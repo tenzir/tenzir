@@ -429,7 +429,7 @@ type suricata.rdp = suricata.component.common + record {
     protocol: string,
     flags: list<string>,
     error_code: count,
-    reason: list<string>,
+    reason: string,
     cookie: string,
     client: record {
       version: string,
