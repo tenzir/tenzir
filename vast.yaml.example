@@ -135,6 +135,13 @@ vast:
     disk-budget-low: 0GiB
     # Seconds between successive disk space checks.
     disk-budget-check-interval: 90
+    # Binary to use for checking the size of the database directory. If left
+    # unset, VAST will recursively add up the size of all files in the
+    # database directory to compute the size. Mainly useful for e.g. compressed
+    # filesystem where raw file size is not the correct metric.
+    # Must be the absolute path to an executable file, which will get passed
+    # the database directory as its first and only argument.
+    #disk-budget-check-binary:
 
   # The `vast count` command counts hits for a query without exporting data.
   count:

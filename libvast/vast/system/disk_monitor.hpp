@@ -28,6 +28,12 @@ struct disk_monitor_state {
   size_t high_water_mark;
   size_t low_water_mark;
 
+  /// The command to use to determine file size.
+  std::optional<std::string> scan_command;
+
+  /// The timespan between scans.
+  std::chrono::seconds scan_interval;
+
   /// Whether an erasing run is currently in progress.
   bool purging;
 
@@ -37,11 +43,26 @@ struct disk_monitor_state {
   /// Node handle of the INDEX.
   index_actor index;
 
-  /// The timespan between scans.
-  std::chrono::seconds scan_interval;
+  /// Computes the size of the database directory.
+  /// Note that this function may spawn an external process to perform the
+  /// computation.
+  caf::expected<size_t> compute_dbdir_size() const;
 
   constexpr static const char* name = "disk-monitor";
 };
+
+/// Contains values for the fields of `disk_monitor_state` with
+/// the same name.
+struct disk_monitor_config {
+  size_t high_water_mark;
+  size_t low_water_mark;
+  std::optional<std::string> scan_binary;
+  std::chrono::seconds scan_interval;
+};
+
+/// Tests if the passed config options represent a valid disk monitor
+/// configuration.
+caf::error validate(const disk_monitor_config&);
 
 /// Periodically scans the size of the database directory and deletes data
 /// once it exceeds some threshold.
@@ -54,8 +75,7 @@ struct disk_monitor_state {
 /// @param index The actor handle of the INDEX.
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
-             size_t high_water, size_t low_water,
-             std::chrono::seconds scan_interval,
+             const disk_monitor_config& config,
              const std::filesystem::path& db_dir, archive_actor archive,
              index_actor index);
 

@@ -6,12 +6,16 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <unistd.h> // gethostname, sysconf, getpid
-
-#include <cerrno>
+#include "vast/detail/system.hpp"
 
 #include "vast/detail/assert.hpp"
-#include "vast/detail/system.hpp"
+#include "vast/error.hpp"
+
+#include <caf/expected.hpp>
+
+#include <cerrno>
+#include <cstdio>
+#include <unistd.h> // gethostname, sysconf, getpid
 
 namespace vast {
 namespace detail {
