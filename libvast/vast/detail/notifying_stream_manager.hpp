@@ -19,7 +19,12 @@ namespace vast::detail {
 
 template <class State>
 void notify_listeners_if_clean(State& st, const caf::stream_manager& mgr) {
-  if (!st.flush_listeners.empty() && mgr.inbound_paths_idle()
+  // We intentionally don't check the inbound path state here because it will
+  // only be marked as idle after an ack was sent for the last batch that was
+  // received. However, acks are only sent once for each credit round, which
+  // means that sometimes we wouldn't notify even though all batches are done.
+  // In that case the listener would never get the notification and hang.
+  if (!st.flush_listeners.empty() // && mgr.inbound_paths_idle()
       && mgr.out().clean()) {
     st.notify_flush_listeners();
   }
