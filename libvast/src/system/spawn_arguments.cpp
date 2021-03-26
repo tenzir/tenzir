@@ -11,6 +11,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/detail/load_contents.hpp"
 #include "vast/detail/sigma.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
@@ -25,6 +26,8 @@
 #include <caf/optional.hpp>
 #include <caf/settings.hpp>
 #include <caf/string_algorithms.hpp>
+
+#include <filesystem>
 
 namespace vast::system {
 
@@ -77,7 +80,7 @@ caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
   auto schema_file_ptr = caf::get_if<std::string>(&args.inv.options, "schema");
   if (!schema_file_ptr)
     return caf::optional<schema>{caf::none};
-  auto str = load_contents(*schema_file_ptr);
+  auto str = detail::load_contents(std::filesystem::path{*schema_file_ptr});
   if (!str)
     return str.error();
   auto result = to<schema>(*str);

@@ -14,6 +14,7 @@
 #include "vast/detail/add_message_types.hpp"
 #include "vast/detail/append.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/load_contents.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
@@ -131,7 +132,7 @@ caf::error configuration::parse(int argc, char** argv) {
   record merged_config;
   for (const auto& config : config_files) {
     if (exists(config)) {
-      auto contents = load_contents(config);
+      auto contents = detail::load_contents(config);
       if (!contents)
         return contents.error();
       auto yaml = from_yaml(*contents);

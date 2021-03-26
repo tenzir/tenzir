@@ -155,12 +155,6 @@ bool exists(const path& p);
 /// @param p The path pointint to a file.
 /// @returns The size of *p* or an error upon failure.
 caf::expected<std::uintmax_t> file_size(const path& p) noexcept;
-
-// Loads file contents into a string.
-// @param p The path of the file to load.
-// @returns The contents of the file *p*.
-caf::expected<std::string> load_contents(const path& p);
-
 } // namespace vast
 
 namespace std {
