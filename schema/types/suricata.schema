@@ -459,6 +459,49 @@ type suricata.rdp = suricata.component.common + record {
   }
 }
 
+// versions are strings because they are in the RFB spec and the EVE-JSON:
+// - https://tools.ietf.org/html/rfc6143#section-7.1.1
+// - https://suricata.readthedocs.io/en/suricata-6.0.1/output/eve/eve-json-format.html#event-type-rfb
+type suricata.rfb = suricata.component.common + record {
+  rfb: record {
+    client_protocol_version: record {
+      major: string,
+      minor: string
+    },
+    server_protocol_version: record {
+      major: string,
+      minor: string
+    },
+    authentication: record {
+      security_type: count,
+      vnc: record {
+        challenge: string,
+        response: string
+      },
+      security_result: string
+    },
+    server_security_failure_reason: string,
+    screen_shared: bool,
+    framebuffer: record {
+      width: count,
+      height: count,
+      name: string,
+      pixel_format: record {
+        bits_per_pixel: count,
+        depth: count,
+        big_endian: bool,
+        true_color: bool,
+        red_max: count,
+        green_max: count,
+        blue_max: count,
+        red_shift: count,
+        green_shift: count,
+        blue_shift: count
+      }
+    }
+  }
+}
+
 type suricata.sip = suricata.component.common + record {
   sip: record {
     method: string,

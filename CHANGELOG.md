@@ -11,6 +11,12 @@ This changelog documents all notable user-facing changes of VAST.
 ### 🐞 Bug Fixes
 -->
 
+## Unreleased
+
+- ⚠️ VAST now ships with a schema record type for Suricata's `rfb` event type.
+  [#1499](https://github.com/tenzir/vast/pull/1499)
+  [@satta](https://github.com/satta)
+
 ## [2021.03.25]
 
 ### ⚡️ Breaking Changes
