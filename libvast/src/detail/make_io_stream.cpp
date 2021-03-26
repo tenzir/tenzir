@@ -14,16 +14,17 @@
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
-#include "vast/logger.hpp"
+#include "vast/path.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 
+#include <fmt/format.h>
+
 #include <filesystem>
 #include <fstream>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input,
@@ -82,12 +83,13 @@ make_input_stream(const std::string& input,
 }
 
 caf::expected<std::unique_ptr<std::istream>>
-make_input_stream(const std::string& format, const caf::settings& options) {
-  std::string category = "vast." + format;
-  auto input = get_or(options, category + ".read", defaults::import::read);
-  auto uds = get_or(options, category + ".uds", false);
-  auto fifo = get_or(options, category + ".fifo", false);
-  auto pt = uds ? path::socket : (fifo ? path::fifo : path::regular_file);
+make_input_stream(const caf::settings& options) {
+  auto input = get_or(options, "vast.import.read", defaults::import::read);
+  auto uds = get_or(options, "vast.import.uds", false);
+  auto fifo = get_or(options, "vast.import.fifo", false);
+  const auto pt = uds ? std::filesystem::file_type::socket
+                      : (fifo ? std::filesystem::file_type::fifo
+                              : std::filesystem::file_type::regular);
   return make_input_stream(input, pt);
 }
 
@@ -130,5 +132,15 @@ make_output_stream(const std::string& output,
   }
 }
 
-} // namespace detail
-} // namespace vast
+caf::expected<std::unique_ptr<std::ostream>>
+make_output_stream(const caf::settings& options) {
+  auto output = get_or(options, "vast.export.write", defaults::export_::write);
+  auto uds = get_or(options, "vast.export.uds", false);
+  auto fifo = get_or(options, "vast.export.fifo", false);
+  const auto pt = uds ? std::filesystem::file_type::socket
+                      : (fifo ? std::filesystem::file_type::fifo
+                              : std::filesystem::file_type::regular);
+  return make_output_stream(output, pt);
+}
+
+} // namespace vast::detail
