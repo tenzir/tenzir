@@ -57,6 +57,7 @@
 #include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <memory>
 #include <unistd.h>
 
@@ -111,7 +112,7 @@ caf::error
 extract_partition_synopsis(const vast::path& partition_path,
                            const vast::path& partition_synopsis_path) {
   // Use blocking operations here since this is part of the startup.
-  auto chunk = chunk::mmap(partition_path);
+  auto chunk = chunk::mmap(std::filesystem::path{partition_path.str()});
   if (!chunk)
     return caf::make_error(ec::system_error, "could not mmap partition at "
                                                + partition_path.str());
@@ -211,7 +212,7 @@ caf::error index_state::load_from_disk() {
         if (auto error = extract_partition_synopsis(part_dir, synopsis_dir))
           return error;
       }
-      auto chunk = chunk::mmap(synopsis_dir);
+      auto chunk = chunk::mmap(std::filesystem::path{synopsis_dir.str()});
       if (!chunk) {
         VAST_WARN("{} could not mmap partition at {}", self, part_dir);
         continue;

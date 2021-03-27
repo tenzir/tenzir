@@ -392,7 +392,7 @@ caf::error segment_store::register_segments() {
 
 caf::error
 segment_store::register_segment(const std::filesystem::path& filename) {
-  auto chk = chunk::mmap(vast::path{filename.string()});
+  auto chk = chunk::mmap(filename);
   if (!chk)
     return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
                            filename.string());
@@ -425,7 +425,7 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
   auto filename = segment_path() / to_string(id);
   VAST_DEBUG("{} mmaps segment from {}", detail::pretty_type_name(this),
              filename);
-  auto chk = chunk::mmap(vast::path{filename.string()});
+  auto chk = chunk::mmap(filename);
   if (!chk)
     return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
                            filename.string());
