@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "vast/path.hpp"
+
 #include <caf/fwd.hpp>
 
 #include <filesystem>
-
-#include <vast/path.hpp>
 
 namespace vast::detail {
 

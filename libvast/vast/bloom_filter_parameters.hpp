@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include <caf/optional.hpp>
 
 #include <string_view>
-
-#include <vast/fwd.hpp>
 
 namespace vast {
 

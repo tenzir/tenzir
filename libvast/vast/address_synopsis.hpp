@@ -10,17 +10,16 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/address.hpp"
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/bloom_filter_synopsis.hpp"
 #include "vast/buffered_synopsis.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/error.hpp"
+#include "vast/logger.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
-
-#include <vast/address.hpp>
-#include <vast/detail/assert.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
 
 namespace vast {
 
