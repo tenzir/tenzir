@@ -8,7 +8,7 @@
 
 #include "vast/bloom_filter_synopsis.hpp"
 
-#include <vast/detail/assert.hpp>
+#include "vast/detail/assert.hpp"
 
 namespace vast {
 

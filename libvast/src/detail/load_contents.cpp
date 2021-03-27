@@ -8,6 +8,9 @@
 
 #include "vast/detail/load_contents.hpp"
 
+#include "vast/error.hpp"
+#include "vast/path.hpp"
+
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/streambuf.hpp>
@@ -16,9 +19,6 @@
 #include <fstream>
 #include <string>
 #include <type_traits>
-
-#include <vast/error.hpp>
-#include <vast/path.hpp>
 
 namespace vast::detail {
 

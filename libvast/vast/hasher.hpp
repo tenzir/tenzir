@@ -8,14 +8,14 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
+
 #include <caf/sec.hpp>
 
 #include <cstddef>
 #include <utility>
 #include <vector>
-
-#include <vast/detail/assert.hpp>
-#include <vast/detail/operators.hpp>
 
 namespace vast {
 

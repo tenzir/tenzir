@@ -8,14 +8,14 @@
 
 #include "vast/bloom_filter_parameters.hpp"
 
+#include "vast/concept/parseable/core.hpp"
+#include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/concept/parseable/numeric/real.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/type.hpp"
+
 #include <cmath>
 #include <cstddef>
-
-#include <vast/concept/parseable/core.hpp>
-#include <vast/concept/parseable/numeric/integral.hpp>
-#include <vast/concept/parseable/numeric/real.hpp>
-#include <vast/detail/assert.hpp>
-#include <vast/type.hpp>
 
 namespace vast {
 
