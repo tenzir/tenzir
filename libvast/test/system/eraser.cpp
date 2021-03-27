@@ -32,6 +32,8 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
+#include <filesystem>
+
 using namespace std::literals::chrono_literals;
 using namespace vast;
 
@@ -191,7 +193,7 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
   auto slices = take(zeek_conn_log_full, 4);
   MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
   auto fs = self->spawn(vast::system::posix_filesystem, directory);
-  auto indexdir = directory / "index";
+  auto indexdir = std::filesystem::path{directory.str()} / "index";
   index = self->spawn(system::index, fs, indexdir, slice_size, 100, taste_count,
                       1, indexdir, 0.01);
   auto& index_state

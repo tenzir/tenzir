@@ -14,7 +14,6 @@
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/make_counted.hpp>
@@ -61,7 +60,8 @@ chunk_ptr chunk::mmap(const std::filesystem::path& filename, size_type size,
     std::error_code err{};
     size = std::filesystem::file_size(filename, err);
     if (size == static_cast<std::uintmax_t>(-1)) {
-      VAST_INFO("failed to get file size for filename");
+      VAST_ERROR("failed to get file size for filename {}: {}", filename,
+                 err.message());
       return nullptr;
     }
   }

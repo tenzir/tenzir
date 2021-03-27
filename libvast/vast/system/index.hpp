@@ -131,13 +131,15 @@ struct index_state {
 
   void flush_to_disk();
 
-  [[nodiscard]] path index_filename(const path& basename = {}) const;
+  [[nodiscard]] std::filesystem::path
+  index_filename(const std::filesystem::path& basename = {}) const;
 
   // Maps partitions to their expected location on the file system.
-  [[nodiscard]] vast::path partition_path(const uuid& id) const;
+  [[nodiscard]] std::filesystem::path partition_path(const uuid& id) const;
 
   // Maps partition synopses to their expected location on the file system.
-  [[nodiscard]] vast::path partition_synopsis_path(const uuid& id) const;
+  [[nodiscard]] std::filesystem::path
+  partition_synopsis_path(const uuid& id) const;
 
   // -- query handling ---------------------------------------------------------
 
@@ -220,10 +222,10 @@ struct index_state {
   size_t meta_index_bytes = {};
 
   /// The directory for persistent state.
-  path dir = {};
+  std::filesystem::path dir = {};
 
   /// The directory for partition synopses.
-  path synopsisdir = {};
+  std::filesystem::path synopsisdir = {};
 
   /// Statistics about processed data.
   index_statistics stats = {};
@@ -261,8 +263,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 /// @pre `partition_capacity > 0
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, path dir, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
-      path meta_index_dir, double meta_index_fp_rate);
+      filesystem_actor filesystem, std::filesystem::path dir,
+      size_t partition_capacity, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
+      std::filesystem::path meta_index_dir, double meta_index_fp_rate);
 
 } // namespace vast::system

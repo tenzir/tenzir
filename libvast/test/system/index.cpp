@@ -27,6 +27,8 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
+#include <filesystem>
+
 using caf::after;
 using std::chrono_literals::operator""s;
 
@@ -44,7 +46,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     directory /= "index";
     auto fs = self->spawn(system::posix_filesystem, directory);
-    auto dir = directory / "index";
+    auto dir = std::filesystem::path{directory.str()} / "index";
     index = self->spawn(system::index, fs, dir, slice_size, in_mem_partitions,
                         taste_count, num_query_supervisors, dir,
                         meta_index_fp_rate);

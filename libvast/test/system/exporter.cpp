@@ -56,7 +56,7 @@ struct fixture : fixture_base {
 
   void spawn_index() {
     auto fs = self->spawn(system::posix_filesystem, directory);
-    auto indexdir = directory / "index";
+    auto indexdir = std::filesystem::path{directory.str()} / "index";
     index = self->spawn(system::index, fs, indexdir, 10000, 5, 5, 1, indexdir,
                         0.01);
   }
