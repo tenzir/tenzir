@@ -15,9 +15,6 @@
 #include "vast/detail/string.hpp"
 #include "vast/logger.hpp"
 
-#include <caf/streambuf.hpp>
-
-#include <fstream>
 #include <iterator>
 
 #if VAST_POSIX
@@ -257,18 +254,6 @@ caf::expected<std::uintmax_t> file_size(const path& p) noexcept {
   // TODO: before returning, we may want to check whether we're dealing with a
   // regular file.
   return st.st_size;
-}
-
-caf::expected<std::string> load_contents(const path& p) {
-  std::string contents;
-  caf::containerbuf<std::string> obuf{contents};
-  std::ostream out{&obuf};
-  std::ifstream in{p.str()};
-  if (!in)
-    return caf::make_error(ec::filesystem_error,
-                           "failed to read from file " + p.str());
-  out << in.rdbuf();
-  return contents;
 }
 
 } // namespace vast

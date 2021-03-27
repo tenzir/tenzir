@@ -13,6 +13,7 @@
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/load_contents.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
@@ -37,7 +38,7 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
               err.message());
   if (exists) {
     // Attempt to read file to display an actionable error message.
-    auto contents = load_contents(vast::path{filename.string()});
+    auto contents = detail::load_contents(filename);
     if (!contents)
       return contents.error();
     auto other_pid = to<int32_t>(*contents);

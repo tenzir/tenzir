@@ -14,6 +14,7 @@
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/filter_dir.hpp"
+#include "vast/detail/load_contents.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
@@ -576,7 +577,7 @@ caf::expected<data> from_yaml(std::string_view str) {
 }
 
 caf::expected<data> load_yaml(const std::filesystem::path& file) {
-  auto contents = load_contents(vast::path{file.string()});
+  const auto contents = detail::load_contents(file);
   if (!contents)
     return contents.error();
   if (auto yaml = from_yaml(*contents))

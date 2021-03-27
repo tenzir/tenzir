@@ -16,6 +16,7 @@
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/filter_dir.hpp"
+#include "vast/detail/load_contents.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
@@ -251,7 +252,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
 caf::expected<schema> load_schema(const path& schema_file) {
   if (schema_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
-  auto str = load_contents(schema_file);
+  auto str = detail::load_contents(schema_file);
   if (!str)
     return str.error();
   return to<schema>(*str);
@@ -260,7 +261,7 @@ caf::expected<schema> load_schema(const path& schema_file) {
 caf::error load_symbols(const path& schema_file, symbol_map& local) {
   if (schema_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
-  auto str = load_contents(schema_file);
+  auto str = detail::load_contents(schema_file);
   if (!str)
     return str.error();
   auto p = symbol_map_parser{};
