@@ -11,7 +11,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
-#include "vast/path.hpp"
+#include "vast/logger.hpp"
 
 #if VAST_POSIX
 #  include <fcntl.h>
@@ -23,12 +23,12 @@
 
 namespace vast {
 
-file::file(vast::path p) : path_{std::move(p)} {
+file::file(std::filesystem::path p) : path_{std::move(p)} {
 }
 
 file::~file() {
   // Don't close stdin/stdout implicitly.
-  if (path_ != "-")
+  if (path_.string() != "-")
     close();
 }
 
@@ -40,7 +40,7 @@ caf::expected<void> file::open(open_mode mode, bool append) {
                                                  "append mode simultaneously");
 #if VAST_POSIX
   // Support reading from STDIN and writing to STDOUT.
-  if (path_ == "-") {
+  if (path_.string() == "-") {
     if (mode == read_write)
       return caf::make_error(ec::filesystem_error,
                              "cannot open - in read/write "
@@ -66,13 +66,20 @@ caf::expected<void> file::open(open_mode mode, bool append) {
   if (append)
     flags |= O_APPEND;
   errno = 0;
-  if (mode != read_only && !exists(path_.parent())) {
-    if (auto err = mkdir(path_.parent()))
-      return caf::make_error(
-        ec::filesystem_error,
-        "failed to create parent directory: ", err.context());
+  std::error_code err{};
+  const auto parent = path_.parent_path();
+  const auto file_exists = std::filesystem::exists(parent, err);
+  if (mode != read_only && !file_exists) {
+    const auto created_directory
+      = std::filesystem::create_directories(parent, err);
+    if (!created_directory) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to create parent directory "
+                                         "{}: {}",
+                                         parent, err.message()));
+    }
   }
-  handle_ = ::open(path_.str().data(), flags, 0644);
+  handle_ = ::open(path_.string().data(), flags, 0644);
   if (handle_ != -1) {
     is_open_ = true;
     return {};
@@ -99,18 +106,21 @@ bool file::is_open() const {
 
 caf::expected<size_t> file::read(void* sink, size_t bytes) {
   if (!is_open_)
-    return caf::make_error(ec::filesystem_error, "file is not open", path_);
+    return caf::make_error(ec::filesystem_error, "file is not open",
+                           path_.string());
   return detail::read(handle_, sink, bytes);
 }
 
 caf::error file::write(const void* source, size_t bytes) {
   if (!is_open_)
-    return caf::make_error(ec::filesystem_error, "file is not open", path_);
+    return caf::make_error(ec::filesystem_error, "file is not open",
+                           path_.string());
   auto count = detail::write(handle_, source, bytes);
   if (!count)
     return count.error();
   if (*count != bytes)
-    return caf::make_error(ec::filesystem_error, "incomplete read", path_);
+    return caf::make_error(ec::filesystem_error, "incomplete read",
+                           path_.string());
   return caf::none;
 }
 
@@ -124,7 +134,7 @@ bool file::seek(size_t bytes) {
   return true;
 }
 
-const path& file::path() const {
+const std::filesystem::path& file::path() const {
   return path_;
 }
 

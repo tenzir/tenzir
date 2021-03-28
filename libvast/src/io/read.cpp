@@ -18,7 +18,7 @@
 namespace vast::io {
 
 caf::error read(const std::filesystem::path& filename, span<std::byte> xs) {
-  file f{filename.string()};
+  file f{filename};
   if (!f.open(file::read_only))
     return caf::make_error(ec::filesystem_error, "failed open file");
   auto bytes_read = f.read(xs.data(), xs.size());

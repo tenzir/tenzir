@@ -14,6 +14,7 @@
 #include <caf/message_builder.hpp>
 
 #include <cstdio>
+#include <filesystem>
 #include <iostream>
 
 using namespace caf;
@@ -61,7 +62,7 @@ int main(int argc, char** argv) {
       cerr << "failed to accept connection" << endl;
       return -1;
     }
-    file f{filename};
+    file f{std::filesystem::path{filename}};
     auto mode = file::invalid;
     if (reading && writing)
       mode = file::read_write;
