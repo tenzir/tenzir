@@ -266,12 +266,8 @@ namespace fmt {
 
 /// Custom escape-aware formatting for strings.
 template <class Escaper>
-struct formatter<vast::detail::escaped_string_view<Escaper>> {
-  template <typename ParseContext>
-  constexpr auto parse(ParseContext& ctx) const {
-    return std::end(ctx);
-  }
-
+struct formatter<vast::detail::escaped_string_view<Escaper>>
+  : vast::detail::empty_formatter_base {
   template <typename FormatContext>
   auto format(vast::detail::escaped_string_view<Escaper> s,
               FormatContext& ctx) const {

@@ -431,7 +431,6 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
     = vast::detail::escaped_string_view<vast::detail::print_escaper_functor>;
   using json_escape_string
     = vast::detail::escaped_string_view<vast::detail::json_escaper_functor>;
-  using this_type = formatter<vast::data>;
 
   template <typename Output>
   struct ascii_visitor {
@@ -629,12 +628,10 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
     int indent_size;
     int current_indent{0};
 
-    template <class... Ts>
-    constexpr void dec_indent(Ts&&...) noexcept {
+    constexpr void dec_indent() noexcept {
       --current_indent;
     }
-    template <class... Ts>
-    constexpr void inc_indent(Ts&&...) noexcept {
+    constexpr void inc_indent() noexcept {
       ++current_indent;
     }
     template <class Output>
