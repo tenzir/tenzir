@@ -630,6 +630,7 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
 
     constexpr void dec_indent() noexcept {
       --current_indent;
+      assert(current_indent >= 0);
     }
     constexpr void inc_indent() noexcept {
       ++current_indent;
