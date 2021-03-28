@@ -18,7 +18,6 @@
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 
 #include <fcntl.h>
 #include <system_error>
