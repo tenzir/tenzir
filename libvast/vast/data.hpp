@@ -653,6 +653,9 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
   };
 
   struct yaml_visitor {
+    yaml_visitor(YAML::Emitter& out) : out_{out} {
+    }
+
     YAML::Emitter& out_;
     auto operator()(caf::none_t) {
       out_ << YAML::Null;
