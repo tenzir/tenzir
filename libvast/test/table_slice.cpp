@@ -17,6 +17,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
+#include "vast/project.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/table_slice_row.hpp"
 
@@ -201,6 +202,93 @@ TEST(evaluate) {
   check_eval("#type != \"zeek.conn\"", {});
   check_eval("#field == \"orig_pkts\"", {{0, 8}});
   check_eval("#field != \"orig_pkts\"", {});
+}
+
+TEST(project column flat index) {
+  auto sut = zeek_conn_log[0];
+  auto proj = project<vast::time, std::string>(sut, 0, 6);
+  REQUIRE(proj);
+  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  for (auto&& [ts, proto] : proj) {
+    REQUIRE(ts);
+    CHECK_GREATER_EQUAL(*ts, vast::time{});
+    REQUIRE(proto);
+    CHECK_EQUAL(*proto, "udp");
+  }
+}
+
+TEST(project column full name) {
+  auto sut = zeek_conn_log[0];
+  auto proj
+    = project<vast::time, std::string>(sut, "zeek.conn.ts", "zeek.conn.proto");
+  REQUIRE(proj);
+  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  for (auto&& [ts, proto] : proj) {
+    REQUIRE(ts);
+    CHECK_GREATER_EQUAL(*ts, vast::time{});
+    REQUIRE(proto);
+    CHECK_EQUAL(*proto, "udp");
+  }
+}
+
+TEST(project column name) {
+  auto sut = zeek_conn_log[0];
+  auto proj = project<vast::time, std::string>(sut, "ts", "proto");
+  REQUIRE(proj);
+  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  for (auto&& [ts, proto] : proj) {
+    REQUIRE(ts);
+    CHECK_GREATER_EQUAL(*ts, vast::time{});
+    REQUIRE(proto);
+    CHECK_EQUAL(*proto, "udp");
+  }
+}
+
+TEST(project column mixed access) {
+  auto sut = zeek_conn_log[0];
+  auto proj = project<vast::time, std::string>(sut, 0, "proto");
+  REQUIRE(proj);
+  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  for (auto&& [ts, proto] : proj) {
+    REQUIRE(ts);
+    CHECK_GREATER_EQUAL(*ts, vast::time{});
+    REQUIRE(proto);
+    CHECK_EQUAL(*proto, "udp");
+  }
+}
+
+TEST(project column order independence) {
+  auto sut = zeek_conn_log[0];
+  auto proj = project<std::string, vast::time>(sut, "proto", "ts");
+  REQUIRE(proj);
+  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  for (auto&& [proto, ts] : proj) {
+    REQUIRE(proto);
+    CHECK_EQUAL(*proto, "udp");
+    REQUIRE(ts);
+    CHECK_GREATER_EQUAL(*ts, vast::time{});
+  }
+}
+
+TEST(project column detect type mismatches) {
+  auto sut = zeek_conn_log[0];
+  auto proj = project<bool, vast::time>(sut, "proto", "ts");
+  REQUIRE(!proj);
+  REQUIRE_EQUAL(proj.begin(), proj.end());
+}
+
+TEST(project column detect wrong field names) {
+  auto sut = zeek_conn_log[0];
+  auto proj = project<std::string, vast::time>(sut, "porto", "ts");
+  REQUIRE(!proj);
+  REQUIRE_EQUAL(proj.begin(), proj.end());
+}
+
+TEST(project column detect wrong flat indices) {
+  auto sut = zeek_conn_log[0];
+  auto proj = project<std::string, vast::time>(sut, 123, "ts");
+  REQUIRE(!proj);
+  REQUIRE_EQUAL(proj.begin(), proj.end());
 }
 
 FIXTURE_SCOPE_END()

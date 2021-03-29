@@ -143,6 +143,9 @@ class msgpack_table_slice;
 
 inline constexpr size_t dynamic_extent = std::numeric_limits<size_t>::max();
 
+template <class... Types>
+class projection;
+
 template <class, size_t Extent = dynamic_extent>
 class span;
 
