@@ -1,4 +1,4 @@
-set(VAST_VERSION_FALLBACK "2021.03.25-rc3-0-")
+set(VAST_VERSION_FALLBACK "2021.03.25")
 
 if (NOT VAST_VERSION_TAG)
   if (DEFINED ENV{VAST_VERSION_TAG})
@@ -16,34 +16,53 @@ if (NOT VAST_VERSION_TAG)
         message(FATAL_ERROR "git describe failed: ${VAST_GIT_DESCRIBE_RESULT}")
       endif ()
     endif ()
-  else ()
-    set(VAST_VERSION_TAG "${VAST_VERSION_FALLBACK}")
   endif ()
 endif ()
 
-string(REGEX REPLACE "^([0-9]+)\\..*" "\\1" VAST_VERSION_MAJOR
-                     "${VAST_VERSION_TAG}")
-string(REGEX REPLACE "^[0-9]+\\.([0-9]+).*" "\\1" VAST_VERSION_MINOR
-                     "${VAST_VERSION_TAG}")
-string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+).*" "\\1" VAST_VERSION_PATCH
-                     "${VAST_VERSION_TAG}")
-string(
-  REGEX
-  REPLACE "^[0-9]+\\.[0-9]+\\.[0-9]+(\\-[a-zA-Z]+[a-zA-Z0-9]*)?\\-([0-9]+).*"
-          "\\2" VAST_VERSION_TWEAK "${VAST_VERSION_TAG}")
-
-string(
-  REGEX
-  REPLACE "^[0-9]+\\.[0-9]+\\.[0-9]+\\-([a-zA-Z]+[a-zA-Z0-9]*)\\-[0-9]+\\-(.*)"
-          "\\1-\\2" VAST_VERSION_COMMIT "${VAST_VERSION_TAG}")
-if (VAST_VERSION_COMMIT STREQUAL VAST_VERSION_TAG)
-  string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.[0-9]+\\-[0-9]+\\-(.*)" "\\1"
-                       VAST_VERSION_COMMIT "${VAST_VERSION_TAG}")
+if (NOT VAST_VERSION_TAG)
+  set(VAST_VERSION_TAG "${VAST_VERSION_FALLBACK}")
 endif ()
 
-# Strip - and -0- suffixes from the version tag.
-string(REGEX REPLACE "^(.*)[-0-|-]\\\$" "\\1" VAST_VERSION_TAG
-                     "${VAST_VERSION_TAG}")
+# We accept:
+# (1) 2021.03.25(-dirty)
+# (2) 2021.03.25-rc1(-dirty)
+# (3) 2021.03.25-13-g3c8009fe4(-dirty)
+# (4) 2021.03.25-rc1-13-g3c8009fe4(-dirty)
+
+list(LENGTH "${VAST_VERSION_TAG}" version_tag_list_len)
+if (NOT version_tag_list_len EQUAL 0)
+  message(FATAL_ERROR "Invalid version tag: ${VAST_VERSION_TAG}")
+endif ()
+unset(version_tag_list_len)
+
+string(REPLACE "-" ";" version_list "${VAST_VERSION_TAG}")
+# The version string can optionally have a "-dirty" suffix, we strip it now to
+# get consistent reverse indexing.
+list(GET version_list -1 version_list_last)
+if (NOT version_list_last OR version_list_last STREQUAL "dirty")
+  list(POP_BACK version_list)
+endif ()
+list(LENGTH version_list version_list_len)
+
+# Extract Major, Minor, and Patch.
+list(GET version_list 0 VAST_VERSION_MMP)
+string(REPLACE "." ";" VAST_VERSION_MMP "${VAST_VERSION_MMP}")
+list(GET VAST_VERSION_MMP 0 VAST_VERSION_MAJOR)
+list(GET VAST_VERSION_MMP 1 VAST_VERSION_MINOR)
+list(GET VAST_VERSION_MMP 2 VAST_VERSION_PATCH)
+
+# Extract Tweak and Commit.
+if (version_list_len GREATER 2)
+  list(GET version_list -2 VAST_VERSION_TWEAK)
+  list(GET version_list -1 VAST_VERSION_COMMIT)
+else ()
+  # Default tweak to 0 and commit to unset.
+  set(VAST_VERSION_TWEAK 0)
+endif ()
+
+unset(version_list)
+unset(version_list_last)
+unset(version_list_len)
 
 cmake_policy(PUSH)
 if (POLICY CMP0009)
