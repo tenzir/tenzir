@@ -513,8 +513,6 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("node-id,i", "the unique ID of this node")
         .add<bool>("node,N", "spawn a node instead of connecting to one")
         .add<bool>("enable-metrics", "keep track of performance metrics")
-        .add<bool>("no-default-schema", "don't load the default schema "
-                                        "definitions (deprecated)")
         .add<std::vector<std::string>>("plugin-dirs", "additional directories "
                                                       "to load plugins from")
         .add<std::vector<std::string>>("plugins", "plugins to load at startup")

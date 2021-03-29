@@ -221,28 +221,22 @@ detail::stable_set<std::filesystem::path>
 get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses) {
   detail::stable_set<std::filesystem::path> result;
-  if (caf::get_or(cfg, "vast.no-default-schema", false)) {
-    VAST_WARN("the option 'vast.no-default-schema' is deprecated and will be "
-              "removed in a future release");
-  } else {
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-    result.insert(VAST_DATADIR "/vast/schema");
+  result.insert(VAST_DATADIR "/vast/schema");
 #endif
-    // Get filesystem path to the executable.
-    for (const void* addr : objpath_addresses) {
-      if (const auto& binary = detail::objectpath(addr); binary)
-        result.insert(binary->parent_path().parent_path() / "share" / "vast"
-                      / "schema");
-      else
-        VAST_ERROR("{} failed to get program path", __func__);
-    }
-    result.insert(std::filesystem::path{VAST_SYSCONFDIR} / "vast" / "schema");
-    if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
-      result.insert(std::filesystem::path{xdg_config_home} / "vast" / "schema");
-    else if (const char* home = std::getenv("HOME"))
-      result.insert(std::filesystem::path{home} / ".config" / "vast"
+  // Get filesystem path to the executable.
+  for (const void* addr : objpath_addresses) {
+    if (const auto& binary = detail::objectpath(addr); binary)
+      result.insert(binary->parent_path().parent_path() / "share" / "vast"
                     / "schema");
+    else
+      VAST_ERROR("{} failed to get program path", __func__);
   }
+  result.insert(std::filesystem::path{VAST_SYSCONFDIR} / "vast" / "schema");
+  if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
+    result.insert(std::filesystem::path{xdg_config_home} / "vast" / "schema");
+  else if (const char* home = std::getenv("HOME"))
+    result.insert(std::filesystem::path{home} / ".config" / "vast" / "schema");
   if (auto dirs = caf::get_if<std::vector<std::string>>( //
         &cfg, "vast.schema-dirs"))
     result.insert(dirs->begin(), dirs->end());
