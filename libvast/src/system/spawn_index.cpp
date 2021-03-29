@@ -11,12 +11,13 @@
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
+
+#include <filesystem>
 
 namespace vast::system {
 
@@ -32,7 +33,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     = self->state.registry.find<filesystem_actor, accountant_actor>();
   if (!filesystem)
     return caf::make_error(ec::lookup_error, "failed to find filesystem actor");
-  auto indexdir = args.dir / args.label;
+  const auto indexdir = std::filesystem::path{args.dir.str()} / args.label;
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
     index, filesystem, indexdir,
@@ -41,7 +42,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
     opt("vast.max-taste-partitions", sd::taste_partitions),
     opt("vast.max-queries", sd::num_query_supervisors),
-    vast::path{opt("vast.meta-index-dir", indexdir.str())},
+    std::filesystem::path{opt("vast.meta-index-dir", indexdir.string())},
     opt("vast.meta-index-fp-rate", sd::string_synopsis_fp_rate));
   VAST_VERBOSE("{} spawned the index", self);
   if (accountant)

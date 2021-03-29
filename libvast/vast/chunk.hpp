@@ -112,8 +112,8 @@ public:
   /// @param size The number of bytes to map. If 0, map the entire file.
   /// @param offset Where to start in terms of number of bytes from the start.
   /// @returns A chunk pointer or `nullptr` on failure.
-  static chunk_ptr
-  mmap(const path& filename, size_type size = 0, size_type offset = 0);
+  static chunk_ptr mmap(const std::filesystem::path& filename,
+                        size_type size = 0, size_type offset = 0);
 
   // -- container facade -------------------------------------------------------
 

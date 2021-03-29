@@ -10,6 +10,8 @@
 
 #include "vast/system/counter.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
@@ -18,7 +20,6 @@
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"
@@ -29,6 +30,8 @@
 #include <caf/actor_system.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
+
+#include <filesystem>
 
 using namespace vast;
 using namespace system;
@@ -61,7 +64,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // Spawn INDEX and ARCHIVE, and a mock client.
     MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
     auto fs = self->spawn(vast::system::posix_filesystem, directory);
-    auto indexdir = directory / "index";
+    auto indexdir = std::filesystem::path{directory.str()} / "index";
     index = self->spawn(system::index, fs, indexdir,
                         defaults::import::table_slice_size, 100, 3, 1, indexdir,
                         0.01);

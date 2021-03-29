@@ -14,7 +14,6 @@
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/make_counted.hpp>
@@ -54,16 +53,20 @@ chunk_ptr chunk::make(view_type view, deleter_type&& deleter) noexcept {
   return chunk_ptr{new chunk{view, std::move(deleter)}, false};
 }
 
-chunk_ptr chunk::mmap(const path& filename, size_type size, size_type offset) {
+chunk_ptr chunk::mmap(const std::filesystem::path& filename, size_type size,
+                      size_type offset) {
   // Figure out the file size if not provided.
   if (size == 0) {
-    auto s = file_size(filename);
-    if (!s)
+    std::error_code err{};
+    size = std::filesystem::file_size(filename, err);
+    if (size == static_cast<std::uintmax_t>(-1)) {
+      VAST_ERROR("failed to get file size for filename {}: {}", filename,
+                 err.message());
       return nullptr;
-    size = *s;
+    }
   }
   // Open and memory-map the file.
-  auto fd = ::open(filename.str().c_str(), O_RDONLY, 0644);
+  auto fd = ::open(filename.c_str(), O_RDONLY, 0644);
   if (fd == -1)
     return {};
   auto map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, offset);

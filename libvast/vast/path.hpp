@@ -150,11 +150,6 @@ bool exists(const path& p);
 /// @param p The path to a directory to create.
 /// @returns `caf::none` on success or if *p* exists already.
 [[nodiscard]] caf::error mkdir(const path& p);
-
-/// Determines the size of a file.
-/// @param p The path pointint to a file.
-/// @returns The size of *p* or an error upon failure.
-caf::expected<std::uintmax_t> file_size(const path& p) noexcept;
 } // namespace vast
 
 namespace std {

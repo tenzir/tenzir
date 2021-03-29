@@ -57,6 +57,7 @@
 #include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <memory>
 #include <unistd.h>
 
@@ -107,19 +108,19 @@ namespace vast::system {
 
 namespace {
 
-caf::error
-extract_partition_synopsis(const vast::path& partition_path,
-                           const vast::path& partition_synopsis_path) {
+caf::error extract_partition_synopsis(
+  const std::filesystem::path& partition_path,
+  const std::filesystem::path& partition_synopsis_path) {
   // Use blocking operations here since this is part of the startup.
   auto chunk = chunk::mmap(partition_path);
   if (!chunk)
     return caf::make_error(ec::system_error, "could not mmap partition at "
-                                               + partition_path.str());
+                                               + partition_path.string());
   const auto* partition = fbs::GetPartition(chunk->data());
   if (partition->partition_type() != fbs::partition::Partition::v0)
     return caf::make_error(ec::format_error, "found unsupported version for "
                                              "partition "
-                                               + partition_path.str());
+                                               + partition_path.string());
   const auto* partition_v0 = partition->partition_as_v0();
   VAST_ASSERT(partition_v0);
   partition_synopsis ps;
@@ -133,17 +134,18 @@ extract_partition_synopsis(const vast::path& partition_path,
   auto flatbuffer = ps_builder.Finish();
   fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
   auto chunk_out = fbs::release(builder);
-  return io::save(std::filesystem::path{partition_synopsis_path.str()},
+  return io::save(partition_synopsis_path,
                   span{chunk_out->data(), chunk_out->size()});
 }
 
 } // namespace
 
-vast::path index_state::partition_path(const uuid& id) const {
+std::filesystem::path index_state::partition_path(const uuid& id) const {
   return dir / to_string(id);
 }
 
-vast::path index_state::partition_synopsis_path(const uuid& id) const {
+std::filesystem::path
+index_state::partition_synopsis_path(const uuid& id) const {
   return synopsisdir / (to_string(id) + ".mdx");
 }
 
@@ -152,9 +154,10 @@ partition_actor partition_factory::operator()(const uuid& id) const {
   VAST_ASSERT(std::find(state_.persisted_partitions.begin(),
                         state_.persisted_partitions.end(), id)
               != state_.persisted_partitions.end());
-  auto path = state_.partition_path(id);
+  const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", state_.self, id, path);
-  return state_.self->spawn(passive_partition, id, filesystem_, path);
+  return state_.self->spawn(passive_partition, id, filesystem_,
+                            vast::path{path.string()});
 }
 
 filesystem_actor& partition_factory::filesystem() {
@@ -172,13 +175,15 @@ index_state::index_state(index_actor::pointer self)
 caf::error index_state::load_from_disk() {
   // We dont use the filesystem actor here because this function is only
   // called once during startup, when no other actors exist yet.
-  if (!exists(dir)) {
+  std::error_code err{};
+  const auto file_exists = std::filesystem::exists(dir, err);
+  if (!file_exists) {
     VAST_VERBOSE("{} found no prior state, starting with a clean slate", self);
     return caf::none;
   }
-  if (auto fname = index_filename(); exists(fname)) {
+  if (auto fname = index_filename(); std::filesystem::exists(fname, err)) {
     VAST_VERBOSE("{} loads state from {}", self, fname);
-    auto buffer = io::read(std::filesystem::path{fname.str()});
+    auto buffer = io::read(fname);
     if (!buffer) {
       VAST_ERROR("{} failed to read index file: {}", self,
                  render(buffer.error()));
@@ -342,7 +347,9 @@ void index_state::decomission_active_partition() {
   auto part_dir = partition_path(id);
   auto synopsis_dir = partition_synopsis_path(id);
   VAST_DEBUG("{} persists active partition to {}", self, part_dir);
-  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
+  self
+    ->request(actor, caf::infinite, atom::persist_v,
+              vast::path{part_dir.string()}, vast::path{synopsis_dir.string()})
     .then(
       [=](std::shared_ptr<partition_synopsis>& ps) {
         VAST_DEBUG("{} successfully persisted partition {}", self, id);
@@ -515,7 +522,8 @@ index_state::collect_query_actors(query_state& lookup,
   return result;
 }
 
-path index_state::index_filename(const path& basename) const {
+std::filesystem::path
+index_state::index_filename(const std::filesystem::path& basename) const {
   return basename / dir / "index.bin";
 }
 
@@ -576,7 +584,7 @@ void index_state::flush_to_disk() {
   auto chunk = fbs::release(builder);
   self
     ->request(caf::actor_cast<caf::actor>(filesystem), caf::infinite,
-              atom::write_v, index_filename(), chunk)
+              atom::write_v, vast::path{index_filename().string()}, chunk)
     .then(
       [=](atom::ok) {
         VAST_DEBUG("{} successfully persisted index state", self);
@@ -588,9 +596,10 @@ void index_state::flush_to_disk() {
 
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, path dir, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
-      path meta_index_dir, double meta_index_fp_rate) {
+      filesystem_actor filesystem, std::filesystem::path dir,
+      size_t partition_capacity, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
+      std::filesystem::path meta_index_dir, double meta_index_fp_rate) {
   VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
                    VAST_ARG(taste_partitions), VAST_ARG(num_workers),
@@ -853,8 +862,12 @@ index(index_actor::stateful_pointer<index_state> self,
       auto synopsis_path = self->state.partition_synopsis_path(partition_id);
       bool adjust_stats = true;
       if (self->state.persisted_partitions.count(partition_id) == 0u) {
-        if (!exists(path)) {
-          rp.deliver(caf::make_error(ec::logic_error, "unknown partition"));
+        std::error_code err{};
+        const auto file_exists = std::filesystem::exists(path, err);
+        if (!file_exists) {
+          rp.deliver(caf::make_error(
+            ec::logic_error, fmt::format("unknown partition for path {}: {}",
+                                         path, err.message())));
           return rp;
         }
         // As a special case, if the partition exists on disk we just continue
@@ -873,7 +886,9 @@ index(index_actor::stateful_pointer<index_state> self,
                           "partition {} from the meta index: {}",
                           partition_id, err);
               });
-      self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
+      self
+        ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
+                  vast::path{path.string()})
         .then(
           [=](const chunk_ptr& chunk) mutable {
             // Adjust layout stats by subtracting the events of the removed
@@ -907,7 +922,7 @@ index(index_actor::stateful_pointer<index_state> self,
             // loaded and answering a query.
             auto try_remove_all = [](const auto& p, const auto& error_fn) {
               std::error_code err{};
-              std::filesystem::remove_all(p.str(), err);
+              std::filesystem::remove_all(p, err);
               if (err)
                 error_fn();
             };
