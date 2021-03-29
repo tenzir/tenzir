@@ -24,8 +24,8 @@
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <map>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace vast::system {
@@ -68,7 +68,7 @@ public:
   meta_index_actor::pointer self;
 
   /// Maps a partition ID to the synopses for that partition.
-  std::unordered_map<uuid, partition_synopsis> synopses;
+  std::map<uuid, partition_synopsis> synopses;
 };
 
 /// The META INDEX is the first index actor that queries hit. The result

@@ -226,7 +226,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
           "{} checked {} partitions for predicate {} and got {} results",
           detail::pretty_type_name(this), synopses.size(), x, result.size());
         // Some calling paths require the result to be sorted.
-        std::sort(result.begin(), result.end());
+        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
         return result;
       };
       auto extract_expr = detail::overload{
@@ -248,8 +248,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 }
               }
             }
-            // Re-establish potentially violated invariant.
-            std::sort(result.begin(), result.end());
+            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
           } else if (lhs.kind == meta_extractor::field) {
             // We don't have to look into the synopses for type queries, just
@@ -278,8 +277,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                   result.push_back(synopsis.first);
               }
             }
-            // Re-establish potentially violated invariant.
-            std::sort(result.begin(), result.end());
+            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
           }
           VAST_WARN("{} cannot process attribute extractor: {}",
