@@ -62,7 +62,7 @@ filesystem_actor::behavior_type posix_filesystem(
         = filename.is_absolute() ? filename : self->state.root / filename;
       if (auto chk = chunk::mmap(std::filesystem::path{path.str()})) {
         ++self->state.stats.mmaps.successful;
-        ++self->state.stats.mmaps.bytes += chk->size();
+        ++self->state.stats.mmaps.bytes += chk->get()->size();
         return chk;
       } else {
         ++self->state.stats.mmaps.failed;
