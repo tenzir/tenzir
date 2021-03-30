@@ -291,4 +291,19 @@ TEST(project column detect wrong flat indices) {
   REQUIRE_EQUAL(proj.begin(), proj.end());
 }
 
+TEST(project column unspecified types) {
+  auto sut = zeek_conn_log[0];
+  auto proj = project<vast::data, vast::time>(sut, "proto", "ts");
+  REQUIRE(proj);
+  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  for (auto&& [proto, ts] : proj) {
+    REQUIRE(proto);
+    REQUIRE(!caf::holds_alternative<caf::none_t>(*proto));
+    REQUIRE(caf::holds_alternative<view<std::string>>(*proto));
+    CHECK_EQUAL(caf::get<vast::view<std::string>>(*proto), "udp");
+    REQUIRE(ts);
+    CHECK_GREATER_EQUAL(*ts, vast::time{});
+  }
+}
+
 FIXTURE_SCOPE_END()

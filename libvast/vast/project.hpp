@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/error.hpp"
+#include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_row.hpp"
 
@@ -74,10 +75,22 @@ public:
     reference operator*() const noexcept {
       auto get = [&](auto column, auto type) noexcept
         -> std::optional<view<type_to_data<decltype(type)>>> {
-        auto data = proj_.slice_.at(row_, column, std::move(type));
-        if (caf::holds_alternative<caf::none_t>(data))
-          return std::nullopt;
-        return caf::get<view<type_to_data<decltype(type)>>>(data);
+        if constexpr (std::is_same_v<std::decay_t<decltype(type)>, vast::type>) {
+          // TODO: Wrapping a data_view inside an optional is kind of
+          // non-sensical; we should consider offering an explicit operator bool
+          // to data_view that checks whether it holds a none_t, and drop the
+          // wrapping optional. As is, the ergonomics on the call site differ
+          // too much when using unspecified types.
+          auto data = proj_.slice_.at(row_, column);
+          if (caf::holds_alternative<caf::none_t>(data))
+            return std::nullopt;
+          return data;
+        } else {
+          auto data = proj_.slice_.at(row_, column, std::move(type));
+          if (caf::holds_alternative<caf::none_t>(data))
+            return std::nullopt;
+          return caf::get<view<type_to_data<decltype(type)>>>(data);
+        }
       };
       return detail::map_tuple_elements(
         get, proj_.indices_, std::make_tuple(data_to_type<Types>{}...));
@@ -150,11 +163,12 @@ public:
   [[nodiscard]] caf::error error() const noexcept {
     if (*this)
       return caf::none;
-    return caf::make_error(ec::invalid_argument,
-                           "cannot project invalid indices: at least one of "
-                           "the given indices is outside the valid range [0, "
-                           "{}): {}",
-                           size(), indices_);
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("cannot project invalid indices: at least one of "
+                  "the given indices is outside the valid range [0, "
+                  "{}): {}",
+                  size(), indices_));
   }
 
   /// Return the underlying table slice.
@@ -219,7 +233,8 @@ projection<Types...> project(table_slice slice, Hints&&... hints) {
     = [&](const auto& type, auto&& hint) noexcept -> table_slice::size_type {
     if constexpr (std::is_convertible_v<decltype(hint), offset>) {
       if (auto field = layout.at(hint))
-        if (congruent(field->type, type))
+        if (std::is_same_v<std::decay_t<decltype(type)>, vast::type> //
+            || congruent(field->type, type))
           if (auto flat_index = layout.flat_index_at(hint))
             return *flat_index;
     } else if constexpr (std::is_constructible_v<std::string_view,
@@ -230,7 +245,8 @@ projection<Types...> project(table_slice slice, Hints&&... hints) {
         auto name_view = std::string_view{full_name};
         while (true) {
           if (name_view == hint)
-            if (congruent(field.type(), type))
+            if (std::is_same_v<std::decay_t<decltype(type)>, vast::type> //
+                || congruent(field.type(), type))
               return flat_index;
           auto colon = name_view.find_first_of('.');
           if (colon == std::string_view::npos)
@@ -244,7 +260,8 @@ projection<Types...> project(table_slice slice, Hints&&... hints) {
       table_slice::size_type flat_index = 0;
       for (const auto& field : record_type::each{layout}) {
         if (flat_index == detail::narrow_cast<table_slice::size_type>(hint))
-          if (congruent(field.type(), type))
+          if (std::is_same_v<std::decay_t<decltype(type)>, vast::type> //
+              || congruent(field.type(), type))
             return flat_index;
         ++flat_index;
       }

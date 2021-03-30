@@ -838,6 +838,11 @@ VAST_TYPE_TRAIT(map);
 #undef VAST_TYPE_TRAIT
 
 template <>
+struct type_traits<vast::type> {
+  using data_type = vast::data;
+};
+
+template <>
 struct type_traits<none_type> {
   using data_type = caf::none_t;
 };
