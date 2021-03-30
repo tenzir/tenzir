@@ -45,10 +45,11 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   st.requested = std::move(max_events);
   st.local_schema = std::move(local_schema);
   st.accountant = std::move(accountant);
+  st.table_slice_size = table_slice_size;
   st.sink = nullptr;
   st.done = false;
   // Register with the accountant.
-  self->send(accountant, atom::announce_v, st.name);
+  self->send(st.accountant, atom::announce_v, st.name);
   init(self, std::move(type_registry), std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
@@ -58,24 +59,24 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   // Spin up the stream manager for the source.
   st.mgr = self->make_continuous_source(
     // init
-    [=](caf::unit_t&) {
+    [self](caf::unit_t&) {
       caf::timestamp now = std::chrono::system_clock::now();
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [=](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
+    [self](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
       VAST_DEBUG("{} tries to generate {} messages", self, num);
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) { out.push(std::move(slice)); };
       // We can produce up to num * table_slice_size events per run.
-      auto events = num * table_slice_size;
+      auto events = num * self->state.table_slice_size;
       if (st.requested)
         events = std::min(events, *st.requested - st.count);
       auto t = timer::start(st.metrics);
       auto [err, produced]
-        = st.reader->read(events, table_slice_size, push_slice);
+        = st.reader->read(events, self->state.table_slice_size, push_slice);
       VAST_DEBUG("{} read {} events", self, produced);
       t.stop(produced);
       st.count += produced;
@@ -123,10 +124,10 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       VAST_DEBUG("{} ended a generation round regularly", self);
     },
     // done?
-    [=](const caf::unit_t&) { return self->state.done; });
+    [self](const caf::unit_t&) { return self->state.done; });
   return {
-    [=](atom::get, atom::schema) { return self->state.reader->schema(); },
-    [=](atom::put, schema sch) -> caf::result<void> {
+    [self](atom::get, atom::schema) { return self->state.reader->schema(); },
+    [self](atom::put, schema sch) -> caf::result<void> {
       VAST_DEBUG("{} received {}", self, VAST_ARG("schema", sch));
       auto& st = self->state;
       if (auto err = st.reader->schema(std::move(sch));
@@ -134,12 +135,12 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         return err;
       return caf::unit;
     },
-    [=]([[maybe_unused]] expression& expr) {
+    [self]([[maybe_unused]] expression& expr) {
       // FIXME: Allow for filtering import data.
       // self->state.filter = std::move(expr);
       VAST_WARN("{} does not currently implement filter expressions", self);
     },
-    [=](stream_sink_actor<table_slice, std::string> sink) {
+    [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG("{} registers {}", self, VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
@@ -153,14 +154,14 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                                    self->current_sender()));
         return;
       }
-      st.sink = sink;
+      st.sink = std::move(sink);
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
       // Start streaming.
       auto name = std::string{st.reader->name()};
       st.mgr->add_outbound_path(st.sink, std::make_tuple(std::move(name)));
     },
-    [=](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v) {
       auto& st = self->state;
       caf::settings result;
       if (v >= status_verbosity::detailed) {
@@ -173,7 +174,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       }
       return result;
     },
-    [=](atom::wakeup) {
+    [self](atom::wakeup) {
       VAST_VERBOSE("{} wakes up to check for new input", self);
       auto& st = self->state;
       st.waiting_for_input = false;
@@ -182,7 +183,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       if (st.mgr->generate_messages())
         st.mgr->push();
     },
-    [=](atom::telemetry) {
+    [self](atom::telemetry) {
       VAST_DEBUG("{} got a telemetry atom", self);
       auto& st = self->state;
       send_report(self);

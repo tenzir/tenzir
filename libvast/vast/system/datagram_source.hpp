@@ -31,7 +31,6 @@
 #include <caf/io/broker.hpp>
 #include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
-//#include <caf/stream_source.hpp>
 #include <caf/streambuf.hpp>
 
 #include <chrono>
@@ -196,7 +195,7 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
       }
       return result;
     },
-    [=](atom::telemetry) {
+    [self](atom::telemetry) {
       auto& st = self->state;
       send_report(self);
       if (st.dropped_packets > 0) {

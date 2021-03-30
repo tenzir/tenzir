@@ -63,6 +63,9 @@ struct source_state {
   /// The import-local schema.
   vast::schema local_schema;
 
+  /// The maximum size for a table slice.
+  size_t table_slice_size;
+
   /// Current metrics for the accountant.
   measurement metrics;
 
