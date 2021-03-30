@@ -14,7 +14,6 @@
 #include "vast/detail/range_map.hpp"
 #include "vast/segment.hpp"
 #include "vast/segment_builder.hpp"
-#include "vast/store.hpp"
 #include "vast/uuid.hpp"
 
 #include <filesystem>
@@ -25,8 +24,30 @@ namespace vast {
 using segment_store_ptr = std::unique_ptr<segment_store>;
 
 /// A store that keeps its data in terms of segments.
-class segment_store : public store {
+class segment_store {
 public:
+  // -- helper types -----------------------------------------------------------
+
+  /// A session type for managing the state of a lookup.
+  class lookup {
+  public:
+    using uuid_iterator = std::vector<uuid>::iterator;
+
+    lookup(const segment_store& store, ids xs, std::vector<uuid>&& candidates);
+
+    caf::expected<table_slice> next();
+
+  private:
+    caf::expected<std::vector<table_slice>> handle_segment();
+
+    const segment_store& store_;
+    ids xs_;
+    std::vector<uuid> candidates_;
+    uuid_iterator first_ = candidates_.begin();
+    caf::expected<std::vector<table_slice>> buffer_{caf::no_error};
+    std::vector<table_slice>::iterator it_;
+  };
+
   // -- constructors, destructors, and assignment operators --------------------
 
   /// Constructs a segment store.
@@ -37,8 +58,6 @@ public:
   static segment_store_ptr
   make(std::filesystem::path dir, size_t max_segment_size,
        size_t in_memory_segments);
-
-  ~segment_store();
 
   // -- properties -------------------------------------------------------------
 
@@ -71,17 +90,17 @@ public:
 
   // -- implementation of store ------------------------------------------------
 
-  caf::error put(table_slice xs) override;
+  caf::error put(table_slice xs);
 
-  std::unique_ptr<store::lookup> extract(const ids& xs) const override;
+  std::unique_ptr<lookup> extract(const ids& xs) const;
 
-  caf::error erase(const ids& xs) override;
+  caf::error erase(const ids& xs);
 
-  caf::expected<std::vector<table_slice>> get(const ids& xs) override;
+  caf::expected<std::vector<table_slice>> get(const ids& xs);
 
-  caf::error flush() override;
+  caf::error flush();
 
-  void inspect_status(caf::settings& xs, system::status_verbosity v) override;
+  void inspect_status(caf::settings& xs, system::status_verbosity v);
 
 private:
   segment_store(std::filesystem::path dir, uint64_t max_segment_size,

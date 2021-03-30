@@ -15,6 +15,7 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>

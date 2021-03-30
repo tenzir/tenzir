@@ -30,6 +30,50 @@
 
 namespace vast {
 
+segment_store::lookup::lookup(const segment_store& store, ids xs,
+                              std::vector<uuid>&& candidates)
+  : store_{store}, xs_{std::move(xs)}, candidates_{std::move(candidates)} {
+  // nop
+}
+
+caf::expected<table_slice> segment_store::lookup::next() {
+  // Update the buffer if it has been consumed or the previous
+  // refresh return an error.
+  while (!buffer_ || it_ == buffer_->end()) {
+    buffer_ = handle_segment();
+    if (!buffer_)
+      // Either an error occurred, or the list of candidates is exhausted.
+      return buffer_.error();
+    it_ = buffer_->begin();
+  }
+  return *it_++;
+}
+
+caf::expected<std::vector<table_slice>>
+segment_store::lookup::handle_segment() {
+  if (first_ == candidates_.end())
+    return caf::no_error;
+  auto& cand = *first_++;
+  if (cand == store_.builder_.id()) {
+    VAST_DEBUG("{} looks into the active segment {}",
+               detail::pretty_type_name(this), cand);
+    return store_.builder_.lookup(xs_);
+  }
+  auto i = store_.cache_.find(cand);
+  if (i != store_.cache_.end()) {
+    VAST_DEBUG("{} got cache hit for segment {}",
+               detail::pretty_type_name(this), cand);
+    return i->second.lookup(xs_);
+  }
+  VAST_DEBUG("{} got cache miss for segment {}", detail::pretty_type_name(this),
+             cand);
+  auto s = store_.load_segment(cand);
+  if (!s)
+    return s.error();
+  store_.cache_.emplace(cand, *s);
+  return s->lookup(xs_);
+}
+
 // TODO: return expected<segment_store_ptr> for better error propagation.
 segment_store_ptr
 segment_store::make(std::filesystem::path dir, size_t max_segment_size,
@@ -56,10 +100,6 @@ segment_store::segment_store(std::filesystem::path dir,
   // nop
 }
 
-segment_store::~segment_store() {
-  // nop
-}
-
 caf::error segment_store::put(table_slice xs) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(xs));
   if (!segments_.inject(xs.offset(), xs.offset() + xs.rows(), builder_.id()))
@@ -73,62 +113,8 @@ caf::error segment_store::put(table_slice xs) {
   return flush();
 }
 
-std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
-  class lookup : public store::lookup {
-  public:
-    using uuid_iterator = std::vector<uuid>::iterator;
-
-    lookup(const segment_store& store, ids xs, std::vector<uuid>&& candidates)
-      : store_{store}, xs_{std::move(xs)}, candidates_{std::move(candidates)} {
-      // nop
-    }
-
-    caf::expected<table_slice> next() override {
-      // Update the buffer if it has been consumed or the previous
-      // refresh return an error.
-      while (!buffer_ || it_ == buffer_->end()) {
-        buffer_ = handle_segment();
-        if (!buffer_)
-          // Either an error occurred, or the list of candidates is exhausted.
-          return buffer_.error();
-        it_ = buffer_->begin();
-      }
-      return *it_++;
-    }
-
-  private:
-    caf::expected<std::vector<table_slice>> handle_segment() {
-      if (first_ == candidates_.end())
-        return caf::no_error;
-      auto& cand = *first_++;
-      if (cand == store_.builder_.id()) {
-        VAST_DEBUG("{} looks into the active segment {}",
-                   detail::pretty_type_name(this), cand);
-        return store_.builder_.lookup(xs_);
-      }
-      auto i = store_.cache_.find(cand);
-      if (i != store_.cache_.end()) {
-        VAST_DEBUG("{} got cache hit for segment {}",
-                   detail::pretty_type_name(this), cand);
-        return i->second.lookup(xs_);
-      }
-      VAST_DEBUG("{} got cache miss for segment {}",
-                 detail::pretty_type_name(this), cand);
-      auto s = store_.load_segment(cand);
-      if (!s)
-        return s.error();
-      store_.cache_.emplace(cand, *s);
-      return s->lookup(xs_);
-    }
-
-    const segment_store& store_;
-    ids xs_;
-    std::vector<uuid> candidates_;
-    uuid_iterator first_ = candidates_.begin();
-    caf::expected<std::vector<table_slice>> buffer_{caf::no_error};
-    std::vector<table_slice>::iterator it_;
-  };
-
+std::unique_ptr<segment_store::lookup>
+segment_store::extract(const ids& xs) const {
   VAST_TRACE_SCOPE("{}", VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.

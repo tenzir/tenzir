@@ -16,7 +16,6 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
-#include "vast/store.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
