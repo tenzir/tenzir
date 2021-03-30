@@ -183,7 +183,7 @@ struct formatter<vast::address> {
 
     auto out = ctx.out();
     if (result != nullptr)
-      format_to(out, "{}", result);
+      out = format_to(out, "{}", result);
     return out;
   }
 };
