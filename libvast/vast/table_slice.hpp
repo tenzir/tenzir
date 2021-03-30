@@ -165,11 +165,7 @@ public:
 #endif // VAST_ENABLE_ARROW
 
   /// Creates a typed view on a given set of columns of a table slice.
-  /// @relates table_slice::projection
-  /// @tparam Types... The explicitly specified types of the columns.
-  /// @param slice The table slice to project.
-  /// @param hints... The hints of the columns, specified as either flat
-  /// column indices, offsets, or column names.
+  /// @note This function is defined and documented in 'vast/project.hpp'.
   template <class... Types, class... Hints>
   friend projection<Types...> project(table_slice slice, Hints&&... hints);
 

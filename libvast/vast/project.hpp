@@ -10,7 +10,9 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/error.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_row.hpp"
 
 #include <iterator>
 
@@ -56,9 +58,14 @@ map_tuple_elements(Invocable& invocable, Tuple&& tuple, Tuples&&... tuples) {
 template <class... Types>
 class projection final {
 public:
+  // -- member types -----------------------------------------------------------
+
+  /// A column-wise iterator over selected columns in a table slice.
   // TODO: Consider making this a virtual base class that has multiple
   // implementations depending on the table slice type.
   struct iterator final {
+    // -- iterator facade ------------------------------------------------------
+
     // TODO: Consider making this a random access iterator.
     using iterator_category = std::forward_iterator_tag;
     using difference_type = std::ptrdiff_t;
@@ -95,11 +102,17 @@ public:
       return !(lhs == rhs);
     };
 
+    // -- constructors, destructors, and assignment operators ------------------
+
+    /// Construct a table slice projection iterator at a given row.
     iterator(const projection& proj, table_slice::size_type row) noexcept
       : proj_{proj}, row_{row} {
       // nop
     }
 
+    // -- concepts -------------------------------------------------------------
+
+    /// Support CAF's type inspection.
     template <class Inspector>
     friend auto inspect(Inspector& f, iterator& x) ->
       typename Inspector::result_type {
@@ -107,17 +120,49 @@ public:
                x.row_);
     }
 
+    // -- utility functions ----------------------------------------------------
+
+    /// Access a view to the whole table slice row that the iterator is working
+    /// on instead of just the selected columns.
+    [[nodiscard]] table_slice_row row() const noexcept {
+      return {proj_.slice(), row_};
+    }
+
+    // -- implementation details -----------------------------------------------
+
   private:
     const projection& proj_ = {};
     table_slice::size_type row_ = 0;
   };
 
-  explicit operator bool() const noexcept {
+  // -- utility functions ------------------------------------------------------
+
+  /// Check for validity of the projection. Returns true if all indices are
+  /// valid.
+  [[nodiscard]] explicit operator bool() const noexcept {
     return std::all_of(indices_.begin(), indices_.end(),
                        [size = size()](table_slice::size_type index) noexcept {
                          return index >= 0 && index < size;
                        });
   }
+
+  /// Returns an error that helps debug wrong indices.
+  [[nodiscard]] caf::error error() const noexcept {
+    if (*this)
+      return caf::none;
+    return caf::make_error(ec::invalid_argument,
+                           "cannot project invalid indices: at least one of "
+                           "the given indices is outside the valid range [0, "
+                           "{}): {}",
+                           size(), indices_);
+  }
+
+  /// Return the underlying table slice.
+  [[nodiscard]] const table_slice& slice() const noexcept {
+    return slice_;
+  }
+
+  // -- container facade -------------------------------------------------------
 
   [[nodiscard]] table_slice::size_type size() const noexcept {
     return slice_.rows();
@@ -133,6 +178,9 @@ public:
     return {*this, size()};
   }
 
+  // -- constructors, destructors, and assignment operators --------------------
+
+  /// Construct a table slice projection for a given set of indices (columns).
   projection(
     table_slice slice,
     std::array<table_slice::size_type, sizeof...(Types)> indices) noexcept
@@ -140,17 +188,28 @@ public:
     // nop
   }
 
+  // -- concepts ---------------------------------------------------------------
+
+  /// Support CAF's type inspection.
   template <class Inspector>
   friend auto inspect(Inspector& f, projection& x) ->
     typename Inspector::result_type {
     return f(caf::meta::type_name("vast.projection"), x.slice_, x.indices_);
   }
 
+  // -- implementation details -------------------------------------------------
+
 private:
   const table_slice slice_ = {};
   const std::array<table_slice::size_type, sizeof...(Types)> indices_;
 };
 
+/// Creates a typed view on a given set of columns of a table slice.
+/// @relates projection
+/// @tparam Types... The explicitly specified types of the columns.
+/// @param slice The table slice to project.
+/// @param hints... The hints of the columns, specified as either flat
+/// column indices, offsets, or column names.
 template <class... Types, class... Hints>
 projection<Types...> project(table_slice slice, Hints&&... hints) {
   static_assert(sizeof...(Types) == sizeof...(Hints),
