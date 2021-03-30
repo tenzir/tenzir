@@ -297,12 +297,13 @@ void index_state::add_flush_listener(flush_listener_actor listener) {
 
 // The whole purpose of the `-b` flag is to somehow block until all imported
 // data is available for querying, so we have to layer hack upon hack here to
-// achieve this most of the time.
+// achieve this most of the time. This is only used for integration tests.
+// Note that there's still a race condition here if the call to
+// `notify_flush_listeners()` arrives when there's still data en route to
+// the unpersisted partitions.
 // TODO(ch19583): Rip out the whole 'notifying_stream_manager' and replace it
 // with some kind of ping/pong protocol.
 void index_state::notify_flush_listeners() {
-  if (!unpersisted.empty())
-    return;
   VAST_DEBUG("{} sends 'flush' messages to {} listeners", self,
              flush_listeners.size());
   for (auto& listener : flush_listeners) {
@@ -727,7 +728,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.accountant = std::move(accountant);
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      VAST_WARN("{} adds flush listener", self);
+      VAST_DEBUG("{} adds flush listener", self);
       self->state.add_flush_listener(std::move(listener));
     },
     [self](vast::expression expr) -> caf::result<void> {
