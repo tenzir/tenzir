@@ -16,6 +16,42 @@
 
 namespace vast {
 
+namespace detail {
+
+// Returns a tuple of addresses for the element at the given index in each of
+// the given tuples.
+template <std::size_t Index, class... Tuples>
+constexpr auto map_tuple_elements_get_addresses(Tuples&&... tuples) {
+  return std::make_tuple(std::addressof(std::get<Index>(tuples))...);
+}
+
+// Helper utility of `map_tuple_elements` for use with index sequences.
+template <class Invocable, class... Tuples, std::size_t... Indices>
+constexpr auto
+map_tuple_elements_impl(std::index_sequence<Indices...>, Invocable& invocable,
+                        Tuples&&... tuples) {
+  return std::make_tuple(std::apply(
+    [&](auto&&... args) {
+      return std::invoke(invocable, *std::forward<decltype(args)>(args)...);
+    },
+    map_tuple_elements_get_addresses<Indices>(tuples...))...);
+}
+
+// Invoke function for each of the given tuples, capturing the result in a
+// tuple itself.
+template <class Invocable, class Tuple, class... Tuples>
+constexpr auto
+map_tuple_elements(Invocable& invocable, Tuple&& tuple, Tuples&&... tuples) {
+  constexpr auto size = std::tuple_size_v<std::decay_t<Tuple>>;
+  static_assert(((size == std::tuple_size_v<std::decay_t<Tuples>>) &&...),
+                "tuple sizes must match exactly");
+  return map_tuple_elements_impl(std::make_index_sequence<size>{}, invocable,
+                                 std::forward<Tuple>(tuple),
+                                 std::forward<Tuples>(tuples)...);
+}
+
+} // namespace detail
+
 /// A typed view on a given set of columns of a table slice.
 template <class... Types>
 class projection final {
@@ -29,7 +65,6 @@ public:
     using reference = std::tuple<std::optional<view<Types>>...>;
 
     reference operator*() const noexcept {
-      auto indices_it = proj_.indices_.begin();
       auto get = [&](auto column, auto type) noexcept
         -> std::optional<view<type_to_data<decltype(type)>>> {
         auto data = proj_.slice_.at(row_, column, std::move(type));
@@ -37,7 +72,8 @@ public:
           return std::nullopt;
         return caf::get<view<type_to_data<decltype(type)>>>(data);
       };
-      return {get(*(indices_it++), data_to_type<Types>{})...};
+      return detail::map_tuple_elements(
+        get, proj_.indices_, std::make_tuple(data_to_type<Types>{}...));
     }
 
     iterator& operator++() noexcept {
