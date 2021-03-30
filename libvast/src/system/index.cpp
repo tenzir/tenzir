@@ -114,9 +114,8 @@ caf::error extract_partition_synopsis(
   // Use blocking operations here since this is part of the startup.
   auto chunk = chunk::mmap(partition_path);
   if (!chunk)
-    return caf::make_error(ec::system_error, "could not mmap partition at "
-                                               + partition_path.string());
-  const auto* partition = fbs::GetPartition(chunk->data());
+    return std::move(chunk.error());
+  const auto* partition = fbs::GetPartition(chunk->get()->data());
   if (partition->partition_type() != fbs::partition::Partition::v0)
     return caf::make_error(ec::format_error, "found unsupported version for "
                                              "partition "
@@ -221,7 +220,8 @@ caf::error index_state::load_from_disk() {
         VAST_WARN("{} could not mmap partition at {}", self, part_dir);
         continue;
       }
-      const auto* ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->data());
+      const auto* ps_flatbuffer
+        = fbs::GetPartitionSynopsis(chunk->get()->data());
       partition_synopsis ps;
       if (ps_flatbuffer->partition_synopsis_type()
           != fbs::partition_synopsis::PartitionSynopsis::v0)

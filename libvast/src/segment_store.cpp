@@ -394,8 +394,7 @@ caf::error
 segment_store::register_segment(const std::filesystem::path& filename) {
   auto chk = chunk::mmap(filename);
   if (!chk)
-    return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
-                           filename.string());
+    return std::move(chk.error());
   // We don't verify the segment here, since doing that would access
   // most of the pages of the mapping and effectively cause us to
   // read of the whole archive contents from disk. When the database
@@ -403,7 +402,7 @@ segment_store::register_segment(const std::filesystem::path& filename) {
   // (see also tdhtf/ch1935)
   // TODO: Create a library function that performs verification on a
   // subset of the fields of a flatbuffer table.
-  auto s = fbs::GetSegment(chk->data());
+  auto s = fbs::GetSegment(chk->get()->data());
   if (s == nullptr)
     return caf::make_error(ec::format_error, "segment integrity check failed");
   auto s0 = s->segment_as_v0();
@@ -427,9 +426,8 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
              filename);
   auto chk = chunk::mmap(filename);
   if (!chk)
-    return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
-                           filename.string());
-  if (auto segment = segment::make(std::move(chk))) {
+    return std::move(chk.error());
+  if (auto segment = segment::make(std::move(*chk))) {
     return segment;
   } else {
     VAST_ERROR("{} failed to load segment at {} with error: {}",

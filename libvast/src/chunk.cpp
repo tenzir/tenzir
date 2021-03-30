@@ -53,26 +53,28 @@ chunk_ptr chunk::make(view_type view, deleter_type&& deleter) noexcept {
   return chunk_ptr{new chunk{view, std::move(deleter)}, false};
 }
 
-chunk_ptr chunk::mmap(const std::filesystem::path& filename, size_type size,
-                      size_type offset) {
+caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
+                                     size_type size, size_type offset) {
   // Figure out the file size if not provided.
   if (size == 0) {
     std::error_code err{};
     size = std::filesystem::file_size(filename, err);
-    if (size == static_cast<std::uintmax_t>(-1)) {
-      VAST_ERROR("failed to get file size for filename {}: {}", filename,
-                 err.message());
-      return nullptr;
-    }
+    if (size == static_cast<std::uintmax_t>(-1))
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to get file size for file"
+                                         "{}: {}",
+                                         filename, err.message()));
   }
   // Open and memory-map the file.
   auto fd = ::open(filename.c_str(), O_RDONLY, 0644);
   if (fd == -1)
-    return {};
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to open file {}", filename));
   auto map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, offset);
   ::close(fd);
   if (map == MAP_FAILED)
-    return {};
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to mmap file {}", filename));
   auto deleter = [=]() noexcept { ::munmap(map, size); };
   return make(map, size, std::move(deleter));
 }
