@@ -142,7 +142,7 @@ FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
 // speed, so it must be enabled manually.
 TEST_DISABLED(large_file_io) {
   using namespace vast::binary_byte_literals;
-  auto filename = directory / "very-large.file";
+  auto filename = std::filesystem::path{directory.str()} / "very-large.file";
   auto size = 3_GiB;
   {
     MESSAGE("Generate a sparse file");
@@ -162,16 +162,16 @@ TEST_DISABLED(large_file_io) {
     if (auto err = f.read(ptr, size))
       FAIL(err);
     REQUIRE(f.close());
-    CHECK(std::filesystem::remove_all(std::filesystem::path{filename.str()}));
+    CHECK(std::filesystem::remove_all(filename));
     MESSAGE("write back to disk");
-    auto filename_copy = filename + ".copy";
+    auto filename_copy = filename;
+    filename_copy += ".copy";
     auto f2 = file{filename_copy};
     REQUIRE(f2.open(file::write_only));
     if (auto err = f2.write(ptr, size))
       FAIL(err);
     REQUIRE(f2.close());
-    CHECK(
-      std::filesystem::remove_all(std::filesystem::path{filename_copy.str()}));
+    CHECK(std::filesystem::remove_all(filename_copy));
   }
 }
 

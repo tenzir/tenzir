@@ -13,19 +13,20 @@
 #include "vast/path.hpp"
 
 #include <cstddef>
+#include <filesystem>
 
 namespace vast::io {
 
-caf::error write(const path& filename, span<const std::byte> xs) {
+caf::error
+write(const std::filesystem::path& filename, span<const std::byte> xs) {
   file f{filename};
   if (!f.open(file::write_only))
     return caf::make_error(ec::filesystem_error, "failed open file");
   return f.write(xs.data(), xs.size());
 }
 
-caf::error
-write(const std::filesystem::path& filename, span<const std::byte> xs) {
-  return write(vast::path{filename.string()}, xs);
+caf::error write(const path& filename, span<const std::byte> xs) {
+  return write(std::filesystem::path{filename.str()}, xs);
 }
 
 } // namespace vast::io

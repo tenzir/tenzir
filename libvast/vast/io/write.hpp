@@ -19,9 +19,9 @@ namespace vast::io {
 /// @param filename The file to write to.
 /// @param xs The buffer to read from.
 /// @returns An error if the operation failed.
-caf::error write(const path& filename, span<const std::byte> xs);
-
 caf::error
 write(const std::filesystem::path& filename, span<const std::byte> xs);
+
+caf::error write(const vast::path& filename, span<const std::byte> xs);
 
 } // namespace vast::io

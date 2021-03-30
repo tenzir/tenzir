@@ -9,20 +9,17 @@
 #pragma once
 
 #include "vast/config.hpp"
-#include "vast/path.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 
 #include <cstdint>
+#include <filesystem>
 
 namespace vast {
 
 /// A simple file abstraction.
 class file {
-  file(const file&) = delete;
-  file& operator=(const file&) = delete;
-
 public:
 /// The native type of a file.
 #if VAST_POSIX
@@ -44,7 +41,10 @@ public:
 
   /// Constructs a file from a path.
   /// @param p The file path.
-  explicit file(vast::path p);
+  explicit file(std::filesystem::path p);
+
+  file(const file&) = delete;
+  file& operator=(const file&) = delete;
 
   file(file&&) = default;
 
@@ -88,7 +88,7 @@ public:
 
   /// Retrieves the path for this file.
   /// @returns The path for this file.
-  const vast::path& path() const;
+  const std::filesystem::path& path() const;
 
   /// Retrieves the native handle for this file.
   /// @returns The native handle.
@@ -98,7 +98,7 @@ private:
   native_type handle_;
   bool is_open_ = false;
   bool seek_failed_ = false;
-  vast::path path_;
+  std::filesystem::path path_;
 };
 
 } // namespace vast
