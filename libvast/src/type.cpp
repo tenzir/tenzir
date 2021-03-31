@@ -645,14 +645,9 @@ bool is_container(const type& x) {
 namespace {
 
 struct type_congruence_checker {
-  template <class T>
-  bool operator()(const T&, const T&) const {
-    return true;
-  }
-
-  template <class T, class U>
-  bool operator()(const T&, const U&) const {
-    return false;
+  template <class T, class U = T>
+  constexpr bool operator()(const T&, const U&) const {
+    return std::is_same_v<std::decay_t<T>, std::decay_t<U>>;
   }
 
   template <class T>
