@@ -10,11 +10,12 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/path.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/filesystem_statistics.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
+
+#include <filesystem>
 
 namespace vast::system {
 
@@ -25,7 +26,7 @@ struct posix_filesystem_state {
   filesystem_statistics stats;
 
   /// The filesystem root.
-  path root;
+  std::filesystem::path root;
 
   /// The actor name.
   static inline const char* name = "posix-filesystem";
@@ -36,7 +37,8 @@ struct posix_filesystem_state {
 /// @param root The filesystem root. The actor prepends this path to all
 ///             operations that include a path parameter.
 /// @returns The actor behavior.
-filesystem_actor::behavior_type posix_filesystem(
-  filesystem_actor::stateful_pointer<posix_filesystem_state> self, path root);
+filesystem_actor::behavior_type
+posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
+                 const std::filesystem::path& root);
 
 } // namespace vast::system

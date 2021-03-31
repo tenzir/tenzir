@@ -284,13 +284,13 @@ using disk_monitor_actor = typed_actor_fwd<
 using filesystem_actor = typed_actor_fwd<
   // Writes a chunk of data to a given path. Creates intermediate directories
   // if needed.
-  caf::replies_to<atom::write, path, chunk_ptr>::with< //
+  caf::replies_to<atom::write, std::filesystem::path, chunk_ptr>::with< //
     atom::ok>,
   // Reads a chunk of data from a given path and returns the chunk.
-  caf::replies_to<atom::read, path>::with< //
+  caf::replies_to<atom::read, std::filesystem::path>::with< //
     chunk_ptr>,
   // Memory-maps a file.
-  caf::replies_to<atom::mmap, path>::with< //
+  caf::replies_to<atom::mmap, std::filesystem::path>::with< //
     chunk_ptr>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
@@ -299,7 +299,8 @@ using filesystem_actor = typed_actor_fwd<
 using active_partition_actor = typed_actor_fwd<
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // Persists the active partition at the specified path.
-  caf::replies_to<atom::persist, path, path>::with< //
+  caf::replies_to<atom::persist, std::filesystem::path,
+                  std::filesystem::path>::with< //
     std::shared_ptr<partition_synopsis>>,
   // INTERNAL: A repeatedly called continuation of the persist request.
   caf::reacts_to<atom::internal, atom::persist, atom::resume>>

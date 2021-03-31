@@ -23,17 +23,16 @@
 
 namespace vast::system {
 
-filesystem_actor::behavior_type posix_filesystem(
-  filesystem_actor::stateful_pointer<posix_filesystem_state> self, path root) {
+filesystem_actor::behavior_type
+posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
+                 const std::filesystem::path& root) {
   self->state.root = root;
   return {
-    [self](atom::write, const path& filename,
+    [self](atom::write, const std::filesystem::path& filename,
            chunk_ptr chk) -> caf::result<atom::ok> {
       VAST_ASSERT(chk != nullptr);
-      auto path
-        = filename.is_absolute()
-            ? std::filesystem::path{filename.str()}
-            : std::filesystem::path{self->state.root.str()} / filename.str();
+      const auto path
+        = filename.is_absolute() ? filename : self->state.root / filename;
       if (auto err = io::save(path, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;
@@ -43,11 +42,10 @@ filesystem_actor::behavior_type posix_filesystem(
         return atom::ok_v;
       }
     },
-    [self](atom::read, const path& filename) -> caf::result<chunk_ptr> {
-      auto path
-        = filename.is_absolute()
-            ? std::filesystem::path{filename.str()}
-            : std::filesystem::path{self->state.root.str()} / filename.str();
+    [self](atom::read,
+           const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
+      const auto path
+        = filename.is_absolute() ? filename : self->state.root / filename;
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
         ++self->state.stats.reads.bytes += bytes->size();
@@ -57,10 +55,11 @@ filesystem_actor::behavior_type posix_filesystem(
         return bytes.error();
       }
     },
-    [self](atom::mmap, const path& filename) -> caf::result<chunk_ptr> {
-      auto path
+    [self](atom::mmap,
+           const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
+      const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
-      if (auto chk = chunk::mmap(std::filesystem::path{path.str()})) {
+      if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
         ++self->state.stats.mmaps.bytes += chk->get()->size();
         return chk;

@@ -31,6 +31,7 @@
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 
+#include <filesystem>
 #include <fstream>
 
 namespace vast::system {
@@ -113,14 +114,21 @@ importer_state::~importer_state() {
 }
 
 caf::error importer_state::read_state() {
-  auto file = dir / "current_id_block";
-  if (exists(file)) {
+  const auto file = dir / "current_id_block";
+  std::error_code err{};
+  const auto file_exists = std::filesystem::exists(file, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to read state from import "
+                                       "directory {}: {}",
+                                       file, err.message()));
+  if (file_exists) {
     VAST_VERBOSE("{} reads persistent state from {}", self, file);
-    std::ifstream state_file{to_string(file)};
+    std::ifstream state_file{file.string()};
     state_file >> current.end;
     if (!state_file)
-      return caf::make_error(ec::parse_error,
-                             "unable to read importer state file", file.str());
+      return caf::make_error(
+        ec::parse_error, "unable to read importer state file", file.string());
     state_file >> current.next;
     if (!state_file) {
       VAST_WARN("{} did not find next ID position in state file; "
@@ -137,11 +145,17 @@ caf::error importer_state::read_state() {
 }
 
 caf::error importer_state::write_state(write_mode mode) {
-  if (!exists(dir)) {
-    if (auto err = mkdir(dir))
-      return err;
-  }
-  std::ofstream state_file{to_string(dir / "current_id_block")};
+  std::error_code err{};
+  const auto dir_exists = std::filesystem::exists(dir, err);
+  if (!dir_exists)
+    if (const auto created_dir = std::filesystem::create_directories(dir, err);
+        !created_dir)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to create importer directory "
+                                         "{}: {}",
+                                         dir, err.message()));
+  const auto block = dir / "current_id_block";
+  std::ofstream state_file{block.string()};
   state_file << current.end;
   if (mode == write_mode::with_next) {
     state_file << " " << current.next;
@@ -261,11 +275,12 @@ void importer_state::send_report() {
 }
 
 importer_actor::behavior_type
-importer(importer_actor::stateful_pointer<importer_state> self, path dir,
-         node_actor::pointer node, const archive_actor& archive,
-         index_actor index, const type_registry_actor& type_registry) {
+importer(importer_actor::stateful_pointer<importer_state> self,
+         const std::filesystem::path& dir, node_actor::pointer node,
+         const archive_actor& archive, index_actor index,
+         const type_registry_actor& type_registry) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(dir));
-  self->state.dir = std::move(dir);
+  self->state.dir = dir;
   auto err = self->state.read_state();
   if (err) {
     VAST_ERROR("{} failed to load state: {}", self, render(err));

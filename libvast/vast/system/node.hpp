@@ -11,7 +11,6 @@
 #include "vast/aliases.hpp"
 #include "vast/command.hpp"
 #include "vast/error.hpp"
-#include "vast/path.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/component_registry.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -21,6 +20,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
+#include <filesystem>
 #include <map>
 #include <string>
 
@@ -59,7 +59,7 @@ struct node_state {
   // -- member types -----------------------------------------------------------
 
   /// Stores the base directory for persistent state.
-  path dir = {};
+  std::filesystem::path dir = {};
 
   /// The component registry.
   component_registry registry = {};
@@ -74,7 +74,8 @@ struct node_state {
 /// @param dir The directory where to store persistent state.
 /// @param shutdown_grace_period Time to give components to shutdown cleanly.
 node_actor::behavior_type
-node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
+node(node_actor::stateful_pointer<node_state> self, std::string name,
+     const std::filesystem::path& dir,
      std::chrono::milliseconds shutdown_grace_period);
 
 } // namespace vast::system

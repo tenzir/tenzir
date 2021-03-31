@@ -155,8 +155,7 @@ partition_actor partition_factory::operator()(const uuid& id) const {
               != state_.persisted_partitions.end());
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", state_.self, id, path);
-  return state_.self->spawn(passive_partition, id, filesystem_,
-                            vast::path{path.string()});
+  return state_.self->spawn(passive_partition, id, filesystem_, path);
 }
 
 filesystem_actor& partition_factory::filesystem() {
@@ -348,9 +347,7 @@ void index_state::decomission_active_partition() {
   auto part_dir = partition_path(id);
   auto synopsis_dir = partition_synopsis_path(id);
   VAST_DEBUG("{} persists active partition to {}", self, part_dir);
-  self
-    ->request(actor, caf::infinite, atom::persist_v,
-              vast::path{part_dir.string()}, vast::path{synopsis_dir.string()})
+  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=](std::shared_ptr<partition_synopsis>& ps) {
         VAST_DEBUG("{} successfully persisted partition {}", self, id);
@@ -584,8 +581,7 @@ void index_state::flush_to_disk() {
   }
   auto chunk = fbs::release(builder);
   self
-    ->request(caf::actor_cast<caf::actor>(filesystem), caf::infinite,
-              atom::write_v, vast::path{index_filename().string()}, chunk)
+    ->request(filesystem, caf::infinite, atom::write_v, index_filename(), chunk)
     .then(
       [=](atom::ok) {
         VAST_DEBUG("{} successfully persisted index state", self);
@@ -597,10 +593,10 @@ void index_state::flush_to_disk() {
 
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, std::filesystem::path dir,
+      filesystem_actor filesystem, const std::filesystem::path& dir,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
-      std::filesystem::path meta_index_dir, double meta_index_fp_rate) {
+      const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
   VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
                    VAST_ARG(taste_partitions), VAST_ARG(num_workers),
@@ -887,9 +883,7 @@ index(index_actor::stateful_pointer<index_state> self,
                           "partition {} from the meta index: {}",
                           partition_id, err);
               });
-      self
-        ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
-                  vast::path{path.string()})
+      self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
         .then(
           [=](const chunk_ptr& chunk) mutable {
             // Adjust layout stats by subtracting the events of the removed

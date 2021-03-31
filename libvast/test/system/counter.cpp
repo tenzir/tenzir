@@ -64,7 +64,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // Spawn INDEX and ARCHIVE, and a mock client.
     MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
     auto fs = self->spawn(vast::system::posix_filesystem, directory);
-    auto indexdir = std::filesystem::path{directory.str()} / "index";
+    auto indexdir = directory / "index";
     index = self->spawn(system::index, fs, indexdir,
                         defaults::import::table_slice_size, 100, 3, 1, indexdir,
                         0.01);

@@ -263,9 +263,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 /// @pre `partition_capacity > 0
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, std::filesystem::path dir,
+      filesystem_actor filesystem, const std::filesystem::path& dir,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
-      std::filesystem::path meta_index_dir, double meta_index_fp_rate);
+      const std::filesystem::path& meta_index_dir, double meta_index_fp_rate);
 
 } // namespace vast::system

@@ -49,6 +49,7 @@
 #include <flatbuffers/base.h> // FLATBUFFERS_MAX_BUFFER_SIZE
 #include <flatbuffers/flatbuffers.h>
 
+#include <filesystem>
 #include <memory>
 
 namespace vast::system {
@@ -490,7 +491,8 @@ active_partition_actor::behavior_type active_partition(
     [self](atom::subscribe, atom::flush, const flush_listener_actor& listener) {
       self->state.add_flush_listener(listener);
     },
-    [self](atom::persist, const path& part_dir, const path& synopsis_dir) {
+    [self](atom::persist, const std::filesystem::path& part_dir,
+           const std::filesystem::path& synopsis_dir) {
       VAST_DEBUG("{} got persist atom", self);
       // Ensure that the response promise has not already been initialized.
       VAST_ASSERT(
@@ -690,7 +692,7 @@ active_partition_actor::behavior_type active_partition(
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, class path path) {
+  filesystem_actor filesystem, const std::filesystem::path& path) {
   self->state.self = self;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,

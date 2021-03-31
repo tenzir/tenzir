@@ -17,6 +17,8 @@
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
+#include <filesystem>
+
 using namespace caf;
 using namespace vast;
 

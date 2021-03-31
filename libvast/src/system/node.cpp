@@ -137,7 +137,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   auto& system = put_dictionary(req_state->content, "system");
   if (v >= status_verbosity::info) {
     put(system, "in-memory-table-slices", table_slice::instances());
-    put(system, "database-path", self->state.dir.str());
+    put(system, "database-path", self->state.dir.string());
     detail::merge_settings(detail::get_status(), system);
   }
   if (v >= status_verbosity::debug) {
@@ -554,7 +554,8 @@ node_state::spawn_command(const invocation& inv,
 }
 
 node_actor::behavior_type
-node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
+node(node_actor::stateful_pointer<node_state> self, std::string name,
+     const std::filesystem::path& dir,
      std::chrono::milliseconds shutdown_grace_period) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);

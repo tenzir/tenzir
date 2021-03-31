@@ -37,20 +37,27 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
   auto db_dir
     = get_or(opts, "vast.db-directory", defaults::system::db_directory);
-  auto abs_dir = path{db_dir}.complete();
-  if (!exists(abs_dir)) {
-    if (auto err = mkdir(abs_dir))
+  std::error_code err{};
+  const auto abs_dir = std::filesystem::absolute(db_dir, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to get absolute path to "
+                                       "db-directory {}: {}",
+                                       db_dir, err.message()));
+  const auto dir_exists = std::filesystem::exists(abs_dir, err);
+  if (!dir_exists) {
+    if (auto created_dir = std::filesystem::create_directory(abs_dir, err);
+        !created_dir)
       return caf::make_error(ec::filesystem_error,
-                             "unable to create db-directory:", abs_dir.str(),
-                             err.context());
+                             fmt::format("unable to create db-directory {}: {}",
+                                         abs_dir, err.message()));
   }
   // Write VERSION file if it doesnt exist yet. Note that an empty db dir
   // often already exists before the node is initialized, e.g., when the log
   // output is written into the same directory.
-  const auto abs_dir_path = std::filesystem::path{abs_dir.str()};
-  if (auto err = initialize_db_version(abs_dir_path))
+  if (auto err = initialize_db_version(abs_dir))
     return err;
-  if (const auto version = read_db_version(abs_dir_path);
+  if (const auto version = read_db_version(abs_dir);
       version != db_version::latest) {
     VAST_INFO("Cannot start VAST, breaking changes detected in the database "
               "directory");
@@ -59,11 +66,13 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
       ec::breaking_change,
       "breaking changes in the current database directory:", reasons);
   }
-  if (!abs_dir.is_writable())
-    return caf::make_error(ec::filesystem_error,
-                           "unable to write to db-directory:", abs_dir.str());
+  if (const auto is_writable = ::access(abs_dir.c_str(), W_OK) == 0;
+      !is_writable)
+    return caf::make_error(
+      ec::filesystem_error,
+      "unable to write to db-directory:", abs_dir.string());
   // Acquire PID lock.
-  auto pid_file = std::filesystem::path{abs_dir.str()} / "pid.lock";
+  auto pid_file = abs_dir / "pid.lock";
   VAST_DEBUG("{} acquires PID lock {}", node, pid_file.string());
   if (auto err = detail::acquire_pid_file(pid_file))
     return err;

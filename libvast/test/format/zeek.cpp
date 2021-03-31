@@ -393,7 +393,7 @@ FIXTURE_SCOPE(zeek_writer_tests, writer_fixture)
 TEST(zeek writer) {
   // Perform the writing.
   caf::settings options;
-  caf::put(options, "vast.export.write", directory.str());
+  caf::put(options, "vast.export.write", directory.string());
   format::zeek::writer writer{options};
   for (auto& slice : zeek_conn_log)
     if (auto err = writer.write(slice))
@@ -402,9 +402,13 @@ TEST(zeek writer) {
     if (auto err = writer.write(slice))
       FAIL("failed to write HTTP log");
   auto conn_layout = zeek_conn_log[0].layout();
-  CHECK(exists(directory / conn_layout.name() + ".log"));
+  const auto conn_layout_log
+    = std::filesystem::path{conn_layout.name() + ".log"};
+  CHECK(std::filesystem::exists(directory / conn_layout_log));
   auto http_layout = zeek_http_log[0].layout();
-  CHECK(exists(directory / http_layout.name() + ".log"));
+  const auto http_layout_log
+    = std::filesystem::path{http_layout.name() + ".log"};
+  CHECK(std::filesystem::exists(directory / http_layout_log));
   // TODO: these tests should verify content as well.
 }
 
