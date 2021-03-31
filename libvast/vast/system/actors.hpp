@@ -14,11 +14,37 @@
 
 #include <caf/replies_to.hpp>
 
+#include <filesystem>
+
 #define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast_actors, type)
+
+// NOLINTNEXTLINE(cert-dcl58-cpp)
+namespace std::filesystem {
+
+// TODO: With CAF 0.18, drop this inspector that is—strictly speaking—undefined
+// behavior and replace it with a specialization of caf::inspector_access.
+template <class Inspector>
+typename Inspector::result_type
+inspect(Inspector& f, ::std::filesystem::path& x) {
+  auto str = x.string();
+  if constexpr (std::is_same_v<typename Inspector::result_type, void>) {
+    f(str);
+    if constexpr (Inspector::reads_state)
+      x = {str};
+    return;
+  } else {
+    auto result = f(str);
+    if constexpr (Inspector::reads_state)
+      x = {str};
+    return result;
+  }
+}
+
+} // namespace std::filesystem
 
 namespace vast::system {
 
-/// Helper utility that enables extending typed actor forwartd declarations
+/// Helper utility that enables extending typed actor forward declarations
 /// without including <caf/typed_actor.hpp>.
 template <class... Fs>
 struct typed_actor_fwd;
@@ -367,6 +393,8 @@ using node_actor = typed_actor_fwd<
 // -- type announcements -------------------------------------------------------
 
 CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
+
+  VAST_ADD_TYPE_ID((std::filesystem::path))
 
   VAST_ADD_TYPE_ID((vast::system::accountant_actor))
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))

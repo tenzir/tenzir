@@ -42,6 +42,7 @@
 #include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <filesystem>
 #include <utility>
 #include <vector>
 
