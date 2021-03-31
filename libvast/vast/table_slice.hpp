@@ -27,7 +27,7 @@ namespace vast {
 /// accessing homogenous data independent of the concrete carrier format.
 class table_slice final {
 public:
-  // -- member types -----------------------------------------------------------
+  // -- member types and friends ----------------------------------------------
 
   /// Platform-independent unsigned integer type used for sizes.
   using size_type = uint64_t;
@@ -37,6 +37,10 @@ public:
     no,  ///< Disable FlatBuffers table verification.
     yes, ///< Enable FlatBuffers table verification.
   };
+
+  /// A typed view on a given set of columns of a table slice.
+  template <class... Types>
+  friend class projection;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -160,6 +164,11 @@ public:
 
 #endif // VAST_ENABLE_ARROW
 
+  /// Creates a typed view on a given set of columns of a table slice.
+  /// @note This function is defined and documented in 'vast/project.hpp'.
+  template <class... Types, class... Hints>
+  friend projection<Types...> project(table_slice slice, Hints&&... hints);
+
   // -- concepts ---------------------------------------------------------------
 
   /// Returns an immutable view on the underlying binary representation of a
@@ -236,8 +245,8 @@ private:
 
 // -- operations ---------------------------------------------------------------
 
-/// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice` into
-/// multiple slices if `selection` produces gaps.
+/// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice`
+/// into multiple slices if `selection` produces gaps.
 /// @param slice The input table slice.
 /// @param selection ID set for selecting events from `slice`.
 /// @returns new table slices of the same implementation type as `slice` from
@@ -254,8 +263,8 @@ std::vector<table_slice> select(const table_slice& slice, const ids& selection);
 /// @pre `num_rows > 0`
 table_slice truncate(const table_slice& slice, size_t num_rows);
 
-/// Splits a table slice into two slices such that the first slice contains the
-/// rows `[0, partition_point)` and the second slice contains the rows
+/// Splits a table slice into two slices such that the first slice contains
+/// the rows `[0, partition_point)` and the second slice contains the rows
 /// `[partition_point, n)`, where `n = slice.rows()`.
 /// @param slice The input table slice.
 /// @param partition_point The index of the first row for the second slice.

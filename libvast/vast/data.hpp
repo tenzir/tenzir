@@ -248,6 +248,11 @@ struct data_traits<std::string> {
   using type = string_type;
 };
 
+template <>
+struct data_traits<data> {
+  using type = vast::type;
+};
+
 /// @relates data type
 template <class T>
 using data_to_type = typename data_traits<T>::type;
