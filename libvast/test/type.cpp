@@ -455,6 +455,10 @@ TEST(congruence) {
   a = a.name("r0");
   CHECK(type{a} != type{r0});
   CHECK(congruent(a, r0));
+  MESSAGE("unspecified type");
+  CHECK(congruent(type{}, type{}));
+  CHECK(!congruent(type{string_type{}}, type{}));
+  CHECK(!congruent(type{}, type{string_type{}}));
 }
 
 TEST(subset) {
