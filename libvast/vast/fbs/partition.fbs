@@ -36,6 +36,16 @@ table v0 {
   ids: [ubyte];
 }
 
+namespace vast.fbs.partition.store_header;
+
+table v0 {
+  /// The identifier of the store implementation that can read the data.
+  id: string;
+
+  /// The store metadata.
+  data: [ubyte];
+}
+
 namespace vast.fbs.partition;
 
 /// A partition is a collection of indices and column synopses for some
@@ -63,47 +73,14 @@ table v0 {
 
   /// The contained value indexes.
   indexes: [qualified_value_index.v0];
-}
-
-table store_header {
-  /// The identifier of the store implementation that can read the data.
-  id: string;
-
-  /// The store metadata.
-  data: [ubyte];
-}
-
-table v1 {
-  /// The UUID of this partition.
-  uuid: uuid.v0;
-
-  /// The first ID in the partition.
-  offset: uint64;
-
-  /// The number of contained events.
-  events: uint64;
-
-  /// The available layouts in this partition.
-  /// TODO: Use the layout type once available.
-  combined_layout: [ubyte];
-
-  /// A map storing the mapping from type name -> ids.
-  type_ids: [type_ids.v0];
-
-  /// Various synopsis structures for partition-wide synopses of certain
-  /// columns (e.g., global min and max timestamp).
-  partition_synopsis: partition_synopsis.v0;
-
-  /// The contained value indexes.
-  indexes: [qualified_value_index.v0];
 
   /// A store identifier and header information.
-  store: store_header;
+  /// The 
+  store: store_header.v0;
 }
 
 union Partition {
   v0,
-  v1,
 }
 
 namespace vast.fbs;
