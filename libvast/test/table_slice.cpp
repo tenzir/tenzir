@@ -207,8 +207,8 @@ TEST(evaluate) {
 TEST(project column flat index) {
   auto sut = zeek_conn_log[0];
   auto proj = project<vast::time, std::string>(sut, 0, 6);
-  REQUIRE(proj);
-  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj);
+  CHECK_NOT_EQUAL(proj.begin(), proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -221,8 +221,8 @@ TEST(project column full name) {
   auto sut = zeek_conn_log[0];
   auto proj
     = project<vast::time, std::string>(sut, "zeek.conn.ts", "zeek.conn.proto");
-  REQUIRE(proj);
-  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj);
+  CHECK_NOT_EQUAL(proj.begin(), proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -234,8 +234,8 @@ TEST(project column full name) {
 TEST(project column name) {
   auto sut = zeek_conn_log[0];
   auto proj = project<vast::time, std::string>(sut, "ts", "proto");
-  REQUIRE(proj);
-  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj);
+  CHECK_NOT_EQUAL(proj.begin(), proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -247,8 +247,8 @@ TEST(project column name) {
 TEST(project column mixed access) {
   auto sut = zeek_conn_log[0];
   auto proj = project<vast::time, std::string>(sut, 0, "proto");
-  REQUIRE(proj);
-  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj);
+  CHECK_NOT_EQUAL(proj.begin(), proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -260,8 +260,8 @@ TEST(project column mixed access) {
 TEST(project column order independence) {
   auto sut = zeek_conn_log[0];
   auto proj = project<std::string, vast::time>(sut, "proto", "ts");
-  REQUIRE(proj);
-  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj);
+  CHECK_NOT_EQUAL(proj.begin(), proj.end());
   for (auto&& [proto, ts] : proj) {
     REQUIRE(proto);
     CHECK_EQUAL(*proto, "udp");
@@ -273,32 +273,32 @@ TEST(project column order independence) {
 TEST(project column detect type mismatches) {
   auto sut = zeek_conn_log[0];
   auto proj = project<bool, vast::time>(sut, "proto", "ts");
-  REQUIRE(!proj);
-  REQUIRE_EQUAL(proj.begin(), proj.end());
+  CHECK(!proj);
+  CHECK_EQUAL(proj.begin(), proj.end());
 }
 
 TEST(project column detect wrong field names) {
   auto sut = zeek_conn_log[0];
   auto proj = project<std::string, vast::time>(sut, "porto", "ts");
-  REQUIRE(!proj);
-  REQUIRE_EQUAL(proj.begin(), proj.end());
+  CHECK(!proj);
+  CHECK_EQUAL(proj.begin(), proj.end());
 }
 
 TEST(project column detect wrong flat indices) {
   auto sut = zeek_conn_log[0];
   auto proj = project<std::string, vast::time>(sut, 123, "ts");
-  REQUIRE(!proj);
-  REQUIRE_EQUAL(proj.begin(), proj.end());
+  CHECK(!proj);
+  CHECK_EQUAL(proj.begin(), proj.end());
 }
 
 TEST(project column unspecified types) {
   auto sut = zeek_conn_log[0];
   auto proj = project<vast::data, vast::time>(sut, "proto", "ts");
-  REQUIRE(proj);
-  REQUIRE_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj);
+  CHECK_NOT_EQUAL(proj.begin(), proj.end());
   for (auto&& [proto, ts] : proj) {
     REQUIRE(proto);
-    REQUIRE(!caf::holds_alternative<caf::none_t>(*proto));
+    CHECK(!caf::holds_alternative<caf::none_t>(*proto));
     REQUIRE(caf::holds_alternative<view<std::string>>(*proto));
     CHECK_EQUAL(caf::get<vast::view<std::string>>(*proto), "udp");
     REQUIRE(ts);

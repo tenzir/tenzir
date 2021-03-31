@@ -24,33 +24,33 @@ namespace detail {
 // Returns a tuple of addresses for the element at the given index in each of
 // the given tuples.
 template <std::size_t Index, class... Tuples>
-constexpr auto map_tuple_elements_get_addresses(Tuples&&... tuples) {
+constexpr auto tuple_zip_addressof(Tuples&&... tuples) {
   return std::make_tuple(std::addressof(std::get<Index>(tuples))...);
 }
 
 // Helper utility of `map_tuple_elements` for use with index sequences.
 template <class Invocable, class... Tuples, std::size_t... Indices>
 constexpr auto
-map_tuple_elements_impl(std::index_sequence<Indices...>, Invocable& invocable,
-                        Tuples&&... tuples) {
+tuple_zip_and_map_impl(std::index_sequence<Indices...>, Invocable& invocable,
+                       Tuples&&... tuples) {
   return std::make_tuple(std::apply(
     [&](auto&&... args) {
       return std::invoke(invocable, *std::forward<decltype(args)>(args)...);
     },
-    map_tuple_elements_get_addresses<Indices>(tuples...))...);
+    tuple_zip_addressof<Indices>(tuples...))...);
 }
 
 // Invoke function for each of the given tuples, capturing the result in a
 // tuple itself.
 template <class Invocable, class Tuple, class... Tuples>
 constexpr auto
-map_tuple_elements(Invocable& invocable, Tuple&& tuple, Tuples&&... tuples) {
+tuple_zip_and_map(Invocable& invocable, Tuple&& tuple, Tuples&&... tuples) {
   constexpr auto size = std::tuple_size_v<std::decay_t<Tuple>>;
   static_assert(((size == std::tuple_size_v<std::decay_t<Tuples>>) &&...),
                 "tuple sizes must match exactly");
-  return map_tuple_elements_impl(std::make_index_sequence<size>{}, invocable,
-                                 std::forward<Tuple>(tuple),
-                                 std::forward<Tuples>(tuples)...);
+  return tuple_zip_and_map_impl(std::make_index_sequence<size>{}, invocable,
+                                std::forward<Tuple>(tuple),
+                                std::forward<Tuples>(tuples)...);
 }
 
 } // namespace detail
@@ -92,7 +92,7 @@ public:
           return caf::get<view<type_to_data<decltype(type)>>>(data);
         }
       };
-      return detail::map_tuple_elements(
+      return detail::tuple_zip_and_map(
         get, proj_.indices_, std::make_tuple(data_to_type<Types>{}...));
     }
 
