@@ -33,7 +33,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     = self->state.registry.find<filesystem_actor, accountant_actor>();
   if (!filesystem)
     return caf::make_error(ec::lookup_error, "failed to find filesystem actor");
-  const auto indexdir = std::filesystem::path{args.dir.str()} / args.label;
+  const auto indexdir = args.dir / args.label;
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
     index, filesystem, indexdir,

@@ -23,8 +23,7 @@ spawn_type_registry(node_actor::stateful_pointer<node_state> self,
                     spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  auto handle = self->spawn(type_registry,
-                            std::filesystem::path{args.dir.str()} / args.label);
+  auto handle = self->spawn(type_registry, args.dir / args.label);
   self->request(handle, defaults::system::initial_request_timeout, atom::load_v)
     .await([](atom::ok) {},
            [](caf::error& err) {

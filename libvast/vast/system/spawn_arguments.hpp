@@ -17,6 +17,7 @@
 #include <caf/fwd.hpp>
 #include <caf/meta/type_name.hpp>
 
+#include <filesystem>
 #include <string>
 
 namespace vast::system {
@@ -27,7 +28,7 @@ struct spawn_arguments {
   const invocation& inv;
 
   /// Path to persistent node state.
-  const path& dir;
+  const std::filesystem::path& dir;
 
   /// Label for the new component.
   const std::string& label;

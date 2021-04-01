@@ -15,7 +15,6 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
 #include "vast/partition_synopsis.hpp"
-#include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/evaluator.hpp"
@@ -30,6 +29,7 @@
 #include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <filesystem>
 #include <unordered_map>
 #include <vector>
 
@@ -113,10 +113,10 @@ struct active_partition_state {
     persistence_promise;
 
   /// Path where the index state is written.
-  std::optional<path> persist_path;
+  std::optional<std::filesystem::path> persist_path;
 
   /// Path where the partition synopsis is written.
-  std::optional<path> synopsis_path;
+  std::optional<std::filesystem::path> synopsis_path;
 
   /// Counts how many indexers have already responded to the `snapshot` atom
   /// with a serialized chunk.
@@ -215,6 +215,6 @@ active_partition_actor::behavior_type active_partition(
 /// @param path The path where the partition flatbuffer can be found.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, vast::path path);
+  filesystem_actor filesystem, const std::filesystem::path& path);
 
 } // namespace vast::system

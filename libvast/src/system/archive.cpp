@@ -15,7 +15,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
 #include "vast/system/report.hpp"
@@ -85,8 +84,9 @@ void archive_state::send_report() {
 }
 
 archive_actor::behavior_type
-archive(archive_actor::stateful_pointer<archive_state> self, path dir,
-        size_t capacity, size_t max_segment_size) {
+archive(archive_actor::stateful_pointer<archive_state> self,
+        const std::filesystem::path& dir, size_t capacity,
+        size_t max_segment_size) {
   // TODO: make the choice of store configurable. For most flexibility, it
   // probably makes sense to pass a unique_ptr<stor> directory to the spawn
   // arguments of the actor. This way, users can provide their own store
@@ -95,9 +95,7 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
                "size of {} and {} segments in memory",
                self, dir, max_segment_size, capacity);
   self->state.self = self;
-  auto segment_dir = std::filesystem::path{dir.str()};
-  self->state.store
-    = segment_store::make(segment_dir, max_segment_size, capacity);
+  self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);

@@ -75,7 +75,7 @@ FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
 TEST(read / write) {
   std::string str = "foobarbaz";
   auto x = chunk::make(std::move(str));
-  const auto filename = std::filesystem::path{directory.str()} / "chunk";
+  const auto filename = directory / "chunk";
   auto err = write(filename, x);
   CHECK_EQUAL(err, caf::none);
   chunk_ptr y;

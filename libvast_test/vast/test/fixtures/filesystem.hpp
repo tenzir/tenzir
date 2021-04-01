@@ -8,11 +8,6 @@
 
 #pragma once
 
-#include "vast/test/test.hpp"
-
-#include "vast/error.hpp"
-#include "vast/path.hpp"
-
 #include <filesystem>
 
 namespace fixtures {
@@ -20,13 +15,11 @@ namespace fixtures {
 struct filesystem {
   filesystem() {
     // Fresh afresh.
-    std::filesystem::remove_all(std::filesystem::path{directory.str()});
-    if (auto err = mkdir(directory))
-      // error is non-recoverable, so we just abort
-      FAIL(vast::render(err));
+    std::filesystem::remove_all(directory);
+    std::filesystem::create_directory(directory);
   }
 
-  vast::path directory = "vast-unit-test";
+  std::filesystem::path directory = "vast-unit-test";
 };
 
 } // namespace fixtures

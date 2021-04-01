@@ -18,6 +18,7 @@
 #include "vast/system/status_verbosity.hpp"
 
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
 
 using namespace vast;
@@ -46,7 +47,9 @@ TEST(read) {
   auto err = io::write(filename, as_bytes(bytes));
   REQUIRE(err == caf::none);
   MESSAGE("read file via actor");
-  self->request(filesystem, caf::infinite, atom::read_v, path{foo})
+  self
+    ->request(filesystem, caf::infinite, atom::read_v,
+              std::filesystem::path{foo})
     .receive(
       [&](const chunk_ptr& chk) {
         CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
@@ -59,9 +62,11 @@ TEST(write) {
   auto copy = foo;
   auto chk = chunk::make(std::move(copy));
   REQUIRE(chk);
-  auto filename = std::filesystem::path{directory.str()} / foo;
+  auto filename = directory / foo;
   MESSAGE("write file via actor");
-  self->request(filesystem, caf::infinite, atom::write_v, path{foo}, chk)
+  self
+    ->request(filesystem, caf::infinite, atom::write_v,
+              std::filesystem::path{foo}, chk)
     .receive(
       [&](atom::ok) {
         // all good
@@ -79,7 +84,9 @@ TEST(mmap) {
   auto bytes = span<const char>{foo.data(), foo.size()};
   auto err = io::write(filename, as_bytes(bytes));
   MESSAGE("mmap file via actor");
-  self->request(filesystem, caf::infinite, atom::mmap_v, path{foo})
+  self
+    ->request(filesystem, caf::infinite, atom::mmap_v,
+              std::filesystem::path{foo})
     .receive(
       [&](const chunk_ptr& chk) {
         CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
@@ -89,7 +96,9 @@ TEST(mmap) {
 
 TEST(status) {
   MESSAGE("create file");
-  self->request(filesystem, caf::infinite, atom::read_v, path{"not-there"})
+  self
+    ->request(filesystem, caf::infinite, atom::read_v,
+              std::filesystem::path{"not-there"})
     .receive(
       [&](const chunk_ptr&) { FAIL("should not receive chunk on failure"); },
       [&](const caf::error&) {

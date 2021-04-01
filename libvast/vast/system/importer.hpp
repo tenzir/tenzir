@@ -12,7 +12,6 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
-#include "vast/path.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 
@@ -20,6 +19,7 @@
 #include <caf/typed_response_promise.hpp>
 
 #include <chrono>
+#include <filesystem>
 #include <vector>
 
 namespace vast::system {
@@ -77,7 +77,7 @@ struct importer_state {
   id_block current;
 
   /// State directory.
-  path dir;
+  std::filesystem::path dir;
 
   /// All available ANALYZER PLUGIN actors and their names.
   std::vector<std::pair<std::string, analyzer_plugin_actor>> analyzers;
@@ -116,8 +116,9 @@ struct importer_state {
 /// @param batch_size The initial number of IDs to request when replenishing.
 /// @param type_registry A handle to the type-registry module.
 importer_actor::behavior_type
-importer(importer_actor::stateful_pointer<importer_state> self, path dir,
-         node_actor::pointer node, const archive_actor& archive,
-         index_actor index, const type_registry_actor& type_registry);
+importer(importer_actor::stateful_pointer<importer_state> self,
+         const std::filesystem::path& dir, node_actor::pointer node,
+         const archive_actor& archive, index_actor index,
+         const type_registry_actor& type_registry);
 
 } // namespace vast::system

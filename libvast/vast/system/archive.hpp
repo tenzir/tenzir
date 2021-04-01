@@ -18,6 +18,7 @@
 #include <caf/actor_addr.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <filesystem>
 #include <memory>
 #include <queue>
 #include <unordered_map>
@@ -48,7 +49,8 @@ struct archive_state {
 /// @param max_segment_size The maximum segment size in bytes.
 /// @pre `max_segment_size > 0`
 archive_actor::behavior_type
-archive(archive_actor::stateful_pointer<archive_state> self, path dir,
-        size_t capacity, size_t max_segment_size);
+archive(archive_actor::stateful_pointer<archive_state> self,
+        const std::filesystem::path& dir, size_t capacity,
+        size_t max_segment_size);
 
 } // namespace vast::system

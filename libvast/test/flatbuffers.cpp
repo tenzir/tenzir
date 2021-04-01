@@ -35,6 +35,7 @@
 #include "vast/test/test.hpp"
 
 #include <cstddef>
+#include <filesystem>
 
 using vast::span;
 
@@ -202,9 +203,10 @@ TEST(full partition roundtrip) {
   REQUIRE(src);
   run();
   // Persist the partition to disk;
-  vast::path persist_path = "test-partition"; // will be interpreted relative to
-                                              // the fs actor's root dir
-  vast::path synopsis_path = "test-partition-synopsis";
+  std::filesystem::path persist_path
+    = "test-partition"; // will be interpreted relative to
+                        // the fs actor's root dir
+  std::filesystem::path synopsis_path = "test-partition-synopsis";
   auto persist_promise
     = self->request(partition, caf::infinite, vast::atom::persist_v,
                     persist_path, synopsis_path);

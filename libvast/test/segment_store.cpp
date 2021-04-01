@@ -32,7 +32,7 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
-    auto segments_dir = std::filesystem::path{directory.str()} / "segments";
+    auto segments_dir = directory / "segments";
     store = segment_store::make(segments_dir, 512_KiB, 2);
     if (store == nullptr)
       FAIL("segment_store::make failed to allocate a segment store");
