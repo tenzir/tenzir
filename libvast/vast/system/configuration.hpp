@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "vast/path.hpp"
-
 #include <caf/actor_system_config.hpp>
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -36,7 +35,7 @@ public:
   std::vector<std::string> command_line;
 
   /// The configuration files to load.
-  std::vector<path> config_files;
+  std::vector<std::filesystem::path> config_files;
 };
 
 } // namespace vast::system

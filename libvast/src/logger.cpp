@@ -176,16 +176,20 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (is_server) {
     if (log_file == defaults::logger::log_file
         && vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
-      path log_dir = caf::get_or(cfg_file, "vast.db-directory",
-                                 defaults::system::db_directory);
-      if (!exists(log_dir)) {
-        if (auto err = mkdir(log_dir)) {
-          std::cerr << "unable to create directory: " << log_dir.str() << ' '
-                    << vast::render(err) << '\n';
+      std::filesystem::path log_dir = caf::get_or(
+        cfg_file, "vast.db-directory", defaults::system::db_directory);
+      std::error_code err{};
+      if (!std::filesystem::exists(log_dir, err)) {
+        const auto created_log_dir
+          = std::filesystem::create_directory(log_dir, err);
+        if (!created_log_dir) {
+          std::cerr << fmt::format("unable to create directory {}: {}", log_dir,
+                                   err.message())
+                    << '\n';
           return false;
         }
       }
-      log_file = (log_dir / log_file).str();
+      log_file = (log_dir / log_file).string();
     }
   } else {
     // Please note, client file does not go to db_directory!
