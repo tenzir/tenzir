@@ -19,7 +19,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"

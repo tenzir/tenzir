@@ -4,7 +4,6 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 #include "vast/system/disk_monitor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/node_control.hpp"

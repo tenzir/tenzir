@@ -22,7 +22,6 @@
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 
 #include <caf/actor_system_config.hpp>
 
