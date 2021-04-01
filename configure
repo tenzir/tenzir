@@ -62,15 +62,16 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-ubsan          enable Undefined Behavior Sanitizer
 
   Required packages:
-    --with-arrow=PATH       path to Apache Arrow install root
-    --without-arrow         explicitly disable Apache Arrow integration
-    --with-caf=PATH         path to CAF install root or build directory
-    --with-bundled-caf      build CAF from the submodule
-    --with-flatbuffers=PATH path to FlatBuffers install root
-    --with-yaml-cpp=PATH    path to yaml-cpp install root
-    --with-simdjson=PATH    path to simdjson install root
-    --with-fmt=PATH         path to {fmt} install root
-    --with-spdlog=PATH      path to spdlog install root
+    --with-arrow=PATH        path to Apache Arrow install root
+    --without-arrow          explicitly disable Apache Arrow integration
+    --with-caf=PATH          path to CAF install root or build directory
+    --with-bundled-caf       build CAF from the submodule
+    --with-bundled-robin-map prefer bundled tsl-robin-map over installed one
+    --with-flatbuffers=PATH  path to FlatBuffers install root
+    --with-yaml-cpp=PATH     path to yaml-cpp install root
+    --with-simdjson=PATH     path to simdjson install root
+    --with-fmt=PATH          path to {fmt} install root
+    --with-spdlog=PATH       path to spdlog install root
 
   Optional packages:
     --with-doxygen=PATH   path to Doxygen install root
@@ -241,6 +242,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-bundled-caf)
       append_cache_entry VAST_ENABLE_BUNDLED_CAF BOOL yes
+      ;;
+    --with-bundled-robin-map)
+      append_cache_entry VAST_ENABLE_BUNDLED_ROBIN_MAP BOOL yes
       ;;
     --with-flatbuffers=*)
       append_cache_entry FLATBUFFERS_ROOT_DIR PATH "$optarg"
