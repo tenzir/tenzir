@@ -329,8 +329,6 @@ using exporter_actor = typed_actor_fwd<
   caf::reacts_to<atom::extract, uint64_t>,
   // Register the ACCOUNTANT actor.
   caf::reacts_to<accountant_actor>,
-  // Register the ARCHIVE actor.
-  caf::reacts_to<archive_actor>,
   // Register the INDEX actor.
   caf::reacts_to<index_actor>,
   // Register the SINK actor.

@@ -45,9 +45,8 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   auto handle = self->spawn(exporter, *expr, query_opts);
   VAST_VERBOSE("{} spawned an exporter for {}", self, to_string(*expr));
   // Wire the exporter to all components.
-  auto [accountant, importer, archive, index]
-    = self->state.registry
-        .find<accountant_actor, importer_actor, archive_actor, index_actor>();
+  auto [accountant, importer, index]
+    = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
   if (accountant)
     self->send(handle, accountant);
   if (importer && has_continuous_option(query_opts))
@@ -62,10 +61,6 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
           VAST_ERROR("{} failed to connect to importer {}: {}", self, importer,
                      err);
         });
-  if (archive) {
-    VAST_DEBUG("{} connects archive to new exporter", self);
-    self->send(handle, archive);
-  }
   if (index) {
     VAST_DEBUG("{} connects index to new exporter", self);
     self->send(handle, index);
