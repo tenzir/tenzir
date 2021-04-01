@@ -22,7 +22,6 @@
 #include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 
 #include <caf/config_value.hpp>
 

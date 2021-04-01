@@ -15,7 +15,6 @@
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/start_command.hpp"
 

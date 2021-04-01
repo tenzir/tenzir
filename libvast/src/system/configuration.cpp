@@ -20,7 +20,6 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/format/writer_factory.hpp"
-#include "vast/path.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/value_index.hpp"
