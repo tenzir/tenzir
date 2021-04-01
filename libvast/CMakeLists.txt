@@ -8,7 +8,7 @@ option(VAST_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map" OFF)
 add_feature_info("VAST_ENABLE_BUNDLED_ROBIN_MAP" VAST_ENABLE_BUNDLED_ROBIN_MAP
                  "always use the tsl-robin-map.")
 if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
-  find_package(tsl-robin-map 0.6.2 QUIET)
+  find_package(tsl-robin-map 0.6.2)
 endif ()
 if (NOT tsl-robin-map_FOUND)
   if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
@@ -449,6 +449,7 @@ dependency_summary("simdjson" simdjson::simdjson)
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
+dependency_summary("robin-map" tsl::robin_map)
 
 # Link against Apache Arrow.
 if (VAST_ENABLE_ARROW)
