@@ -159,8 +159,11 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
     [self](table_slice slice) {
       self->send(self->state.client, std::move(slice));
     },
-    [self](atom::done, caf::error) {
-      VAST_DEBUG("{} completed expression evaluation", self);
+    [self](atom::done, caf::error err) {
+      if (err)
+        VAST_DEBUG("{} completed expression evaluation", self);
+      else
+        VAST_ERROR("{} completed expression evaluation with {}", self, err);
       self->state.promise.deliver(atom::done_v);
       // TODO: quit.
     },

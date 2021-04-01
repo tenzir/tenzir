@@ -58,7 +58,7 @@ struct evaluator_state {
   /// Points to the parent actor.
   evaluator_actor::pointer self;
 
-  /// Stores the actor for sendings results to.
+  /// Stores the actor that returns table slices for ids.
   store_actor store;
 
   /// Stores the actor for sendings results to.

@@ -38,6 +38,8 @@ table v0 {
 
 namespace vast.fbs.partition.store_header;
 
+/// Stores an id for the store implmentation and a block of bytes that
+/// passed to the initalization function.
 table v0 {
   /// The identifier of the store implementation that can read the data.
   id: string;
@@ -75,7 +77,6 @@ table v0 {
   indexes: [qualified_value_index.v0];
 
   /// A store identifier and header information.
-  /// The 
   store: store_header.v0;
 }
 

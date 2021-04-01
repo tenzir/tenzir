@@ -116,9 +116,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     self->send(eval, atom::done_v, caf::error{});
     run();
     bool got_done_atom = false;
-    size_t slices = 0;
+    size_t num_slices = 0;
     while (!self->mailbox().empty())
-      self->receive([&](const table_slice&) { slices++; },
+      self->receive([&](const table_slice&) { num_slices++; },
                     [&](atom::done) { got_done_atom = true; });
     if (!got_done_atom)
       FAIL("evaluator failed to send 'done'");
