@@ -4,24 +4,28 @@
 # 0.6.2, which is not widely available on package managers. We should
 # investigate switching to a different map, e.g., from folly or abseil.
 
-add_subdirectory(aux/robin-map)
-export(
-  EXPORT tsl-robin-mapTargets
-  FILE tsl-robin-mapTargets.cmake
-  NAMESPACE tsl::)
-add_custom_target(
-  tsl-robin-map-targets-link
-  COMMAND
-    ${CMAKE_COMMAND} -E create_symlink
-    "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapTargets.cmake"
-    "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake"
-  COMMENT "Linking tsl-robin-map targets")
-install(
-  EXPORT tsl-robin-mapTargets
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-  NAMESPACE tsl::)
-string(APPEND VAST_EXTRA_TARGETS_FILES
-       "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
+find_package(tsl-robin-map 0.6.2 QUIET)
+if (NOT tsl-robin-map_FOUND)
+  add_subdirectory(aux/robin-map)
+  export(
+    EXPORT tsl-robin-mapTargets
+    FILE tsl-robin-mapTargets.cmake
+    NAMESPACE tsl::)
+  add_custom_target(
+    tsl-robin-map-targets-link
+    COMMAND
+      ${CMAKE_COMMAND} -E create_symlink
+      "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapTargets.cmake"
+      "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake"
+    COMMENT "Linking tsl-robin-map targets")
+  install(
+    EXPORT tsl-robin-mapTargets
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
+    NAMESPACE tsl::)
+  string(APPEND VAST_EXTRA_TARGETS_FILES
+        "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
+  add_dependencies(robin_map tsl-robin-map-targets-link)
+endif ()
 
 # -- flattbuffers ---------------------------------------------------------------
 
@@ -436,7 +440,6 @@ dependency_summary("simdjson" simdjson::simdjson)
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
-add_dependencies(libvast tsl-robin-map-targets-link)
 
 # Link against Apache Arrow.
 if (VAST_ENABLE_ARROW)
