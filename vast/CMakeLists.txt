@@ -132,6 +132,7 @@ if (VAST_PLUGINS)
         "${plugin_source_dir}/schema/*.schema"
         "${plugin_source_dir}/schema/*.yml"
         "${plugin_source_dir}/schema/*.yaml")
+      list(SORT plugin_schema_files)
       foreach (plugin_schema_file IN LISTS plugin_schema_files)
         string(REGEX REPLACE "^${plugin_source_dir}/schema/" ""
                              relative_plugin_schema_file ${plugin_schema_file})

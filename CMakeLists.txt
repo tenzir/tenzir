@@ -516,6 +516,7 @@ file(
   GLOB doc_files CONFIGURE_DEPENDS
   RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
   "doc/cli/*.md")
+list(SORT doc_files)
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/BANNER" doc_header NEWLINE_CONSUME)
 set(doc_header "${doc_header}\n#pragma once\n")
 set(doc_header "${doc_header}\nnamespace vast::documentation {\n")

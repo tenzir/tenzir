@@ -9,9 +9,11 @@ endif ()
 
 file(GLOB_RECURSE test_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+list(SORT test_sources)
 
 file(GLOB_RECURSE test_headers CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
+list(SORT test_headers)
 
 # Add vast-test executable.
 add_executable(vast-test ${test_sources} ${test_headers})

@@ -15,6 +15,7 @@
 , spdlog
 , libyamlcpp
 , simdjson
+, robin-map
 , jemalloc
 , libunwind
 , python3
@@ -71,7 +72,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap jemalloc libyamlcpp simdjson spdlog ]
+  buildInputs = [ libpcap jemalloc libyamlcpp simdjson spdlog robin-map ]
     # Required for backtrace on musl libc.
     ++ lib.optional (stdenv.hostPlatform.isMusl) libunwind;
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
