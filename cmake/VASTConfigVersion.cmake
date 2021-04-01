@@ -79,6 +79,7 @@ file(
   "${CMAKE_CURRENT_LIST_DIR}/../libvast/*.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/../cmake/*"
   "${CMAKE_CURRENT_LIST_DIR}/../CMakeLists.txt")
+list(SORT hash_files)
 
 cmake_policy(POP)
 

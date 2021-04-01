@@ -43,6 +43,7 @@ endif ()
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs"
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/legacy/*.fbs")
+list(SORT flatbuffers_schemas)
 set(flatbuffers_output_path "${CMAKE_CURRENT_BINARY_DIR}/vast/fbs")
 
 add_custom_target(libvast_flatbuffers)
@@ -316,10 +317,10 @@ endif ()
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
-
 list(APPEND libvast_sources
   "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
   "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp")
+list(SORT libvast_sources)
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
