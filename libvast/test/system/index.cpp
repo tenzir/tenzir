@@ -23,6 +23,7 @@
 #include "vast/detail/spawn_generator_source.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
+#include "vast/system/archive.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -42,14 +43,18 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   static constexpr uint32_t taste_count = 4;
   static constexpr size_t num_query_supervisors = 1;
   static constexpr double meta_index_fp_rate = 0.01;
+  static constexpr size_t segments = 1;
+  static constexpr size_t max_segment_size = 8192;
 
   fixture() {
     auto fs = self->spawn(system::posix_filesystem, directory);
-    auto dir = directory / "index";
-    auto store = system::store_actor{};
-    index = self->spawn(system::index, store, fs, dir, slice_size,
+    auto archive_dir = directory / "archive";
+    auto index_dir = directory / "index";
+    archive
+      = self->spawn(system::archive, archive_dir, segments, max_segment_size);
+    index = self->spawn(system::index, archive, fs, index_dir, slice_size,
                         in_mem_partitions, taste_count, num_query_supervisors,
-                        dir, meta_index_fp_rate);
+                        index_dir, meta_index_fp_rate);
   }
 
   ~fixture() {
@@ -73,20 +78,25 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return result;
   }
 
-  ids receive_result(const uuid& query_id, uint32_t hits, uint32_t scheduled) {
-    ids result;
+  size_t
+  receive_result(const uuid& query_id, uint32_t hits, uint32_t scheduled) {
+    size_t result = 0;
     uint32_t collected = 0;
     auto fetch = [&](size_t chunk) {
       auto done = false;
       while (!done)
-        self->receive([&](ids& sub_result) { result |= sub_result; },
-                      [&](atom::done) { done = true; },
-                      caf::others >> [](caf::message_view& msg)
-                        -> caf::result<caf::message> {
-                        FAIL("unexpected message: " << msg.content());
-                        return caf::none;
-                      },
-                      after(0s) >> [&] { FAIL("ran out of messages"); });
+        self->receive(
+          [&](table_slice& slice) {
+            // test
+            result += slice.rows();
+          },
+          [&](atom::done) { done = true; },
+          caf::others >>
+            [](caf::message_view& msg) -> caf::result<caf::message> {
+            FAIL("unexpected message: " << msg.content());
+            return caf::none;
+          },
+          after(0s) >> [&] { FAIL("ran out of messages"); });
       if (!self->mailbox().empty())
         FAIL("mailbox not empty after receiving all 'done' messages");
       collected += chunk;
@@ -122,6 +132,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   // Handle to the INDEX actor.
   system::index_actor index;
+  system::archive_actor archive;
 };
 
 } // namespace
@@ -132,17 +143,13 @@ TEST(one - shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
   auto slices = rebase(first_n(alternating_integers, taste_count));
   REQUIRE_EQUAL(rows(slices), slice_size * taste_count);
-  auto src = detail::spawn_container_source(sys, slices, index);
+  auto src = detail::spawn_container_source(sys, slices, archive, index);
   run();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
   CHECK_EQUAL(hits, taste_count);
   CHECK_EQUAL(scheduled, taste_count);
-  ids expected_result;
-  for (size_t i = 0; i < rows(slices) / 2; ++i) {
-    expected_result.append_bit(false);
-    expected_result.append_bit(true);
-  }
+  size_t expected_result = rows(slices) / 2;
   auto result = receive_result(query_id, hits, scheduled);
   CHECK_EQUAL(result, expected_result);
 }
@@ -151,19 +158,14 @@ TEST(iterable integer query result) {
   auto partitions = taste_count * 3;
   MESSAGE("fill first " << partitions << " partitions");
   auto slices = first_n(alternating_integers, partitions);
-  auto src = detail::spawn_container_source(sys, slices, index);
+  auto src = detail::spawn_container_source(sys, slices, archive, index);
   run();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
   CHECK_NOT_EQUAL(query_id, uuid::nil());
   CHECK_EQUAL(hits, partitions);
   CHECK_EQUAL(scheduled, taste_count);
-  ids expected_result;
-  expected_result.append_bits(false, alternating_integers[0].offset());
-  for (size_t i = 0; i < (slice_size * partitions) / 2; ++i) {
-    expected_result.append_bit(false);
-    expected_result.append_bit(true);
-  }
+  size_t expected_result = slice_size * partitions / 2;
   MESSAGE("collect results");
   auto result = receive_result(query_id, hits, scheduled);
   CHECK_EQUAL(result, expected_result);
@@ -171,45 +173,33 @@ TEST(iterable integer query result) {
 
 TEST(iterable zeek conn log query result) {
   MESSAGE("ingest conn.log slices");
-  detail::spawn_container_source(sys, zeek_conn_log, index);
+  detail::spawn_container_source(sys, zeek_conn_log, archive, index);
   run();
-  /// Aligns `x` to the size of `y`.
-  auto align = [&](ids& x, const ids& y) {
-    if (x.size() < y.size())
-      x.append_bits(false, y.size() - x.size());
-  };
   MESSAGE("issue field type query");
   {
-    auto expected_result = make_ids({5, 6, 9, 11});
+    auto expected_result = 4u;
     auto [query_id, hits, scheduled] = query(":addr == 192.168.1.104");
     auto result = receive_result(query_id, hits, scheduled);
-    align(expected_result, result);
-    CHECK_EQUAL(rank(result), rank(expected_result));
     CHECK_EQUAL(result, expected_result);
   }
   MESSAGE("issue field name queries");
   {
-    auto expected_result = make_ids({5, 6, 9, 11});
+    auto expected_result = 4u;
     auto [query_id, hits, scheduled] = query("id.orig_h == 192.168.1.104");
     auto result = receive_result(query_id, hits, scheduled);
-    align(expected_result, result);
-    CHECK_EQUAL(rank(result), rank(expected_result));
     CHECK_EQUAL(result, expected_result);
   }
   {
     auto [query_id, hits, scheduled] = query("service == \"dns\"");
     auto result = receive_result(query_id, hits, scheduled);
-    CHECK_EQUAL(rank(result), 11u);
+    CHECK_EQUAL(result, 11u);
   }
   MESSAGE("issue historical point query with conjunction");
   {
-    auto expected_result = make_ids({1, 14});
+    auto expected_result = 2u;
     auto [query_id, hits, scheduled] = query("service == \"dns\" "
                                              "&& :addr == 192.168.1.103");
     auto result = receive_result(query_id, hits, scheduled);
-    align(expected_result, result);
-    CHECK_EQUAL(rank(expected_result), 2u);
-    CHECK_EQUAL(rank(result), 2u);
     CHECK_EQUAL(result, expected_result);
   }
 }

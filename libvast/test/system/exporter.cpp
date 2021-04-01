@@ -53,15 +53,15 @@ struct fixture : fixture_base {
       = self->spawn(system::type_registry, directory / "type-registry");
   }
 
+  void spawn_archive() {
+    archive = self->spawn(system::archive, directory / "archive", 1, 1024);
+  }
+
   void spawn_index() {
     auto fs = self->spawn(system::posix_filesystem, directory);
     auto indexdir = directory / "index";
-    index = self->spawn(system::index, fs, indexdir, 10000, 5, 5, 1, indexdir,
-                        0.01);
-  }
-
-  void spawn_archive() {
-    archive = self->spawn(system::archive, directory / "archive", 1, 1024);
+    index = self->spawn(system::index, archive, fs, indexdir, 10000, 5, 5, 1,
+                        indexdir, 0.01);
   }
 
   void spawn_importer() {
@@ -76,10 +76,10 @@ struct fixture : fixture_base {
   void importer_setup() {
     if (!type_registry)
       spawn_type_registry();
-    if (!index)
-      spawn_index();
     if (!archive)
       spawn_archive();
+    if (!index)
+      spawn_index();
     if (!importer)
       spawn_importer();
     run();
@@ -141,8 +141,8 @@ FIXTURE_SCOPE(exporter_tests, fixture)
 
 TEST(historical query without importer) {
   MESSAGE("spawn index and archive");
-  spawn_index();
   spawn_archive();
+  spawn_index();
   run();
   MESSAGE("ingest conn.log into archive and index");
   vast::detail::spawn_container_source(sys, zeek_conn_log, index, archive);

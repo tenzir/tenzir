@@ -94,7 +94,7 @@ using partition_client_actor = typed_actor_fwd<
   // of ids followed by a final `atom::done` which as sent as response to the
   // expression. This interface provides the callback for the middle part of
   // this sequence.
-  caf::reacts_to<ids>>::unwrap;
+  caf::reacts_to<table_slice>>::unwrap;
 
 /// The INDEX CLIENT actor interface.
 using index_client_actor = typed_actor_fwd<
@@ -147,8 +147,10 @@ using query_supervisor_actor = typed_actor_fwd<
 
 /// The EVALUATOR actor interface.
 using evaluator_actor = typed_actor_fwd<
-  // Re-evaluates the expression and relays new hits to the PARTITION CLIENT.
-  caf::replies_to<partition_client_actor>::with<atom::done>>::unwrap;
+  // Evaluates the expression and requests table slices form the store.
+  caf::replies_to<partition_client_actor>::with<atom::done>>
+  // Conform to the procol of the ARCHIVE CLIENT actor.
+  ::extend_with<archive_client_actor>::unwrap;
 
 /// The INDEXER actor interface.
 using indexer_actor = typed_actor_fwd<
@@ -341,8 +343,6 @@ using exporter_actor = typed_actor_fwd<
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>
-  // Conform to the protocol of the ARCHIVE CLIENT actor.
-  ::extend_with<archive_client_actor>
   // Conform to the protocol of the INDEX CLIENT actor.
   ::extend_with<index_client_actor>::unwrap;
 

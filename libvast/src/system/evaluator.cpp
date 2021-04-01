@@ -12,6 +12,7 @@
 
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
@@ -124,17 +125,16 @@ void evaluator_state::evaluate() {
   VAST_DEBUG("{} got predicate_hits: {} expr_hits: {}", self, predicate_hits,
              expr_hits);
   auto delta = expr_hits - hits;
-  if (any<1>(delta)) {
+  if (any<1>(delta))
     hits |= delta;
-    self->send(client, std::move(delta));
-  }
 }
 
 void evaluator_state::decrement_pending() {
   // We're done evaluating if all INDEXER actors have reported their hits.
   if (--pending_responses == 0) {
-    VAST_DEBUG("{} completed expression evaluation", self);
-    promise.deliver(atom::done_v);
+    // Now we ask the store for the actual data.
+    // TODO: handle count estimate requests.
+    self->send(store, hits, static_cast<archive_client_actor>(self));
   }
 }
 
@@ -153,7 +153,17 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
   self->state.expr = std::move(expr);
   self->state.eval = std::move(eval);
   self->state.store = std::move(store);
+  self->send(self->state.store, atom::exporter_v,
+             caf::actor_cast<caf::actor>(self));
   return {
+    [self](table_slice slice) {
+      self->send(self->state.client, std::move(slice));
+    },
+    [self](atom::done, caf::error) {
+      VAST_DEBUG("{} completed expression evaluation", self);
+      self->state.promise.deliver(atom::done_v);
+      // TODO: quit.
+    },
     [self](partition_client_actor client) {
       self->state.client = client;
       self->state.promise = self->make_response_promise<atom::done>();
@@ -175,8 +185,6 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
         VAST_DEBUG("{} has nothing to evaluate for expression", self);
         self->state.promise.deliver(atom::done_v);
       }
-      // We can only deal with exactly one expression/client at the moment.
-      self->unbecome();
       return self->state.promise;
     },
   };

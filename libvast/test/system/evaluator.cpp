@@ -103,12 +103,22 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     }
     auto eval = sys.spawn(system::evaluator, expr, std::move(triples),
                           caf::actor_cast<system::store_actor>(self));
+    run();
+    self->receive([&](atom::exporter, const caf::actor&) {});
     self->send(eval, caf::actor_cast<system::partition_client_actor>(self));
     run();
     ids result;
+    REQUIRE(!self->mailbox().empty());
+    self->receive([&](const ids& hits,
+                      vast::system::archive_client_actor&) { result |= hits; },
+                  [] {});
+    REQUIRE(self->mailbox().empty());
+    self->send(eval, atom::done_v, caf::error{});
+    run();
     bool got_done_atom = false;
+    size_t slices = 0;
     while (!self->mailbox().empty())
-      self->receive([&](const ids& hits) { result |= hits; },
+      self->receive([&](const table_slice&) { slices++; },
                     [&](atom::done) { got_done_atom = true; });
     if (!got_done_atom)
       FAIL("evaluator failed to send 'done'");

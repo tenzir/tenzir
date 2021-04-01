@@ -346,51 +346,51 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     [self](table_slice slice) { //
       handle_batch(self, std::move(slice));
     },
-    [self](atom::done, const caf::error& err) {
-      VAST_ASSERT(self->current_sender() == self->state.archive);
-      ++self->state.query.lookups_complete;
-      VAST_DEBUG("{} received done from archive: {} {}", self, VAST_ARG(err),
-                 VAST_ARG("query", self->state.query));
-      // We skip 'done' messages of the query supervisors until we process all
-      // hits first. Hence, we can never be finished here.
-      VAST_ASSERT(!finished(self->state.query));
-    },
+    //[self](atom::done, const caf::error& err) {
+    //  VAST_ASSERT(self->current_sender() == self->state.archive);
+    //  ++self->state.query.lookups_complete;
+    //  VAST_DEBUG("{} received done from archive: {} {}", self, VAST_ARG(err),
+    //             VAST_ARG("query", self->state.query));
+    //  // We skip 'done' messages of the query supervisors until we process all
+    //  // hits first. Hence, we can never be finished here.
+    //  VAST_ASSERT(!finished(self->state.query));
+    //},
     // -- index_client_actor ---------------------------------------------------
     // The INDEX (or the EVALUATOR, to be more precise) sends us a series of
     // `ids` in response to an expression (query), terminated by 'done'.
-    [self](const ids& hits) -> caf::result<void> {
-      // Skip results that arrive before we got our lookup handle from the
-      // INDEX actor.
-      if (self->state.query.expected == 0)
-        return caf::skip;
-      // Add `hits` to the total result set and update all stats.
-      caf::timespan runtime
-        = std::chrono::system_clock::now() - self->state.start;
-      self->state.query.runtime = runtime;
-      auto count = rank(hits);
-      if (self->state.accountant) {
-        auto r = report{};
-        if (self->state.hits.empty())
-          r.push_back({"exporter.hits.first", runtime});
-        r.push_back({"exporter.hits.arrived", runtime});
-        r.push_back({"exporter.hits.count", count});
-        self->send(self->state.accountant, r);
-      }
-      if (count == 0) {
-        VAST_WARN("{} got empty hits", self);
-      } else {
-        VAST_ASSERT(rank(self->state.hits & hits) == 0);
-        VAST_DEBUG("{} got {} index hits in [{}, {})", self, count,
-                   select(hits, 1), (select(hits, -1) + 1));
-        self->state.hits |= hits;
-        VAST_DEBUG("{} forwards hits to archive", self);
-        // FIXME: restrict according to configured limit.
-        ++self->state.query.lookups_issued;
-        self->send(self->state.archive, std::move(hits),
-                   static_cast<archive_client_actor>(self));
-      }
-      return {};
-    },
+    //[self](const ids& hits) -> caf::result<void> {
+    //  // Skip results that arrive before we got our lookup handle from the
+    //  // INDEX actor.
+    //  if (self->state.query.expected == 0)
+    //    return caf::skip;
+    //  // Add `hits` to the total result set and update all stats.
+    //  caf::timespan runtime
+    //    = std::chrono::system_clock::now() - self->state.start;
+    //  self->state.query.runtime = runtime;
+    //  auto count = rank(hits);
+    //  if (self->state.accountant) {
+    //    auto r = report{};
+    //    if (self->state.hits.empty())
+    //      r.push_back({"exporter.hits.first", runtime});
+    //    r.push_back({"exporter.hits.arrived", runtime});
+    //    r.push_back({"exporter.hits.count", count});
+    //    self->send(self->state.accountant, r);
+    //  }
+    //  if (count == 0) {
+    //    VAST_WARN("{} got empty hits", self);
+    //  } else {
+    //    VAST_ASSERT(rank(self->state.hits & hits) == 0);
+    //    VAST_DEBUG("{} got {} index hits in [{}, {})", self, count,
+    //               select(hits, 1), (select(hits, -1) + 1));
+    //    self->state.hits |= hits;
+    //    VAST_DEBUG("{} forwards hits to archive", self);
+    //    // FIXME: restrict according to configured limit.
+    //    ++self->state.query.lookups_issued;
+    //    self->send(self->state.archive, std::move(hits),
+    //               static_cast<archive_client_actor>(self));
+    //  }
+    //  return {};
+    //},
     [self](atom::done) -> caf::result<void> {
       // Ignore this message until we got all lookup results from the ARCHIVE.
       // Otherwise, we can end up in weirdly interleaved state.
