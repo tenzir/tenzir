@@ -410,7 +410,7 @@ tests:
       - command: -N export ascii '#type == "custom"'
 
   Zeek conn log aging:
-    tags: [import-export, aging, zeek]
+    tags: [disabled, import-export, aging, zeek]
     fixture: AgingTester
     steps:
       - command: import -b zeek
