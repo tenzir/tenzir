@@ -46,9 +46,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     auto fs = self->spawn(system::posix_filesystem, directory);
     auto dir = directory / "index";
-    index = self->spawn(system::index, fs, dir, slice_size, in_mem_partitions,
-                        taste_count, num_query_supervisors, dir,
-                        meta_index_fp_rate);
+    auto store = system::store_actor{};
+    index = self->spawn(system::index, store, fs, dir, slice_size,
+                        in_mem_partitions, taste_count, num_query_supervisors,
+                        dir, meta_index_fp_rate);
   }
 
   ~fixture() {
@@ -123,11 +124,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   system::index_actor index;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(index_tests, fixture)
 
-TEST(one-shot integer query result) {
+TEST(one - shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
   auto slices = rebase(first_n(alternating_integers, taste_count));
   REQUIRE_EQUAL(rows(slices), slice_size * taste_count);

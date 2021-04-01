@@ -101,7 +101,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       for (auto& x : xs)
         triples.emplace_back(expr_position, curried(pred), x);
     }
-    auto eval = sys.spawn(system::evaluator, expr, std::move(triples));
+    auto eval = sys.spawn(system::evaluator, expr, std::move(triples),
+                          caf::actor_cast<system::store_actor>(self));
     self->send(eval, caf::actor_cast<system::partition_client_actor>(self));
     run();
     ids result;

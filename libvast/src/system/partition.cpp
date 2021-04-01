@@ -369,13 +369,14 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts) {
+  caf::settings synopsis_opts, store_actor store) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
   self->state.offset = invalid_id;
   self->state.events = 0;
   self->state.filesystem = std::move(filesystem);
+  self->state.store = std::move(store);
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
@@ -634,7 +635,7 @@ active_partition_actor::behavior_type active_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
+      auto eval = self->spawn(evaluator, expr, triples, self->state.store);
       return self->delegate(eval, client);
     },
     [self](atom::status,
@@ -692,8 +693,10 @@ active_partition_actor::behavior_type active_partition(
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, const std::filesystem::path& path) {
+  filesystem_actor filesystem, const std::filesystem::path& path,
+  store_actor store) {
   self->state.self = self;
+  self->state.store = std::move(store);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
@@ -811,7 +814,7 @@ partition_actor::behavior_type passive_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
+      auto eval = self->spawn(evaluator, expr, triples, self->state.store);
       return self->delegate(eval, client);
     },
     [self](atom::status,

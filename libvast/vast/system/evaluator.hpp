@@ -59,6 +59,9 @@ struct evaluator_state {
   evaluator_actor::pointer self;
 
   /// Stores the actor for sendings results to.
+  store_actor store;
+
+  /// Stores the actor for sendings results to.
   partition_client_actor client;
 
   /// Stores the original query expression.
@@ -79,6 +82,7 @@ struct evaluator_state {
 /// @pre `!eval.empty()`
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
-          expression expr, std::vector<evaluation_triple> eval);
+          expression expr, std::vector<evaluation_triple> eval,
+          store_actor store);
 
 } // namespace vast::system

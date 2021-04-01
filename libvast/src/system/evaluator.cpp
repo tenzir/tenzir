@@ -146,11 +146,13 @@ evaluator_state::hits_for(const offset& position) {
 
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
-          expression expr, std::vector<evaluation_triple> eval) {
+          expression expr, std::vector<evaluation_triple> eval,
+          store_actor store) {
   VAST_TRACE_SCOPE("{} {}", VAST_ARG(expr), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
   self->state.expr = std::move(expr);
   self->state.eval = std::move(eval);
+  self->state.store = std::move(store);
   return {
     [self](partition_client_actor client) {
       self->state.client = client;

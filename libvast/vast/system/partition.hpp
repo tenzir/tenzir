@@ -122,6 +122,10 @@ struct active_partition_state {
   /// with a serialized chunk.
   size_t persisted_indexers;
 
+  /// The store to retrieve the data from. Either the legacy global archive or a
+  /// local component that holds the data for this partition.
+  store_actor store;
+
   /// Temporary storage for the serialized indexers of this partition, before
   /// they get written into the flatbuffer.
   std::map<caf::actor_id, vast::chunk_ptr> chunks;
@@ -178,6 +182,10 @@ struct passive_partition_state {
                          caf::typed_response_promise<atom::done>>>
     deferred_evaluations;
 
+  /// The store to retrieve the data from. Either the legacy global archive or a
+  /// local component that holds the data for this partition.
+  store_actor store;
+
   /// A typed view into the `partition_chunk`.
   const fbs::partition::v0* flatbuffer;
 
@@ -203,18 +211,21 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 /// @param filesystem The actor handle of the filesystem actor.
 /// @param index_opts Settings that are forwarded when creating indexers.
 /// @param synopsis_opts Settings that are forwarded when creating synopses.
+/// @param store The store to retrieve the events from.
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts);
+  caf::settings synopsis_opts, store_actor store);
 
 /// Spawns a read-only partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
 /// @param filesystem The actor handle of the filesystem actor.
 /// @param path The path where the partition flatbuffer can be found.
+/// @param store The store to retrieve the events from.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, const std::filesystem::path& path);
+  filesystem_actor filesystem, const std::filesystem::path& path,
+  store_actor store);
 
 } // namespace vast::system

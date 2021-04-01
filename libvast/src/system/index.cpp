@@ -155,7 +155,8 @@ partition_actor partition_factory::operator()(const uuid& id) const {
               != state_.persisted_partitions.end());
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", state_.self, id, path);
-  return state_.self->spawn(passive_partition, id, filesystem_, path);
+  return state_.self->spawn(passive_partition, id, filesystem_, path,
+                            state_.store);
 }
 
 filesystem_actor& partition_factory::filesystem() {
@@ -327,7 +328,7 @@ void index_state::create_active_partition() {
   put(synopsis_options, "string-synopsis-fp-rate", meta_index_fp_rate);
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, filesystem, index_opts,
-                  synopsis_options);
+                  synopsis_options, store);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
   active_partition.capacity = partition_capacity;
@@ -592,7 +593,7 @@ void index_state::flush_to_disk() {
 }
 
 index_actor::behavior_type
-index(index_actor::stateful_pointer<index_state> self,
+index(index_actor::stateful_pointer<index_state> self, store_actor store,
       filesystem_actor filesystem, const std::filesystem::path& dir,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
@@ -609,6 +610,7 @@ index(index_actor::stateful_pointer<index_state> self,
   // Set members.
   self->state.self = self;
   self->state.accept_queries = true;
+  self->state.store = std::move(store);
   self->state.filesystem = std::move(filesystem);
   self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
   self->state.dir = dir;
