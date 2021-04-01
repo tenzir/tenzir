@@ -44,7 +44,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   static constexpr double meta_index_fp_rate = 0.01;
 
   fixture() {
-    directory /= "index";
     auto fs = self->spawn(system::posix_filesystem, directory);
     auto dir = directory / "index";
     index = self->spawn(system::index, fs, dir, slice_size, in_mem_partitions,

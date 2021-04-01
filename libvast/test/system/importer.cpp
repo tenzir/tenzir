@@ -59,10 +59,10 @@ template <class Base>
 struct importer_fixture : Base {
   importer_fixture(size_t table_slice_size) : slice_size(table_slice_size) {
     MESSAGE("spawn importer");
-    this->directory /= "importer";
-    importer = this->self->spawn(system::importer, this->directory,
-                                 system::archive_actor{}, system::index_actor{},
-                                 system::type_registry_actor{});
+    auto dir = this->directory / "importer";
+    importer
+      = this->self->spawn(system::importer, dir, system::archive_actor{},
+                          system::index_actor{}, system::type_registry_actor{});
   }
 
   ~importer_fixture() {

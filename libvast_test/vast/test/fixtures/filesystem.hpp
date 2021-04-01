@@ -19,7 +19,7 @@ struct filesystem {
     std::filesystem::create_directory(directory);
   }
 
-  std::filesystem::path directory = "vast-unit-test";
+  const std::filesystem::path directory = "vast-unit-test";
 };
 
 } // namespace fixtures
