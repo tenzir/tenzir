@@ -17,7 +17,7 @@ This changelog documents all notable user-facing changes of VAST.
   [@satta](https://github.com/satta). VAST now prefers an installed
   `tsl-robin-map>=0.6.2` to the bundled one unless configured with
   `--with-bundled-robin-map`, and we provide a manpage for `lsvast` if
-  `asciidoctor` is installed.
+  `pandoc` is installed.
   [#1515](https://github.com/tenzir/vast/pull/1515)
 
 - ⚡️ The previously deprecated
