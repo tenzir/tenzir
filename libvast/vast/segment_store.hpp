@@ -16,6 +16,11 @@
 #include "vast/segment_builder.hpp"
 #include "vast/uuid.hpp"
 
+// std::vector<table_slice> needs the definition on older versions of libstdc++.
+#if VAST_GCC && __GNUC__ <= 8
+#  include "vast/table_slice.hpp"
+#endif
+
 #include <filesystem>
 
 namespace vast {
@@ -115,8 +120,8 @@ private:
   caf::expected<segment> load_segment(uuid id) const;
 
   /// Fills `candidates` with all segments that qualify for `selection`.
-  caf::error select_segments(const ids& selection,
-                             std::vector<uuid>& candidates) const;
+  caf::error
+  select_segments(const ids& selection, std::vector<uuid>& candidates) const;
 
   /// Drops an entire segment and erases its content from disk.
   /// @param x The segment to drop.
