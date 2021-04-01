@@ -88,7 +88,7 @@ tests:
       - command: infer
         input: data/json/nested-object.json
   Conn log counting:
-    tags: [node, counting, zeek]
+    tags: [disabled, node, counting, zeek]
     steps:
       - command: -N --max-partition-size=64 import -b zeek
         input: data/zeek/conn.log.gz
@@ -120,8 +120,8 @@ tests:
         input: data/zeek/dns.log.gz
       - command: -N export ascii 'resp_h == 192.168.1.104'
       - command: -N export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
-      - command: '-N count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
-      - command: -N count '#type == "zeek.conn"'
+      #- command: '-N count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
+      #- command: -N count '#type == "zeek.conn"'
   Node Zeek dns log:
     tags: [node, import-export, zeek]
     steps:
@@ -130,8 +130,8 @@ tests:
       - command: -N export ascii 'resp_h == 192.168.1.104'
       - command: -N export zeek 'resp_h == 192.168.1.104'
         transformation: awk '!/^#(open|close)/'
-      - command: -N count ':port == 53'
-      - command: '-N count ":count == 53 && #type == \"zeek.dns\""'
+      #- command: -N count ':port == 53'
+      #- command: '-N count ":count == 53 && #type == \"zeek.dns\""'
   Node Zeek http log:
     tags: [node, import-export, zeek]
     steps:
@@ -194,8 +194,8 @@ tests:
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
-      - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
-      - command: count '#type == "zeek.conn"'
+      #- command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
+      #- command: count '#type == "zeek.conn"'
   Table Slice Types:
     tags: [server, import-export, batch-encoding, zeek]
     fixture: ServerTester
@@ -204,11 +204,11 @@ tests:
         input: data/zeek/conn.log.gz
       - command: import -b --batch-encoding=msgpack zeek
         input: data/zeek/conn.log.gz
-      - command: count '#type == "zeek.conn"'
-      - guard: version | jq -e '."Apache Arrow"'
-      - command: import -b --batch-encoding=arrow zeek
-        input: data/zeek/conn.log.gz
-      - command: count '#type == "zeek.conn"'
+      #- command: count '#type == "zeek.conn"'
+      #- guard: version | jq -e '."Apache Arrow"'
+      #- command: import -b --batch-encoding=arrow zeek
+      #  input: data/zeek/conn.log.gz
+      #- command: count '#type == "zeek.conn"'
   Query Operators:
     tags: [server, operator]
     fixture: ServerTester
@@ -304,7 +304,7 @@ tests:
         transformation: awk '!/^#(open|close)/'
 
   Taxonomy queries:
-    tags: [concepts, models]
+    tags: [disabled, concepts, models]
     fixture: ServerTester
     steps:
       - command: import -b zeek
@@ -425,7 +425,7 @@ tests:
       - command: spawn source -r @./data/suricata/eve.json suricata
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: count '#type ~ /suricata.*/'
+      #- command: count '#type ~ /suricata.*/'
   Example config file:
     tags: [import-export, zeek]
     fixture: ExampleConfigFileTester
@@ -448,7 +448,7 @@ tests:
       - command: import suricata
         input: data/suricata/eve.json
         transformation: sleep 4
-      - command: count '#type == /zeek.*/'
+      #- command: count '#type == /zeek.*/'
   # This test only checks whether it is possible to take a Sigma rule as valid
   # input and perform a simple query. It does not check for subtleties in the
   # expression language itself. See the corresponding unit tests for that.
