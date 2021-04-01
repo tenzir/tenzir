@@ -10,7 +10,6 @@
 
 #include "vast/error.hpp"
 #include "vast/file.hpp"
-#include "vast/path.hpp"
 
 #include <cstddef>
 #include <filesystem>
@@ -23,10 +22,6 @@ write(const std::filesystem::path& filename, span<const std::byte> xs) {
   if (!f.open(file::write_only))
     return caf::make_error(ec::filesystem_error, "failed open file");
   return f.write(xs.data(), xs.size());
-}
-
-caf::error write(const path& filename, span<const std::byte> xs) {
-  return write(std::filesystem::path{filename.str()}, xs);
 }
 
 } // namespace vast::io
