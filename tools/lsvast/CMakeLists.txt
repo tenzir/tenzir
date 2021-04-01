@@ -9,3 +9,19 @@ endif ()
 add_executable(lsvast lsvast.cpp)
 target_link_libraries(lsvast PRIVATE vast::libvast vast::internal)
 install(TARGETS lsvast DESTINATION "${CMAKE_INSTALL_BINDIR}")
+
+find_program(ASCIIDOCTOR asciidoctor)
+if (ASCIIDOCTOR)
+  add_custom_target(lsvast-man ALL
+    DEPENDS vast
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
+    COMMAND "${ASCIIDOCTOR}" -b manpage
+      "${CMAKE_CURRENT_SOURCE_DIR}/lsvast.1.adoc"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
+    COMMENT "Generating man page lsvast.1"
+    VERBATIM)
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
+    DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
+    OPTIONAL)
+endif ()
