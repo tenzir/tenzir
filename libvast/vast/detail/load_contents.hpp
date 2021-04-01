@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "vast/path.hpp"
-
 #include <caf/fwd.hpp>
 
 #include <filesystem>
@@ -20,7 +18,5 @@ namespace vast::detail {
 // @param p The path of the file to load.
 // @returns The contents of the file *p*.
 caf::expected<std::string> load_contents(const std::filesystem::path& p);
-
-caf::expected<std::string> load_contents(const vast::path& p);
 
 } // namespace vast::detail
