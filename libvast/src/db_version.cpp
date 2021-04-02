@@ -55,7 +55,7 @@ std::ostream& operator<<(std::ostream& str, const db_version& version) {
 
 db_version read_db_version(const std::filesystem::path& db_dir) {
   std::error_code err{};
-  if (const auto exists = std::filesystem::exists(db_dir, err); !exists || err)
+  if (!std::filesystem::exists(db_dir, err))
     return db_version::invalid;
   const auto versionfile = db_dir / "VERSION";
   auto contents = io::read(versionfile);
