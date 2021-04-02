@@ -242,7 +242,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   return result;
 }
 
-caf::expected<schema> load_schema(const path& schema_file) {
+caf::expected<schema> load_schema(const std::filesystem::path& schema_file) {
   if (schema_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
   auto str = detail::load_contents(schema_file);
@@ -251,7 +251,8 @@ caf::expected<schema> load_schema(const path& schema_file) {
   return to<schema>(*str);
 }
 
-caf::error load_symbols(const path& schema_file, symbol_map& local) {
+caf::error
+load_symbols(const std::filesystem::path& schema_file, symbol_map& local) {
   if (schema_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
   auto str = detail::load_contents(schema_file);
@@ -260,7 +261,7 @@ caf::error load_symbols(const path& schema_file, symbol_map& local) {
   auto p = symbol_map_parser{};
   if (!p(*str, local))
     return caf::make_error(ec::parse_error, "failed to load symbols from",
-                           schema_file);
+                           schema_file.string());
   return caf::none;
 }
 
@@ -292,7 +293,7 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
     symbol_map local_symbols;
     for (const auto& f : *schema_files) {
       VAST_DEBUG("loading schema {}", f);
-      if (auto err = load_symbols(path{f.string()}, local_symbols))
+      if (auto err = load_symbols(f, local_symbols))
         return err;
     }
     auto r = symbol_resolver{global_symbols, local_symbols};
