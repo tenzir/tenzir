@@ -20,6 +20,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/format/writer_factory.hpp"
+#include "vast/logger.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/value_index.hpp"
@@ -32,6 +33,7 @@
 #endif
 
 #include <algorithm>
+#include <filesystem>
 #include <unordered_set>
 
 namespace vast::system {
@@ -77,29 +79,38 @@ caf::error configuration::parse(int argc, char** argv) {
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
   // Check for multiple config files in directories.
-  std::unordered_set<path> config_dirs;
+  std::unordered_set<std::string> config_dirs;
   for (const auto& config : config_files) {
-    if (!exists(config))
+    std::error_code err{};
+    if (!std::filesystem::exists(config, err))
       return caf::make_error(ec::no_such_file,
-                             "config file does not exist:", config.complete());
-    auto dir = config.parent();
-    if (config_dirs.count(dir))
+                             fmt::format("config file {} does not exist: {}",
+                                         std::filesystem::absolute(config, err),
+                                         err.message()));
+    const auto dir = config.parent_path();
+    if (config_dirs.find(dir.string()) != config_dirs.end())
       return caf::make_error(ec::parse_error, "found multiple config files in",
-                             dir);
+                             dir.string());
     else
-      config_dirs.insert(std::move(dir));
+      config_dirs.insert(dir.string());
   }
   // Instead of the CAF-supplied `config_file_path`, we use our own
   // `config_files` variable in order to support multiple configuration files.
-  auto add_configs = [&](auto&& dir) -> caf::error {
+  auto add_configs = [&](std::filesystem::path&& dir) -> caf::error {
     auto conf_yaml = dir / "vast.yaml";
     auto conf_yml = dir / "vast.yml";
-    auto exists_conf_yaml = exists(conf_yaml);
-    auto exists_conf_yml = exists(conf_yml);
+    std::error_code err{};
+    const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
+    const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
+    if (err)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to check if vast yaml config "
+                                         "files existed from directory {}: {}",
+                                         dir, err.message()));
     if (exists_conf_yaml && exists_conf_yml)
       return caf::make_error(
         ec::invalid_configuration,
-        "detected both 'vast.yaml' and 'vast.yml' files in " + dir.str());
+        "detected both 'vast.yaml' and 'vast.yml' files in " + dir.string());
     else if (exists_conf_yaml)
       config_files.emplace_back(std::move(conf_yaml));
     else if (exists_conf_yml)
@@ -107,30 +118,35 @@ caf::error configuration::parse(int argc, char** argv) {
     return caf::none;
   };
   if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME")) {
-    if (auto err = add_configs(path{xdg_config_home} / "vast"))
+    if (auto err = add_configs(std::filesystem::path{xdg_config_home} / "vast"))
       return err;
   } else if (const char* home = std::getenv("HOME")) {
-    if (auto err = add_configs(path{home} / ".config" / "vast"))
+    if (auto err
+        = add_configs(std::filesystem::path{home} / ".config" / "vast"))
       return err;
   }
-  if (auto err = add_configs(VAST_SYSCONFDIR / path{"vast"}))
+  if (auto err = add_configs(std::filesystem::path{VAST_SYSCONFDIR} / "vast"))
     return err;
   // If the user provided a config file on the command line, we attempt to
   // parse it last.
   for (auto& arg : command_line) {
     if (detail::starts_with(arg, "--config=")) {
-      if (auto config = path{arg.substr(9)}; exists(config))
+      std::error_code err{};
+      if (auto config = std::filesystem::path{arg.substr(9)};
+          std::filesystem::exists(config, err))
         config_files.push_back(std::move(config));
       else
-        return caf::make_error(ec::invalid_configuration, "cannot find "
-                                                          "configuration file: "
-                                                            + config.str());
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("cannot find configuration file {}: "
+                                           "{}",
+                                           config, err.message()));
     }
   }
   // Parse and merge all configuration files.
   record merged_config;
   for (const auto& config : config_files) {
-    if (exists(config)) {
+    std::error_code err{};
+    if (std::filesystem::exists(config, err)) {
       auto contents = detail::load_contents(config);
       if (!contents)
         return contents.error();
