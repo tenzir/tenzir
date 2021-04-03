@@ -275,8 +275,7 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
   for (const auto& dir : schema_dirs) {
     VAST_VERBOSE("loading schemas from {}", dir);
     std::error_code err{};
-    const auto file_exists = std::filesystem::exists(dir, err);
-    if (!file_exists || err) {
+    if (!std::filesystem::exists(dir, err)) {
       VAST_DEBUG("{} skips non-existing directory: {}", __func__, dir);
       continue;
     }
