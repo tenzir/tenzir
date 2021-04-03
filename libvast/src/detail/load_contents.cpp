@@ -9,7 +9,6 @@
 #include "vast/detail/load_contents.hpp"
 
 #include "vast/error.hpp"
-#include "vast/path.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
@@ -32,10 +31,6 @@ caf::expected<std::string> load_contents(const std::filesystem::path& p) {
                            "failed to read from file " + p.string());
   out << in.rdbuf();
   return contents;
-}
-
-caf::expected<std::string> load_contents(const vast::path& p) {
-  return load_contents(std::filesystem::path{p.str()});
 }
 
 } // namespace vast::detail
