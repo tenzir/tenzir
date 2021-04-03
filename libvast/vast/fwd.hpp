@@ -71,7 +71,6 @@ class ewah_bitstream;
 class expression;
 class json;
 class msgpack_table_slice_builder;
-class path;
 class pattern;
 class plugin;
 class plugin_ptr;
@@ -284,7 +283,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::field_extractor))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
-  VAST_ADD_TYPE_ID((vast::path))
   VAST_ADD_TYPE_ID((vast::pattern))
   VAST_ADD_TYPE_ID((vast::plugin_version))
   VAST_ADD_TYPE_ID((vast::port))

@@ -15,7 +15,6 @@
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
-#include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/error.hpp"
