@@ -27,6 +27,7 @@
 #include <caf/optional.hpp>
 
 #include <chrono>
+#include <filesystem>
 #include <memory>
 #include <random>
 #include <unordered_map>
@@ -106,7 +107,7 @@ private:
   std::unique_ptr<struct pcap, pcap_close_wrapper> pcap_ = nullptr;
 
   std::unordered_map<flow, flow_state> flows_;
-  std::string input_;
+  std::filesystem::path input_;
   caf::optional<std::string> interface_;
   uint64_t cutoff_;
   size_t max_flows_;
@@ -152,7 +153,7 @@ private:
   std::unique_ptr<struct pcap, pcap_close_wrapper> pcap_ = nullptr;
   std::unique_ptr<struct pcap_dumper, pcap_dump_close_wrapper> dumper_
     = nullptr;
-  std::string trace_;
+  std::filesystem::path trace_;
 };
 
 } // namespace vast::format::pcap

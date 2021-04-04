@@ -82,7 +82,8 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
   std::string category = "vast.import.pcap";
   if (auto interface = get_if<std::string>(&options, category + ".interface"))
     interface_ = *interface;
-  input_ = get_or(options, "vast.import.read", vast::defaults::import::read);
+  input_ = std::filesystem::path{
+    get_or(options, "vast.import.read", vast::defaults::import::read)};
   cutoff_ = get_or(options, category + ".cutoff", defaults_t::cutoff);
   max_flows_ = get_or(options, category + ".max-flows", defaults_t::max_flows);
   max_age_
@@ -224,8 +225,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   // Initialize PCAP if needed.
   if (!pcap_) {
     std::error_code err{};
-    const auto file_exists
-      = std::filesystem::exists(std::filesystem::path{input_}, err);
+    const auto file_exists = std::filesystem::exists(input_, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to find file {}: {}", input_,
@@ -245,8 +245,9 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       }
       VAST_INFO("{} listens on interface {}", detail::pretty_type_name(this),
                 *interface_);
-    } else if (input_ != "-" && !file_exists) {
-      return caf::make_error(ec::format_error, "no such file: ", input_);
+    } else if (input_.string() != "-" && !file_exists) {
+      return caf::make_error(ec::format_error,
+                             "no such file: ", input_.string());
     } else {
 #  ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_.reset(::pcap_open_offline_with_tstamp_precision(
@@ -257,7 +258,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       if (!pcap_) {
         flows_.clear();
         return caf::make_error(ec::format_error, "failed to open pcap file ",
-                               input_, ": ", std::string{buf});
+                               input_.string(), ": ", std::string{buf});
       }
       VAST_INFO("{} reads trace from {}", detail::pretty_type_name(this),
                 input_);
@@ -493,7 +494,8 @@ void reader::shrink_to_max_size() {
 writer::writer(const caf::settings& options) {
   flush_interval_ = get_or(options, "vast.export.pcap.flush-interval",
                            defaults::flush_interval);
-  trace_ = get_or(options, "vast.export.write", vast::defaults::export_::write);
+  trace_ = std::filesystem::path{
+    get_or(options, "vast.export.write", vast::defaults::export_::write)};
 }
 
 caf::error writer::write(const table_slice& slice) {
