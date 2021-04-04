@@ -280,7 +280,7 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
       continue;
     }
     auto filter = [](const std::filesystem::path& f) {
-      return detail::ends_with(f.string(), ".schema");
+      return f.extension() == ".schema";
     };
     auto schema_files
       = detail::filter_dir(dir, std::move(filter), max_recursion);
