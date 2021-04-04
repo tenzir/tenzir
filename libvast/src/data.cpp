@@ -592,8 +592,8 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion) {
     return ec::recursion_limit_reached;
   std::vector<std::pair<std::filesystem::path, data>> result;
   auto filter = [](const std::filesystem::path& f) {
-    return detail::ends_with(f.string(), ".yaml")
-           || detail::ends_with(f.string(), ".yml");
+    const auto& extension = f.extension();
+    return extension == ".yaml" || extension == ".yml";
   };
   auto yaml_files = detail::filter_dir(dir, std::move(filter), max_recursion);
   if (!yaml_files)
