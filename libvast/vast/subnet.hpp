@@ -83,7 +83,10 @@ struct formatter<vast::subnet> {
 
   template <typename FormatContext>
   auto format(const vast::subnet& sn, FormatContext& ctx) {
-    return format_to(ctx.out(), "{}/{}", sn.network(), sn.length());
+    auto out = ctx.out();
+    out = format_to(out, "{}", sn.network());
+    out = format_to(out, "/{}", sn.length());
+    return out;
   }
 };
 
