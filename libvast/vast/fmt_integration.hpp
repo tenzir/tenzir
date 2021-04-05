@@ -155,28 +155,27 @@ struct fmt_wrapped_formatter<duration> : public empty_formatter_base {
   }
 
   template <class To, class R, class P>
-  static auto count(std::chrono::duration<R, P> d) {
+  static double count(std::chrono::duration<R, P> d) {
     using fractional = std::chrono::duration<double, typename To::period>;
-    return std::llround(100 * std::chrono::duration_cast<fractional>(d).count())
-           / double{100.0};
+    return std::chrono::duration_cast<fractional>(d).count();
   }
 
   template <typename FormatContext>
   auto format(duration d, FormatContext& ctx) const {
     using namespace std::chrono;
     if (is_at_least<days>(d))
-      return fmt::format_to(ctx.out(), "{}d", count<days>(d));
+      return fmt::format_to(ctx.out(), "{:.3g}d", count<days>(d));
     if (is_at_least<hours>(d))
-      return fmt::format_to(ctx.out(), "{}h", count<hours>(d));
+      return fmt::format_to(ctx.out(), "{:.3g}h", count<hours>(d));
     if (is_at_least<minutes>(d))
-      return fmt::format_to(ctx.out(), "{}m", count<minutes>(d));
+      return fmt::format_to(ctx.out(), "{:.3g}m", count<minutes>(d));
     if (is_at_least<seconds>(d))
-      return fmt::format_to(ctx.out(), "{}s", count<seconds>(d));
+      return fmt::format_to(ctx.out(), "{:.3g}s", count<seconds>(d));
     if (is_at_least<milliseconds>(d))
-      return fmt::format_to(ctx.out(), "{}ms", count<milliseconds>(d));
+      return fmt::format_to(ctx.out(), "{:.3g}ms", count<milliseconds>(d));
     if (is_at_least<microseconds>(d))
-      return fmt::format_to(ctx.out(), "{}us", count<microseconds>(d));
-    return fmt::format_to(ctx.out(), "{}ns", count<nanoseconds>(d));
+      return fmt::format_to(ctx.out(), "{:.3g}us", count<microseconds>(d));
+    return fmt::format_to(ctx.out(), "{:.3g}ns", count<nanoseconds>(d));
   }
 };
 
