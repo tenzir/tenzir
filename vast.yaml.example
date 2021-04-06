@@ -63,7 +63,7 @@ vast:
   plugin-dirs: []
   # The plugins to load at startup. For relative paths, VAST tries to find the
   # files in the specified `vast.plugin-dirs`.
-  # Note: Add libexample or libexample here to load the example plugin.
+  # Note: Add `example` or `/path/to/libexample.so` to load the example plugin.
   plugins: []
   # The unique ID of this node.
   node-id: "node"

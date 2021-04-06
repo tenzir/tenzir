@@ -1,3 +1,3 @@
 vast:
   plugins:
-    - libexample
+    - example
