@@ -13,6 +13,13 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚡️ The previously deprecated usage
+  ([#1354](https://github.com/tenzir/vast/pull/1354)) of format-independent
+  options after the format in commands is now no longer possible. This affects
+  the options `listen`, `read`, `schema`, `schema-file`, `type`, and `uds` for
+  import commands and the `write` and `uds` options for export commands.
+  [#1529](https://github.com/tenzir/vast/pull/1529)
+
 - ⚠️ We upstreamed the Debian patches provided by
   [@satta](https://github.com/satta). VAST now prefers an installed
   `tsl-robin-map>=0.6.2` to the bundled one unless configured with

@@ -166,51 +166,21 @@ vast:
     # `vast export` with a positional query argument. This option is only
     # listed here for completeness.
     #read: "-"
-
-    # The `vast export ascii` command exports events formatted in a plain-text
-    # format that is internal to VAST.
-    ascii:
-      # Path to write events to or "-" for writing to stdout.
-      write: "-"
-      # Treat the write option as a UNIX domain socket to connect to.
-      uds: false
-
-    # The `vast export csv` command exports events formatted as CSV.
-    csv:
-      # Path to write events to or "-" for writing to stdout.
-      write: "-"
-      # Treat the write option as a UNIX domain socket to connect to.
-      uds: false
+    # Path to write events to or "-" for writing to stdout.
+    write: "-"
+    # Treat the write option as a UNIX domain socket to connect to.
+    uds: false
 
     # The `vast export json` command exports events formatted as JSONL (line-
     # delimited JSON).
     json:
-      # Path to write events to or "-" for writing to stdout.
-      write: "-"
-      # Treat the write option as a UNIX domain socket to connect to.
-      uds: false
       # Flatten nested objects into the top-level object.
       flatten: false
-
-    # The `vast export arrow` command exports events in the Apache Arrow format.
-    # Unlike other export formats, arrow is always printed to stdout.
-    arrow:
 
     # The `vast export pcap` command exports events in the PCAP format.
     pcap:
       # Flush to disk after this many packets.
       flush-interval: 10000
-      # Path to write events to or "-" for writing to stdout.
-      write: "-"
-      # Treat the write option as a UNIX domain socket to connect to.
-      uds: false
-
-    # The `vast export zeek` command exports events formatted as Zeek logs.
-    zeek:
-      # Path to write events to or "-" for writing to stdout.
-      write: "-"
-      # Treat the write option as a UNIX domain socket to connect to.
-      uds: false
 
   # The `vast infer` command tries to infer the schema from data.
   infer:
@@ -253,32 +223,16 @@ vast:
     blocking: false
     # The amount of time that each read iteration waits for new input.
     read-timeout: 20ms
-
-    # The `vast import csv` command imports data from CSVs with a known schema.
-    csv:
-      # The endpoint to listen on ("[host]:port/type").
-      #listen: <none>
-      # Path to file to read events from or "-" for stdin.
-      read: "-"
-      # Treat the read option as a UNIX domain socket to connect to.
-      uds: false
-      # Path to an alternate schema.
-      #schema-file: <none>
-      # An alternate schema as a string.
-      #schema: <none>
-
-    # The `vast import json` command imports data from JSONLs with a known schema.
-    json:
-      # The endpoint to listen on ("[host]:port/type").
-      #listen: <none>
-      # Path to file to read events from or "-" for stdin.
-      read: "-"
-      # Treat the read option as a UNIX domain socket to connect to.
-      uds: false
-      # Path to an alternate schema.
-      #schema-file: <none>
-      # An alternate schema as a string.
-      #schema: <none>
+    # The endpoint to listen on ("[host]:port/type").
+    #listen: <none>
+    # Path to file to read events from or "-" for stdin.
+    read: "-"
+    # Treat the read option as a UNIX domain socket to connect to.
+    uds: false
+    # Path to an alternate schema.
+    #schema-file: <none>
+    # An alternate schema as a string.
+    #schema: <none>
 
     # The `vast import pcap` command imports PCAP logs.
     pcap:
@@ -299,91 +253,21 @@ vast:
       snaplen: 65535
       # Disable computation of community id for every packet.
       disable-community-id: false
-      # The endpoint to listen on ("[host]:port/type").
-      #listen: <none>
-      # Path to file to read events from or "-" for stdin.
-      read: "-"
-      # Treat the read option as a UNIX domain socket to connect to.
-      uds: false
-      # Path to an alternate schema.
-      #schema-file: <none>
-      # An alternate schema as a string.
-      #schema: <none>
-
-    # The `vast import suricata` command imports Suricata eve.json logs.
-    suricata:
-      # The endpoint to listen on ("[host]:port/type").
-      #listen: <none>
-      # Path to file to read events from or "-" for stdin.
-      read: "-"
-      # Treat the read option as a UNIX domain socket to connect to.
-      uds: false
-      # Path to an alternate schema.
-      #schema-file: <none>
-      # An alternate schema as a string.
-      #schema: <none>
-
-    # The `vast import syslog` command imports Syslog entries.
-    syslog:
-      # The endpoint to listen on ("[host]:port/type").
-      #listen: <none>
-      # Path to file to read events from or "-" for stdin.
-      read: "-"
-      # Treat the read option as a UNIX domain socket to connect to.
-      uds: false
-      # Path to an alternate schema.
-      #schema-file: <none>
-      # An alternate schema as a string.
-      #schema: <none>
 
     # The `vast import test` command imports randomly generated events. Used for
     # debugging and benchmarking only.
     test:
       # The PRNG seed.
       seed: 0
-      # The endpoint to listen on ("[host]:port/type").
-      #listen: <none>
-      # Path to file to read events from or "-" for stdin.
-      read: "-"
-      # Treat the read option as a UNIX domain socket to connect to.
-      uds: false
-      # Path to an alternate schema.
-      #schema-file: <none>
-      # An alternate schema as a string.
-      #schema: <none>
 
     # The `vast import zeek` command imports Zeek logs.
     zeek:
-      # For available options, see import.csv.
-      # The endpoint to listen on ("[host]:port/type").
-      #listen: <none>
-      # Path to file to read events from or "-" for stdin.
-      read: "-"
-      # Treat the read option as a UNIX domain socket to connect to.
-      uds: false
-      # Path to an alternate schema.
-      #schema-file: <none>
-      # An alternate schema as a string.
-      #schema: <none>
       # Flag to indicate whether the output should contain #open/#close tags.
       # Zeek writes these tags in its logs such that users can gain insight
       # when Zeek processed the corresponding data. By default, VAST
       # does the same. Settings this flag to true skips printing these tags,
       # which may help when fully deterministic output is desired.
-      #disable-timestamp-tags: false
-
-    # The `vast import zeek-json` command imports Zeek streaming JSON.
-    zeek-json:
-      # The endpoint to listen on ("[host]:port/type").
-      #listen: <none>
-      # Path to file to read events from or "-" for stdin.
-      read: "-"
-      # Treat the read option as a UNIX domain socket to connect to.
-      uds: false
-      # Path to an alternate schema.
-      #schema-file: <none>
-      # An alternate schema as a string.
-      #schema: <none>
+      disable-timestamp-tags: false
 
   # The `vast pivot` command extracts related events of a given type.
   # For additionally available options, see export.pcap.
