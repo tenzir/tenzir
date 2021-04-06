@@ -159,7 +159,7 @@ add_feature_info(
   "VAST_ENABLE_PLUGIN_AUTOLOADING" VAST_ENABLE_PLUGIN_AUTOLOADING
   "always load all bundled plugins.")
 if (VAST_ENABLE_PLUGIN_AUTOLOADING AND bundled_plugins)
-  list(TRANSFORM bundled_plugins PREPEND "\"lib")
+  list(TRANSFORM bundled_plugins PREPEND "\"")
   list(TRANSFORM bundled_plugins APPEND "\"")
   list(JOIN bundled_plugins ", " joined_bundled_plugins)
   message(WARNING "bundled plugins: ${bundled_plugins}")

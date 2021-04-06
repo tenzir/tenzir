@@ -13,6 +13,14 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚡️ Plugins configured via `vast.plugins` in the configuration file can now be
+  specified using either the plugin name or the full path to the shared plugin
+  library. We no longer allow omitting the extension from specified plugin
+  files, and recommend using the plugin name as a more portable solution, e.g.,
+  `example` over `libexample` and `/path/to/libexample.so` over
+  `/path/to/libexample`.
+  [#1527](https://github.com/tenzir/vast/1527)
+
 - ⚠️ We upstreamed the Debian patches provided by
   [@satta](https://github.com/satta). VAST now prefers an installed
   `tsl-robin-map>=0.6.2` to the bundled one unless configured with
