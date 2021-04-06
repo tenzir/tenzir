@@ -33,6 +33,9 @@ struct source_state {
 
   // -- member variables -------------------------------------------------------
 
+  /// A pointer to the parent actor handle.
+  caf::scheduled_actor* self;
+
   /// Filters events, i.e., causes the source to drop all matching events.
   expression filter;
 
@@ -77,6 +80,14 @@ struct source_state {
 
   /// Indicates whether the stream source is done.
   bool done = false;
+
+  // -- utility functions -----------------------------------------------------
+
+  /// Initializes the state.
+  void
+  initialize(const type_registry_actor& type_registry, std::string type_filter);
+
+  void send_report();
 };
 
 /// An event producer.
@@ -92,7 +103,7 @@ struct source_state {
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
-       type_registry_actor type_registry, vast::schema local_schema,
+       const type_registry_actor& type_registry, vast::schema local_schema,
        std::string type_filter, accountant_actor accountant);
 
 } // namespace vast::system

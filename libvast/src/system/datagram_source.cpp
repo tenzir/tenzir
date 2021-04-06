@@ -21,7 +21,6 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/source_common.hpp"
 #include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
 
@@ -40,8 +39,9 @@ caf::behavior
 datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
                 format::reader_ptr reader, size_t table_slice_size,
                 caf::optional<size_t> max_events,
-                type_registry_actor type_registry, vast::schema local_schema,
-                std::string type_filter, accountant_actor accountant) {
+                const type_registry_actor& type_registry,
+                vast::schema local_schema, std::string type_filter,
+                accountant_actor accountant) {
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -51,18 +51,18 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
   }
   VAST_DEBUG("{} starts listening at port {}", self, udp_res->second);
   // Initialize state.
-  auto& st = self->state;
-  st.name = reader->name();
-  st.reader = std::move(reader);
-  st.requested = std::move(max_events);
-  st.local_schema = std::move(local_schema);
-  st.accountant = std::move(accountant);
-  st.table_slice_size = table_slice_size;
-  st.sink = nullptr;
-  st.done = false;
+  self->state.self = self;
+  self->state.name = reader->name();
+  self->state.reader = std::move(reader);
+  self->state.requested = std::move(max_events);
+  self->state.local_schema = std::move(local_schema);
+  self->state.accountant = std::move(accountant);
+  self->state.table_slice_size = table_slice_size;
+  self->state.sink = nullptr;
+  self->state.done = false;
   // Register with the accountant.
-  self->send(st.accountant, atom::announce_v, st.name);
-  init(self, std::move(type_registry), std::move(type_filter));
+  self->send(self->state.accountant, atom::announce_v, self->state.name);
+  self->state.initialize(type_registry, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
     self->state.done = true;
@@ -84,7 +84,6 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
     [self](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
       VAST_DEBUG("{} got a new datagram of size {}", self, msg.buf.size());
-      auto& st = self->state;
       auto t = timer::start(self->state.metrics);
       auto capacity = self->state.mgr->out().capacity();
       if (capacity == 0) {
@@ -94,16 +93,16 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
-      st.reader->reset(std::make_unique<std::istream>(&buf));
+      self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
         VAST_DEBUG("{} produced a slice with {} rows", self, slice.rows());
         self->state.mgr->out().push(std::move(slice));
       };
       auto events = capacity * self->state.table_slice_size;
-      if (st.requested)
-        events = std::min(events, *st.requested - st.count);
-      auto [err, produced]
-        = st.reader->read(events, self->state.table_slice_size, push_slice);
+      if (self->state.requested)
+        events = std::min(events, *self->state.requested - self->state.count);
+      auto [err, produced] = self->state.reader->read(
+        events, self->state.table_slice_size, push_slice);
       t.stop(produced);
       self->state.count += produced;
       if (self->state.requested && self->state.count >= *self->state.requested)
@@ -112,9 +111,9 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
         VAST_WARN("{} has not enough capacity left in stream, dropping input!",
                   self);
       if (produced > 0)
-        st.mgr->push();
-      if (st.done)
-        send_report(self);
+        self->state.mgr->push();
+      if (self->state.done)
+        self->state.send_report();
     },
     [self](accountant_actor accountant) {
       VAST_DEBUG("{} sets accountant to {}", self, accountant);
@@ -149,25 +148,23 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
       VAST_WARN("{} does not currently implement filter expressions", self);
     },
     [self](atom::status, status_verbosity v) {
-      auto& st = self->state;
       caf::settings result;
       if (v >= status_verbosity::detailed) {
         caf::settings src;
-        if (st.reader)
-          put(src, "format", st.reader->name());
-        put(src, "produced", st.count);
+        if (self->state.reader)
+          put(src, "format", self->state.reader->name());
+        put(src, "produced", self->state.count);
         auto& xs = put_list(result, "sources");
         xs.emplace_back(std::move(src));
       }
       return result;
     },
     [self](atom::telemetry) {
-      auto& st = self->state;
-      send_report(self);
-      if (st.dropped_packets > 0) {
+      self->state.send_report();
+      if (self->state.dropped_packets > 0) {
         VAST_WARN("{} has no capacity left in stream and dropped {} packets",
-                  self, st.dropped_packets);
-        st.dropped_packets = 0;
+                  self, self->state.dropped_packets);
+        self->state.dropped_packets = 0;
       }
       if (!self->state.done)
         self->delayed_send(self, defaults::system::telemetry_rate,

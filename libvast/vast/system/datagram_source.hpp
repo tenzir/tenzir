@@ -13,6 +13,8 @@
 #include "vast/system/actors.hpp"
 #include "vast/system/source.hpp"
 
+#include <caf/io/broker.hpp>
+
 namespace vast::system {
 
 struct datagram_source_state : source_state {
@@ -53,7 +55,8 @@ caf::behavior
 datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
                 format::reader_ptr reader, size_t table_slice_size,
                 caf::optional<size_t> max_events,
-                type_registry_actor type_registry, vast::schema local_schema,
-                std::string type_filter, accountant_actor accountant);
+                const type_registry_actor& type_registry,
+                vast::schema local_schema, std::string type_filter,
+                accountant_actor accountant);
 
 } // namespace vast::system

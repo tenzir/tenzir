@@ -14,7 +14,6 @@
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
-#include "vast/path.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>

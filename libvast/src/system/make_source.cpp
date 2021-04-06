@@ -125,8 +125,8 @@ make_source(caf::actor_system& sys, const std::string& format,
           datagram_source, *udp_port, std::forward<decltype(args)>(args)...);
       }
       if (detached)
-        return sys.spawn<caf::spawn_options::detach_flag>(
-          source, std::forward<decltype(args)>(args)...);
+        return sys.spawn<caf::detached>(source,
+                                        std::forward<decltype(args)>(args)...);
       return sys.spawn(source, std::forward<decltype(args)>(args)...);
     }(std::move(*reader), slice_size, max_events, std::move(type_registry),
       std::move(local_schema), std::move(type_filter), std::move(accountant));

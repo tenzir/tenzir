@@ -15,7 +15,7 @@ if (PANDOC_FOUND)
   add_custom_target(lsvast-man ALL
     DEPENDS lsvast
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
-    COMMAND "${ASCIIDOCTOR}" -s -f markdown -t man
+    COMMAND pandoc -s -f markdown -t man
       "${CMAKE_CURRENT_SOURCE_DIR}/lsvast.1.md"
       -o "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
     COMMENT "Generating man page lsvast.1"
