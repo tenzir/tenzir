@@ -51,8 +51,8 @@ namespace vast::system {
 namespace {
 
 auto make_pcap_options(std::string_view category) {
-  return sink_opts(category).add<size_t>(
-    "flush-interval,f", "flush to disk after this many packets");
+  return opts(category).add<size_t>("flush-interval,f", "flush to disk after "
+                                                        "this many packets");
 }
 
 command::opts_builder add_index_opts(command::opts_builder ob) {
@@ -123,29 +123,28 @@ auto make_export_command() {
       .add<std::string>("read,r", "path for reading the query")
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));
-  // NOTICE: The `sink_opts` are relocated in `command.cpp:fixup_options()`,
-  // That function must be kept in sync with the commands added here.
   export_->add_subcommand("zeek", "exports query results in Zeek format",
                           documentation::vast_export_zeek,
-                          sink_opts("?vast.export.zeek"));
+                          opts("?vast.export.zeek")
+                            .add<bool>("disable-timestamp-tags",
+                                       "whether the output should contain "
+                                       "#open/#close tags"));
   export_->add_subcommand("csv", "exports query results in CSV format",
                           documentation::vast_export_csv,
-                          sink_opts("?vast.export.csv"));
+                          opts("?vast.export.csv"));
   export_->add_subcommand("ascii", "exports query results in ASCII format",
                           documentation::vast_export_ascii,
-                          sink_opts("?vast.export.ascii"));
+                          opts("?vast.export.ascii"));
   export_->add_subcommand("json", "exports query results in JSON format",
                           documentation::vast_export_json,
-                          sink_opts("?vast.export.json")
+                          opts("?vast.export.json")
                             .add<bool>("flatten", "flatten nested objects into "
                                                   "the top-level"));
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
-                          sink_opts("?vast.export.null"));
+                          opts("?vast.export.null"));
 #if VAST_ENABLE_ARROW
-  // The Arrow export does not support --write or --uds, so we don't use the
-  // sink_opts here intentionally.
   export_->add_subcommand("arrow", "exports query results in Arrow format",
                           documentation::vast_export_arrow,
                           opts("?vast.export.arrow"));
@@ -193,36 +192,34 @@ auto make_import_command() {
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("type,t", "filter event type based on prefix matching")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
-  // NOTICE: The `source_opts` are relocated in `command.cpp:fixup_options()`,
-  // That function must be kept in sync with the commands added here.
   import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
                           documentation::vast_import_zeek,
-                          source_opts("?vast.import.zeek"));
+                          opts("?vast.import.zeek"));
   import_->add_subcommand("zeek-json",
                           "imports Zeek JSON logs from STDIN or file",
                           documentation::vast_import_zeek,
-                          source_opts("?vast.import.zeek-json"));
+                          opts("?vast.import.zeek-json"));
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
                           documentation::vast_import_csv,
-                          source_opts("?vast.import.csv"));
+                          opts("?vast.import.csv"));
   import_->add_subcommand("json", "imports JSON with schema",
                           documentation::vast_import_json,
-                          source_opts("?vast.import.json"));
+                          opts("?vast.import.json"));
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
-                          source_opts("?vast.import.suricata"));
+                          opts("?vast.import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
                           documentation::vast_import_syslog,
-                          source_opts("?vast.import.syslog"));
+                          opts("?vast.import.syslog"));
   import_->add_subcommand(
     "test", "imports random data for testing or benchmarking",
     documentation::vast_import_test,
-    source_opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
+    opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
 #if VAST_ENABLE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
     documentation::vast_import_pcap,
-    source_opts("?vast.import.pcap")
+    opts("?vast.import.pcap")
       .add<std::string>("interface,i", "network interface to read packets from")
       .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
       .add<size_t>("max-flows,m", "number of concurrent flows to track")
@@ -288,16 +285,16 @@ auto make_spawn_source_command() {
   spawn_source->add_subcommand("csv",
                                "creates a new CSV source inside the node",
                                documentation::vast_spawn_source_csv,
-                               source_opts("?vast.spawn.source.csv"));
+                               opts("?vast.spawn.source.csv"));
   spawn_source->add_subcommand("json",
                                "creates a new JSON source inside the node",
                                documentation::vast_spawn_source_json,
-                               source_opts("?vast.spawn.source.json"));
+                               opts("?vast.spawn.source.json"));
 #if VAST_ENABLE_PCAP
   spawn_source->add_subcommand(
     "pcap", "creates a new PCAP source inside the node",
     documentation::vast_spawn_source_pcap,
-    source_opts("?vast.spawn.source.pcap")
+    opts("?vast.spawn.source.pcap")
       .add<std::string>("interface,i", "network interface to read packets from")
       .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
       .add<size_t>("max-flows,m", "number of concurrent flows to track")
@@ -314,19 +311,19 @@ auto make_spawn_source_command() {
   spawn_source->add_subcommand("suricata",
                                "creates a new Suricata source inside the node",
                                documentation::vast_spawn_source_suricata,
-                               source_opts("?vast.spawn.source.suricata"));
+                               opts("?vast.spawn.source.suricata"));
   spawn_source->add_subcommand("syslog",
                                "creates a new Syslog source inside the node",
                                documentation::vast_spawn_source_syslog,
-                               source_opts("?vast.spawn.source.syslog"));
+                               opts("?vast.spawn.source.syslog"));
   spawn_source->add_subcommand(
     "test", "creates a new test source inside the node",
     documentation::vast_spawn_source_test,
-    source_opts("?vast.spawn.source.test").add<size_t>("seed", "the PRNG seed"));
+    opts("?vast.spawn.source.test").add<size_t>("seed", "the PRNG seed"));
   spawn_source->add_subcommand("zeek",
                                "creates a new Zeek source inside the node",
                                documentation::vast_spawn_source_zeek,
-                               source_opts("?vast.spawn.source.zeek"));
+                               opts("?vast.spawn.source.zeek"));
   return spawn_source;
 }
 
@@ -586,34 +583,6 @@ void render_error(const command& root, const caf::error& err,
       }
     }
   }
-}
-
-command::opts_builder source_opts(std::string_view category) {
-  // The deprecated options are still accepted but get copied over to their
-  // new location in `command.cpp:fixup_options()`.
-  return command::opts(category)
-    .add<std::string>("listen,l", "deprecated - this option now applies to the "
-                                  "import command")
-    .add<std::string>("read,r", "deprecated - this option now applies to the "
-                                "import command")
-    .add<std::string>("schema-file,s", "deprecated - this option now applies "
-                                       "to the import command")
-    .add<std::string>("schema,S", "deprecated - this option now applies to the "
-                                  "import command")
-    .add<std::string>("type,t", "deprecated - this option now applies to the "
-                                "import command")
-    .add<bool>("uds,d", "deprecated - this option now applies to the import "
-                        "command");
-}
-
-command::opts_builder sink_opts(std::string_view category) {
-  // The deprecated options are still accepted but get copied over to their
-  // new location in `command.cpp:fixup_options()`.
-  return command::opts(category)
-    .add<std::string>("write,w", "deprecated - this option now applies to the "
-                                 "import command")
-    .add<bool>("uds,d", "deprecated - this option now applies to the import "
-                        "command");
 }
 
 command::opts_builder opts(std::string_view category) {

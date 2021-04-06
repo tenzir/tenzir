@@ -13,6 +13,13 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚡️ The previously deprecated usage
+  ([#1354](https://github.com/tenzir/vast/pull/1354)) of format-independent
+  options after the format in commands is now no longer possible. This affects
+  the options `listen`, `read`, `schema`, `schema-file`, `type`, and `uds` for
+  import commands and the `write` and `uds` options for export commands.
+  [#1529](https://github.com/tenzir/vast/pull/1529)
+
 - ⚡️ Plugins configured via `vast.plugins` in the configuration file can now be
   specified using either the plugin name or the full path to the shared plugin
   library. We no longer allow omitting the extension from specified plugin
