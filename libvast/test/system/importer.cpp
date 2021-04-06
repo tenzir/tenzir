@@ -86,13 +86,12 @@ struct importer_fixture : Base {
   }
 
   auto make_zeek_source() {
-    namespace bf = format::zeek;
     auto stream = unbox(
       vast::detail::make_input_stream(artifacts::logs::zeek::small_conn));
-    bf::reader reader{caf::settings{}, std::move(stream)};
-    return this->self->spawn(system::source<bf::reader>, std::move(reader),
-                             slice_size, caf::none,
-                             vast::system::type_registry_actor{},
+    auto reader = std::make_unique<format::zeek::reader>(caf::settings{},
+                                                         std::move(stream));
+    return this->self->spawn(system::source, std::move(reader), slice_size,
+                             caf::none, vast::system::type_registry_actor{},
                              vast::schema{}, std::string{},
                              vast::system::accountant_actor{});
   }

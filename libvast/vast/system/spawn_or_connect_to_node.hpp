@@ -10,9 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
-
-#include <caf/variant.hpp>
 
 namespace vast::system {
 

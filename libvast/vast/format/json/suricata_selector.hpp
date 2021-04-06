@@ -13,6 +13,8 @@
 namespace vast::format::json {
 
 struct suricata_selector_specification {
+  // static constexpr auto category = defaults::import::suricata::category;
+  static constexpr auto name = "suricata-reader";
   static constexpr auto field = "event_type";
   static constexpr auto prefix = "suricata";
 };

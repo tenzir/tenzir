@@ -19,6 +19,7 @@
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/format/reader_factory.hpp"
 #include "vast/format/writer_factory.hpp"
 #include "vast/logger.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -52,7 +53,7 @@ configuration::configuration() {
   // Load I/O module.
   load<caf::io::middleman>();
   initialize_factories<synopsis, table_slice_builder, value_index,
-                       format::writer>();
+                       format::reader, format::writer>();
 }
 
 caf::error configuration::parse(int argc, char** argv) {

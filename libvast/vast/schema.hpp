@@ -52,7 +52,7 @@ public:
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `true` on success.
-  bool add(const type& t);
+  bool add(type t);
 
   /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.

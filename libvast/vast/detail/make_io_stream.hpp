@@ -12,7 +12,7 @@
 #include "vast/detail/posix.hpp"
 
 #include <caf/expected.hpp>
-#include <caf/settings.hpp>
+#include <caf/fwd.hpp>
 
 #include <filesystem>
 #include <iostream>
@@ -29,31 +29,15 @@ make_output_stream(const std::string& output,
                    std::filesystem::file_type file_type
                    = std::filesystem::file_type::regular);
 
-inline caf::expected<std::unique_ptr<std::ostream>>
-make_output_stream(const caf::settings& options) {
-  auto output = get_or(options, "vast.export.write", defaults::export_::write);
-  auto uds = get_or(options, "vast.export.uds", false);
-  auto fifo = get_or(options, "vast.export.fifo", false);
-  const auto pt = uds ? std::filesystem::file_type::socket
-                      : (fifo ? std::filesystem::file_type::fifo
-                              : std::filesystem::file_type::regular);
-  return make_output_stream(output, pt);
-}
+caf::expected<std::unique_ptr<std::ostream>>
+make_output_stream(const caf::settings& options);
 
 caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input,
                   std::filesystem::file_type file_type
                   = std::filesystem::file_type::regular);
 
-inline caf::expected<std::unique_ptr<std::istream>>
-make_input_stream(const caf::settings& options) {
-  auto input = get_or(options, "vast.import.read", defaults::import::read);
-  auto uds = get_or(options, "vast.import.uds", false);
-  auto fifo = get_or(options, "vast.import.fifo", false);
-  const auto pt = uds ? std::filesystem::file_type::socket
-                      : (fifo ? std::filesystem::file_type::fifo
-                              : std::filesystem::file_type::regular);
-  return make_input_stream(input, pt);
-}
+caf::expected<std::unique_ptr<std::istream>>
+make_input_stream(const caf::settings& options);
 
 } // namespace vast::detail

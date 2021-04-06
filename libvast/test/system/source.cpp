@@ -20,8 +20,6 @@
 #include "vast/format/zeek.hpp"
 #include "vast/table_slice.hpp"
 
-#include <caf/typed_event_based_actor.hpp>
-
 using namespace vast;
 using namespace vast::system;
 
@@ -58,20 +56,21 @@ stream_sink_actor<table_slice, std::string>::behavior_type test_sink(
   };
 }
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
 TEST(zeek source) {
   MESSAGE("start reader");
-  auto stream = unbox(
-    detail::make_input_stream(artifacts::logs::zeek::small_conn));
-  format::zeek::reader reader{caf::settings{}, std::move(stream)};
+  auto stream
+    = unbox(detail::make_input_stream(artifacts::logs::zeek::small_conn));
+  auto reader = std::make_unique<format::zeek::reader>(caf::settings{},
+                                                       std::move(stream));
   MESSAGE("start source for producing table slices of size 10");
-  auto src = self->spawn(source<format::zeek::reader>, std::move(reader),
-                         events::slice_size, caf::none,
-                         vast::system::type_registry_actor{}, vast::schema{},
-                         std::string{}, vast::system::accountant_actor{});
+  auto src
+    = self->spawn(source, std::move(reader), events::slice_size, caf::none,
+                  vast::system::type_registry_actor{}, vast::schema{},
+                  std::string{}, vast::system::accountant_actor{});
   run();
   MESSAGE("start sink and run exhaustively");
   auto snk = self->spawn(test_sink, src);

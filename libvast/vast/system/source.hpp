@@ -10,74 +10,31 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/concept/printable/std/chrono.hpp"
-#include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/error.hpp"
-#include "vast/concept/printable/vast/expression.hpp"
-#include "vast/concept/printable/vast/type.hpp"
-#include "vast/data.hpp"
-#include "vast/defaults.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/error.hpp"
 #include "vast/expression.hpp"
-#include "vast/expression_visitors.hpp"
-#include "vast/logger.hpp"
+#include "vast/format/reader.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/report.hpp"
-#include "vast/system/status_verbosity.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/type_set.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>
-#include <caf/downstream.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/settings.hpp>
-#include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
-#include <chrono>
 #include <unordered_map>
-
-namespace vast::detail {
-
-template <typename T>
-constexpr const T& opt_min(caf::optional<T>& opt, T&& rhs) {
-  if (!opt)
-    return rhs;
-  return std::min(*opt, std::forward<T>(rhs));
-}
-
-} // namespace vast::detail
 
 namespace vast::system {
 
 /// The source state.
 /// @tparam Reader The reader type, which must model the *Reader* concept.
-template <class Reader, class Self = caf::event_based_actor>
 struct source_state {
   // -- member types -----------------------------------------------------------
 
   using downstream_manager = caf::broadcast_downstream_manager<table_slice>;
 
-  // -- constructors, destructors, and assignment operators --------------------
-
-  explicit source_state(Self* selfptr)
-    : self{selfptr}, reader_initialized{false} {
-    // nop
-  }
-
-  ~source_state() {
-    self->send(accountant, "source.end", caf::make_timestamp());
-    if (reader_initialized)
-      reader.~Reader();
-  }
-
   // -- member variables -------------------------------------------------------
+
+  /// A pointer to the parent actor handle.
+  caf::scheduled_actor* self;
 
   /// Filters events, i.e., causes the source to drop all matching events.
   expression filter;
@@ -92,18 +49,13 @@ struct source_state {
   stream_sink_actor<table_slice, std::string> sink;
 
   /// Wraps the format-specific parser.
-  union {
-    Reader reader;
-  };
+  format::reader_ptr reader;
 
   /// Pretty name for log files.
   const char* name = "source";
 
   /// Takes care of transmitting batches.
   caf::stream_source_ptr<downstream_manager> mgr;
-
-  /// Points to the owning actor.
-  Self* self;
 
   /// An accumulator for the amount of produced events.
   size_t count = 0;
@@ -113,9 +65,6 @@ struct source_state {
 
   /// The import-local schema.
   vast::schema local_schema;
-
-  /// Stores whether `reader` is constructed.
-  bool reader_initialized;
 
   /// The maximum size for a table slice.
   size_t table_slice_size;
@@ -130,85 +79,15 @@ struct source_state {
   bool waiting_for_input = false;
 
   /// Indicates whether the stream source is done.
-  bool done;
+  bool done = false;
 
-  // -- utility functions ------------------------------------------------------
+  // -- utility functions -----------------------------------------------------
 
   /// Initializes the state.
-  template <class T>
-  void init(T* selfptr, Reader rd, caf::optional<size_t> max_events,
-            type_registry_actor type_registry, vast::schema sch,
-            std::string type_filter, accountant_actor acc, size_t tss) {
-    // Create the reader.
-    self = selfptr;
-    new (&reader) Reader(std::move(rd));
-    name = reader.name();
-    reader_initialized = true;
-    requested = std::move(max_events);
-    local_schema = std::move(sch);
-    accountant = std::move(acc);
-    table_slice_size = tss;
-    sink = nullptr;
-    done = false;
-    // Register with the accountant.
-    self->send(accountant, atom::announce_v, name);
-    // Figure out which schemas we need.
-    if (type_registry) {
-      self->request(type_registry, caf::infinite, atom::get_v)
-        .await([=](type_set types) {
-          auto is_valid = [&](const auto& layout) {
-            return detail::starts_with(layout.name(), type_filter);
-          };
-          // First, merge and de-duplicate the local schema with types from the
-          // type-registry.
-          auto merged_schema = schema{};
-          for (auto& type : local_schema)
-            if (auto&& layout = caf::get_if<vast::record_type>(&type))
-              if (is_valid(*layout))
-                merged_schema.add(std::move(*layout));
-          // Second, filter valid types from all available record types.
-          for (auto& type : types)
-            if (auto&& layout = caf::get_if<vast::record_type>(&type))
-              if (is_valid(*layout))
-                merged_schema.add(std::move(*layout));
-          // Third, try to set the new schema.
-          if (auto err = reader.schema(std::move(merged_schema));
-              err && err != caf::no_error)
-            VAST_ERROR("{} failed to set schema {}", self, err);
-        });
-    } else {
-      // We usually expect to have the type registry at the ready, but if we
-      // don't we fall back to only using the schemas from disk.
-      VAST_WARN("{} failed to retrieve registered types and only "
-                "considers types local to the import command",
-                self);
-      if (auto err = reader.schema(std::move(local_schema));
-          err && err != caf::no_error)
-        VAST_ERROR("{} failed to set schema {}", self, err);
-    }
-  }
+  void
+  initialize(const type_registry_actor& type_registry, std::string type_filter);
 
-  void send_report() {
-    // Send the reader-specific status report to the accountant.
-    if (auto status = reader.status(); !status.empty())
-      self->send(accountant, std::move(status));
-    // Send the source-specific performance metrics to the accountant.
-    auto r = performance_report{{{std::string{name}, metrics}}};
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
-    for (const auto& [key, m] : r) {
-      if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-        VAST_INFO("{} produced {} events at a rate of {} events/sec "
-                  "in {}",
-                  self, m.events, static_cast<uint64_t>(rate),
-                  to_string(m.duration));
-      else
-        VAST_INFO("{} produced {} events in {}", self, m.events,
-                  to_string(m.duration));
-    }
-#endif
-    metrics = measurement{};
-    self->send(accountant, std::move(r));
-  }
+  void send_report();
 };
 
 /// An event producer.
@@ -221,157 +100,10 @@ struct source_state {
 /// @oaram local_schema Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
-template <class Reader>
 caf::behavior
-source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
+source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
-       type_registry_actor type_registry, vast::schema local_schema,
-       std::string type_filter, accountant_actor accountant) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(self));
-  // Initialize state.
-  self->state.init(self, std::move(reader), std::move(max_events),
-                   std::move(type_registry), std::move(local_schema),
-                   std::move(type_filter), std::move(accountant),
-                   table_slice_size);
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
-    self->state.done = true;
-    self->quit(msg.reason);
-  });
-  // Spin up the stream manager for the source.
-  self->state.mgr = self->make_continuous_source(
-    // init
-    [self](caf::unit_t&) {
-      caf::timestamp now = std::chrono::system_clock::now();
-      self->send(self->state.accountant, "source.start", now);
-    },
-    // get next element
-    [self](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
-      VAST_DEBUG("{} tries to generate {} messages", self, num);
-      auto& st = self->state;
-      // Extract events until the source has exhausted its input or until
-      // we have completed a batch.
-      auto push_slice = [&](table_slice slice) { out.push(std::move(slice)); };
-      // We can produce up to num * table_slice_size events per run.
-      auto events = num * self->state.table_slice_size;
-      if (st.requested)
-        events = std::min(events, *st.requested - st.count);
-      auto t = timer::start(st.metrics);
-      auto [err, produced]
-        = st.reader.read(events, self->state.table_slice_size, push_slice);
-      VAST_DEBUG("{} read {} events", self, produced);
-      t.stop(produced);
-      st.count += produced;
-      auto finish = [&] {
-        st.done = true;
-        st.send_report();
-        self->quit();
-      };
-      if (st.requested && st.count >= *st.requested) {
-        VAST_DEBUG("{} finished with {} events", self, st.count);
-        return finish();
-      }
-      if (err == ec::stalled) {
-        if (!st.waiting_for_input) {
-          // This pull handler was invoked while we were waiting for a wakeup
-          // message. Sending another one would create a parallel wakeup cycle.
-          st.waiting_for_input = true;
-          self->delayed_send(self, st.wakeup_delay, atom::wakeup_v);
-          VAST_DEBUG("{} scheduled itself to resume after {}", self,
-                     st.wakeup_delay);
-          // Exponential backoff for the wakeup calls.
-          // For each consecutive invocation of this generate handler that does
-          // not emit any events, we double the wakeup delay.
-          // The sequence is 0, 20, 40, 80, 160, 320, 640, 1280.
-          if (st.wakeup_delay == std::chrono::milliseconds::zero())
-            st.wakeup_delay = std::chrono::milliseconds{20};
-          else if (st.wakeup_delay < st.reader.batch_timeout_ / 2)
-            st.wakeup_delay *= 2;
-        } else {
-          VAST_DEBUG("{} timed out but is already scheduled for wakeup", self);
-        }
-        return;
-      }
-      st.wakeup_delay = std::chrono::milliseconds::zero();
-      if (err == ec::timeout) {
-        VAST_DEBUG("{} reached batch timeout and flushes its buffers", self);
-        st.mgr->out().force_emit_batches();
-      } else if (err != caf::none) {
-        if (err != vast::ec::end_of_input)
-          VAST_INFO("{} completed with message: {}", self, render(err));
-        else
-          VAST_DEBUG("{} completed at end of input", self);
-        return finish();
-      }
-      VAST_DEBUG("{} ended a generation round regularly", self);
-    },
-    // done?
-    [self](const caf::unit_t&) { return self->state.done; });
-  return {
-    [self](atom::get, atom::schema) { //
-      return self->state.reader.schema();
-    },
-    [self](atom::put, schema sch) -> caf::result<void> {
-      VAST_DEBUG("{} received {}", self, VAST_ARG("schema", sch));
-      if (auto err = self->state.reader.schema(std::move(sch));
-          err && err != caf::no_error)
-        return err;
-      return caf::unit;
-    },
-    [self]([[maybe_unused]] expression& expr) {
-      // FIXME: Allow for filtering import data.
-      // self->state.filter = std::move(expr);
-      VAST_WARN("{} does not currently implement filter expressions", self);
-    },
-    [self](stream_sink_actor<table_slice, std::string> sink) {
-      VAST_ASSERT(sink);
-      VAST_DEBUG("{} registers {}", self, VAST_ARG(sink));
-      // TODO: Currently, we use a broadcast downstream manager. We need to
-      //       implement an anycast downstream manager and use it for the
-      //       source, because we mustn't duplicate data.
-      if (self->state.sink) {
-        self->quit(caf::make_error(ec::logic_error,
-                                   "source does not support "
-                                   "multiple sinks; sender =",
-                                   self->current_sender()));
-        return;
-      }
-      self->state.sink = sink;
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
-      // Start streaming.
-      auto name = std::string{self->state.reader.name()};
-      self->state.mgr->add_outbound_path(self->state.sink,
-                                         std::make_tuple(std::move(name)));
-    },
-    [self](atom::status, status_verbosity v) {
-      caf::settings result;
-      if (v >= status_verbosity::detailed) {
-        caf::settings src;
-        if (self->state.reader_initialized)
-          put(src, "format", self->state.reader.name());
-        put(src, "produced", self->state.count);
-        auto& xs = put_list(result, "sources");
-        xs.emplace_back(std::move(src));
-      }
-      return result;
-    },
-    [self](atom::wakeup) {
-      VAST_VERBOSE("{} wakes up to check for new input", self);
-      self->state.waiting_for_input = false;
-      // If we are here, the reader returned with ec::stalled the last time it
-      // was called. Let's check if we can read something now.
-      if (self->state.mgr->generate_messages())
-        self->state.mgr->push();
-    },
-    [self](atom::telemetry) {
-      VAST_DEBUG("{} got a telemetry atom", self);
-      self->state.send_report();
-      if (!self->state.mgr->done())
-        self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry_v);
-    },
-  };
-}
+       const type_registry_actor& type_registry, vast::schema local_schema,
+       std::string type_filter, accountant_actor accountant);
 
 } // namespace vast::system

@@ -26,7 +26,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 

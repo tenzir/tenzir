@@ -25,6 +25,7 @@
 #include "vast/time.hpp"
 #include "vast/view.hpp"
 
+#include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
@@ -33,6 +34,7 @@
 #include <ios>
 #include <limits>
 #include <queue>
+#include <string>
 
 namespace vast::system {
 

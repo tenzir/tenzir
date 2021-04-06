@@ -12,7 +12,6 @@
 
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
-#include "vast/defaults.hpp"
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/detail/string.hpp"
@@ -68,7 +67,7 @@ public:
   reader(const caf::settings& options, std::unique_ptr<std::istream> in
                                        = nullptr);
 
-  void reset(std::unique_ptr<std::istream> in);
+  void reset(std::unique_ptr<std::istream> in) override;
 
   caf::error schema(vast::schema sch) override;
 
@@ -129,7 +128,7 @@ vast::schema reader<Selector>::schema() const {
 
 template <class Selector>
 const char* reader<Selector>::name() const {
-  return "json-reader";
+  return selector_.name();
 }
 
 template <class Selector>

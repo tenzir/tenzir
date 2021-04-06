@@ -438,19 +438,16 @@ auto make_command_factory() {
     {"export zeek", make_writer_command("zeek")},
     {"get", get_command},
     {"infer", infer_command},
-    {"import csv", import_command<format::csv::reader>},
-    {"import json", import_command<
-      format::json::reader<format::json::default_selector>>},
+    {"import csv", import_command},
+    {"import json", import_command},
 #if VAST_ENABLE_PCAP
-    {"import pcap", import_command<format::pcap::reader>},
+    {"import pcap", import_command},
 #endif
-    {"import suricata", import_command<
-      format::json::reader<format::json::suricata_selector>>},
-    {"import syslog", import_command<format::syslog::reader>},
-    {"import test", import_command<format::test::reader>},
-    {"import zeek", import_command<format::zeek::reader>},
-    {"import zeek-json", import_command<
-      format::json::reader<format::json::zeek_selector>>},
+    {"import suricata", import_command},
+    {"import syslog", import_command},
+    {"import test", import_command},
+    {"import zeek", import_command},
+    {"import zeek-json", import_command},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},

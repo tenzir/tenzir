@@ -14,7 +14,7 @@
 
 namespace vast::system {
 
-/// Format-independent implementation for import sub-commands.
+/// Format-independent implementation for export sub-commands.
 caf::message
 sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk);
 
