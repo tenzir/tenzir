@@ -206,7 +206,7 @@ public:
     return static_cast<bool>(ptr_);
   }
 
-  auto operator-> () const {
+  auto operator->() const {
     return ptr_.get();
   }
 

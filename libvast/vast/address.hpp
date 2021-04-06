@@ -176,9 +176,10 @@ struct formatter<vast::address> {
   template <class FormatContext>
   auto format(const vast::address& a, FormatContext& ctx) {
     std::array<char, INET6_ADDRSTRLEN> buf{};
-    auto result = a.is_v4()
-                    ? inet_ntop(AF_INET, &a.data()[12], buf.data(), INET_ADDRSTRLEN)
-                    : inet_ntop(AF_INET6, &a.data(), buf.data(), INET6_ADDRSTRLEN);
+    auto result
+      = a.is_v4()
+          ? inet_ntop(AF_INET, &a.data()[12], buf.data(), INET_ADDRSTRLEN)
+          : inet_ntop(AF_INET6, &a.data(), buf.data(), INET6_ADDRSTRLEN);
     auto out = ctx.out();
     if (result != nullptr)
       out = format_to(out, "{}", result);
