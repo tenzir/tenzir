@@ -83,6 +83,13 @@ struct formatter<vast::subnet> {
 
   template <typename FormatContext>
   auto format(const vast::subnet& sn, FormatContext& ctx) {
+    // This is a workaround for bug in fmt/6.2.1 which fails with
+    // an idiomatic approach that would be something like this:
+    // ```
+    //   return format_t(ctx.out(), {}/{}, sn.network(), sn.length());
+    // ```
+    // See details with a reproduction here
+    // https://github.com/fmtlib/fmt/issues/2214
     auto out = ctx.out();
     out = format_to(out, "{}", sn.network());
     out = format_to(out, "/{}", sn.length());
