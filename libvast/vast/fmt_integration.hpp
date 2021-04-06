@@ -146,6 +146,32 @@ struct fmt_wrapped {
 template <class T>
 struct fmt_wrapped_formatter;
 
+/// An auxiliary wrapper for double value representing duration part.
+struct duration_double_precision_adjuster {
+  double value;
+};
+
+struct duration_double_precision_adjuster_formatter
+  : public empty_formatter_base {
+  template <typename FormatContext>
+  auto format(duration_double_precision_adjuster d, FormatContext& ctx) const {
+    // To print a float number with precision of at most two digits
+    // we print it as fixed 2-digits precision and later
+    // look at the last symbol and cut it if it is zero.
+    // For instance:
+    //   0.00   => 0.0
+    //   31.40  => 31.4
+    //   271.82 => 271.82
+    std::array<char, 64> buf;
+    auto last = fmt::format_to(begin(buf), "{:.2f}", d.value);
+    return fmt::format_to(
+      ctx.out(),
+      std::string_view{buf.data(),
+                       static_cast<std::size_t>(std::distance(
+                         begin(buf), *(last - 1) == '0' ? last - 1 : last))});
+  }
+};
+
 /// Specialization which knows how to format duration type.
 template <>
 struct fmt_wrapped_formatter<duration> : public empty_formatter_base {
@@ -162,20 +188,38 @@ struct fmt_wrapped_formatter<duration> : public empty_formatter_base {
 
   template <typename FormatContext>
   auto format(duration d, FormatContext& ctx) const {
+    // To print 1-2 digits precision float number
+    // representing duration a @c duration_double_precision_adjuster
+    // is used which is capable of printing double in an apropriate way.
+    // The reason precision_adjuster is a separate routine and not embedded here
+    // is that duration is suffixed with unit tag which would complecate
+    // adjustment logic in this function dramaticaly.
     using namespace std::chrono;
     if (is_at_least<days>(d))
-      return fmt::format_to(ctx.out(), "{:.3g}d", count<days>(d));
+      return fmt::format_to(ctx.out(), "{}d",
+                            duration_double_precision_adjuster{count<days>(d)});
     if (is_at_least<hours>(d))
-      return fmt::format_to(ctx.out(), "{:.3g}h", count<hours>(d));
+      return fmt::format_to(
+        ctx.out(), "{}h", duration_double_precision_adjuster{count<hours>(d)});
     if (is_at_least<minutes>(d))
-      return fmt::format_to(ctx.out(), "{:.3g}m", count<minutes>(d));
+      return fmt::format_to(
+        ctx.out(), "{}m",
+        duration_double_precision_adjuster{count<minutes>(d)});
     if (is_at_least<seconds>(d))
-      return fmt::format_to(ctx.out(), "{:.3g}s", count<seconds>(d));
+      return fmt::format_to(
+        ctx.out(), "{}s",
+        duration_double_precision_adjuster{count<seconds>(d)});
     if (is_at_least<milliseconds>(d))
-      return fmt::format_to(ctx.out(), "{:.3g}ms", count<milliseconds>(d));
+      return fmt::format_to(
+        ctx.out(), "{}ms",
+        duration_double_precision_adjuster{count<milliseconds>(d)});
     if (is_at_least<microseconds>(d))
-      return fmt::format_to(ctx.out(), "{:.3g}us", count<microseconds>(d));
-    return fmt::format_to(ctx.out(), "{:.3g}ns", count<nanoseconds>(d));
+      return fmt::format_to(
+        ctx.out(), "{}us",
+        duration_double_precision_adjuster{count<microseconds>(d)});
+    return fmt::format_to(
+      ctx.out(), "{}ns",
+      duration_double_precision_adjuster{count<nanoseconds>(d)});
   }
 };
 
@@ -280,18 +324,8 @@ template <class T>
 struct formatter<vast::detail::fmt_wrapped<T>>
   : public vast::detail::fmt_proxy<T> {};
 
-/// Custom formatter for `vast::pattern` type.
 template <>
-struct formatter<vast::pattern> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return std::end(ctx);
-  }
-
-  template <class P, class FormatContext>
-  auto format(const P& p, FormatContext& ctx) {
-    return format_to(ctx.out(), "/{}/", p.string());
-  }
-};
+struct formatter<vast::detail::duration_double_precision_adjuster>
+  : public vast::detail::duration_double_precision_adjuster_formatter {};
 
 } // namespace fmt
