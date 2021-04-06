@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 VAST no longer erroneously tries to load explicitly specified plugins
+  dynamically that are linked statically.
+  [#1528](https://github.com/tenzir/vast/pull/1528)
+
 - 🐞 VAST no longer refuses to start when any of the configuration file
   directories is unreadable, e.g., because VAST is running in a sandbox.
   [#1533](https://github.com/tenzir/vast/pull/1533)
