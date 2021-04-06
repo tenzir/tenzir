@@ -39,9 +39,6 @@ using namespace vast::printer_literals;
       CHECK_EQUAL(to_string(make_view(x)), str);                               \
     }                                                                          \
     data data_expr{x};                                                         \
-    fmt::print("to_string(data_expr)           : {}\n", to_string(data_expr));            \
-    fmt::print("                 str           : {}\n", str);                             \
-    fmt::print("to_string(make_view(data_expr)): {}\n", to_string(make_view(data_expr))); \
     CHECK_EQUAL(to_string(data_expr), str);                                    \
     CHECK_EQUAL(to_string(make_view(data_expr)), str);                         \
   }
