@@ -85,6 +85,16 @@ public:
           if (caf::holds_alternative<caf::none_t>(data))
             return std::nullopt;
           return data;
+        } else if constexpr (detail::is_any_v<std::decay_t<decltype(type)>,
+                                              vast::list_type, vast::map_type>) {
+          // Work around a mismatch in the type congruency check. We get
+          // incomplete nested types from `data_to_type`, and those don't match
+          // the actual types in the layout, so we call the unoptimized overload
+          // of `table_slice::at` in this case..
+          auto data = proj_.slice_.at(row_, column);
+          if (caf::holds_alternative<caf::none_t>(data))
+            return std::nullopt;
+          return caf::get<view<type_to_data<decltype(type)>>>(data);
         } else {
           auto data = proj_.slice_.at(row_, column, std::move(type));
           if (caf::holds_alternative<caf::none_t>(data))
@@ -234,8 +244,9 @@ projection<Types...> project(table_slice slice, Hints&&... hints) {
     = [&](const auto& type, auto&& hint) noexcept -> table_slice::size_type {
     if constexpr (std::is_convertible_v<decltype(hint), offset>) {
       if (auto field = layout.at(hint))
-        if (std::is_same_v<std::decay_t<decltype(type)>, vast::type> //
-            || congruent(field->type, type))
+        if (detail::is_any_v<std::decay_t<decltype(type)>, vast::type,
+                             vast::list_type, vast::map_type> //
+            || congruent(field.type(), type))
           if (auto flat_index = layout.flat_index_at(hint))
             return *flat_index;
     } else if constexpr (std::is_constructible_v<std::string_view,
@@ -246,7 +257,8 @@ projection<Types...> project(table_slice slice, Hints&&... hints) {
         auto name_view = std::string_view{full_name};
         while (true) {
           if (name_view == hint)
-            if (std::is_same_v<std::decay_t<decltype(type)>, vast::type> //
+            if (detail::is_any_v<std::decay_t<decltype(type)>, vast::type,
+                                 vast::list_type, vast::map_type> //
                 || congruent(field.type(), type))
               return flat_index;
           auto colon = name_view.find_first_of('.');
@@ -261,7 +273,8 @@ projection<Types...> project(table_slice slice, Hints&&... hints) {
       table_slice::size_type flat_index = 0;
       for (const auto& field : record_type::each{layout}) {
         if (flat_index == detail::narrow_cast<table_slice::size_type>(hint))
-          if (std::is_same_v<std::decay_t<decltype(type)>, vast::type> //
+          if (detail::is_any_v<std::decay_t<decltype(type)>, vast::type,
+                               vast::list_type, vast::map_type> //
               || congruent(field.type(), type))
             return flat_index;
         ++flat_index;
