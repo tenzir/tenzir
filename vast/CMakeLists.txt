@@ -107,7 +107,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 
 # -- add plugins ---------------------------------------------------------------
 
-option(VAST_PLUGINS "Specify a list of plugins to build with VAST" "")
+set(VAST_PLUGINS "" CACHE STRING "Specify a list of plugins to build with VAST")
 cmake_dependent_option(VAST_ENABLE_STATIC_PLUGINS
   "Force plugins to be linked statically" OFF
   "NOT VAST_ENABLE_STATIC_EXECUTABLE" ON)
