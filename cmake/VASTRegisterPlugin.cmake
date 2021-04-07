@@ -65,7 +65,7 @@ function (VASTRegisterPlugin)
     list(SORT plugin_schema_files)
     foreach (plugin_schema_file IN LISTS plugin_schema_files)
       string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}/schema/" ""
-                            relative_plugin_schema_file ${plugin_schema_file})
+                           relative_plugin_schema_file ${plugin_schema_file})
       string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
       add_custom_target(
         vast-schema-${plugin_schema_file_hash} ALL
@@ -110,13 +110,13 @@ function (VASTRegisterPlugin)
                                                         vast::internal)
     target_link_whole_archive(${PLUGIN_TARGET}-test PRIVATE ${PLUGIN_TARGET})
     add_test(NAME build-${PLUGIN_TARGET}-test
-              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}"
-                      --config "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
+             COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
+                     "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
     set_tests_properties(build-${PLUGIN_TARGET}-test
-      PROPERTIES FIXTURES_SETUP vast_unit_test_fixture)
+                         PROPERTIES FIXTURES_SETUP vast_unit_test_fixture)
     add_test(NAME ${PLUGIN_TARGET} COMMAND ${PLUGIN_TARGET}-test)
-    set_tests_properties(${PLUGIN_TARGET}
-      PROPERTIES FIXTURES_REQUIRED vast_unit_test_fixture)
+    set_tests_properties(${PLUGIN_TARGET} PROPERTIES FIXTURES_REQUIRED
+                                                     vast_unit_test_fixture)
   endif ()
 
   # Setup integration tests.
@@ -126,16 +126,16 @@ function (VASTRegisterPlugin)
       set(integration_test_path "${CMAKE_SOURCE_DIR}/vast/integration")
     else ()
       if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
-        set(integration_test_path
-          "${CMAKE_INSTALL_DATADIR}/vast/integration")
+        set(integration_test_path "${CMAKE_INSTALL_DATADIR}/vast/integration")
       else ()
         get_target_property(integration_test_path vast::vast LOCATION)
         get_filename_component(integration_test_path "${integration_test_path}"
-          DIRECTORY)
+                               DIRECTORY)
         get_filename_component(integration_test_path "${integration_test_path}"
-          DIRECTORY)
+                               DIRECTORY)
         set(integration_test_path
-          "${integration_test_path}/${CMAKE_INSTALL_DATADIR}/vast/integration")
+            "${integration_test_path}/${CMAKE_INSTALL_DATADIR}/vast/integration"
+        )
       endif ()
     endif ()
     file(
@@ -167,7 +167,8 @@ function (VASTRegisterPlugin)
           \"$@\"")
     add_custom_target(
       ${PLUGIN_TARGET}-integration
-      COMMAND /bin/sh
+      COMMAND
+        /bin/sh
         "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
         -v DEBUG
       USES_TERMINAL)
