@@ -21,6 +21,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"

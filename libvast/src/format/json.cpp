@@ -14,7 +14,6 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
 #include "vast/logger.hpp"
@@ -213,7 +212,7 @@ caf::expected<data> type_biased_convert_impl<real, time>(real s, const type&) {
 template <>
 caf::expected<data>
 type_biased_convert_impl<bool, std::string>(bool s, const type&) {
-  return to_string(s);
+  return std::string(s ? "T" : "F");
 }
 
 template <>

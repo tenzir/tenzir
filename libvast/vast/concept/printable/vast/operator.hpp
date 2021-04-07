@@ -13,6 +13,7 @@
 #include "vast/concept/printable/string/string.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
+#include "vast/operator.hpp"
 
 namespace vast {
 
