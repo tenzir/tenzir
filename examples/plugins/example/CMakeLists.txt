@@ -4,9 +4,10 @@ project(example
   DESCRIPTION "example plugin for VAST"
   LANGUAGES CXX)
 
-if (NOT TARGET vast::libvast)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  include(CTest)
   find_package(VAST REQUIRED)
-endif ()
+endif()
 
 VASTRegisterPlugin(
   TARGET example

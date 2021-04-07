@@ -81,6 +81,13 @@ function (VASTRegisterPlugin)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
                                                         vast::internal)
     target_link_whole_archive(${PLUGIN_TARGET}-test PRIVATE ${PLUGIN_TARGET})
+    add_test(NAME build-${PLUGIN_TARGET}-test
+              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}"
+                      --config "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
+    set_tests_properties(build-${PLUGIN_TARGET}-test
+      PROPERTIES FIXTURES_SETUP vast_unit_test_fixture)
     add_test(NAME ${PLUGIN_TARGET} COMMAND ${PLUGIN_TARGET}-test)
+    set_tests_properties(${PLUGIN_TARGET}
+      PROPERTIES FIXTURES_REQUIRED vast_unit_test_fixture)
   endif ()
 endfunction ()
