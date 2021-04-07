@@ -166,7 +166,7 @@ public:
     return std::all_of(
       indices_.begin(), indices_.end(),
       [columns = slice_.columns()](table_slice::size_type index) noexcept {
-        return index >= 0 && index < columns;
+        return index < columns;
       });
   }
 
