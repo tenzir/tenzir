@@ -118,4 +118,62 @@ function (VASTRegisterPlugin)
     set_tests_properties(${PLUGIN_TARGET}
       PROPERTIES FIXTURES_REQUIRED vast_unit_test_fixture)
   endif ()
+
+  # Setup integration tests.
+  if (TARGET vast::vast
+      AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
+    if (CMAKE_PROJECT_NAME STREQUAL "VAST")
+      set(integration_test_path "${CMAKE_SOURCE_DIR}/vast/integration")
+    else ()
+      if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
+        set(integration_test_path
+          "${CMAKE_INSTALL_DATADIR}/vast/integration")
+      else ()
+        get_target_property(integration_test_path vast::vast LOCATION)
+        get_filename_component(integration_test_path "${integration_test_path}"
+          DIRECTORY)
+        get_filename_component(integration_test_path "${integration_test_path}"
+          DIRECTORY)
+        set(integration_test_path
+          "${integration_test_path}/${CMAKE_INSTALL_DATADIR}/vast/integration")
+      endif ()
+    endif ()
+    file(
+      GENERATE
+      OUTPUT
+        "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
+      CONTENT
+        "#!/bin/sh
+        if ! command -v jq >/dev/null 2>&1; then
+          >&2 echo 'failed to find jq in $PATH'
+          exit 1
+        fi
+        base_dir=\"${integration_test_path}\"
+        env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
+        app=\"$<TARGET_FILE:vast::vast>\"
+        set -e
+        if [ ! -d \"$env_dir\" ]; then
+          python3 -m venv \"$env_dir\"
+        fi
+        . \"$env_dir/bin/activate\"
+        python -m pip install --upgrade pip
+        python -m pip install -r \"$base_dir/requirements.txt\"
+        $<$<BOOL:${VAST_ENABLE_ARROW}>:python -m pip install pyarrow>
+        export VAST_PLUGIN_DIRS=\"$<TARGET_FILE_DIR:${PLUGIN_TARGET}>\"
+        python \"$base_dir/integration.py\" \
+          --app \"$app\" \
+          --set \"${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml\" \
+          --directory vast-${PLUGIN_TARGET}-integration-test \
+          \"$@\"")
+    add_custom_target(
+      ${PLUGIN_TARGET}-integration
+      COMMAND /bin/sh
+        "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
+        -v DEBUG
+      USES_TERMINAL)
+    if (NOT TARGET integration)
+      add_custom_target(integration)
+    endif ()
+    add_dependencies(integration ${PLUGIN_TARGET}-integration)
+  endif ()
 endfunction ()

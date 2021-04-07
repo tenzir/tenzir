@@ -10,6 +10,15 @@ endif ()
 add_executable(vast vast.cpp)
 target_link_libraries(vast PRIVATE vast::internal vast::libvast)
 install(TARGETS vast DESTINATION "${CMAKE_INSTALL_BINDIR}")
+add_executable(vast::vast ALIAS vast)
+
+# Install vast in PREFIX/lib and headers in PREFIX/include/vast.
+install(
+  TARGETS vast
+  EXPORT VASTTargets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Use static versions of VAST_REGISTER_PLUGIN family of macros when inside the
 # vast binary. This makes it possible to statically link a plugin against the
@@ -41,7 +50,7 @@ endif ()
 
 file(
   GENERATE
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/integration-$<CONFIG>.sh"
   CONTENT
     "#!/bin/sh
      if ! command -v jq >/dev/null 2>&1; then
@@ -50,7 +59,7 @@ file(
      fi
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     app=\"$<TARGET_FILE:vast>\"
+     app=\"$<TARGET_FILE:vast::vast>\"
      set -e
      if [ ! -d \"$env_dir\" ]; then
        python3 -m venv \"$env_dir\"
@@ -71,13 +80,12 @@ file(
       --app \"$<TARGET_FILE:lsvast>\" \
       --directory lsvast-integration-test \
       --set \"$base_dir\"/lsvast_integration_suite.yaml \
-      \"$@\" >
-    . \"${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh\"
+      \"$@\">
     ")
 
 add_custom_target(
   integration
-  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh" "-v"
+  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration-$<CONFIG>.sh" "-v"
           "DEBUG"
   USES_TERMINAL)
 
@@ -105,7 +113,6 @@ cmake_dependent_option(VAST_ENABLE_STATIC_PLUGINS
   "NOT VAST_ENABLE_STATIC_EXECUTABLE" ON)
 add_feature_info("VAST_ENABLE_STATIC_PLUGINS" VAST_ENABLE_STATIC_PLUGINS
       "Force plugins to be linked statically.")
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh" "")
 if (VAST_PLUGINS)
   foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
     if (NOT IS_ABSOLUTE "${plugin_source_dir}"
@@ -115,8 +122,9 @@ if (VAST_PLUGINS)
           "Specified plugin \"${plugin_source_dir}\" must be an absolute path to an existing directory that contains a CMakeLists.txt file."
       )
     endif ()
-    # Note that we must explicitly specify a binary directory, because the plugin
-    # source directory may not be a subdirectory of the current list directory.
+    # Note that we must explicitly specify a binary directory, because the
+    # plugin source directory may not be a subdirectory of the current list
+    # directory.
     string(MD5 plugin_path_hash "${plugin_source_dir}")
     string(SUBSTRING "${plugin_path_hash}" 0 8 plugin_path_hash)
     get_filename_component(plugin_name "${plugin_source_dir}" NAME)
@@ -124,15 +132,6 @@ if (VAST_PLUGINS)
     list(APPEND bundled_plugins "${plugin_name}")
     set(plugin_binary_dir "plugin-${plugin_name}-${plugin_path_hash}")
     add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
-    if (EXISTS "${plugin_source_dir}/integration/tests.yaml")
-      file(
-        APPEND "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh"
-        "python \"\$base_dir/integration.py\" \
-        --app \"\$app\" \
-        --set \"${plugin_source_dir}/integration/tests.yaml\" \
-        --directory \"vast-integration-test-${plugin_binary_dir}\" \
-        \"\$@\"\n")
-    endif ()
   endforeach ()
 endif ()
 
