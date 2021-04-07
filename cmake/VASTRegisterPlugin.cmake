@@ -49,10 +49,38 @@ function (VASTRegisterPlugin)
     add_library(${PLUGIN_TARGET} SHARED ${PLUGIN_SOURCES})
   endif ()
 
-  # Install the bundled schema files to <datadir>/vast.
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
+    # Install the bundled schema files to <datadir>/vast.
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
             DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
+    # Copy schemas from bundled plugins to the build directory so they can be
+    # used from a VAST in a build directory (instead if just an installed VAST).
+    file(
+      GLOB_RECURSE
+      plugin_schema_files
+      CONFIGURE_DEPENDS
+      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.schema"
+      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yaml")
+    list(SORT plugin_schema_files)
+    foreach (plugin_schema_file IN LISTS plugin_schema_files)
+      string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}/schema/" ""
+                            relative_plugin_schema_file ${plugin_schema_file})
+      string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
+      add_custom_target(
+        vast-schema-${plugin_schema_file_hash} ALL
+        BYPRODUCTS
+          "${CMAKE_BINARY_DIR}/share/vast/schema/${relative_plugin_schema_file}"
+        COMMAND
+          ${CMAKE_COMMAND} -E copy "${plugin_schema_file}"
+          "${CMAKE_BINARY_DIR}/share/vast/schema/${relative_plugin_schema_file}"
+        COMMENT
+          "Copying schema file ${relative_plugin_schema_file} for plugin ${PLUGIN_TARGET}"
+      )
+      if (TARGET vast-schema)
+        add_dependencies(vast-schema vast-schema-${plugin_schema_file_hash})
+      endif ()
+    endforeach ()
   endif ()
 
   # Install the plugin library to <libdir>/vast/plugins, and also configure the
@@ -64,7 +92,7 @@ function (VASTRegisterPlugin)
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY
                "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins")
 
-  # Implicitly link plugins against vast::libvast and vast::internal:
+  # Implicitly link plugins against vast::libvast and vast::internal.
   target_link_libraries(
     ${PLUGIN_TARGET}
     PUBLIC vast::libvast
