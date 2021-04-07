@@ -113,6 +113,7 @@ type suricata.dhcp = suricata.component.common + record {
 
 type suricata.dns = suricata.component.common + record {
   dns: record {
+    version: count,
     type: enum {
       answer,
       query
@@ -124,7 +125,10 @@ type suricata.dns = suricata.component.common + record {
     rcode: string,
     rdata: string,
     ttl: count,
-    tx_id: count #index=hash
+    tx_id: count #index=hash,
+    grouped: record{
+      A: list<addr>
+    }
   }
 }
 
