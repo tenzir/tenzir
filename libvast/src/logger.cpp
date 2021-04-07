@@ -116,7 +116,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     VAST_ERROR("Log already up");
     return false;
   }
-  bool is_server = cmd_invocation.name() == "start"
+  bool is_server = cmd_invocation.full_name == "start"
                    || caf::get_or(cmd_invocation.options, "vast.node", false);
   const auto& cfg_cmd = cmd_invocation.options;
   auto console_verbosity = vast::defaults::logger::console_verbosity;
