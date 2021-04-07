@@ -485,8 +485,8 @@ auto make_root_command(std::string_view path) {
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
   // For documentation, we use the complete man-page formatted as Markdown
   const auto binary = detail::objectpath();
-  auto schema_desc
-    = "list of directories to look for schema files ([/etc/vast/schema"s;
+  std::string schema_desc
+    = "list of directories to look for schema files ([/etc/vast/schema";
   if (binary) {
     const auto relative_schema_dir
       = binary->parent_path().parent_path() / "share" / "vast" / "schema";

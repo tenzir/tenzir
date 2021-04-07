@@ -8,7 +8,6 @@
 
 #include "vast/taxonomies.hpp"
 
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"

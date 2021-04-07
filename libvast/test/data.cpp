@@ -17,7 +17,6 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
@@ -27,6 +26,7 @@
 
 using namespace vast;
 using namespace std::chrono_literals;
+using namespace std::string_literals;
 
 TEST(list) {
   REQUIRE(std::is_same_v<std::vector<data>, list>);

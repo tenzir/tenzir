@@ -9,7 +9,6 @@
 #include "vast/atoms.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/load_plugin.hpp"
@@ -35,6 +34,7 @@
 
 using namespace vast;
 using namespace vast::system;
+using namespace std::string_literals;
 
 int main(int argc, char** argv) {
   // Set a signal handler for fatal conditions. Prints a backtrace if support

@@ -9,6 +9,7 @@
 #define SUITE schema
 
 #include "vast/schema.hpp"
+#include "vast/data.hpp"
 
 #include "vast/test/test.hpp"
 
@@ -16,7 +17,6 @@
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/detail/deserialize.hpp"

@@ -14,7 +14,6 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"

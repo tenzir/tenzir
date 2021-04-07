@@ -10,7 +10,6 @@
 
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/filter_dir.hpp"
@@ -414,7 +413,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
                                      duration, std::string>)
         cv = x;
       else
-        cv = to_string(x);
+        cv = fmt::to_string(x);
       return caf::none;
     },
     [&](caf::none_t) -> caf::error {

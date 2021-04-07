@@ -9,7 +9,6 @@
 #include "vast/system/version_command.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/logger.hpp"

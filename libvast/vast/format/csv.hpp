@@ -12,7 +12,6 @@
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"

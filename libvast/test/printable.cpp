@@ -18,7 +18,6 @@
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/escapers.hpp"
 #include "vast/fmt_integration.hpp"

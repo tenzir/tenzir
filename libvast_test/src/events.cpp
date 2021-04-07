@@ -9,7 +9,6 @@
 #include "fixtures/events.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/format/test.hpp"
