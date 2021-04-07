@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 # As of CMake 2.8.3, Fink and MacPorts search paths are appended to the default
 # search prefix paths, but the nicer thing would be if they are prepended to the
 # default, so that is fixed here.
