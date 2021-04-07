@@ -205,7 +205,7 @@ TEST(evaluate) {
 }
 
 TEST(project column flat index) {
-  auto sut = zeek_conn_log[0];
+  auto sut = truncate(zeek_conn_log[0], 3);
   auto proj = project<vast::time, std::string>(sut, 0, 6);
   CHECK(proj);
   CHECK_NOT_EQUAL(proj.begin(), proj.end());
@@ -304,6 +304,25 @@ TEST(project column unspecified types) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
   }
+}
+
+TEST(project column lists) {
+  auto sut = zeek_dns_log[0];
+  auto proj = project<vast::list>(sut, "answers");
+  CHECK(proj);
+  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK_EQUAL(proj.size(), sut.rows());
+  size_t answers = 0;
+  for (auto&& [answer] : proj) {
+    if (answer) {
+      answers++;
+      for (auto entry : *answer) {
+        CHECK(!caf::holds_alternative<caf::none_t>(entry));
+        CHECK(caf::holds_alternative<view<std::string>>(entry));
+      }
+    }
+  }
+  CHECK_EQUAL(answers, 4u);
 }
 
 FIXTURE_SCOPE_END()

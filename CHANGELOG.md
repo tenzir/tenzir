@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The Suricata `dns` schema type now defines the `dns.grouped.A` field
+  containing a list of all returned addresses.
+  [#1531](https://github.com/tenzir/vast/pull/1531)
+
 - 🐞 Custom commands from plugins ending in `start` no longer try to write to
   the server instead of the client log file.
   [#1530](https://github.com/tenzir/vast/pull/1530)
