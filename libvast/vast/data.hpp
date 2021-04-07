@@ -424,7 +424,34 @@ struct formatter<vast::record::value_type>
 ///
 /// @note This class is also reused by formatter class for
 ///       `vast::view<vast::data>`. And a part that is
-///       sensetive to changes if @c format_impl function.
+///       sensetive to changes is a set of static functions with
+///       explicit "this" parameter type of comes as template parameter.
+///
+/// Visitors doing rendering to a specific format for some of its
+/// functions (for instance those which handle containers) apply an idiom
+/// which can be called explicit templated this. This idiom helps visitors
+/// to be reusable with a similar formatter for @c vast::view<data> type.
+/// Let's refer to `json_visitor::format_list` as an example
+/// it is an implementation of visiting `vast::list`.
+/// It has plenty of logic in it and this logic
+/// should be preserved unchanged for the corresponding view type
+/// @c `vast::view<vast::list>`. Formatter for "view" types lives separately
+/// and visitors in this formatter are not capable of handling view types
+/// (or more precise: of handling view types that are of a different type
+/// than a type wrapped to `vast::view<T>` in terms of C++ types).
+/// That draws the following issue when it comes to reusing:
+/// certainly we don't want to reimplement all the logic, so an obvious
+/// approach would be using inheritance and adding some more visit handlers
+/// for types which are not originally supported by the base.
+/// But the view wrapper introduces nothing new in the domain
+/// of how the things should be formatted however in terms of C++ types
+/// it does. So having just an inheritance puts you in a position where
+/// new visit handlers should be added while it has nothing to do with any
+/// new formatting logic. This is where "explicit templated this" helps,
+/// it allows implementing formatting logic the way it would be reusable
+/// by ancestors giving them true behavior of its own this type
+/// (and no polymorphism takes place).
+/// It requires an extra function which is a reasonable trade-off.
 template <>
 struct formatter<vast::data> : public vast::detail::vast_formatter_base {
   using ascii_escape_string
