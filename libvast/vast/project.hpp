@@ -153,10 +153,11 @@ public:
   /// Check for validity of the projection. Returns true if all indices are
   /// valid.
   [[nodiscard]] explicit operator bool() const noexcept {
-    return std::all_of(indices_.begin(), indices_.end(),
-                       [size = size()](table_slice::size_type index) noexcept {
-                         return index >= 0 && index < size;
-                       });
+    return std::all_of(
+      indices_.begin(), indices_.end(),
+      [columns = slice_.columns()](table_slice::size_type index) noexcept {
+        return index >= 0 && index < columns;
+      });
   }
 
   /// Returns an error that helps debug wrong indices.
@@ -168,7 +169,7 @@ public:
       fmt::format("cannot project invalid indices: at least one of "
                   "the given indices is outside the valid range [0, "
                   "{}): {}",
-                  size(), indices_));
+                  slice_.columns(), indices_));
   }
 
   /// Return the underlying table slice.
