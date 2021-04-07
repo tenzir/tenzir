@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 Custom commands from plugins ending in `start` no longer try to write to
+  the server instead of the client log file.
+  [#1530](https://github.com/tenzir/vast/pull/1530)
+
 - ⚡️ The previously deprecated usage
   ([#1354](https://github.com/tenzir/vast/pull/1354)) of format-independent
   options after the format in commands is now no longer possible. This affects
