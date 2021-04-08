@@ -176,9 +176,6 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
-      auto zsign = 1;
-      auto zmins = 0;
-      auto zhrs = 0;
       auto secs = 0.0;
       auto mins = 0;
       auto hrs = 0;
@@ -186,16 +183,15 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
       auto mons = 1;
       auto yrs = 0;
       // Compose to match parser attribute.
-      auto zshift = std::tie(zsign, zhrs, zmins);
-      auto ms = std::tie(mins, secs, zshift);
+      // We intentionally ignore the zone info because all timestamps are
+      // normalized to UTC in VAST.
+      auto ms = std::tie(mins, secs, unused);
       auto hms = std::tie(hrs, ms);
       auto dhms = std::tie(dys, hms);
       if (!p(f, l, yrs, mons, dhms))
         return false;
       sys_days ymd = to_days(yrs, mons, dys);
-      auto zone_offset = (hours{zhrs} + minutes{zmins}) * zsign;
-      auto delta = hours{hrs} + minutes{mins} + zone_offset
-                   + double_seconds{secs};
+      auto delta = hours{hrs} + minutes{mins} + double_seconds{secs};
       x = time{ymd} + duration_cast<vast::duration>(delta);
       return true;
     }

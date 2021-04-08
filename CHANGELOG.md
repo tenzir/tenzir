@@ -13,6 +13,12 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The parser for ISO8601 timestamps now ignores timezone offsets. The old
+  behavior of shifting the timestamp according to the offset was problematic,
+  because it was not possible to know what zone the timestamp was relative to.
+  From now on all timestamps in VAST are in the UTC timezone.
+  [#1535](https://github.com/tenzir/vast/pull/1535)
+
 - 🐞 VAST no longer erroneously tries to load explicitly specified plugins
   dynamically that are linked statically.
   [#1528](https://github.com/tenzir/vast/pull/1528)
