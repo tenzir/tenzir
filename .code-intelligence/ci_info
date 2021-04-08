@@ -1,0 +1,16 @@
+{
+  "name": "projects/initial-fuzzing-c6e8b32e",
+  "displayName": "vast-fuzzing",
+  "buildScriptContent": "./configure \\\n--build-type=Debug \\\n--log-level=INFO \\\n--generator=Ninja\ncmake --build build",
+  "details": {
+    "buildSystem": "CMAKE"
+  },
+  "projectEnvironment": {
+    "dockerBuild": {
+      "name": "gcr.io/code-intelligence/vast"
+    },
+    "dockerRun": {
+      "name": "gcr.io/code-intelligence/vast"
+    }
+  }
+}

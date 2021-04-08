@@ -1,0 +1,28 @@
+{
+  "name": "parse_query-20e3604d",
+  "displayName": "parsers",
+  "maxRunTime": "1800s",
+  "fuzzTargets": [
+    "API_fuzz_test-15b58e57",
+    "parse_query-ffbe3f2e"
+  ],
+  "fuzzerRunConfigurations": [
+    {
+      "engine": "LIBFUZZER",
+      "sanitizer": "ADDRESS",
+      "numberOfJobs": 1,
+      "engineArguments": [
+        "-entropic=1"
+      ]
+    },
+    {
+      "engine": "LIBFUZZER",
+      "sanitizer": "ADDRESS",
+      "numberOfJobs": 1,
+      "engineArguments": [
+        "-entropic=1",
+        "-use_value_profile=1"
+      ]
+    }
+  ]
+}

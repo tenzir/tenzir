@@ -1,0 +1,42 @@
+{
+  "name": "API_fuzz_test-15b58e57",
+  "displayName": "cli_parser",
+  "buildFlags": [
+    "-Ibuild/libvast/aux/caf/libcaf_core",
+    "-Ibuild/libvast",
+    "-Ilibvast",
+    "-Ilibvast/aux/caf/libcaf_core",
+    "-Ilibvast/aux/caf/libcaf_io",
+    "-Ilibvast/aux/caf/libcaf_openssl",
+    "-Ilibvast/aux/robin-map/include",
+    "-Lbuild/lib",
+    "-lvast",
+    "-lpthread",
+    "-lcaf_core",
+    "-DCAF_ENABLE_TYPE_ID_CHECKS",
+    "-DFMT_LOCALE -DFMT_SAFE_DURATION_CAST",
+    "-DFMT_USE_INTERNAL -DSIMDJSON_THREADS_ENABLED=1",
+    "-DSIMDJSON_USING_LIBRARY=1",
+    "-DSPDLOG_COMPILED_LIB",
+    "-DSPDLOG_FMT_EXTERNAL",
+    "-O3",
+    "-DNDEBUG",
+    "-pthread",
+    "-ftemplate-backtrace-limit=0",
+    "-msse3",
+    "-mssse3",
+    "-msse4.1",
+    "-msse4.2",
+    "-fno-omit-frame-pointer",
+    "-Wall",
+    "-fdebug-prefix-map=/vast-fuzz=.",
+    "-std=gnu++17",
+    "-MD",
+    "-Wl,-rpath,/vast-fuzz/build/lib: build/lib/libvast.so.2021.02 build/lib/libcaf_openssl.so.0.17.6 build/lib/libcaf_io.so.0.17.6 build/lib/libcaf_core.so.0.17.6 /usr/lib/x86_64-linux gnu/libssl.so /usr/lib/x86_64-linux-gnu/libcrypto.so /usr/lib/x86_64-linux-gnu/libflatbuffers.a /usr/lib/x86_64-linux-gnu/libspdlog.so.1.5.0 /usr/lib/x86_64-linux-gnu/libfmt.a /usr/lib/x86_64-linux-gnu/libsimdjson.so.4.0.0"
+  ],
+  "cApi": {
+    "api": {
+      "relativePath": ".code-intelligence/fuzz_targets/cli_parser.cpp"
+    }
+  }
+}
