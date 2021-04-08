@@ -569,6 +569,7 @@ int main(int argc, char** argv) {
   if (!kind) {
     std::cerr << "Filesystem error with error code: " << kind.error().code()
               << std::endl;
+    return 1;
   }
   if (kind == Kind::Unknown) {
     std::cerr << "Could not determine type of " << argv[1] << std::endl;

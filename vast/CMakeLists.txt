@@ -58,12 +58,22 @@ file(
      . \"$env_dir/bin/activate\"
      python -m pip install --upgrade pip
      python -m pip install -r \"$base_dir/requirements.txt\"
-     $<$<BOOL:<${VAST_ENABLE_ARROW}>:python -m pip install pyarrow>
+     $<$<BOOL:${VAST_ENABLE_ARROW}>:python -m pip install pyarrow>
      python \"$base_dir/integration.py\" \
       --app \"$app\" \
       --directory vast-integration-test \
+      --set \"$base_dir\"/vast_integration_suite.yaml \
       \"$@\"
-      . \"${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh\"")
+     $<$<BOOL:${VAST_ENABLE_LSVAST}>:
+     mkdir lsvast-integration-test
+     $app -N -d lsvast-integration-test/vast.db import -r \"$base_dir\"/data/suricata/eve.json suricata
+     python \"$base_dir/integration.py\" \
+      --app \"$<TARGET_FILE:lsvast>\" \
+      --directory lsvast-integration-test \
+      --set \"$base_dir\"/lsvast_integration_suite.yaml \
+      \"$@\" >
+    . \"${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh\"
+    ")
 
 add_custom_target(
   integration

@@ -694,7 +694,7 @@ def main():
     LOGGER.addHandler(sh)
     # Load test set.
     if not args.set:
-        args.set = Path(__file__).resolve().parent / "default_set.yaml"
+        args.set = Path(__file__).resolve().parent / "vast_integration_suite.yaml"
     args.set = args.set.resolve()
     LOGGER.debug(f"resolved test set path to {args.set}")
     global SET_DIR

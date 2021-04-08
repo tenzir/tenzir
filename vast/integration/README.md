@@ -49,7 +49,7 @@ The creation of a subprocess should be done through the `spawn()` wrapper
 function, which passes its arguments to the `Popen` constructor from `subprocess`.
 
 A *test set* is a collection of tests and fixtures in one YAML file.
-The default test set resides in `default_set.yaml`.
+The default test set resides in `vast_integration_suite.yaml`.
 
 ## Test Runner
 
