@@ -123,7 +123,7 @@ vast::duration to_microseconds(vast::duration ts) {
 TEST(ymdshms time parser) {
   vast::time ts;
   MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss+HH");
-  CHECK(parsers::time("2012-08-12+23:55:04.001234+01", ts));
+  CHECK(parsers::time("2012-08-12+23:55:04.001234-01", ts));
   auto sd = floor<days>(ts);
   auto t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 13));
@@ -141,7 +141,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{4});
   CHECK(to_microseconds(t) == microseconds{1234});
   MESSAGE("YYYY-MM-DD+HH:MM:SS-HH:MM");
-  CHECK(parsers::time("2012-08-12+23:55:04-00:30", ts));
+  CHECK(parsers::time("2012-08-12+23:55:04+00:30", ts));
   sd = floor<days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
@@ -166,7 +166,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{4});
   // TODO: Fix timezone offset without divider
   MESSAGE("YYYY-MM-DD+HH:MM+HHMM");
-  CHECK(parsers::time("2012-08-12+23:55+0130", ts));
+  CHECK(parsers::time("2012-08-12+23:55-0130", ts));
   sd = floor<days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 13));

@@ -194,8 +194,8 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
         return false;
       sys_days ymd = to_days(yrs, mons, dys);
       auto zone_offset = (hours{zhrs} + minutes{zmins}) * zsign;
-      auto delta = hours{hrs} + minutes{mins} + zone_offset
-                   + double_seconds{secs};
+      auto delta
+        = hours{hrs} + minutes{mins} - zone_offset + double_seconds{secs};
       x = time{ymd} + duration_cast<vast::duration>(delta);
       return true;
     }
