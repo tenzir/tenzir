@@ -49,10 +49,38 @@ function (VASTRegisterPlugin)
     add_library(${PLUGIN_TARGET} SHARED ${PLUGIN_SOURCES})
   endif ()
 
-  # Install the bundled schema files to <datadir>/vast.
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
+    # Install the bundled schema files to <datadir>/vast.
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
             DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
+    # Copy schemas from bundled plugins to the build directory so they can be
+    # used from a VAST in a build directory (instead if just an installed VAST).
+    file(
+      GLOB_RECURSE
+      plugin_schema_files
+      CONFIGURE_DEPENDS
+      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.schema"
+      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yaml")
+    list(SORT plugin_schema_files)
+    foreach (plugin_schema_file IN LISTS plugin_schema_files)
+      string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}/schema/" ""
+                           relative_plugin_schema_file ${plugin_schema_file})
+      string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
+      add_custom_target(
+        vast-schema-${plugin_schema_file_hash} ALL
+        BYPRODUCTS
+          "${CMAKE_BINARY_DIR}/share/vast/schema/${relative_plugin_schema_file}"
+        COMMAND
+          ${CMAKE_COMMAND} -E copy "${plugin_schema_file}"
+          "${CMAKE_BINARY_DIR}/share/vast/schema/${relative_plugin_schema_file}"
+        COMMENT
+          "Copying schema file ${relative_plugin_schema_file} for plugin ${PLUGIN_TARGET}"
+      )
+      if (TARGET vast-schema)
+        add_dependencies(vast-schema vast-schema-${plugin_schema_file_hash})
+      endif ()
+    endforeach ()
   endif ()
 
   # Install the plugin library to <libdir>/vast/plugins, and also configure the
@@ -64,7 +92,7 @@ function (VASTRegisterPlugin)
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY
                "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins")
 
-  # Implicitly link plugins against vast::libvast and vast::internal:
+  # Implicitly link plugins against vast::libvast and vast::internal.
   target_link_libraries(
     ${PLUGIN_TARGET}
     PUBLIC vast::libvast
@@ -81,6 +109,72 @@ function (VASTRegisterPlugin)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
                                                         vast::internal)
     target_link_whole_archive(${PLUGIN_TARGET}-test PRIVATE ${PLUGIN_TARGET})
+    add_test(NAME build-${PLUGIN_TARGET}-test
+             COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
+                     "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
+    set_tests_properties(build-${PLUGIN_TARGET}-test
+                         PROPERTIES FIXTURES_SETUP vast_unit_test_fixture)
     add_test(NAME ${PLUGIN_TARGET} COMMAND ${PLUGIN_TARGET}-test)
+    set_tests_properties(${PLUGIN_TARGET} PROPERTIES FIXTURES_REQUIRED
+                                                     vast_unit_test_fixture)
+  endif ()
+
+  # Setup integration tests.
+  if (TARGET vast::vast
+      AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
+    if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+      set(integration_test_path "${CMAKE_SOURCE_DIR}/vast/integration")
+    else ()
+      if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
+        set(integration_test_path "${CMAKE_INSTALL_DATADIR}/vast/integration")
+      else ()
+        get_target_property(integration_test_path vast::vast LOCATION)
+        get_filename_component(integration_test_path "${integration_test_path}"
+                               DIRECTORY)
+        get_filename_component(integration_test_path "${integration_test_path}"
+                               DIRECTORY)
+        set(integration_test_path
+            "${integration_test_path}/${CMAKE_INSTALL_DATADIR}/vast/integration"
+        )
+      endif ()
+    endif ()
+    file(
+      GENERATE
+      OUTPUT
+        "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
+      CONTENT
+        "#!/bin/sh
+        if ! command -v jq >/dev/null 2>&1; then
+          >&2 echo 'failed to find jq in $PATH'
+          exit 1
+        fi
+        base_dir=\"${integration_test_path}\"
+        env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
+        app=\"$<TARGET_FILE:vast::vast>\"
+        set -e
+        if [ ! -d \"$env_dir\" ]; then
+          python3 -m venv \"$env_dir\"
+        fi
+        . \"$env_dir/bin/activate\"
+        python -m pip install --upgrade pip
+        python -m pip install -r \"$base_dir/requirements.txt\"
+        $<$<BOOL:${VAST_ENABLE_ARROW}>:python -m pip install pyarrow>
+        export VAST_PLUGIN_DIRS=\"$<TARGET_FILE_DIR:${PLUGIN_TARGET}>\"
+        python \"$base_dir/integration.py\" \
+          --app \"$app\" \
+          --set \"${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml\" \
+          --directory vast-${PLUGIN_TARGET}-integration-test \
+          \"$@\"")
+    add_custom_target(
+      ${PLUGIN_TARGET}-integration
+      COMMAND
+        /bin/sh
+        "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
+        -v DEBUG
+      USES_TERMINAL)
+    if (NOT TARGET integration)
+      add_custom_target(integration)
+    endif ()
+    add_dependencies(integration ${PLUGIN_TARGET}-integration)
   endif ()
 endfunction ()

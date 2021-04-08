@@ -9,6 +9,10 @@ add_feature_info("VAST_ENABLE_BUNDLED_ROBIN_MAP" VAST_ENABLE_BUNDLED_ROBIN_MAP
                  "always use the tsl-robin-map.")
 if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map 0.6.2)
+  if (tsl-robin-map_FOUND)
+    string(APPEND VAST_FIND_DEPENDENCY_LIST
+      "\nfind_package(tsl-robin-map 0.6.2 REQUIRED)")
+  endif ()
 endif ()
 if (NOT tsl-robin-map_FOUND)
   if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
@@ -423,12 +427,14 @@ target_compile_definitions(
     # Make fmt::internal an alias for fmt::detail. Remove when requiring fmt >= 7.
     FMT_USE_INTERNAL)
 find_package(fmt 5.2.1 REQUIRED HINTS "${FMT_ROOT}")
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(fmt 5.2.1 REQUIRED)")
 target_link_libraries(libvast PUBLIC fmt::fmt)
 dependency_summary("fmt" fmt::fmt)
 
 option(SPDLOG_ROOT "Install root of spdlog" "")
 target_compile_definitions(libvast PUBLIC SPDLOG_FMT_EXTERNAL)
 find_package(spdlog 1.5.0 REQUIRED HINTS "${SPDLOG_ROOT}")
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(spdlog 1.5.0 REQUIRED)")
 target_link_libraries(libvast PUBLIC spdlog::spdlog)
 dependency_summary("spdlog" spdlog::spdlog)
 
@@ -444,6 +450,9 @@ find_package(
   CONFIGS
   "simdjson-config.cmake"
   "simdjson-targets.cmake")
+string(APPEND VAST_FIND_DEPENDENCY_LIST
+  "\nfind_package(simdjson REQUIRED CONFIGS "
+  "\"simdjson-config.cmake\" \"simdjson-targets.cmake\")")
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
 dependency_summary("simdjson" simdjson::simdjson)
 

@@ -1,8 +1,3 @@
-cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast" ON
-                       "NOT CMAKE_CROSS_COMPILING" OFF)
-add_feature_info("VAST_ENABLE_UNIT_TESTS" VAST_ENABLE_UNIT_TESTS
-                 "build unit tests for libvast.")
-
 if (NOT VAST_ENABLE_UNIT_TESTS)
   return()
 endif ()
@@ -29,10 +24,10 @@ if (VAST_ENABLE_PCAP)
   target_link_libraries(vast-test PRIVATE pcap::pcap)
 endif ()
 
-add_test(NAME build_vast_test
+add_test(NAME build-vast-test
          COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                  "$<CONFIG>" --target vast-test)
-set_tests_properties(build_vast_test PROPERTIES FIXTURES_SETUP
+set_tests_properties(build-vast-test PROPERTIES FIXTURES_SETUP
                                                 vast_unit_test_fixture)
 # Helper macro to construct a CMake test from a VAST test suite.
 macro (make_test suite)

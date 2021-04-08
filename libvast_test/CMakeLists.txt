@@ -1,5 +1,4 @@
-# TODO: Figure out whether this is really necessary.
-if (CMAKE_CROSS_COMPILING)
+if (NOT VAST_ENABLE_UNIT_TESTS)
   return()
 endif ()
 

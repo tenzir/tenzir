@@ -61,6 +61,13 @@ else ()
 endif ()
 unset(_VAST_PARENT_DIRECTORY)
 
+# -- testing -------------------------------------------------------------------
+
+cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast"
+                       ON "NOT CMAKE_CROSS_COMPILING" OFF)
+add_feature_info("VAST_ENABLE_UNIT_TESTS" VAST_ENABLE_UNIT_TESTS
+                 "build unit tests for libvast.")
+
 # -- library flavor ------------------------------------------------------------
 
 option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
@@ -563,6 +570,7 @@ configure_package_config_file(
   INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
+              "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")

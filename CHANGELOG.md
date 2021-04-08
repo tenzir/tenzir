@@ -13,6 +13,20 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🎁 The `VAST_PLUGIN_DIRS` environment variable allows for setting additional
+  plugin directories separated with `:` with higher precedence than other plugin
+  directories.
+  [#1532](https://github.com/tenzir/vast/pull/1532)
+
+- 🎁 It is now possible to build plugins against an installed VAST. This
+  requires a slight adaptation to every plugin's build scaffolding. The example
+  plugin was updated accordingly.
+  [#1532](https://github.com/tenzir/vast/pull/1532)
+
+- 🐞 Linking against an installed VAST via CMake now correctly resolves VAST's
+  dependencies.
+  [#1532](https://github.com/tenzir/vast/pull/1532)
+
 - 🐞 The command-line parser no longer crashes when encountering a flag
   with missing value in the last position of a command invocation.
   [#1536](https://github.com/tenzir/vast/pull/1536)

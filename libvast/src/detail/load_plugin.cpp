@@ -26,6 +26,9 @@ namespace {
 stable_set<std::filesystem::path>
 get_plugin_dirs(const caf::actor_system_config& cfg) {
   stable_set<std::filesystem::path> result;
+  if (const char* vast_plugin_directories = std::getenv("VAST_PLUGIN_DIRS"))
+    for (auto&& path : detail::split(vast_plugin_directories, ":"))
+      result.insert({path});
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   result.insert(std::filesystem::path{VAST_LIBDIR} / "vast" / "plugins");
 #endif
