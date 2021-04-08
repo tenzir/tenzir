@@ -8,7 +8,7 @@ option(VAST_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map" OFF)
 add_feature_info("VAST_ENABLE_BUNDLED_ROBIN_MAP" VAST_ENABLE_BUNDLED_ROBIN_MAP
                  "always use the tsl-robin-map.")
 if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
-  find_package(tsl-robin-map 0.6.2)
+  find_package(tsl-robin-map 0.6.2 QUIET)
   if (tsl-robin-map_FOUND)
     string(APPEND VAST_FIND_DEPENDENCY_LIST
       "\nfind_package(tsl-robin-map 0.6.2 REQUIRED)")
@@ -17,7 +17,7 @@ endif ()
 if (NOT tsl-robin-map_FOUND)
   if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
     message(STATUS
-      "cannot find installed tsl-robin-map; falling back to bundled version")
+      "Cannot find installed tsl-robin-map; falling back to bundled version")
   endif ()
   add_subdirectory(aux/robin-map)
   export(
