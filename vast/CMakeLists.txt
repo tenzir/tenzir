@@ -65,8 +65,8 @@ file(
       --set \"$base_dir\"/vast_integration_suite.yaml \
       \"$@\"
      $<$<BOOL:${VAST_ENABLE_LSVAST}>:
-     mkdir -p lsvast-integration-test/
-     $app -N -d lsvast-integration-test/vast.db import -r \"$base_dir\"/data/suricata/eve.json suricata 
+     mkdir lsvast-integration-test
+     $app -N -d lsvast-integration-test/vast.db import -r \"$base_dir\"/data/suricata/eve.json suricata
      python \"$base_dir/integration.py\" \
       --app \"$<TARGET_FILE:lsvast>\" \
       --directory lsvast-integration-test \
