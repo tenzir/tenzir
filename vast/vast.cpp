@@ -50,32 +50,32 @@ int main(int argc, char** argv) {
   }
   // Load plugins.
   auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
-  auto plugin_files_or_names
+  auto plugin_paths_or_names
     = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
 #ifdef VAST_ENABLED_PLUGINS
   // If plugins are enabled at compile time to always be loaded, add them here
   // if they were not already configured as part of vast.plugins.
   for (auto&& plugin_names : std::vector<std::string>{VAST_ENABLED_PLUGINS})
-    if (std::none_of(plugin_files_or_names.begin(), plugin_files_or_names.end(),
+    if (std::none_of(plugin_paths_or_names.begin(), plugin_paths_or_names.end(),
                      [&](auto&& x) { return x == plugin_names; }))
-      plugin_files_or_names.push_back(std::move(plugin_names));
+      plugin_paths_or_names.push_back(std::move(plugin_names));
 #endif
   auto& plugins = plugins::get();
   // Check if any of the specified plugins is already loaded as a static
   // plugin, and silently remove it from the list of specified plugins if
   // that's the case.
   for (const auto& plugin : plugins) {
-    if (auto it = std::find_if(plugin_files_or_names.begin(),
-                               plugin_files_or_names.end(),
-                               [&](const auto& plugin_file_or_name) {
-                                 return plugin->name() == plugin_file_or_name;
+    if (auto it = std::find_if(plugin_paths_or_names.begin(),
+                               plugin_paths_or_names.end(),
+                               [&](const auto& plugin_path_or_name) {
+                                 return plugin->name() == plugin_path_or_name;
                                });
-        it != plugin_files_or_names.end())
-      plugin_files_or_names.erase(it);
+        it != plugin_paths_or_names.end())
+      plugin_paths_or_names.erase(it);
   }
   // Load the specified dynamic plugins.
-  for (const auto& plugin_file : plugin_files_or_names) {
-    if (auto loaded_plugin = detail::load_plugin(plugin_file, cfg)) {
+  for (const auto& plugin_path_or_name : plugin_paths_or_names) {
+    if (auto loaded_plugin = detail::load_plugin(plugin_path_or_name, cfg)) {
       auto&& [path, plugin] = std::move(*loaded_plugin);
       loaded_plugin_paths.push_back(std::move(path));
       plugins.push_back(std::move(plugin));
