@@ -126,8 +126,8 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23:55:04.001234+01", ts));
   auto sd = floor<days>(ts);
   auto t = ts - sd;
-  CHECK(verify_date(sd, 2012, 8, 13));
-  CHECK(to_hours(t) == hours{0});
+  CHECK(verify_date(sd, 2012, 8, 12));
+  CHECK(to_hours(t) == hours{23});
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{4});
   CHECK(to_microseconds(t) == microseconds{1234});
@@ -146,7 +146,7 @@ TEST(ymdshms time parser) {
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
   CHECK_EQUAL(to_hours(t), hours{23});
-  CHECK_EQUAL(to_minutes(t), minutes{25});
+  CHECK_EQUAL(to_minutes(t), minutes{55});
   CHECK(to_seconds(t) == seconds{4});
   MESSAGE("YYYY-MM-DD+HH:MM:SS");
   CHECK(parsers::time("2012-08-12+23:55:04", ts));
@@ -169,9 +169,9 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23:55+0130", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(verify_date(sd, 2012, 8, 13));
-  CHECK_EQUAL(to_hours(t), hours{1});
-  CHECK_EQUAL(to_minutes(t), minutes{25});
+  CHECK(verify_date(sd, 2012, 8, 12));
+  CHECK_EQUAL(to_hours(t), hours{23});
+  CHECK_EQUAL(to_minutes(t), minutes{55});
   CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM-DD+HH:MM");
   CHECK(parsers::time("2012-08-12+23:55", ts));
