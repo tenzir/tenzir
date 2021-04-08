@@ -122,7 +122,7 @@ function (VASTRegisterPlugin)
   # Setup integration tests.
   if (TARGET vast::vast
       AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
-    if (CMAKE_PROJECT_NAME STREQUAL "VAST")
+    if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
       set(integration_test_path "${CMAKE_SOURCE_DIR}/vast/integration")
     else ()
       if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
