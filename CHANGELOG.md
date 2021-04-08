@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 A bug in the parsing of ISO8601 formatted dates that incorrectly adjusted
+  the time to the UTC timezone has been fixed.
+  [#1537](https://github.com/tenzir/vast/pull/1537)
+
 - 🎁 The `VAST_PLUGIN_DIRS` environment variable allows for setting additional
   plugin directories separated with `:` with higher precedence than other plugin
   directories.
