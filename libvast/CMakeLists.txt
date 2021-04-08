@@ -17,7 +17,7 @@ endif ()
 if (NOT tsl-robin-map_FOUND)
   if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
     message(STATUS
-      "cannot find installed tsl-robin-map; falling back to bundled version")
+      "Cannot find installed tsl-robin-map; falling back to bundled version")
   endif ()
   add_subdirectory(aux/robin-map)
   export(
