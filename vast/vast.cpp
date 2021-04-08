@@ -62,8 +62,8 @@ int main(int argc, char** argv) {
 #endif
   auto& plugins = plugins::get();
   // Check if any of the specified plugins is already loaded as a static
-  // plugin, and silently remove it from the list of specified plugins if
-  // that's the case.
+  // plugin, and remove it from the list of specified plugins if that's the
+  // case (essentially a custom set difference with preserved order).
   for (const auto& plugin : plugins) {
     if (auto it = std::find_if(plugin_paths_or_names.begin(),
                                plugin_paths_or_names.end(),
