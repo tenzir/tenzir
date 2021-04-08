@@ -103,16 +103,16 @@ caf::error configuration::parse(int argc, char** argv) {
     std::error_code err{};
     const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
     const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
-    if (err)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to check if vast yaml config "
-                                         "files existed from directory {}: {}",
-                                         dir, err.message()));
+    if (err) {
+      VAST_WARN("failed to check if vast.yaml file exists in {}: {}", dir,
+                err.message());
+      return caf::none;
+    }
     if (exists_conf_yaml && exists_conf_yml)
       return caf::make_error(
         ec::invalid_configuration,
         "detected both 'vast.yaml' and 'vast.yml' files in " + dir.string());
-    else if (exists_conf_yaml)
+    if (exists_conf_yaml)
       config_files.emplace_back(std::move(conf_yaml));
     else if (exists_conf_yml)
       config_files.emplace_back(std::move(conf_yml));
