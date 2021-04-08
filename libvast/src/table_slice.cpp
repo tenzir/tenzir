@@ -334,6 +334,8 @@ data_view table_slice::at(table_slice::size_type row,
 
 data_view table_slice::at(table_slice::size_type row,
                           table_slice::size_type column, const type& t) const {
+  if (const auto* alias = caf::get_if<alias_type>(&t))
+    return at(row, column, alias->value_type);
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
   auto f = detail::overload{
