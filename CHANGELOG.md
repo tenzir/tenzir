@@ -13,6 +13,9 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 The CSV reader no longer crashes when encountering nested type aliases.
+  [#1534](https://github.com/tenzir/vast/pull/1534)
+
 - 🐞 VAST no longer erroneously tries to load explicitly specified plugins
   dynamically that are linked statically.
   [#1528](https://github.com/tenzir/vast/pull/1528)

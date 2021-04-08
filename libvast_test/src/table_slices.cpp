@@ -98,7 +98,6 @@ make_data(const std::vector<table_slice>& slices) {
 
 namespace fixtures {
 
-
 table_slices::table_slices() {
   // Define our test layout.
   layout = record_type{
@@ -152,6 +151,7 @@ table_slices::table_slices() {
     {"maj", map_type{bool_type{}, subnet_type{}}},
     // {"mal", map_type{bool_type{}, list_type{count_type{}}}},
     // {"man", map_type{bool_type{}, map_type{count_type{}, bool_type{}}}},
+	{"aas", alias_type{alias_type{string_type{}}}},
   }.name("test");
   // A bunch of test data for nested type combinations.
   // clang-format off
@@ -207,10 +207,10 @@ table_slices::table_slices() {
   auto rows = std::vector<std::string>{
     "[T, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
     " 10.0.0.0/8, [1, 2, 3], {1 -> T, 2 -> F, 3 -> T}"
-      + test_collections + "]",
+      + test_collections + ", \"aas\"]",
     "[F, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, 64:ff9b::/96,"
     " [], {}"
-      + test_collections + "]",
+      + test_collections + ", \"aas\"]",
   };
   for (auto& row : rows) {
     auto xs = unbox(to<data>(row));

@@ -61,8 +61,8 @@ caf::error render(output_iterator& out, const view<std::string>& x) {
 caf::error render(output_iterator& out, const view<data>& x);
 
 template <class ForwardIterator>
-caf::error render(output_iterator& out, ForwardIterator first,
-                  ForwardIterator last) {
+caf::error
+render(output_iterator& out, ForwardIterator first, ForwardIterator last) {
   if (first == last) {
     for (auto c : empty)
       *out++ = c;
@@ -215,7 +215,9 @@ struct container_parser_builder {
 
   template <class T>
   result_type operator()(const T& t) const {
-    if constexpr (std::is_same_v<T, string_type>) {
+    if constexpr (std::is_same_v<T, alias_type>) {
+      return caf::visit(*this, t.value_type);
+    } else if constexpr (std::is_same_v<T, string_type>) {
       // clang-format off
       return +(parsers::any - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
         return data{std::move(x)};
@@ -290,7 +292,9 @@ struct csv_parser_factory {
 
   template <class T>
   result_type operator()(const T& t) const {
-    if constexpr (std::is_same_v<T, duration_type>) {
+    if constexpr (std::is_same_v<T, alias_type>) {
+      return caf::visit(*this, t.value_type);
+    } else if constexpr (std::is_same_v<T, duration_type>) {
       auto make_duration_parser = [&](auto period) {
         // clang-format off
         return (-parsers::real_opt_dot ->* [](double x) {
@@ -321,8 +325,7 @@ struct csv_parser_factory {
       // If we do not have an explicit unit given, we require the unit suffix.
       return (-parsers::duration).with(add_t<duration>{bptr_});
     } else if constexpr (std::is_same_v<T, string_type>) {
-      return (-+(parsers::any - opt_.separator))
-        .with(add_t<std::string>{bptr_});
+      return (-+(parsers::any - opt_.separator)).with(add_t<std::string>{bptr_});
     } else if constexpr (std::is_same_v<T, pattern_type>) {
       return (-as<pattern>(as<std::string>(+(parsers::any - opt_.separator))))
         .with(add_t<pattern>{bptr_});
