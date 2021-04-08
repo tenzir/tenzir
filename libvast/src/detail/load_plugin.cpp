@@ -49,11 +49,11 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
 } // namespace
 
 caf::expected<std::pair<std::filesystem::path, plugin_ptr>>
-load_plugin(const std::filesystem::path& file_or_name,
+load_plugin(const std::filesystem::path& path_or_name,
             caf::actor_system_config& cfg) {
   auto& plugins = plugins::get();
   auto try_load_plugin = [&](const std::filesystem::path& root,
-                             const std::filesystem::path& file_or_name)
+                             const std::filesystem::path& path_or_name)
     -> caf::expected<plugin_ptr> {
 #if VAST_MACOS
     static constexpr auto ext = ".dylib";
@@ -61,7 +61,7 @@ load_plugin(const std::filesystem::path& file_or_name,
     static constexpr auto ext = ".so";
 #endif
     const bool specified_by_name
-      = !file_or_name.has_parent_path() && file_or_name.extension().empty();
+      = !path_or_name.has_parent_path() && path_or_name.extension().empty();
     // A root must be configured if the plugin is specified by name rather than
     // path. This check ensures we do not silently pick up plugins in the
     // current working directory.
@@ -69,8 +69,8 @@ load_plugin(const std::filesystem::path& file_or_name,
       return caf::no_error;
     auto file
       = specified_by_name
-          ? root / std::filesystem::path{"lib" + file_or_name.string() + ext}
-          : file_or_name;
+          ? root / std::filesystem::path{"lib" + path_or_name.string() + ext}
+          : path_or_name;
     if (!file.is_absolute() && !root.empty())
       file = root / file;
     if (!exists(file))
@@ -79,12 +79,12 @@ load_plugin(const std::filesystem::path& file_or_name,
     if (plugin) {
       VAST_ASSERT(*plugin);
       if (specified_by_name)
-        if ((*plugin)->name() != file_or_name.string())
+        if ((*plugin)->name() != path_or_name.string())
           return caf::make_error( //
             ec::invalid_configuration,
             fmt::format("failed to load plugin {} because its name {} does not "
                         "match the expected name {}",
-                        file, (*plugin)->name(), file_or_name));
+                        file, (*plugin)->name(), path_or_name));
       auto has_same_name = [name = (*plugin)->name()](const auto& other) {
         return !std::strcmp(name, other->name());
       };
@@ -100,16 +100,16 @@ load_plugin(const std::filesystem::path& file_or_name,
   };
   auto load_errors = std::vector<caf::error>{};
   // First, check if the plugin file is specified as an absolute path.
-  auto plugin = try_load_plugin({}, file_or_name);
+  auto plugin = try_load_plugin({}, path_or_name);
   if (plugin)
-    return std::pair{file_or_name, std::move(*plugin)};
+    return std::pair{path_or_name, std::move(*plugin)};
   if (plugin.error() != caf::no_error)
     load_errors.push_back(std::move(plugin.error()));
   // Second, check if the plugin file is specified relative to the specified
   // plugin directories.
   for (const auto& dir : get_plugin_dirs(cfg)) {
-    if (auto plugin = try_load_plugin(dir, file_or_name))
-      return std::pair{dir / file_or_name, std::move(*plugin)};
+    if (auto plugin = try_load_plugin(dir, path_or_name))
+      return std::pair{dir / path_or_name, std::move(*plugin)};
     else if (plugin.error() != caf::no_error)
       load_errors.push_back(std::move(plugin.error()));
   }
@@ -118,11 +118,11 @@ load_plugin(const std::filesystem::path& file_or_name,
   if (load_errors.empty())
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("failed to find plugin {}",
-                                       file_or_name));
+                                       path_or_name));
   // We found the file, but encounterd errors trying to load it.
   return caf::make_error(ec::invalid_configuration,
                          fmt::format("failed to load plugin {}:\n - {}",
-                                     file_or_name,
+                                     path_or_name,
                                      fmt::join(load_errors, "\n - ")));
 }
 

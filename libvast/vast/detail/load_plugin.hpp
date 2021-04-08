@@ -23,7 +23,7 @@ namespace vast::detail {
 /// @returns A pair consisting of the absolute path of the loaded plugin and a
 /// pointer to the loaded plugin, or an error detailing what went wrong.
 caf::expected<std::pair<std::filesystem::path, plugin_ptr>>
-load_plugin(const std::filesystem::path& file_or_name,
+load_plugin(const std::filesystem::path& path_or_name,
             caf::actor_system_config& cfg);
 
 } // namespace vast::detail
