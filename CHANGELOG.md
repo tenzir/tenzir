@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 VAST no longer refuses to start when any of the configuration file
+  directories is unreadable, e.g., because VAST is running in a sandbox.
+  [#1533](https://github.com/tenzir/vast/pull/1533)
+
 - ⚠️ The Suricata `dns` schema type now defines the `dns.grouped.A` field
   containing a list of all returned addresses.
   [#1531](https://github.com/tenzir/vast/pull/1531)
