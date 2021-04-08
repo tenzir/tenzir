@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 The command-line parser no longer crashes when encountering a flag
+  with missing value in the last position of a command invocation.
+  [#1536](https://github.com/tenzir/vast/pull/1536)
+
 - 🐞 The CSV reader no longer crashes when encountering nested type aliases.
   [#1534](https://github.com/tenzir/vast/pull/1534)
 

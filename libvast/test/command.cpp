@@ -148,4 +148,13 @@ TEST(version command) {
   CHECK_VARIANT_EQUAL(exec("version", factory), caf::none);
 }
 
+TEST(missing argument) {
+  auto factory = command::factory{
+    {"foo", foo},
+  };
+  root.add_subcommand("foo", "", "",
+                      command::opts().add<int>("value,v", "some int"));
+  CHECK(is_error(exec("foo -v", factory)));
+}
+
 FIXTURE_SCOPE_END()

@@ -303,9 +303,15 @@ caf::error parse_impl(invocation& result, const command& cmd,
     return caf::none;
   bool has_subcommand;
   switch (state) {
-    default:
-      return caf::make_error(ec::unrecognized_option, cmd.full_name(),
-                             *position, state);
+    default: {
+      std::string printable_position = "(unknown)";
+      if (position != last)
+        printable_position = *position;
+      else if (first != last)
+        printable_position = *first;
+      return caf::make_error(ec::invalid_argument, cmd.full_name(),
+                             printable_position, state);
+    }
     case caf::pec::success:
       has_subcommand = false;
       break;
