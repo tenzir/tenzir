@@ -1,10 +1,14 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/449b698a0b554996ac099b4e3534514528019269.tar.gz -i bash -p git nix coreutils nix-prefetch-github
 
+nix --version
+nix-prefetch-github --version
+
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
 desc="$(git -C ${dir} describe --tags --long --abbrev=10 --dirty )"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
+echo "rev is ${vast_rev}"
 
 target="${STATIC_BINARY_TARGET:-vast}"
 
