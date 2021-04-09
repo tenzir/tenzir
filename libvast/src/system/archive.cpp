@@ -135,6 +135,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                    "session",
                    self);
         self->send(requester, atom::done_v, caf::make_error(ec::no_error));
+        self->state.requesters.pop();
         self->state.next_session();
         return;
       }
@@ -147,6 +148,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                    "{}",
                    self, err);
         self->send(requester, atom::done_v, std::move(err));
+        self->state.requesters.pop();
         self->state.next_session();
         return;
       }
