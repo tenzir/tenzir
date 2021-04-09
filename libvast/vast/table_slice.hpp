@@ -77,6 +77,18 @@ public:
   table_slice(const fbs::FlatTableSlice& flat_slice,
               const chunk_ptr& parent_chunk, enum verify verify) noexcept;
 
+#if VAST_ENABLE_ARROW
+
+  /// Construct an Arrow-encoded table slice from an existing record batch and
+  /// layout. Note that the record batch's schema and the layout must match
+  /// exactly.
+  /// @param record_batch The record batch containing the table slice data.
+  /// @param layout The layout of the tbale slice.
+  table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+              const record_type& layout);
+
+#endif // VAST_ENABLE_ARROW
+
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.
   table_slice(const table_slice& other) noexcept;

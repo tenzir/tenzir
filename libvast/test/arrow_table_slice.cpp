@@ -316,6 +316,16 @@ TEST(single column - serialization) {
   CHECK_VARIANT_EQUAL(slice1, slice2);
 }
 
+TEST(record batch roundtrip) {
+  factory<table_slice_builder>::add<arrow_table_slice_builder>(
+    table_slice_encoding::arrow);
+  auto t = count_type{};
+  auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
+  auto batch = as_record_batch(slice1);
+  auto slice2 = table_slice{batch, slice1.layout()};
+  CHECK_EQUAL(slice1, slice2);
+}
+
 FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)
 
 TEST_TABLE_SLICE(arrow_table_slice_builder, arrow)
