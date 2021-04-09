@@ -17,10 +17,11 @@ This changelog documents all notable user-facing changes of VAST.
   the time to the UTC timezone has been fixed.
   [#1537](https://github.com/tenzir/vast/pull/1537)
 
-- 🎁 The `VAST_PLUGIN_DIRS` environment variable allows for setting additional
-  plugin directories separated with `:` with higher precedence than other plugin
-  directories.
+- 🎁 The `VAST_PLUGIN_DIRS` and `VAST_SCHEMA_DIRS` environment variables allow
+  for setting additional plugin and schema directories separated with `:` with
+  higher precedence than other plugin and schema directories.
   [#1532](https://github.com/tenzir/vast/pull/1532)
+  [#1541](https://github.com/tenzir/vast/pull/1541)
 
 - 🎁 It is now possible to build plugins against an installed VAST. This
   requires a slight adaptation to every plugin's build scaffolding. The example

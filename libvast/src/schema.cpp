@@ -220,6 +220,9 @@ detail::stable_set<std::filesystem::path>
 get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses) {
   detail::stable_set<std::filesystem::path> result;
+  if (const char* vast_schema_directories = std::getenv("VAST_SCHEMA_DIRS"))
+    for (auto&& path : detail::split(vast_schema_directories, ":"))
+      result.insert({path});
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   result.insert(VAST_DATADIR "/vast/schema");
 #endif
