@@ -635,8 +635,18 @@ active_partition_actor::behavior_type active_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples, self->state.store);
-      return self->delegate(eval, client);
+      auto eval = self->spawn(evaluator, expr, triples);
+      auto rp = self->make_response_promise<atom::done>();
+      self->send(self->state.store, atom::exporter_v,
+                 caf::actor_cast<caf::actor>(client));
+      self->request(eval, caf::infinite, atom::run_v)
+        .then(
+          [self, client, rp](const ids& hits) mutable {
+            rp.delegate(self->state.store, atom::extract_v, hits,
+                        static_cast<receiver<table_slice>>(client));
+          },
+          [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
+      return rp;
     },
     [self](atom::status,
            status_verbosity v) -> caf::typed_response_promise<caf::settings> {
@@ -814,8 +824,18 @@ partition_actor::behavior_type passive_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples, self->state.store);
-      return self->delegate(eval, client);
+      auto eval = self->spawn(evaluator, expr, triples);
+      auto rp = self->make_response_promise<atom::done>();
+      self->send(self->state.store, atom::exporter_v,
+                 caf::actor_cast<caf::actor>(client));
+      self->request(eval, caf::infinite, atom::run_v)
+        .then(
+          [self, client, rp](const ids& hits) mutable {
+            rp.delegate(self->state.store, atom::extract_v, hits,
+                        static_cast<receiver<table_slice>>(client));
+          },
+          [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
+      return rp;
     },
     [self](atom::status,
            status_verbosity /*v*/) -> caf::config_value::dictionary {

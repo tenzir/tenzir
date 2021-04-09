@@ -101,17 +101,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       for (auto& x : xs)
         triples.emplace_back(expr_position, curried(pred), x);
     }
-    auto eval = sys.spawn(system::evaluator, expr, std::move(triples),
-                          caf::actor_cast<system::store_actor>(self));
+    auto eval = sys.spawn(system::evaluator, expr, std::move(triples));
     run();
-    self->send(eval, caf::actor_cast<system::receiver<table_slice>>(self));
+    self->send(eval, atom::run_v);
     run();
     ids result;
     REQUIRE(!self->mailbox().empty());
-    self->receive([&](atom::exporter, const caf::actor&) {});
-    self->receive([&](atom::extract, const ids& hits,
-                      vast::system::receiver<table_slice>&) { result |= hits; },
-                  [] {});
+    self->receive([&](const ids& hits) { result = hits; });
     REQUIRE(self->mailbox().empty());
     return result;
   }

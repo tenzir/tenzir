@@ -116,9 +116,7 @@ using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
 
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
-  // Evaluate the given expression, returning the relevant evaluation triples.
-  // TODO: Passing the `receiver<table_slice>` here is an historical artifact,
-  // a cleaner API would be to just return the evaluated `vast::ids`.
+  // Evaluate the given expression and send the matching events to the receiver.
   caf::replies_to<expression, receiver<table_slice>>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
@@ -136,8 +134,8 @@ using query_supervisor_actor = typed_actor_fwd<
 
 /// The EVALUATOR actor interface.
 using evaluator_actor = typed_actor_fwd<
-  // Evaluates the expression and requests table slices form the store.
-  caf::replies_to<receiver<table_slice>>::with<atom::done>>::unwrap;
+  // Evaluates the expression and responds with matching ids.
+  caf::replies_to<atom::run>::with<ids>>::unwrap;
 
 /// The INDEXER actor interface.
 using indexer_actor = typed_actor_fwd<

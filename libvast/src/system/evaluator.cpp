@@ -134,9 +134,7 @@ void evaluator_state::decrement_pending() {
   if (--pending_responses == 0) {
     // Now we ask the store for the actual data.
     // TODO: handle count estimate requests.
-    self->send(store, atom::exporter_v, caf::actor_cast<caf::actor>(client));
-    promise.delegate(store, atom::extract_v, hits,
-                     static_cast<receiver<table_slice>>(client));
+    promise.deliver(hits);
     self->quit();
   }
 }
@@ -149,28 +147,14 @@ evaluator_state::hits_for(const offset& position) {
 
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
-          expression expr, std::vector<evaluation_triple> eval,
-          store_actor store) {
+          expression expr, std::vector<evaluation_triple> eval) {
   VAST_TRACE_SCOPE("{} {}", VAST_ARG(expr), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
   self->state.expr = std::move(expr);
   self->state.eval = std::move(eval);
-  self->state.store = std::move(store);
   return {
-    //[self](table_slice slice) {
-    //  self->send(self->state.client, std::move(slice));
-    //},
-    //[self](atom::done, caf::error err) {
-    //  if (err)
-    //    VAST_DEBUG("{} completed expression evaluation", self);
-    //  else
-    //    VAST_ERROR("{} completed expression evaluation with {}", self, err);
-    //  self->state.promise.deliver(atom::done_v);
-    //  // TODO: quit.
-    //},
-    [self](receiver<table_slice> client) {
-      self->state.client = client;
-      self->state.promise = self->make_response_promise<atom::done>();
+    [self](atom::run) {
+      self->state.promise = self->make_response_promise<ids>();
       self->state.pending_responses += self->state.eval.size();
       for (auto& triple : self->state.eval) {
         // No strucutured bindings available due to subsequent lambda. :-/
@@ -187,7 +171,7 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
       }
       if (self->state.pending_responses == 0) {
         VAST_DEBUG("{} has nothing to evaluate for expression", self);
-        self->state.promise.deliver(atom::done_v);
+        self->state.promise.deliver(ids{});
       }
       return self->state.promise;
     },
