@@ -146,7 +146,7 @@ TEST(one - shot integer query result) {
   auto src = detail::spawn_container_source(sys, slices, archive, index);
   run();
   MESSAGE("query half of the values");
-  auto [query_id, hits, scheduled] = query(":int == 1");
+  auto [query_id, hits, scheduled] = query(":int == +1");
   CHECK_EQUAL(hits, taste_count);
   CHECK_EQUAL(scheduled, taste_count);
   size_t expected_result = rows(slices) / 2;
@@ -161,7 +161,7 @@ TEST(iterable integer query result) {
   auto src = detail::spawn_container_source(sys, slices, archive, index);
   run();
   MESSAGE("query half of the values");
-  auto [query_id, hits, scheduled] = query(":int == 1");
+  auto [query_id, hits, scheduled] = query(":int == +1");
   CHECK_NOT_EQUAL(query_id, uuid::nil());
   CHECK_EQUAL(hits, partitions);
   CHECK_EQUAL(scheduled, taste_count);
