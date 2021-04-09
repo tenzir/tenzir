@@ -7,7 +7,7 @@ on:
     branches: [ master ]
 
 env:
-  FUZZING_SERVER_ADDRESS: 'http://localhost:6775:443'
+  FUZZING_SERVER_ADDRESS: 'localhost:443'
   WEB_APP_ADDRESS:  'http://localhost:6775'
   
 
@@ -29,7 +29,7 @@ jobs:
         with:
           ci_fuzz_api_token: ${{ secrets.CI_FUZZ_API_TOKEN }}
           test_collection_run: ${{ steps.start-fuzzing.outputs.test_collection_run }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ github.token }}
           pull_request_number: ${{ github.event.pull_request.number }}
           owner: ${{ github.event.repository.owner.login }}
           repository: ${{ github.event.repository.name }}
@@ -42,7 +42,7 @@ jobs:
         with:
           ci_fuzz_api_token: ${{ secrets.CI_FUZZ_API_TOKEN }}
           test_collection_run: ${{ steps.start-fuzzing.outputs.test_collection_run }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ github.token }}
           pull_request_number: ${{ github.event.pull_request.number }}
           owner: ${{ github.event.repository.owner.login }}
           repository: ${{ github.event.repository.name }}
