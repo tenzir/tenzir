@@ -16,6 +16,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/make_io_stream.hpp"
+#include "vast/expression.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
@@ -61,7 +62,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
     // receiver<table_slice> exactly, but there's no way to verify that at
     // compile time. We can improve upon this situation when changing the
     // archive to stream its results.
-    self->send(archive, atom::extract_v, to_ids(*i),
+    self->send(archive, atom::extract_v, expression{}, to_ids(*i),
                caf::actor_cast<receiver<table_slice>>(self));
     bool waiting = true;
     self->receive_while(waiting)

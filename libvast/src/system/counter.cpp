@@ -77,7 +77,7 @@ void counter_state::process_hits(const ids& hits) {
     hits_ |= hits;
     // TODO: Change caf::actor_cast to static_cast once the COUNTER is a typed
     // actor.
-    self_->send(archive_, atom::extract_v, std::move(hits),
+    self_->send(archive_, atom::extract_v, expr_, std::move(hits),
                 caf::actor_cast<receiver<table_slice>>(self_));
     // Block the FSM from advancing until we got all slices from the ARCHIVE.
     if (++pending_archive_requests_ == 1)

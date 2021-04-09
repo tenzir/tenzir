@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/system/actors.hpp"

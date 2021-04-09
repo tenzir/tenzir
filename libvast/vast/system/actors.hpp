@@ -103,8 +103,10 @@ using store_actor = typed_actor_fwd<
   // TODO: This is only for compatibility with the legacy archive and
   // can be removed with that.
   caf::reacts_to<atom::exporter, caf::actor>,
-  // Handles a query for the given ids.
-  caf::replies_to<atom::extract, ids, receiver<table_slice>>::with<atom::done>,
+  // Handles a query for the given expression, optionally optimized by a set of
+  // ids to pre-select the events to evaluate.
+  caf::replies_to<atom::extract, expression, ids,
+                  receiver<table_slice>>::with<atom::done>,
   // Erase the events with the given ids.
   caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
 
@@ -222,8 +224,8 @@ using index_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-using archive_request
-  = std::tuple<caf::typed_response_promise<atom::done>, receiver<table_slice>>;
+using archive_request = std::tuple<caf::typed_response_promise<atom::done>,
+                                   receiver<table_slice>, expression>;
 
 /// The ARCHIVE actor interface.
 using archive_actor = typed_actor_fwd<

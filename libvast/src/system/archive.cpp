@@ -119,7 +119,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
     self->state.active_exporters.erase(msg.source);
   });
   return {
-    [self](atom::extract, const ids& xs,
+    [self](atom::extract, expression expr, const ids& xs,
            receiver<table_slice> requester) -> caf::result<atom::done> {
       VAST_DEBUG("{} got query for {} events in range [{},  {})", self,
                  rank(xs), select(xs, 1), select(xs, -1) + 1);
@@ -129,7 +129,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       }
       auto rp = self->make_response_promise<atom::done>();
       self->state.unhandled_ids[requester->address()].push(xs);
-      self->state.requests.emplace(rp, std::move(requester));
+      self->state.requests.emplace(rp, std::move(requester), std::move(expr));
       if (!self->state.session)
         self->state.next_session();
       return rp;
