@@ -9,6 +9,7 @@ on:
 env:
   FUZZING_SERVER_ADDRESS: 'localhost:443'
   WEB_APP_ADDRESS:  'http://localhost:6775'
+  VAST_VERSION_TAG: 2021.03.30+ci 
   
 
 jobs:
