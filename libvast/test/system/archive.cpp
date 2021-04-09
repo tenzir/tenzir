@@ -40,15 +40,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   std::vector<table_slice> query(const ids& ids) {
     bool done = false;
     std::vector<table_slice> result;
-    self->send(a, ids, caf::actor_cast<system::archive_client_actor>(self));
+    self->send(a, atom::extract_v, ids,
+               caf::actor_cast<system::receiver<table_slice>>(self));
     run();
     self
-      ->do_receive(
-        [&](vast::atom::done, const caf::error& err) {
-          REQUIRE(!err);
-          done = true;
-        },
-        [&](table_slice slice) { result.push_back(std::move(slice)); })
+      ->do_receive([&](vast::atom::done) { done = true; },
+                   [&](table_slice slice) {
+                     result.push_back(std::move(slice));
+                   })
       .until(done);
     return result;
   }

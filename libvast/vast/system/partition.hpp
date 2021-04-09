@@ -178,7 +178,7 @@ struct passive_partition_state {
   chunk_ptr partition_chunk;
 
   /// Stores a list of expressions that could not be answered immediately.
-  std::vector<std::tuple<expression, partition_client_actor,
+  std::vector<std::tuple<expression, receiver<table_slice>,
                          caf::typed_response_promise<atom::done>>>
     deferred_evaluations;
 

@@ -34,7 +34,7 @@ struct archive_state {
   std::unique_ptr<vast::segment_store> store;
   std::unique_ptr<vast::segment_store::lookup> session;
   uint64_t session_id = 0;
-  std::queue<archive_client_actor> requesters;
+  std::queue<archive_request> requests;
   std::unordered_map<caf::actor_addr, std::queue<ids>> unhandled_ids;
   std::unordered_set<caf::actor_addr> active_exporters;
   vast::system::measurement measurement;

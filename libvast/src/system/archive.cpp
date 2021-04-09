@@ -29,23 +29,32 @@
 
 namespace vast::system {
 
+static auto& promise(archive_request& r) {
+  return std::get<0>(r);
+}
+
+static auto& client(const archive_request& r) {
+  return std::get<1>(r);
+}
+
 void archive_state::next_session() {
   // No requester means no work to do.
-  if (requesters.empty()) {
-    VAST_TRACE_SCOPE("{} has no requesters", self);
+  if (requests.empty()) {
+    VAST_TRACE_SCOPE("{} has no requests", self);
     session = nullptr;
     return;
   }
   // Find the work queue for our current requester.
-  const auto& current_requester = requesters.front();
-  auto it = unhandled_ids.find(current_requester->address());
-  // There is no ids queue for our current requester. Let's dismiss the
-  // requester and try again.
+  auto& current_request = requests.front();
+  auto it = unhandled_ids.find(client(current_request)->address());
+  // There is no ids queue for our current requester. Let's dismiss the requeste
+  // and try again.
   if (it == unhandled_ids.end()) {
     VAST_TRACE_SCOPE("{} could not find an ids queue for the current "
                      "requester",
                      self);
-    requesters.pop();
+    promise(current_request).deliver(atom::done_v);
+    requests.pop();
     return next_session();
   }
   // There is a work queue for our current requester, but it is empty. Let's
@@ -54,13 +63,14 @@ void archive_state::next_session() {
     VAST_TRACE_SCOPE("{} found an empty ids queue for the current requester",
                      self);
     unhandled_ids.erase(it);
-    requesters.pop();
+    promise(current_request).deliver(atom::done_v);
+    requests.pop();
     return next_session();
   }
   // Start working on the next ids for the next requester.
   auto& next_ids = it->second.front();
   session = store->extract(next_ids);
-  self->send(self, atom::internal_v, next_ids, current_requester, ++session_id);
+  self->send(self, atom::internal_v, next_ids, current_request, ++session_id);
   it->second.pop();
 }
 
@@ -109,24 +119,27 @@ archive(archive_actor::stateful_pointer<archive_state> self,
     self->state.active_exporters.erase(msg.source);
   });
   return {
-    [self](const ids& xs, archive_client_actor requester) {
+    [self](atom::extract, const ids& xs,
+           receiver<table_slice> requester) -> caf::result<atom::done> {
       VAST_DEBUG("{} got query for {} events in range [{},  {})", self,
                  rank(xs), select(xs, 1), select(xs, -1) + 1);
       if (self->state.active_exporters.count(requester->address()) == 0) {
         VAST_DEBUG("{} dismisses query for inactive sender", self);
-        return;
+        return atom::done_v;
       }
-      self->state.requesters.push(requester);
+      auto rp = self->make_response_promise<atom::done>();
       self->state.unhandled_ids[requester->address()].push(xs);
+      self->state.requests.emplace(rp, std::move(requester));
       if (!self->state.session)
         self->state.next_session();
+      return rp;
     },
-    [self](atom::internal, const ids& xs, archive_client_actor requester,
+    [self](atom::internal, const ids& xs, archive_request request,
            uint64_t session_id) {
       // If the export has since shut down, we need to invalidate the session.
-      if (self->state.active_exporters.count(requester->address()) == 0) {
+      if (self->state.active_exporters.count(client(request)->address()) == 0) {
         VAST_DEBUG("{} invalidates running query session for {}", self,
-                   requester);
+                   client(request));
         self->state.next_session();
         return;
       }
@@ -134,8 +147,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
         VAST_DEBUG("{} considers extraction finished for invalidated "
                    "session",
                    self);
-        self->send(requester, atom::done_v, caf::make_error(ec::no_error));
-        self->state.requesters.pop();
+        promise(request).deliver(atom::done_v);
+        self->state.requests.pop();
         self->state.next_session();
         return;
       }
@@ -147,16 +160,16 @@ archive(archive_actor::stateful_pointer<archive_state> self,
         VAST_DEBUG("{} finished extraction from the current session: "
                    "{}",
                    self, err);
-        self->send(requester, atom::done_v, std::move(err));
-        self->state.requesters.pop();
+        promise(request).deliver(atom::done_v);
+        self->state.requests.pop();
         self->state.next_session();
         return;
       }
       // The slice may contain entries that are not selected by xs.
       for (auto& sub_slice : select(*slice, xs))
-        self->send(requester, sub_slice);
+        self->send(client(request), sub_slice);
       // Continue working on the current session.
-      self->send(self, atom::internal_v, xs, requester, session_id);
+      self->send(self, atom::internal_v, xs, request, session_id);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
@@ -205,8 +218,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     [self](atom::exporter, const caf::actor& exporter) {
-      auto sender_addr = self->current_sender()->address();
-      self->state.active_exporters.insert(sender_addr);
+      self->state.active_exporters.insert(exporter->address());
       self->monitor<caf::message_priority::high>(exporter);
     },
     [self](atom::status, status_verbosity v) {

@@ -629,7 +629,7 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [self](const expression& expr,
-           partition_client_actor client) -> caf::result<atom::done> {
+           receiver<table_slice> client) -> caf::result<atom::done> {
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
       auto triples = evaluate(self->state, expr);
@@ -797,7 +797,7 @@ partition_actor::behavior_type passive_partition(
       });
   return {
     [self](const expression& expr,
-           partition_client_actor client) -> caf::result<atom::done> {
+           receiver<table_slice> client) -> caf::result<atom::done> {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       if (!self->state.partition_chunk)
         return std::get<2>(self->state.deferred_evaluations.emplace_back(

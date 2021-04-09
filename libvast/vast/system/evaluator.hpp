@@ -62,7 +62,7 @@ struct evaluator_state {
   store_actor store;
 
   /// Stores the actor for sendings results to.
-  partition_client_actor client;
+  receiver<table_slice> client;
 
   /// Stores the original query expression.
   expression expr;

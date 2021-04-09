@@ -317,7 +317,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       }
       return result;
     },
-    // -- partition_client_actor -------------------------------------------------
+    // -- receiver<table_slice> -------------------------------------------------
     [self](table_slice slice) { //
       handle_batch(self, std::move(slice));
     },
