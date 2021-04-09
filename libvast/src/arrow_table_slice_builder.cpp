@@ -559,6 +559,49 @@ table_slice arrow_table_slice_builder::finish(
   return table_slice{std::move(chunk), table_slice::verify::no, layout()};
 }
 
+table_slice arrow_table_slice_builder::create(
+  const std::shared_ptr<arrow::RecordBatch>& record_batch,
+  const record_type& layout, size_t initial_buffer_size) {
+  VAST_ASSERT(record_batch->schema()->Equals(make_arrow_schema(layout)));
+  auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
+  // Pack layout.
+  auto flat_layout = std::vector<char>{};
+  caf::binary_serializer source(nullptr, flat_layout);
+  auto error = source(layout);
+  VAST_ASSERT(error == caf::no_error);
+  auto layout_buffer = builder.CreateVector(
+    reinterpret_cast<const unsigned char*>(flat_layout.data()),
+    flat_layout.size());
+  // Pack schema.
+#  if ARROW_VERSION_MAJOR >= 2
+  auto flat_schema
+    = arrow::ipc::SerializeSchema(*record_batch->schema()).ValueOrDie();
+#  else
+  auto flat_schema
+    = arrow::ipc::SerializeSchema(*record_batch->schema(), nullptr).ValueOrDie();
+#  endif
+  auto schema_buffer
+    = builder.CreateVector(flat_schema->data(), flat_schema->size());
+  // Pack record batch.
+  auto flat_record_batch
+    = arrow::ipc::SerializeRecordBatch(*record_batch,
+                                       arrow::ipc::IpcWriteOptions::Defaults())
+        .ValueOrDie();
+  auto record_batch_buffer = builder.CreateVector(flat_record_batch->data(),
+                                                  flat_record_batch->size());
+  // Create Arrow-encoded table slices.
+  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv0(
+    builder, layout_buffer, schema_buffer, record_batch_buffer);
+  // Create and finish table slice.
+  auto table_slice_buffer
+    = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::arrow_v0,
+                            arrow_table_slice_buffer.Union());
+  fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
+  // Create the table slice from the chunk.
+  auto chunk = fbs::release(builder);
+  return table_slice{std::move(chunk), table_slice::verify::no, layout};
+}
+
 size_t arrow_table_slice_builder::rows() const noexcept {
   return rows_;
 }

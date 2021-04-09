@@ -12,11 +12,10 @@
 
 #if VAST_ENABLE_ARROW
 
-#  include "vast/arrow_table_slice.hpp"
-
 #  include "vast/test/fixtures/table_slices.hpp"
 #  include "vast/test/test.hpp"
 
+#  include "vast/arrow_table_slice.hpp"
 #  include "vast/arrow_table_slice_builder.hpp"
 #  include "vast/concept/parseable/to.hpp"
 #  include "vast/concept/parseable/vast/address.hpp"
@@ -79,9 +78,9 @@ integer operator"" _i(unsigned long long int x) {
 
 } // namespace
 
-#define CHECK_OK(expression)                                                   \
-  if (!(expression).ok())                                                      \
-    FAIL("!! " #expression);
+#  define CHECK_OK(expression)                                                 \
+    if (!(expression).ok())                                                    \
+      FAIL("!! " #expression);
 
 TEST(single column - equality) {
   auto t = count_type{};
@@ -314,6 +313,48 @@ TEST(single column - serialization) {
   CHECK_VARIANT_EQUAL(slice2.at(2, 0, t), 2_c);
   CHECK_VARIANT_EQUAL(slice2.at(3, 0, t), 3_c);
   CHECK_VARIANT_EQUAL(slice1, slice2);
+}
+
+TEST(record batch roundtrip) {
+  factory<table_slice_builder>::add<arrow_table_slice_builder>(
+    table_slice_encoding::arrow);
+  auto t = count_type{};
+  auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
+  auto batch = as_record_batch(slice1);
+  auto slice2 = table_slice{batch, slice1.layout()};
+  CHECK_EQUAL(slice1, slice2);
+  CHECK_VARIANT_EQUAL(slice2.at(0, 0, t), 0_c);
+  CHECK_VARIANT_EQUAL(slice2.at(1, 0, t), 1_c);
+  CHECK_VARIANT_EQUAL(slice2.at(2, 0, t), 2_c);
+  CHECK_VARIANT_EQUAL(slice2.at(3, 0, t), 3_c);
+}
+
+TEST(record batch roundtrip - adding column) {
+  factory<table_slice_builder>::add<arrow_table_slice_builder>(
+    table_slice_encoding::arrow);
+  auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
+  auto batch = as_record_batch(slice1);
+  auto cb = arrow_table_slice_builder::column_builder::make(
+    string_type{}, arrow::default_memory_pool());
+  cb->add("0"sv);
+  cb->add("1"sv);
+  cb->add("2"sv);
+  cb->add("3"sv);
+  auto column = cb->finish();
+  REQUIRE(column);
+  auto new_batch = batch->AddColumn(1, "new", column);
+  REQUIRE(new_batch.ok());
+  auto new_layout = slice1.layout();
+  new_layout.fields.emplace_back("new", string_type{});
+  auto slice2 = table_slice{new_batch.ValueUnsafe(), new_layout};
+  CHECK_VARIANT_EQUAL(slice2.at(0, 0, count_type{}), 0_c);
+  CHECK_VARIANT_EQUAL(slice2.at(1, 0, count_type{}), 1_c);
+  CHECK_VARIANT_EQUAL(slice2.at(2, 0, count_type{}), 2_c);
+  CHECK_VARIANT_EQUAL(slice2.at(3, 0, count_type{}), 3_c);
+  CHECK_VARIANT_EQUAL(slice2.at(0, 1, string_type{}), "0"sv);
+  CHECK_VARIANT_EQUAL(slice2.at(1, 1, string_type{}), "1"sv);
+  CHECK_VARIANT_EQUAL(slice2.at(2, 1, string_type{}), "2"sv);
+  CHECK_VARIANT_EQUAL(slice2.at(3, 1, string_type{}), "3"sv);
 }
 
 FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)

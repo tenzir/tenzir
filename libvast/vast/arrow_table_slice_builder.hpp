@@ -68,6 +68,12 @@ public:
   [[nodiscard]] table_slice
   finish(span<const std::byte> serialized_layout = {}) override;
 
+  /// @pre `record_batch->schema()->Equals(make_arrow_schema(layout))``
+  [[nodiscard]] table_slice static create(
+    const std::shared_ptr<arrow::RecordBatch>& record_batch,
+    const record_type& layout,
+    size_t initial_buffer_size = default_buffer_size);
+
   /// @returns The number of columns in the table slice.
   size_t columns() const noexcept;
 
