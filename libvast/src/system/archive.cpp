@@ -37,6 +37,10 @@ static auto& client(const archive_request& r) {
   return std::get<1>(r);
 }
 
+static auto& expr(const archive_request& r) {
+  return std::get<2>(r);
+}
+
 void archive_state::next_session() {
   // No requester means no work to do.
   if (requests.empty()) {
@@ -165,9 +169,22 @@ archive(archive_actor::stateful_pointer<archive_state> self,
         self->state.next_session();
         return;
       }
-      // The slice may contain entries that are not selected by xs.
-      for (auto& sub_slice : select(*slice, xs))
-        self->send(client(request), sub_slice);
+      if (expr(request) == expression{}) {
+        auto final_slice = filter(*slice, xs);
+        if (final_slice)
+          self->send(client(request), *final_slice);
+      } else {
+        auto checker = tailor(expr(request), slice->layout());
+        if (!checker) {
+          VAST_ERROR("{} failed to tailor expression: {}", self,
+                     checker.error());
+        } else {
+          // TODO: Remove meta predicates (They don't contain false positives).
+          auto final_slice = filter(*slice, *checker, xs);
+          if (final_slice)
+            self->send(client(request), *final_slice);
+        }
+      }
       // Continue working on the current session.
       self->send(self, atom::internal_v, xs, request, session_id);
     },

@@ -317,9 +317,15 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       }
       return result;
     },
-    // -- receiver<table_slice> -------------------------------------------------
+    // -- receiver<table_slice> ------------------------------------------------
     [self](table_slice slice) { //
-      handle_batch(self, std::move(slice));
+      VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+      VAST_DEBUG("{} got batch of {} events", self, slice.rows());
+      self->state.query.processed += slice.rows();
+      self->state.query.cached += slice.rows();
+      self->state.results.push_back(slice);
+      // Ship slices to connected SINKs.
+      ship_results(self);
     },
     [self](atom::done) -> caf::result<void> {
       // Figure out if we're done by bumping the counter for `received` and

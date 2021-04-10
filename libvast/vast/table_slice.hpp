@@ -211,6 +211,18 @@ public:
   friend void select(std::vector<table_slice>& result, const table_slice& slice,
                      const ids& selection);
 
+  /// Produces a new table slice consisting only of events addressed in `hints`
+  /// that match the given expression. Does not preserve ids, use `select
+  ///`instead if the id mapping must be maintained.
+  /// @param slice The input table slice.
+  /// @param expr The expression to evaluate.
+  /// @param hints An ID set for pruning the events that need to be considered.
+  /// @returns a new table slice consisting only of events matching the given
+  ///          expression.
+  /// @pre `slice.encoding() != table_slice_encoding::none`
+  friend std::optional<table_slice>
+  filter(const table_slice& slice, const expression& expr, const ids& hints);
+
 private:
   // -- implementation details -------------------------------------------------
 
@@ -242,6 +254,34 @@ private:
   /// The number of in-memory table slices.
   inline static std::atomic<size_t> num_instances_ = {};
 };
+
+// Attribute-specifier-seqs are not allowed in friend function declarations, so
+// we re-declare the filter functions with nodiscard here.
+[[nodiscard]] std::optional<table_slice>
+filter(const table_slice& slice, const expression& expr, const ids& hints);
+
+/// Produces a new table slice consisting only of events that match the given
+/// expression. Does not preserve ids, use `select`instead if the id mapping
+/// must be maintained.
+/// @param slice The input table slice.
+/// @param expr The expression to evaluate.
+/// @returns a new table slice consisting only of events matching the given
+///          expression.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+[[nodiscard]] std::optional<table_slice>
+filter(const table_slice& slice, const expression& expr);
+
+/// Produces a new table slice consisting only of events addressed in `hints`.
+/// Does not preserve ids, use `select`instead if the id mapping must be
+/// maintained.
+/// @param slice The input table slice.
+/// @param hints The set of IDs to select the events to include in the output
+///              slice.
+/// @returns a new table slice consisting only of events matching the given
+///          expression.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+[[nodiscard]] std::optional<table_slice>
+filter(const table_slice& slice, const ids& hints);
 
 // -- operations ---------------------------------------------------------------
 

@@ -650,4 +650,73 @@ ids evaluate(const expression& expr, const table_slice& slice) {
   return result;
 }
 
+std::optional<table_slice>
+filter(const table_slice& slice, const expression& expr, const ids& hints) {
+  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  auto xs_ids = make_ids({{slice.offset(), slice.offset() + slice.rows()}});
+  auto selection = xs_ids;
+  if (!hints.empty()) {
+    selection &= hints;
+    if (selection.empty())
+      return std::nullopt;
+  }
+  if (expr == expression{}) {
+    if (xs_ids == selection)
+      return slice;
+  }
+  // Get the desired encoding, and the already serialized layout.
+  auto f = detail::overload{
+    []() noexcept -> std::pair<table_slice_encoding, span<const std::byte>> {
+      die("cannot filter an invalid table slice");
+    },
+    [&](const auto& encoded) noexcept {
+      return std::pair{
+        builder_id(state(encoded, slice.state_)->encoding),
+        span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
+             encoded.layout()->size()}};
+    },
+  };
+  table_slice_encoding implementation_id;
+  span<const std::byte> serialized_layout = {};
+  std::tie(implementation_id, serialized_layout)
+    = visit(f, as_flatbuffer(slice.chunk_));
+  // Start slicing and dicing.
+  auto builder
+    = factory<table_slice_builder>::make(implementation_id, slice.layout());
+  VAST_ASSERT(builder);
+  auto flat_layout = flatten(slice.layout());
+  auto check = [&](row_evaluator eval) {
+    if (expr == expression{})
+      return true;
+    return caf::visit(eval, expr);
+  };
+  for (auto id : select(selection)) {
+    VAST_ASSERT(id >= slice.offset());
+    auto row = id - slice.offset();
+    VAST_ASSERT(row < slice.rows());
+    if (check(row_evaluator{slice, row})) {
+      for (size_t column = 0; column < flat_layout.fields.size(); ++column) {
+        auto cell_value
+          = slice.at(row, column, flat_layout.fields[column].type);
+        auto ret = builder->add(cell_value);
+        VAST_ASSERT(ret);
+      }
+    }
+  }
+  if (builder->rows() == 0)
+    return std::nullopt;
+  auto new_slice = builder->finish(serialized_layout);
+  VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
+  return new_slice;
+}
+
+std::optional<table_slice>
+filter(const table_slice& slice, const expression& expr) {
+  return filter(slice, expr, ids{});
+}
+
+std::optional<table_slice> filter(const table_slice& slice, const ids& hints) {
+  return filter(slice, expression{}, hints);
+}
+
 } // namespace vast
