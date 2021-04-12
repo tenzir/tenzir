@@ -159,23 +159,6 @@ struct remove_optional<caf::optional<T>> {
 template <class T>
 using remove_optional_t = typename remove_optional<T>::type;
 
-// -- operator availability --------------------------------------------------
-
-template <typename T>
-using ostream_operator_t
-  = decltype(std::declval<std::ostream&>() << std::declval<T>());
-
-template <typename T>
-struct has_ostream_operator
-  : std::experimental::is_detected<ostream_operator_t, T> {};
-
-template <typename T>
-using has_ostream_operator_t = typename has_ostream_operator<T>::type;
-
-template <typename T>
-inline constexpr bool has_ostream_operator_v
-  = std::experimental::is_detected_v<ostream_operator_t, T>;
-
 // -- checks for stringification functions -----------------------------------
 
 template <typename T>
