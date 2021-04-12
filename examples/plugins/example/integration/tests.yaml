@@ -7,4 +7,4 @@ tests:
       - command: version
         transformation: jq -ec '.plugins.example'
       - command: -N status
-        transformation: jq -ec '.importer.analyzers[].example? // empty'
+        transformation: jq -ec '.example'
