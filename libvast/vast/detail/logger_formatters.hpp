@@ -80,21 +80,25 @@ struct fmt::internal::fallback_formatter<
   T, fmt::format_context::char_type,
   std::enable_if_t<std::conjunction_v<
     std::negation<vast::detail::is_formattable<T>>,
-    std::negation<vast::detail::has_ostream_operator<T>>,
+    std::negation<fmt::internal::is_streamable<T, fmt::format_context::char_type>>,
     std::negation<vast::is_printable<std::back_insert_iterator<std::string>,
                                      std::decay_t<T>>>,
-    caf::detail::is_inspectable<caf::detail::stringification_inspector, T>>>> {
+    caf::detail::is_inspectable<caf::detail::stringification_inspector, T>>>>
+  : private formatter<basic_string_view<fmt::format_context::char_type>,
+                      fmt::format_context::char_type> {
+  using super = formatter<basic_string_view<fmt::format_context::char_type>,
+                          fmt::format_context::char_type>;
   template <typename ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return super::parse(ctx);
   }
 
   template <typename FormatContext>
-  auto format(const T& item, FormatContext& ctx) {
+  auto format(const T& item, FormatContext& ctx) -> decltype(ctx.out()) {
     auto result = std::string{};
     auto f = caf::detail::stringification_inspector{result};
     f(item);
-    return format_to(ctx.out(), "{}", result);
+    return super::format(result, ctx);
   }
 };
 
@@ -104,18 +108,22 @@ struct fmt::internal::fallback_formatter<
   T, fmt::format_context::char_type,
   std::enable_if_t<std::conjunction_v<
     std::negation<vast::detail::is_formattable<T>>,
-    std::negation<vast::detail::has_ostream_operator<T>>,
-    vast::is_printable<std::back_insert_iterator<std::string>, std::decay_t<T>>>>> {
+    std::negation<fmt::internal::is_streamable<T, fmt::format_context::char_type>>,
+    vast::is_printable<std::back_insert_iterator<std::string>, std::decay_t<T>>>>>
+  : private formatter<basic_string_view<fmt::format_context::char_type>,
+                      fmt::format_context::char_type> {
+  using super = formatter<basic_string_view<fmt::format_context::char_type>,
+                          fmt::format_context::char_type>;
   template <typename ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return super::parse(ctx);
   }
 
   template <typename FormatContext>
-  auto format(const T& item, FormatContext& ctx) {
+  auto format(const T& item, FormatContext& ctx) -> decltype(ctx.out()) {
     auto result = std::string{};
     vast::print(std::back_inserter(result), item);
-    return format_to(ctx.out(), "{}", result);
+    return super::format(result, ctx);
   }
 };
 
