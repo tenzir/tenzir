@@ -32,9 +32,9 @@ while ! lsof -i ':42000'; do sleep 1; done
 
 # Import demo data.
 >&2 echo "Importing demo data"
-vast import -b zeek -r 'vast-jupyter-demo/M57-day11-18-conn.log'
-vast import -b suricata -r 'vast-jupyter-demo/M57-day11-18.json'
-vast import -b pcap -r 'vast-jupyter-demo/M57-2009-day11-18.trace'
+vast import -b -r 'vast-jupyter-demo/M57-day11-18-conn.log' zeek
+vast import -b -r 'vast-jupyter-demo/M57-day11-18.json' suricata
+vast import -b -r 'vast-jupyter-demo/M57-2009-day11-18.trace' pcap
 
 # Setup virtual environment.
 >&2 echo "Setting up virtual environment"

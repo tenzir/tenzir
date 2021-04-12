@@ -78,7 +78,7 @@ jobs:
           apt-get -y install clang-10
 
           # Apache Arrow (c.f. https://arrow.apache.org/install/)
-          wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+          wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
           apt-get -y install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
           apt-get update
           apt-get -y install libarrow-dev
