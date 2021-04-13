@@ -29,55 +29,6 @@
 
 namespace vast::system {
 
-static auto& promise(archive_request& r) {
-  return std::get<0>(r);
-}
-
-static auto& client(const archive_request& r) {
-  return std::get<1>(r);
-}
-
-static auto& expr(const archive_request& r) {
-  return std::get<2>(r);
-}
-
-void archive_state::next_session() {
-  // No requester means no work to do.
-  if (requests.empty()) {
-    VAST_TRACE_SCOPE("{} has no requests", self);
-    session = nullptr;
-    return;
-  }
-  // Find the work queue for our current requester.
-  auto& current_request = requests.front();
-  auto it = unhandled_ids.find(client(current_request)->address());
-  // There is no ids queue for our current requester. Let's dismiss the requeste
-  // and try again.
-  if (it == unhandled_ids.end()) {
-    VAST_TRACE_SCOPE("{} could not find an ids queue for the current "
-                     "requester",
-                     self);
-    promise(current_request).deliver(atom::done_v);
-    requests.pop();
-    return next_session();
-  }
-  // There is a work queue for our current requester, but it is empty. Let's
-  // clean house, dismiss the requester and try again.
-  if (it->second.empty()) {
-    VAST_TRACE_SCOPE("{} found an empty ids queue for the current requester",
-                     self);
-    unhandled_ids.erase(it);
-    promise(current_request).deliver(atom::done_v);
-    requests.pop();
-    return next_session();
-  }
-  // Start working on the next ids for the next requester.
-  auto& next_ids = it->second.front();
-  session = store->extract(next_ids);
-  self->send(self, atom::internal_v, next_ids, current_request, ++session_id);
-  it->second.pop();
-}
-
 void archive_state::send_report() {
   auto r = performance_report{{{std::string{name}, measurement}}};
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
@@ -94,6 +45,31 @@ void archive_state::send_report() {
 #endif
   measurement = vast::system::measurement{};
   self->send(accountant, std::move(r));
+}
+
+std::unique_ptr<segment_store::lookup> next_session(archive_state& state) {
+  while (true) {
+    if (state.requests.empty()) {
+      VAST_TRACE("archive has no requests");
+      return nullptr;
+    }
+    auto& request = state.requests.front();
+    if (request.cancelled || request.ids_queue.empty()) {
+      // Not sure whether this is really necessary.
+      while (!request.ids_queue.empty()) {
+        request.ids_queue.front().second.deliver(atom::done_v);
+        request.ids_queue.pop();
+      }
+      state.requests.pop_front();
+      continue;
+    }
+    // We found an active request.
+    auto& [ids, rp] = request.ids_queue.front();
+    state.active_promise = std::move(rp);
+    state.session_ids = std::move(ids);
+    request.ids_queue.pop();
+    return state.store->extract(state.session_ids);
+  }
 }
 
 archive_actor::behavior_type
@@ -120,73 +96,133 @@ archive(archive_actor::stateful_pointer<archive_state> self,
   });
   self->set_down_handler([self](const caf::down_msg& msg) {
     VAST_DEBUG("{} received DOWN from {}", self, msg.source);
-    self->state.active_exporters.erase(msg.source);
+    auto it = std::find_if(
+      self->state.requests.begin(), self->state.requests.end(),
+      [&](const auto& request) { return request.sink == msg.source; });
+    if (it != self->state.requests.end())
+      it->cancelled = true;
   });
   return {
     [self](atom::extract, expression expr, const ids& xs,
-           receiver<table_slice> requester) -> caf::result<atom::done> {
+           receiver_actor<table_slice> requester,
+           bool preserve_ids) -> caf::result<atom::done> {
       VAST_DEBUG("{} got query for {} events in range [{},  {})", self,
                  rank(xs), select(xs, 1), select(xs, -1) + 1);
-      if (self->state.active_exporters.count(requester->address()) == 0) {
-        VAST_DEBUG("{} dismisses query for inactive sender", self);
-        return atom::done_v;
-      }
+      auto op = preserve_ids ? archive_state::operation::extract_with_ids
+                             : archive_state::operation::extract;
       auto rp = self->make_response_promise<atom::done>();
-      self->state.unhandled_ids[requester->address()].push(xs);
-      self->state.requests.emplace(rp, std::move(requester), std::move(expr));
-      if (!self->state.session)
-        self->state.next_session();
+      auto it
+        = std::find_if(self->state.requests.begin(), self->state.requests.end(),
+                       [&](const auto& request) {
+                         return request.sink == requester->address();
+                       });
+      if (it != self->state.requests.end()) {
+        VAST_ASSERT(expr == it->expr);
+        VAST_ASSERT(op == it->op);
+        // Down messages are sent with high prio.
+        // TODO: What if the request is already cleaned up after a down, but we
+        // get new ids from the same requester later because of the normal
+        // priority afterwards?
+        if (it->cancelled) {
+          rp.deliver(atom::done_v);
+        } else {
+          it->ids_queue.emplace(xs, rp);
+        }
+      } else {
+        self->monitor(requester);
+        self->state.requests.emplace_back(
+          requester, op,
+          std::move(expr), std::make_pair(xs, rp));
+      }
+      if (!self->state.session) {
+        self->state.session = next_session(self->state);
+        // We just queued the work.
+        VAST_ASSERT(self->state.session);
+        self->send(self, atom::internal_v);
+      }
       return rp;
     },
-    [self](atom::internal, const ids& xs, archive_request request,
-           uint64_t session_id) {
-      // If the export has since shut down, we need to invalidate the session.
-      if (self->state.active_exporters.count(client(request)->address()) == 0) {
-        VAST_DEBUG("{} invalidates running query session for {}", self,
-                   client(request));
-        self->state.next_session();
-        return;
-      }
-      if (!self->state.session || self->state.session_id != session_id) {
-        VAST_DEBUG("{} considers extraction finished for invalidated "
-                   "session",
-                   self);
-        promise(request).deliver(atom::done_v);
-        self->state.requests.pop();
-        self->state.next_session();
-        return;
-      }
-      // Extract the next slice.
+    [self](atom::internal) {
+      VAST_ASSERT(self->state.session);
+      VAST_ASSERT(!self->state.requests.empty());
+      auto& request = self->state.requests.front();
+      if (request.cancelled) {
+        self->state.active_promise.deliver(atom::done_v);
+        self->state.session = next_session(self->state);
+        if (!self->state.session)
+          // Nothing to do at the moment;
+          return;
+      };
       auto slice = self->state.session->next();
-      if (!slice) {
-        auto err = slice.error() ? std::move(slice.error())
-                                 : caf::make_error(ec::no_error);
-        VAST_DEBUG("{} finished extraction from the current session: "
-                   "{}",
-                   self, err);
-        promise(request).deliver(atom::done_v);
-        self->state.requests.pop();
-        self->state.next_session();
-        return;
-      }
-      if (expr(request) == expression{}) {
-        auto final_slice = filter(*slice, xs);
-        if (final_slice)
-          self->send(client(request), *final_slice);
-      } else {
-        auto checker = tailor(expr(request), slice->layout());
-        if (!checker) {
-          VAST_ERROR("{} failed to tailor expression: {}", self,
-                     checker.error());
-        } else {
-          // TODO: Remove meta predicates (They don't contain false positives).
-          auto final_slice = filter(*slice, *checker, xs);
-          if (final_slice)
-            self->send(client(request), *final_slice);
+      if (slice) {
+        switch (request.op) {
+          case archive_state::operation::extract: {
+            if (request.expr == expression{}) {
+              auto final_slice = filter(*slice, self->state.session_ids);
+              if (final_slice)
+                self->send(request.sink, *final_slice);
+            } else {
+              auto checker = tailor(request.expr, slice->layout());
+              if (!checker) {
+                VAST_ERROR("{} failed to tailor expression: {}", self,
+                           checker.error());
+              } else {
+                // TODO: Remove meta predicates (They don't contain false
+                // positives).
+                auto final_slice
+                  = filter(*slice, *checker, self->state.session_ids);
+                if (final_slice)
+                  self->send(request.sink, *final_slice);
+              }
+            }
+            break;
+          }
+          case archive_state::operation::extract_with_ids: {
+            for (auto& sub_slice : select(*slice, self->state.session_ids)) {
+              self->send(request.sink,
+                         sub_slice /*, self->state.partition_offset*/);
+            }
+            if (request.expr == expression{}) {
+              for (auto& sub_slice : select(*slice, self->state.session_ids)) {
+                self->send(request.sink, sub_slice/*,
+                           self->state.partition_offset*/);
+              }
+            } else {
+              auto checker = tailor(request.expr, slice->layout());
+              if (!checker) {
+                VAST_ERROR("{} failed to tailor expression: {}", self,
+                           checker.error());
+              } else {
+                // TODO: Remove meta predicates (They don't contain false
+                // positives).
+                for (auto& sub_slice :
+                     select(*slice, self->state.session_ids)) {
+                  auto hits = evaluate(*checker, sub_slice);
+                  for (auto& final_slice : select(sub_slice, hits))
+                    self->send(request.sink, final_slice/*,
+                               self->state.partition_offset*/);
+                }
+              }
+            }
+            break;
+          }
+          case archive_state::operation::count:
+          case archive_state::operation::erase:
+            die("not implemented");
         }
+      } else {
+        // We didn't get a slice from the segment store.
+        if (slice.error() != caf::no_error)
+          VAST_ERROR("{} failed to retrieve slice: {}", self, slice.error());
+        // This session is done.
+        // We're at the end, check for more requests.
+        self->state.active_promise.deliver(atom::done_v);
+        self->state.session = next_session(self->state);
+        if (!self->state.session)
+          // Nothing to do at the moment;
+          return;
       }
-      // Continue working on the current session.
-      self->send(self, atom::internal_v, xs, request, session_id);
+      self->send(self, atom::internal_v);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
@@ -211,9 +247,9 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             t.stop(events);
           },
           [=](caf::unit_t&, const caf::error& err) {
-            // We get an 'unreachable' error when the stream becomes unreachable
-            // because the actor was destroyed; in this case we can't use `self`
-            // anymore.
+            // We get an 'unreachable' error when the stream becomes
+            // unreachable because the actor was destroyed; in this case we
+            // can't use `self` anymore.
             if (err && err != caf::exit_reason::unreachable) {
               if (err != caf::exit_reason::user_shutdown)
                 VAST_ERROR("{} got a stream error: {}", self, render(err));
@@ -235,7 +271,6 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     [self](atom::exporter, const caf::actor& exporter) {
-      self->state.active_exporters.insert(exporter->address());
       self->monitor<caf::message_priority::high>(exporter);
     },
     [self](atom::status, status_verbosity v) {

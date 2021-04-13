@@ -629,7 +629,7 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [self](expression expr,
-           receiver<table_slice> client) -> caf::result<atom::done> {
+           receiver_actor<table_slice> client) -> caf::result<atom::done> {
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
       auto triples = evaluate(self->state, expr);
@@ -643,7 +643,8 @@ active_partition_actor::behavior_type active_partition(
         .then(
           [self, client, rp, expr = std::move(expr)](const ids& hits) mutable {
             rp.delegate(self->state.store, atom::extract_v, std::move(expr),
-                        hits, static_cast<receiver<table_slice>>(client));
+                        hits, static_cast<receiver_actor<table_slice>>(client),
+                        false);
           },
           [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
       return rp;
@@ -807,7 +808,7 @@ partition_actor::behavior_type passive_partition(
       });
   return {
     [self](expression expr,
-           receiver<table_slice> client) -> caf::result<atom::done> {
+           receiver_actor<table_slice> client) -> caf::result<atom::done> {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       if (!self->state.partition_chunk)
         return std::get<2>(self->state.deferred_evaluations.emplace_back(
@@ -832,7 +833,8 @@ partition_actor::behavior_type passive_partition(
         .then(
           [self, client, rp, expr = std::move(expr)](const ids& hits) mutable {
             rp.delegate(self->state.store, atom::extract_v, std::move(expr),
-                        hits, static_cast<receiver<table_slice>>(client));
+                        hits, static_cast<receiver_actor<table_slice>>(client),
+                        false);
           },
           [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
       return rp;

@@ -317,7 +317,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       }
       return result;
     },
-    // -- receiver<table_slice> ------------------------------------------------
+    // -- receiver_actor<table_slice> ------------------------------------------------
     [self](table_slice slice) { //
       VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
       VAST_DEBUG("{} got batch of {} events", self, slice.rows());

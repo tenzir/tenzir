@@ -31,7 +31,7 @@ using namespace vast;
 // system::partition_actor::behavior_type
 // dummy_partition(system::partition_actor::pointer self, ids x) {
 //  return {
-//    [=](const vast::expression&, const system::receiver<table_slice>& client)
+//    [=](const vast::expression&, const system::receiver_actor<table_slice>& client)
 //    {
 //      self->send(client, x);
 //      return atom::done_v;

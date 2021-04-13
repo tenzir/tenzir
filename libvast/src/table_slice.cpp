@@ -653,15 +653,16 @@ ids evaluate(const expression& expr, const table_slice& slice) {
 std::optional<table_slice>
 filter(const table_slice& slice, const expression& expr, const ids& hints) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  auto xs_ids = make_ids({{slice.offset(), slice.offset() + slice.rows()}});
-  auto selection = xs_ids;
+  const auto offset = slice.offset();
+  auto slice_ids = make_ids({{offset, offset + slice.rows()}});
+  auto selection = slice_ids;
   if (!hints.empty()) {
     selection &= hints;
     if (selection.empty())
       return std::nullopt;
   }
   if (expr == expression{}) {
-    if (xs_ids == selection)
+    if (slice_ids == selection)
       return slice;
   }
   // Get the desired encoding, and the already serialized layout.
@@ -691,8 +692,8 @@ filter(const table_slice& slice, const expression& expr, const ids& hints) {
     return caf::visit(eval, expr);
   };
   for (auto id : select(selection)) {
-    VAST_ASSERT(id >= slice.offset());
-    auto row = id - slice.offset();
+    VAST_ASSERT(id >= offset);
+    auto row = id - offset;
     VAST_ASSERT(row < slice.rows());
     if (check(row_evaluator{slice, row})) {
       for (size_t column = 0; column < flat_layout.fields.size(); ++column) {
@@ -707,6 +708,7 @@ filter(const table_slice& slice, const expression& expr, const ids& hints) {
     return std::nullopt;
   auto new_slice = builder->finish(serialized_layout);
   VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
+  new_slice.offset(offset);
   return new_slice;
 }
 

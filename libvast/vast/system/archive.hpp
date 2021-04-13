@@ -29,18 +29,42 @@ namespace vast::system {
 
 /// @relates archive
 struct archive_state {
-  void send_report();
-  void next_session();
-  archive_actor::pointer self;
-  std::unique_ptr<vast::segment_store> store;
+  enum class operation { //
+    count,
+    erase,
+    extract,
+    extract_with_ids
+  };
+
+  struct request_state {
+    request_state(receiver_actor<table_slice> sink_, operation op_,
+                  expression expr_,
+                  std::pair<ids, caf::typed_response_promise<atom::done>> ids_)
+      : sink{std::move(sink_)}, op{op_}, expr{std::move(expr_)} {
+      ids_queue.push(std::move(ids_));
+    }
+    receiver_actor<table_slice> sink;
+    operation op;
+    expression expr;
+    std::queue<std::pair<ids, caf::typed_response_promise<atom::done>>>
+      ids_queue;
+    bool cancelled = false;
+  };
+
+  std::deque<request_state> requests;
   std::unique_ptr<vast::segment_store::lookup> session;
-  uint64_t session_id = 0;
-  std::queue<archive_request> requests;
-  std::unordered_map<caf::actor_addr, std::queue<ids>> unhandled_ids;
-  std::unordered_set<caf::actor_addr> active_exporters;
+  ids session_ids = {};
+  caf::typed_response_promise<atom::done> active_promise;
+
+  archive_actor::pointer self;
+
+  std::unique_ptr<vast::segment_store> store;
+
+  void send_report();
   vast::system::measurement measurement;
   accountant_actor accountant;
   static inline const char* name = "archive";
+  const uint64_t partition_offset = 0;
 };
 
 /// Stores event batches and answers queries for ID sets.

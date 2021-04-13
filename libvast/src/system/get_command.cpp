@@ -59,11 +59,11 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
       return caf::make_error(ec::parse_error, c, "is not a positive integer");
     // The caf::actor_cast here is necessary because a scoped actor cannot be a
     // typed actor. The message handlers below reflect those of the
-    // receiver<table_slice> exactly, but there's no way to verify that at
+    // receiver_actor<table_slice> exactly, but there's no way to verify that at
     // compile time. We can improve upon this situation when changing the
     // archive to stream its results.
     self->send(archive, atom::extract_v, expression{}, to_ids(*i),
-               caf::actor_cast<receiver<table_slice>>(self));
+               caf::actor_cast<receiver_actor<table_slice>>(self), false);
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.

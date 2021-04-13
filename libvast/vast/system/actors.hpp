@@ -81,7 +81,7 @@ using flush_listener_actor = typed_actor_fwd<
   caf::reacts_to<atom::flush>>::unwrap;
 
 template <class T, class... Ts>
-using receiver = typename typed_actor_fwd<
+using receiver_actor = typename typed_actor_fwd<
   // Add a new source.
   typename caf::reacts_to<T, Ts...>>::unwrap;
 
@@ -90,7 +90,7 @@ using index_client_actor = typed_actor_fwd<
   // Receives done from the INDEX when the query finished.
   caf::reacts_to<atom::done>>
   // Receives ids from the INDEX for partial query hits.
-  ::extend_with<receiver<table_slice>>::unwrap;
+  ::extend_with<receiver_actor<table_slice>>::unwrap;
 
 /// The STATUS CLIENT actor interface.
 using status_client_actor = typed_actor_fwd<
@@ -105,8 +105,8 @@ using store_actor = typed_actor_fwd<
   caf::reacts_to<atom::exporter, caf::actor>,
   // Handles a query for the given expression, optionally optimized by a set of
   // ids to pre-select the events to evaluate.
-  caf::replies_to<atom::extract, expression, ids,
-                  receiver<table_slice>>::with<atom::done>,
+  caf::replies_to<atom::extract, expression, ids, receiver_actor<table_slice>,
+                  bool>::with<atom::done>,
   // Erase the events with the given ids.
   caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
 
@@ -119,7 +119,7 @@ using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
-  caf::replies_to<expression, receiver<table_slice>>::with<atom::done>>
+  caf::replies_to<expression, receiver_actor<table_slice>>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -207,7 +207,7 @@ using meta_index_actor = typed_actor_fwd<
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
   caf::reacts_to<atom::done, uuid>,
-  // Registers the ARCHIVE with the ACCOUNTANT.
+  // Registers the INDEX with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
@@ -224,16 +224,13 @@ using index_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-using archive_request = std::tuple<caf::typed_response_promise<atom::done>,
-                                   receiver<table_slice>, expression>;
-
 /// The ARCHIVE actor interface.
 using archive_actor = typed_actor_fwd<
   // Registers the ARCHIVE with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
   // INTERNAL: Handles a query for the given ids, and sends the table slices
   // back to the client.
-  caf::reacts_to<atom::internal, ids, archive_request, uint64_t>,
+  caf::reacts_to<atom::internal>,
   // The internal telemetry loop of the ARCHIVE.
   caf::reacts_to<atom::telemetry>>
   // Conform to the protocol of the STORE actor.
@@ -421,7 +418,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::query_map))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_actor))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_master_actor))
-  VAST_ADD_TYPE_ID((vast::system::receiver<vast::table_slice>) )
+  VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::table_slice>) )
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>) )
   VAST_ADD_TYPE_ID(
@@ -437,7 +434,6 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 #define vast_uuid_synopsis_map std::map<vast::uuid, vast::partition_synopsis>
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::system::archive_request)
 #undef vast_uuid_synopsis_map
 
 #undef VAST_ADD_TYPE_ID

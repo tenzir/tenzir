@@ -61,7 +61,7 @@ query_supervisor_actor::behavior_type query_supervisor(
         // TODO: Add a proper configurable timeout.
         self
           ->request(partition, caf::infinite, expr,
-                    static_cast<const receiver<table_slice>&>(client))
+                    static_cast<const receiver_actor<table_slice>&>(client))
           .then(
             [=](atom::done) {
               if (--self->state.open_requests == 0) {
