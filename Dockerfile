@@ -23,7 +23,7 @@ RUN apt-get -qq update && apt-get -qqy install \
 RUN apt-get -qqy -t buster-backports install cmake libspdlog-dev libfmt-dev
 
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
-RUN wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
+RUN wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
   apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
   apt-get -qq update && \
   apt-get -qqy install libarrow-dev
@@ -80,7 +80,7 @@ RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
 RUN apt-get -qqy -t buster-backports install libspdlog1 libfmt-dev
 
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
-RUN wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
+RUN wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
   apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
   apt-get -qq update && \
   apt-get -qqy install libarrow-dev

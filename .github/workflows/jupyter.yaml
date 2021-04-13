@@ -26,14 +26,12 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get -qq update
-        sudo apt-get -qqy install libpcap-dev libssl-dev lsb-release
+        sudo apt-get -qqy install ca-certificates libpcap-dev libssl-dev lsb-release wget
         # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
-        # TODO: Revert the commit that introduced this version pinning once ch20162
-        # is done and we can use latest upstream again.
-        wget https://apache.bintray.com/arrow/ubuntu/pool/focal/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb
-        sudo apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb
-        sudo apt-get -qq update
-        sudo apt-get -qqy install libarrow-dev=1.0.1-1
+        wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+        sudo apt-get -y install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+        sudo apt-get update
+        sudo apt-get -y install libarrow-dev
 
     # Fetch latest successful build of the 'VAST' workflow, master branch
     - name: Fetch VAST
@@ -65,8 +63,8 @@ jobs:
         export PATH="$PWD"/vast/bin:"$PATH"
         nohup vast start &
         while ! lsof -i ":42000"; do sleep 1; done
-        vast import zeek -r vast-jupyter-demo/M57-day11-18-conn.log
-        vast import suricata -r vast-jupyter-demo/M57-day11-18.json
-        vast import pcap -r vast-jupyter-demo/M57-2009-day11-18.trace
+        vast import -r vast-jupyter-demo/M57-day11-18-conn.log zeek
+        vast import -r vast-jupyter-demo/M57-day11-18.json suricata
+        vast import -r vast-jupyter-demo/M57-2009-day11-18.trace pcap
         jupyter-nbconvert --to notebook --execute --output vast-example-1.py examples/jupyter/vast-example-1.ipynb
         vast stop
