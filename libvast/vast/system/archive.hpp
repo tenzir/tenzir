@@ -37,13 +37,12 @@ struct archive_state {
   };
 
   struct request_state {
-    request_state(receiver_actor<table_slice> sink_, operation op_,
-                  expression expr_,
+    request_state(caf::weak_actor_ptr sink_, operation op_, expression expr_,
                   std::pair<ids, caf::typed_response_promise<atom::done>> ids_)
       : sink{std::move(sink_)}, op{op_}, expr{std::move(expr_)} {
       ids_queue.push(std::move(ids_));
     }
-    receiver_actor<table_slice> sink;
+    caf::weak_actor_ptr sink;
     operation op;
     expression expr;
     std::queue<std::pair<ids, caf::typed_response_promise<atom::done>>>
