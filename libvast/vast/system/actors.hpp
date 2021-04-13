@@ -99,10 +99,6 @@ using status_client_actor = typed_actor_fwd<
     caf::dictionary<caf::config_value>>>::unwrap;
 
 using store_actor = typed_actor_fwd<
-  // Register an exporter actor.
-  // TODO: This is only for compatibility with the legacy archive and
-  // can be removed with that.
-  caf::reacts_to<atom::exporter, caf::actor>,
   // Handles a query for the given expression, optionally optimized by a set of
   // ids to pre-select the events to evaluate.
   caf::replies_to<atom::extract, expression, ids, receiver_actor<table_slice>,

@@ -39,7 +39,6 @@ void counter_state::init(expression expr, index_actor index,
   // Add additional message handlers if we need to perform candidate checks.
   if (skip_candidate_check_)
     return;
-  self_->send(archive_, atom::exporter_v, self_);
   caf::message_handler base{behaviors_[collect_hits].as_behavior_impl()};
   behaviors_[collect_hits] = base.or_else(
     [this](table_slice slice) {

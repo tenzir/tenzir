@@ -637,8 +637,6 @@ active_partition_actor::behavior_type active_partition(
         return atom::done_v;
       auto eval = self->spawn(evaluator, expr, triples);
       auto rp = self->make_response_promise<atom::done>();
-      self->send(self->state.store, atom::exporter_v,
-                 caf::actor_cast<caf::actor>(client));
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, client, rp, expr = std::move(expr)](const ids& hits) mutable {
@@ -827,8 +825,6 @@ partition_actor::behavior_type passive_partition(
         return atom::done_v;
       auto eval = self->spawn(evaluator, expr, triples);
       auto rp = self->make_response_promise<atom::done>();
-      self->send(self->state.store, atom::exporter_v,
-                 caf::actor_cast<caf::actor>(client));
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, client, rp, expr = std::move(expr)](const ids& hits) mutable {

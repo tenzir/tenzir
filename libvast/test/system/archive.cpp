@@ -29,7 +29,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   fixture() {
     a = self->spawn(system::archive, directory, 10, 1024 * 1024);
-    self->send(a, atom::exporter_v, self);
   }
 
   void push_to_archive(std::vector<table_slice> xs) {

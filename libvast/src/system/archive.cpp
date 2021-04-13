@@ -270,9 +270,6 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
-    [self](atom::exporter, const caf::actor& exporter) {
-      self->monitor<caf::message_priority::high>(exporter);
-    },
     [self](atom::status, status_verbosity v) {
       auto result = caf::settings{};
       auto& archive_status = put_dictionary(result, "archive");
