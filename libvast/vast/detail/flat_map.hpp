@@ -19,7 +19,7 @@ namespace vast::detail {
 
 template <class Key, class T, class Compare>
 struct flat_map_policy {
-  static bool pair_compare(const std::pair<const Key, T>& x, const Key& y) {
+  static bool pair_compare(const std::pair<Key, T>& x, const Key& y) {
     return Compare{}(x.first, y);
   }
 
@@ -39,7 +39,9 @@ struct flat_map_policy {
   }
 };
 
-/// A map abstraction over a sorted `std::vector`.
+/// A map abstraction over a `std::vector`.
+/// Guarantees that all entries are always stored in ascending order
+/// according to `Compare`.
 template <class Key, class T, class Compare = std::less<Key>,
           class Allocator = std::allocator<std::pair<Key, T>>>
 using flat_map

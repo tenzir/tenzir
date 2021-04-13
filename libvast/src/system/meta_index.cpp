@@ -41,7 +41,20 @@ void meta_index_state::erase(const uuid& partition) {
 }
 
 void meta_index_state::merge(const uuid& partition, partition_synopsis&& ps) {
-  synopses[partition] = std::move(ps);
+  synopses.emplace(partition, std::move(ps));
+}
+
+void meta_index_state::create_from(std::map<uuid, partition_synopsis>&& ps) {
+  std::vector<std::pair<uuid, partition_synopsis>> flat_data;
+  for (auto&& [uuid, synopsis] : std::move(ps)) {
+    flat_data.emplace_back(uuid, std::move(synopsis));
+  }
+  std::sort(flat_data.begin(), flat_data.end(),
+            [](const std::pair<uuid, partition_synopsis>& lhs,
+               const std::pair<uuid, partition_synopsis>& rhs) {
+              return lhs.first < rhs.first;
+            });
+  synopses = decltype(synopses)::make_unsafe(std::move(flat_data));
 }
 
 partition_synopsis& meta_index_state::at(const uuid& partition) {
@@ -345,9 +358,7 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
   return {
     [=](atom::merge,
         std::shared_ptr<std::map<uuid, partition_synopsis>>& ps) -> atom::ok {
-      for (auto&& [id, synopsis] : std::move(*ps)) {
-        self->state.merge(std::move(id), std::move(synopsis));
-      }
+      self->state.create_from(std::move(*ps));
       return atom::ok_v;
     },
     [=](atom::merge, uuid partition,
