@@ -372,6 +372,8 @@ using node_actor = typed_actor_fwd<
   // Run an invocation in the node.
   caf::replies_to<atom::run, invocation>::with< //
     caf::message>,
+  // INTERNAL: Spawn component plugins.
+  caf::reacts_to<atom::internal, atom::spawn, atom::plugin>,
   // Run an invocation in the node that spawns an actor.
   caf::replies_to<atom::spawn, invocation>::with< //
     caf::actor>,

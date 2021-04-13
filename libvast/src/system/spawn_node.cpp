@@ -105,10 +105,10 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     auto inv = invocation{opts, "spawn "s + std::move(name), {}};
     self->request(node.get(), caf::infinite, atom::spawn_v, std::move(inv))
       .receive(
-        [&](caf::actor) {
+        [&](const caf::actor&) {
           // nop
         },
-        [&](caf::error err) { //
+        [&](caf::error& err) { //
           result = std::move(err);
         });
     return result;
@@ -123,6 +123,14 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
       return err;
     }
   }
+  caf::error error = caf::none;
+  self
+    ->request(node.get(), caf::infinite, atom::internal_v, atom::spawn_v,
+              atom::plugin_v)
+    .receive([]() { /* nop */ },
+             [&](caf::error& err) { error = std::move(err); });
+  if (error)
+    return error;
   return node;
 }
 
