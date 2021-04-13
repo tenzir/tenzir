@@ -336,12 +336,17 @@ using exporter_actor = typed_actor_fwd<
   // Conform to the protocol of the INDEX CLIENT actor.
   ::extend_with<index_client_actor>::unwrap;
 
-/// The interface of an ANALYZER PLUGIN actors.
+/// The interface of a COMPONENT PLUGIN actor.
+using component_plugin_actor = typed_actor_fwd<>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
+
+/// The interface of an ANALYZER PLUGIN actor.
 using analyzer_plugin_actor = typed_actor_fwd<>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+  // Conform to the protocol of the COMPONENT PLUGIN actor.
+  ::extend_with<component_plugin_actor>::unwrap;
 
 /// The interface of an IMPORTER actor.
 using importer_actor = typed_actor_fwd<

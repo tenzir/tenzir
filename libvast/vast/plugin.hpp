@@ -100,17 +100,53 @@ public:
   [[nodiscard]] virtual const char* name() const = 0;
 };
 
+// -- component plugin --------------------------------------------------------
+
+/// A base class for plugins that spawn components in the NODE.
+/// @relates plugin
+class component_plugin : public virtual plugin {
+public:
+  /// Creates an actor as a component in the NODE.
+  /// @param node A pointer to the NODE actor handle.
+  /// @returns The actor handle to the NODE component.
+  virtual system::component_plugin_actor
+  make_component(system::node_actor::pointer node) const = 0;
+};
+
 // -- analyzer plugin ----------------------------------------------------------
 
 /// A base class for plugins that hook into the input stream.
-/// @relates plugin
-class analyzer_plugin : public virtual plugin {
+/// @relates component_plugin
+class analyzer_plugin : public virtual component_plugin {
 public:
+  /// Gets or spawns the ANALYZER actor spawned by the plugin.
+  /// @param node A pointer to the NODE actor handle.
+  /// @returns The actor handle to the analyzer, or `nullptr` if the actor was
+  /// spawned but shut down already.
+  system::analyzer_plugin_actor
+  analyzer(system::node_actor::pointer node) const;
+
+  /// Implicitly fulfill the requirements of a COMPONENT PLUGIN actor via the
+  /// ANALYZER PLUGIN actor.
+  system::component_plugin_actor
+  make_component(system::node_actor::pointer node) const final;
+
+protected:
   /// Creates an actor that hooks into the input table slice stream.
   /// @param node A pointer to the NODE actor handle.
   /// @returns The actor handle to the analyzer.
+  /// @note It is guaranteed that this function is not called while the ANALYZER
+  /// is still running.
   virtual system::analyzer_plugin_actor
   make_analyzer(system::node_actor::pointer node) const = 0;
+
+private:
+  /// A weak handle to the spawned actor handle.
+  mutable caf::weak_actor_ptr weak_handle_ = {};
+
+  /// Indicates that the ANALYZER was spawned at least once. This flag is used
+  /// to ensure that `make_analyzer` is called at most once per plugin.
+  mutable bool spawned_once_ = false;
 };
 
 // -- command plugin -----------------------------------------------------------
@@ -120,9 +156,9 @@ public:
 class command_plugin : public virtual plugin {
 public:
   /// Creates additional commands.
-  /// @note VAST calls this function before initializing the plugin, which means
-  /// that this function cannot depend on any plugin state. The logger is
-  /// unavailable when this function is called.
+  /// @note VAST calls this function before initializing the plugin, which
+  /// means that this function cannot depend on any plugin state. The logger
+  /// is unavailable when this function is called.
   [[nodiscard]] virtual std::pair<std::unique_ptr<command>, command::factory>
   make_command() const = 0;
 };

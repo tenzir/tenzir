@@ -185,18 +185,10 @@ id importer_state::available_ids() const noexcept {
   return max_id - current.next;
 }
 
-caf::typed_response_promise<caf::settings>
-importer_state::status(status_verbosity v) const {
-  struct req_state_t {
-    // Maps nodes to a map associating components with status information.
-    caf::settings result = {};
-    // Contains the number of pending replies.
-    size_t pending_replies = 0;
-  };
-  auto req_state = std::make_shared<req_state_t>();
-  auto rp = self->make_response_promise<caf::settings>();
+caf::settings importer_state::status(status_verbosity v) const {
+  auto result = caf::settings{};
   // Gather general importer status.
-  auto& importer_status = put_dictionary(req_state->result, "importer");
+  auto& importer_status = put_dictionary(result, "importer");
   // TODO: caf::config_value can only represent signed 64 bit integers, which
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
@@ -211,39 +203,7 @@ importer_state::status(status_verbosity v) const {
   // General state such as open streams.
   if (v >= status_verbosity::debug)
     detail::fill_status_map(importer_status, self);
-  // Gather status from all analyzer actors.
-  auto& analyzers_status = caf::put_list(importer_status, "analyzers");
-  for (const auto& [name, analyzer] : analyzers) {
-    ++req_state->pending_replies;
-    // Request the status from each analyzer, giving them each half the time to
-    // reply that the importer had in total. This is to avoid a single analyzer
-    // causing the entire importer status to turn into a request_timeout error.
-    self
-      ->request<caf::message_priority::high>(
-        analyzer, defaults::system::initial_request_timeout / 2, atom::status_v,
-        v)
-      .then(
-        [=, name = name,
-         &analyzers_status](const caf::settings& analyzer_status) mutable {
-          analyzers_status.emplace_back().as_dictionary().emplace(
-            name, analyzer_status);
-          if (--req_state->pending_replies == 0)
-            rp.deliver(std::move(req_state->result));
-        },
-        [=, name = name, &analyzers_status](const caf::error& err) mutable {
-          VAST_WARN("{} failed to retrieve status from analyzer {} with {} "
-                    "pending analyzer replies: {}",
-                    self, name, req_state->pending_replies, err);
-          auto& analyzer_status = caf::put_dictionary(
-            analyzers_status.emplace_back().as_dictionary(), name);
-          caf::put(analyzer_status, "error", render(err));
-          if (--req_state->pending_replies == 0)
-            rp.deliver(std::move(req_state->result));
-        });
-  }
-  if (req_state->pending_replies == 0)
-    rp.deliver(std::move(req_state->result));
-  return rp;
+  return result;
 }
 
 void importer_state::send_report() {
@@ -299,14 +259,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->state.index = std::move(index);
     self->state.stage->add_outbound_path(self->state.index);
   }
-  for (auto& plugin : plugins::get()) {
-    if (auto p = plugin.as<analyzer_plugin>()) {
-      if (auto analyzer = p->make_analyzer(node)) {
+  for (auto& plugin : plugins::get())
+    if (auto* p = plugin.as<analyzer_plugin>())
+      if (auto analyzer = p->analyzer(node))
         self->state.stage->add_outbound_path(analyzer);
-        self->state.analyzers.emplace_back(p->name(), std::move(analyzer));
-      }
-    }
-  }
   return {
     // Register the ACCOUNTANT actor.
     [self](accountant_actor accountant) {
@@ -344,7 +300,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity v) -> caf::result<caf::settings> {
+    [self](atom::status, status_verbosity v) { //
       return self->state.status(v);
     },
   };

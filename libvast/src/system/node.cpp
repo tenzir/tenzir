@@ -32,6 +32,7 @@
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
@@ -559,6 +560,20 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
   auto err
     = register_component(self, caf::actor_cast<caf::actor>(fs), "filesystem");
   VAST_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
+  // Add all plugins to the component registry.
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* component = plugin.as<component_plugin>()) {
+      if (auto handle = component->make_component(self); !handle)
+        VAST_ERROR("{} failed to spawn component plugin {}", self,
+                   component->name());
+      else if (auto err = register_component(
+                 self, caf::actor_cast<caf::actor>(handle), component->name());
+               err && err != caf::no_error)
+        VAST_ERROR("{} failed to register component plugin {} in component "
+                   "registry: {}",
+                   self, component->name(), err);
+    }
+  }
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG("{} got DOWN from {}", self, msg.source);
