@@ -242,7 +242,7 @@ public:
   }
 
 private:
-  vector_map(vector_type&& xs) : xs_{std::move(xs)} {
+  explicit vector_map(vector_type&& xs) : xs_{std::move(xs)} {
     // nop
   }
 

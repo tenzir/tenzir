@@ -31,7 +31,7 @@ namespace vast::system {
 
 size_t meta_index_state::memusage() const {
   size_t result = 0;
-  for (auto& [id, partition_synopsis] : synopses)
+  for (const auto& [id, partition_synopsis] : synopses)
     result += partition_synopsis.memusage();
   return result;
 }
@@ -186,10 +186,10 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
       // be queried.
       auto search = [&](auto match) {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
-        auto& rhs = caf::get<data>(x.rhs);
+        const auto& rhs = caf::get<data>(x.rhs);
         result_type result;
-        for (auto& [part_id, part_syn] : synopses) {
-          for (auto& [field, syn] : part_syn.field_synopses_) {
+        for (const auto& [part_id, part_syn] : synopses) {
+          for (const auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
               auto cleaned_type = vast::type{field.type}.attributes({});
               // We rely on having a field -> nullptr mapping here for the
@@ -235,8 +235,8 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
-            for (auto& [part_id, part_syn] : synopses) {
-              for (auto& pair : part_syn.field_synopses_) {
+            for (const auto& [part_id, part_syn] : synopses) {
+              for (const auto& pair : part_syn.field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
                 // short, so we're probably not hitting the allocator due to
@@ -254,7 +254,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
-            auto s = caf::get_if<std::string>(&d);
+            const auto* s = caf::get_if<std::string>(&d);
             if (!s) {
               VAST_WARN("#field meta queries only support string "
                         "comparisons");
@@ -361,7 +361,7 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
       self->state.erase(partition);
       return atom::ok_v;
     },
-    [=](expression expr) -> std::vector<uuid> {
+    [=](const expression& expr) -> std::vector<uuid> {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       return self->state.lookup(expr);
     },
