@@ -17,6 +17,7 @@ This changelog documents all notable user-facing changes of VAST.
   the VAST server process. *Analyzer Plugins* are now a specialization of
   *Component Plugins*, and their API remains unchanged.
   [#1544](https://github.com/tenzir/vast/pull/1544)
+  [#1547](https://github.com/tenzir/vast/pull/1547)
 
 - ⚠️ The status output of *Analyzer Plugins* moved from the `importer.analyzers`
   key into the top-level record.

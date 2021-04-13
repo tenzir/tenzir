@@ -560,20 +560,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
   auto err
     = register_component(self, caf::actor_cast<caf::actor>(fs), "filesystem");
   VAST_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
-  // Add all plugins to the component registry.
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* component = plugin.as<component_plugin>()) {
-      if (auto handle = component->make_component(self); !handle)
-        VAST_ERROR("{} failed to spawn component plugin {}", self,
-                   component->name());
-      else if (auto err = register_component(
-                 self, caf::actor_cast<caf::actor>(handle), component->name());
-               err && err != caf::no_error)
-        VAST_ERROR("{} failed to register component plugin {} in component "
-                   "registry: {}",
-                   self, component->name(), err);
-    }
-  }
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG("{} got DOWN from {}", self, msg.source);
@@ -648,6 +634,26 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       // Run the command.
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
+    },
+    [self](atom::internal, atom::spawn, atom::plugin) -> caf::result<void> {
+      // Add all plugins to the component registry.
+      for (const auto& plugin : plugins::get()) {
+        if (const auto* component = plugin.as<component_plugin>()) {
+          if (auto handle = component->make_component(self); !handle)
+            return caf::make_error(ec::unspecified,
+                                   "{} failed to spawn component plugin {}",
+                                   self, component->name());
+          else if (auto err = register_component(
+                     self, caf::actor_cast<caf::actor>(handle),
+                     component->name());
+                   err && err != caf::no_error)
+            return caf::make_error(ec::unspecified,
+                                   "{} failed to register component plugin {} "
+                                   "in component registry: {}",
+                                   self, component->name(), err);
+        }
+      }
+      return {};
     },
     [self](atom::spawn, const invocation& inv) {
       VAST_DEBUG("{} got spawn command {} with options {} and arguments {}",
