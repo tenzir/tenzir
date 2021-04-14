@@ -130,15 +130,12 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
 
 std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
-  // TODO: we could consider a flat_set<uuid> here, which would then have
-  // overloads for inplace intersection/union and simplify the implementation
-  // of this function a bit. This would also simplify the maintainance of a
-  // critical invariant: partition UUIDs must be sorted. Otherwise the
-  // invariants of the inplace union and intersection algorithms are violated,
-  // leading to wrong results. This invariant is easily violated because we
-  // currently just append results to the candidate vector, so all places where
-  // we return an assembled set must ensure the post-condition of returning a
-  // sorted list.
+  // The partition UUIDs must be sorted, otherwise the invariants of the
+  // inplace union and intersection algorithms are violated, leading to
+  // wrong results. So all places where we return an assembled set must
+  // ensure the post-condition of returning a sorted list. We currently
+  // rely on `flat_map` already traversing them in the correct order, so
+  // no separate sorting step is required.
   using result_type = std::vector<uuid>;
   result_type memoized_partitions;
   auto all_partitions = [&] {

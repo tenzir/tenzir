@@ -72,6 +72,9 @@ public:
   meta_index_actor::pointer self;
 
   /// Maps a partition ID to the synopses for that partition.
+  // We mainly iterate over the whole map and return a sorted set, for which
+  // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
+  // See also ae9dbed.
   detail::flat_map<uuid, partition_synopsis> synopses;
 };
 
