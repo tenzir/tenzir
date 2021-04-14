@@ -31,7 +31,7 @@ namespace vast::system {
 
 size_t meta_index_state::memusage() const {
   size_t result = 0;
-  for (auto& [id, partition_synopsis] : synopses)
+  for (const auto& [id, partition_synopsis] : synopses)
     result += partition_synopsis.memusage();
   return result;
 }
@@ -41,7 +41,20 @@ void meta_index_state::erase(const uuid& partition) {
 }
 
 void meta_index_state::merge(const uuid& partition, partition_synopsis&& ps) {
-  synopses[partition] = std::move(ps);
+  synopses.emplace(partition, std::move(ps));
+}
+
+void meta_index_state::create_from(std::map<uuid, partition_synopsis>&& ps) {
+  std::vector<std::pair<uuid, partition_synopsis>> flat_data;
+  for (auto&& [uuid, synopsis] : std::move(ps)) {
+    flat_data.emplace_back(uuid, std::move(synopsis));
+  }
+  std::sort(flat_data.begin(), flat_data.end(),
+            [](const std::pair<uuid, partition_synopsis>& lhs,
+               const std::pair<uuid, partition_synopsis>& rhs) {
+              return lhs.first < rhs.first;
+            });
+  synopses = decltype(synopses)::make_unsafe(std::move(flat_data));
 }
 
 partition_synopsis& meta_index_state::at(const uuid& partition) {
@@ -117,15 +130,12 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
 
 std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
-  // TODO: we could consider a flat_set<uuid> here, which would then have
-  // overloads for inplace intersection/union and simplify the implementation
-  // of this function a bit. This would also simplify the maintainance of a
-  // critical invariant: partition UUIDs must be sorted. Otherwise the
-  // invariants of the inplace union and intersection algorithms are violated,
-  // leading to wrong results. This invariant is easily violated because we
-  // currently just append results to the candidate vector, so all places where
-  // we return an assembled set must ensure the post-condition of returning a
-  // sorted list.
+  // The partition UUIDs must be sorted, otherwise the invariants of the
+  // inplace union and intersection algorithms are violated, leading to
+  // wrong results. So all places where we return an assembled set must
+  // ensure the post-condition of returning a sorted list. We currently
+  // rely on `flat_map` already traversing them in the correct order, so
+  // no separate sorting step is required.
   using result_type = std::vector<uuid>;
   result_type memoized_partitions;
   auto all_partitions = [&] {
@@ -186,10 +196,10 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
       // be queried.
       auto search = [&](auto match) {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
-        auto& rhs = caf::get<data>(x.rhs);
+        const auto& rhs = caf::get<data>(x.rhs);
         result_type result;
-        for (auto& [part_id, part_syn] : synopses) {
-          for (auto& [field, syn] : part_syn.field_synopses_) {
+        for (const auto& [part_id, part_syn] : synopses) {
+          for (const auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
               auto cleaned_type = vast::type{field.type}.attributes({});
               // We rely on having a field -> nullptr mapping here for the
@@ -226,7 +236,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
           "{} checked {} partitions for predicate {} and got {} results",
           detail::pretty_type_name(this), synopses.size(), x, result.size());
         // Some calling paths require the result to be sorted.
-        std::sort(result.begin(), result.end());
+        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
         return result;
       };
       auto extract_expr = detail::overload{
@@ -235,8 +245,8 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
-            for (auto& [part_id, part_syn] : synopses) {
-              for (auto& pair : part_syn.field_synopses_) {
+            for (const auto& [part_id, part_syn] : synopses) {
+              for (const auto& pair : part_syn.field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
                 // short, so we're probably not hitting the allocator due to
@@ -248,14 +258,13 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 }
               }
             }
-            // Re-establish potentially violated invariant.
-            std::sort(result.begin(), result.end());
+            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
           } else if (lhs.kind == meta_extractor::field) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
-            auto s = caf::get_if<std::string>(&d);
+            const auto* s = caf::get_if<std::string>(&d);
             if (!s) {
               VAST_WARN("#field meta queries only support string "
                         "comparisons");
@@ -278,8 +287,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                   result.push_back(synopsis.first);
               }
             }
-            // Re-establish potentially violated invariant.
-            std::sort(result.begin(), result.end());
+            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
           }
           VAST_WARN("{} cannot process attribute extractor: {}",
@@ -347,9 +355,7 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
   return {
     [=](atom::merge,
         std::shared_ptr<std::map<uuid, partition_synopsis>>& ps) -> atom::ok {
-      for (auto&& [id, synopsis] : std::move(*ps)) {
-        self->state.merge(std::move(id), std::move(synopsis));
-      }
+      self->state.create_from(std::move(*ps));
       return atom::ok_v;
     },
     [=](atom::merge, uuid partition,
@@ -363,7 +369,7 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
       self->state.erase(partition);
       return atom::ok_v;
     },
-    [=](expression expr) -> std::vector<uuid> {
+    [=](const expression& expr) -> std::vector<uuid> {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       return self->state.lookup(expr);
     },

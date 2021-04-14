@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/flat_map.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
@@ -24,8 +25,8 @@
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <map>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace vast::system {
@@ -41,6 +42,9 @@ public:
 
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the meta index state at startup.
+  void create_from(std::map<uuid, partition_synopsis>&&);
+
+  /// Add a new partition synopsis.
   void merge(const uuid& partition, partition_synopsis&&);
 
   /// Returns the partition synopsis for a specific partition.
@@ -68,7 +72,10 @@ public:
   meta_index_actor::pointer self;
 
   /// Maps a partition ID to the synopses for that partition.
-  std::unordered_map<uuid, partition_synopsis> synopses;
+  // We mainly iterate over the whole map and return a sorted set, for which
+  // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
+  // See also ae9dbed.
+  detail::flat_map<uuid, partition_synopsis> synopses;
 };
 
 /// The META INDEX is the first index actor that queries hit. The result
