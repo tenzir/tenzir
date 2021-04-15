@@ -185,9 +185,10 @@ public:
 
   /// Creates a reader, which will be available via `vast import <format>` and
   /// `vast spawn source <format>`.
+  /// @note Use `vast::detail::make_input_stream` to create an input stream from
+  /// the options.
   [[nodiscard]] virtual std::unique_ptr<format::reader>
-  make_reader(const caf::settings& options,
-              std::unique_ptr<std::istream> in) const = 0;
+  make_reader(const caf::settings& options) const = 0;
 };
 
 // -- writer plugin -----------------------------------------------------------
@@ -212,9 +213,10 @@ public:
 
   /// Creates a reader, which will be available via `vast export <format>` and
   /// `vast spawn sink <format>`.
+  /// @note Use `vast::detail::make_output_stream` to create an output stream
+  /// from the options.
   [[nodiscard]] virtual std::unique_ptr<format::writer>
-  make_writer(const caf::settings& options,
-              std::unique_ptr<std::ostream> out) const = 0;
+  make_writer(const caf::settings& options) const = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

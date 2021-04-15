@@ -71,10 +71,7 @@ void factory_traits<format::reader>::initialize() {
               continue;
             const auto* reader = plugin.as<reader_plugin>();
             VAST_ASSERT(reader);
-            auto in = detail::make_input_stream(options);
-            if (!in)
-              return in.error();
-            return reader->make_reader(options, std::move(*in));
+            return reader->make_reader(options);
           }
           return caf::make_error(ec::logic_error,
                                  fmt::format("reader plugin {} was used to "

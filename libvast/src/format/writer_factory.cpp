@@ -61,10 +61,7 @@ void factory_traits<format::writer>::initialize() {
               continue;
             const auto* writer = plugin.as<writer_plugin>();
             VAST_ASSERT(writer);
-            auto out = detail::make_output_stream(options);
-            if (!out)
-              return out.error();
-            return writer->make_writer(options, std::move(*out));
+            return writer->make_writer(options);
           }
           return caf::make_error(ec::logic_error,
                                  fmt::format("writer plugin {} was used to "

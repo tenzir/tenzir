@@ -160,10 +160,7 @@ public:
 
   /// Constructs a PCAP reader.
   /// @param options Additional options.
-  /// @param in Input stream (unused). Pass filename via options instead.
-  explicit reader(const caf::settings& options,
-                  [[maybe_unused]] std::unique_ptr<std::istream> in)
-    : super(options) {
+  explicit reader(const caf::settings& options) : super(options) {
     using defaults_t = vast::defaults::import::pcap;
     using caf::get_if;
     std::string category = "vast.import.pcap";
@@ -575,8 +572,7 @@ public:
 
   /// Constructs a PCAP writer.
   /// @param options The configuration options for the writer.
-  explicit writer([[maybe_unused]] std::unique_ptr<std::ostream> out,
-                  const caf::settings& options) {
+  explicit writer(const caf::settings& options) {
     flush_interval_ = get_or(options, "vast.export.pcap.flush-interval",
                              defaults::flush_interval);
     trace_
@@ -659,7 +655,7 @@ private:
   std::string trace_;
 };
 
-/// An example plugin.
+/// The PCAP reader/writer plugin.
 class plugin final : public virtual reader_plugin,
                      public virtual writer_plugin {
 public:
@@ -743,9 +739,8 @@ sudo vast import pcap --interface=en0 --cutoff=65535
   /// Creates a reader, which will be available via `vast import <format>` and
   /// `vast spawn source <format>`.
   [[nodiscard]] std::unique_ptr<format::reader>
-  make_reader(const caf::settings& options,
-              std::unique_ptr<std::istream> in) const override {
-    return std::make_unique<reader>(options, std::move(in));
+  make_reader(const caf::settings& options) const override {
+    return std::make_unique<reader>(options);
   }
 
   /// Returns the export format's name.
@@ -780,9 +775,8 @@ transforms a provided query expression `E` into `#type == "pcap.packet" && E`.
   /// Creates a reader, which will be available via `vast export <format>` and
   /// `vast spawn sink <format>`.
   [[nodiscard]] std::unique_ptr<format::writer>
-  make_writer(const caf::settings& options,
-              std::unique_ptr<std::ostream> out) const override {
-    return std::make_unique<writer>(std::move(out), options);
+  make_writer(const caf::settings& options) const override {
+    return std::make_unique<writer>(options);
   }
 
 private:

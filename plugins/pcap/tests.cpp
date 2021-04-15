@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE pcap_reader
+#define SUITE pcap
 
 #include "vast/test/data.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
@@ -25,7 +25,7 @@
 
 #include <filesystem>
 
-namespace vast::plugins::pcap_reader {
+namespace vast::plugins::pcap {
 
 namespace {
 
@@ -66,11 +66,7 @@ struct fixture {
 
 } // namespace
 
-// Technically, we don't need the actor system. However, we do need to
-// initialize the table slice builder factories which happens automatically in
-// the actor system setup. Further, including this fixture gives us access to
-// log files to hunt down bugs faster.
-FIXTURE_SCOPE(pcap_reader_tests, fixture)
+FIXTURE_SCOPE(pcap_tests, fixture)
 
 TEST(PCAP read 1) {
   // Initialize a PCAP source with no cutoff (-1), and at most 5 flow table
@@ -157,4 +153,4 @@ TEST(PCAP read 2) {
 
 FIXTURE_SCOPE_END()
 
-} // namespace vast::plugins::pcap_reader
+} // namespace vast::plugins::pcap
