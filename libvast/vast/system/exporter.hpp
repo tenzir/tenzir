@@ -79,6 +79,6 @@ struct exporter_state {
 /// @param opts The query options.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options opts);
+         query_options options);
 
 } // namespace vast::system

@@ -36,9 +36,15 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))
-    query_opts = query_opts + continuous;
-  if (get_or(args.inv.options, "vast.export.unified", false))
-    query_opts = unified;
+    query_opts = query_opts | continuous;
+  if (get_or(args.inv.options, "vast.export.historical-with-ids", false))
+    query_opts = query_opts | historical_with_ids;
+  if (get_or(args.inv.options, "vast.export.unified", false)) {
+    if (has_historical_with_ids_option(query_opts))
+      query_opts = query_opts | continuous;
+    else
+      query_opts = unified;
+  }
   // Default to historical if no options provided.
   if (query_opts == no_query_options)
     query_opts = historical;

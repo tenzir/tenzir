@@ -258,9 +258,12 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // communication for typed actors. Hence, we must actor_cast here.
       // Ideally, we would change that index handler to actually return the
       // desired value.
+      auto verb = has_historical_with_ids_option(self->state.options)
+                    ? query::verb::extract_with_ids
+                    : query::verb::extract;
       self
         ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
-                  query{query::verb::extract, self->state.expr})
+                  query{verb, self->state.expr})
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
             VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} partitions",
