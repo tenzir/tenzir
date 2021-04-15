@@ -34,17 +34,12 @@ public:
 
   eraser_state(caf::event_based_actor* self);
 
-  void init(caf::timespan interval, std::string query, index_actor index,
-            archive_actor archive);
+  void init(caf::timespan interval, std::string query, index_actor index);
 
 protected:
   // -- implementation hooks ---------------------------------------------------
 
   void transition_to(state_name x) override;
-
-  void process_hits(const ids& hits) override;
-
-  void process_end_of_hits() override;
 
 private:
   // -- member variables -------------------------------------------------------
@@ -57,9 +52,6 @@ private:
   /// instead would fix any query such as `#time < 1 week ago` to the time of
   /// its parsing and not update properly.
   std::string query_;
-
-  /// Points to the ARCHIVE that needs periodic pruning.
-  archive_actor archive_;
 
   /// Collects hits until all deltas arrived.
   ids hits_;
@@ -77,9 +69,8 @@ private:
 ///              1 week ago` to the time of its parsing and not update
 ///              properly.
 /// @param index A handle to the INDEX under investigation.
-/// @param archive A handle to the ARCHIVE that needs periodic pruning.
 caf::behavior
 eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
-       std::string query, index_actor index, archive_actor archive);
+       std::string query, index_actor index);
 
 } // namespace vast::system

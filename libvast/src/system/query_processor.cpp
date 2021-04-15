@@ -23,10 +23,6 @@ namespace vast::system {
 
 query_processor::query_processor(caf::event_based_actor* self)
   : state_(idle), self_(self), block_end_of_hits_(false) {
-  // We might receive hits before the query ID arrives. Since we don't want to
-  // deal with races manually, we skip messages that arrive out of order until
-  // transitioning into the corresponding state.
-  self->set_default_handler(caf::skip);
   behaviors_[idle].assign(
     // Our default init state simply waits for a query to execute.
     [=](vast::query& query, const index_actor& index) {
@@ -35,30 +31,24 @@ query_processor::query_processor(caf::event_based_actor* self)
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
     [=](const uuid& query_id, uint32_t total, uint32_t scheduled) {
+      VAST_ASSERT(scheduled <= total);
       query_id_ = query_id;
       partitions_.received = 0;
       partitions_.scheduled = scheduled;
       partitions_.total = total;
-      transition_to(collect_hits);
+      transition_to(await_results_until_done);
     });
-  behaviors_[collect_hits].assign(
-    // Received from EVALUATOR actors while generating query hits.
-    [=](const ids& hits) {
-      process_hits(hits);
-      // No transtion. We will receive a 'done' message after getting all hits.
-    },
+  behaviors_[await_results_until_done].assign(
     [=](atom::done) -> caf::result<void> {
       if (block_end_of_hits_)
         return caf::skip;
       partitions_.received += partitions_.scheduled;
-      process_end_of_hits();
+      process_done();
       return caf::unit;
     });
 }
 
-query_processor::~query_processor() {
-  // nop
-}
+query_processor::~query_processor() = default;
 
 // -- convenience functions ----------------------------------------------------
 
@@ -68,14 +58,18 @@ void query_processor::start(vast::query query, index_actor index) {
   transition_to(await_query_id);
 }
 
-void query_processor::request_more_hits(uint32_t n) {
+bool query_processor::request_more_results() {
+  auto n
+    = std::min(partitions_.total - partitions_.received, partitions_.scheduled);
+  VAST_ASSERT(partitions_.received + n <= partitions_.total);
+  if (n == 0)
+    return false;
   VAST_DEBUG("{} asks the INDEX for more hits by scheduling {}"
              "additional partitions",
              self_, n);
-  VAST_ASSERT(n > 0);
-  VAST_ASSERT(partitions_.received + n <= partitions_.total);
   partitions_.scheduled = n;
   self_->send(index_, query_id_, n);
+  return true;
 }
 
 // -- state management ---------------------------------------------------------
@@ -88,12 +82,9 @@ void query_processor::transition_to(state_name x) {
 
 // -- implementation hooks -----------------------------------------------------
 
-void query_processor::process_hits(const ids&) {
-  // nop
-}
-
-void query_processor::process_end_of_hits() {
-  transition_to(idle);
+void query_processor::process_done() {
+  if (!request_more_results())
+    transition_to(idle);
 }
 
 // -- related functions --------------------------------------------------------
@@ -102,7 +93,7 @@ std::string to_string(query_processor::state_name x) {
   static constexpr const char* tbl[] = {
     "idle",
     "await_query_id",
-    "collect_hits",
+    "await_results_until_done",
   };
   return tbl[static_cast<size_t>(x)];
 }

@@ -19,6 +19,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/ids.hpp"
+#include "vast/query.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -54,14 +55,21 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     },
     [=](vast::query&) {
       auto query_id = unbox(to<uuid>(uuid_str));
-      auto anon_self = caf::actor_cast<caf::event_based_actor*>(self);
+      auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
       auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-      anon_self->send(hdl, query_id, uint32_t{3}, uint32_t(7));
-      anon_self->send(hdl, make_ids({1, 2, 4}));
-      anon_self->send(hdl, make_ids({3, 5}));
+      anon_self->send(hdl, query_id, uint32_t{5}, uint32_t(3));
+      anon_self->send(hdl, uint64_t{2});
+      anon_self->send(hdl, uint64_t{3});
+      anon_self->send(hdl, uint64_t{6});
       anon_self->send(hdl, atom::done_v);
     },
-    [=](const uuid&, uint32_t) { FAIL("no mock implementation available"); },
+    [=](const uuid&, uint32_t) {
+      auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
+      auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
+      anon_self->send(hdl, uint64_t{12});
+      anon_self->send(hdl, uint64_t{24});
+      anon_self->send(hdl, atom::done_v);
+    },
     [=](atom::erase, uuid) -> ids { FAIL("no mock implementation available"); },
   };
 }
@@ -71,6 +79,13 @@ public:
   using super = query_processor;
 
   mock_processor(caf::event_based_actor* self) : super(self) {
+    caf::message_handler base{
+      behaviors_[await_results_until_done].as_behavior_impl()};
+    behaviors_[await_results_until_done] = base.or_else(
+      // Forward results to the sink.
+      [this](uint64_t partial_result) { //
+        results += partial_result;
+      });
     // nop
   }
 
@@ -79,12 +94,8 @@ public:
     super::transition_to(x);
   }
 
-  void process_hits(const ids& xs) override {
-    hits |= xs;
-  }
-
   std::vector<std::string> log;
-  ids hits;
+  uint64_t results = 0;
 };
 
 struct fixture : fixtures::deterministic_actor_system {
@@ -109,22 +120,29 @@ struct fixture : fixtures::deterministic_actor_system {
 
 FIXTURE_SCOPE(query_processor_tests, fixture)
 
-// TEST(state transitions) {
-//  std::vector<std::string> expected_log{
-//    "idle -> await_query_id",
-//    "await_query_id -> collect_hits",
-//    "collect_hits -> idle",
-//  };
-//  self->send(aut, unbox(to<expression>(query_str)), index);
-//  expect((expression, system::index_actor), from(self).to(aut));
-//  expect((expression), from(aut).to(index));
-//  expect((uuid, uint32_t, uint32_t), from(index).to(aut));
-//  expect((ids), from(index).to(aut));
-//  expect((ids), from(index).to(aut));
-//  expect((atom::done), from(index).to(aut));
-//  CHECK_EQUAL(mock_ref().log, expected_log);
-//  CHECK_EQUAL(mock_ref().hits, make_ids({{1, 6}}));
-//  CHECK_EQUAL(mock_ref().state(), system::query_processor::idle);
-//}
+TEST(state transitions) {
+  std::vector<std::string> expected_log{
+    "idle -> await_query_id",
+    "await_query_id -> await_results_until_done",
+    "await_results_until_done -> idle",
+  };
+  self->send(
+    aut, vast::query{query::verb::extract, unbox(to<expression>(query_str))},
+    index);
+  expect((vast::query, system::index_actor), from(self).to(aut));
+  expect((vast::query), from(aut).to(index));
+  expect((uuid, uint32_t, uint32_t), from(index).to(aut));
+  expect((uint64_t), from(index).to(aut));
+  expect((uint64_t), from(index).to(aut));
+  expect((uint64_t), from(index).to(aut));
+  expect((atom::done), from(index).to(aut));
+  expect((uuid, uint32_t), from(aut).to(index));
+  expect((uint64_t), from(index).to(aut));
+  expect((uint64_t), from(index).to(aut));
+  expect((atom::done), from(index).to(aut));
+  CHECK_EQUAL(mock_ref().log, expected_log);
+  CHECK_EQUAL(mock_ref().results, unsigned{2 + 3 + 6 + 12 + 24});
+  CHECK_EQUAL(mock_ref().state(), system::query_processor::idle);
+}
 
 FIXTURE_SCOPE_END()

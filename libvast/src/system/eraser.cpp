@@ -26,14 +26,13 @@ eraser_state::eraser_state(caf::event_based_actor* self) : super{self} {
 }
 
 void eraser_state::init(caf::timespan interval, std::string query,
-                        index_actor index, archive_actor archive) {
+                        index_actor index) {
   VAST_TRACE_SCOPE("{} {} {} {}", VAST_ARG(interval), VAST_ARG(query),
-                   VAST_ARG(index), VAST_ARG(archive));
+                   VAST_ARG(index));
   // Set member variables.
-  interval_ = std::move(interval);
+  interval_ = interval;
   query_ = std::move(query);
   index_ = std::move(index);
-  archive_ = std::move(archive);
   // Override the behavior for the idle state.
   behaviors_[idle].assign([=](atom::run) {
     if (self_->current_sender() != self_->ctrl())
@@ -67,35 +66,13 @@ void eraser_state::transition_to(query_processor::state_name x) {
   }
 }
 
-void eraser_state::process_hits(const ids& hits) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(hits));
-  hits_ |= hits;
-}
-
-void eraser_state::process_end_of_hits() {
-  VAST_TRACE_SCOPE("");
-  // Fetch more hits if the INDEX has more partitions to go through.
-  if (partitions_.received < partitions_.total) {
-    auto n = std::min(partitions_.total - partitions_.received,
-                      partitions_.scheduled);
-    request_more_hits(n);
-    return;
-  }
-  // Tell the ARCHIVE to erase all hits.
-  using std::swap;
-  ids all_hits;
-  swap(all_hits, hits_);
-  self_->send(archive_, atom::erase_v, std::move(all_hits));
-  transition_to(idle);
-}
-
 caf::behavior
 eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
-       std::string query, index_actor index, archive_actor archive) {
+       std::string query, index_actor index) {
   VAST_TRACE_SCOPE("{} {} {} {} {}", VAST_ARG(self), VAST_ARG(interval),
-                   VAST_ARG(query), VAST_ARG(index), VAST_ARG(archive));
+                   VAST_ARG(query), VAST_ARG(index));
   auto& st = self->state;
-  st.init(interval, std::move(query), std::move(index), std::move(archive));
+  st.init(interval, std::move(query), std::move(index));
   return st.behavior();
 }
 

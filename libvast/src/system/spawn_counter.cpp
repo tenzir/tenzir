@@ -34,14 +34,11 @@ spawn_counter(node_actor::stateful_pointer<node_state> self,
   auto expr = get_expression(args);
   if (!expr)
     return expr.error();
-  auto [index, archive]
-    = self->state.registry.find<index_actor, archive_actor>();
+  auto [index] = self->state.registry.find<index_actor>();
   if (!index)
     return caf::make_error(ec::missing_component, "index");
-  if (!archive)
-    return caf::make_error(ec::missing_component, "archive");
   auto estimate = caf::get_or(args.inv.options, "vast.count.estimate", false);
-  auto handle = self->spawn(counter, *expr, index, archive, estimate);
+  auto handle = self->spawn(counter, *expr, index, estimate);
   VAST_VERBOSE("{} spawned a counter for {}", self, to_string(*expr));
   return handle;
 }
