@@ -817,7 +817,7 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
     },
     [self](const uuid& query_id, uint32_t num_partitions) -> caf::result<void> {
       auto sender = self->current_sender();
-      auto client = caf::actor_cast<index_client_actor>(sender);
+      auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
       // Sanity checks.
       if (!sender) {
         VAST_ERROR("{} ignores an anonymous query", self);

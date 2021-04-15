@@ -40,7 +40,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     bool done = false;
     std::vector<table_slice> result;
     self->send(a, vast::query{query::verb::extract, expression{}}, ids,
-               caf::actor_cast<system::receiver_actor<table_slice>>(self));
+               caf::actor_cast<caf::weak_actor_ptr>(self));
     run();
     self
       ->do_receive([&](vast::atom::done) { done = true; },

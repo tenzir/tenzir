@@ -628,7 +628,7 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [self](vast::query query,
-           receiver_actor<table_slice> client) -> caf::result<atom::done> {
+           caf::weak_actor_ptr client) -> caf::result<atom::done> {
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
       auto triples = evaluate(self->state, query.expr);
@@ -640,8 +640,15 @@ active_partition_actor::behavior_type active_partition(
         .then(
           [self, client, rp,
            query = std::move(query)](const ids& hits) mutable {
-            rp.delegate(self->state.store, std::move(query), hits,
-                        static_cast<receiver_actor<table_slice>>(client));
+            // TODO: Use the first path if the expression can be evaluated
+            // exactly.
+            if (query.verb == query::verb::count_estimate) {
+              self->send(caf::actor_cast<receiver_actor<uint64_t>>(client),
+                         rank(hits));
+              rp.deliver(atom::done_v);
+            } else {
+              rp.delegate(self->state.store, std::move(query), hits, client);
+            }
           },
           [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
       return rp;
@@ -805,7 +812,7 @@ partition_actor::behavior_type passive_partition(
       });
   return {
     [self](vast::query query,
-           receiver_actor<table_slice> client) -> caf::result<atom::done> {
+           caf::weak_actor_ptr client) -> caf::result<atom::done> {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(query));
       if (!self->state.partition_chunk)
         return std::get<2>(self->state.deferred_evaluations.emplace_back(
@@ -828,8 +835,15 @@ partition_actor::behavior_type passive_partition(
         .then(
           [self, client, rp,
            query = std::move(query)](const ids& hits) mutable {
-            rp.delegate(self->state.store, std::move(query), hits,
-                        static_cast<receiver_actor<table_slice>>(client));
+            // TODO: Use the first path if the expression can be evaluated
+            // exactly.
+            if (query.verb == query::verb::count_estimate) {
+              self->send(caf::actor_cast<receiver_actor<uint64_t>>(client),
+                         rank(hits));
+              rp.deliver(atom::done_v);
+            } else {
+              rp.delegate(self->state.store, std::move(query), hits, client);
+            }
           },
           [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
       return rp;

@@ -45,7 +45,7 @@ query_supervisor_actor::behavior_type query_supervisor(
   return {
     [self](const vast::query& query,
            const std::vector<std::pair<uuid, partition_actor>>& qm,
-           const index_client_actor& client) {
+           const receiver_actor<atom::done>& client) {
       VAST_DEBUG("{} {} got a new query for {} partitions: {}", self,
                  self->state.log_identifier, qm.size(), get_ids(qm));
       // TODO: We can save one message here if we handle this case in the
@@ -61,7 +61,7 @@ query_supervisor_actor::behavior_type query_supervisor(
         // TODO: Add a proper configurable timeout.
         self
           ->request(partition, caf::infinite, query,
-                    static_cast<const receiver_actor<table_slice>&>(client))
+                    caf::actor_cast<caf::weak_actor_ptr>(client))
           .then(
             [=](atom::done) {
               if (--self->state.open_requests == 0) {

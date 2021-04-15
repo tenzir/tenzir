@@ -138,12 +138,16 @@ archive(archive_actor::stateful_pointer<archive_state> self,
   });
   return {
     [self](vast::query query, const ids& xs,
-           receiver_actor<table_slice> requester) -> caf::result<atom::done> {
-      VAST_DEBUG("{} got extract request with the query {}"
-                 " and {} hints [{},  {})",
+           caf::weak_actor_ptr requester) -> caf::result<atom::done> {
+      VAST_DEBUG("{} got request with the query {} and {} hints [{},  {})",
                  self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
-      return file_request(self, std::move(query), xs,
-                          caf::actor_cast<caf::weak_actor_ptr>(requester));
+      if (query.verb == query::verb::erase) {
+        // We erase eagerly.
+        if (auto err = self->state.store->erase(xs))
+          VAST_ERROR("{} failed to erase events: {}", self, render(err));
+        return atom::done_v;
+      }
+      return file_request(self, std::move(query), xs, std::move(requester));
     },
     [self](atom::internal) {
       VAST_ASSERT(self->state.session);
@@ -208,12 +212,15 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             }
             break;
           }
-          case vast::query::verb::count:
           case vast::query::verb::count_estimate: {
+            // This should be handled by the partition instead.
+            VAST_ASSERT(false);
+            break;
+          }
+          case vast::query::verb::count: {
             auto sink = caf::actor_cast<receiver_actor<uint64_t>>(request.sink);
             auto checker = expression{};
-            if (request.query.verb == query::verb::count
-                && request.query.expr != expression{}) {
+            if (request.query.expr != expression{}) {
               auto c = tailor(request.query.expr, slice->layout());
               if (!c)
                 VAST_ERROR("{} failed to tailor expression: {}", self,
@@ -233,7 +240,10 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             break;
           }
           case vast::query::verb::erase:
-            die("not implemented");
+            // This should have been handled immediately upon receiving the
+            // query.
+            VAST_ASSERT(false);
+            break;
         }
       } else {
         // We didn't get a slice from the segment store.

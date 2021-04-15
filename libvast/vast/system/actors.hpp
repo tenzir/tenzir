@@ -85,13 +85,6 @@ using receiver_actor = typename typed_actor_fwd<
   // Add a new source.
   typename caf::reacts_to<T, Ts...>>::unwrap;
 
-/// The INDEX CLIENT actor interface.
-using index_client_actor = typed_actor_fwd<
-  // Receives done from the INDEX when the query finished.
-  caf::reacts_to<atom::done>>
-  // Receives ids from the INDEX for partial query hits.
-  ::extend_with<receiver_actor<table_slice>>::unwrap;
-
 /// The STATUS CLIENT actor interface.
 using status_client_actor = typed_actor_fwd<
   // Reply to a status request from the NODE.
@@ -101,7 +94,7 @@ using status_client_actor = typed_actor_fwd<
 using store_actor = typed_actor_fwd<
   // Handles an extraction for the given expression, optionally optimized by a
   // set of ids to pre-select the events to evaluate.
-  caf::replies_to<query, ids, receiver_actor<table_slice>>::with<atom::done>,
+  caf::replies_to<query, ids, caf::weak_actor_ptr>::with<atom::done>,
   // Erase the events with the given ids.
   caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
 
@@ -114,7 +107,7 @@ using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
-  caf::replies_to<query, receiver_actor<table_slice>>::with<atom::done>>
+  caf::replies_to<query, caf::weak_actor_ptr>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -126,7 +119,7 @@ using query_map = std::vector<std::pair<uuid, partition_actor>>;
 using query_supervisor_actor = typed_actor_fwd<
   /// Reacts to a query and a set of relevant partitions by sending several
   /// `vast::ids` to the index_client_actor, followed by a final `atom::done`.
-  caf::reacts_to<query, query_map, index_client_actor>>::unwrap;
+  caf::reacts_to<query, query_map, receiver_actor<atom::done>>>::unwrap;
 
 /// The EVALUATOR actor interface.
 using evaluator_actor = typed_actor_fwd<
@@ -316,14 +309,16 @@ using exporter_actor = typed_actor_fwd<
   caf::reacts_to<atom::sink, caf::actor>,
   // Execute previously registered query.
   caf::reacts_to<atom::run>,
+  // Execute previously registered query.
+  caf::reacts_to<atom::done>,
+  // Execute previously registered query.
+  caf::reacts_to<table_slice>,
   // Register a STATISTICS SUBSCRIBER actor.
   caf::reacts_to<atom::statistics, caf::actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>
-  // Conform to the protocol of the INDEX CLIENT actor.
-  ::extend_with<index_client_actor>::unwrap;
+  ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of a COMPONENT PLUGIN actor.
 using component_plugin_actor = typed_actor_fwd<>
@@ -405,14 +400,13 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::flush_listener_actor))
   VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::index_actor))
-  VAST_ADD_TYPE_ID((vast::system::index_client_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))
   VAST_ADD_TYPE_ID((vast::system::node_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
   VAST_ADD_TYPE_ID((vast::system::query_map))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_actor))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_master_actor))
-  VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::table_slice>) )
+  VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>) )
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>) )
   VAST_ADD_TYPE_ID(

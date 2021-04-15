@@ -63,7 +63,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
     // compile time. We can improve upon this situation when changing the
     // archive to stream its results.
     self->send(archive, query{query::verb::extract, expression{}}, to_ids(*i),
-               caf::actor_cast<receiver_actor<table_slice>>(self));
+               caf::actor_cast<caf::weak_actor_ptr>(self));
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.
