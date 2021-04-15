@@ -1,6 +1,6 @@
 {
-  "name": "parsers",
-  "displayName": "parsers",
+  "name": "parsers_30m",
+  "displayName": "parsers_30m",
   "maxRunTime": "1800s",
   "fuzzTargets": [
     "cli_parser",

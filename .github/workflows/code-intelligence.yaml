@@ -7,8 +7,8 @@ on:
     branches: [ master ]
 
 env:
-  FUZZING_SERVER_ADDRESS: 'localhost:443'
-  WEB_APP_ADDRESS:  'http://localhost:6775'
+  FUZZING_SERVER_ADDRESS: vast.app.code-intelligence.com:6773
+  WEB_APP_ADDRESS:  https://vast.app.code-intelligence.com
   VAST_VERSION_TAG: 2021.03.30+ci 
   
 
@@ -21,7 +21,7 @@ jobs:
         uses: CodeIntelligenceTesting/github-actions/start-fuzzing@v3
         with:
           ci_fuzz_api_token: ${{ secrets.CI_FUZZ_API_TOKEN }}
-          test_collection: "projects/initial-fuzzing-c6e8b32e/campaigns/parse_query-20e3604d"
+          test_collection: "projects/organizations_cc54e568d0a031c8_vast-fuzzing/campaigns/parsers_30m"
           git_reference: ${{ github.sha }}
           fuzzing_server_address: ${{ env.FUZZING_SERVER_ADDRESS }}          
       - id: monitor-fuzzing
@@ -30,7 +30,7 @@ jobs:
         with:
           ci_fuzz_api_token: ${{ secrets.CI_FUZZ_API_TOKEN }}
           test_collection_run: ${{ steps.start-fuzzing.outputs.test_collection_run }}
-          github_token: ${{ github.token }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           pull_request_number: ${{ github.event.pull_request.number }}
           owner: ${{ github.event.repository.owner.login }}
           repository: ${{ github.event.repository.name }}
@@ -43,7 +43,7 @@ jobs:
         with:
           ci_fuzz_api_token: ${{ secrets.CI_FUZZ_API_TOKEN }}
           test_collection_run: ${{ steps.start-fuzzing.outputs.test_collection_run }}
-          github_token: ${{ github.token }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           pull_request_number: ${{ github.event.pull_request.number }}
           owner: ${{ github.event.repository.owner.login }}
           repository: ${{ github.event.repository.name }}
@@ -51,3 +51,5 @@ jobs:
           fuzzing_server_address: ${{ env.FUZZING_SERVER_ADDRESS }}
           dashboard_address: ${{ env.WEB_APP_ADDRESS }}
           
+
+
