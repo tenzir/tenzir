@@ -24,6 +24,9 @@
 
 struct VAST {
   caf::detail::scope_guard<void (*)()> log_context;
+  // We need to store the configuration separately, because of course the
+  // actor_system only stores it by reference. (wtf)
+  vast::system::configuration cfg;
   // TODO: We probably want an actor system similar to what is used in the
   // unit tests, that only moves when one of the API functions is called.
   caf::actor_system sys;
@@ -45,8 +48,8 @@ extern "C" VAST* vast_open(const char* endpoint) {
   new (&result->log_context)
     caf::detail::scope_guard<void (*)()>{std::move(*log_context)};
 
-  vast::system::configuration cfg;
-  new (&result->sys) caf::actor_system{cfg};
+  new (&result->cfg) vast::system::configuration{};
+  new (&result->sys) caf::actor_system{result->cfg};
 
   auto self = caf::scoped_actor{result->sys};
 
