@@ -21,6 +21,7 @@
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
+#include "vast/query.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status_verbosity.hpp"
@@ -259,7 +260,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // desired value.
       self
         ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
-                  self->state.expr)
+                  query{query::verb::extract, self->state.expr})
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
             VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} partitions",
@@ -317,7 +318,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       }
       return result;
     },
-    // -- receiver_actor<table_slice> ------------------------------------------------
+    // -- receiver_actor<table_slice>
+    // ------------------------------------------------
     [self](table_slice slice) { //
       VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
       VAST_DEBUG("{} got batch of {} events", self, slice.rows());

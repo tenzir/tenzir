@@ -11,11 +11,11 @@
 #include "vast/fwd.hpp"
 
 #include "vast/aliases.hpp"
-#include "vast/expression.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/query.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"
@@ -178,7 +178,7 @@ struct passive_partition_state {
   chunk_ptr partition_chunk;
 
   /// Stores a list of expressions that could not be answered immediately.
-  std::vector<std::tuple<expression, receiver_actor<table_slice>,
+  std::vector<std::tuple<query, receiver_actor<table_slice>,
                          caf::typed_response_promise<atom::done>>>
     deferred_evaluations;
 

@@ -10,8 +10,8 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/expression.hpp"
 #include "vast/ids.hpp"
+#include "vast/query.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
@@ -29,22 +29,14 @@ namespace vast::system {
 
 /// @relates archive
 struct archive_state {
-  enum class operation { //
-    count,
-    erase,
-    extract,
-    extract_with_ids
-  };
-
   struct request_state {
-    request_state(caf::weak_actor_ptr sink_, operation op_, expression expr_,
+    request_state(caf::weak_actor_ptr sink_, vast::query query_,
                   std::pair<ids, caf::typed_response_promise<atom::done>> ids_)
-      : sink{std::move(sink_)}, op{op_}, expr{std::move(expr_)} {
+      : sink{std::move(sink_)}, query{std::move(query_)} {
       ids_queue.push(std::move(ids_));
     }
     caf::weak_actor_ptr sink;
-    operation op;
-    expression expr;
+    vast::query query;
     std::queue<std::pair<ids, caf::typed_response_promise<atom::done>>>
       ids_queue;
     bool cancelled = false;

@@ -99,10 +99,9 @@ using status_client_actor = typed_actor_fwd<
     caf::dictionary<caf::config_value>>>::unwrap;
 
 using store_actor = typed_actor_fwd<
-  // Handles a query for the given expression, optionally optimized by a set of
-  // ids to pre-select the events to evaluate.
-  caf::replies_to<atom::extract, expression, ids, receiver_actor<table_slice>,
-                  bool>::with<atom::done>,
+  // Handles an extraction for the given expression, optionally optimized by a
+  // set of ids to pre-select the events to evaluate.
+  caf::replies_to<query, ids, receiver_actor<table_slice>>::with<atom::done>,
   // Erase the events with the given ids.
   caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
 
@@ -115,7 +114,7 @@ using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
-  caf::replies_to<expression, receiver_actor<table_slice>>::with<atom::done>>
+  caf::replies_to<query, receiver_actor<table_slice>>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -125,10 +124,9 @@ using query_map = std::vector<std::pair<uuid, partition_actor>>;
 
 /// The QUERY SUPERVISOR actor interface.
 using query_supervisor_actor = typed_actor_fwd<
-  /// Reacts to an expression and a set of relevant partitions by
-  /// sending several `vast::ids` to the index_client_actor, followed
-  /// by a final `atom::done`.
-  caf::reacts_to<expression, query_map, index_client_actor>>::unwrap;
+  /// Reacts to a query and a set of relevant partitions by sending several
+  /// `vast::ids` to the index_client_actor, followed by a final `atom::done`.
+  caf::reacts_to<query, query_map, index_client_actor>>::unwrap;
 
 /// The EVALUATOR actor interface.
 using evaluator_actor = typed_actor_fwd<
@@ -207,8 +205,8 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<accountant_actor>,
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
-  // Evaluatates an expression.
-  caf::reacts_to<expression>,
+  // Evaluatates an query.
+  caf::reacts_to<query>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
   // Erases the given events from the INDEX, and returns their ids.

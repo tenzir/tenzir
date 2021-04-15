@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 
@@ -30,8 +29,8 @@ query_processor::query_processor(caf::event_based_actor* self)
   self->set_default_handler(caf::skip);
   behaviors_[idle].assign(
     // Our default init state simply waits for a query to execute.
-    [=](expression& expr, const index_actor& index) {
-      start(std::move(expr), index);
+    [=](vast::query& query, const index_actor& index) {
+      start(std::move(query), index);
     });
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
@@ -63,9 +62,9 @@ query_processor::~query_processor() {
 
 // -- convenience functions ----------------------------------------------------
 
-void query_processor::start(expression expr, index_actor index) {
+void query_processor::start(vast::query query, index_actor index) {
   index_ = std::move(index);
-  self_->send(index_, std::move(expr));
+  self_->send(index_, std::move(query));
   transition_to(await_query_id);
 }
 

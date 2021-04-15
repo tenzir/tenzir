@@ -73,7 +73,7 @@ std::unique_ptr<segment_store::lookup> next_session(archive_state& state) {
 }
 
 auto file_request(archive_actor::stateful_pointer<archive_state> self,
-                  archive_state::operation op, expression expr, const ids& xs,
+                  vast::query query, const ids& xs,
                   caf::weak_actor_ptr requester) {
   auto rp = self->make_response_promise<atom::done>();
   auto it = std::find_if(self->state.requests.begin(),
@@ -81,8 +81,8 @@ auto file_request(archive_actor::stateful_pointer<archive_state> self,
                            return request.sink == requester;
                          });
   if (it != self->state.requests.end()) {
-    VAST_ASSERT(expr == it->expr);
-    VAST_ASSERT(op == it->op);
+    VAST_ASSERT(query.expr == it->query.expr);
+    VAST_ASSERT(query.verb == it->query.verb);
     // Down messages are sent with high prio.
     // TODO: What if the request is already cleaned up after a down, but we
     // get new ids from the same requester later because of the normal
@@ -94,7 +94,7 @@ auto file_request(archive_actor::stateful_pointer<archive_state> self,
     }
   } else {
     self->monitor(requester);
-    self->state.requests.emplace_back(requester, op, std::move(expr),
+    self->state.requests.emplace_back(requester, std::move(query),
                                       std::make_pair(xs, rp));
   }
   if (!self->state.session) {
@@ -137,14 +137,12 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       it->cancelled = true;
   });
   return {
-    [self](atom::extract, expression expr, const ids& xs,
-           receiver_actor<table_slice> requester,
-           bool preserve_ids) -> caf::result<atom::done> {
-      VAST_DEBUG("{} got extract with the query {} and {} hints [{},  {})",
-                 self, expr, rank(xs), select(xs, 1), select(xs, -1) + 1);
-      auto op = preserve_ids ? archive_state::operation::extract_with_ids
-                             : archive_state::operation::extract;
-      return file_request(self, op, std::move(expr), xs,
+    [self](vast::query query, const ids& xs,
+           receiver_actor<table_slice> requester) -> caf::result<atom::done> {
+      VAST_DEBUG("{} got extract request with the query {}"
+                 " and {} hints [{},  {})",
+                 self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
+      return file_request(self, std::move(query), xs,
                           caf::actor_cast<caf::weak_actor_ptr>(requester));
     },
     [self](atom::internal) {
@@ -160,16 +158,16 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       };
       auto slice = self->state.session->next();
       if (slice) {
-        switch (request.op) {
-          case archive_state::operation::extract: {
+        switch (request.query.verb) {
+          case vast::query::verb::extract: {
             auto sink
               = caf::actor_cast<receiver_actor<table_slice>>(request.sink);
-            if (request.expr == expression{}) {
+            if (request.query.expr == expression{}) {
               auto final_slice = filter(*slice, self->state.session_ids);
               if (final_slice)
                 self->send(sink, *final_slice);
             } else {
-              auto checker = tailor(request.expr, slice->layout());
+              auto checker = tailor(request.query.expr, slice->layout());
               if (!checker) {
                 VAST_ERROR("{} failed to tailor expression: {}", self,
                            checker.error());
@@ -184,18 +182,15 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             }
             break;
           }
-          case archive_state::operation::extract_with_ids: {
+          case vast::query::verb::extract_with_ids: {
             auto sink
               = caf::actor_cast<receiver_actor<table_slice>>(request.sink);
-            for (auto& sub_slice : select(*slice, self->state.session_ids)) {
-              self->send(sink, sub_slice /*, self->state.partition_offset*/);
-            }
-            if (request.expr == expression{}) {
+            if (request.query.expr == expression{}) {
               for (auto& sub_slice : select(*slice, self->state.session_ids)) {
                 self->send(sink, sub_slice /*, self->state.partition_offset*/);
               }
             } else {
-              auto checker = tailor(request.expr, slice->layout());
+              auto checker = tailor(request.query.expr, slice->layout());
               if (!checker) {
                 VAST_ERROR("{} failed to tailor expression: {}", self,
                            checker.error());
@@ -213,8 +208,31 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             }
             break;
           }
-          case archive_state::operation::count:
-          case archive_state::operation::erase:
+          case vast::query::verb::count:
+          case vast::query::verb::count_estimate: {
+            auto sink = caf::actor_cast<receiver_actor<uint64_t>>(request.sink);
+            auto checker = expression{};
+            if (request.query.verb == query::verb::count
+                && request.query.expr != expression{}) {
+              auto c = tailor(request.query.expr, slice->layout());
+              if (!c)
+                VAST_ERROR("{} failed to tailor expression: {}", self,
+                           c.error());
+              else
+                checker = std::move(*c);
+            }
+            // TODO: Remove meta predicates (They don't contain false
+            // positives).
+            // TODO: Add a count function on table slices to avoid going through
+            // a bulider.
+            auto final_slice = filter(*slice, checker, self->state.session_ids);
+            uint64_t result = 0;
+            if (final_slice)
+              result = final_slice->rows();
+            self->send(sink, result);
+            break;
+          }
+          case vast::query::verb::erase:
             die("not implemented");
         }
       } else {

@@ -729,10 +729,10 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
       VAST_DEBUG("{} adds flush listener", self);
       self->state.add_flush_listener(std::move(listener));
     },
-    [self](vast::expression expr) -> caf::result<void> {
+    [self](vast::query query) -> caf::result<void> {
       if (!self->state.accept_queries) {
         VAST_VERBOSE("{} delays query {} because it is still starting up", self,
-                     expr);
+                     query);
         return caf::skip;
       }
       // TODO: This check is not required technically, but we use the query
@@ -770,7 +770,7 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
         candidates.push_back(id);
       auto rp = self->make_response_promise<void>();
       // Get all potentially matching partitions.
-      self->request(self->state.meta_index, caf::infinite, expr)
+      self->request(self->state.meta_index, caf::infinite, query.expr)
         .then(
           [=, candidates = std::move(candidates)](
             std::vector<uuid> midx_candidates) mutable {
@@ -801,7 +801,7 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
             auto total = candidates.size();
             auto scheduled = detail::narrow<uint32_t>(
               std::min(candidates.size(), self->state.taste_partitions));
-            auto lookup = query_state{query_id, expr, std::move(candidates)};
+            auto lookup = query_state{query_id, query, std::move(candidates)};
             auto result
               = self->state.pending.emplace(query_id, std::move(lookup));
             VAST_ASSERT(result.second);
@@ -848,7 +848,7 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
       VAST_DEBUG("{} schedules {} more partition(s) for query id {}"
                  "with {} partitions remaining",
                  self, actors.size(), query_id, query_state.partitions.size());
-      self->send(*worker, query_state.expression, std::move(actors), client);
+      self->send(*worker, query_state.query, std::move(actors), client);
       // Cleanup if we exhausted all candidates.
       if (query_state.partitions.empty())
         self->state.pending.erase(iter);

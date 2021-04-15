@@ -10,6 +10,7 @@
 
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/logger.hpp"
+#include "vast/query.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/event_based_actor.hpp>
@@ -28,7 +29,7 @@ void counter_state::init(expression expr, index_actor index,
   // Transition from idle state when receiving 'run' and client handle.
   behaviors_[idle].assign([=](atom::run, caf::actor client) {
     client_ = std::move(client);
-    start(expr_, index);
+    start(vast::query{query::verb::count, expr_}, index);
     // Stop immediately when losing the client.
     self_->monitor(client_);
     self_->set_down_handler([this](caf::down_msg& dm) {
@@ -76,8 +77,9 @@ void counter_state::process_hits(const ids& hits) {
     hits_ |= hits;
     // TODO: Change caf::actor_cast to static_cast once the COUNTER is a typed
     // actor.
-    self_->send(archive_, atom::extract_v, expr_, std::move(hits),
-                caf::actor_cast<receiver_actor<table_slice>>(self_), false);
+    // TODO: Refactor.
+    // self_->send(archive_, atom::extract_v, expr_, std::move(hits),
+    //            caf::actor_cast<receiver_actor<table_slice>>(self_), false);
     // Block the FSM from advancing until we got all slices from the ARCHIVE.
     if (++pending_archive_requests_ == 1)
       block_end_of_hits(true);

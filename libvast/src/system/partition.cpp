@@ -21,7 +21,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/settings.hpp"
-#include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
@@ -628,21 +627,21 @@ active_partition_actor::behavior_type active_partition(
             });
       }
     },
-    [self](expression expr,
+    [self](vast::query query,
            receiver_actor<table_slice> client) -> caf::result<atom::done> {
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
-      auto triples = evaluate(self->state, expr);
+      auto triples = evaluate(self->state, query.expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
+      auto eval = self->spawn(evaluator, query.expr, triples);
       auto rp = self->make_response_promise<atom::done>();
       self->request(eval, caf::infinite, atom::run_v)
         .then(
-          [self, client, rp, expr = std::move(expr)](const ids& hits) mutable {
-            rp.delegate(self->state.store, atom::extract_v, std::move(expr),
-                        hits, static_cast<receiver_actor<table_slice>>(client),
-                        false);
+          [self, client, rp,
+           query = std::move(query)](const ids& hits) mutable {
+            rp.delegate(self->state.store, std::move(query), hits,
+                        static_cast<receiver_actor<table_slice>>(client));
           },
           [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
       return rp;
@@ -805,12 +804,12 @@ partition_actor::behavior_type passive_partition(
         self->quit(std::move(err));
       });
   return {
-    [self](expression expr,
+    [self](vast::query query,
            receiver_actor<table_slice> client) -> caf::result<atom::done> {
-      VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
+      VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(query));
       if (!self->state.partition_chunk)
         return std::get<2>(self->state.deferred_evaluations.emplace_back(
-          std::move(expr), client, self->make_response_promise<atom::done>()));
+          std::move(query), client, self->make_response_promise<atom::done>()));
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       VAST_ASSERT(self->state.deferred_evaluations.empty());
@@ -820,17 +819,17 @@ partition_actor::behavior_type passive_partition(
       if (self->state.indexers.empty())
         return caf::make_error(ec::system_error, "can not handle query because "
                                                  "shutdown was requested");
-      auto triples = evaluate(self->state, expr);
+      auto triples = evaluate(self->state, query.expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
+      auto eval = self->spawn(evaluator, query.expr, triples);
       auto rp = self->make_response_promise<atom::done>();
       self->request(eval, caf::infinite, atom::run_v)
         .then(
-          [self, client, rp, expr = std::move(expr)](const ids& hits) mutable {
-            rp.delegate(self->state.store, atom::extract_v, std::move(expr),
-                        hits, static_cast<receiver_actor<table_slice>>(client),
-                        false);
+          [self, client, rp,
+           query = std::move(query)](const ids& hits) mutable {
+            rp.delegate(self->state.store, std::move(query), hits,
+                        static_cast<receiver_actor<table_slice>>(client));
           },
           [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
       return rp;

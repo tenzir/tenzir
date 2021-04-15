@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/query.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/uuid.hpp"
 
@@ -90,7 +91,7 @@ public:
   /// Sends the query `expr` to `index` and transitions from `idle` to
   /// `await_query_id`.
   /// @pre `state() == idle`
-  void start(expression expr, index_actor index);
+  void start(vast::query query, index_actor index);
 
   /// @pre `state() == collect_hits`
   /// @pre `n > 0`

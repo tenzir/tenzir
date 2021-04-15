@@ -12,8 +12,8 @@
 
 #include "vast/detail/lru_cache.hpp"
 #include "vast/detail/stable_map.hpp"
-#include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
+#include "vast/query.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/meta_index.hpp"
@@ -97,14 +97,14 @@ struct query_state {
   vast::uuid id;
 
   /// The query expression.
-  vast::expression expression;
+  vast::query query;
 
   /// Unscheduled partitions.
   std::vector<uuid> partitions;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.id, x.expression,
+    return f(caf::meta::type_name("query_state"), x.id, x.query,
              caf::meta::omittable_if_empty(), x.partitions);
   }
 };
