@@ -1,5 +1,5 @@
 {
-  "name": "API_fuzz_test-15b58e57",
+  "name": "cli_parser",
   "displayName": "cli_parser",
   "buildFlags": [
     "-Ibuild/libvast/aux/caf/libcaf_core",

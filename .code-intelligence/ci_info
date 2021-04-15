@@ -1,5 +1,5 @@
 {
-  "name": "projects/initial-fuzzing-c6e8b32e",
+  "name": "projects/vast-fuzzing",
   "displayName": "vast-fuzzing",
   "buildScriptContent": "./configure \\\n--build-type=Debug \\\n--log-level=INFO \\\n--generator=Ninja\ncmake --build build",
   "details": {
