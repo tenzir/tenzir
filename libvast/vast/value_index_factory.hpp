@@ -8,8 +8,10 @@
 
 #pragma once
 
-#include "vast/factory.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/factory.hpp"
+#include "vast/value_index.hpp"
 
 #include <caf/fwd.hpp>
 

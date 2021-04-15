@@ -9,6 +9,9 @@
 #include "vast/test/data.hpp"
 #include "vast/test/test.hpp"
 
+#include "vast/data.hpp"
+#include "vast/plugin.hpp"
+
 #include <caf/message_builder.hpp>
 #include <caf/test/unit_test.hpp>
 
@@ -81,6 +84,8 @@ int main(int argc, char** argv) {
     }
     vast::test::config = std::move(res.opts);
   }
+  for (auto& plugin : vast::plugins::get())
+    plugin->initialize({});
   // Run the unit tests.
   return caf::test::main(argc, argv);
 }

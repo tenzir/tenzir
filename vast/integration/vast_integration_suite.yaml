@@ -268,42 +268,12 @@ tests:
       - command: -N export ascii 'State != "CON" && Dur > 4900ms'
       - command: -N export ascii 'Cause == "Status" && Dur > 1s'
 
-  Manual 1:
-    condition: version | jq -e '."PCAP"'
-    tags: [examples]
-    fixture: ServerTester
-    steps:
-      - command: import -b pcap
-        input: data/pcap/example.pcap.gz
-      - command: export ascii ':addr in 192.168.168.0/24'
-      - command: export pcap 'sport > 60000 && src !in 192.168.168.0/8'
-
-  Manual 1 node:
-    condition: version | jq -e '."PCAP"'
-    tags: [examples]
-    steps:
-      - command: -N import pcap
-        input: data/pcap/example.pcap.gz
-      - command: -N export ascii ':addr in 192.168.168.0/24'
-      - command: -N export pcap 'sport > 60000 && src !in 192.168.168.0/8'
-      - command: -N status --detailed
-        transformation: jq '.index.statistics | del(."meta-index-bytes")'
-
   Manual 2:
     tags: [examples, disabled]
     fixture: BiTopologyTester
     steps:
       - command: peer 'localhost:42124'
       - command: status
-
-  Importing VLAN traffic:
-    condition: version | jq -e '."PCAP"'
-    tags: [import, pcap]
-    steps:
-      - command: -N import pcap
-        input: data/pcap/vlan.pcap.gz
-      - command: -N status --detailed
-        transformation: jq '.index.statistics | del(."meta-index-bytes")'
 
   Multi addr query:
     tags: [import-export, zeek]
@@ -318,9 +288,9 @@ tests:
     fixture: ServerTester
     steps:
       - command: import -b zeek
-        input: data/pcap/zeek/conn.log.gz
+        input: data/zeek/pcap-conn.log.gz
       - command: import -b suricata
-        input: data/pcap/suricata/eve.json.gz
+        input: data/suricata/pcap-eve.json.gz
       - command: count "net.src.ip == 192.168.168.100"
       - command: count "net.connection == <192.168.168.100, _, 72.247.178.18, _, _>"
       # We omit the whitespace after the colon on purpose, otherwise pyyaml
@@ -337,31 +307,6 @@ tests:
     steps:
       - command: dump concepts
       - command: dump --yaml models
-
-  Pivot:
-    tags: [pivot]
-    steps:
-      - command: -N import suricata
-        input: data/pcap/suricata/eve.json.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/conn.log.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/files.log.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/http.log.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/packet_filter.log.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/ssh.log.gz
-      - command: -N pivot --format=zeek zeek.conn '#type ~ /suricata.*/ && dest_ip == 72.247.178.18'
-        transformation: awk '!/^#(open|close)/'
-      - command: -N pivot zeek.conn '#type ~ /zeek.http/ && method == "GET"'
-        transformation: awk '!/^#(open|close)/'
-      - guard: version | jq -e '."PCAP"'
-      - command: -N import pcap
-        input: data/pcap/example.pcap.gz
-      - command: -N pivot --format=pcap pcap.packet 'dest_ip == 72.247.178.18'
-        transformation: tcpdump -n -tt -r -
   Arrow:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]

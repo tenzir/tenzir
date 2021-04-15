@@ -19,10 +19,7 @@
 #include "vast/format/syslog.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
-
-#if VAST_ENABLE_PCAP
-#  include "vast/format/pcap.hpp"
-#endif
+#include "vast/plugin.hpp"
 
 #if VAST_ENABLE_ARROW
 #  include "vast/format/arrow.hpp"
@@ -63,9 +60,30 @@ void factory_traits<format::reader>::initialize() {
   fac::add("zeek", make_reader<zeek::reader>);
   fac::add("zeek-json",
            make_reader<format::json::reader<format::json::zeek_selector>>);
-#if VAST_ENABLE_PCAP
-  fac::add("pcap", make_reader<pcap::reader>);
-#endif
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* reader = plugin.as<reader_plugin>()) {
+      fac::add(
+        reader->reader_format(),
+        [name = std::string{plugin->name()}](const caf::settings& options)
+          -> caf::expected<std::unique_ptr<format::reader>> {
+          for (const auto& plugin : plugins::get()) {
+            if (plugin->name() != name)
+              continue;
+            const auto* reader = plugin.as<reader_plugin>();
+            VAST_ASSERT(reader);
+            auto in = detail::make_input_stream(options);
+            if (!in)
+              return in.error();
+            return reader->make_reader(options, std::move(*in));
+          }
+          return caf::make_error(ec::logic_error,
+                                 fmt::format("reader plugin {} was used to "
+                                             "initialize factory but unloaded "
+                                             "at a later point in time",
+                                             name));
+        });
+    }
+  }
 }
 
 } // namespace vast

@@ -163,6 +163,60 @@ public:
   make_command() const = 0;
 };
 
+// -- reader plugin -----------------------------------------------------------
+
+/// A base class for plugins that add import formats.
+/// @relates plugin
+class reader_plugin : public virtual plugin {
+public:
+  /// Returns the import format's name.
+  [[nodiscard]] virtual const char* reader_format() const = 0;
+
+  /// Returns the `vast import <format>` helptext.
+  [[nodiscard]] virtual const char* reader_help() const = 0;
+
+  /// Returns the `vast import <format>` documentation.
+  [[nodiscard]] virtual const char* reader_documentation() const = 0;
+
+  /// Returns the options for the `vast import <format>` and `vast spawn source
+  /// <format>` commands.
+  [[nodiscard]] virtual caf::config_option_set
+  reader_options(command::opts_builder&& opts) const = 0;
+
+  /// Creates a reader, which will be available via `vast import <format>` and
+  /// `vast spawn source <format>`.
+  [[nodiscard]] virtual std::unique_ptr<format::reader>
+  make_reader(const caf::settings& options,
+              std::unique_ptr<std::istream> in) const = 0;
+};
+
+// -- writer plugin -----------------------------------------------------------
+
+/// A base class for plugins that add export formats.
+/// @relates plugin
+class writer_plugin : public virtual plugin {
+public:
+  /// Returns the export format's name.
+  [[nodiscard]] virtual const char* writer_format() const = 0;
+
+  /// Returns the `vast export <format>` helptext.
+  [[nodiscard]] virtual const char* writer_help() const = 0;
+
+  /// Returns the `vast export <format>` documentation.
+  [[nodiscard]] virtual const char* writer_documentation() const = 0;
+
+  /// Returns the options for the `vast export <format>` and `vast spawn sink
+  /// <format>` commands.
+  [[nodiscard]] virtual caf::config_option_set
+  writer_options(command::opts_builder&& opts) const = 0;
+
+  /// Creates a reader, which will be available via `vast export <format>` and
+  /// `vast spawn sink <format>`.
+  [[nodiscard]] virtual std::unique_ptr<format::writer>
+  make_writer(const caf::settings& options,
+              std::unique_ptr<std::ostream> out) const = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
@@ -313,6 +367,7 @@ private:
       return new (name);                                                       \
     }                                                                          \
     extern "C" void vast_plugin_destroy(class ::vast::plugin* plugin) {        \
+      /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       delete plugin;                                                           \
     }                                                                          \
     extern "C" struct ::vast::plugin_version vast_plugin_version() {           \

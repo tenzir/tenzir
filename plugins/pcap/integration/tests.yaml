@@ -1,0 +1,65 @@
+config-file: vast.yaml
+
+fixtures:
+  ServerTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=self.config_file)
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
+tests:
+  Importing VLAN traffic:
+    tags: [import, pcap]
+    steps:
+      - command: -N import pcap
+        input: data/pcap/vlan.pcap.gz
+      - command: -N status --detailed
+        transformation: jq '.index.statistics | del(."meta-index-bytes")'
+
+  Manual 1:
+    tags: [examples]
+    fixture: ServerTester
+    steps:
+      - command: import -b pcap
+        input: data/pcap/example.pcap.gz
+      - command: export ascii ':addr in 192.168.168.0/24'
+      - command: export pcap 'sport > 60000 && src !in 192.168.168.0/8'
+
+  Manual 1 node:
+    tags: [examples]
+    steps:
+      - command: -N import pcap
+        input: data/pcap/example.pcap.gz
+      - command: -N export ascii ':addr in 192.168.168.0/24'
+      - command: -N export pcap 'sport > 60000 && src !in 192.168.168.0/8'
+      - command: -N status --detailed
+        transformation: jq '.index.statistics | del(."meta-index-bytes")'
+
+  Pivot:
+    tags: [pivot]
+    steps:
+      - command: -N import suricata
+        input: data/pcap/suricata/eve.json.gz
+      - command: -N import zeek
+        input: data/pcap/zeek/conn.log.gz
+      - command: -N import zeek
+        input: data/pcap/zeek/files.log.gz
+      - command: -N import zeek
+        input: data/pcap/zeek/http.log.gz
+      - command: -N import zeek
+        input: data/pcap/zeek/packet_filter.log.gz
+      - command: -N import zeek
+        input: data/pcap/zeek/ssh.log.gz
+      - command: -N pivot --format=zeek zeek.conn '#type ~ /suricata.*/ && dest_ip == 72.247.178.18'
+        transformation: awk '!/^#(open|close)/'
+      - command: -N pivot zeek.conn '#type ~ /zeek.http/ && method == "GET"'
+        transformation: awk '!/^#(open|close)/'
+      - command: -N import pcap
+        input: data/pcap/example.pcap.gz
+      - command: -N pivot --format=pcap pcap.packet 'dest_ip == 72.247.178.18'
+        transformation: tcpdump -n -tt -r -

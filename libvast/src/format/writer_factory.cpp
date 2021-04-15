@@ -16,10 +16,7 @@
 #include "vast/format/null.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/format/zeek.hpp"
-
-#if VAST_ENABLE_PCAP
-#  include "vast/format/pcap.hpp"
-#endif
+#include "vast/plugin.hpp"
 
 #if VAST_ENABLE_ARROW
 #  include "vast/format/arrow.hpp"
@@ -50,12 +47,33 @@ void factory_traits<format::writer>::initialize() {
   fac::add("json", make_writer<format::json::writer>);
   fac::add("null", make_writer<null::writer>);
   fac::add("zeek", make_writer<zeek::writer>);
-#if VAST_ENABLE_PCAP
-  fac::add("pcap", make_writer<pcap::writer>);
-#endif
 #if VAST_ENABLE_ARROW
   fac::add("arrow", make_writer<arrow::writer>);
 #endif
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* reader = plugin.as<writer_plugin>()) {
+      fac::add(
+        reader->writer_format(),
+        [name = std::string{plugin->name()}](const caf::settings& options)
+          -> caf::expected<std::unique_ptr<format::writer>> {
+          for (const auto& plugin : plugins::get()) {
+            if (plugin->name() != name)
+              continue;
+            const auto* writer = plugin.as<writer_plugin>();
+            VAST_ASSERT(writer);
+            auto out = detail::make_output_stream(options);
+            if (!out)
+              return out.error();
+            return writer->make_writer(options, std::move(*out));
+          }
+          return caf::make_error(ec::logic_error,
+                                 fmt::format("writer plugin {} was used to "
+                                             "initialize factory but unloaded "
+                                             "at a later point in time",
+                                             name));
+        });
+    }
+  }
 }
 
 } // namespace vast

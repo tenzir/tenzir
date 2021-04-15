@@ -144,8 +144,6 @@ if (VAST_ENABLE_PLUGIN_AUTOLOADING AND bundled_plugins)
   list(TRANSFORM bundled_plugins PREPEND "\"")
   list(TRANSFORM bundled_plugins APPEND "\"")
   list(JOIN bundled_plugins ", " joined_bundled_plugins)
-  message(WARNING "bundled plugins: ${bundled_plugins}")
-  message(WARNING "joined bundled plugins: ${joined_bundled_plugins}")
   target_compile_definitions(
     vast PRIVATE "VAST_ENABLED_PLUGINS=${joined_bundled_plugins}")
 endif ()

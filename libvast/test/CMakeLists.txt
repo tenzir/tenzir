@@ -20,10 +20,6 @@ if (VAST_ENABLE_ARROW)
   target_link_libraries(vast-test PRIVATE ${ARROW_LIBRARY})
 endif ()
 
-if (VAST_ENABLE_PCAP)
-  target_link_libraries(vast-test PRIVATE pcap::pcap)
-endif ()
-
 add_test(NAME build-vast-test
          COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                  "$<CONFIG>" --target vast-test)

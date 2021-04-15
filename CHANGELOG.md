@@ -13,6 +13,22 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚡️ Plugins must define a separate entrypoint in their build scaffolding using
+  the argument `ENTRYPOINT` to the CMake function `VASTRegisterPlugin`. If only
+  a single value is given to the argument `SOURCES`, it is interpreted as the
+  `ENTRYPOINT` automatically.
+  [#1549](https://github.com/tenzir/vast/pull/1549)
+
+- 🐞 Plugin unit tests now correctly load and initialize their respective
+  plugins.
+  [#1549](https://github.com/tenzir/vast/pull/1549)
+
+- 🎁 *Reader Plugins* and *Writer Plugins* are a new family of plugins that add
+  import/export formats. The previously optional PCAP format moved into a
+  dedicated plugin. Configure with `--with-pcap-plugin` and add `pcap` to
+  `vast.plugins` to enable the PCAP plugin.
+  [#1549](https://github.com/tenzir/vast/pull/1549)
+
 - 🎁 *Component Plugins* are a new category of plugins that execute code within
   the VAST server process. *Analyzer Plugins* are now a specialization of
   *Component Plugins*, and their API remains unchanged.

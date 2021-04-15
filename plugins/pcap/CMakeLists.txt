@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.14...3.20 FATAL_ERROR)
 
-project(example
-  DESCRIPTION "Example plugin for VAST"
+project(pcap
+  DESCRIPTION "PCAP plugin for VAST"
   LANGUAGES CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the
@@ -16,10 +16,14 @@ if (NOT COMMAND VASTRegisterPlugin)
 endif ()
 
 VASTRegisterPlugin(
-  TARGET example
-  ENTRYPOINT
-    example.cpp
-  # SOURCES
-  #   list additional source files here
+  TARGET pcap
+  ENTRYPOINT main.cpp
   TEST_SOURCES
-    tests/example.cpp)
+    tests.cpp)
+
+# Adjust the CMake Module Path to pick up our custom FindPCAP.cmake script.
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+# Link pcap plugin against libpcap.
+find_package(PCAP REQUIRED)
+target_link_libraries(pcap PUBLIC pcap::pcap)

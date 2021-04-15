@@ -53,6 +53,8 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   if (!query)
     return caf::make_message(std::move(query.error()));
   // Transform expression if needed, e.g., for PCAP sink.
+  // TODO: Can we remove this special-casing, or move it to the PCAP plugin
+  // somehow?
   if (inv.name() == "pcap") {
     VAST_DEBUG("{} restricts expression to PCAP packets",
                detail::pretty_type_name(inv.full_name));

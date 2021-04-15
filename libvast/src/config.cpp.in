@@ -11,6 +11,10 @@
 namespace vast::version {
 
 const char* version = "@VAST_VERSION_TAG@";
+unsigned short major = @VAST_VERSION_MAJOR@;
+unsigned short minor = @VAST_VERSION_MINOR@;
+unsigned short patch = @VAST_VERSION_PATCH@;
+unsigned short tweak = @VAST_VERSION_TWEAK@;
 const char* build_tree_hash = "@VAST_BUILD_TREE_HASH@";
 
 } // namespace vast

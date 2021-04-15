@@ -428,6 +428,7 @@ jobs:
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
             --with-example-plugin \
+            --with-pcap-plugin \
             --with-lsvast \
             --with-dscat \
             --with-bundled-caf \

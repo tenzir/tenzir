@@ -78,32 +78,6 @@ struct test {
   static size_t seed(const caf::settings& options);
 };
 
-/// Contains settings for the pcap subcommand.
-struct pcap {
-  /// Number of bytes to keep per event.
-  static constexpr size_t cutoff = std::numeric_limits<size_t>::max();
-
-  /// Number of concurrent flows to track.
-  static constexpr size_t max_flows = 1'048'576; // 1_Mi
-
-  /// Maximum flow lifetime before eviction.
-  static constexpr size_t max_flow_age = 60;
-
-  /// Flow table expiration interval.
-  static constexpr size_t flow_expiry = 10;
-
-  /// Inverse factor by which to delay packets. For example, if 5, then for two
-  /// packets spaced *t* seconds apart, the source will sleep for *t/5* seconds.
-  static constexpr int64_t pseudo_realtime_factor = 0;
-
-  /// If the snapshot length is set to snaplen, and snaplen is less than the
-  /// size of a packet that is captured, only the first snaplen bytes of that
-  /// packet will be captured and provided as packet data. A snapshot length
-  /// of 65535 should be sufficient, on most if not all networks, to capture all
-  /// the data available from the packet.
-  static constexpr size_t snaplen = 65535;
-};
-
 } // namespace import
 
 // -- constants for the explore command and its subcommands --------------------
@@ -147,12 +121,6 @@ struct csv {
 
   // TODO: agree on reasonable values
   static constexpr std::string_view set_separator = " | ";
-};
-
-/// Contains settings for the pcap subcommand.
-struct pcap {
-  /// Flush to disk after that many packets.
-  static constexpr size_t flush_interval = 10'000;
 };
 
 } // namespace export_

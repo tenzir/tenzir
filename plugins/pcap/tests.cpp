@@ -3,30 +3,29 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE format
+#define SUITE pcap_reader
 
+#include "vast/test/data.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/config.hpp"
+#include "vast/defaults.hpp"
+#include "vast/error.hpp"
+#include "vast/format/reader_factory.hpp"
+#include "vast/format/writer_factory.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_column.hpp"
 
-#if VAST_ENABLE_PCAP
+#include <filesystem>
 
-#  include "vast/test/data.hpp"
-#  include "vast/test/fixtures/actor_system.hpp"
-#  include "vast/test/test.hpp"
-
-#  include "vast/concept/parseable/to.hpp"
-#  include "vast/concept/parseable/vast/address.hpp"
-#  include "vast/defaults.hpp"
-#  include "vast/error.hpp"
-#  include "vast/format/pcap.hpp"
-#  include "vast/table_slice.hpp"
-#  include "vast/table_slice_column.hpp"
-
-#  include <filesystem>
-
-using namespace vast;
+namespace vast::plugins::pcap_reader {
 
 namespace {
 
@@ -57,15 +56,23 @@ std::string_view community_ids[] = {
   "1:zjGM746aZkpYb2mVIlsgLrUG59k=", "1:zjGM746aZkpYb2mVIlsgLrUG59k=",
 };
 
+struct fixture {
+  fixture() {
+    factory<format::reader>::initialize();
+    factory<format::writer>::initialize();
+    factory<table_slice_builder>::initialize();
+  }
+};
+
 } // namespace
 
 // Technically, we don't need the actor system. However, we do need to
 // initialize the table slice builder factories which happens automatically in
 // the actor system setup. Further, including this fixture gives us access to
 // log files to hunt down bugs faster.
-FIXTURE_SCOPE(pcap_tests, fixtures::deterministic_actor_system)
+FIXTURE_SCOPE(pcap_reader_tests, fixture)
 
-TEST(PCAP read/write 1) {
+TEST(PCAP read 1) {
   // Initialize a PCAP source with no cutoff (-1), and at most 5 flow table
   // entries.
   caf::settings settings;
@@ -75,7 +82,8 @@ TEST(PCAP read/write 1) {
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
   caf::put(settings, "vast.import.batch-timeout", "0s");
-  format::pcap::reader reader{std::move(settings)};
+  auto reader = format::reader::make("pcap", settings);
+  REQUIRE(reader);
   size_t events_produced = 0;
   table_slice slice;
   auto add_slice = [&](const table_slice& x) {
@@ -84,9 +92,9 @@ TEST(PCAP read/write 1) {
     slice = x;
     events_produced = x.rows();
   };
-  auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
-                                     100, // we expect only 44 events
-                                     add_slice);
+  auto [err, produced] = reader->get()->read(std::numeric_limits<size_t>::max(),
+                                             100, // we expect only 44 events
+                                             add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(events_produced, 44u);
   auto&& layout = slice.layout();
@@ -99,15 +107,16 @@ TEST(PCAP read/write 1) {
   for (size_t row = 0; row < 44; ++row)
     CHECK_VARIANT_EQUAL((*community_id_column)[row], community_ids[row]);
   MESSAGE("write out read packets");
-  auto file = "vast-unit-test-nmap-vsn.pcap";
-  caf::put(settings, "vast.export.write", file);
-  format::pcap::writer writer{settings};
-  auto deleter = caf::detail::make_scope_guard(
-    [&] { std::filesystem::remove_all(std::filesystem::path{file}); });
-  REQUIRE_EQUAL(writer.write(slice), caf::none);
+  const auto file = std::filesystem::path{"vast-unit-test-nmap-vsn.pacp"};
+  caf::put(settings, "vast.export.write", file.string());
+  auto writer = format::writer::make("pcap", settings);
+  REQUIRE(writer);
+  auto deleter
+    = caf::detail::make_scope_guard([&] { std::filesystem::remove_all(file); });
+  REQUIRE_EQUAL(writer->get()->write(slice), caf::none);
 }
 
-TEST(PCAP read/write 2) {
+TEST(PCAP read 2) {
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   caf::settings settings;
@@ -119,15 +128,16 @@ TEST(PCAP read/write 2) {
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
   caf::put(settings, "vast.import.batch-timeout", "0s");
-  format::pcap::reader reader{std::move(settings)};
+  auto reader = format::reader::make("pcap", settings);
+  REQUIRE(reader);
   table_slice slice{};
   auto add_slice = [&](const table_slice& x) {
     REQUIRE_EQUAL(slice.encoding(), table_slice_encoding::none);
     slice = x;
   };
-  auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
-                                     100, // we expect only 36 events
-                                     add_slice);
+  auto [err, produced] = reader->get()->read(std::numeric_limits<size_t>::max(),
+                                             100, // we expect only 36 events
+                                             add_slice);
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(produced, 36u);
@@ -135,14 +145,16 @@ TEST(PCAP read/write 2) {
   auto&& layout = slice.layout();
   CHECK_EQUAL(layout.name(), "pcap.packet");
   MESSAGE("write out read packets");
-  auto file = "vast-unit-test-workshop-2011-browse.pcap";
-  caf::put(settings, "vast.export.write", file);
-  format::pcap::writer writer{settings};
-  auto deleter = caf::detail::make_scope_guard(
-    [&] { std::filesystem::remove_all(std::filesystem::path{file}); });
-  REQUIRE_EQUAL(writer.write(slice), caf::none);
+  const auto file
+    = std::filesystem::path{"vast-unit-test-workshop-2011-browse.pcap"};
+  caf::put(settings, "vast.export.write", file.string());
+  auto writer = format::writer::make("pcap", settings);
+  REQUIRE(writer);
+  auto deleter
+    = caf::detail::make_scope_guard([&] { std::filesystem::remove_all(file); });
+  REQUIRE_EQUAL(writer->get()->write(slice), caf::none);
 }
 
 FIXTURE_SCOPE_END()
 
-#endif // VAST_ENABLE_PCAP
+} // namespace vast::plugins::pcap_reader
