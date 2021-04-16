@@ -98,7 +98,9 @@ function (VASTRegisterPlugin)
             DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins")
 
     # Ensure that VAST only runs after all pluigns are built.
-    add_dependencies(vast ${PLUGIN_TARGET}-shared)
+    if (TARGET vast)
+      add_dependencies(vast ${PLUGIN_TARGET}-shared)
+    endif ()
   endif ()
 
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
