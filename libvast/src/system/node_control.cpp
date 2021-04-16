@@ -17,11 +17,13 @@
 namespace vast::system {
 
 caf::expected<caf::actor>
-spawn_at_node(caf::scoped_actor& self, node_actor node, invocation inv) {
+spawn_at_node(caf::scoped_actor& self, const node_actor& node, invocation inv) {
   caf::expected<caf::actor> result = caf::no_error;
-  self->request(node, caf::infinite, atom::spawn_v, std::move(inv))
-    .receive([&](caf::actor actor) { result = std::move(actor); },
-             [&](caf::error err) { result = std::move(err); });
+  self
+    ->request(node, defaults::system::initial_request_timeout, atom::spawn_v,
+              std::move(inv))
+    .receive([&](caf::actor& actor) { result = std::move(actor); },
+             [&](caf::error& err) { result = std::move(err); });
   return result;
 }
 
