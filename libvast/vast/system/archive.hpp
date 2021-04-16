@@ -30,12 +30,11 @@ namespace vast::system {
 /// @relates archive
 struct archive_state {
   struct request_state {
-    request_state(caf::weak_actor_ptr sink_, vast::query query_,
+    request_state(vast::query query_,
                   std::pair<ids, caf::typed_response_promise<atom::done>> ids_)
-      : sink{std::move(sink_)}, query{std::move(query_)} {
+      : query{std::move(query_)} {
       ids_queue.push(std::move(ids_));
     }
-    caf::weak_actor_ptr sink;
     vast::query query;
     std::queue<std::pair<ids, caf::typed_response_promise<atom::done>>>
       ids_queue;

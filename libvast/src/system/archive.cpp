@@ -74,13 +74,11 @@ std::unique_ptr<segment_store::lookup> next_session(archive_state& state) {
 }
 
 auto file_request(archive_actor::stateful_pointer<archive_state> self,
-                  vast::query query, const ids& xs,
-                  caf::weak_actor_ptr requester) {
+                  vast::query query, const ids& xs) {
   auto rp = self->make_response_promise<atom::done>();
-  auto it = std::find_if(self->state.requests.begin(),
-                         self->state.requests.end(), [&](const auto& request) {
-                           return request.sink == requester;
-                         });
+  auto it
+    = std::find_if(self->state.requests.begin(), self->state.requests.end(),
+                   [&](const auto& request) { return request.query == query; });
   if (it != self->state.requests.end()) {
     VAST_ASSERT(query == it->query);
     // Down messages are sent with high prio.
@@ -93,9 +91,13 @@ auto file_request(archive_actor::stateful_pointer<archive_state> self,
       it->ids_queue.emplace(xs, rp);
     }
   } else {
-    self->monitor(requester);
-    self->state.requests.emplace_back(requester, std::move(query),
-                                      std::make_pair(xs, rp));
+    caf::visit(detail::overload{
+                 [&](query::count& count) { self->monitor(count.sink); },
+                 [&](query::extract& extract) { self->monitor(extract.sink); },
+                 [](query::erase&) { die("erase requests don't get filed"); },
+               },
+               query.cmd);
+    self->state.requests.emplace_back(std::move(query), std::make_pair(xs, rp));
   }
   if (!self->state.session) {
     self->state.session = next_session(self->state);
@@ -130,15 +132,29 @@ archive(archive_actor::stateful_pointer<archive_state> self,
   });
   self->set_down_handler([self](const caf::down_msg& msg) {
     VAST_DEBUG("{} received DOWN from {}", self, msg.source);
-    auto it = std::find_if(
-      self->state.requests.begin(), self->state.requests.end(),
-      [&](const auto& request) { return request.sink == msg.source; });
+    auto it
+      = std::find_if(self->state.requests.begin(), self->state.requests.end(),
+                     [&](const auto& request) {
+                       return caf::visit(detail::overload{
+                                           [&](const query::count& count) {
+                                             return count.sink == msg.source;
+                                           },
+                                           [&](const query::extract& extract) {
+                                             return extract.sink == msg.source;
+                                           },
+                                           [](const query::erase&) {
+                                             // erase request don't have sinks
+                                             // to monitor
+                                             return false;
+                                           },
+                                         },
+                                         request.query.cmd);
+                     });
     if (it != self->state.requests.end())
       it->cancelled = true;
   });
   return {
-    [self](vast::query query, const ids& xs,
-           caf::weak_actor_ptr requester) -> caf::result<atom::done> {
+    [self](vast::query query, const ids& xs) -> caf::result<atom::done> {
       VAST_DEBUG("{} got request with the query {} and {} hints [{},  {})",
                  self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
       if (caf::holds_alternative<query::erase>(query.cmd)) {
@@ -147,7 +163,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
           VAST_ERROR("{} failed to erase events: {}", self, render(err));
         return atom::done_v;
       }
-      return file_request(self, std::move(query), xs, std::move(requester));
+      return file_request(self, std::move(query), xs);
     },
     [self](atom::internal) {
       VAST_ASSERT(self->state.session);
@@ -173,44 +189,42 @@ archive(archive_actor::stateful_pointer<archive_state> self,
           // TODO: Remove meta predicates (They don't contain false
           // positives).
         }
-        caf::visit(
-          detail::overload{
-            [&](const query::count& count) {
-              if (count.mode == query::count::estimate)
-                die("logic error detected");
-              // TODO: Add a count function on table slices to avoid going
-              // through a bulider.
-              auto final_slice
-                = filter(*slice, checker, self->state.session_ids);
-              uint64_t result = 0;
-              if (final_slice)
-                result = final_slice->rows();
-              self->send(count.sink, result);
-            },
-            [&](const query::extract& extract) {
-              auto sink
-                = caf::actor_cast<receiver_actor<table_slice>>(request.sink);
-              if (extract.policy == query::extract::ids_policy::preserve) {
-                for (auto& sub_slice :
-                     select(*slice, self->state.session_ids)) {
-                  if (request.query.expr == expression{}) {
-                    self->send(extract.sink, sub_slice);
-                  } else {
-                    auto hits = evaluate(checker, sub_slice);
-                    for (auto& final_slice : select(sub_slice, hits))
-                      self->send(extract.sink, final_slice);
-                  }
-                }
-              } else {
-                auto final_slice
-                  = filter(*slice, checker, self->state.session_ids);
-                if (final_slice)
-                  self->send(sink, *final_slice);
-              }
-            },
-            [&](query::erase) { die("logic error detected"); },
-          },
-          request.query.cmd);
+        caf::visit(detail::overload{
+                     [&](const query::count& count) {
+                       if (count.mode == query::count::estimate)
+                         die("logic error detected");
+                       // TODO: Add a count function on table slices to avoid
+                       // going through a bulider.
+                       auto final_slice
+                         = filter(*slice, checker, self->state.session_ids);
+                       uint64_t result = 0;
+                       if (final_slice)
+                         result = final_slice->rows();
+                       self->send(count.sink, result);
+                     },
+                     [&](const query::extract& extract) {
+                       if (extract.policy
+                           == query::extract::ids_policy::preserve) {
+                         for (auto& sub_slice :
+                              select(*slice, self->state.session_ids)) {
+                           if (request.query.expr == expression{}) {
+                             self->send(extract.sink, sub_slice);
+                           } else {
+                             auto hits = evaluate(checker, sub_slice);
+                             for (auto& final_slice : select(sub_slice, hits))
+                               self->send(extract.sink, final_slice);
+                           }
+                         }
+                       } else {
+                         auto final_slice
+                           = filter(*slice, checker, self->state.session_ids);
+                         if (final_slice)
+                           self->send(extract.sink, *final_slice);
+                       }
+                     },
+                     [&](query::erase) { die("logic error detected"); },
+                   },
+                   request.query.cmd);
       } else {
         // We didn't get a slice from the segment store.
         if (slice.error() != caf::no_error)

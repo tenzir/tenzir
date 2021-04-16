@@ -30,8 +30,9 @@ namespace {
 system::partition_actor::behavior_type
 dummy_partition(system::partition_actor::pointer self, ids x) {
   return {
-    [=](const vast::query&, const caf::weak_actor_ptr& client) {
-      self->send(caf::actor_cast<system::receiver_actor<ids>>(client), x);
+    [=](const vast::query& q) {
+      auto sink = caf::get<query::count>(q.cmd).sink;
+      self->send(sink, rank(x));
       return atom::done_v;
     },
     [=](atom::status, system::status_verbosity) { return caf::settings{}; },
@@ -66,11 +67,11 @@ TEST(lookup) {
   run();
   MESSAGE("collect results");
   bool done = false;
-  ids result;
+  uint64_t result = 0;
   while (!done)
-    self->receive([&](const ids& x) { result |= x; },
+    self->receive([&](const uint64_t& x) { result += x; },
                   [&](atom::done) { done = true; });
-  CHECK_EQUAL(result, make_ids({{0, 9}}));
+  CHECK_EQUAL(result, 9u);
   MESSAGE("after completion, the supervisor should register itself again");
   expect((atom::worker, system::query_supervisor_actor),
          from(sv).to(self).with(atom::worker_v, sv));

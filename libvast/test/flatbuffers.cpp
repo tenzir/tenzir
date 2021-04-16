@@ -242,8 +242,7 @@ TEST(full partition roundtrip) {
         auto rp = self->request(
           readonly_partition, caf::infinite,
           vast::query::make_count(dummy, vast::query::count::mode::estimate,
-                                  expression),
-          caf::actor_cast<caf::weak_actor_ptr>(dummy));
+                                  expression));
         run();
         rp.receive([&done](vast::atom::done) { done = true; },
                    [](caf::error&) { REQUIRE(false); });

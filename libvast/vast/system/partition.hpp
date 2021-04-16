@@ -178,8 +178,7 @@ struct passive_partition_state {
   chunk_ptr partition_chunk;
 
   /// Stores a list of expressions that could not be answered immediately.
-  std::vector<std::tuple<query, caf::weak_actor_ptr,
-                         caf::typed_response_promise<atom::done>>>
+  std::vector<std::tuple<query, caf::typed_response_promise<atom::done>>>
     deferred_evaluations;
 
   /// The store to retrieve the data from. Either the legacy global archive or a
