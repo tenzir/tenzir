@@ -11,13 +11,15 @@ project(example
 include(CTest)
 
 # Unless built alongside VAST, we must find an installed VAST.
-if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+if (NOT COMMAND VASTRegisterPlugin)
   find_package(VAST REQUIRED)
 endif ()
 
 VASTRegisterPlugin(
   TARGET example
-  SOURCES
+  ENTRYPOINT
     example.cpp
+  # SOURCES
+  #   list additional source files here
   TEST_SOURCES
     tests/example.cpp)

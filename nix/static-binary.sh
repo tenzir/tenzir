@@ -14,7 +14,8 @@ target="${STATIC_BINARY_TARGET:-vast}"
 
 USE_HEAD="off"
 cmakeFlags=""
-plugins=()
+# Enable the PCAP plugin by default.
+plugins=("plugins/pcap")
 
 while [ $# -ne 0 ]; do
   case "$1" in

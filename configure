@@ -77,7 +77,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-doxygen=PATH   path to Doxygen install root
     --with-jemalloc=PATH  link against jemalloc
     --with-openssl=PATH   path to OpenSSL install root
-    --with-pcap=PATH      path to libpcap install root
 
   Influential Environment Variables (only on first invocation):
     CXX             C++ compiler command
@@ -180,6 +179,13 @@ while [ $# -ne 0 ]; do
         plugins="${plugins};${sourcedir}/examples/plugins/example"
       fi
       ;;
+    --with-pcap-plugin)
+      if [ -z "${plugins}" ]; then
+        plugins="${sourcedir}/plugins/pcap"
+      else
+        plugins="${plugins};${sourcedir}/plugins/pcap"
+      fi
+      ;;
     --with-plugin=*)
       plugin_parent_dir="$(dirname "$optarg")"
       if ! [ -d "$plugin_parent_dir" ]; then
@@ -271,9 +277,6 @@ while [ $# -ne 0 ]; do
       ;;
     --with-openssl=*)
       append_cache_entry OPENSSL_ROOT_DIR PATH "$optarg"
-      ;;
-    --with-pcap=*)
-      append_cache_entry PCAP_ROOT_DIR PATH "$optarg"
       ;;
     *)
       echo "Invalid option '$1'.  Try $0 --help to see available options."

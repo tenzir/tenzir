@@ -11,6 +11,7 @@
 #include "vast/factory.hpp"
 #include "vast/format/reader.hpp"
 
+#include <functional>
 #include <string>
 
 namespace vast {
@@ -19,7 +20,7 @@ template <>
 struct factory_traits<format::reader> {
   using result_type = caf::expected<format::reader_ptr>;
   using key_type = std::string;
-  using signature = result_type (*)(const caf::settings&);
+  using signature = std::function<result_type(const caf::settings&)>;
 
   static void initialize();
 };

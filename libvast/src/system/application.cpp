@@ -41,19 +41,9 @@
 #  include "vast/format/arrow.hpp"
 #endif
 
-#if VAST_ENABLE_PCAP
-#  include "vast/format/pcap.hpp"
-#  include "vast/system/pcap_writer_command.hpp"
-#endif
-
 namespace vast::system {
 
 namespace {
-
-auto make_pcap_options(std::string_view category) {
-  return opts(category).add<size_t>("flush-interval,f", "flush to disk after "
-                                                        "this many packets");
-}
 
 command::opts_builder add_index_opts(command::opts_builder ob) {
   return std::move(ob)
@@ -150,11 +140,15 @@ auto make_export_command() {
                           opts("?vast.export.arrow"));
 
 #endif
-#if VAST_ENABLE_PCAP
-  export_->add_subcommand("pcap", "exports query results in PCAP format",
-                          documentation::vast_export_pcap,
-                          make_pcap_options("?vast.export.pcap"));
-#endif
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* writer = plugin.as<writer_plugin>()) {
+      auto opts_category
+        = fmt::format("?vast.export.{}", writer->writer_format());
+      export_->add_subcommand(writer->writer_format(), writer->writer_help(),
+                              writer->writer_documentation(),
+                              writer->writer_options(opts(opts_category)));
+    }
+  }
   return export_;
 }
 
@@ -215,24 +209,15 @@ auto make_import_command() {
     "test", "imports random data for testing or benchmarking",
     documentation::vast_import_test,
     opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
-#if VAST_ENABLE_PCAP
-  import_->add_subcommand(
-    "pcap", "imports PCAP logs from STDIN or file",
-    documentation::vast_import_pcap,
-    opts("?vast.import.pcap")
-      .add<std::string>("interface,i", "network interface to read packets from")
-      .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-      .add<size_t>("max-flows,m", "number of concurrent flows to track")
-      .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
-      .add<size_t>("flow-expiry,e", "flow table expiration interval")
-      .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
-                                               "1/c")
-      .add<size_t>("snaplen", "snapshot length in bytes")
-      .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
-                                          "warnings to occur")
-      .add<bool>("disable-community-id", "disable computation of community id "
-                                         "for every packet"));
-#endif
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* reader = plugin.as<reader_plugin>()) {
+      auto opts_category
+        = fmt::format("?vast.import.{}", reader->reader_format());
+      import_->add_subcommand(reader->reader_format(), reader->reader_help(),
+                              reader->reader_documentation(),
+                              reader->reader_options(opts(opts_category)));
+    }
+  }
   return import_;
 }
 
@@ -250,7 +235,9 @@ auto make_pivot_command() {
   auto pivot = std::make_unique<command>(
     "pivot", "extracts related events of a given type",
     documentation::vast_pivot,
-    make_pcap_options("?vast.pivot")
+    opts("?vast.pivot")
+      .add<size_t>("flush-interval,f", "flush to disk after this many packets "
+                                       "(only with the PCAP plugin)")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<std::string>("format", "output format "
                                   "(default: JSON)"));
@@ -290,24 +277,6 @@ auto make_spawn_source_command() {
                                "creates a new JSON source inside the node",
                                documentation::vast_spawn_source_json,
                                opts("?vast.spawn.source.json"));
-#if VAST_ENABLE_PCAP
-  spawn_source->add_subcommand(
-    "pcap", "creates a new PCAP source inside the node",
-    documentation::vast_spawn_source_pcap,
-    opts("?vast.spawn.source.pcap")
-      .add<std::string>("interface,i", "network interface to read packets from")
-      .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-      .add<size_t>("max-flows,m", "number of concurrent flows to track")
-      .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
-      .add<size_t>("flow-expiry,e", "flow table expiration interval")
-      .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
-                                               "1/c")
-      .add<size_t>("snaplen", "snapshot length in bytes")
-      .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
-                                          "warnings to occur")
-      .add<bool>("disable-community-id", "disable computation of community id "
-                                         "for every packet"));
-#endif
   spawn_source->add_subcommand("suricata",
                                "creates a new Suricata source inside the node",
                                documentation::vast_spawn_source_suricata,
@@ -324,6 +293,16 @@ auto make_spawn_source_command() {
                                "creates a new Zeek source inside the node",
                                documentation::vast_spawn_source_zeek,
                                opts("?vast.spawn.source.zeek"));
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* reader = plugin.as<reader_plugin>()) {
+      auto opts_category
+        = fmt::format("?vast.spawn.source.{}", reader->reader_format());
+      spawn_source->add_subcommand(reader->reader_format(),
+                                   reader->reader_help(),
+                                   reader->reader_documentation(),
+                                   reader->reader_options(opts(opts_category)));
+    }
+  }
   return spawn_source;
 }
 
@@ -334,10 +313,6 @@ auto make_spawn_sink_command() {
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket"),
     false);
-  spawn_sink->add_subcommand("pcap", "creates a new PCAP sink", "",
-                             opts("?vast.spawn.sink.pcap")
-                               .add<size_t>("flush,f", "flush to disk after "
-                                                       "this many packets"));
   spawn_sink->add_subcommand("zeek", "creates a new Zeek sink", "",
                              opts("?vast.spawn.sink.zeek"));
   spawn_sink->add_subcommand("ascii", "creates a new ASCII sink", "",
@@ -346,6 +321,15 @@ auto make_spawn_sink_command() {
                              opts("?vast.spawn.sink.csv"));
   spawn_sink->add_subcommand("json", "creates a new JSON sink", "",
                              opts("?vast.spawn.sink.json"));
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* writer = plugin.as<writer_plugin>()) {
+      auto opts_category
+        = fmt::format("?vast.spawn.sink.{}", writer->writer_format());
+      spawn_sink->add_subcommand(writer->writer_format(), writer->writer_help(),
+                                 writer->writer_documentation(),
+                                 writer->writer_options(opts(opts_category)));
+    }
+  }
   return spawn_sink;
 }
 
@@ -416,7 +400,7 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in node.cpp as
   // well iff necessary
   // clang-format off
-  return command::factory{
+  auto result = command::factory{
     {"count", count_command},
     {"dump", remote_command},
     {"dump concepts", remote_command},
@@ -429,17 +413,11 @@ auto make_command_factory() {
 #if VAST_ENABLE_ARROW
     {"export arrow", make_writer_command("arrow")},
 #endif
-#if VAST_ENABLE_PCAP
-    {"export pcap", pcap_writer_command},
-#endif
     {"export zeek", make_writer_command("zeek")},
     {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command},
     {"import json", import_command},
-#if VAST_ENABLE_PCAP
-    {"import pcap", import_command},
-#endif
     {"import suricata", import_command},
     {"import syslog", import_command},
     {"import test", import_command},
@@ -460,11 +438,9 @@ auto make_command_factory() {
     {"spawn sink ascii", remote_command},
     {"spawn sink csv", remote_command},
     {"spawn sink json", remote_command},
-    {"spawn sink pcap", remote_command},
     {"spawn sink zeek", remote_command},
     {"spawn source csv", remote_command},
     {"spawn source json", remote_command},
-    {"spawn source pcap", remote_command},
     {"spawn source suricata", remote_command},
     {"spawn source syslog", remote_command},
     {"spawn source test", remote_command},
@@ -476,6 +452,21 @@ auto make_command_factory() {
     {"version", version_command},
   };
   // clang-format on
+  for (auto& plugin : plugins::get()) {
+    if (auto* reader = plugin.as<reader_plugin>()) {
+      result.emplace(fmt::format("import {}", reader->reader_format()),
+                     import_command);
+      result.emplace(fmt::format("spawn source {}", reader->reader_format()),
+                     remote_command);
+    }
+    if (auto* writer = plugin.as<writer_plugin>()) {
+      result.emplace(fmt::format("export {}", writer->writer_format()),
+                     make_writer_command(writer->writer_format()));
+      result.emplace(fmt::format("spawn sink {}", writer->writer_format()),
+                     remote_command);
+    }
+  }
+  return result;
 } // namespace
 
 auto make_root_command(std::string_view path) {

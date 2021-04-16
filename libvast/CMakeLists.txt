@@ -119,21 +119,6 @@ if (VAST_ENABLE_ARROW)
   endif ()
 endif ()
 
-# -- pcap ----------------------------------------------------------------------
-
-option(VAST_ENABLE_PCAP "Build with PCAP support" ON)
-add_feature_info("VAST_ENABLE_PCAP" VAST_ENABLE_PCAP "build with PCAP support.")
-if (VAST_ENABLE_PCAP)
-  if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
-    set(PCAP_ROOT_DIR ${VAST_PREFIX})
-  endif ()
-  find_package(PCAP REQUIRED)
-  if (NOT BUILD_SHARED_LIBS)
-    provide_find_module(PCAP)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(PCAP REQUIRED)")
-  endif ()
-endif ()
-
 # -- log level -----------------------------------------------------------------
 
 # Choose a deafult log level based on build type.
@@ -464,12 +449,6 @@ dependency_summary("robin-map" tsl::robin_map)
 if (VAST_ENABLE_ARROW)
   target_link_libraries(libvast PRIVATE ${ARROW_LIBRARY})
   dependency_summary("Apache Arrow" ${ARROW_LIBRARY})
-endif ()
-
-# Link against PCAP.
-if (VAST_ENABLE_PCAP)
-  target_link_libraries(libvast PRIVATE pcap::pcap)
-  dependency_summary("PCAP" pcap::pcap)
 endif ()
 
 # TODO: Should we move the bundled schemas to libvast?

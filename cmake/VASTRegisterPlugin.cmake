@@ -3,7 +3,8 @@ include_guard(GLOBAL)
 function (VASTRegisterPlugin)
   include(GNUInstallDirs)
 
-  cmake_parse_arguments(PLUGIN "" "TARGET" "SOURCES;TEST_SOURCES" ${ARGN})
+  cmake_parse_arguments(PLUGIN "" "TARGET;ENTRYPOINT" "SOURCES;TEST_SOURCES"
+                        ${ARGN})
 
   # A replacement for target_link_libraries that links static libraries using
   # the platform-specific whole-archive options. Please test any changes to this
@@ -13,12 +14,20 @@ function (VASTRegisterPlugin)
     if (target_type STREQUAL "STATIC_LIBRARY")
       # Prevent elision of self-registration code in statically linked libraries,
       # c.f., https://www.bfilipek.com/2018/02/static-vars-static-lib.html
+      # Possible PLATFORM_ID values:
+      # - Windows: Windows (Visual Studio, MinGW GCC)
+      # - Darwin: macOS/OS X (Clang, GCC)
+      # - Linux: Linux (GCC, Intel, PGI)
+      # - Android: Android NDK (GCC, Clang)
+      # - FreeBSD: FreeBSD
+      # - CrayLinuxEnvironment: Cray supercomputers (Cray compiler)
+      # - MSYS: Windows (MSYS2 shell native GCC)#
       target_link_options(
         ${target}
         ${visibility}
-        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:LINKER:-force_load,$<TARGET_FILE:${library}>>
-        $<$<CXX_COMPILER_ID:GNU>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
-        $<$<CXX_COMPILER_ID:MSVC>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>
+        $<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<TARGET_FILE:${library}>>
+        $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
+        $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>
       )
     endif ()
     target_link_libraries(${target} ${visibility} ${library})
@@ -29,24 +38,67 @@ function (VASTRegisterPlugin)
       FATAL_ERROR "TARGET must be specified in call to VASTRegisterPlugin")
   endif ()
 
-  if (NOT PLUGIN_SOURCES)
-    message(
-      FATAL_ERROR "SOURCES must be specified in call to VASTRegisterPlugin")
+  if (NOT PLUGIN_ENTRYPOINT)
+    list(LENGTH PLUGIN_SOURCES num_sources)
+    if (num_sources EQUAL 1)
+      list(GET PLUGIN_SOURCES 0 PLUGIN_ENTRYPOINT)
+      set(PLUGIN_SOURCEs "")
+    else ()
+      message(
+        FATAL_ERROR "ENTRYPOINT must be specified in call to VASTRegisterPlugin"
+      )
+    endif ()
   endif ()
 
+  # Craete a stub source file with an identfier if no sources except for the
+  # entrypoint exist.
+  if (NOT PLUGIN_SOURCES)
+    string(MAKE_C_IDENTIFIER "${PLUGIN_TARGET}" plugin_identifier)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.cpp"
+         "void vast_plugin_${plugin_identifier}_stub() {}")
+    set(PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.cpp")
+  endif ()
+
+  # Create a static library target for our plugin _without_ the entrypoint.
+  add_library(${PLUGIN_TARGET} STATIC ${PLUGIN_SOURCES})
+  target_link_libraries(
+    ${PLUGIN_TARGET}
+    PUBLIC vast::libvast
+    PRIVATE vast::internal)
+
+  # Create a static library target for our plugin with the entrypoint, and use
+  # static versions of VAST_REGISTER_PLUGIN family of macros.
+  add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
+  target_link_whole_archive(${PLUGIN_TARGET}-static PRIVATE ${PLUGIN_TARGET})
+  target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
+  target_compile_definitions(${PLUGIN_TARGET}-static
+                             PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+
   if (VAST_ENABLE_STATIC_PLUGINS)
-    # Create a static library target for our plugin.
-    add_library(${PLUGIN_TARGET} STATIC ${PLUGIN_SOURCES})
-
-    # Use static versions of VAST_REGISTER_PLUGIN family of macros.
-    target_compile_definitions(${PLUGIN_TARGET}
-                               PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
-
     # Link our static library against the vast binary directly.
-    target_link_whole_archive(vast PRIVATE ${PLUGIN_TARGET})
+    target_link_whole_archive(vast PRIVATE ${PLUGIN_TARGET}-static)
   else ()
+    # Enable position-independent code for the static library if we're linking
+    # it into shared one.
+    set_property(TARGET ${PLUGIN_TARGET} PROPERTY POSITION_INDEPENDENT_CODE ON)
+
     # Create a shared library target for our plugin.
-    add_library(${PLUGIN_TARGET} SHARED ${PLUGIN_SOURCES})
+    add_library(${PLUGIN_TARGET}-shared SHARED ${PLUGIN_ENTRYPOINT})
+    target_link_whole_archive(${PLUGIN_TARGET}-shared PRIVATE ${PLUGIN_TARGET})
+    target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE vast::internal)
+
+    # Install the plugin library to <libdir>/vast/plugins, and also configure
+    # the library output directory accordingly.
+    set_target_properties(
+      ${PLUGIN_TARGET}-shared
+      PROPERTIES LIBRARY_OUTPUT_DIRECTORY
+                 "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
+                 OUTPUT_NAME "${PLUGIN_TARGET}")
+    install(TARGETS ${PLUGIN_TARGET}-shared
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins")
+
+    # Ensure that VAST only runs after all pluigns are built.
+    add_dependencies(vast ${PLUGIN_TARGET}-shared)
   endif ()
 
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
@@ -83,32 +135,13 @@ function (VASTRegisterPlugin)
     endforeach ()
   endif ()
 
-  # Install the plugin library to <libdir>/vast/plugins, and also configure the
-  # library output directory accordingly.
-  install(TARGETS ${PLUGIN_TARGET}
-          DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins")
-  set_target_properties(
-    ${PLUGIN_TARGET}
-    PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-               "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins")
-
-  # Implicitly link plugins against vast::libvast and vast::internal.
-  target_link_libraries(
-    ${PLUGIN_TARGET}
-    PUBLIC vast::libvast
-    PRIVATE vast::internal)
-
-  # Ensure the man-page target is generated after all plugins.
-  if (TARGET vast-man)
-    add_dependencies(vast-man ${PLUGIN_TARGET})
-  endif ()
-
   # Setup unit tests.
   if (VAST_ENABLE_UNIT_TESTS AND PLUGIN_TEST_SOURCES)
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
                                                         vast::internal)
-    target_link_whole_archive(${PLUGIN_TARGET}-test PRIVATE ${PLUGIN_TARGET})
+    target_link_whole_archive(${PLUGIN_TARGET}-test PRIVATE
+                              ${PLUGIN_TARGET}-static)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)

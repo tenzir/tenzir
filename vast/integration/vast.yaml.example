@@ -189,7 +189,8 @@ vast:
     # Unlike other export formats, arrow is always printed to stdout.
     arrow:
 
-    # The `vast export pcap` command exports events in the PCAP format.
+    # The `vast export pcap` command exports events in the PCAP format (requires
+    # the PCAP plugin).
     pcap:
       # Flush to disk after this many packets.
       flush-interval: 10000
@@ -273,7 +274,8 @@ vast:
       # An alternate schema as a string.
       #schema: <none>
 
-    # The `vast import pcap` command imports PCAP logs.
+    # The `vast import pcap` command imports PCAP logs (requires the PCAP
+    # plugin).
     pcap:
       # Network interface to read packets from.
       #interface: <none>

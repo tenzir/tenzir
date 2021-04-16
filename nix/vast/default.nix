@@ -65,7 +65,7 @@ stdenv.mkDerivation rec {
   pname = "vast";
 
   preConfigure = ''
-    substituteInPlace cmake/FindPCAP.cmake \
+    substituteInPlace plugins/pcap/cmake/FindPCAP.cmake \
       --replace /bin/sh "${stdenv.shell}" \
       --replace nm "''${NM}"
   '';

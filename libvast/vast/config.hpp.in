@@ -10,7 +10,6 @@
 #cmakedefine01 VAST_ENABLE_EXCEPTIONS
 #cmakedefine01 VAST_ENABLE_JEMALLOC
 #cmakedefine01 VAST_ENABLE_OPENSSL
-#cmakedefine01 VAST_ENABLE_PCAP
 #cmakedefine01 VAST_ENABLE_RELOCATABLE_INSTALLATIONS
 #cmakedefine01 VAST_ENABLE_SDT
 #cmakedefine01 VAST_ENABLE_STATIC_EXECUTABLE
@@ -21,6 +20,12 @@ namespace vast::version {
 
 /// Contains the full version string.
 extern const char* version;
+
+/// The individual version components.
+extern unsigned short major;
+extern unsigned short minor;
+extern unsigned short patch;
+extern unsigned short tweak;
 
 /// Contains a hash of VAST's build tree.
 extern const char* build_tree_hash;

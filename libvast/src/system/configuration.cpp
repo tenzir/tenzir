@@ -19,12 +19,9 @@
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
-#include "vast/format/reader_factory.hpp"
-#include "vast/format/writer_factory.hpp"
 #include "vast/logger.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/io/middleman.hpp>
@@ -39,21 +36,14 @@
 
 namespace vast::system {
 
-namespace {
-
-template <class... Ts>
-void initialize_factories() {
-  (factory<Ts>::initialize(), ...);
-}
-
-} // namespace
-
 configuration::configuration() {
   detail::add_message_types(*this);
   // Load I/O module.
   load<caf::io::middleman>();
-  initialize_factories<synopsis, table_slice_builder, value_index,
-                       format::reader, format::writer>();
+  // Initialize factories.
+  factory<synopsis>::initialize();
+  factory<table_slice_builder>::initialize();
+  factory<value_index>::initialize();
 }
 
 caf::error configuration::parse(int argc, char** argv) {

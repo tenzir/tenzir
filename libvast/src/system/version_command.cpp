@@ -19,10 +19,6 @@
 #  include <arrow/util/config.h>
 #endif
 
-#if VAST_ENABLE_PCAP
-#  include <pcap/pcap.h>
-#endif
-
 #if VAST_ENABLE_JEMALLOC
 #  include <jemalloc/jemalloc.h>
 #endif
@@ -49,11 +45,6 @@ record retrieve_versions() {
   result["Apache Arrow"] = arrow_version.str();
 #else
   result["Apache Arrow"] = data{};
-#endif
-#if VAST_ENABLE_PCAP
-  result["PCAP"] = pcap_lib_version();
-#else
-  result["PCAP"] = data{};
 #endif
 #if VAST_ENABLE_JEMALLOC
   result["jemalloc"] = JEMALLOC_VERSION;

@@ -18,6 +18,9 @@
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
+#include "vast/factory.hpp"
+#include "vast/format/reader_factory.hpp"
+#include "vast/format/writer_factory.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/schema.hpp"
@@ -84,6 +87,9 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
+  // Initialize factories.
+  factory<format::reader>::initialize();
+  factory<format::writer>::initialize();
   // Application setup.
   auto [root, root_factory] = make_application(argv[0]);
   if (!root)

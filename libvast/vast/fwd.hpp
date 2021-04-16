@@ -235,7 +235,6 @@ class default_application;
 class export_command;
 class meta_index;
 class node_command;
-class pcap_writer_command;
 class remote_command;
 class sink_command;
 class start_command;

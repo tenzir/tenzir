@@ -13,39 +13,11 @@
 
 namespace vast::system {
 
-/// Tries to spawn a new SINK for the PCAP format.
+/// Tries to spawn a new SINK.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
 caf::expected<caf::actor>
-spawn_pcap_sink(caf::local_actor* self, spawn_arguments& args);
-
-/// Tries to spawn a new SINK for the Zeek format.
-/// @param self Points to the parent actor.
-/// @param args Configures the new actor.
-/// @returns a handle to the spawned actor on success, an error otherwise
-caf::expected<caf::actor>
-spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args);
-
-/// Tries to spawn a new SINK for the ASCII format.
-/// @param self Points to the parent actor.
-/// @param args Configures the new actor.
-/// @returns a handle to the spawned actor on success, an error otherwise
-caf::expected<caf::actor>
-spawn_ascii_sink(caf::local_actor* self, spawn_arguments& args);
-
-/// Tries to spawn a new SINK for the CSV format.
-/// @param self Points to the parent actor.
-/// @param args Configures the new actor.
-/// @returns a handle to the spawned actor on success, an error otherwise
-caf::expected<caf::actor>
-spawn_csv_sink(caf::local_actor* self, spawn_arguments& args);
-
-/// Tries to spawn a new SINK for the JSON format.
-/// @param self Points to the parent actor.
-/// @param args Configures the new actor.
-/// @returns a handle to the spawned actor on success, an error otherwise
-caf::expected<caf::actor>
-spawn_json_sink(caf::local_actor* self, spawn_arguments& args);
+spawn_sink(caf::local_actor* self, spawn_arguments& args);
 
 } // namespace vast::system

@@ -57,10 +57,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
 
-#if VAST_ENABLE_PCAP
-#  include "vast/format/pcap.hpp"
-#endif
-
 #include <caf/function_view.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
@@ -374,41 +370,48 @@ node_state::component_factory_fun lift_component_factory() {
 }
 
 auto make_component_factory() {
-  return node_state::named_component_factory {
+  auto result = node_state::named_component_factory{
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
-      {"spawn archive", lift_component_factory<spawn_archive>()},
-      {"spawn counter", lift_component_factory<spawn_counter>()},
-      {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
-      {"spawn eraser", lift_component_factory<spawn_eraser>()},
-      {"spawn exporter", lift_component_factory<spawn_exporter>()},
-      {"spawn explorer", lift_component_factory<spawn_explorer>()},
-      {"spawn importer", lift_component_factory<spawn_importer>()},
-      {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
-      {"spawn index", lift_component_factory<spawn_index>()},
-      {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
-      {"spawn source", lift_component_factory<spawn_source>()},
-      {"spawn source csv", lift_component_factory<spawn_source>()},
-      {"spawn source json", lift_component_factory<spawn_source>()},
-#if VAST_ENABLE_PCAP
-      {"spawn source pcap", lift_component_factory<spawn_source>()},
-#endif
-      {"spawn source suricata", lift_component_factory<spawn_source>()},
-      {"spawn source syslog", lift_component_factory<spawn_source>()},
-      {"spawn source test", lift_component_factory<spawn_source>()},
-      {"spawn source zeek", lift_component_factory<spawn_source>()},
-      {"spawn source zeek-json", lift_component_factory<spawn_source>()},
-      {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
-      {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
-      {"spawn sink csv", lift_component_factory<spawn_csv_sink>()},
-      {"spawn sink ascii", lift_component_factory<spawn_ascii_sink>()},
-      {"spawn sink json", lift_component_factory<spawn_json_sink>()},
+    {"spawn archive", lift_component_factory<spawn_archive>()},
+    {"spawn counter", lift_component_factory<spawn_counter>()},
+    {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
+    {"spawn eraser", lift_component_factory<spawn_eraser>()},
+    {"spawn exporter", lift_component_factory<spawn_exporter>()},
+    {"spawn explorer", lift_component_factory<spawn_explorer>()},
+    {"spawn importer", lift_component_factory<spawn_importer>()},
+    {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
+    {"spawn index", lift_component_factory<spawn_index>()},
+    {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
+    {"spawn source", lift_component_factory<spawn_source>()},
+    {"spawn source csv", lift_component_factory<spawn_source>()},
+    {"spawn source json", lift_component_factory<spawn_source>()},
+    {"spawn source suricata", lift_component_factory<spawn_source>()},
+    {"spawn source syslog", lift_component_factory<spawn_source>()},
+    {"spawn source test", lift_component_factory<spawn_source>()},
+    {"spawn source zeek", lift_component_factory<spawn_source>()},
+    {"spawn source zeek-json", lift_component_factory<spawn_source>()},
+    {"spawn sink zeek", lift_component_factory<spawn_sink>()},
+    {"spawn sink csv", lift_component_factory<spawn_sink>()},
+    {"spawn sink ascii", lift_component_factory<spawn_sink>()},
+    {"spawn sink json", lift_component_factory<spawn_sink>()},
   };
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* reader = plugin.as<reader_plugin>()) {
+      auto command = fmt::format("spawn source {}", reader->reader_format());
+      result.emplace(command, lift_component_factory<spawn_source>());
+    }
+    if (const auto* writer = plugin.as<writer_plugin>()) {
+      auto command = fmt::format("spawn sink {}", writer->writer_format());
+      result.emplace(command, lift_component_factory<spawn_sink>());
+    }
+  }
+  return result;
 }
 
 auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
-  return command::factory{
+  auto result = command::factory{
     {"dump", dump_command},
     {"dump concepts", dump_command},
     {"dump models", dump_command},
@@ -428,11 +431,9 @@ auto make_command_factory() {
     {"spawn sink ascii", node_state::spawn_command},
     {"spawn sink csv", node_state::spawn_command},
     {"spawn sink json", node_state::spawn_command},
-    {"spawn sink pcap", node_state::spawn_command},
     {"spawn sink zeek", node_state::spawn_command},
     {"spawn source csv", node_state::spawn_command},
     {"spawn source json", node_state::spawn_command},
-    {"spawn source pcap", node_state::spawn_command},
     {"spawn source suricata", node_state::spawn_command},
     {"spawn source syslog", node_state::spawn_command},
     {"spawn source test", node_state::spawn_command},
@@ -440,6 +441,17 @@ auto make_command_factory() {
     {"spawn source zeek-json", node_state::spawn_command},
     {"status", status_command},
   };
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* reader = plugin.as<reader_plugin>()) {
+      auto command = fmt::format("spawn source {}", reader->reader_format());
+      result.emplace(command, node_state::spawn_command);
+    }
+    if (const auto* writer = plugin.as<writer_plugin>()) {
+      auto command = fmt::format("spawn sink {}", writer->writer_format());
+      result.emplace(command, node_state::spawn_command);
+    }
+  }
+  return result;
 }
 
 std::string generate_label(node_actor::stateful_pointer<node_state> self,

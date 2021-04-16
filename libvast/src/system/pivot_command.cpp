@@ -20,10 +20,6 @@
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 
-#if VAST_ENABLE_PCAP
-#  include "vast/format/pcap.hpp"
-#endif
-
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
