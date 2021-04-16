@@ -283,8 +283,8 @@ tests:
       - command: -N export ascii
         input: queries/multi_addr.txt
 
-  Pivot with PCAP:
-    tags: [node, pivot, pcap]
+  Pivot:
+    tags: [node, pivot]
     steps:
       - command: -N import suricata
         input: data/pcap/suricata/eve.json.gz
