@@ -54,11 +54,11 @@ get_static_type_id_blocks() noexcept {
 
 // -- analyzer plugin ---------------------------------------------------------
 
-system::analyzer_plugin_actor
-analyzer_plugin::analyzer(system::node_actor::pointer node) const {
+system::analyzer_plugin_actor analyzer_plugin::analyzer(
+  system::node_actor::stateful_pointer<system::node_state> node) const {
   if (auto handle = weak_handle_.lock())
     return caf::actor_cast<system::analyzer_plugin_actor>(handle);
-  if (spawned_once_)
+  if (spawned_once_ || !node)
     return {};
   auto handle = make_analyzer(node);
   weak_handle_ = caf::actor_cast<caf::weak_actor_ptr>(handle);
@@ -66,8 +66,8 @@ analyzer_plugin::analyzer(system::node_actor::pointer node) const {
   return handle;
 }
 
-system::component_plugin_actor
-analyzer_plugin::make_component(system::node_actor::pointer node) const {
+system::component_plugin_actor analyzer_plugin::make_component(
+  system::node_actor::stateful_pointer<system::node_state> node) const {
   return analyzer(node);
 }
 
