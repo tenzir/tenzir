@@ -8,6 +8,7 @@
 
 #include "vast/atoms.hpp"
 #include "vast/command.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/actor_cast_wrapper.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/tuple_map.hpp"
@@ -27,7 +28,7 @@
 namespace vast::system {
 
 caf::expected<caf::actor>
-spawn_at_node(caf::scoped_actor& self, node_actor node, invocation inv);
+spawn_at_node(caf::scoped_actor& self, const node_actor& node, invocation inv);
 
 /// Look up components by their typed actor interfaces. Returns the first actor
 /// of each type passed as template parameter.
@@ -48,14 +49,14 @@ get_node_components(caf::scoped_actor& self, const node_actor& node) {
   auto labels = std::vector<std::string>{
     normalize(caf::type_name_by_id<caf::type_id<Actors>::value>::value)...};
   self
-    ->request(node, caf::infinite, atom::get_v, atom::label_v,
-              std::move(labels))
+    ->request(node, defaults::system::initial_request_timeout, atom::get_v,
+              atom::label_v, std::move(labels))
     .receive(
-      [&](std::vector<caf::actor> components) {
+      [&](std::vector<caf::actor>& components) {
         result = detail::tuple_map<result_t>(std::move(components),
                                              detail::actor_cast_wrapper{});
       },
-      [&](caf::error e) { //
+      [&](caf::error& e) { //
         result = std::move(e);
       });
   return result;
