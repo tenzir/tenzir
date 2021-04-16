@@ -194,7 +194,7 @@ function (VASTRegisterPlugin)
         python -m pip install --upgrade pip
         python -m pip install -r \"$base_dir/requirements.txt\"
         $<$<BOOL:${VAST_ENABLE_ARROW}>:python -m pip install pyarrow>
-        export VAST_PLUGIN_DIRS=\"$<TARGET_FILE_DIR:${PLUGIN_TARGET}>\"
+        $<$<TARGET_EXISTS:${PLUGIN_TARGET}-shared>:export VAST_PLUGIN_DIRS=\"$<TARGET_FILE_DIR:${PLUGIN_TARGET}-shared>\">
         export VAST_SCHEMA_DIRS=\"${CMAKE_CURRENT_SOURCE_DIR}/schema\"
         python \"$base_dir/integration.py\" \
           --app \"$app\" \
