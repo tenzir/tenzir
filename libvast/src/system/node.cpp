@@ -652,17 +652,19 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       for (const auto& plugin : plugins::get()) {
         if (const auto* component = plugin.as<component_plugin>()) {
           if (auto handle = component->make_component(self); !handle)
-            return caf::make_error(ec::unspecified,
-                                   "{} failed to spawn component plugin {}",
-                                   self, component->name());
+            return caf::make_error( //
+              ec::unspecified, fmt::format("{} failed to spawn component "
+                                           "plugin {}",
+                                           self, component->name()));
           else if (auto err = register_component(
                      self, caf::actor_cast<caf::actor>(handle),
                      component->name());
                    err && err != caf::no_error)
-            return caf::make_error(ec::unspecified,
-                                   "{} failed to register component plugin {} "
-                                   "in component registry: {}",
-                                   self, component->name(), err);
+            return caf::make_error( //
+              ec::unspecified, fmt::format("{} failed to register component "
+                                           "plugin {} in component registry: "
+                                           "{}",
+                                           self, component->name(), err));
         }
       }
       return {};

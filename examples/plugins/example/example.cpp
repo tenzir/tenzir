@@ -10,6 +10,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
+#include "vast/system/node.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/actor_cast.hpp>
@@ -154,7 +155,8 @@ public:
   /// Creates an actor that hooks into the input table slice stream.
   /// @param node A pointer to the NODE actor handle.
   system::analyzer_plugin_actor
-  make_analyzer(system::node_actor::pointer node) const override {
+  make_analyzer(system::node_actor::stateful_pointer<system::node_state> node)
+    const override {
     // Create a scoped actor for interaction with actors from non-actor
     // contexts.
     auto self = caf::scoped_actor{node->system()};

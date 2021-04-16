@@ -107,10 +107,12 @@ public:
 class component_plugin : public virtual plugin {
 public:
   /// Creates an actor as a component in the NODE.
-  /// @param node A pointer to the NODE actor handle.
+  /// @param node A stateful pointer to the NODE actor.
   /// @returns The actor handle to the NODE component.
-  virtual system::component_plugin_actor
-  make_component(system::node_actor::pointer node) const = 0;
+  /// @note This function runs in the actor context of the NODE actor and can
+  /// safely access the NODE's state.
+  virtual system::component_plugin_actor make_component(
+    system::node_actor::stateful_pointer<system::node_state> node) const = 0;
 };
 
 // -- analyzer plugin ----------------------------------------------------------
@@ -120,25 +122,29 @@ public:
 class analyzer_plugin : public virtual component_plugin {
 public:
   /// Gets or spawns the ANALYZER actor spawned by the plugin.
-  /// @param node A pointer to the NODE actor handle.
+  /// @param node A pointer to the NODE actor handle. This argument is optional
+  /// for retrieving an already spawned ANALYZER.
   /// @returns The actor handle to the analyzer, or `nullptr` if the actor was
   /// spawned but shut down already.
   system::analyzer_plugin_actor
-  analyzer(system::node_actor::pointer node) const;
+  analyzer(system::node_actor::stateful_pointer<system::node_state> node
+           = nullptr) const;
 
   /// Implicitly fulfill the requirements of a COMPONENT PLUGIN actor via the
   /// ANALYZER PLUGIN actor.
-  system::component_plugin_actor
-  make_component(system::node_actor::pointer node) const final;
+  system::component_plugin_actor make_component(
+    system::node_actor::stateful_pointer<system::node_state> node) const final;
 
 protected:
   /// Creates an actor that hooks into the input table slice stream.
-  /// @param node A pointer to the NODE actor handle.
+  /// @param node A stateful pointer to the NODE actor.
   /// @returns The actor handle to the analyzer.
   /// @note It is guaranteed that this function is not called while the ANALYZER
   /// is still running.
-  virtual system::analyzer_plugin_actor
-  make_analyzer(system::node_actor::pointer node) const = 0;
+  /// @note This function runs in the actor context of the NODE actor and can
+  /// safely access the NODE's state.
+  virtual system::analyzer_plugin_actor make_analyzer(
+    system::node_actor::stateful_pointer<system::node_state> node) const = 0;
 
 private:
   /// A weak handle to the spawned actor handle.
