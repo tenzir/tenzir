@@ -14,12 +14,20 @@ function (VASTRegisterPlugin)
     if (target_type STREQUAL "STATIC_LIBRARY")
       # Prevent elision of self-registration code in statically linked libraries,
       # c.f., https://www.bfilipek.com/2018/02/static-vars-static-lib.html
+      # Possible PLATFORM_ID values:
+      # - Windows: Windows (Visual Studio, MinGW GCC)
+      # - Darwin: macOS/OS X (Clang, GCC)
+      # - Linux: Linux (GCC, Intel, PGI)
+      # - Android: Android NDK (GCC, Clang)
+      # - FreeBSD: FreeBSD
+      # - CrayLinuxEnvironment: Cray supercomputers (Cray compiler)
+      # - MSYS: Windows (MSYS2 shell native GCC)#
       target_link_options(
         ${target}
         ${visibility}
-        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:LINKER:-force_load,$<TARGET_FILE:${library}>>
-        $<$<CXX_COMPILER_ID:GNU>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
-        $<$<CXX_COMPILER_ID:MSVC>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>
+        $<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<TARGET_FILE:${library}>>
+        $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
+        $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>
       )
     endif ()
     target_link_libraries(${target} ${visibility} ${library})
