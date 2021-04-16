@@ -23,9 +23,9 @@ counter_state::counter_state(caf::event_based_actor* self) : super(self) {
 
 void counter_state::init(expression expr, index_actor index,
                          bool skip_candidate_check) {
-  auto verb
-    = skip_candidate_check ? query::verb::count_estimate : query::verb::count;
-  auto q = vast::query{verb, std::move(expr)};
+  auto q = vast::query::make_count(
+    self_, skip_candidate_check ? query::count::estimate : query::count::exact,
+    std::move(expr));
   // Transition from idle state when receiving 'run' and client handle.
   behaviors_[idle].assign([=, q = std::move(q)](atom::run, caf::actor client) {
     client_ = std::move(client);

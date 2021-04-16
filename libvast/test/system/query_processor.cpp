@@ -126,9 +126,10 @@ TEST(state transitions) {
     "await_query_id -> await_results_until_done",
     "await_results_until_done -> idle",
   };
-  self->send(
-    aut, vast::query{query::verb::extract, unbox(to<expression>(query_str))},
-    index);
+  self->send(aut,
+             query::make_extract(self, query::extract::drop,
+                                 unbox(to<expression>(query_str))),
+             index);
   expect((vast::query, system::index_actor), from(self).to(aut));
   expect((vast::query), from(aut).to(index));
   expect((uuid, uint32_t, uint32_t), from(index).to(aut));

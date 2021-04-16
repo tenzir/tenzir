@@ -642,9 +642,9 @@ active_partition_actor::behavior_type active_partition(
            query = std::move(query)](const ids& hits) mutable {
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
-            if (query.verb == query::verb::count_estimate) {
-              self->send(caf::actor_cast<receiver_actor<uint64_t>>(client),
-                         rank(hits));
+            auto* count = caf::get_if<query::count>(&query.cmd);
+            if (count && count->mode == query::count::estimate) {
+              self->send(count->sink, rank(hits));
               rp.deliver(atom::done_v);
             } else {
               rp.delegate(self->state.store, std::move(query), hits, client);
@@ -837,9 +837,9 @@ partition_actor::behavior_type passive_partition(
            query = std::move(query)](const ids& hits) mutable {
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
-            if (query.verb == query::verb::count_estimate) {
-              self->send(caf::actor_cast<receiver_actor<uint64_t>>(client),
-                         rank(hits));
+            auto* count = caf::get_if<query::count>(&query.cmd);
+            if (count && count->mode == query::count::estimate) {
+              self->send(count->sink, rank(hits));
               rp.deliver(atom::done_v);
             } else {
               rp.delegate(self->state.store, std::move(query), hits, client);

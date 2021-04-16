@@ -14,6 +14,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/system/report.hpp"
@@ -81,8 +82,7 @@ auto file_request(archive_actor::stateful_pointer<archive_state> self,
                            return request.sink == requester;
                          });
   if (it != self->state.requests.end()) {
-    VAST_ASSERT(query.expr == it->query.expr);
-    VAST_ASSERT(query.verb == it->query.verb);
+    VAST_ASSERT(query == it->query);
     // Down messages are sent with high prio.
     // TODO: What if the request is already cleaned up after a down, but we
     // get new ids from the same requester later because of the normal
@@ -141,7 +141,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
            caf::weak_actor_ptr requester) -> caf::result<atom::done> {
       VAST_DEBUG("{} got request with the query {} and {} hints [{},  {})",
                  self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
-      if (query.verb == query::verb::erase) {
+      if (caf::holds_alternative<query::erase>(query.cmd)) {
         // We erase eagerly.
         if (auto err = self->state.store->erase(xs))
           VAST_ERROR("{} failed to erase events: {}", self, render(err));
@@ -162,89 +162,55 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       };
       auto slice = self->state.session->next();
       if (slice) {
-        switch (request.query.verb) {
-          case vast::query::verb::extract: {
-            auto sink
-              = caf::actor_cast<receiver_actor<table_slice>>(request.sink);
-            if (request.query.expr == expression{}) {
-              auto final_slice = filter(*slice, self->state.session_ids);
+        // Add an lru cache for checkers in the archive state.
+        auto checker = expression{};
+        if (request.query.expr != expression{}) {
+          auto c = tailor(request.query.expr, slice->layout());
+          if (!c)
+            VAST_ERROR("{} failed to tailor expression: {}", self, c.error());
+          else
+            checker = std::move(*c);
+          // TODO: Remove meta predicates (They don't contain false
+          // positives).
+        }
+        caf::visit(
+          detail::overload{
+            [&](const query::count& count) {
+              if (count.mode == query::count::estimate)
+                die("logic error detected");
+              // TODO: Add a count function on table slices to avoid going
+              // through a bulider.
+              auto final_slice
+                = filter(*slice, checker, self->state.session_ids);
+              uint64_t result = 0;
               if (final_slice)
-                self->send(sink, *final_slice);
-            } else {
-              auto checker = tailor(request.query.expr, slice->layout());
-              if (!checker) {
-                VAST_ERROR("{} failed to tailor expression: {}", self,
-                           checker.error());
+                result = final_slice->rows();
+              self->send(count.sink, result);
+            },
+            [&](const query::extract& extract) {
+              auto sink
+                = caf::actor_cast<receiver_actor<table_slice>>(request.sink);
+              if (extract.policy == query::extract::ids_policy::preserve) {
+                for (auto& sub_slice :
+                     select(*slice, self->state.session_ids)) {
+                  if (request.query.expr == expression{}) {
+                    self->send(extract.sink, sub_slice);
+                  } else {
+                    auto hits = evaluate(checker, sub_slice);
+                    for (auto& final_slice : select(sub_slice, hits))
+                      self->send(extract.sink, final_slice);
+                  }
+                }
               } else {
-                // TODO: Remove meta predicates (They don't contain false
-                // positives).
                 auto final_slice
-                  = filter(*slice, *checker, self->state.session_ids);
+                  = filter(*slice, checker, self->state.session_ids);
                 if (final_slice)
                   self->send(sink, *final_slice);
               }
-            }
-            break;
-          }
-          case vast::query::verb::extract_with_ids: {
-            auto sink
-              = caf::actor_cast<receiver_actor<table_slice>>(request.sink);
-            if (request.query.expr == expression{}) {
-              for (auto& sub_slice : select(*slice, self->state.session_ids)) {
-                self->send(sink, sub_slice /*, self->state.partition_offset*/);
-              }
-            } else {
-              auto checker = tailor(request.query.expr, slice->layout());
-              if (!checker) {
-                VAST_ERROR("{} failed to tailor expression: {}", self,
-                           checker.error());
-              } else {
-                // TODO: Remove meta predicates (They don't contain false
-                // positives).
-                for (auto& sub_slice :
-                     select(*slice, self->state.session_ids)) {
-                  auto hits = evaluate(*checker, sub_slice);
-                  for (auto& final_slice : select(sub_slice, hits))
-                    self->send(sink,
-                               final_slice /*, self->state.partition_offset*/);
-                }
-              }
-            }
-            break;
-          }
-          case vast::query::verb::count_estimate: {
-            // This should be handled by the partition instead.
-            VAST_ASSERT(false);
-            break;
-          }
-          case vast::query::verb::count: {
-            auto sink = caf::actor_cast<receiver_actor<uint64_t>>(request.sink);
-            auto checker = expression{};
-            if (request.query.expr != expression{}) {
-              auto c = tailor(request.query.expr, slice->layout());
-              if (!c)
-                VAST_ERROR("{} failed to tailor expression: {}", self,
-                           c.error());
-              else
-                checker = std::move(*c);
-            }
-            // TODO: Remove meta predicates (They don't contain false
-            // positives).
-            // TODO: Add a count function on table slices to avoid going through
-            // a bulider.
-            auto final_slice = filter(*slice, checker, self->state.session_ids);
-            uint64_t result = 0;
-            if (final_slice)
-              result = final_slice->rows();
-            self->send(sink, result);
-            break;
-          }
-          case vast::query::verb::erase:
-            // This should have been handled immediately upon receiving the
-            // query.
-            VAST_ASSERT(false);
-            break;
-        }
+            },
+            [&](query::erase) { die("logic error detected"); },
+          },
+          request.query.cmd);
       } else {
         // We didn't get a slice from the segment store.
         if (slice.error() != caf::no_error)

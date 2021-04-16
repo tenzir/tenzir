@@ -58,10 +58,11 @@ TEST(lookup) {
   MESSAGE("fill query map and trigger supervisor");
   system::query_map qm{
     {uuid::random(), p0}, {uuid::random(), p1}, {uuid::random(), p2}};
-  self->send(
-    sv,
-    vast::query{query::verb::count_estimate, unbox(to<expression>("x == 42"))},
-    std::move(qm), caf::actor_cast<system::receiver_actor<atom::done>>(self));
+  self->send(sv,
+             vast::query::make_count(self, query::count::mode::estimate,
+                                     unbox(to<expression>("x == 42"))),
+             std::move(qm),
+             caf::actor_cast<system::receiver_actor<atom::done>>(self));
   run();
   MESSAGE("collect results");
   bool done = false;

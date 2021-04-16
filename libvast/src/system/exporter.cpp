@@ -253,20 +253,22 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      // TODO: The index replies to expressions by manually sending back to the
-      // sender, which does not work with request(...).then(...) style of
+      // TODO: The index replies to expressions by manually sending back to
+      // the sender, which does not work with request(...).then(...) style of
       // communication for typed actors. Hence, we must actor_cast here.
       // Ideally, we would change that index handler to actually return the
       // desired value.
-      auto verb = has_historical_with_ids_option(self->state.options)
-                    ? query::verb::extract_with_ids
-                    : query::verb::extract;
+      auto perserve_ids = has_historical_with_ids_option(self->state.options)
+                            ? query::extract::preserve
+                            : query::extract::drop;
+      auto q = vast::query::make_extract(self, perserve_ids, self->state.expr);
       self
         ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
-                  query{verb, self->state.expr})
+                  std::move(q))
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
-            VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} partitions",
+            VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
+                         "partitions",
                          self, lookup, scheduled, partitions);
             self->state.id = lookup;
             if (partitions > 0) {
@@ -300,7 +302,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
           })
         .inbound_slot();
     },
-    // -- status_client_actor --------------------------------------------------
+    // -- status_client_actor
+    // --------------------------------------------------
     [self](atom::status, status_verbosity v) {
       auto result = caf::settings{};
       auto& exporter_status = put_dictionary(result, "exporter");
@@ -333,8 +336,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       ship_results(self);
     },
     [self](atom::done) -> caf::result<void> {
-      // Figure out if we're done by bumping the counter for `received` and
-      // check whether it reaches `expected`.
+      // Figure out if we're done by bumping the counter for `received`
+      // and check whether it reaches `expected`.
       caf::timespan runtime
         = std::chrono::system_clock::now() - self->state.start;
       self->state.query.runtime = runtime;
