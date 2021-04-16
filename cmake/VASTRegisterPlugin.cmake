@@ -70,6 +70,10 @@ function (VASTRegisterPlugin)
     # Link our static library against the vast binary directly.
     target_link_whole_archive(vast PRIVATE ${PLUGIN_TARGET}-static)
   else ()
+    # Enable position-independent code for the static library if we're linking
+    # it into shared one.
+    set_property(TARGET ${PLUGIN_TARGET} PROPERTY POSITION_INDEPENDENT_CODE ON)
+
     # Create a shared library target for our plugin.
     add_library(${PLUGIN_TARGET}-shared SHARED ${PLUGIN_ENTRYPOINT})
     target_link_whole_archive(${PLUGIN_TARGET}-shared PRIVATE ${PLUGIN_TARGET})
