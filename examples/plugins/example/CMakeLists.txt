@@ -10,11 +10,7 @@ project(example
 # line manually so plugins can be linked against an installed VAST.
 include(CTest)
 
-# Unless built alongside VAST, we must find an installed VAST.
-if (NOT COMMAND VASTRegisterPlugin)
-  find_package(VAST REQUIRED)
-endif ()
-
+find_package(VAST REQUIRED)
 VASTRegisterPlugin(
   TARGET example
   ENTRYPOINT

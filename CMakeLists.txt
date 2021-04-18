@@ -29,6 +29,17 @@ if (NOT IS_ABSOLUTE "${CMAKE_INSTALL_PREFIX}")
       "CMAKE_INSTALL_PREFIX must be an absolute path: ${CMAKE_INSTALL_PREFIX}")
 endif ()
 
+# Override `find_package` for subprojects to be a no-op when trying to find VAST
+# itself. This simplifies the plugin CMake by not requiring plugin developers to
+# check whether their plugin is built alongside VAST.
+if ("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
+  macro(find_package)
+    if (NOT "${ARGV0}" STREQUAL "${CMAKE_PROJECT_NAME}")
+      _find_package(${ARGV})
+    endif ()
+  endmacro()
+endif ()
+
 # -- includes ------------------------------------------------------------------
 
 include(CMakeDependentOption)
