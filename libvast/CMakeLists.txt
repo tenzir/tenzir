@@ -390,18 +390,18 @@ endif ()
 if (NOT caf_dir)
   set(caf_dir ${CAF_INCLUDE_DIRS})
 endif ()
-dependency_summary("CAF" "${caf_dir}")
+dependency_summary("CAF" "${caf_dir}" "Dependencies")
 
 # Link against FlatBuffers.
 target_link_libraries(libvast PUBLIC ${flatbuffers_target})
 add_dependencies(libvast libvast_flatbuffers)
-dependency_summary("FlatBuffers" ${flatbuffers_target})
+dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
 
 # Link against yaml-cpp.
 option(YAML_CPP_ROOT "Install root of yaml-cpp" "")
 find_package(yaml-cpp 0.6.2 REQUIRED HINTS "${YAML_CPP_ROOT}")
 target_link_libraries(libvast PRIVATE yaml-cpp)
-dependency_summary("yaml-cpp" yaml-cpp)
+dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 
 option(FMT_ROOT "Install root of fmt" "")
 target_compile_definitions(
@@ -414,14 +414,14 @@ target_compile_definitions(
 find_package(fmt 5.2.1 REQUIRED HINTS "${FMT_ROOT}")
 string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(fmt 5.2.1 REQUIRED)")
 target_link_libraries(libvast PUBLIC fmt::fmt)
-dependency_summary("fmt" fmt::fmt)
+dependency_summary("fmt" fmt::fmt "Dependencies")
 
 option(SPDLOG_ROOT "Install root of spdlog" "")
 target_compile_definitions(libvast PUBLIC SPDLOG_FMT_EXTERNAL)
 find_package(spdlog 1.5.0 REQUIRED HINTS "${SPDLOG_ROOT}")
 string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(spdlog 1.5.0 REQUIRED)")
 target_link_libraries(libvast PUBLIC spdlog::spdlog)
-dependency_summary("spdlog" spdlog::spdlog)
+dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
 # Link against simdjson.
 option(SIMDJSON_ROOT "Install root of simdjson" "")
@@ -439,16 +439,16 @@ string(APPEND VAST_FIND_DEPENDENCY_LIST
   "\nfind_package(simdjson REQUIRED CONFIGS "
   "\"simdjson-config.cmake\" \"simdjson-targets.cmake\")")
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
-dependency_summary("simdjson" simdjson::simdjson)
+dependency_summary("simdjson" simdjson::simdjson "Dependencies")
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
-dependency_summary("robin-map" tsl::robin_map)
+dependency_summary("robin-map" tsl::robin_map "Dependencies")
 
 # Link against Apache Arrow.
 if (VAST_ENABLE_ARROW)
   target_link_libraries(libvast PRIVATE ${ARROW_LIBRARY})
-  dependency_summary("Apache Arrow" ${ARROW_LIBRARY})
+  dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 endif ()
 
 # TODO: Should we move the bundled schemas to libvast?

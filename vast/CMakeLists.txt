@@ -132,6 +132,7 @@ if (VAST_PLUGINS)
     list(APPEND bundled_plugins "${plugin_name}")
     set(plugin_binary_dir "plugin-${plugin_name}-${plugin_path_hash}")
     add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
+    dependency_summary("${plugin_name}" "${plugin_source_dir}" "Plugins")
   endforeach ()
 endif ()
 
