@@ -32,10 +32,10 @@ public:
   // -- configuration options --------------------------------------------------
 
   /// The program command line, without --caf. arguments.
-  std::vector<std::string> command_line;
+  std::vector<std::string> command_line = {};
 
   /// The configuration files to load.
-  std::vector<std::filesystem::path> config_files;
+  std::vector<std::filesystem::path> config_files = {};
 };
 
 } // namespace vast::system

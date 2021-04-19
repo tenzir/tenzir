@@ -219,6 +219,8 @@ caf::expected<schema> get_schema(const caf::settings& options) {
 detail::stable_set<std::filesystem::path>
 get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses) {
+  const auto disable_default_config_dirs
+    = caf::get_or(cfg, "vast.disable-default-config-dirs", false);
   detail::stable_set<std::filesystem::path> result;
   if (const char* vast_schema_directories = std::getenv("VAST_SCHEMA_DIRS"))
     for (auto&& path : detail::split(vast_schema_directories, ":"))
@@ -234,14 +236,17 @@ get_schema_dirs(const caf::actor_system_config& cfg,
     else
       VAST_ERROR("{} failed to get program path", __func__);
   }
-  result.insert(std::filesystem::path{VAST_SYSCONFDIR} / "vast" / "schema");
-  if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
-    result.insert(std::filesystem::path{xdg_config_home} / "vast" / "schema");
-  else if (const char* home = std::getenv("HOME"))
-    result.insert(std::filesystem::path{home} / ".config" / "vast" / "schema");
-  if (auto dirs = caf::get_if<std::vector<std::string>>( //
-        &cfg, "vast.schema-dirs"))
-    result.insert(dirs->begin(), dirs->end());
+  if (!disable_default_config_dirs) {
+    result.insert(std::filesystem::path{VAST_SYSCONFDIR} / "vast" / "schema");
+    if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
+      result.insert(std::filesystem::path{xdg_config_home} / "vast" / "schema");
+    else if (const char* home = std::getenv("HOME"))
+      result.insert(std::filesystem::path{home} / ".config" / "vast"
+                    / "schema");
+    if (auto dirs = caf::get_if<std::vector<std::string>>( //
+          &cfg, "vast.schema-dirs"))
+      result.insert(dirs->begin(), dirs->end());
+  }
   return result;
 }
 

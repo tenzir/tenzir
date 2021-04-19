@@ -162,7 +162,7 @@ if (PANDOC_FOUND)
   file(
     WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
     "execute_process(
-      COMMAND ${CMAKE_BINARY_DIR}/bin/vast manual
+      COMMAND ${CMAKE_BINARY_DIR}/bin/vast --disable-default-config-dirs manual
       OUTPUT_FILE ${man_generated}.md)
     execute_process(
       COMMAND pandoc -s -f markdown -t man ${man_generated}.md
