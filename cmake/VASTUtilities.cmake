@@ -54,9 +54,16 @@ macro (install_symlink _filepath _sympath)
 endmacro (install_symlink)
 
 # Helper utility for printing the status of dependencies.
-macro (dependency_summary name what)
+macro (dependency_summary name what category)
+  get_property(VAST_DEPENDENCY_SUMMARY_CATEGORIES GLOBAL
+               PROPERTY "VAST_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY")
+  if (NOT "${category}" IN_LIST VAST_DEPENDENCY_SUMMARY_CATEGORIES)
+    list(APPEND VAST_DEPENDENCY_SUMMARY_CATEGORIES "${category}")
+    set_property(GLOBAL PROPERTY "VAST_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY"
+                                 "${VAST_DEPENDENCY_SUMMARY_CATEGORIES}")
+  endif ()
   get_property(VAST_DEPENDENCY_SUMMARY GLOBAL
-               PROPERTY VAST_DEPENDENCY_SUMMARY_PROPERTY)
+               PROPERTY "VAST_DEPENDENCY_SUMMARY_${category}_PROPERTY")
   if (TARGET ${what})
     get_target_property(type "${what}" TYPE)
     if (type STREQUAL "INTERFACE_LIBRARY")
@@ -81,6 +88,6 @@ macro (dependency_summary name what)
     set(location "Not found")
   endif ()
   list(APPEND VAST_DEPENDENCY_SUMMARY " * ${name}: ${location}")
-  set_property(GLOBAL PROPERTY VAST_DEPENDENCY_SUMMARY_PROPERTY
+  set_property(GLOBAL PROPERTY "VAST_DEPENDENCY_SUMMARY_${category}_PROPERTY"
                                "${VAST_DEPENDENCY_SUMMARY}")
 endmacro ()
