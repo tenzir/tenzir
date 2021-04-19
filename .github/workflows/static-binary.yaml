@@ -1,7 +1,5 @@
 name: "VAST Static"
 on:
-  repository_dispatch:
-    types: static-binary
   workflow_dispatch:
     inputs:
       arguments:
@@ -35,14 +33,6 @@ jobs:
       BUILD_DIR: build
     steps:
     - name: Checkout
-      if: github.event_name == 'repository_dispatch'
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-        ref: ${{ github.event.client_payload.ref == '' && 'master' || github.event.client_payload.ref }}
-
-    - name: Checkout
-      if: github.event_name != 'repository_dispatch'
       uses: actions/checkout@v2
       with:
         fetch-depth: 0
