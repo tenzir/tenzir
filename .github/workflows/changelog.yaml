@@ -1,10 +1,5 @@
 name: 'VAST Changelog'
 on:
-  push:
-    branches:
-      - 'master'
-    paths-ignore:
-      - 'CHANGELOG.md'
   pull_request:
 
 jobs:
@@ -23,10 +18,15 @@ jobs:
           fetch-depth: 0
           submodules: 'recursive'
       - name: 'Detect Changes in CHANGELOG.md'
-        if: github.event_name == 'pull_request'
         run: |
-          if ! git diff --exit-code $(git merge-base 'origin/${{ github.event.pull_request.base.ref }}' HEAD) -- 'CHANGELOG.md'; then
-            echo 'Error: CHANGELOG.md must not be modified in PRs'
+          alias is_unchanged="git diff --exit-code $(git merge-base 'origin/${{ github.event.pull_request.base.ref }}' HEAD) --"
+          if ! is_unchanged CHANGELOG.md \
+            && is_unchanged cmake/VASTVersionFallback.cmake; then
+            echo 'Error: CHANGELOG.md must not be modified in non-release PRs'
+            exit 1
+          elif is_unchanged CHANGELOG.md \
+            && ! is_unchanged cmake/VASTVersionFallback.cmake; then
+            echo 'Error: CHANGELOG.md must be modified in release PRs'
             exit 1
           fi
       - name: 'Install Dependencies'
@@ -48,13 +48,3 @@ jobs:
       - name: 'Update CHANGELOG.md'
         run: |
           cmake --build build --target update-changelog
-      - name: 'Push CHANGELOG.md'
-        if: github.event_name == 'push'
-        run: |
-          git config --local user.email "engineering@tenzir.com"
-          git config --local user.name "Tenzir Bot"
-          git add 'CHANGELOG.md'
-          if ! git diff-index --quiet 'HEAD'; then
-            git commit -m "Update CHANGELOG"
-            git push "https://x-access-token:${{ secrets.REPO_SCOPE_ACCESS_TOKEN }}@github.com/tenzir/vast.git"
-          fi
