@@ -560,7 +560,7 @@ node_state::spawn_command(const invocation& inv,
 
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::string name,
-     const std::filesystem::path& dir,
+     std::filesystem::path dir,
      std::chrono::milliseconds shutdown_grace_period) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);
@@ -575,13 +575,15 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG("{} got DOWN from {}", self, msg.source);
-    auto actor = caf::actor_cast<caf::actor>(msg.source);
-    auto component = self->state.registry.remove(actor);
-    VAST_ASSERT(component); // All components are in the registry.
-    // Terminate if a singleton dies.
-    if (is_singleton(component->type)) {
-      VAST_ERROR("{} terminates after DOWN from {}", self, component->type);
-      self->send_exit(self, caf::exit_reason::user_shutdown);
+    if (!self->state.tearing_down) {
+      auto actor = caf::actor_cast<caf::actor>(msg.source);
+      auto component = self->state.registry.remove(actor);
+      VAST_ASSERT(component);
+      // Terminate if a singleton dies.
+      if (is_singleton(component->type)) {
+        VAST_ERROR("{} terminates after DOWN from {}", self, component->type);
+        self->send_exit(self, caf::exit_reason::user_shutdown);
+      }
     }
   });
   // Terminate deterministically on shutdown.
@@ -637,6 +639,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
     shutdown<policy::sequential>(self, std::move(scheduled_for_teardown),
                                  shutdown_grace_period, shutdown_kill_timeout);
+    self->state.tearing_down = true;
   });
   // Define the node behavior.
   return {
