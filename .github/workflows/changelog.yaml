@@ -51,12 +51,10 @@ jobs:
       - name: 'Push CHANGELOG.md'
         if: github.event_name == 'push'
         run: |
-          # Show github-actions as committer, c.f.,
-          # https://github.com/actions/checkout/issues/13#issuecomment-724415212
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          git config --local user.email "engineering@tenzir.com"
+          git config --local user.name "Tenzir Bot"
           git add 'CHANGELOG.md'
           if ! git diff-index --quiet 'HEAD'; then
             git commit -m "Update CHANGELOG"
-            git push "https://x-access-token:${{ github.token }}@github.com/tenzir/vast.git"
+            git push "https://x-access-token:${{ secrets.REPO_SCOPE_ACCESS_TOKEN }}@github.com/tenzir/vast.git"
           fi
