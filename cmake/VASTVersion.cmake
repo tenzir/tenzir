@@ -1,4 +1,4 @@
-include("${CMAKE_CURRENT_LIST_DIR}/VASTConfigVersionFallback.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/VASTVersionFallback.cmake")
 
 if (NOT VAST_VERSION_TAG)
   if (DEFINED ENV{VAST_VERSION_TAG})

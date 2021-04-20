@@ -101,7 +101,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :warning: Changes
 
-- default size of table slices (event batches) that is created from `vast import` processes has been changed from 1,000 to 1,024.
+- The default size of table slices (event batches) that is created from `vast import` processes has been changed from 1,000 to 1,024.
   [#1396](https://github.com/tenzir/vast/pull/1396)
 
 - VAST now ships with schema record types for Suricata's `mqtt` and `anomaly` event types.
@@ -530,7 +530,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The global VAST configuration now always resides in `<sysconfdir>/vast/vast.conf`, and bundled schemas always in `<datadir>/vast/schema/`. VAST no longer supports reading a `vast.conf` file in the current working directory.
   [#1036](https://github.com/tenzir/vast/pull/1036)
 
-- The prioprietary VAST configuration file has changed to the more ops-friendly industry standard YAML. This change introduced also a new dependency: [yaml-cpp](https://github.com/jbeder/yaml-cpp) version 0.6.2 or greater. The top-level `vast.yaml.example` illustrates how the new YAML config looks like. Please rename existing configuration files from `vast.conf` to `vast.yaml`. VAST still reads `vast.conf` but will soon only look for `vast.yaml` or `vast.yml` files in available configuration file paths.
+- The proprietary VAST configuration file has changed to the more ops-friendly industry standard YAML. This change introduced also a new dependency: [yaml-cpp](https://github.com/jbeder/yaml-cpp) version 0.6.2 or greater. The top-level `vast.yaml.example` illustrates how the new YAML config looks like. Please rename existing configuration files from `vast.conf` to `vast.yaml`. VAST still reads `vast.conf` but will soon only look for `vast.yaml` or `vast.yml` files in available configuration file paths.
   [#1045](https://github.com/tenzir/vast/pull/1045)
   [#1055](https://github.com/tenzir/vast/pull/1055)
   [#1059](https://github.com/tenzir/vast/pull/1059)
@@ -1039,7 +1039,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[unreleased]: https://github.com/tenzir/vast/commits/master/changelog
+[unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
 [2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
 [2021.01.28]: https://github.com/tenzir/vast/releases/tag/2021.01.28
