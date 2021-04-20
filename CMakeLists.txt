@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14...3.20 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
 
 # -- project setup -------------------------------------------------------------
 
@@ -13,6 +13,7 @@ project(
   VERSION
     ${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}.${VAST_VERSION_TWEAK}
   DESCRIPTION "Visibility Across Space and Time"
+  HOMEPAGE_URL "https://github.com/tenzir/vast"
   LANGUAGES C CXX)
 
 # -- sanity checks -------------------------------------------------------------
@@ -71,6 +72,30 @@ else ()
   set(VAST_IS_NOT_SUBPROJECT ON)
 endif ()
 unset(_VAST_PARENT_DIRECTORY)
+
+# -- changelog -----------------------------------------------------------------
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTChangelog.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake" @ONLY)
+
+file(GLOB_RECURSE changelog_dependencies CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/changelog/**.md")
+
+add_custom_target(changelog ALL
+  BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
+  DEPENDS
+    "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake"
+    ${changelog_dependencies}
+  COMMAND ${CMAKE_COMMAND} -P
+    "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake")
+
+add_custom_target(update-changelog
+  BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md"
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
+    "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md")
 
 # -- testing -------------------------------------------------------------------
 
@@ -602,7 +627,7 @@ endif ()
 
 # Install LICENSE and README. This can intentionally not be disabled.
 install(
-  FILES "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md"
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
         "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.3rdparty"
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"

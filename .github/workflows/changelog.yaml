@@ -1,0 +1,58 @@
+name: 'VAST Changelog'
+on:
+  push:
+    branches:
+      - 'master'
+    paths-ignore:
+      - 'CHANGELOG.md'
+  pull_request:
+
+jobs:
+  update:
+    name: 'Update'
+    runs-on: ubuntu-20.04
+    container: debian:buster-backports
+    steps:
+      - name: 'Install Git'
+        run: |
+          apt-get update
+          apt-get -y install git
+      - name: 'Checkout'
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+      - name: 'Detect Changes in CHANGELOG.md'
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --exit-code $(git merge-base 'origin/${{ github.event.pull_request.base.ref }}' HEAD) -- 'CHANGELOG.md'; then
+            echo 'Error: CHANGELOG.md must not be modified in PRs'
+            exit 1
+          fi
+      - name: 'Install Dependencies'
+        run: |
+          apt-get -y install libsnappy-dev libbrotli-dev zlib1g-dev wget \
+            liblz4-dev libzstd-dev ninja-build libpcap-dev libssl-dev \
+            libbenchmark-dev libflatbuffers-dev  flatbuffers-compiler-dev \
+            libyaml-cpp-dev libsimdjson-dev gnupg2 gcc-8 g++-8 python3 \
+            python3-pip python3-venv jq software-properties-common
+          apt-get -y -t buster-backports install libspdlog-dev libfmt-dev
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --upgrade cmake
+      - name: 'Configure Build'
+        env:
+          CC: gcc-8
+          CXX: g++-8
+        run: |
+          ./configure --with-bundled-caf --without-arrow
+      - name: 'Update CHANGELOG.md'
+        run: |
+          cmake --build build --target update-changelog
+      - name: 'Push CHANGELOG.md'
+        if: github.event_name == 'push'
+        run: |
+          git add 'CHANGELOG.md'
+          if git diff-index --quiet 'HEAD'; then
+            git commit -m "Update CHANGELOG"
+            git push
+          fi

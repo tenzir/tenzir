@@ -30,6 +30,7 @@ RUN wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | 
 
 # VAST
 WORKDIR $BUILD_DIR/vast
+COPY changelog ./changelog
 COPY cmake ./cmake
 COPY doc ./doc
 COPY libvast ./libvast

@@ -1,0 +1,103 @@
+cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
+
+set(categories
+  "breaking-changes"
+  "changes"
+  "experimental-features"
+  "features"
+  "bug-fixes")
+set(titles
+  ":zap: Breaking Changes"
+  ":warning: Changes"
+  ":dna: Experimental Features"
+  ":gift: Features"
+  ":beetle: Bug Fixes")
+
+set(changelog "")
+set(changelog_links "")
+set(changelog_directory "@CMAKE_CURRENT_SOURCE_DIR@/changelog")
+
+string(APPEND changelog
+  "<!--\n"
+  "This file is generated automatically. Add indivual changelog entries to the\n"
+  "'changelog/' subdirectory instead.\n"
+  "-->\n\n"
+  "# Changelog\n\n"
+  "This changelog documents all notable changes to @PROJECT_NAME@.\n\n")
+
+file(GLOB releases LIST_DIRECTORIES ON
+  RELATIVE "${changelog_directory}/" "${changelog_directory}/*")
+# TODO: Use COMPARE NATURAL when using CMake >= 3.18
+list(SORT releases COMPARE STRING ORDER DESCENDING)
+if ("unreleased" IN_LIST releases)
+  list(REMOVE_ITEM releases "unreleased")
+  list(PREPEND releases "unreleased")
+endif ()
+
+foreach (release IN LISTS releases)
+  # Write the section header.
+  if (release STREQUAL "unreleased")
+    string(APPEND changelog "## Unreleased\n\n")
+  else ()
+    string(APPEND changelog "## [${release}]\n\n")
+    string(APPEND changelog_links
+      "[${release}]: @PROJECT_HOMEPAGE_URL@/releases/tag/${release}\n")
+  endif ()
+
+  # Iterate over changelog entries for every release in a fixed order of
+  # sections as defined in `categories` and `titles`.
+  list(LENGTH categories num_categories)
+  math(EXPR num_categories "${num_categories} - 1")
+  foreach (category_index RANGE "${num_categories}")
+    list(GET categories "${category_index}" category)
+    list(GET titles "${category_index}" title)
+    if (IS_DIRECTORY "${changelog_directory}/${release}/${category}")
+      file(GLOB entries
+        RELATIVE "${changelog_directory}/${release}/${category}/"
+        "${changelog_directory}/${release}/${category}/*.md")
+      if (entries)
+        string(APPEND changelog "### ${title}\n\n")
+        list(SORT entries)
+        # Iterate over the individual changelog entries for the current release
+        # and category. Note that each paragraph is convereted into a single
+        # bullet.
+        foreach (entry IN LISTS entries)
+          file(READ "${changelog_directory}/${release}/${category}/${entry}"
+            entry_texts)
+          string(STRIP "${entry_texts}" entry_texts)
+          string(REPLACE ";" ":semicolon:" entry_texts "${entry_texts}")
+          string(REPLACE "\n\n" ";" entry_texts "${entry_texts}")
+          foreach (entry_text IN LISTS entry_texts)
+            string(REPLACE ":semicolon:" ";" entry_text "${entry_text}")
+            string(REPLACE "\n" " " entry_text "${entry_text}")
+            string(APPEND changelog "- ${entry_text}\n")
+            string(REGEX REPLACE "\\.[^.]*$" "" references "${entry}")
+            string(REPLACE "-" ";" references "${references}")
+            # Add the PR/Author reference(s) to evrry changelog entry as
+            # determined from the filename.
+            foreach (reference IN LISTS references)
+              if (reference)
+                if (reference MATCHES "^[1-9][0-9]+\$")
+                  set(reference_link "@PROJECT_HOMEPAGE_URL@/pull/${reference}")
+                  string(PREPEND reference "#")
+                else ()
+                  set(reference_link "https://github.com/${reference}")
+                  string(PREPEND reference "@")
+                endif ()
+                string(APPEND changelog "  [${reference}](${reference_link})\n")
+              endif ()
+            endforeach ()
+            string(APPEND changelog "\n")
+          endforeach ()
+        endforeach ()
+      endif ()
+    endif ()
+  endforeach ()
+endforeach ()
+
+# Assemble the amalgamated CHANGELOG.md file.
+file(READ "${changelog_directory}/legacy.md" changelog_legacy)
+file(WRITE "@CMAKE_CURRENT_BINARY_DIR@/CHANGELOG.md"
+  "${changelog}"
+  "${changelog_legacy}"
+  "${changelog_links}")
