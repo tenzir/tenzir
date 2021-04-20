@@ -33,6 +33,7 @@ file(GLOB releases LIST_DIRECTORIES ON
   RELATIVE "${changelog_directory}/" "${changelog_directory}/*")
 # TODO: Use COMPARE NATURAL when using CMake >= 3.18
 list(SORT releases COMPARE STRING ORDER DESCENDING)
+list(REMOVE_ITEM releases "legacy.md")
 if ("unreleased" IN_LIST releases)
   list(REMOVE_ITEM releases "unreleased")
   list(PREPEND releases "unreleased")

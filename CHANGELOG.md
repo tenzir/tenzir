@@ -88,8 +88,6 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Plugin unit tests now correctly load and initialize their respective plugins.
   [#1549](https://github.com/tenzir/vast/pull/1549)
 
-## [legacy.md]
-
 ## [2021.03.25]
 
 ### :zap: Breaking Changes
@@ -1042,7 +1040,6 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog
-[legacy.md]: https://github.com/tenzir/vast/releases/tag/legacy.md
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
 [2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
 [2021.01.28]: https://github.com/tenzir/vast/releases/tag/2021.01.28
