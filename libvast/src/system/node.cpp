@@ -467,7 +467,11 @@ node_state::spawn_command(const invocation& inv,
   VAST_TRACE_SCOPE("{}", inv);
   using std::begin;
   using std::end;
-  auto self = this_node;
+  auto* self = this_node;
+  if (self->state.tearing_down)
+    return caf::make_message(caf::make_error(caf::sec::request_receiver_down,
+                                             "can't spawn a component while "
+                                             "tearing down"));
   auto rp = self->make_response_promise();
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
@@ -589,57 +593,62 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);
-    std::vector<caf::actor> scheduled_for_teardown;
-    // TODO: A recent refactoring introduced a bug that caused this function to
-    // only remove by label instead of by type or label. This was not caught in
-    // our integration test suite because we do not currently test continuous
-    // imports/exports in them. We should evaluate how we can test for shutdown
-    // bugs.
-    auto schedule_teardown = [&](const std::string& type_or_label) {
-      if (is_singleton(type_or_label)) {
-        if (auto component = self->state.registry.remove(type_or_label)) {
-          VAST_VERBOSE("{} schedules {} for shutdown", self, type_or_label);
-          self->demonitor(component->actor);
-          scheduled_for_teardown.push_back(std::move(component->actor));
-        }
-      } else if (auto components
-                 = self->state.registry.find_by_type(type_or_label);
-                 !components.empty()) {
-        VAST_VERBOSE("{} schedules {} {}(s) for shutdown", self,
-                     components.size(), type_or_label);
-        for (auto& component : components) {
-          if (auto removed = self->state.registry.remove(component)) {
-            self->demonitor(removed->actor);
-            scheduled_for_teardown.push_back(std::move(removed->actor));
-          }
-        }
-      }
-    };
-    // Terminate the accountant first because it acts like a source and may
-    // hold buffered data.
-    schedule_teardown("accountant");
-    // Take out the filesystem, which we terminate at the very end.
-    auto filesystem = deregister_component(self, "filesystem");
-    // Tear down the pipeline from source to sink. Note that the order is
-    // important here; the source must be shut down before the importer.
-    auto pipeline = {"source",  "importer", "disk-monitor", "index",
-                     "archive", "exporter", "sink"};
-    for (const auto* component : pipeline)
-      schedule_teardown(component);
-    // Now schedule all remaining components for termination.
-    auto& registry = self->state.registry;
-    std::vector<std::string> remaining;
-    remaining.reserve(registry.components().size());
-    for (const auto& [label, _] : registry.components())
-      remaining.push_back(label);
-    for (const auto& label : remaining)
-      schedule_teardown(label);
-    // Finally, bring down the filesystem.
-    scheduled_for_teardown.push_back(std::move(*filesystem));
-    auto shutdown_kill_timeout = shutdown_grace_period / 5;
-    shutdown<policy::sequential>(self, std::move(scheduled_for_teardown),
-                                 shutdown_grace_period, shutdown_kill_timeout);
     self->state.tearing_down = true;
+    // Ignore duplicate EXIT messages except for hard kills.
+    self->set_exit_handler([=](const caf::exit_msg& msg) {
+      if (msg.reason == caf::exit_reason::kill) {
+        VAST_WARN("{} received hard kill and terminates immediately", self);
+        self->quit(msg.reason);
+      } else {
+        VAST_DEBUG("{} ignores duplicate EXIT message from {}", self,
+                   msg.source);
+      }
+    });
+    std::vector<caf::actor> teardown_aux;
+    for (const auto& [_, comp] : self->state.registry.components()) {
+      self->demonitor(comp.actor);
+      // Ignore remote actors.
+      if (comp.actor->node() != self->node())
+        continue;
+      // Core components are terminated last.
+      if (comp.type == "archive" || comp.type == "filesystem"
+          || comp.type == "importer" || comp.type == "index")
+        continue;
+      teardown_aux.push_back(comp.actor);
+    }
+    auto shutdown_kill_timeout = shutdown_grace_period / 5;
+    auto core_shutdown_sequence = [=]() {
+      std::vector<caf::actor> teardown_core;
+      auto schedule = [&](const std::string& component) {
+        if (auto x = self->state.registry.find_by_label(component)) {
+          teardown_core.push_back(x);
+        }
+      };
+      schedule("importer");
+      schedule("index");
+      schedule("archive");
+      // The filesystem is still required for the shutdown of other components,
+      // so we schedule it to terminate last.
+      schedule("filesystem");
+      shutdown<policy::sequential>(self, std::move(teardown_core),
+                                   shutdown_grace_period,
+                                   shutdown_kill_timeout);
+    };
+    terminate<policy::parallel>(self, std::move(teardown_aux),
+                                shutdown_grace_period, shutdown_kill_timeout)
+      .then(
+        [self, core_shutdown_sequence](atom::done) mutable {
+          VAST_DEBUG("{} terminated auxiliary actors, commencing core shutdown "
+                     "sequence...",
+                     self);
+          core_shutdown_sequence();
+        },
+        [self, core_shutdown_sequence](const caf::error& err) {
+          VAST_ERROR("{} failed to cleanly terminate auxiliary actors {}, "
+                     "shutting down core components",
+                     self, err);
+          core_shutdown_sequence();
+        });
   });
   // Define the node behavior.
   return {
