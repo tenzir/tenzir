@@ -61,6 +61,14 @@ caf::error configuration::parse(int argc, char** argv) {
     for (const auto& [old, new_] : replacements)
       if (option == old)
         option = new_;
+  // Detect when running with --disable-default-config-dirs, and remove the
+  // option from the command line.
+  if (auto it = std::find(command_line.begin(), command_line.end(),
+                          "--disable-default-config-dirs");
+      it != command_line.end()) {
+    caf::put(content, "vast.disable-default-config-dirs", true);
+    command_line.erase(it);
+  }
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) { return !detail::starts_with(x, "--caf."); };
@@ -69,22 +77,6 @@ caf::error configuration::parse(int argc, char** argv) {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // Check for multiple config files in directories.
-  std::unordered_set<std::string> config_dirs;
-  for (const auto& config : config_files) {
-    std::error_code err{};
-    if (!std::filesystem::exists(config, err))
-      return caf::make_error(ec::no_such_file,
-                             fmt::format("config file {} does not exist: {}",
-                                         std::filesystem::absolute(config, err),
-                                         err.message()));
-    const auto dir = config.parent_path();
-    if (config_dirs.find(dir.string()) != config_dirs.end())
-      return caf::make_error(ec::parse_error, "found multiple config files in",
-                             dir.string());
-    else
-      config_dirs.insert(dir.string());
-  }
   // Instead of the CAF-supplied `config_file_path`, we use our own
   // `config_files` variable in order to support multiple configuration files.
   auto add_configs = [&](std::filesystem::path&& dir) -> caf::error {
@@ -108,16 +100,19 @@ caf::error configuration::parse(int argc, char** argv) {
       config_files.emplace_back(std::move(conf_yml));
     return caf::none;
   };
-  if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME")) {
-    if (auto err = add_configs(std::filesystem::path{xdg_config_home} / "vast"))
-      return err;
-  } else if (const char* home = std::getenv("HOME")) {
-    if (auto err
-        = add_configs(std::filesystem::path{home} / ".config" / "vast"))
+  if (!caf::get_or(content, "vast.disable-default-config-dirs", false)) {
+    if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME")) {
+      if (auto err
+          = add_configs(std::filesystem::path{xdg_config_home} / "vast"))
+        return err;
+    } else if (const char* home = std::getenv("HOME")) {
+      if (auto err
+          = add_configs(std::filesystem::path{home} / ".config" / "vast"))
+        return err;
+    }
+    if (auto err = add_configs(std::filesystem::path{VAST_SYSCONFDIR} / "vast"))
       return err;
   }
-  if (auto err = add_configs(std::filesystem::path{VAST_SYSCONFDIR} / "vast"))
-    return err;
   // If the user provided a config file on the command line, we attempt to
   // parse it last.
   for (auto& arg : command_line) {
@@ -144,7 +139,7 @@ caf::error configuration::parse(int argc, char** argv) {
       auto yaml = from_yaml(*contents);
       if (!yaml)
         return yaml.error();
-      auto rec = caf::get_if<record>(&*yaml);
+      auto* rec = caf::get_if<record>(&*yaml);
       if (!rec)
         return caf::make_error(ec::parse_error, "config file not a map of "
                                                 "key-value pairs");
@@ -177,7 +172,7 @@ caf::error configuration::parse(int argc, char** argv) {
   // heuristic to see whether either type works.
   auto parse_config_value
     = [](const caf::config_option& opt,
-         const caf::config_value val) -> caf::expected<caf::config_value> {
+         const caf::config_value& val) -> caf::expected<caf::config_value> {
     // Hackish way to get a string representation that doesn't add double
     // quotes around the value.
     auto no_quote_stringify = detail::overload{
@@ -208,7 +203,7 @@ caf::error configuration::parse(int argc, char** argv) {
     // Now this is incredibly ugly, but custom_options_ (a config_option_set)
     // is the only place that contains the valid type information that our
     // config file must abide to.
-    if (auto option = custom_options_.qualified_name_lookup(key)) {
+    if (const auto* option = custom_options_.qualified_name_lookup(key)) {
       if (auto x = parse_config_value(*option, value))
         put(content, key, std::move(*x));
       else

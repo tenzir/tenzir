@@ -13,6 +13,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The new option `--disable-default-config-dirs` disables the loading of user
+  and system configuration, schema, and plugin directories. We use this option
+  internally when generating VAST's man page and when running integration tests.
+  [#1557](https://github.com/tenzir/vast/pull/1557)
+
 - ⚡️ Plugins must define a separate entrypoint in their build scaffolding using
   the argument `ENTRYPOINT` to the CMake function `VASTRegisterPlugin`. If only
   a single value is given to the argument `SOURCES`, it is interpreted as the

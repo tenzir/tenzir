@@ -85,7 +85,7 @@ option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
 add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
                  "build shared instead of static libraries.\n")
 
-# -- relocatable installations ----------------------------------------------
+# -- relocatable installations -------------------------------------------------
 
 # Setting this option removes configuration dependent absolute paths from the
 # VAST installation. Concretely, it enables the dynamic binary and libraries to
