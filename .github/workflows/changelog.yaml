@@ -52,7 +52,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           git add 'CHANGELOG.md'
-          if git diff-index --quiet 'HEAD'; then
+          if ! git diff-index --quiet 'HEAD'; then
             git commit -m "Update CHANGELOG"
             git push
           fi
