@@ -80,6 +80,17 @@ auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(caf::make_error(code, std::move(msg)));
 }
 
+/// A list of components that are essential for importing and exporting data
+/// from the node.
+std::set<const char*> core_components
+  = {"archive", "filesystem", "importer", "index"};
+
+bool is_core_component(std::string_view type) {
+  auto pred = [&](const char* x) { return x == type; };
+  return std::any_of(std::begin(core_components), std::end(core_components),
+                     pred);
+}
+
 /// Helper function to determine whether a component can be spawned at most
 /// once.
 bool is_singleton(std::string_view type) {
@@ -583,7 +594,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       auto component = self->state.registry.remove(actor);
       VAST_ASSERT(component);
       // Terminate if a singleton dies.
-      if (is_singleton(component->type)) {
+      if (is_core_component(component->type)) {
         VAST_ERROR("{} terminates after DOWN from {}", self, component->type);
         self->send_exit(self, caf::exit_reason::user_shutdown);
       }
@@ -606,14 +617,18 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     auto& registry = self->state.registry;
     // Core components are terminated in a second stage, we remove them from the
     // registry upfront and deal with them later.
-    std::vector<caf::actor> core_components;
+    std::vector<caf::actor> core_shutdown_handles;
     // The components listed here need to be terminated in sequential order.
     // The importer needs to shut down first because it might still have
     // buffered data. The index uses the archive for querying. The filesystem
     // is needed by all others for the persisting logic.
-    for (const char* name : {"importer", "index", "archive", "filesystem"}) {
+    auto shutdown_sequence = std::initializer_list<const char*>{
+      "importer", "index", "archive", "filesystem"};
+    // Make sure that these remain in sync.
+    VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
+    for (const char* name : shutdown_sequence) {
       if (auto comp = registry.remove(name))
-        core_components.push_back(comp->actor);
+        core_shutdown_handles.push_back(comp->actor);
     }
     std::vector<caf::actor> aux_components;
     for (const auto& [_, comp] : registry.components()) {
@@ -626,14 +641,14 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     // Drop everything.
     registry.clear();
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
-    auto core_shutdown_sequence
-      = [=, core_components = std::move(core_components)]() mutable {
-          for (const auto& comp : core_components)
-            self->demonitor(comp);
-          shutdown<policy::sequential>(self, std::move(core_components),
-                                       shutdown_grace_period,
-                                       shutdown_kill_timeout);
-        };
+    auto core_shutdown_sequence =
+      [=, core_shutdown_handles = std::move(core_shutdown_handles)]() mutable {
+        for (const auto& comp : core_shutdown_handles)
+          self->demonitor(comp);
+        shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
+                                     shutdown_grace_period,
+                                     shutdown_kill_timeout);
+      };
     terminate<policy::parallel>(self, std::move(aux_components),
                                 shutdown_grace_period, shutdown_kill_timeout)
       .then(
