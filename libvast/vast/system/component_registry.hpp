@@ -128,6 +128,9 @@ public:
   /// @returns A reference to the internal component map.
   const component_map& components() const;
 
+  /// Removes all entries from the registry.
+  void clear() noexcept;
+
   /// @relates registry
   template <class Inspector>
   friend auto inspect(Inspector& f, component_registry& x) {

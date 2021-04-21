@@ -469,9 +469,8 @@ node_state::spawn_command(const invocation& inv,
   using std::end;
   auto* self = this_node;
   if (self->state.tearing_down)
-    return caf::make_message(caf::make_error(caf::sec::request_receiver_down,
-                                             "can't spawn a component while "
-                                             "tearing down"));
+    return caf::make_message(caf::make_error( //
+      ec::no_error, "can't spawn a component while tearing down"));
   auto rp = self->make_response_promise();
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
@@ -604,37 +603,38 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
                    msg.source);
       }
     });
-    std::vector<caf::actor> teardown_aux;
-    for (const auto& [_, comp] : self->state.registry.components()) {
+    auto& registry = self->state.registry;
+    // Core components are terminated in a second stage, we remove them from the
+    // registry upfront and deal with them later.
+    std::vector<caf::actor> core_components;
+    // The components listed here need to be terminated in sequential order.
+    // The importer needs to shut down first because it might still have
+    // buffered data. The index uses the archive for querying. The filesystem
+    // is needed by all others for the persisting logic.
+    for (const char* name : {"importer", "index", "archive", "filesystem"}) {
+      if (auto comp = registry.remove(name))
+        core_components.push_back(comp->actor);
+    }
+    std::vector<caf::actor> aux_components;
+    for (const auto& [_, comp] : registry.components()) {
       self->demonitor(comp.actor);
       // Ignore remote actors.
       if (comp.actor->node() != self->node())
         continue;
-      // Core components are terminated last.
-      if (comp.type == "archive" || comp.type == "filesystem"
-          || comp.type == "importer" || comp.type == "index")
-        continue;
-      teardown_aux.push_back(comp.actor);
+      aux_components.push_back(comp.actor);
     }
+    // Drop everything.
+    registry.clear();
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
-    auto core_shutdown_sequence = [=]() {
-      std::vector<caf::actor> teardown_core;
-      auto schedule = [&](const std::string& component) {
-        if (auto x = self->state.registry.find_by_label(component)) {
-          teardown_core.push_back(x);
-        }
-      };
-      schedule("importer");
-      schedule("index");
-      schedule("archive");
-      // The filesystem is still required for the shutdown of other components,
-      // so we schedule it to terminate last.
-      schedule("filesystem");
-      shutdown<policy::sequential>(self, std::move(teardown_core),
-                                   shutdown_grace_period,
-                                   shutdown_kill_timeout);
-    };
-    terminate<policy::parallel>(self, std::move(teardown_aux),
+    auto core_shutdown_sequence
+      = [=, core_components = std::move(core_components)]() mutable {
+          for (const auto& comp : core_components)
+            self->demonitor(comp);
+          shutdown<policy::sequential>(self, std::move(core_components),
+                                       shutdown_grace_period,
+                                       shutdown_kill_timeout);
+        };
+    terminate<policy::parallel>(self, std::move(aux_components),
                                 shutdown_grace_period, shutdown_kill_timeout)
       .then(
         [self, core_shutdown_sequence](atom::done) mutable {
@@ -643,7 +643,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
                      self);
           core_shutdown_sequence();
         },
-        [self, core_shutdown_sequence](const caf::error& err) {
+        [self, core_shutdown_sequence](const caf::error& err) mutable {
           VAST_ERROR("{} failed to cleanly terminate auxiliary actors {}, "
                      "shutting down core components",
                      self, err);
