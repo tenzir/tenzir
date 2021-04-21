@@ -258,7 +258,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // communication for typed actors. Hence, we must actor_cast here.
       // Ideally, we would change that index handler to actually return the
       // desired value.
-      auto perserve_ids = has_historical_with_ids_option(self->state.options)
+      auto perserve_ids = has_preserve_ids_option(self->state.options)
                             ? query::extract::preserve
                             : query::extract::drop;
       auto q = vast::query::make_extract(self, perserve_ids, self->state.expr);
