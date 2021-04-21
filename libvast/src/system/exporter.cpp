@@ -303,8 +303,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
           })
         .inbound_slot();
     },
-    // -- status_client_actor
-    // --------------------------------------------------
+    // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) {
       auto result = caf::settings{};
       auto& exporter_status = put_dictionary(result, "exporter");
@@ -325,8 +324,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       }
       return result;
     },
-    // -- receiver_actor<table_slice>
-    // ------------------------------------------------
+    // -- receiver_actor<table_slice> ------------------------------------------
     [self](table_slice slice) { //
       VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
       VAST_DEBUG("{} got batch of {} events", self, slice.rows());

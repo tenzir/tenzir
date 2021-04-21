@@ -94,7 +94,7 @@ public:
   void start(vast::query query, index_actor index);
 
   /// @pre `state() == collect_hits`
-  /// @returns false if there are no more partition to schedule.
+  /// @returns false if there are no more partitions to schedule.
   bool request_more_results();
 
   // -- properties -------------------------------------------------------------
