@@ -255,6 +255,48 @@ private:
   inline static std::atomic<size_t> num_instances_ = {};
 };
 
+// -- operations ---------------------------------------------------------------
+
+/// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice`
+/// into multiple slices if `selection` produces gaps.
+/// @param slice The input table slice.
+/// @param selection ID set for selecting events from `slice`.
+/// @returns new table slices of the same implementation type as `slice` from
+///          `selection`.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+std::vector<table_slice> select(const table_slice& slice, const ids& selection);
+
+/// Selects the first `num_rows` rows of `slice`.
+/// @param slice The input table slice.
+/// @param num_rows The number of rows to keep.
+/// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
+///          table slice of the first `num_rows` rows from `slice`.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+/// @pre `num_rows > 0`
+table_slice truncate(table_slice slice, size_t num_rows);
+
+/// Splits a table slice into two slices such that the first slice contains
+/// the rows `[0, partition_point)` and the second slice contains the rows
+/// `[partition_point, n)`, where `n = slice.rows()`.
+/// @param slice The input table slice.
+/// @param partition_point The index of the first row for the second slice.
+/// @returns two new table slices if `0 < partition_point < slice.rows()`,
+///          otherwise returns `slice` and an invalid tbale slice.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+std::pair<table_slice, table_slice>
+split(table_slice slice, size_t partition_point);
+
+/// Counts the number of total rows of multiple table slices.
+/// @param slices The table slices to count.
+/// @returns The sum of rows across *slices*.
+uint64_t rows(const std::vector<table_slice>& slices);
+
+/// Evaluates an expression over a table slice by applying it row-wise.
+/// @param expr The expression to evaluate.
+/// @param slice The table slice to apply *expr* on.
+/// @returns The set of row IDs in *slice* for which *expr* yields true.
+ids evaluate(const expression& expr, const table_slice& slice);
+
 // Attribute-specifier-seqs are not allowed in friend function declarations, so
 // we re-declare the filter functions with nodiscard here.
 [[nodiscard]] std::optional<table_slice>
@@ -282,47 +324,5 @@ filter(const table_slice& slice, const expression& expr);
 /// @pre `slice.encoding() != table_slice_encoding::none`
 [[nodiscard]] std::optional<table_slice>
 filter(const table_slice& slice, const ids& hints);
-
-// -- operations ---------------------------------------------------------------
-
-/// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice`
-/// into multiple slices if `selection` produces gaps.
-/// @param slice The input table slice.
-/// @param selection ID set for selecting events from `slice`.
-/// @returns new table slices of the same implementation type as `slice` from
-///          `selection`.
-/// @pre `slice.encoding() != table_slice_encoding::none`
-std::vector<table_slice> select(const table_slice& slice, const ids& selection);
-
-/// Selects the first `num_rows` rows of `slice`.
-/// @param slice The input table slice.
-/// @param num_rows The number of rows to keep.
-/// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
-///          table slice of the first `num_rows` rows from `slice`.
-/// @pre `slice.encoding() != table_slice_encoding::none`
-/// @pre `num_rows > 0`
-table_slice truncate(const table_slice& slice, size_t num_rows);
-
-/// Splits a table slice into two slices such that the first slice contains
-/// the rows `[0, partition_point)` and the second slice contains the rows
-/// `[partition_point, n)`, where `n = slice.rows()`.
-/// @param slice The input table slice.
-/// @param partition_point The index of the first row for the second slice.
-/// @returns two new table slices if `0 < partition_point < slice.rows()`,
-///          otherwise returns `slice` and an invalid tbale slice.
-/// @pre `slice.encoding() != table_slice_encoding::none`
-std::pair<table_slice, table_slice>
-split(const table_slice& slice, size_t partition_point);
-
-/// Counts the number of total rows of multiple table slices.
-/// @param slices The table slices to count.
-/// @returns The sum of rows across *slices*.
-uint64_t rows(const std::vector<table_slice>& slices);
-
-/// Evaluates an expression over a table slice by applying it row-wise.
-/// @param expr The expression to evaluate.
-/// @param slice The table slice to apply *expr* on.
-/// @returns The set of row IDs in *slice* for which *expr* yields true.
-ids evaluate(const expression& expr, const table_slice& slice);
 
 } // namespace vast

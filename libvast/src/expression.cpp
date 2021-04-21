@@ -192,7 +192,9 @@ caf::expected<expression> normalize_and_validate(expression expr) {
 
 caf::expected<expression> tailor(expression expr, const type& t) {
   if (caf::holds_alternative<caf::none_t>(expr))
-    return caf::make_error(ec::unspecified, "invalid expression");
+    return caf::make_error(
+      ec::unspecified,
+      fmt::format("failed to tailor expression {} for type {}", expr, t));
   return caf::visit(type_resolver{t}, std::move(expr));
 }
 

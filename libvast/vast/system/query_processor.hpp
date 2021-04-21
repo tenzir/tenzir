@@ -94,6 +94,7 @@ public:
   void start(vast::query query, index_actor index);
 
   /// @pre `state() == collect_hits`
+  /// @returns false if there are no more partition to schedule.
   bool request_more_results();
 
   // -- properties -------------------------------------------------------------
@@ -126,7 +127,8 @@ protected:
 
   // -- implementation hooks ---------------------------------------------------
 
-  /// Processes incoming hits from the INDEX.
+  /// Processes incoming done messages from the INDEX. The default
+  /// implementation tansitions to the idle state.
   virtual void process_done();
 
   // -- member variables -------------------------------------------------------

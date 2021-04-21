@@ -48,7 +48,8 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
       slice = std::move(st.results[0]);
       st.results.erase(st.results.begin());
     } else {
-      auto [first, second] = split(st.results[0], st.query.requested);
+      auto [first, second]
+        = split(std::move(st.results[0]), st.query.requested);
       VAST_ASSERT(first.encoding() != table_slice_encoding::none);
       VAST_ASSERT(second.encoding() != table_slice_encoding::none);
       VAST_ASSERT(first.rows() == st.query.requested);

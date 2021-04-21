@@ -54,7 +54,6 @@ struct archive_state {
   vast::system::measurement measurement;
   accountant_actor accountant;
   static inline const char* name = "archive";
-  const uint64_t partition_offset = 0;
 };
 
 /// Stores event batches and answers queries for ID sets.

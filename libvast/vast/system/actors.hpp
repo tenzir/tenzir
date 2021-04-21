@@ -217,7 +217,7 @@ using archive_actor = typed_actor_fwd<
   caf::reacts_to<accountant_actor>,
   // INTERNAL: Handles a query for the given ids, and sends the table slices
   // back to the client.
-  caf::reacts_to<atom::internal>,
+  caf::reacts_to<atom::internal, atom::resume>,
   // The internal telemetry loop of the ARCHIVE.
   caf::reacts_to<atom::telemetry>>
   // Conform to the protocol of the STORE actor.

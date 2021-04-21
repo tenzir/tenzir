@@ -648,7 +648,7 @@ active_partition_actor::behavior_type active_partition(
               rp.delegate(self->state.store, std::move(query), hits);
             }
           },
-          [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
+          [rp](caf::error& err) mutable { rp.deliver(std::move(err)); });
       return rp;
     },
     [self](atom::status,
@@ -840,7 +840,7 @@ partition_actor::behavior_type passive_partition(
               rp.delegate(self->state.store, std::move(query), hits);
             }
           },
-          [rp](caf::error err) mutable { rp.deliver(std::move(err)); });
+          [rp](caf::error& err) mutable { rp.deliver(std::move(err)); });
       return rp;
     },
     [self](atom::status,

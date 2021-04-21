@@ -49,11 +49,7 @@ void archive_state::send_report() {
 }
 
 std::unique_ptr<segment_store::lookup> next_session(archive_state& state) {
-  while (true) {
-    if (state.requests.empty()) {
-      VAST_TRACE("archive has no requests");
-      return nullptr;
-    }
+  while (!state.requests.empty()) {
     auto& request = state.requests.front();
     if (request.cancelled || request.ids_queue.empty()) {
       // Not sure whether this is really necessary.
@@ -71,6 +67,8 @@ std::unique_ptr<segment_store::lookup> next_session(archive_state& state) {
     request.ids_queue.pop();
     return state.store->extract(state.session_ids);
   }
+  VAST_TRACE("archive has no requests");
+  return nullptr;
 }
 
 auto file_request(archive_actor::stateful_pointer<archive_state> self,
@@ -81,16 +79,19 @@ auto file_request(archive_actor::stateful_pointer<archive_state> self,
                    [&](const auto& request) { return request.query == query; });
   if (it != self->state.requests.end()) {
     VAST_ASSERT(query == it->query);
-    // Down messages are sent with high prio.
-    // TODO: What if the request is already cleaned up after a down, but we
-    // get new ids from the same requester later because of the normal
-    // priority afterwards?
+    // Down messages are sent with high prio so the request might still be
+    // in the queue but cancelled. In case the first request has already been
+    // cleaned up, we are in the else branch.
     if (it->cancelled) {
       rp.deliver(atom::done_v);
-    } else {
-      it->ids_queue.emplace(xs, rp);
+      return rp;
     }
+    it->ids_queue.emplace(xs, rp);
   } else {
+    // Monitor the sink. We can cancel query execution for it when it goes down.
+    // In case we already cleaned up a previous request we're doing unnecessary
+    // work.
+    // TODO: Figure out a way to avoid this.
     caf::visit(detail::overload{
                  [&](query::count& count) { self->monitor(count.sink); },
                  [&](query::extract& extract) { self->monitor(extract.sink); },
@@ -103,7 +104,7 @@ auto file_request(archive_actor::stateful_pointer<archive_state> self,
     self->state.session = next_session(self->state);
     // We just queued the work.
     VAST_ASSERT(self->state.session);
-    self->send(self, atom::internal_v);
+    self->send(self, atom::internal_v, atom::resume_v);
   }
   return rp;
 }
@@ -155,7 +156,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
   });
   return {
     [self](vast::query query, const ids& xs) -> caf::result<atom::done> {
-      VAST_DEBUG("{} got request with the query {} and {} hints [{},  {})",
+      VAST_DEBUG("{} got a request with the query {} and {} hints [{},  {})",
                  self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
       if (caf::holds_alternative<query::erase>(query.cmd)) {
         // We erase eagerly.
@@ -165,27 +166,33 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       }
       return file_request(self, std::move(query), xs);
     },
-    [self](atom::internal) {
+    [self](atom::internal, atom::resume) {
       VAST_ASSERT(self->state.session);
       VAST_ASSERT(!self->state.requests.empty());
-      auto& request = self->state.requests.front();
-      if (request.cancelled) {
+      if (self->state.requests.front().cancelled) {
         self->state.active_promise.deliver(atom::done_v);
         self->state.session = next_session(self->state);
         if (!self->state.session)
           // Nothing to do at the moment;
           return;
       };
+      auto& request = self->state.requests.front();
       auto slice = self->state.session->next();
       if (slice) {
         // Add an lru cache for checkers in the archive state.
         auto checker = expression{};
         if (request.query.expr != expression{}) {
           auto c = tailor(request.query.expr, slice->layout());
-          if (!c)
-            VAST_ERROR("{} failed to tailor expression: {}", self, c.error());
-          else
-            checker = std::move(*c);
+          if (!c) {
+            VAST_ERROR("{} {}", self, c.error());
+            request.cancelled = true;
+            self->state.active_promise.deliver(c.error());
+            // We deliver the remaining promises in this request regularly in
+            // the next run of `next_session()`.
+            self->send(self, atom::internal_v, atom::resume_v);
+            return;
+          }
+          checker = std::move(*c);
           // TODO: Remove meta predicates (They don't contain false
           // positives).
         }
@@ -227,17 +234,20 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                    request.query.cmd);
       } else {
         // We didn't get a slice from the segment store.
-        if (slice.error() != caf::no_error)
+        if (slice.error() != caf::no_error) {
           VAST_ERROR("{} failed to retrieve slice: {}", self, slice.error());
+          self->state.active_promise.deliver(slice.error());
+        } else {
+          self->state.active_promise.deliver(atom::done_v);
+        }
         // This session is done.
         // We're at the end, check for more requests.
-        self->state.active_promise.deliver(atom::done_v);
         self->state.session = next_session(self->state);
         if (!self->state.session)
           // Nothing to do at the moment;
           return;
       }
-      self->send(self, atom::internal_v);
+      self->send(self, atom::internal_v, atom::resume_v);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {

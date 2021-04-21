@@ -508,24 +508,34 @@ select(const table_slice& slice, const ids& selection) {
   return result;
 }
 
-table_slice truncate(const table_slice& slice, size_t num_rows) {
+table_slice truncate(table_slice slice, size_t num_rows) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   VAST_ASSERT(num_rows > 0);
   if (slice.rows() <= num_rows)
     return slice;
+  // make_ids fails if the offset is an invalid_id.
+  auto offset = slice.offset();
+  if (offset == invalid_id)
+    slice.offset(0u);
   auto selection = make_ids({{slice.offset(), slice.offset() + num_rows}});
   auto xs = select(slice, selection);
   VAST_ASSERT(xs.size() == 1);
+  if (offset == invalid_id)
+    xs.back().offset(invalid_id);
   return std::move(xs.back());
 }
 
 std::pair<table_slice, table_slice>
-split(const table_slice& slice, size_t partition_point) {
+split(table_slice slice, size_t partition_point) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   if (partition_point == 0)
     return {{}, slice};
   if (partition_point >= slice.rows())
     return {slice, {}};
+  // make_ids fails if the offset is an invalid_id.
+  auto offset = slice.offset();
+  if (offset == invalid_id)
+    slice.offset(0u);
   auto first = slice.offset();
   auto mid = first + partition_point;
   auto last = first + slice.rows();
@@ -535,6 +545,10 @@ split(const table_slice& slice, size_t partition_point) {
   // Create second table slice.
   select(xs, slice, make_ids({{mid, last}}));
   VAST_ASSERT(xs.size() == 2);
+  if (offset == invalid_id) {
+    xs.front().offset(invalid_id);
+    xs.back().offset(invalid_id);
+  }
   return {std::move(xs.front()), std::move(xs.back())};
 }
 
@@ -708,7 +722,6 @@ filter(const table_slice& slice, const expression& expr, const ids& hints) {
     return std::nullopt;
   auto new_slice = builder->finish(serialized_layout);
   VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
-  new_slice.offset(offset);
   return new_slice;
 }
 

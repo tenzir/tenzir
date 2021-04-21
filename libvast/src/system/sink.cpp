@@ -77,7 +77,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       if (remaining == 0)
         return reached_max_events();
       if (slice.rows() > remaining)
-        slice = truncate(slice, remaining);
+        slice = truncate(std::move(slice), remaining);
       // Handle events.
       auto t = timer::start(self->state.measurement);
       if (auto err = self->state.writer->write(slice)) {
