@@ -1,6 +1,7 @@
 ---
 Checks: >
   *,
+  -altera-*,
   -clang-analyzer-alpha*,
   -llvmlibc-*,
   -google-*,
@@ -15,6 +16,7 @@ Checks: >
   -cppcoreguidelines-pro-type-union-access,
   -modernize-use-trailing-return-type,
   -readability-braces-around-statements,
+  -readability-function-cognitive-complexity,
   -readability-magic-numbers,
   -readability-named-parameter,
   -readability-uppercase-literal-suffix
