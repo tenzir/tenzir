@@ -80,6 +80,17 @@ auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(caf::make_error(code, std::move(msg)));
 }
 
+/// A list of components that are essential for importing and exporting data
+/// from the node.
+std::set<const char*> core_components
+  = {"archive", "filesystem", "importer", "index"};
+
+bool is_core_component(std::string_view type) {
+  auto pred = [&](const char* x) { return x == type; };
+  return std::any_of(std::begin(core_components), std::end(core_components),
+                     pred);
+}
+
 /// Helper function to determine whether a component can be spawned at most
 /// once.
 bool is_singleton(std::string_view type) {
@@ -467,7 +478,10 @@ node_state::spawn_command(const invocation& inv,
   VAST_TRACE_SCOPE("{}", inv);
   using std::begin;
   using std::end;
-  auto self = this_node;
+  auto* self = this_node;
+  if (self->state.tearing_down)
+    return caf::make_message(caf::make_error( //
+      ec::no_error, "can't spawn a component while tearing down"));
   auto rp = self->make_response_promise();
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
@@ -560,7 +574,7 @@ node_state::spawn_command(const invocation& inv,
 
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::string name,
-     const std::filesystem::path& dir,
+     std::filesystem::path dir,
      std::chrono::milliseconds shutdown_grace_period) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);
@@ -575,68 +589,81 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG("{} got DOWN from {}", self, msg.source);
-    auto actor = caf::actor_cast<caf::actor>(msg.source);
-    auto component = self->state.registry.remove(actor);
-    VAST_ASSERT(component); // All components are in the registry.
-    // Terminate if a singleton dies.
-    if (is_singleton(component->type)) {
-      VAST_ERROR("{} terminates after DOWN from {}", self, component->type);
-      self->send_exit(self, caf::exit_reason::user_shutdown);
+    if (!self->state.tearing_down) {
+      auto actor = caf::actor_cast<caf::actor>(msg.source);
+      auto component = self->state.registry.remove(actor);
+      VAST_ASSERT(component);
+      // Terminate if a singleton dies.
+      if (is_core_component(component->type)) {
+        VAST_ERROR("{} terminates after DOWN from {}", self, component->type);
+        self->send_exit(self, caf::exit_reason::user_shutdown);
+      }
     }
   });
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);
-    std::vector<caf::actor> scheduled_for_teardown;
-    // TODO: A recent refactoring introduced a bug that caused this function to
-    // only remove by label instead of by type or label. This was not caught in
-    // our integration test suite because we do not currently test continuous
-    // imports/exports in them. We should evaluate how we can test for shutdown
-    // bugs.
-    auto schedule_teardown = [&](const std::string& type_or_label) {
-      if (is_singleton(type_or_label)) {
-        if (auto component = self->state.registry.remove(type_or_label)) {
-          VAST_VERBOSE("{} schedules {} for shutdown", self, type_or_label);
-          self->demonitor(component->actor);
-          scheduled_for_teardown.push_back(std::move(component->actor));
-        }
-      } else if (auto components
-                 = self->state.registry.find_by_type(type_or_label);
-                 !components.empty()) {
-        VAST_VERBOSE("{} schedules {} {}(s) for shutdown", self,
-                     components.size(), type_or_label);
-        for (auto& component : components) {
-          if (auto removed = self->state.registry.remove(component)) {
-            self->demonitor(removed->actor);
-            scheduled_for_teardown.push_back(std::move(removed->actor));
-          }
-        }
+    self->state.tearing_down = true;
+    // Ignore duplicate EXIT messages except for hard kills.
+    self->set_exit_handler([=](const caf::exit_msg& msg) {
+      if (msg.reason == caf::exit_reason::kill) {
+        VAST_WARN("{} received hard kill and terminates immediately", self);
+        self->quit(msg.reason);
+      } else {
+        VAST_DEBUG("{} ignores duplicate EXIT message from {}", self,
+                   msg.source);
       }
-    };
-    // Terminate the accountant first because it acts like a source and may
-    // hold buffered data.
-    schedule_teardown("accountant");
-    // Take out the filesystem, which we terminate at the very end.
-    auto filesystem = deregister_component(self, "filesystem");
-    // Tear down the pipeline from source to sink. Note that the order is
-    // important here; the source must be shut down before the importer.
-    auto pipeline = {"source",  "importer", "disk-monitor", "index",
-                     "archive", "exporter", "sink"};
-    for (const auto* component : pipeline)
-      schedule_teardown(component);
-    // Now schedule all remaining components for termination.
+    });
     auto& registry = self->state.registry;
-    std::vector<std::string> remaining;
-    remaining.reserve(registry.components().size());
-    for (const auto& [label, _] : registry.components())
-      remaining.push_back(label);
-    for (const auto& label : remaining)
-      schedule_teardown(label);
-    // Finally, bring down the filesystem.
-    scheduled_for_teardown.push_back(std::move(*filesystem));
+    // Core components are terminated in a second stage, we remove them from the
+    // registry upfront and deal with them later.
+    std::vector<caf::actor> core_shutdown_handles;
+    // The components listed here need to be terminated in sequential order.
+    // The importer needs to shut down first because it might still have
+    // buffered data. The index uses the archive for querying. The filesystem
+    // is needed by all others for the persisting logic.
+    auto shutdown_sequence = std::initializer_list<const char*>{
+      "importer", "index", "archive", "filesystem"};
+    // Make sure that these remain in sync.
+    VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
+    for (const char* name : shutdown_sequence) {
+      if (auto comp = registry.remove(name))
+        core_shutdown_handles.push_back(comp->actor);
+    }
+    std::vector<caf::actor> aux_components;
+    for (const auto& [_, comp] : registry.components()) {
+      self->demonitor(comp.actor);
+      // Ignore remote actors.
+      if (comp.actor->node() != self->node())
+        continue;
+      aux_components.push_back(comp.actor);
+    }
+    // Drop everything.
+    registry.clear();
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
-    shutdown<policy::sequential>(self, std::move(scheduled_for_teardown),
-                                 shutdown_grace_period, shutdown_kill_timeout);
+    auto core_shutdown_sequence =
+      [=, core_shutdown_handles = std::move(core_shutdown_handles)]() mutable {
+        for (const auto& comp : core_shutdown_handles)
+          self->demonitor(comp);
+        shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
+                                     shutdown_grace_period,
+                                     shutdown_kill_timeout);
+      };
+    terminate<policy::parallel>(self, std::move(aux_components),
+                                shutdown_grace_period, shutdown_kill_timeout)
+      .then(
+        [self, core_shutdown_sequence](atom::done) mutable {
+          VAST_DEBUG("{} terminated auxiliary actors, commencing core shutdown "
+                     "sequence...",
+                     self);
+          core_shutdown_sequence();
+        },
+        [self, core_shutdown_sequence](const caf::error& err) mutable {
+          VAST_ERROR("{} failed to cleanly terminate auxiliary actors {}, "
+                     "shutting down core components",
+                     self, err);
+          core_shutdown_sequence();
+        });
   });
   // Define the node behavior.
   return {

@@ -66,6 +66,9 @@ struct node_state {
 
   /// Counters for multi-instance components.
   std::unordered_map<std::string, uint64_t> label_counters = {};
+
+  /// Flag to signal if the node received an exit message.
+  bool tearing_down = false;
 };
 
 /// Spawns a node.
@@ -73,9 +76,8 @@ struct node_state {
 /// @param name The unique name of the node.
 /// @param dir The directory where to store persistent state.
 /// @param shutdown_grace_period Time to give components to shutdown cleanly.
-node_actor::behavior_type
-node(node_actor::stateful_pointer<node_state> self, std::string name,
-     const std::filesystem::path& dir,
-     std::chrono::milliseconds shutdown_grace_period);
+node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
+                               std::string name, std::filesystem::path dir,
+                               std::chrono::milliseconds shutdown_grace_period);
 
 } // namespace vast::system

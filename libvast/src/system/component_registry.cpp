@@ -81,6 +81,10 @@ component_registry::find_by_type(std::string_view type) const {
   return result;
 }
 
+void component_registry::clear() noexcept {
+  components_.clear();
+}
+
 const component_registry::component_map&
 component_registry::components() const {
   return components_;
