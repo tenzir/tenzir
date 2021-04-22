@@ -174,6 +174,10 @@ expression hoist(expression expr) {
   return caf::visit(hoister{}, std::move(expr));
 }
 
+expression prune_meta_predicates(expression expr) {
+  return caf::visit(meta_pruner{}, std::move(expr));
+}
+
 expression normalize(expression expr) {
   expr = caf::visit(hoister{}, std::move(expr));
   expr = caf::visit(aligner{}, std::move(expr));

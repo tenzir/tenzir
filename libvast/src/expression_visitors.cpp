@@ -31,6 +31,52 @@
 
 namespace vast {
 
+expression meta_pruner::operator()(caf::none_t) const {
+  return expression{};
+}
+
+expression meta_pruner::operator()(const conjunction& c) const {
+  conjunction pruned;
+  for (const auto& op : c) {
+    auto x = caf::visit(*this, op);
+    if (x != expression{})
+      pruned.push_back(std::move(x));
+  }
+  if (pruned.empty())
+    return expression{};
+  if (pruned.size() == 1)
+    return pruned.front();
+  return pruned;
+}
+
+expression meta_pruner::operator()(const disjunction& d) const {
+  disjunction pruned;
+  for (const auto& op : d) {
+    auto x = caf::visit(*this, op);
+    if (x != expression{})
+      pruned.push_back(std::move(x));
+  }
+  if (pruned.empty())
+    return expression{};
+  if (pruned.size() == 1)
+    return pruned.front();
+  return pruned;
+}
+
+expression meta_pruner::operator()(const negation& n) const {
+  auto x = caf::visit(*this, n.expr());
+  if (x == expression{})
+    return x;
+  return negation{x};
+}
+
+expression meta_pruner::operator()(const predicate& p) const {
+  if (caf::holds_alternative<meta_extractor>(p.lhs)
+      || caf::holds_alternative<meta_extractor>(p.rhs))
+    return expression{};
+  return {p};
+}
+
 expression hoister::operator()(caf::none_t) const {
   return expression{};
 }

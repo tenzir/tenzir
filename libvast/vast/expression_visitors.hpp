@@ -21,11 +21,18 @@
 
 namespace vast {
 
-class event;
-
 /// Hoists the contained expression of a single-element conjunction or
 /// disjunction one level in the tree.
 struct hoister {
+  expression operator()(caf::none_t) const;
+  expression operator()(const conjunction& c) const;
+  expression operator()(const disjunction& d) const;
+  expression operator()(const negation& n) const;
+  expression operator()(const predicate& p) const;
+};
+
+/// Removes meta predicates from the tree.
+struct meta_pruner {
   expression operator()(caf::none_t) const;
   expression operator()(const conjunction& c) const;
   expression operator()(const disjunction& d) const;

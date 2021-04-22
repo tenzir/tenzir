@@ -113,10 +113,6 @@ archive_actor::behavior_type
 archive(archive_actor::stateful_pointer<archive_state> self,
         const std::filesystem::path& dir, size_t capacity,
         size_t max_segment_size) {
-  // TODO: make the choice of store configurable. For most flexibility, it
-  // probably makes sense to pass a unique_ptr<stor> directory to the spawn
-  // arguments of the actor. This way, users can provide their own store
-  // implementation conveniently.
   VAST_VERBOSE("{} initializes archive in {} with a maximum segment "
                "size of {} and {} segments in memory",
                self, dir, max_segment_size, capacity);
@@ -192,9 +188,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             self->send(self, atom::internal_v, atom::resume_v);
             return;
           }
-          checker = std::move(*c);
-          // TODO: Remove meta predicates (They don't contain false
-          // positives).
+          checker = prune_meta_predicates(std::move(*c));
         }
         caf::visit(detail::overload{
                      [&](const query::count& count) {

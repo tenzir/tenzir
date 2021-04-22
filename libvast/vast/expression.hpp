@@ -338,6 +338,11 @@ auto for_each_predicate(const expression& e, F&& f) {
 /// @returns The hoisted expression.
 expression hoist(expression expr);
 
+/// Removes predicates with meta extractors from the tree.
+/// @param expr The expression to prune.
+/// @returns The pruned expression.
+expression prune_meta_predicates(expression expr);
+
 /// Normalizes an expression such that:
 ///
 /// 1. Single-element conjunctions/disjunctions don't exist.
