@@ -80,6 +80,12 @@ using flush_listener_actor = typed_actor_fwd<
   // Reacts to the requested flush message.
   caf::reacts_to<atom::flush>>::unwrap;
 
+/// The RECEIVER SINK actor interface.
+/// This can be used to avoid defining an opaque alias for a single-handler
+/// interface.
+/// @tparam T The type of first parameter of the message handler the the actor
+///           handle must implement.
+/// @tparam Ts... The types of additional parameters for the message handler.
 template <class T, class... Ts>
 using receiver_actor = typename typed_actor_fwd<
   // Add a new source.
@@ -91,6 +97,7 @@ using status_client_actor = typed_actor_fwd<
   caf::replies_to<atom::status, status_verbosity>::with< //
     caf::dictionary<caf::config_value>>>::unwrap;
 
+/// The STORE actor interface.
 using store_actor = typed_actor_fwd<
   // Handles an extraction for the given expression, optionally optimized by a
   // set of ids to pre-select the events to evaluate.
@@ -98,6 +105,7 @@ using store_actor = typed_actor_fwd<
   // Erase the events with the given ids.
   caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
 
+/// The STORE BUILDER actor interface.
 using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
