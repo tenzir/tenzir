@@ -670,13 +670,15 @@ filter(const table_slice& slice, const expression& expr, const ids& hints) {
   const auto offset = slice.offset();
   auto slice_ids = make_ids({{offset, offset + slice.rows()}});
   auto selection = slice_ids;
-  if (!hints.empty()) {
+  if (!hints.empty())
     selection &= hints;
-    if (selection.empty())
-      return std::nullopt;
-  }
+  // Do no rows qualify?
+  auto selection_rank = rank(selection);
+  if (selection_rank == 0)
+    return std::nullopt;
   if (expr == expression{}) {
-    if (slice_ids == selection)
+    // Do all rows qualify?
+    if (rank(slice_ids) == selection_rank)
       return slice;
   }
   // Get the desired encoding, and the already serialized layout.
@@ -720,6 +722,8 @@ filter(const table_slice& slice, const expression& expr, const ids& hints) {
   }
   if (builder->rows() == 0)
     return std::nullopt;
+  if (builder->rows() == slice.rows())
+    return slice;
   auto new_slice = builder->finish(serialized_layout);
   VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
   return new_slice;
@@ -740,13 +744,15 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   const auto offset = slice.offset();
   auto slice_ids = make_ids({{offset, offset + slice.rows()}});
   auto selection = slice_ids;
-  if (!hints.empty()) {
+  if (!hints.empty())
     selection &= hints;
-    if (selection.empty())
-      return 0;
-  }
+  // Do no rows qualify?
+  auto selection_rank = rank(selection);
+  if (selection_rank == 0)
+    return 0;
   if (expr == expression{}) {
-    if (slice_ids == selection)
+    // Do all rows qualify?
+    if (rank(slice_ids) == selection_rank)
       return slice.rows();
   }
   // Get the desired encoding, and the already serialized layout.
