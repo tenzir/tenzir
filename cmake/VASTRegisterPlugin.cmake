@@ -1,3 +1,4 @@
+# this is a comment
 include_guard(GLOBAL)
 
 function (VASTRegisterPlugin)
