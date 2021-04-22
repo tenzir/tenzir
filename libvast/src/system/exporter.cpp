@@ -260,8 +260,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // Ideally, we would change that index handler to actually return the
       // desired value.
       auto perserve_ids = has_preserve_ids_option(self->state.options)
-                            ? query::extract::preserve
-                            : query::extract::drop;
+                            ? query::extract::preserve_ids
+                            : query::extract::drop_ids;
       auto q = vast::query::make_extract(self, perserve_ids, self->state.expr);
       self
         ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,

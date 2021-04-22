@@ -127,7 +127,7 @@ TEST(state transitions) {
     "await_results_until_done -> idle",
   };
   self->send(aut,
-             query::make_extract(self, query::extract::drop,
+             query::make_extract(self, query::extract::drop_ids,
                                  unbox(to<expression>(query_str))),
              index);
   expect((vast::query, system::index_actor), from(self).to(aut));

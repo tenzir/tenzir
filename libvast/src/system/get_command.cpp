@@ -62,7 +62,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
     // receiver_actor<table_slice> exactly, but there's no way to verify that at
     // compile time. We can improve upon this situation when changing the
     // archive to stream its results.
-    auto q = query::make_extract(self, query::extract::drop, expression{});
+    auto q = query::make_extract(self, query::extract::drop_ids, expression{});
     self->send(archive, std::move(q), to_ids(*i));
     bool waiting = true;
     self->receive_while(waiting)

@@ -33,9 +33,9 @@ struct query {
   };
 
   struct extract {
-    enum ids_policy { drop, preserve };
+    enum mode { drop_ids, preserve_ids };
     system::receiver_actor<table_slice> sink;
-    ids_policy policy = {};
+    mode policy = {};
 
     friend bool operator==(const extract& lhs, const extract& rhs) {
       return lhs.sink == rhs.sink && lhs.policy == rhs.policy;
@@ -74,7 +74,7 @@ struct query {
 
   template <class Actor>
   static query
-  make_extract(const Actor& sink, extract::ids_policy p, expression expr) {
+  make_extract(const Actor& sink, extract::mode p, expression expr) {
     return {extract{caf::actor_cast<system::receiver_actor<table_slice>>(sink),
                     p},
             std::move(expr)};

@@ -210,8 +210,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                        self->send(count.sink, result);
                      },
                      [&](const query::extract& extract) {
-                       if (extract.policy
-                           == query::extract::ids_policy::preserve) {
+                       if (extract.policy == query::extract::preserve_ids) {
                          for (auto& sub_slice :
                               select(*slice, self->state.session_ids)) {
                            if (request.query.expr == expression{}) {

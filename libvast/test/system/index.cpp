@@ -67,9 +67,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   auto query(std::string_view expr) {
-    self->send(index, vast::query::make_extract(
-                        self, query::extract::ids_policy::preserve,
-                        unbox(to<expression>(expr))));
+    self->send(index,
+               vast::query::make_extract(self, query::extract::preserve_ids,
+                                         unbox(to<expression>(expr))));
     run();
     std::tuple<uuid, uint32_t, uint32_t> result;
     self->receive(
