@@ -50,7 +50,21 @@ struct archive_state {
 
   std::unique_ptr<vast::segment_store> store;
 
+  /// Send metrics to the accountant.
   void send_report();
+
+  /// Opens the next lookup session with the segment_store, either
+  /// by popping the next ids item from the queue of the current request
+  /// or by moving to the next request.
+  std::unique_ptr<segment_store::lookup> next_session();
+
+  /// Updates an existing request with additional ids or inserts a new request
+  /// if the query client hasn't been seen before.
+  /// @param query The type of request.
+  /// @param xs A preselection of ids to narrow down the search space.
+  caf::typed_response_promise<atom::done>
+  file_request(vast::query query, const ids& xs);
+
   vast::system::measurement measurement;
   accountant_actor accountant;
   static inline const char* name = "archive";

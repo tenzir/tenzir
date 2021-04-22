@@ -48,36 +48,36 @@ void archive_state::send_report() {
   self->send(accountant, std::move(r));
 }
 
-std::unique_ptr<segment_store::lookup> next_session(archive_state& state) {
-  while (!state.requests.empty()) {
-    auto& request = state.requests.front();
+std::unique_ptr<segment_store::lookup> archive_state::next_session() {
+  while (!requests.empty()) {
+    auto& request = requests.front();
     if (request.cancelled || request.ids_queue.empty()) {
       // Not sure whether this is really necessary.
       while (!request.ids_queue.empty()) {
         request.ids_queue.front().second.deliver(atom::done_v);
         request.ids_queue.pop();
       }
-      state.requests.pop_front();
+      requests.pop_front();
       continue;
     }
     // We found an active request.
     auto& [ids, rp] = request.ids_queue.front();
-    state.active_promise = std::move(rp);
-    state.session_ids = std::move(ids);
+    active_promise = std::move(rp);
+    session_ids = std::move(ids);
     request.ids_queue.pop();
-    return state.store->extract(state.session_ids);
+    return store->extract(session_ids);
   }
   VAST_TRACE("archive has no requests");
   return nullptr;
 }
 
-auto file_request(archive_actor::stateful_pointer<archive_state> self,
-                  vast::query query, const ids& xs) {
+caf::typed_response_promise<atom::done>
+archive_state::file_request(vast::query query, const ids& xs) {
   auto rp = self->make_response_promise<atom::done>();
   auto it
-    = std::find_if(self->state.requests.begin(), self->state.requests.end(),
+    = std::find_if(requests.begin(), requests.end(),
                    [&](const auto& request) { return request.query == query; });
-  if (it != self->state.requests.end()) {
+  if (it != requests.end()) {
     VAST_ASSERT(query == it->query);
     // Down messages are sent with high prio so the request might still be
     // in the queue but cancelled. In case the first request has already been
@@ -98,12 +98,12 @@ auto file_request(archive_actor::stateful_pointer<archive_state> self,
                  [](query::erase&) { die("erase requests don't get filed"); },
                },
                query.cmd);
-    self->state.requests.emplace_back(std::move(query), std::make_pair(xs, rp));
+    requests.emplace_back(std::move(query), std::make_pair(xs, rp));
   }
-  if (!self->state.session) {
-    self->state.session = next_session(self->state);
+  if (!session) {
+    session = next_session();
     // We just queued the work.
-    VAST_ASSERT(self->state.session);
+    VAST_ASSERT(session);
     self->send(self, atom::internal_v, atom::resume_v);
   }
   return rp;
@@ -164,14 +164,14 @@ archive(archive_actor::stateful_pointer<archive_state> self,
           VAST_ERROR("{} failed to erase events: {}", self, render(err));
         return atom::done_v;
       }
-      return file_request(self, std::move(query), xs);
+      return self->state.file_request(std::move(query), xs);
     },
     [self](atom::internal, atom::resume) {
       VAST_ASSERT(self->state.session);
       VAST_ASSERT(!self->state.requests.empty());
       if (self->state.requests.front().cancelled) {
         self->state.active_promise.deliver(atom::done_v);
-        self->state.session = next_session(self->state);
+        self->state.session = self->state.next_session();
         if (!self->state.session)
           // Nothing to do at the moment;
           return;
@@ -242,7 +242,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
         }
         // This session is done.
         // We're at the end, check for more requests.
-        self->state.session = next_session(self->state);
+        self->state.session = self->state.next_session();
         if (!self->state.session)
           // Nothing to do at the moment;
           return;
