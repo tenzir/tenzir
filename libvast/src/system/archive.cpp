@@ -200,13 +200,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                      [&](const query::count& count) {
                        if (count.mode == query::count::estimate)
                          die("logic error detected");
-                       // TODO: Add a count function on table slices to avoid
-                       // going through a bulider.
-                       auto final_slice
-                         = filter(*slice, checker, self->state.session_ids);
-                       uint64_t result = 0;
-                       if (final_slice)
-                         result = final_slice->rows();
+                       auto result = count_matching(*slice, checker,
+                                                    self->state.session_ids);
                        self->send(count.sink, result);
                      },
                      [&](const query::extract& extract) {

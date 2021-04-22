@@ -734,4 +734,50 @@ std::optional<table_slice> filter(const table_slice& slice, const ids& hints) {
   return filter(slice, expression{}, hints);
 }
 
+uint64_t count_matching(const table_slice& slice, const expression& expr,
+                        const ids& hints) {
+  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  const auto offset = slice.offset();
+  auto slice_ids = make_ids({{offset, offset + slice.rows()}});
+  auto selection = slice_ids;
+  if (!hints.empty()) {
+    selection &= hints;
+    if (selection.empty())
+      return 0;
+  }
+  if (expr == expression{}) {
+    if (slice_ids == selection)
+      return slice.rows();
+  }
+  // Get the desired encoding, and the already serialized layout.
+  auto f = detail::overload{
+    []() noexcept -> std::pair<table_slice_encoding, span<const std::byte>> {
+      die("cannot filter an invalid table slice");
+    },
+    [&](const auto& encoded) noexcept {
+      return std::pair{
+        builder_id(state(encoded, slice.state_)->encoding),
+        span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
+             encoded.layout()->size()}};
+    },
+  };
+  table_slice_encoding implementation_id;
+  span<const std::byte> serialized_layout = {};
+  std::tie(implementation_id, serialized_layout)
+    = visit(f, as_flatbuffer(slice.chunk_));
+  auto check = [&](row_evaluator eval) -> uint64_t {
+    if (expr == expression{})
+      return 1u;
+    return static_cast<uint64_t>(caf::visit(eval, expr));
+  };
+  uint64_t cnt = 0u;
+  for (auto id : select(selection)) {
+    VAST_ASSERT(id >= offset);
+    auto row = id - offset;
+    VAST_ASSERT(row < slice.rows());
+    cnt += check(row_evaluator{slice, row});
+  }
+  return cnt;
+}
+
 } // namespace vast

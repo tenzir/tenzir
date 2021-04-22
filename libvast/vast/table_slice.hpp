@@ -223,6 +223,15 @@ public:
   friend std::optional<table_slice>
   filter(const table_slice& slice, const expression& expr, const ids& hints);
 
+  /// Counts the rows that match an expression.
+  /// @param slice The input table slice.
+  /// @param expr The expression to evaluate.
+  /// @param hints An ID set for pruning the events that need to be considered.
+  /// @returns the number of rows that are included in `hints` and match `expr`.
+  /// @pre `slice.encoding() != table_slice_encoding::none`
+  friend uint64_t count_matching(const table_slice& slice,
+                                 const expression& expr, const ids& hints);
+
 private:
   // -- implementation details -------------------------------------------------
 
@@ -324,5 +333,10 @@ filter(const table_slice& slice, const expression& expr);
 /// @pre `slice.encoding() != table_slice_encoding::none`
 [[nodiscard]] std::optional<table_slice>
 filter(const table_slice& slice, const ids& hints);
+
+// Attribute-specifier-seqs are not allowed in friend function declarations, so
+// we re-declare the count_matching function with nodiscard here.
+[[nodiscard]] uint64_t count_matching(const table_slice& slice,
+                                      const expression& expr, const ids& hints);
 
 } // namespace vast
