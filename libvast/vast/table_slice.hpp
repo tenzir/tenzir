@@ -212,8 +212,8 @@ public:
                      const ids& selection);
 
   /// Produces a new table slice consisting only of events addressed in `hints`
-  /// that match the given expression. Does not preserve ids, use `select
-  ///`instead if the id mapping must be maintained.
+  /// that match the given expression. Does not preserve ids; use `select`
+  /// instead if the id mapping must be maintained.
   /// @param slice The input table slice.
   /// @param expr The expression to evaluate.
   /// @param hints An ID set for pruning the events that need to be considered.

@@ -21,6 +21,7 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/test/dsl.hpp>
 #include <caf/test/io_dsl.hpp>
+
 // Defined in dsl.hpp and clashes with range_map::inject
 #undef inject
 
