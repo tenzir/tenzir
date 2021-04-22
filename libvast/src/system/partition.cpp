@@ -21,7 +21,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/settings.hpp"
-#include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
@@ -369,13 +368,14 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts) {
+  caf::settings synopsis_opts, store_actor store) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
   self->state.offset = invalid_id;
   self->state.events = 0;
   self->state.filesystem = std::move(filesystem);
+  self->state.store = std::move(store);
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
@@ -627,15 +627,29 @@ active_partition_actor::behavior_type active_partition(
             });
       }
     },
-    [self](const expression& expr,
-           partition_client_actor client) -> caf::result<atom::done> {
+    [self](vast::query query) -> caf::result<atom::done> {
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
-      auto triples = evaluate(self->state, expr);
+      auto triples = evaluate(self->state, query.expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
-      return self->delegate(eval, client);
+      auto eval = self->spawn(evaluator, query.expr, triples);
+      auto rp = self->make_response_promise<atom::done>();
+      self->request(eval, caf::infinite, atom::run_v)
+        .then(
+          [self, rp, query = std::move(query)](const ids& hits) mutable {
+            // TODO: Use the first path if the expression can be evaluated
+            // exactly.
+            auto* count = caf::get_if<query::count>(&query.cmd);
+            if (count && count->mode == query::count::estimate) {
+              self->send(count->sink, rank(hits));
+              rp.deliver(atom::done_v);
+            } else {
+              rp.delegate(self->state.store, std::move(query), hits);
+            }
+          },
+          [rp](caf::error& err) mutable { rp.deliver(std::move(err)); });
+      return rp;
     },
     [self](atom::status,
            status_verbosity v) -> caf::typed_response_promise<caf::settings> {
@@ -692,8 +706,10 @@ active_partition_actor::behavior_type active_partition(
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, const std::filesystem::path& path) {
+  filesystem_actor filesystem, const std::filesystem::path& path,
+  store_actor store) {
   self->state.self = self;
+  self->state.store = std::move(store);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
@@ -774,15 +790,14 @@ partition_actor::behavior_type passive_partition(
         // Delegate all deferred evaluations now that we have the partition chunk.
         VAST_DEBUG("{} delegates {} deferred evaluations", self,
                    self->state.deferred_evaluations.size());
-        for (auto&& [expr, client, rp] :
+        for (auto&& [expr, rp] :
              std::exchange(self->state.deferred_evaluations, {}))
-          rp.delegate(static_cast<partition_actor>(self), std::move(expr),
-                      client);
+          rp.delegate(static_cast<partition_actor>(self), std::move(expr));
       },
       [=](caf::error err) {
         VAST_ERROR("{} failed to load partition: {}", self, render(err));
         // Deliver the error for all deferred evaluations.
-        for (auto&& [expr, client, rp] :
+        for (auto&& [expr, rp] :
              std::exchange(self->state.deferred_evaluations, {})) {
           // Because of a deficiency in the typed_response_promise API, we must
           // access the underlying response_promise to deliver the error.
@@ -793,12 +808,11 @@ partition_actor::behavior_type passive_partition(
         self->quit(std::move(err));
       });
   return {
-    [self](const expression& expr,
-           partition_client_actor client) -> caf::result<atom::done> {
-      VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
+    [self](vast::query query) -> caf::result<atom::done> {
+      VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(query));
       if (!self->state.partition_chunk)
-        return std::get<2>(self->state.deferred_evaluations.emplace_back(
-          expr, client, self->make_response_promise<atom::done>()));
+        return std::get<1>(self->state.deferred_evaluations.emplace_back(
+          std::move(query), self->make_response_promise<atom::done>()));
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       VAST_ASSERT(self->state.deferred_evaluations.empty());
@@ -808,11 +822,26 @@ partition_actor::behavior_type passive_partition(
       if (self->state.indexers.empty())
         return caf::make_error(ec::system_error, "can not handle query because "
                                                  "shutdown was requested");
-      auto triples = evaluate(self->state, expr);
+      auto triples = evaluate(self->state, query.expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
-      return self->delegate(eval, client);
+      auto eval = self->spawn(evaluator, query.expr, triples);
+      auto rp = self->make_response_promise<atom::done>();
+      self->request(eval, caf::infinite, atom::run_v)
+        .then(
+          [self, rp, query = std::move(query)](const ids& hits) mutable {
+            // TODO: Use the first path if the expression can be evaluated
+            // exactly.
+            auto* count = caf::get_if<query::count>(&query.cmd);
+            if (count && count->mode == query::count::estimate) {
+              self->send(count->sink, rank(hits));
+              rp.deliver(atom::done_v);
+            } else {
+              rp.delegate(self->state.store, std::move(query), hits);
+            }
+          },
+          [rp](caf::error& err) mutable { rp.deliver(std::move(err)); });
+      return rp;
     },
     [self](atom::status,
            status_verbosity /*v*/) -> caf::config_value::dictionary {

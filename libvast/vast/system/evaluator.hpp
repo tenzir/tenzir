@@ -58,9 +58,6 @@ struct evaluator_state {
   /// Points to the parent actor.
   evaluator_actor::pointer self;
 
-  /// Stores the actor for sendings results to.
-  partition_client_actor client;
-
   /// Stores the original query expression.
   expression expr;
 
@@ -68,7 +65,7 @@ struct evaluator_state {
   std::vector<evaluation_triple> eval;
 
   /// Allows us to respond to the COLLECTOR after finishing a lookup.
-  caf::typed_response_promise<atom::done> promise;
+  caf::typed_response_promise<ids> promise;
 
   /// Gives this actor a recognizable name in logging output.
   static inline const char* name = "evaluator";

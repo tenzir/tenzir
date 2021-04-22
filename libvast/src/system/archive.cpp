@@ -14,9 +14,9 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
-#include "vast/store.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
@@ -29,41 +29,6 @@
 #include <algorithm>
 
 namespace vast::system {
-
-void archive_state::next_session() {
-  // No requester means no work to do.
-  if (requesters.empty()) {
-    VAST_TRACE_SCOPE("{} has no requesters", self);
-    session = nullptr;
-    return;
-  }
-  // Find the work queue for our current requester.
-  const auto& current_requester = requesters.front();
-  auto it = unhandled_ids.find(current_requester->address());
-  // There is no ids queue for our current requester. Let's dismiss the
-  // requester and try again.
-  if (it == unhandled_ids.end()) {
-    VAST_TRACE_SCOPE("{} could not find an ids queue for the current "
-                     "requester",
-                     self);
-    requesters.pop();
-    return next_session();
-  }
-  // There is a work queue for our current requester, but it is empty. Let's
-  // clean house, dismiss the requester and try again.
-  if (it->second.empty()) {
-    VAST_TRACE_SCOPE("{} found an empty ids queue for the current requester",
-                     self);
-    unhandled_ids.erase(it);
-    requesters.pop();
-    return next_session();
-  }
-  // Start working on the next ids for the next requester.
-  auto& next_ids = it->second.front();
-  session = store->extract(next_ids);
-  self->send(self, atom::internal_v, next_ids, current_requester, ++session_id);
-  it->second.pop();
-}
 
 void archive_state::send_report() {
   auto r = performance_report{{{std::string{name}, measurement}}};
@@ -83,14 +48,71 @@ void archive_state::send_report() {
   self->send(accountant, std::move(r));
 }
 
+std::unique_ptr<segment_store::lookup> archive_state::next_session() {
+  while (!requests.empty()) {
+    auto& request = requests.front();
+    if (request.cancelled || request.ids_queue.empty()) {
+      // Not sure whether this is really necessary.
+      while (!request.ids_queue.empty()) {
+        request.ids_queue.front().second.deliver(atom::done_v);
+        request.ids_queue.pop();
+      }
+      requests.pop_front();
+      continue;
+    }
+    // We found an active request.
+    auto& [ids, rp] = request.ids_queue.front();
+    active_promise = std::move(rp);
+    session_ids = std::move(ids);
+    request.ids_queue.pop();
+    return store->extract(session_ids);
+  }
+  VAST_TRACE("archive has no requests");
+  return nullptr;
+}
+
+caf::typed_response_promise<atom::done>
+archive_state::file_request(vast::query query, const ids& xs) {
+  auto rp = self->make_response_promise<atom::done>();
+  auto it
+    = std::find_if(requests.begin(), requests.end(),
+                   [&](const auto& request) { return request.query == query; });
+  if (it != requests.end()) {
+    VAST_ASSERT(query == it->query);
+    // Down messages are sent with high prio so the request might still be
+    // in the queue but cancelled. In case the first request has already been
+    // cleaned up, we are in the else branch.
+    if (it->cancelled) {
+      rp.deliver(atom::done_v);
+      return rp;
+    }
+    it->ids_queue.emplace(xs, rp);
+  } else {
+    // Monitor the sink. We can cancel query execution for it when it goes down.
+    // In case we already cleaned up a previous request we're doing unnecessary
+    // work.
+    // TODO: Figure out a way to avoid this.
+    caf::visit(detail::overload{
+                 [&](query::count& count) { self->monitor(count.sink); },
+                 [&](query::extract& extract) { self->monitor(extract.sink); },
+                 [](query::erase&) { die("erase requests don't get filed"); },
+               },
+               query.cmd);
+    requests.emplace_back(std::move(query), std::make_pair(xs, rp));
+  }
+  if (!session) {
+    session = next_session();
+    // We just queued the work.
+    VAST_ASSERT(session);
+    self->send(self, atom::internal_v, atom::resume_v);
+  }
+  return rp;
+}
+
 archive_actor::behavior_type
 archive(archive_actor::stateful_pointer<archive_state> self,
         const std::filesystem::path& dir, size_t capacity,
         size_t max_segment_size) {
-  // TODO: make the choice of store configurable. For most flexibility, it
-  // probably makes sense to pass a unique_ptr<stor> directory to the spawn
-  // arguments of the actor. This way, users can provide their own store
-  // implementation conveniently.
   VAST_VERBOSE("{} initializes archive in {} with a maximum segment "
                "size of {} and {} segments in memory",
                self, dir, max_segment_size, capacity);
@@ -107,55 +129,113 @@ archive(archive_actor::stateful_pointer<archive_state> self,
   });
   self->set_down_handler([self](const caf::down_msg& msg) {
     VAST_DEBUG("{} received DOWN from {}", self, msg.source);
-    self->state.active_exporters.erase(msg.source);
+    auto it
+      = std::find_if(self->state.requests.begin(), self->state.requests.end(),
+                     [&](const auto& request) {
+                       return caf::visit(detail::overload{
+                                           [&](const query::count& count) {
+                                             return count.sink == msg.source;
+                                           },
+                                           [&](const query::extract& extract) {
+                                             return extract.sink == msg.source;
+                                           },
+                                           [](const query::erase&) {
+                                             // erase request don't have sinks
+                                             // to monitor
+                                             return false;
+                                           },
+                                         },
+                                         request.query.cmd);
+                     });
+    if (it != self->state.requests.end())
+      it->cancelled = true;
   });
   return {
-    [self](const ids& xs, archive_client_actor requester) {
-      VAST_DEBUG("{} got query for {} events in range [{},  {})", self,
-                 rank(xs), select(xs, 1), select(xs, -1) + 1);
-      if (self->state.active_exporters.count(requester->address()) == 0) {
-        VAST_DEBUG("{} dismisses query for inactive sender", self);
-        return;
+    [self](vast::query query, const ids& xs) -> caf::result<atom::done> {
+      VAST_DEBUG("{} got a request with the query {} and {} hints [{},  {})",
+                 self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
+      if (caf::holds_alternative<query::erase>(query.cmd)) {
+        // We erase eagerly.
+        if (auto err = self->state.store->erase(xs))
+          VAST_ERROR("{} failed to erase events: {}", self, render(err));
+        return atom::done_v;
       }
-      self->state.requesters.push(requester);
-      self->state.unhandled_ids[requester->address()].push(xs);
-      if (!self->state.session)
-        self->state.next_session();
+      return self->state.file_request(std::move(query), xs);
     },
-    [self](atom::internal, const ids& xs, archive_client_actor requester,
-           uint64_t session_id) {
-      // If the export has since shut down, we need to invalidate the session.
-      if (self->state.active_exporters.count(requester->address()) == 0) {
-        VAST_DEBUG("{} invalidates running query session for {}", self,
-                   requester);
-        self->state.next_session();
-        return;
-      }
-      if (!self->state.session || self->state.session_id != session_id) {
-        VAST_DEBUG("{} considers extraction finished for invalidated "
-                   "session",
-                   self);
-        self->send(requester, atom::done_v, caf::make_error(ec::no_error));
-        self->state.next_session();
-        return;
-      }
-      // Extract the next slice.
+    [self](atom::internal, atom::resume) {
+      VAST_ASSERT(self->state.session);
+      VAST_ASSERT(!self->state.requests.empty());
+      if (self->state.requests.front().cancelled) {
+        self->state.active_promise.deliver(atom::done_v);
+        self->state.session = self->state.next_session();
+        if (!self->state.session)
+          // Nothing to do at the moment;
+          return;
+      };
+      auto& request = self->state.requests.front();
       auto slice = self->state.session->next();
-      if (!slice) {
-        auto err = slice.error() ? std::move(slice.error())
-                                 : caf::make_error(ec::no_error);
-        VAST_DEBUG("{} finished extraction from the current session: "
-                   "{}",
-                   self, err);
-        self->send(requester, atom::done_v, std::move(err));
-        self->state.next_session();
-        return;
+      if (slice) {
+        // Add an lru cache for checkers in the archive state.
+        auto checker = expression{};
+        if (request.query.expr != expression{}) {
+          auto c = tailor(request.query.expr, slice->layout());
+          if (!c) {
+            VAST_ERROR("{} {}", self, c.error());
+            request.cancelled = true;
+            self->state.active_promise.deliver(c.error());
+            // We deliver the remaining promises in this request regularly in
+            // the next run of `next_session()`.
+            self->send(self, atom::internal_v, atom::resume_v);
+            return;
+          }
+          checker = prune_meta_predicates(std::move(*c));
+        }
+        caf::visit(detail::overload{
+                     [&](const query::count& count) {
+                       if (count.mode == query::count::estimate)
+                         die("logic error detected");
+                       auto result = count_matching(*slice, checker,
+                                                    self->state.session_ids);
+                       self->send(count.sink, result);
+                     },
+                     [&](const query::extract& extract) {
+                       if (extract.policy == query::extract::preserve_ids) {
+                         for (auto& sub_slice :
+                              select(*slice, self->state.session_ids)) {
+                           if (request.query.expr == expression{}) {
+                             self->send(extract.sink, sub_slice);
+                           } else {
+                             auto hits = evaluate(checker, sub_slice);
+                             for (auto& final_slice : select(sub_slice, hits))
+                               self->send(extract.sink, final_slice);
+                           }
+                         }
+                       } else {
+                         auto final_slice
+                           = filter(*slice, checker, self->state.session_ids);
+                         if (final_slice)
+                           self->send(extract.sink, *final_slice);
+                       }
+                     },
+                     [&](query::erase) { die("logic error detected"); },
+                   },
+                   request.query.cmd);
+      } else {
+        // We didn't get a slice from the segment store.
+        if (slice.error() != caf::no_error) {
+          VAST_ERROR("{} failed to retrieve slice: {}", self, slice.error());
+          self->state.active_promise.deliver(slice.error());
+        } else {
+          self->state.active_promise.deliver(atom::done_v);
+        }
+        // This session is done.
+        // We're at the end, check for more requests.
+        self->state.session = self->state.next_session();
+        if (!self->state.session)
+          // Nothing to do at the moment;
+          return;
       }
-      // The slice may contain entries that are not selected by xs.
-      for (auto& sub_slice : select(*slice, xs))
-        self->send(requester, sub_slice);
-      // Continue working on the current session.
-      self->send(self, atom::internal_v, xs, requester, session_id);
+      self->send(self, atom::internal_v, atom::resume_v);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
@@ -180,9 +260,9 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             t.stop(events);
           },
           [=](caf::unit_t&, const caf::error& err) {
-            // We get an 'unreachable' error when the stream becomes unreachable
-            // because the actor was destroyed; in this case we can't use `self`
-            // anymore.
+            // We get an 'unreachable' error when the stream becomes
+            // unreachable because the actor was destroyed; in this case we
+            // can't use `self` anymore.
             if (err && err != caf::exit_reason::unreachable) {
               if (err != caf::exit_reason::user_shutdown)
                 VAST_ERROR("{} got a stream error: {}", self, render(err));
@@ -202,11 +282,6 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
-    },
-    [self](atom::exporter, const caf::actor& exporter) {
-      auto sender_addr = self->current_sender()->address();
-      self->state.active_exporters.insert(sender_addr);
-      self->monitor<caf::message_priority::high>(exporter);
     },
     [self](atom::status, status_verbosity v) {
       auto result = caf::settings{};

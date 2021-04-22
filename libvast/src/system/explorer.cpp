@@ -214,6 +214,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         auto query = to_string(*expr);
         VAST_TRACE_SCOPE("{} spawns new exporter with query {}", self, query);
         auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
+        caf::put(exporter_invocation.options, "vast.export.preserve-ids", true);
         if (st.limits.per_result)
           caf::put(exporter_invocation.options, "vast.export.max-events",
                    st.limits.per_result);

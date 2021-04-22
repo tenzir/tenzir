@@ -11,13 +11,13 @@
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
-#include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
+#include "vast/query.hpp"
 #include "vast/span.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/meta_index.hpp"
@@ -46,7 +46,8 @@ TEST(uuid roundtrip) {
   auto fb = *expected_fb;
   vast::uuid uuid2 = vast::uuid::random();
   CHECK_NOT_EQUAL(uuid, uuid2);
-  span<const std::byte> span{reinterpret_cast<const std::byte*>(fb->data()), fb->size()};
+  span<const std::byte> span{reinterpret_cast<const std::byte*>(fb->data()),
+                             fb->size()};
   vast::fbs::unwrap<vast::fbs::uuid::v0>(span, uuid2);
   CHECK_EQUAL(uuid, uuid2);
 }
@@ -188,8 +189,9 @@ TEST(full partition roundtrip) {
     vast::system::posix_filesystem,
     directory); // `directory` is provided by the unit test fixture
   auto partition_uuid = vast::uuid::random();
-  auto partition = sys.spawn(vast::system::active_partition, partition_uuid, fs,
-                             caf::settings{}, caf::settings{});
+  auto partition
+    = sys.spawn(vast::system::active_partition, partition_uuid, fs,
+                caf::settings{}, caf::settings{}, vast::system::store_actor{});
   run();
   REQUIRE(partition);
   // Add data to the partition.
@@ -215,37 +217,40 @@ TEST(full partition roundtrip) {
     [](std::shared_ptr<vast::partition_synopsis>&) {
       CHECK("persisting done");
     },
-    [](caf::error err) { FAIL(err); });
+    [](const caf::error& err) { FAIL(err); });
   self->send_exit(partition, caf::exit_reason::user_shutdown);
   // Spawn a read-only partition from this chunk and try to query the data we
   // added. We make two queries, one "#type"-query and one "normal" query
-  auto readonly_partition = sys.spawn(vast::system::passive_partition,
-                                      partition_uuid, fs, persist_path);
+  auto readonly_partition
+    = sys.spawn(vast::system::passive_partition, partition_uuid, fs,
+                persist_path, vast::system::store_actor{});
   REQUIRE(readonly_partition);
   run();
   // A minimal `partition_client_actor`that stores the results in a local
   // variable.
-  auto dummy_client = [](std::shared_ptr<vast::ids> ids)
-    -> vast::system::partition_client_actor::behavior_type {
+  auto dummy_client = [](std::shared_ptr<uint64_t> count)
+    -> vast::system::receiver_actor<uint64_t>::behavior_type {
     return {
-      [ids](const vast::ids& hits) { *ids |= hits; },
+      [count](uint64_t hits) { *count += hits; },
     };
   };
   auto test_expression
     = [&](const vast::expression& expression, size_t expected_ids) {
-        bool done;
-        auto results = std::make_shared<vast::ids>();
-        auto dummy = self->spawn(dummy_client, results);
-        auto rp
-          = self->request(readonly_partition, caf::infinite, expression, dummy);
+        auto done = false;
+        auto result = std::make_shared<uint64_t>();
+        auto dummy = self->spawn(dummy_client, result);
+        auto rp = self->request(
+          readonly_partition, caf::infinite,
+          vast::query::make_count(dummy, vast::query::count::mode::estimate,
+                                  expression));
         run();
         rp.receive([&done](vast::atom::done) { done = true; },
-                   [](caf::error) { REQUIRE(false); });
+                   [](caf::error&) { REQUIRE(false); });
         run();
         self->send_exit(dummy, caf::exit_reason::user_shutdown);
         run();
         CHECK_EQUAL(done, true);
-        CHECK_EQUAL(rank(*results), expected_ids);
+        CHECK_EQUAL(*result, expected_ids);
         return true;
       };
   auto x_equals_zero = vast::expression{

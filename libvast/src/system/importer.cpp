@@ -234,7 +234,7 @@ void importer_state::send_report() {
 
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, const archive_actor& archive,
+         const std::filesystem::path& dir, const store_actor& store,
          index_actor index, const type_registry_actor& type_registry) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(dir));
   self->state.dir = dir;
@@ -252,8 +252,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   self->state.stage = make_importer_stage(self);
   if (type_registry)
     self->state.stage->add_outbound_path(type_registry);
-  if (archive)
-    self->state.stage->add_outbound_path(archive);
+  if (store)
+    self->state.stage->add_outbound_path(store);
   if (index) {
     self->state.index = std::move(index);
     self->state.stage->add_outbound_path(self->state.index);

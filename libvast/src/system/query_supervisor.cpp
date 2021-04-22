@@ -10,8 +10,8 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/query.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -43,9 +43,9 @@ query_supervisor_actor::behavior_type query_supervisor(
   self->state.master = std::move(master);
   self->send(self->state.master, atom::worker_v, self);
   return {
-    [self](const expression& expr,
+    [self](const vast::query& query,
            const std::vector<std::pair<uuid, partition_actor>>& qm,
-           const index_client_actor& client) {
+           const receiver_actor<atom::done>& client) {
       VAST_DEBUG("{} {} got a new query for {} partitions: {}", self,
                  self->state.log_identifier, qm.size(), get_ids(qm));
       // TODO: We can save one message here if we handle this case in the
@@ -56,12 +56,10 @@ query_supervisor_actor::behavior_type query_supervisor(
         return;
       }
       VAST_ASSERT(self->state.open_requests == 0);
-      for (auto& [id, partition] : qm) {
+      for (const auto& [id, partition] : qm) {
         ++self->state.open_requests;
         // TODO: Add a proper configurable timeout.
-        self
-          ->request(partition, caf::infinite, expr,
-                    static_cast<const partition_client_actor&>(client))
+        self->request(partition, caf::infinite, query)
           .then(
             [=](atom::done) {
               if (--self->state.open_requests == 0) {

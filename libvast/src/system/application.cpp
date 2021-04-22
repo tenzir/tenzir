@@ -109,6 +109,9 @@ auto make_export_command() {
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
+      // We don't expose the `preserve-ids` option to the user because it
+      // doesnt' affect the formatted output.
+      //.add<bool>("preserve-ids", "don't substitute taxonomy identifiers")
       .add<size_t>("max-events,n", "maximum number of results")
       .add<std::string>("read,r", "path for reading the query")
       .add<std::string>("write,w", "path to write events to")

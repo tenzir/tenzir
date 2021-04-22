@@ -36,6 +36,18 @@ table v0 {
   ids: [ubyte];
 }
 
+namespace vast.fbs.partition.store_header;
+
+/// Stores an id for the store implmentation and a block of bytes that
+/// passed to the initalization function.
+table v0 {
+  /// The identifier of the store implementation that can read the data.
+  id: string;
+
+  /// The store metadata.
+  data: [ubyte];
+}
+
 namespace vast.fbs.partition;
 
 /// A partition is a collection of indices and column synopses for some
@@ -63,6 +75,9 @@ table v0 {
 
   /// The contained value indexes.
   indexes: [qualified_value_index.v0];
+
+  /// A store identifier and header information.
+  store: store_header.v0;
 }
 
 union Partition {

@@ -189,6 +189,38 @@ TEST(split) {
   CHECK_EQUAL(split_sut(7), manual_split_sut(7));
 }
 
+TEST(filter - expression overload) {
+  auto sut = zeek_conn_log[0];
+  // sut.offset(0);
+  auto check_eval = [&](std::string_view expr, size_t x) {
+    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.layout()));
+    CHECK_EQUAL(filter(sut, exp)->rows(), x);
+  };
+  check_eval("id.orig_h != 192.168.1.102", 5);
+}
+
+TEST(filter - hints only) {
+  auto sut = zeek_conn_log[0];
+  // sut.offset(0);
+  auto check_eval = [&](std::initializer_list<id_range> id_init, size_t x) {
+    auto hints = make_ids(id_init, sut.offset() + sut.rows());
+    CHECK_EQUAL(filter(sut, hints)->rows(), x);
+  };
+  check_eval({{2, 7}}, 5);
+}
+
+TEST(filter - expression with hints) {
+  auto sut = zeek_conn_log[0];
+  // sut.offset(0);
+  auto check_eval = [&](std::string_view expr,
+                        std::initializer_list<id_range> id_init, size_t x) {
+    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.layout()));
+    auto hints = make_ids(id_init, sut.offset() + sut.rows());
+    CHECK_EQUAL(filter(sut, exp, hints)->rows(), x);
+  };
+  check_eval("id.orig_h != 192.168.1.102", {{0, 8}}, 5);
+}
+
 TEST(evaluate) {
   auto sut = zeek_conn_log[0];
   sut.offset(0);

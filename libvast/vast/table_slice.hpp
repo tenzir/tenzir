@@ -211,6 +211,27 @@ public:
   friend void select(std::vector<table_slice>& result, const table_slice& slice,
                      const ids& selection);
 
+  /// Produces a new table slice consisting only of events addressed in `hints`
+  /// that match the given expression. Does not preserve ids; use `select`
+  /// instead if the id mapping must be maintained.
+  /// @param slice The input table slice.
+  /// @param expr The expression to evaluate.
+  /// @param hints An ID set for pruning the events that need to be considered.
+  /// @returns a new table slice consisting only of events matching the given
+  ///          expression.
+  /// @pre `slice.encoding() != table_slice_encoding::none`
+  friend std::optional<table_slice>
+  filter(const table_slice& slice, const expression& expr, const ids& hints);
+
+  /// Counts the rows that match an expression.
+  /// @param slice The input table slice.
+  /// @param expr The expression to evaluate.
+  /// @param hints An ID set for pruning the events that need to be considered.
+  /// @returns the number of rows that are included in `hints` and match `expr`.
+  /// @pre `slice.encoding() != table_slice_encoding::none`
+  friend uint64_t count_matching(const table_slice& slice,
+                                 const expression& expr, const ids& hints);
+
 private:
   // -- implementation details -------------------------------------------------
 
@@ -261,7 +282,7 @@ std::vector<table_slice> select(const table_slice& slice, const ids& selection);
 ///          table slice of the first `num_rows` rows from `slice`.
 /// @pre `slice.encoding() != table_slice_encoding::none`
 /// @pre `num_rows > 0`
-table_slice truncate(const table_slice& slice, size_t num_rows);
+table_slice truncate(table_slice slice, size_t num_rows);
 
 /// Splits a table slice into two slices such that the first slice contains
 /// the rows `[0, partition_point)` and the second slice contains the rows
@@ -272,7 +293,7 @@ table_slice truncate(const table_slice& slice, size_t num_rows);
 ///          otherwise returns `slice` and an invalid tbale slice.
 /// @pre `slice.encoding() != table_slice_encoding::none`
 std::pair<table_slice, table_slice>
-split(const table_slice& slice, size_t partition_point);
+split(table_slice slice, size_t partition_point);
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
@@ -284,5 +305,38 @@ uint64_t rows(const std::vector<table_slice>& slices);
 /// @param slice The table slice to apply *expr* on.
 /// @returns The set of row IDs in *slice* for which *expr* yields true.
 ids evaluate(const expression& expr, const table_slice& slice);
+
+// Attribute-specifier-seqs are not allowed in friend function declarations, so
+// we re-declare the filter functions with nodiscard here.
+[[nodiscard]] std::optional<table_slice>
+filter(const table_slice& slice, const expression& expr, const ids& hints);
+
+/// Produces a new table slice consisting only of events that match the given
+/// expression. Does not preserve ids, use `select`instead if the id mapping
+/// must be maintained.
+/// @param slice The input table slice.
+/// @param expr The expression to evaluate.
+/// @returns a new table slice consisting only of events matching the given
+///          expression.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+[[nodiscard]] std::optional<table_slice>
+filter(const table_slice& slice, const expression& expr);
+
+/// Produces a new table slice consisting only of events addressed in `hints`.
+/// Does not preserve ids, use `select`instead if the id mapping must be
+/// maintained.
+/// @param slice The input table slice.
+/// @param hints The set of IDs to select the events to include in the output
+///              slice.
+/// @returns a new table slice consisting only of events matching the given
+///          expression.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+[[nodiscard]] std::optional<table_slice>
+filter(const table_slice& slice, const ids& hints);
+
+// Attribute-specifier-seqs are not allowed in friend function declarations, so
+// we re-declare the count_matching function with nodiscard here.
+[[nodiscard]] uint64_t count_matching(const table_slice& slice,
+                                      const expression& expr, const ids& hints);
 
 } // namespace vast

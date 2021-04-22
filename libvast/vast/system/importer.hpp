@@ -106,14 +106,13 @@ struct importer_state {
 /// Spawns an IMPORTER.
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
-/// @param max_table_slice_size The suggested maximum size for table slices.
-/// @param archive A handle to the ARCHIVE.
+/// @param store A handle to the global STORE (ARCHIVE).
 /// @param index A handle to the INDEX.
 /// @param batch_size The initial number of IDs to request when replenishing.
 /// @param type_registry A handle to the type-registry module.
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, const archive_actor& archive,
+         const std::filesystem::path& dir, const store_actor& store,
          index_actor index, const type_registry_actor& type_registry);
 
 } // namespace vast::system

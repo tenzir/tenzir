@@ -32,9 +32,6 @@ struct exporter_state {
 
   // -- member variables -------------------------------------------------------
 
-  /// Stores a handle to the ARCHIVE for fetching candidates.
-  archive_actor archive;
-
   /// Stores a handle to the INDEX for querying results.
   index_actor index;
 
@@ -74,14 +71,14 @@ struct exporter_state {
   expression expr;
 };
 
-/// The EXPORTER receives index hits, looks up the corresponding events in the
-/// archive, and performs a candidate check to select the resulting stream of
-/// matching events.
+/// The EXPORTER gradually requests more results from the index until no more
+/// results are available or the requested number of events is reached.
+/// It also performs a candidate check to filter out false positives.
 /// @param self The actor handle of the exporter.
 /// @param expr The AST of the query.
 /// @param opts The query options.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options opts);
+         query_options options);
 
 } // namespace vast::system

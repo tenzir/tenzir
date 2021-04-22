@@ -46,15 +46,11 @@ spawn_eraser(node_actor::stateful_pointer<node_state> self,
     aging_frequency = *parsed;
   }
   // Ensure component dependencies.
-  auto [index, archive]
-    = self->state.registry.find<index_actor, archive_actor>();
+  auto [index] = self->state.registry.find<index_actor>();
   if (!index)
     return caf::make_error(ec::missing_component, "index");
-  if (!archive)
-    return caf::make_error(ec::missing_component, "archive");
   // Spawn the eraser.
-  auto handle
-    = self->spawn(eraser, aging_frequency, eraser_query, index, archive);
+  auto handle = self->spawn(eraser, aging_frequency, eraser_query, index);
   VAST_VERBOSE("{} spawned an eraser for {}", self, eraser_query);
   return handle;
 }

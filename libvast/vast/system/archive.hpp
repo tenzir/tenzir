@@ -11,7 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/ids.hpp"
-#include "vast/store.hpp"
+#include "vast/query.hpp"
+#include "vast/segment_store.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 
@@ -28,15 +29,42 @@ namespace vast::system {
 
 /// @relates archive
 struct archive_state {
-  void send_report();
-  void next_session();
+  struct request_state {
+    request_state(vast::query query_,
+                  std::pair<ids, caf::typed_response_promise<atom::done>> ids_)
+      : query{std::move(query_)} {
+      ids_queue.push(std::move(ids_));
+    }
+    vast::query query;
+    std::queue<std::pair<ids, caf::typed_response_promise<atom::done>>>
+      ids_queue;
+    bool cancelled = false;
+  };
+
+  std::deque<request_state> requests;
+  std::unique_ptr<vast::segment_store::lookup> session;
+  ids session_ids = {};
+  caf::typed_response_promise<atom::done> active_promise;
+
   archive_actor::pointer self;
-  std::unique_ptr<vast::store> store;
-  std::unique_ptr<vast::store::lookup> session;
-  uint64_t session_id = 0;
-  std::queue<archive_client_actor> requesters;
-  std::unordered_map<caf::actor_addr, std::queue<ids>> unhandled_ids;
-  std::unordered_set<caf::actor_addr> active_exporters;
+
+  std::unique_ptr<vast::segment_store> store;
+
+  /// Send metrics to the accountant.
+  void send_report();
+
+  /// Opens the next lookup session with the segment_store, either
+  /// by popping the next ids item from the queue of the current request
+  /// or by moving to the next request.
+  std::unique_ptr<segment_store::lookup> next_session();
+
+  /// Updates an existing request with additional ids or inserts a new request
+  /// if the query client hasn't been seen before.
+  /// @param query The type of request.
+  /// @param xs A preselection of ids to narrow down the search space.
+  caf::typed_response_promise<atom::done>
+  file_request(vast::query query, const ids& xs);
+
   vast::system::measurement measurement;
   accountant_actor accountant;
   static inline const char* name = "archive";

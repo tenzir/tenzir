@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/query.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/uuid.hpp"
 
@@ -68,7 +69,7 @@ public:
   enum state_name {
     idle,
     await_query_id,
-    collect_hits,
+    await_results_until_done,
   };
 
   static constexpr size_t num_states = 3;
@@ -90,12 +91,11 @@ public:
   /// Sends the query `expr` to `index` and transitions from `idle` to
   /// `await_query_id`.
   /// @pre `state() == idle`
-  void start(expression expr, index_actor index);
+  void start(vast::query query, index_actor index);
 
   /// @pre `state() == collect_hits`
-  /// @pre `n > 0`
-  /// @pre `partitions_.received + n <= partitions_.total`
-  void request_more_hits(uint32_t n);
+  /// @returns false if there are no more partitions to schedule.
+  bool request_more_results();
 
   // -- properties -------------------------------------------------------------
 
@@ -127,12 +127,9 @@ protected:
 
   // -- implementation hooks ---------------------------------------------------
 
-  /// Processes incoming hits from the INDEX.
-  virtual void process_hits(const ids& hits);
-
-  /// Processes incoming done messages. The default implementation always
-  /// transitions to the idle state.
-  virtual void process_end_of_hits();
+  /// Processes incoming done messages from the INDEX. The default
+  /// implementation tansitions to the idle state.
+  virtual void process_done();
 
   // -- member variables -------------------------------------------------------
 

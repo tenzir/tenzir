@@ -12,8 +12,8 @@
 
 #include "vast/detail/lru_cache.hpp"
 #include "vast/detail/stable_map.hpp"
-#include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
+#include "vast/query.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/meta_index.hpp"
@@ -97,14 +97,14 @@ struct query_state {
   vast::uuid id;
 
   /// The query expression.
-  vast::expression expression;
+  vast::query query;
 
   /// Unscheduled partitions.
   std::vector<uuid> partitions;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.id, x.expression,
+    return f(caf::meta::type_name("query_state"), x.id, x.query,
              caf::meta::omittable_if_empty(), x.partitions);
   }
 };
@@ -236,6 +236,9 @@ struct index_state {
   /// List of actors that wait for the next flush event.
   std::vector<flush_listener_actor> flush_listeners = {};
 
+  /// Actor handle of the store actor.
+  store_actor store = {};
+
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
 
@@ -253,6 +256,8 @@ caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// Indexes events in horizontal partitions.
+/// @param store The global store actor. Not used by the index itself but
+/// forwarded to partitions.
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
 /// @param dir The directory of the index.
@@ -262,7 +267,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 /// @param meta_index_fp_rate The false positive rate for the meta index.
 /// @pre `partition_capacity > 0
 index_actor::behavior_type
-index(index_actor::stateful_pointer<index_state> self,
+index(index_actor::stateful_pointer<index_state> self, store_actor store,
       filesystem_actor filesystem, const std::filesystem::path& dir,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,

@@ -38,8 +38,6 @@ using namespace system;
 
 using vast::expression;
 using vast::ids;
-using vast::make_ids;
-using vast::uuid;
 
 namespace {
 
@@ -65,12 +63,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
     auto fs = self->spawn(vast::system::posix_filesystem, directory);
     auto indexdir = directory / "index";
-    index = self->spawn(system::index, fs, indexdir,
-                        defaults::import::table_slice_size, 100, 3, 1, indexdir,
-                        0.01);
     archive = self->spawn(system::archive, directory / "archive",
                           defaults::system::segments,
                           defaults::system::max_segment_size);
+    index = self->spawn(system::index, archive, fs, indexdir,
+                        defaults::import::table_slice_size, 100, 3, 1, indexdir,
+                        0.01);
     client = sys.spawn(mock_client);
     // Fill the INDEX with 400 rows from the Zeek conn log.
     detail::spawn_container_source(sys, take(zeek_conn_log_full, 4), index);
@@ -88,7 +86,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   void spawn_aut(std::string_view query, bool skip_candidate_check) {
     if (index == nullptr)
       FAIL("cannot start AUT without INDEX");
-    aut = sys.spawn(counter, unbox(to<expression>(query)), index, archive,
+    aut = sys.spawn(counter, unbox(to<expression>(query)), index,
                     skip_candidate_check);
     run();
     anon_send(aut, atom::run_v, client);
@@ -109,7 +107,7 @@ TEST(count IP point query without candidate check) {
   MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
   spawn_aut(":addr == 192.168.1.104", true);
   // Once started, the COUNTER reaches out to the INDEX.
-  expect((expression), from(aut).to(index));
+  expect((query), from(aut).to(index));
   run();
   // The magic number 133 was computed via:
   // bro-cut < libvast_test/artifacts/logs/zeek/conn.log
@@ -125,7 +123,7 @@ TEST(count IP point query with candidate check) {
   MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
   spawn_aut(":addr == 192.168.1.104", false);
   // Once started, the COUNTER reaches out to the INDEX.
-  expect((expression), from(aut).to(index));
+  expect((query), from(aut).to(index));
   run();
   // The magic number 105 was computed via:
   // bro-cut < libvast_test/artifacts/logs/zeek/conn.log

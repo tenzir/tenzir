@@ -19,6 +19,7 @@
 #include "vast/format/writer.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/query.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/node_control.hpp"
@@ -58,20 +59,16 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
       return caf::make_error(ec::parse_error, c, "is not a positive integer");
     // The caf::actor_cast here is necessary because a scoped actor cannot be a
     // typed actor. The message handlers below reflect those of the
-    // archive_client_actor exactly, but there's no way to verify that at
+    // receiver_actor<table_slice> exactly, but there's no way to verify that at
     // compile time. We can improve upon this situation when changing the
     // archive to stream its results.
-    self->send(archive, to_ids(*i),
-               caf::actor_cast<archive_client_actor>(self));
+    auto q = query::make_extract(self, query::extract::drop_ids, expression{});
+    self->send(archive, std::move(q), to_ids(*i));
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.
       ([&](table_slice slice) { (*writer)->write(slice); },
-       [&](atom::done, const caf::error& err) {
-         if (err)
-           VAST_WARN("failed to get table slice: {}", render(err));
-         waiting = false;
-       });
+       [&](atom::done) { waiting = false; });
   }
   return caf::none;
 }
@@ -95,7 +92,6 @@ caf::message get_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(components.error()));
   auto&& [archive] = *components;
   VAST_ASSERT(archive);
-  self->send(archive, atom::exporter_v, self);
   auto err = run(self, archive, inv);
   return caf::make_message(err);
 }

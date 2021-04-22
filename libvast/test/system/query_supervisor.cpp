@@ -17,8 +17,8 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/expression.hpp"
 #include "vast/ids.hpp"
+#include "vast/query.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -30,8 +30,9 @@ namespace {
 system::partition_actor::behavior_type
 dummy_partition(system::partition_actor::pointer self, ids x) {
   return {
-    [=](const vast::expression&, const system::partition_client_actor& client) {
-      self->send(client, x);
+    [=](const vast::query& q) {
+      auto sink = caf::get<query::count>(q.cmd).sink;
+      self->send(sink, rank(x));
       return atom::done_v;
     },
     [=](atom::status, system::status_verbosity) { return caf::settings{}; },
@@ -58,16 +59,19 @@ TEST(lookup) {
   MESSAGE("fill query map and trigger supervisor");
   system::query_map qm{
     {uuid::random(), p0}, {uuid::random(), p1}, {uuid::random(), p2}};
-  self->send(sv, unbox(to<expression>("x == 42")), std::move(qm),
-             caf::actor_cast<system::index_client_actor>(self));
+  self->send(sv,
+             vast::query::make_count(self, query::count::mode::estimate,
+                                     unbox(to<expression>("x == 42"))),
+             std::move(qm),
+             caf::actor_cast<system::receiver_actor<atom::done>>(self));
   run();
   MESSAGE("collect results");
   bool done = false;
-  ids result;
+  uint64_t result = 0;
   while (!done)
-    self->receive([&](const ids& x) { result |= x; },
+    self->receive([&](const uint64_t& x) { result += x; },
                   [&](atom::done) { done = true; });
-  CHECK_EQUAL(result, make_ids({{0, 9}}));
+  CHECK_EQUAL(result, 9u);
   MESSAGE("after completion, the supervisor should register itself again");
   expect((atom::worker, system::query_supervisor_actor),
          from(sv).to(self).with(atom::worker_v, sv));

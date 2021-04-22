@@ -12,6 +12,7 @@
 
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
@@ -124,17 +125,17 @@ void evaluator_state::evaluate() {
   VAST_DEBUG("{} got predicate_hits: {} expr_hits: {}", self, predicate_hits,
              expr_hits);
   auto delta = expr_hits - hits;
-  if (any<1>(delta)) {
+  if (any<1>(delta))
     hits |= delta;
-    self->send(client, std::move(delta));
-  }
 }
 
 void evaluator_state::decrement_pending() {
   // We're done evaluating if all INDEXER actors have reported their hits.
   if (--pending_responses == 0) {
-    VAST_DEBUG("{} completed expression evaluation", self);
-    promise.deliver(atom::done_v);
+    // Now we ask the store for the actual data.
+    // TODO: handle count estimate requests.
+    promise.deliver(hits);
+    self->quit();
   }
 }
 
@@ -152,9 +153,8 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
   self->state.expr = std::move(expr);
   self->state.eval = std::move(eval);
   return {
-    [self](partition_client_actor client) {
-      self->state.client = client;
-      self->state.promise = self->make_response_promise<atom::done>();
+    [self](atom::run) {
+      self->state.promise = self->make_response_promise<ids>();
       self->state.pending_responses += self->state.eval.size();
       for (auto& triple : self->state.eval) {
         // No strucutured bindings available due to subsequent lambda. :-/
@@ -171,10 +171,8 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
       }
       if (self->state.pending_responses == 0) {
         VAST_DEBUG("{} has nothing to evaluate for expression", self);
-        self->state.promise.deliver(atom::done_v);
+        self->state.promise.deliver(ids{});
       }
-      // We can only deal with exactly one expression/client at the moment.
-      self->unbecome();
       return self->state.promise;
     },
   };

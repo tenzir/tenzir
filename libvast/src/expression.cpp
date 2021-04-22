@@ -174,6 +174,10 @@ expression hoist(expression expr) {
   return caf::visit(hoister{}, std::move(expr));
 }
 
+expression prune_meta_predicates(expression expr) {
+  return caf::visit(meta_pruner{}, std::move(expr));
+}
+
 expression normalize(expression expr) {
   expr = caf::visit(hoister{}, std::move(expr));
   expr = caf::visit(aligner{}, std::move(expr));
@@ -192,7 +196,9 @@ caf::expected<expression> normalize_and_validate(expression expr) {
 
 caf::expected<expression> tailor(expression expr, const type& t) {
   if (caf::holds_alternative<caf::none_t>(expr))
-    return caf::make_error(ec::unspecified, "invalid expression");
+    return caf::make_error(
+      ec::unspecified,
+      fmt::format("failed to tailor expression {} for type {}", expr, t));
   return caf::visit(type_resolver{t}, std::move(expr));
 }
 

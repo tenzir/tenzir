@@ -80,28 +80,16 @@ using flush_listener_actor = typed_actor_fwd<
   // Reacts to the requested flush message.
   caf::reacts_to<atom::flush>>::unwrap;
 
-/// The ARCHIVE CLIENT actor interface.
-using archive_client_actor = typed_actor_fwd<
-  // An ARCHIVE CLIENT receives table slices from the ARCHIVE for partial
-  // query hits.
-  caf::reacts_to<table_slice>,
-  // An ARCHIVE CLIENT receives (done, error) when the query finished.
-  caf::reacts_to<atom::done, caf::error>>::unwrap;
-
-/// The PARTITION CLIENT actor interface.
-using partition_client_actor = typed_actor_fwd<
-  // The client sends an expression to the partition and receives several sets
-  // of ids followed by a final `atom::done` which as sent as response to the
-  // expression. This interface provides the callback for the middle part of
-  // this sequence.
-  caf::reacts_to<ids>>::unwrap;
-
-/// The INDEX CLIENT actor interface.
-using index_client_actor = typed_actor_fwd<
-  // Receives done from the INDEX when the query finished.
-  caf::reacts_to<atom::done>>
-  // Receives ids from the INDEX for partial query hits.
-  ::extend_with<partition_client_actor>::unwrap;
+/// The RECEIVER SINK actor interface.
+/// This can be used to avoid defining an opaque alias for a single-handler
+/// interface.
+/// @tparam T The type of first parameter of the message handler the the actor
+///           handle must implement.
+/// @tparam Ts... The types of additional parameters for the message handler.
+template <class T, class... Ts>
+using receiver_actor = typename typed_actor_fwd<
+  // Add a new source.
+  typename caf::reacts_to<T, Ts...>>::unwrap;
 
 /// The STATUS CLIENT actor interface.
 using status_client_actor = typed_actor_fwd<
@@ -109,12 +97,25 @@ using status_client_actor = typed_actor_fwd<
   caf::replies_to<atom::status, status_verbosity>::with< //
     caf::dictionary<caf::config_value>>>::unwrap;
 
+/// The STORE actor interface.
+using store_actor = typed_actor_fwd<
+  // Handles an extraction for the given expression, optionally optimized by a
+  // set of ids to pre-select the events to evaluate.
+  caf::replies_to<query, ids>::with<atom::done>,
+  // Erase the events with the given ids.
+  caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
+
+/// The STORE BUILDER actor interface.
+using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
+  // Conform to the protocol of the STREAM SINK actor for table slices.
+  ::extend_with<stream_sink_actor<table_slice>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
+
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
-  // Evaluate the given expression, returning the relevant evaluation triples.
-  // TODO: Passing the `partition_client_actor` here is an historical artifact,
-  // a cleaner API would be to just return the evaluated `vast::ids`.
-  caf::replies_to<expression, partition_client_actor>::with<atom::done>>
+  // Evaluate the given expression and send the matching events to the receiver.
+  caf::replies_to<query>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -124,15 +125,14 @@ using query_map = std::vector<std::pair<uuid, partition_actor>>;
 
 /// The QUERY SUPERVISOR actor interface.
 using query_supervisor_actor = typed_actor_fwd<
-  /// Reacts to an expression and a set of relevant partitions by
-  /// sending several `vast::ids` to the index_client_actor, followed
-  /// by a final `atom::done`.
-  caf::reacts_to<expression, query_map, index_client_actor>>::unwrap;
+  /// Reacts to a query and a set of relevant partitions by sending several
+  /// `vast::ids` to the index_client_actor, followed by a final `atom::done`.
+  caf::reacts_to<query, query_map, receiver_actor<atom::done>>>::unwrap;
 
 /// The EVALUATOR actor interface.
 using evaluator_actor = typed_actor_fwd<
-  // Re-evaluates the expression and relays new hits to the PARTITION CLIENT.
-  caf::replies_to<partition_client_actor>::with<atom::done>>::unwrap;
+  // Evaluates the expression and responds with matching ids.
+  caf::replies_to<atom::run>::with<ids>>::unwrap;
 
 /// The INDEXER actor interface.
 using indexer_actor = typed_actor_fwd<
@@ -202,12 +202,12 @@ using meta_index_actor = typed_actor_fwd<
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
   caf::reacts_to<atom::done, uuid>,
-  // Registers the ARCHIVE with the ACCOUNTANT.
+  // Registers the INDEX with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
-  // Evaluatates an expression.
-  caf::reacts_to<expression>,
+  // Evaluatates an query.
+  caf::reacts_to<query>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
   // Erases the given events from the INDEX, and returns their ids.
@@ -221,21 +221,15 @@ using index_actor = typed_actor_fwd<
 
 /// The ARCHIVE actor interface.
 using archive_actor = typed_actor_fwd<
-  // Register an exporter actor.
-  // TODO: This should probably take an archive_client_actor.
-  caf::reacts_to<atom::exporter, caf::actor>,
   // Registers the ARCHIVE with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
-  // Starts handling a query for the given ids.
-  caf::reacts_to<ids, archive_client_actor>,
   // INTERNAL: Handles a query for the given ids, and sends the table slices
-  // back to the ARCHIVE CLIENT.
-  caf::reacts_to<atom::internal, ids, archive_client_actor, uint64_t>,
+  // back to the client.
+  caf::reacts_to<atom::internal, atom::resume>,
   // The internal telemetry loop of the ARCHIVE.
-  caf::reacts_to<atom::telemetry>,
-  // Erase the events with the given ids.
-  caf::replies_to<atom::erase, ids>::with< //
-    atom::done>>
+  caf::reacts_to<atom::telemetry>>
+  // Conform to the protocol of the STORE actor.
+  ::extend_with<store_actor>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the procotol of the STATUS CLIENT actor.
@@ -317,24 +311,22 @@ using exporter_actor = typed_actor_fwd<
   caf::reacts_to<atom::extract, uint64_t>,
   // Register the ACCOUNTANT actor.
   caf::reacts_to<accountant_actor>,
-  // Register the ARCHIVE actor.
-  caf::reacts_to<archive_actor>,
   // Register the INDEX actor.
   caf::reacts_to<index_actor>,
   // Register the SINK actor.
   caf::reacts_to<atom::sink, caf::actor>,
   // Execute previously registered query.
   caf::reacts_to<atom::run>,
+  // Execute previously registered query.
+  caf::reacts_to<atom::done>,
+  // Execute previously registered query.
+  caf::reacts_to<table_slice>,
   // Register a STATISTICS SUBSCRIBER actor.
   caf::reacts_to<atom::statistics, caf::actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>
-  // Conform to the protocol of the ARCHIVE CLIENT actor.
-  ::extend_with<archive_client_actor>
-  // Conform to the protocol of the INDEX CLIENT actor.
-  ::extend_with<index_client_actor>::unwrap;
+  ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of a COMPONENT PLUGIN actor.
 using component_plugin_actor = typed_actor_fwd<>
@@ -409,7 +401,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::active_partition_actor))
   VAST_ADD_TYPE_ID((vast::system::analyzer_plugin_actor))
   VAST_ADD_TYPE_ID((vast::system::archive_actor))
-  VAST_ADD_TYPE_ID((vast::system::archive_client_actor))
   VAST_ADD_TYPE_ID((vast::system::disk_monitor_actor))
   VAST_ADD_TYPE_ID((vast::system::evaluator_actor))
   VAST_ADD_TYPE_ID((vast::system::exporter_actor))
@@ -417,14 +408,13 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::flush_listener_actor))
   VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::index_actor))
-  VAST_ADD_TYPE_ID((vast::system::index_client_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))
   VAST_ADD_TYPE_ID((vast::system::node_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
-  VAST_ADD_TYPE_ID((vast::system::partition_client_actor))
   VAST_ADD_TYPE_ID((vast::system::query_map))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_actor))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_master_actor))
+  VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>) )
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>) )
   VAST_ADD_TYPE_ID(
