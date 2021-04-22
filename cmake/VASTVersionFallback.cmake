@@ -1,3 +1,3 @@
 # IMPORTANT: When updating this file, also run the target `update-changelog` and
 # push the updated CHANGELOG file.
-set(VAST_VERSION_FALLBACK "2021.03.25")
+set(VAST_VERSION_FALLBACK "2021.04.29-rc1")
