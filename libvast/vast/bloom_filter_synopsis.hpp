@@ -34,7 +34,7 @@ public:
     bloom_filter_.add(caf::get<view<T>>(x));
   }
 
-  caf::optional<bool>
+  [[nodiscard]] caf::optional<bool>
   lookup(relational_operator op, data_view rhs) const override {
     switch (op) {
       default:
@@ -53,14 +53,14 @@ public:
     }
   }
 
-  bool equals(const synopsis& other) const noexcept override {
+  [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
     if (typeid(other) != typeid(bloom_filter_synopsis))
       return false;
     auto& rhs = static_cast<const bloom_filter_synopsis&>(other);
     return this->type() == rhs.type() && bloom_filter_ == rhs.bloom_filter_;
   }
 
-  size_t memusage() const override {
+  [[nodiscard]] size_t memusage() const override {
     return bloom_filter_.memusage();
   }
 

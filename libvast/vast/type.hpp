@@ -155,16 +155,16 @@ public:
   explicit operator bool() const;
 
   /// @returns the name of the type.
-  const std::string& name() const;
+  [[nodiscard]] const std::string& name() const;
 
   /// @returns The attributes of the type.
-  const std::vector<attribute>& attributes() const;
+  [[nodiscard]] const std::vector<attribute>& attributes() const;
 
   /// @cond PRIVATE
 
-  abstract_type_ptr ptr() const;
+  [[nodiscard]] abstract_type_ptr ptr() const;
 
-  const abstract_type* raw_ptr() const noexcept;
+  [[nodiscard]] const abstract_type* raw_ptr() const noexcept;
 
   const abstract_type* operator->() const noexcept;
 
@@ -412,7 +412,7 @@ private:
 /// @relates type
 template <class Derived>
 struct basic_type : concrete_type<Derived> {
-  type_flags flags() const noexcept final {
+  [[nodiscard]] type_flags flags() const noexcept final {
     return type_flags::basic;
   }
 };
@@ -421,7 +421,7 @@ struct basic_type : concrete_type<Derived> {
 /// @relates basic_type type
 template <class Derived>
 struct complex_type : concrete_type<Derived> {
-  type_flags flags() const noexcept override {
+  [[nodiscard]] type_flags flags() const noexcept override {
     return type_flags::complex | type_flags::recursive;
   }
 };
@@ -432,7 +432,7 @@ template <class Derived>
 struct recursive_type : complex_type<Derived> {
   using super = complex_type<Derived>;
 
-  type_flags flags() const noexcept override {
+  [[nodiscard]] type_flags flags() const noexcept override {
     return type_flags::complex | type_flags::recursive;
   }
 };
@@ -455,12 +455,12 @@ struct nested_type : recursive_type<Derived> {
              x.value_type);
   }
 
-  bool equals(const abstract_type& other) const final {
+  [[nodiscard]] bool equals(const abstract_type& other) const final {
     return super::equals(other)
            && value_type == super::downcast(other).value_type;
   }
 
-  bool less_than(const abstract_type& other) const final {
+  [[nodiscard]] bool less_than(const abstract_type& other) const final {
     return super::less_than(other)
            && value_type < super::downcast(other).value_type;
   }
@@ -617,9 +617,9 @@ struct record_type final : recursive_type<record_type> {
   class each : public detail::range_facade<each> {
   public:
     struct range_state {
-      std::string key() const;
-      const class type& type() const;
-      size_t depth() const;
+      [[nodiscard]] std::string key() const;
+      [[nodiscard]] const class type& type() const;
+      [[nodiscard]] size_t depth() const;
 
       detail::stack_vector<const record_field*, 64> trace;
       vast::offset offset;
@@ -631,8 +631,8 @@ struct record_type final : recursive_type<record_type> {
     friend detail::range_facade<each>;
 
     void next();
-    bool done() const;
-    const range_state& get() const;
+    [[nodiscard]] bool done() const;
+    [[nodiscard]] const range_state& get() const;
 
     range_state state_;
     detail::stack_vector<const record_type*, 64> records_;

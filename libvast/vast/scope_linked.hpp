@@ -43,7 +43,7 @@ public:
   // -- properties -------------------------------------------------------------
 
   /// @returns the managed actor.
-  const Handle& get() const {
+  [[nodiscard]] const Handle& get() const {
     return hdl_;
   }
 

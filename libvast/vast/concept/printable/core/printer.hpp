@@ -25,7 +25,7 @@ class guard_printer;
 template <class Derived>
 struct printer {
   template <class Action>
-  auto before(Action fun) const {
+  [[nodiscard]] auto before(Action fun) const {
     return action_printer<Derived, Action>{derived(), fun};
   }
 
@@ -35,7 +35,7 @@ struct printer {
   }
 
   template <class Guard>
-  auto with(Guard fun) const {
+  [[nodiscard]] [[nodiscard]] auto with(Guard fun) const {
     return guard_printer<Derived, Guard>{derived(), fun};
   }
 
@@ -67,7 +67,7 @@ struct printer {
   }
 
 private:
-  const Derived& derived() const {
+  [[nodiscard]] const Derived& derived() const {
     return static_cast<const Derived&>(*this);
   }
 };

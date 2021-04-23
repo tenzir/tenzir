@@ -41,11 +41,11 @@ public:
 
   /// Retrieves the port number.
   /// @returns The port number.
-  number_type number() const;
+  [[nodiscard]] number_type number() const;
 
   /// Retrieves the transport protocol type.
   /// @returns The port type.
-  port_type type() const;
+  [[nodiscard]] port_type type() const;
 
   /// Sets the port number.
   /// @param n The new port number.

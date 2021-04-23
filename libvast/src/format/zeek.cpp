@@ -616,7 +616,7 @@ public:
       p, slice, {std::string_view{&separator, 1}, "", "", ""});
   }
 
-  const char* name() const override {
+  [[nodiscard]] const char* name() const override {
     return "zeek-writer";
   }
 

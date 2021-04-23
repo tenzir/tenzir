@@ -48,22 +48,22 @@ public:
   /// @param rhs The RHS of the predicate.
   /// @pre: The query has already been type-checked.
   /// @returns The evaluation result of `*this op rhs`.
-  virtual caf::optional<bool> lookup(relational_operator op,
-                                     data_view rhs) const = 0;
+  [[nodiscard]] virtual caf::optional<bool>
+  lookup(relational_operator op, data_view rhs) const = 0;
 
   /// @returns A best-effort estimate of the size (in bytes) of this synopsis.
-  virtual size_t memusage() const = 0;
+  [[nodiscard]] virtual size_t memusage() const = 0;
 
   /// Returns a new synopsis with the same data but consuming less memory,
   /// or `nullptr` if that is not possible.
   /// This currently only makes sense for the `buffered_address_synopsis`.
-  virtual synopsis_ptr shrink() const;
+  [[nodiscard]] virtual synopsis_ptr shrink() const;
 
   /// Tests whether two objects are equal.
-  virtual bool equals(const synopsis& other) const noexcept = 0;
+  [[nodiscard]] virtual bool equals(const synopsis& other) const noexcept = 0;
 
   /// @returns the type this synopsis operates for.
-  const vast::type& type() const;
+  [[nodiscard]] const vast::type& type() const;
 
   // -- serialization ----------------------------------------------------------
 

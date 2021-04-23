@@ -31,7 +31,7 @@ public:
   /// Checks whether this subnet includes a given address.
   /// @param addr The address to test for containment.
   /// @returns `true` if *addr* is an element of this subnet.
-  bool contains(const address& addr) const;
+  [[nodiscard]] bool contains(const address& addr) const;
 
   /// Checks whether this subnet includes another subnet.
   /// For two subnets *A* and *B*, the subset relationship *A ⊆ B* holds true
@@ -41,15 +41,15 @@ public:
   /// of *A*.
   /// @param other The subnet to test for containment.
   /// @returns `true` if *other* is contained within this subnet.
-  bool contains(const subnet& other) const;
+  [[nodiscard]] bool contains(const subnet& other) const;
 
   /// Retrieves the network address of the prefix.
   /// @returns The prefix address.
-  const address& network() const;
+  [[nodiscard]] const address& network() const;
 
   /// Retrieves the prefix length.
   /// @returns The prefix length.
-  uint8_t length() const;
+  [[nodiscard]] uint8_t length() const;
 
   friend bool operator==(const subnet& x, const subnet& y);
   friend bool operator<(const subnet& x, const subnet& y);

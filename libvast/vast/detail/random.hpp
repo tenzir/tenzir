@@ -29,11 +29,11 @@ public:
       : shape_{shape}, scale_{scale} {
     }
 
-    result_type shape() const {
+    [[nodiscard]] result_type shape() const {
       return shape_;
     }
 
-    result_type scale() const {
+    [[nodiscard]] result_type scale() const {
       return scale_;
     }
 
@@ -59,7 +59,7 @@ public:
   template <class URNG>
   result_type operator()(URNG& g, const param_type& parm);
 
-  param_type param() const {
+  [[nodiscard]] param_type param() const {
     return params_;
   }
 
@@ -67,11 +67,11 @@ public:
     params_ = std::move(parm);
   }
 
-  result_type shape() const {
+  [[nodiscard]] result_type shape() const {
     return params_.shape();
   }
 
-  result_type scale() const {
+  [[nodiscard]] result_type scale() const {
     return params_.scale();
   }
 

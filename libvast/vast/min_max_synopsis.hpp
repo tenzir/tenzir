@@ -37,8 +37,8 @@ public:
       max_ = *y;
   }
 
-  caf::optional<bool> lookup(relational_operator op,
-                             data_view rhs) const override {
+  [[nodiscard]] caf::optional<bool>
+  lookup(relational_operator op, data_view rhs) const override {
     auto do_lookup = [this](relational_operator op,
                          data_view xv) -> caf::optional<bool> {
       if (auto x = caf::get_if<view<T>>(&xv))
@@ -77,7 +77,7 @@ public:
     }
   }
 
-  size_t memusage() const override {
+  [[nodiscard]] size_t memusage() const override {
     return sizeof(min_max_synopsis);
   }
 
@@ -89,16 +89,16 @@ public:
     return source(min_, max_);
   }
 
-  T min() const noexcept {
+  [[nodiscard]] T min() const noexcept {
     return min_;
   }
 
-  T max() const noexcept {
+  [[nodiscard]] T max() const noexcept {
     return max_;
   }
 
 private:
-  bool lookup_impl(relational_operator op, const T x) const {
+  [[nodiscard]] bool lookup_impl(relational_operator op, const T x) const {
     // Let *min* and *max* constitute the LHS of the lookup operation and *rhs*
     // be the value to compare with on the RHS. Then, there are 5 possible
     // scenarios to differentiate for the inputs:

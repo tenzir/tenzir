@@ -32,11 +32,11 @@ public:
 
   // -- inspectors -----------------------------------------------------------
 
-  bool empty() const;
+  [[nodiscard]] bool empty() const;
 
-  size_type size() const;
+  [[nodiscard]] size_type size() const;
 
-  size_t memusage() const;
+  [[nodiscard]] size_t memusage() const;
 
   // -- modifiers ------------------------------------------------------------
 
@@ -71,7 +71,7 @@ public:
   explicit null_bitmap_range(const null_bitmap& bm);
 
   void next();
-  bool done() const;
+  [[nodiscard]] bool done() const;
 
 private:
   void scan();

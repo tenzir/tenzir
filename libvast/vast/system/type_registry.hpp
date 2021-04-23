@@ -32,16 +32,17 @@ struct type_registry_state {
   static inline constexpr auto name = "type-registry";
 
   /// Generate a telemetry report for the accountant.
-  report telemetry() const;
+  [[nodiscard]] report telemetry() const;
 
   /// Summarizes the actors state.
-  caf::dictionary<caf::config_value> status(status_verbosity v) const;
+  [[nodiscard]] caf::dictionary<caf::config_value>
+  status(status_verbosity v) const;
 
   /// Create the path that the type-registry is persisted at on disk.
-  std::filesystem::path filename() const;
+  [[nodiscard]] std::filesystem::path filename() const;
 
   /// Save the type-registry to disk.
-  caf::error save_to_disk() const;
+  [[nodiscard]] caf::error save_to_disk() const;
 
   /// Load the type-registry from disk.
   caf::error load_from_disk();
@@ -50,7 +51,7 @@ struct type_registry_state {
   void insert(vast::type layout);
 
   /// Get a list of known types from the registry.
-  type_set types() const;
+  [[nodiscard]] type_set types() const;
 
   type_registry_actor::pointer self = {};
   accountant_actor accountant = {};

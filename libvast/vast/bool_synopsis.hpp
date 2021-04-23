@@ -21,12 +21,12 @@ public:
 
   void add(data_view x) override;
 
-  caf::optional<bool> lookup(relational_operator op,
-                             data_view rhs) const override;
+  [[nodiscard]] caf::optional<bool>
+  lookup(relational_operator op, data_view rhs) const override;
 
-  bool equals(const synopsis& other) const noexcept override;
+  [[nodiscard]] bool equals(const synopsis& other) const noexcept override;
 
-  size_t memusage() const override;
+  [[nodiscard]] size_t memusage() const override;
 
   caf::error serialize(caf::serializer& sink) const override;
 

@@ -29,7 +29,7 @@ public:
   explicit fdinbuf(int fd, size_t buffer_size = 8192);
 
   std::optional<std::chrono::milliseconds>& read_timeout();
-  bool timed_out() const;
+  [[nodiscard]] bool timed_out() const;
 
 protected:
   int_type underflow() override;

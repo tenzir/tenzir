@@ -198,7 +198,7 @@ private:
     return *static_cast<Derived*>(this);
   }
 
-  const Derived& derived() const {
+  [[nodiscard]] const Derived& derived() const {
     return *static_cast<const Derived*>(this);
   }
 };
@@ -207,7 +207,7 @@ private:
 template <class Derived, class Block>
 class bit_range_base : public detail::range_facade<Derived> {
 public:
-  const bits<Block>& get() const {
+  [[nodiscard]] const bits<Block>& get() const {
     return bits_;
   }
 

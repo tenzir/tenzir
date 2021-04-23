@@ -22,7 +22,7 @@ class line_range : range_facade<line_range> {
 public:
   explicit line_range(std::istream& input);
 
-  const std::string& get() const;
+  [[nodiscard]] const std::string& get() const;
 
   void next_impl();
   void next();
@@ -38,11 +38,11 @@ public:
       std::move(timeout)));
   }
 
-  bool done() const;
+  [[nodiscard]] bool done() const;
 
   std::string& line();
 
-  size_t line_number() const;
+  [[nodiscard]] size_t line_number() const;
 
 private:
   std::istream& input_;

@@ -86,17 +86,17 @@ public:
   }
 
   /// @returns The number of cells in the underlying bit vector.
-  size_t size() const {
+  [[nodiscard]] size_t size() const {
     return bits_.size();
   }
 
   /// @returns An estimate for amount of memory (in bytes) used by this filter.
-  size_t memusage() const {
+  [[nodiscard]] size_t memusage() const {
     return sizeof(bloom_filter) + bits_.capacity() / CHAR_BIT;
   }
 
   /// @returns The number of hash functions in the hasher.
-  size_t num_hash_functions() const {
+  [[nodiscard]] size_t num_hash_functions() const {
     return hasher_.size();
   }
 

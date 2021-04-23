@@ -46,14 +46,14 @@ public:
   /// Matches a string against the pattern.
   /// @param str The string to match.
   /// @returns `true` if the pattern matches exactly *str*.
-  bool match(std::string_view str) const;
+  [[nodiscard]] bool match(std::string_view str) const;
 
   /// Searches a pattern in a string.
   /// @param str The string to search.
   /// @returns `true` if the pattern matches inside *str*.
-  bool search(std::string_view str) const;
+  [[nodiscard]] bool search(std::string_view str) const;
 
-  const std::string& string() const;
+  [[nodiscard]] const std::string& string() const;
 
   // -- concepts // ------------------------------------------------------------
 

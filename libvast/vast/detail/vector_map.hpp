@@ -60,7 +60,7 @@ public:
     return xs_.begin();
   }
 
-  const_iterator begin() const {
+  [[nodiscard]] const_iterator begin() const {
     return xs_.begin();
   }
 
@@ -68,7 +68,7 @@ public:
     return xs_.end();
   }
 
-  const_iterator end() const {
+  [[nodiscard]] const_iterator end() const {
     return xs_.end();
   }
 
@@ -76,7 +76,7 @@ public:
     return xs_.rbegin();
   }
 
-  const_reverse_iterator rbegin() const {
+  [[nodiscard]] const_reverse_iterator rbegin() const {
     return xs_.rbegin();
   }
 
@@ -84,17 +84,17 @@ public:
     return xs_.rend();
   }
 
-  const_reverse_iterator rend() const {
+  [[nodiscard]] const_reverse_iterator rend() const {
     return xs_.rend();
   }
 
   // -- capacity -------------------------------------------------------------
 
-  bool empty() const {
+  [[nodiscard]] bool empty() const {
     return xs_.empty();
   }
 
-  size_type size() const {
+  [[nodiscard]] size_type size() const {
     return xs_.size();
   }
 
@@ -179,7 +179,7 @@ public:
   }
 
   template <class L>
-  const mapped_type& at(const L& key) const {
+  [[nodiscard]] const mapped_type& at(const L& key) const {
     auto i = find(key);
     if (i == end())
       VAST_RAISE_ERROR(std::out_of_range,
@@ -201,7 +201,7 @@ public:
   }
 
   template <class L>
-  const_iterator find(const L& x) const {
+  [[nodiscard]] const_iterator find(const L& x) const {
     return Policy::lookup(xs_, x);
   }
 

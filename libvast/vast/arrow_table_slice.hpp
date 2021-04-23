@@ -63,13 +63,13 @@ public:
     = table_slice_encoding::arrow;
 
   /// @returns The table layout.
-  const record_type& layout() const noexcept;
+  [[nodiscard]] const record_type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
-  table_slice::size_type rows() const noexcept;
+  [[nodiscard]] table_slice::size_type rows() const noexcept;
 
   /// @returns The number of columns in the slice.
-  table_slice::size_type columns() const noexcept;
+  [[nodiscard]] table_slice::size_type columns() const noexcept;
 
   // -- data access ------------------------------------------------------------
 
@@ -84,18 +84,21 @@ public:
   /// @param row The row offset.
   /// @param column The column offset.
   /// @pre `row < rows() && column < columns()`
-  data_view at(table_slice::size_type row, table_slice::size_type column) const;
+  [[nodiscard]] data_view
+  at(table_slice::size_type row, table_slice::size_type column) const;
 
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
   /// @param column The column offset.
   /// @param t The type of the value to be retrieved.
   /// @pre `row < rows() && column < columns()`
-  data_view at(table_slice::size_type row, table_slice::size_type column,
-               const type& t) const;
+  [[nodiscard]] data_view
+  at(table_slice::size_type row, table_slice::size_type column,
+     const type& t) const;
 
   /// @returns A shared pointer to the underlying Arrow Record Batch.
-  std::shared_ptr<arrow::RecordBatch> record_batch() const noexcept;
+  [[nodiscard]] std::shared_ptr<arrow::RecordBatch>
+  record_batch() const noexcept;
 
 private:
   // -- implementation details -------------------------------------------------

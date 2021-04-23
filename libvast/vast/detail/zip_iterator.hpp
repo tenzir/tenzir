@@ -60,7 +60,7 @@ public:
     return *this;
   }
 
-  std::tuple<T...> val() const {
+  [[nodiscard]] std::tuple<T...> val() const {
     return std::apply([](auto&&... args) { return std::tuple((*args)...); },
                       ptr_);
   }
@@ -81,7 +81,7 @@ public:
   }
 
   template <std::size_t N = 0>
-  decltype(auto) get() const {
+  [[nodiscard]] [[nodiscard]] [[nodiscard]] decltype(auto) get() const {
     return *std::get<N>(ptr_);
   }
 
@@ -190,7 +190,7 @@ class zip_iterator {
   std::tuple<Iterator...> it_;
 
   template <std::size_t I = 0>
-  bool one_is_equal(const zip_iterator& rhs) const {
+  [[nodiscard]] bool one_is_equal(const zip_iterator& rhs) const {
     if (std::get<I>(it_) == std::get<I>(rhs.it_))
       return true;
     if constexpr (I + 1 < sizeof...(Iterator))
@@ -199,7 +199,8 @@ class zip_iterator {
   }
 
   template <std::size_t I = 0>
-  bool none_is_equal(const zip_iterator& rhs) const {
+  [[nodiscard]] [[nodiscard]] [[nodiscard]] bool
+  none_is_equal(const zip_iterator& rhs) const {
     if (std::get<I>(it_) == std::get<I>(rhs.it_))
       return false;
     if constexpr (I + 1 < sizeof...(Iterator))
@@ -346,12 +347,12 @@ public:
       [](auto&&... args) { return zip_iterator((args.begin())...); }, zip_);
   }
 
-  auto cbegin() const {
+  [[nodiscard]] auto cbegin() const {
     return std ::apply(
       [](auto&&... args) { return zip_iterator((args.cbegin())...); }, zip_);
   }
 
-  auto begin() const {
+  [[nodiscard]] auto begin() const {
     return this->cbegin();
   }
 
@@ -360,12 +361,12 @@ public:
       [](auto&&... args) { return zip_iterator((args.end())...); }, zip_);
   }
 
-  auto cend() const {
+  [[nodiscard]] auto cend() const {
     return std ::apply(
       [](auto&&... args) { return zip_iterator((args.cend())...); }, zip_);
   }
 
-  auto end() const {
+  [[nodiscard]] auto end() const {
     return this->cend();
   }
 
@@ -374,12 +375,12 @@ public:
       [](auto&&... args) { return zip_iterator((args.rbegin())...); }, zip_);
   }
 
-  auto crbegin() const {
+  [[nodiscard]] auto crbegin() const {
     return std ::apply(
       [](auto&&... args) { return zip_iterator((args.crbegin())...); }, zip_);
   }
 
-  auto rbegin() const {
+  [[nodiscard]] auto rbegin() const {
     return this->crbegin();
   }
 
@@ -388,12 +389,12 @@ public:
       [](auto&&... args) { return zip_iterator((args.rend())...); }, zip_);
   }
 
-  auto crend() const {
+  [[nodiscard]] auto crend() const {
     return std ::apply(
       [](auto&&... args) { return zip_iterator((args.crend())...); }, zip_);
   }
 
-  auto rend() const {
+  [[nodiscard]] auto rend() const {
     return this->crend();
   }
 };

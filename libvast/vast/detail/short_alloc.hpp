@@ -91,7 +91,7 @@ public:
     return N;
   }
 
-  size_t used() const noexcept {
+  [[nodiscard]] size_t used() const noexcept {
     return static_cast<size_t>(ptr_ - buf_);
   }
 

@@ -38,7 +38,7 @@ struct measurement : public detail::addable<measurement> {
   }
 
   /// Returns the rate of events per second in the current measurement.
-  double rate_per_sec() const noexcept {
+  [[nodiscard]] double rate_per_sec() const noexcept {
     if (duration.count() > 0)
       return std::round(static_cast<double>(events)
                         * decltype(duration)::period::den / duration.count());

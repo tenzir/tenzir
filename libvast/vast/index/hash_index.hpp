@@ -180,7 +180,7 @@ private:
     return true;
   }
 
-  caf::expected<ids>
+  [[nodiscard]] caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override {
     VAST_ASSERT(rank(this->mask()) == digests_.size());
     // Implementation of the one-pass search algorithm that computes the
@@ -244,13 +244,13 @@ private:
     return caf::make_error(ec::unsupported_operator, op);
   }
 
-  size_t memusage_impl() const override {
+  [[nodiscard]] size_t memusage_impl() const override {
     return digests_.capacity() * sizeof(digest_type)
            + unique_digests_.size() * sizeof(key)
            + seeds_.size() * sizeof(typename decltype(seeds_)::value_type);
   }
 
-  bool immutable() const {
+  [[nodiscard]] bool immutable() const {
     return unique_digests_.empty() && !digests_.empty();
   }
 

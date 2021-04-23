@@ -37,7 +37,7 @@ struct spawn_arguments {
   std::optional<expression> expr;
 
   /// Returns whether CLI arguments are empty.
-  bool empty() const noexcept {
+  [[nodiscard]] bool empty() const noexcept {
     return inv.arguments.empty();
   }
 

@@ -42,7 +42,7 @@ public:
     VAST_ASSERT(caf::holds_alternative<address_type>(this->type()));
   }
 
-  bool equals(const synopsis& other) const noexcept override {
+  [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
     if (typeid(other) != typeid(address_synopsis))
       return false;
     auto& rhs = static_cast<const address_synopsis&>(other);

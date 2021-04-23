@@ -955,7 +955,7 @@ public:
   }
 
   /// Returns true when the vtable doesn't hold any erased object
-  bool empty() const noexcept {
+  [[nodiscard]] bool empty() const noexcept {
     data_accessor data;
     cmd_(nullptr, opcode::op_fetch_empty, nullptr, 0U, &data, 0U);
     return bool(data.inplace_storage_);
@@ -1029,14 +1029,15 @@ public:
   FU2_DETAIL_CXX14_CONSTEXPR data_accessor* opaque_ptr() noexcept {
     return &storage_.accessor_;
   }
-  constexpr data_accessor const* opaque_ptr() const noexcept {
+  [[nodiscard]] constexpr data_accessor const* opaque_ptr() const noexcept {
     return &storage_.accessor_;
   }
   FU2_DETAIL_CXX14_CONSTEXPR data_accessor volatile*
   opaque_ptr() volatile noexcept {
     return &storage_.accessor_;
   }
-  constexpr data_accessor const volatile* opaque_ptr() const volatile noexcept {
+  [[nodiscard]] constexpr data_accessor const volatile* opaque_ptr() const
+    volatile noexcept {
     return &storage_.accessor_;
   }
 
@@ -1183,7 +1184,7 @@ public:
   }
 
   /// Returns true when the erasure doesn't hold any erased object
-  constexpr bool empty() const noexcept {
+  [[nodiscard]] constexpr bool empty() const noexcept {
     return vtable_.empty();
   }
 
@@ -1303,7 +1304,7 @@ public:
   }
 
   /// Returns true when the erasure doesn't hold any erased object
-  constexpr bool empty() const noexcept {
+  [[nodiscard]] constexpr bool empty() const noexcept {
     return view_.ptr_ == nullptr;
   }
 
@@ -1550,7 +1551,7 @@ public:
   }
 
   /// Returns true when the function is empty
-  bool empty() const noexcept {
+  [[nodiscard]] bool empty() const noexcept {
     return erasure_.empty();
   }
 

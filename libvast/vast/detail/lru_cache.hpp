@@ -121,7 +121,7 @@ public:
     return cache_items_map_.find(key) != cache_items_map_.end();
   }
 
-  size_t size() const {
+  [[nodiscard]] size_t size() const {
     return cache_items_map_.size();
   }
 

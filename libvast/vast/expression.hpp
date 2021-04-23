@@ -204,7 +204,7 @@ struct negation : detail::totally_ordered<negation> {
   negation& operator=(negation&& other) noexcept;
 
   // Access the contained expression.
-  const expression& expr() const;
+  [[nodiscard]] const expression& expr() const;
   expression& expr();
 
 private:
@@ -244,7 +244,7 @@ public:
 
   /// @cond PRIVATE
 
-  const node& get_data() const;
+  [[nodiscard]] const node& get_data() const;
   node& get_data();
 
   /// @endcond

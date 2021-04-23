@@ -41,7 +41,7 @@ public:
     VAST_ASSERT(caf::holds_alternative<string_type>(this->type()));
   }
 
-  bool equals(const synopsis& other) const noexcept override {
+  [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
     if (typeid(other) != typeid(string_synopsis))
       return false;
     auto& rhs = static_cast<const string_synopsis&>(other);

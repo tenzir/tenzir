@@ -53,16 +53,16 @@ public:
   data_view operator[](size_t row) const;
 
   /// @returns the number of rows in the column.
-  size_t size() const noexcept;
+  [[nodiscard]] size_t size() const noexcept;
 
   /// @returns the viewed table slice.
-  const table_slice& slice() const noexcept;
+  [[nodiscard]] const table_slice& slice() const noexcept;
 
   /// @returns the viewed column's index.
-  size_t index() const noexcept;
+  [[nodiscard]] size_t index() const noexcept;
 
   /// @returns the viewed column's record field.
-  const qualified_record_field& field() const noexcept;
+  [[nodiscard]] const qualified_record_field& field() const noexcept;
 
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>

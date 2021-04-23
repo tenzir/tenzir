@@ -61,11 +61,11 @@ public:
 
   // -- inspectors -----------------------------------------------------------
 
-  bool empty() const;
+  [[nodiscard]] bool empty() const;
 
-  size_type size() const;
+  [[nodiscard]] size_type size() const;
 
-  size_t memusage() const;
+  [[nodiscard]] size_t memusage() const;
 
   // -- modifiers ------------------------------------------------------------
 
@@ -80,7 +80,7 @@ public:
   // -- concepts -------------------------------------------------------------
 
   variant& get_data();
-  const variant& get_data() const;
+  [[nodiscard]] const variant& get_data() const;
 
   friend bool operator==(const bitmap& x, const bitmap& y);
 
@@ -100,7 +100,7 @@ public:
   explicit bitmap_bit_range(const bitmap& bm);
 
   void next();
-  bool done() const;
+  [[nodiscard]] bool done() const;
 
 private:
   using range_variant = caf::variant<

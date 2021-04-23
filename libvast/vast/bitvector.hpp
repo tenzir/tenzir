@@ -83,30 +83,30 @@ public:
   void assign(size_type n, const value_type& t);
   void assign(std::initializer_list<value_type>);
 
-  allocator_type get_allocator() const noexcept;
+  [[nodiscard]] allocator_type get_allocator() const noexcept;
 
   // -- iterators -------------------------------------------------------------
 
   iterator begin() noexcept;
-  const_iterator begin() const noexcept;
+  [[nodiscard]] const_iterator begin() const noexcept;
   iterator end() noexcept;
-  const_iterator end() const noexcept;
+  [[nodiscard]] const_iterator end() const noexcept;
   reverse_iterator rbegin() noexcept;
-  const_reverse_iterator rbegin() const noexcept;
+  [[nodiscard]] const_reverse_iterator rbegin() const noexcept;
   reverse_iterator rend() noexcept;
-  const_reverse_iterator rend() const noexcept;
+  [[nodiscard]] const_reverse_iterator rend() const noexcept;
 
-  const_iterator cbegin() const noexcept;
-  const_iterator cend() const noexcept;
-  const_reverse_iterator crbegin() const noexcept;
-  const_reverse_iterator crend() const noexcept;
+  [[nodiscard]] const_iterator cbegin() const noexcept;
+  [[nodiscard]] const_iterator cend() const noexcept;
+  [[nodiscard]] const_reverse_iterator crbegin() const noexcept;
+  [[nodiscard]] const_reverse_iterator crend() const noexcept;
 
   // -- capacity --------------------------------------------------------------
 
-  bool empty() const noexcept;
-  size_type size() const noexcept;
-  size_type max_size() const noexcept;
-  size_type capacity() const noexcept;
+  [[nodiscard]] bool empty() const noexcept;
+  [[nodiscard]] size_type size() const noexcept;
+  [[nodiscard]] size_type max_size() const noexcept;
+  [[nodiscard]] size_type capacity() const noexcept;
   void resize(size_type n, value_type value = false);
   void reserve(size_type n);
   void shrink_to_fit();
@@ -115,12 +115,12 @@ public:
 
   reference operator[](size_type i);
   const_reference operator[](size_type i) const;
-  const_reference at(size_type n) const;
+  [[nodiscard]] const_reference at(size_type n) const;
   reference at(size_type n);
   reference front();
-  const_reference front() const;
+  [[nodiscard]] const_reference front() const;
   reference back();
-  const_reference back() const;
+  [[nodiscard]] const_reference back() const;
 
   // -- modifiers -------------------------------------------------------------
 
@@ -168,7 +168,7 @@ public:
   static constexpr auto npos = word_type::npos;
 
   /// Retrieves the underlying sequence of blocks.
-  const block_vector& blocks() const noexcept;
+  [[nodiscard]] const block_vector& blocks() const noexcept;
 
   /// Appends a single block or a prefix of a block.
   /// @param x The block value.
@@ -198,11 +198,11 @@ private:
     return blocks_[i / word_type::width];
   }
 
-  const block& block_at_bit(size_type i) const {
+  [[nodiscard]] const block& block_at_bit(size_type i) const {
     return blocks_[i / word_type::width];
   }
 
-  size_type partial_bits() const {
+  [[nodiscard]] size_type partial_bits() const {
     return size_ % word_type::width;
   }
 
@@ -351,7 +351,7 @@ private:
     : bitvector_{&bv}, i_{off} {
   }
 
-  bool equals(const bitvector_iterator& other) const {
+  [[nodiscard]] bool equals(const bitvector_iterator& other) const {
     return i_ == other.i_;
   }
 
@@ -369,11 +369,11 @@ private:
     i_ += n;
   }
 
-  auto distance_to(const bitvector_iterator& other) const {
+  [[nodiscard]] auto distance_to(const bitvector_iterator& other) const {
     return other.i_ - i_;
   }
 
-  auto dereference() const {
+  [[nodiscard]] auto dereference() const {
     VAST_ASSERT(!bitvector_->empty());
     VAST_ASSERT(i_ < bitvector_->size());
     return (*bitvector_)[i_];

@@ -323,11 +323,11 @@ public:
     // nop
   }
 
-  msgpack::format format() const {
+  [[nodiscard]] msgpack::format format() const {
     return format_;
   }
 
-  auto data() const {
+  [[nodiscard]] auto data() const {
     return data_;
   }
 
@@ -355,17 +355,17 @@ public:
   }
 
   /// @returns The container format.
-  msgpack::format format() const {
+  [[nodiscard]] msgpack::format format() const {
     return format_;
   }
 
   /// @returns The number of elements in the array.
-  size_t size() const {
+  [[nodiscard]] size_t size() const {
     return size_;
   }
 
   /// @returns A pointer to the beginning of the array data.
-  overlay data() const;
+  [[nodiscard]] overlay data() const;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, array_view& x) {
@@ -390,15 +390,15 @@ public:
                 || fmt == ext16 || fmt == ext32);
   }
 
-  msgpack::format format() const {
+  [[nodiscard]] msgpack::format format() const {
     return format_;
   }
 
-  int8_t type() const {
+  [[nodiscard]] int8_t type() const {
     return type_;
   }
 
-  auto data() const {
+  [[nodiscard]] auto data() const {
     return data_;
   }
 
@@ -617,7 +617,7 @@ public:
   /// @pre The underlying buffer must represent a sequence of at least one
   /// well-formed msgpack object.
   /// @returns The object at the current position.
-  object get() const;
+  [[nodiscard]] object get() const;
 
   /// Advances to the next object.
   /// @returns The number of bytes skipped or 0 on failure.
@@ -637,7 +637,7 @@ public:
   }
 
 private:
-  const std::byte* at(size_t i) const {
+  [[nodiscard]] const std::byte* at(size_t i) const {
     return buffer_.data() + position_ + i;
   }
 
