@@ -1,6 +1,19 @@
 include_guard(GLOBAL)
 
 function (VASTRegisterPlugin)
+  # Safeguard against repeated VASTRegisterPlugin calls from the same project.
+  # While technically possible for external pluigins, doing so makes it
+  # impossible to build the plugin alongside VAST.
+  get_property(VAST_PLUGIN_PROJECT_SOURCE_DIRS GLOBAL
+               PROPERTY "VAST_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY")
+  if ("${PROJECT_SOURCE_DIR}" IN_LIST VAST_PLUGIN_PROJECT_SOURCE_DIRS)
+    message(
+      FATAL_ERROR
+        "VASTRegisterPlugin called twice in CMake project ${PROJECT_NAME}")
+  endif ()
+  set_property(GLOBAL APPEND PROPERTY "VAST_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY"
+                                      "${PROJECT_SOURCE_DIR}")
+
   include(GNUInstallDirs)
 
   cmake_parse_arguments(PLUGIN "" "TARGET;ENTRYPOINT" "SOURCES;TEST_SOURCES"
@@ -218,5 +231,23 @@ function (VASTRegisterPlugin)
       add_custom_target(integration)
     endif ()
     add_dependencies(integration ${PLUGIN_TARGET}-integration)
+  endif ()
+
+  # Provide niceties for external plugins that are usually part of VAST.
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    # Support tools like clang-tidy by creating a compilation database and
+    # copying it to the project root.
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+    add_custom_target(
+      ${PLUGIN_TARGET}-compilation-database ALL
+      COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json"
+      DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"
+      BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json"
+      COMMENT
+        "Copying compilation database for ${PLUGIN_TARGET} to ${CMAKE_CURRENT_SOURCE_DIR}"
+    )
   endif ()
 endfunction ()
