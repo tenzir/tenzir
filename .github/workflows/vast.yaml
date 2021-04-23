@@ -14,9 +14,8 @@ on:
     - .github/workflows/jupyter.yaml
     - .github/workflows/pyvast.yaml
   release:
-    types:
-    - released
-    - prereleased
+    types: published
+
 env:
   CMAKE_GENERATOR: Ninja
   CMAKE_MAKE_PROGRAM: ninja

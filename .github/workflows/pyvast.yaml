@@ -6,8 +6,7 @@ on:
     - '.github/workflows/pyvast.yml'
     - '.github/workflows/style.yml'
   release:
-    types:
-    - released
+    types: published
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
@@ -77,4 +76,4 @@ jobs:
     - name: Publish to PyPI
       working-directory: pyvast
       run: |
-        python -m twine upload --verbose --non-interactive dist/*
+        python -m twine upload --skip-existing --verbose --non-interactive dist/*

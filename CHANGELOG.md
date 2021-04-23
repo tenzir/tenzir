@@ -6,7 +6,7 @@ This file is generated automatically. Add indivual changelog entries to the'chan
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.04.29-rc1]
+## [2021.04.29-rc2]
 
 ### :zap: Breaking Changes
 
@@ -93,6 +93,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - A race condition in the shutdown logic that caused an assertion was fixed.
   [#1563](https://github.com/tenzir/vast/pull/1563)
+
+- VAST now correctly builds within shallow clones of the repository. If the build system is unable to determine the correct version from `git-describe`, it now always falls back to the version of the last release.
+  [#1570](https://github.com/tenzir/vast/pull/1570)
 
 ## [2021.03.25]
 
@@ -1046,7 +1049,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.04.29-rc1]: https://github.com/tenzir/vast/releases/tag/2021.04.29-rc1
+[2021.04.29-rc2]: https://github.com/tenzir/vast/releases/tag/2021.04.29-rc2
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
 [2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
 [2021.01.28]: https://github.com/tenzir/vast/releases/tag/2021.01.28
