@@ -54,9 +54,10 @@ public:
   /// @param op The relation operator.
   /// @param x The value to lookup.
   /// @returns The result of the lookup or an error upon failure.
-  caf::expected<ids> lookup(relational_operator op, data_view x) const;
+  [[nodiscard]] caf::expected<ids>
+  lookup(relational_operator op, data_view x) const;
 
-  size_t memusage() const;
+  [[nodiscard]] size_t memusage() const;
 
   /// Merges another value index with this one.
   /// @param other The value index to merge.
@@ -65,13 +66,13 @@ public:
 
   /// Retrieves the ID of the last append operation.
   /// @returns The largest ID in the index.
-  size_type offset() const;
+  [[nodiscard]] size_type offset() const;
 
   /// @returns the type of the index.
-  const vast::type& type() const;
+  [[nodiscard]] const vast::type& type() const;
 
   /// @returns the options of the index.
-  const caf::settings& options() const;
+  [[nodiscard]] const caf::settings& options() const;
 
   // -- persistence -----------------------------------------------------------
 
@@ -80,16 +81,16 @@ public:
   virtual caf::error deserialize(caf::deserializer& source);
 
 protected:
-  const ewah_bitmap& mask() const;
-  const ewah_bitmap& none() const;
+  [[nodiscard]] const ewah_bitmap& mask() const;
+  [[nodiscard]] const ewah_bitmap& none() const;
 
 private:
   virtual bool append_impl(data_view x, id pos) = 0;
 
-  virtual caf::expected<ids>
+  [[nodiscard]] virtual caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const = 0;
 
-  virtual size_t memusage_impl() const = 0;
+  [[nodiscard]] virtual size_t memusage_impl() const = 0;
 
   ewah_bitmap mask_;         ///< The position of all values excluding nil.
   ewah_bitmap none_;         ///< The positions of nil values.

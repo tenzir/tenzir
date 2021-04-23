@@ -104,13 +104,13 @@ public:
 
   /// Retrieves the currently used schema.
   /// @returns The current schema.
-  virtual vast::schema schema() const = 0;
+  [[nodiscard]] virtual vast::schema schema() const = 0;
 
   /// @returns The name of the reader type.
-  virtual const char* name() const = 0;
+  [[nodiscard]] virtual const char* name() const = 0;
 
   /// @returns A report for the accountant.
-  virtual vast::system::report status() const;
+  [[nodiscard]] virtual vast::system::report status() const;
 
 protected:
   virtual caf::error

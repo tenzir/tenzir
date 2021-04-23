@@ -29,7 +29,7 @@ struct message {
   std::vector<http::header> headers;
   std::string body;
 
-  const http::header* header(const std::string& name) const;
+  [[nodiscard]] const http::header* header(const std::string& name) const;
 };
 
 /// A HTTP request message.

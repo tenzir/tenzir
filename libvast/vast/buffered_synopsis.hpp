@@ -44,7 +44,7 @@ public:
     // nop
   }
 
-  synopsis_ptr shrink() const override {
+  [[nodiscard]] synopsis_ptr shrink() const override {
     size_t next_power_of_two = 1ull;
     while (data_.size() > next_power_of_two)
       next_power_of_two *= 2;
@@ -72,11 +72,11 @@ public:
     data_.insert(materialize(*v));
   }
 
-  size_t memusage() const override {
+  [[nodiscard]] size_t memusage() const override {
     return sizeof(p_) + buffered_synopsis_traits<T>::memusage(data_);
   }
 
-  caf::optional<bool>
+  [[nodiscard]] caf::optional<bool>
   lookup(relational_operator op, data_view rhs) const override {
     switch (op) {
       default:
@@ -107,7 +107,7 @@ public:
                                             "buffered_string_synopsis");
   }
 
-  bool equals(const synopsis& other) const noexcept override {
+  [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
     if (auto* p = dynamic_cast<const buffered_synopsis*>(&other))
       return data_ == p->data_;
     return false;

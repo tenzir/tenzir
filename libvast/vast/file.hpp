@@ -66,7 +66,7 @@ public:
 
   /// Checks whether the file is open.
   /// @returns `true` iff the file is open
-  bool is_open() const;
+  [[nodiscard]] bool is_open() const;
 
   /// Reads a given number of bytes in to a buffer.
   /// @param sink The destination of the read.
@@ -88,11 +88,11 @@ public:
 
   /// Retrieves the path for this file.
   /// @returns The path for this file.
-  const std::filesystem::path& path() const;
+  [[nodiscard]] const std::filesystem::path& path() const;
 
   /// Retrieves the native handle for this file.
   /// @returns The native handle.
-  native_type handle() const;
+  [[nodiscard]] native_type handle() const;
 
 private:
   native_type handle_;

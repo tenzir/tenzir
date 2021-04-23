@@ -51,7 +51,7 @@ struct qualified_record_field
 
   /// Retrieves the full-qualified name, i.e., the record typename concatenated
   /// with the field name.
-  std::string fqn() const {
+  [[nodiscard]] std::string fqn() const {
     return layout_name + "." + field_name;
   }
 

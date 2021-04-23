@@ -53,7 +53,7 @@ public:
   /// Checks whether the base has at least one value, and that all values
   /// are >= 2.
   /// @returns `true` iff this base is well-defined.
-  bool well_defined() const;
+  [[nodiscard]] bool well_defined() const;
 
   /// Decomposes a value into a sequence of values.
   /// @param x The value to decompose.
@@ -94,20 +94,20 @@ public:
   using iterator = typename vector_type::iterator;
   using const_iterator = typename vector_type::const_iterator;
 
-  bool empty() const;
+  [[nodiscard]] bool empty() const;
 
-  size_t size() const;
+  [[nodiscard]] size_t size() const;
 
-  size_t memusage() const;
+  [[nodiscard]] size_t memusage() const;
 
   value_type& operator[](size_t i);
   value_type operator[](size_t i) const;
 
   iterator begin();
-  const_iterator begin() const;
+  [[nodiscard]] const_iterator begin() const;
 
   iterator end();
-  const_iterator end() const;
+  [[nodiscard]] const_iterator end() const;
 
   // -- concepts --------------------------------------------------------------
 

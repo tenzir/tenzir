@@ -24,14 +24,14 @@ struct abstract_rule;
 template <class Iterator>
 struct abstract_rule<Iterator, unused_type> {
   virtual ~abstract_rule() = default;
-  virtual abstract_rule* clone() const = 0;
+  [[nodiscard]] virtual abstract_rule* clone() const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
 };
 
 template <class Iterator, class Attribute>
 struct abstract_rule {
   virtual ~abstract_rule() = default;
-  virtual abstract_rule* clone() const = 0;
+  [[nodiscard]] virtual abstract_rule* clone() const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, Attribute& a) const = 0;
 };
@@ -50,7 +50,7 @@ public:
     // nop
   }
 
-  rule_definition* clone() const override {
+  [[nodiscard]] rule_definition* clone() const override {
     return new rule_definition(*this);
   };
 
@@ -72,7 +72,7 @@ public:
     // nop
   }
 
-  rule_definition* clone() const override {
+  [[nodiscard]] rule_definition* clone() const override {
     return new rule_definition(*this);
   };
 
@@ -182,7 +182,7 @@ public:
     return (*parser_)->parse(f, l, std::forward<T>(x));
   }
 
-  const std::shared_ptr<rule_pointer>& parser() const {
+  [[nodiscard]] const std::shared_ptr<rule_pointer>& parser() const {
     return parser_;
   }
 

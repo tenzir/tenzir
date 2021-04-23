@@ -60,14 +60,14 @@ public:
   type* find(std::string_view name);
 
   //! @copydoc find(const std::string& name)
-  const type* find(std::string_view name) const;
+  [[nodiscard]] const type* find(std::string_view name) const;
 
   // -- container API ----------------------------------------------------------
 
-  const_iterator begin() const;
-  const_iterator end() const;
-  size_t size() const;
-  bool empty() const;
+  [[nodiscard]] const_iterator begin() const;
+  [[nodiscard]] const_iterator end() const;
+  [[nodiscard]] size_t size() const;
+  [[nodiscard]] bool empty() const;
   void clear();
 
   friend void serialize(caf::serializer& sink, const schema& sch);

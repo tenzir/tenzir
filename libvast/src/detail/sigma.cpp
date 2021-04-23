@@ -76,7 +76,7 @@ struct search_id_symbol_table : parser<search_id_symbol_table> {
   }
 
   /// Performs *-wildcard search on all search identifiers.
-  std::vector<expression> search(std::string str) const {
+  [[nodiscard]] std::vector<expression> search(std::string str) const {
     auto rx_str = std::regex_replace(str, std::regex("\\*"), ".*");
     auto rx = std::regex{rx_str};
     std::vector<expression> result;

@@ -41,7 +41,7 @@ public:
 
   caf::error write(const table_slice& x) override;
 
-  const char* name() const override;
+  [[nodiscard]] const char* name() const override;
 
 private:
   std::string last_layout_;

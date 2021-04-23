@@ -118,7 +118,7 @@ public:
 
   /// Returns the full name of `cmd`, i.e., its own name prepended by all parent
   /// names.
-  std::string full_name() const;
+  [[nodiscard]] std::string full_name() const;
 
   // -- factory functions ------------------------------------------------------
 
@@ -167,7 +167,7 @@ struct invocation {
   // -- utility methods ------------------------------------------------------
 
   /// Holds the name of the scheduled command.
-  std::string_view name() const {
+  [[nodiscard]] std::string_view name() const {
     std::string_view result = full_name;
     result.remove_prefix(std::min(result.find_last_of(' ') + 1, result.size()));
     return result;

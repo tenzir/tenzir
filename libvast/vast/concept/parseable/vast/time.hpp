@@ -127,8 +127,8 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
   // https://github.com/HowardHinnant/date/blob/master/include/date/date.h
   // An explanation for this algorithm can be found here:
   // http://howardhinnant.github.io/date_algorithms.html#days_from_civil
-  constexpr sys_days to_days(unsigned short year, unsigned char month,
-                             unsigned char day) const {
+  [[nodiscard]] constexpr sys_days
+  to_days(unsigned short year, unsigned char month, unsigned char day) const {
     static_assert(std::numeric_limits<unsigned>::digits >= 18,
                   "This algorithm has not been ported to a 16 bit unsigned "
                   "integer");

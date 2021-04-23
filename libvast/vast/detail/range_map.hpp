@@ -56,17 +56,17 @@ public:
   private:
     friend iterator_access;
 
-    entry dereference() const {
+    [[nodiscard]] entry dereference() const {
       return {this->base()->first, this->base()->second.first,
                       this->base()->second.second};
     }
   };
 
-  const_iterator begin() const {
+  [[nodiscard]] const_iterator begin() const {
     return const_iterator{map_.begin()};
   }
 
-  const_iterator end() const {
+  [[nodiscard]] const_iterator end() const {
     return const_iterator{map_.end()};
   }
 
@@ -212,7 +212,7 @@ public:
   /// @param p The point to lookup.
   /// @returns A pointer to the value associated with the half-open interval
   ///          *[a,b)* if *a <= p < b* and `nullptr` otherwise.
-  const Value* lookup(const Point& p) const {
+  [[nodiscard]] const Value* lookup(const Point& p) const {
     auto i = locate(p, map_.lower_bound(p));
     return i != map_.end() ? &i->second.second : nullptr;
   }
@@ -224,7 +224,8 @@ public:
   ///          and `nullptr` otherwise. If the last component points to a
   ///          valid value, then the first two represent *[a,b)* and *[0,0)*
   ///          otherwise.
-  std::tuple<Point, Point, const Value*> find(const Point& p) const {
+  [[nodiscard]] std::tuple<Point, Point, const Value*>
+  find(const Point& p) const {
     auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
       return {0, 0, nullptr};
@@ -234,13 +235,13 @@ public:
 
   /// Retrieves the size of the range map.
   /// @returns The number of entries in the map.
-  size_t size() const {
+  [[nodiscard]] size_t size() const {
     return map_.size();
   }
 
   /// Checks whether the range map is empty.
   /// @returns `true` iff the map is empty.
-  bool empty() const {
+  [[nodiscard]] bool empty() const {
     return map_.empty();
   }
 
@@ -271,7 +272,8 @@ private:
   }
 
   // Finds the interval of a point.
-  map_const_iterator locate(const Point& p, map_const_iterator lb) const {
+  [[nodiscard]] map_const_iterator
+  locate(const Point& p, map_const_iterator lb) const {
     if ((lb != map_.end() && p == left(lb))
         || (lb != map_.begin() && p < right(--lb)))
       return lb;

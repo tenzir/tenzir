@@ -80,7 +80,7 @@ public:
   /// @param op The relational operator to use for looking up *x*.
   /// @param x The value to find the bitmap for.
   /// @returns The bitmap for all values *v* where *op(v,x)* is `true`.
-  bitmap_type lookup(relational_operator op, value_type x) const {
+  [[nodiscard]] bitmap_type lookup(relational_operator op, value_type x) const {
     auto binned = binner_type::bin(x);
     // In case the binning causes a loss of precision, the comparison value
     // has to be adjusted by 1. E.g. a query for `dat > 1.1` will be
@@ -98,25 +98,25 @@ public:
 
   /// Retrieves the bitmap index size.
   /// @returns The number of elements/rows contained in the bitmap index.
-  size_type size() const {
+  [[nodiscard]] size_type size() const {
     return coder_.size();
   }
 
   /// Retrieves the bitmap index memory usage.
   /// @returns The number of bytes occupied by this instance.
-  size_type memusage() const {
+  [[nodiscard]] size_type memusage() const {
     return coder_.memusage();
   }
 
   /// Checks whether the bitmap index is empty.
   /// @returns `true` *iff* the bitmap index has 0 entries.
-  bool empty() const {
+  [[nodiscard]] bool empty() const {
     return size() == 0;
   }
 
   /// Accesses the underlying coder of the bitmap index.
   /// @returns The coder of this bitmap index.
-  const coder_type& coder() const {
+  [[nodiscard]] const coder_type& coder() const {
     return coder_;
   }
 

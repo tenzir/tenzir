@@ -104,7 +104,7 @@ private:
     return *static_cast<Derived*>(this);
   }
 
-  const Derived& derived() const {
+  [[nodiscard]] const Derived& derived() const {
     return *static_cast<const Derived*>(this);
   }
 
@@ -248,7 +248,7 @@ class iterator_adaptor
       : iterator_{b} {
     }
 
-    const Base& base() const {
+    [[nodiscard]] const Base& base() const {
       return iterator_;
     }
 
@@ -260,11 +260,11 @@ class iterator_adaptor
  private:
     friend iterator_access;
 
-    Reference dereference() const {
+    [[nodiscard]] Reference dereference() const {
       return *iterator_;
     }
 
-    bool equals(const iterator_adaptor& other) const {
+    [[nodiscard]] bool equals(const iterator_adaptor& other) const {
       return iterator_ == other.base();
     }
 
@@ -280,7 +280,7 @@ class iterator_adaptor
       --iterator_;
     }
 
-    Difference distance_to(const iterator_adaptor& other) const {
+    [[nodiscard]] Difference distance_to(const iterator_adaptor& other) const {
       return other.base() - iterator_;
     }
 

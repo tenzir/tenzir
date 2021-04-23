@@ -84,13 +84,13 @@ public:
 
   // -- inspectors -----------------------------------------------------------
 
-  bool empty() const;
+  [[nodiscard]] bool empty() const;
 
-  size_type size() const;
+  [[nodiscard]] size_type size() const;
 
-  size_t memusage() const;
+  [[nodiscard]] size_t memusage() const;
 
-  const block_vector& blocks() const;
+  [[nodiscard]] const block_vector& blocks() const;
 
   // -- modifiers ------------------------------------------------------------
 
@@ -129,7 +129,7 @@ public:
   explicit wah_bitmap_range(const wah_bitmap& bm);
 
   void next();
-  bool done() const;
+  [[nodiscard]] bool done() const;
 
 private:
   void scan();

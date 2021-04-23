@@ -43,7 +43,7 @@ public:
   virtual caf::expected<void> flush();
 
   /// @returns The name of the writer type.
-  virtual const char* name() const = 0;
+  [[nodiscard]] virtual const char* name() const = 0;
 };
 
 } // namespace vast::format

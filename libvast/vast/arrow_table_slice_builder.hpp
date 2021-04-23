@@ -40,7 +40,8 @@ public:
     [[nodiscard]] virtual std::shared_ptr<arrow::Array> finish() = 0;
 
     /// @returns The underlying array builder.
-    virtual std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const = 0;
+    [[nodiscard]] virtual std::shared_ptr<arrow::ArrayBuilder>
+    arrow_builder() const = 0;
 
     /// Constructs an Arrow column builder.
     /// @param t A type to create a column builder for.

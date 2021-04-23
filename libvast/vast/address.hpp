@@ -63,26 +63,26 @@ public:
 
   /// Determines whether the address is IPv4.
   /// @returns @c true iff the address is an IPv4 address.
-  bool is_v4() const;
+  [[nodiscard]] bool is_v4() const;
 
   /// Determines whether the address is IPv4.
   /// @returns `true` iff the address is an IPv4 address.
-  bool is_v6() const;
+  [[nodiscard]] bool is_v6() const;
 
   /// Determines whether the address is an IPv4 loopback address.
   /// @returns `true` if the address is v4 and its first byte has the
   /// value 127.
-  bool is_loopback() const;
+  [[nodiscard]] bool is_loopback() const;
 
   /// Determines whether the address is an IPv4 broadcast address.
   /// @returns `true` if the address is v4 and has the value 255.255.255.255.
-  bool is_broadcast() const;
+  [[nodiscard]] bool is_broadcast() const;
 
   /// Determines whether the address is a multicast address. For v4
   /// addresses, this means the first byte equals to 224. For v6 addresses,
   /// this means the first bytes equals 255.
   /// @returns `true` if the address is a multicast address.
-  bool is_multicast() const;
+  [[nodiscard]] bool is_multicast() const;
 
   /// Masks out lower bits of the address.
   /// @param top_bits_to_keep The number of bits *not* to mask out,
@@ -112,14 +112,14 @@ public:
 
   /// Retrieves the underlying byte array.
   /// @returns A reference to an array of 16 bytes.
-  const std::array<uint8_t, 16>& data() const;
+  [[nodiscard]] const std::array<uint8_t, 16>& data() const;
 
   /// Compares the top-k bits of this address with another one.
   /// @param other The other address.
   /// @param k The number of bits to compare, starting from the top.
   /// @returns `true` if the first *k* bits of both addresses are equal
   /// @pre `k > 0 && k <= 128`
-  bool compare(const address& other, size_t k) const;
+  [[nodiscard]] bool compare(const address& other, size_t k) const;
 
   friend bool operator==(const address& x, const address& y);
   friend bool operator<(const address& x, const address& y);

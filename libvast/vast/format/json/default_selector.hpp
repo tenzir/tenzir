@@ -84,7 +84,7 @@ public:
     return caf::none;
   }
 
-  vast::schema schema() const {
+  [[nodiscard]] vast::schema schema() const {
     vast::schema result;
     for (const auto& [k, v] : type_cache)
       result.add(v);

@@ -231,7 +231,7 @@ public:
     // nop
   }
 
-  constexpr index_type size() const noexcept {
+  [[nodiscard]] constexpr index_type size() const noexcept {
     return Ext;
   }
 };
@@ -249,7 +249,7 @@ public:
     // nop
   }
 
-  constexpr index_type size() const noexcept {
+  [[nodiscard]] constexpr index_type size() const noexcept {
     return size_;
   }
 
@@ -378,28 +378,30 @@ public:
     return {data() + Offset, Count == dynamic_extent ? size() - Offset : Count};
   }
 
-  constexpr span<element_type, dynamic_extent> first(index_type count) const {
+  [[nodiscard]] constexpr span<element_type, dynamic_extent>
+  first(index_type count) const {
     return {data(), count};
   }
 
-  constexpr span<element_type, dynamic_extent> last(index_type count) const {
+  [[nodiscard]] constexpr span<element_type, dynamic_extent>
+  last(index_type count) const {
     return make_subspan(size() - count, dynamic_extent,
                         subspan_selector<Extent>{});
   }
 
-  constexpr span<element_type, dynamic_extent>
+  [[nodiscard]] constexpr span<element_type, dynamic_extent>
   subspan(index_type offset, index_type count = dynamic_extent) const {
     return make_subspan(offset, count, subspan_selector<Extent>{});
   }
 
   // [span.obs], span observers
-  constexpr index_type size() const noexcept {
+  [[nodiscard]] constexpr index_type size() const noexcept {
     return storage_.size();
   }
-  constexpr index_type memusage() const noexcept {
+  [[nodiscard]] constexpr index_type memusage() const noexcept {
     return size() * detail::narrow_cast<index_type>(sizeof(element_type));
   }
-  constexpr bool empty() const noexcept {
+  [[nodiscard]] constexpr bool empty() const noexcept {
     return size() == 0;
   }
 
@@ -408,42 +410,42 @@ public:
     return data()[idx];
   }
 
-  constexpr reference at(index_type idx) const {
+  [[nodiscard]] constexpr reference at(index_type idx) const {
     return this->operator[](idx);
   }
   constexpr reference operator()(index_type idx) const {
     return this->operator[](idx);
   }
-  constexpr pointer data() const noexcept {
+  [[nodiscard]] constexpr pointer data() const noexcept {
     return storage_.data();
   }
 
   // [span.iter], span iterator support
-  constexpr iterator begin() const noexcept {
+  [[nodiscard]] constexpr iterator begin() const noexcept {
     return {this, 0};
   }
-  constexpr iterator end() const noexcept {
+  [[nodiscard]] constexpr iterator end() const noexcept {
     return {this, size()};
   }
 
-  constexpr const_iterator cbegin() const noexcept {
+  [[nodiscard]] constexpr const_iterator cbegin() const noexcept {
     return {this, 0};
   }
-  constexpr const_iterator cend() const noexcept {
+  [[nodiscard]] constexpr const_iterator cend() const noexcept {
     return {this, size()};
   }
 
-  constexpr reverse_iterator rbegin() const noexcept {
+  [[nodiscard]] constexpr reverse_iterator rbegin() const noexcept {
     return reverse_iterator{end()};
   }
-  constexpr reverse_iterator rend() const noexcept {
+  [[nodiscard]] constexpr reverse_iterator rend() const noexcept {
     return reverse_iterator{begin()};
   }
 
-  constexpr const_reverse_iterator crbegin() const noexcept {
+  [[nodiscard]] constexpr const_reverse_iterator crbegin() const noexcept {
     return const_reverse_iterator{cend()};
   }
-  constexpr const_reverse_iterator crend() const noexcept {
+  [[nodiscard]] constexpr const_reverse_iterator crend() const noexcept {
     return const_reverse_iterator{cbegin()};
   }
 
@@ -473,7 +475,7 @@ private:
       // nop
     }
 
-    constexpr pointer data() const noexcept {
+    [[nodiscard]] constexpr pointer data() const noexcept {
       return data_;
     }
 
@@ -493,14 +495,14 @@ private:
   class subspan_selector {};
 
   template <size_t CallerExtent>
-  span<element_type, dynamic_extent>
+  [[nodiscard]] span<element_type, dynamic_extent>
   make_subspan(index_type offset, index_type count,
                subspan_selector<CallerExtent>) const {
     span<element_type, dynamic_extent> tmp(*this);
     return tmp.subspan(offset, count);
   }
 
-  span<element_type, dynamic_extent>
+  [[nodiscard]] span<element_type, dynamic_extent>
   make_subspan(index_type offset, index_type count,
                subspan_selector<dynamic_extent>) const {
     VAST_ASSERT(size() - offset >= 0);

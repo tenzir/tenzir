@@ -78,7 +78,7 @@ struct coder {
 
   /// Retrieves the amout of memory that is occupied by the coder.
   /// @returns The size of the coder measured in heap bytes used.
-  size_t memusage() const;
+  [[nodiscard]] size_t memusage() const;
 
   /// Retrieves the coder-specific bitmap storage.
   auto& storage() const;
@@ -92,7 +92,7 @@ public:
   using size_type = typename Bitmap::size_type;
   using value_type = bool;
 
-  size_t bitmap_count() const noexcept {
+  [[nodiscard]] size_t bitmap_count() const noexcept {
     return 1;
   }
 
@@ -101,7 +101,7 @@ public:
     return bitmap_;
   }
 
-  const bitmap_type& bitmap_at(size_t index) const {
+  [[nodiscard]] const bitmap_type& bitmap_at(size_t index) const {
     VAST_ASSERT(index == 0);
     return bitmap_;
   }
@@ -111,7 +111,7 @@ public:
     bitmap_.append_bits(x, n);
   }
 
-  Bitmap decode(relational_operator op, value_type x) const {
+  [[nodiscard]] Bitmap decode(relational_operator op, value_type x) const {
     VAST_ASSERT(op == relational_operator::equal
                 || op == relational_operator::not_equal);
     auto result = bitmap_;
@@ -130,15 +130,15 @@ public:
     bitmap_.append(other.bitmap_);
   }
 
-  size_type size() const {
+  [[nodiscard]] size_type size() const {
     return bitmap_.size();
   }
 
-  size_t memusage() const {
+  [[nodiscard]] size_t memusage() const {
     return bitmap_.memusage();
   }
 
-  const Bitmap& storage() const {
+  [[nodiscard]] const Bitmap& storage() const {
     return bitmap_;
   }
 

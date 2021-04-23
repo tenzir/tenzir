@@ -43,19 +43,20 @@ public:
   /// Locates previously added table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
-  caf::expected<std::vector<table_slice>> lookup(const vast::ids& xs) const;
+  [[nodiscard]] caf::expected<std::vector<table_slice>>
+  lookup(const vast::ids& xs) const;
 
   /// @returns The UUID for the segment under construction.
-  const uuid& id() const;
+  [[nodiscard]] const uuid& id() const;
 
   /// @returns The IDs for the contained table slices.
-  vast::ids ids() const;
+  [[nodiscard]] vast::ids ids() const;
 
   /// @returns The number of bytes of the current segment.
-  size_t table_slice_bytes() const;
+  [[nodiscard]] size_t table_slice_bytes() const;
 
   /// @returns The currently buffered table slices.
-  const std::vector<table_slice>& table_slices() const;
+  [[nodiscard]] const std::vector<table_slice>& table_slices() const;
 
   /// Resets the builder state to start with a new segment.
   void reset();

@@ -42,13 +42,13 @@ public:
   data_view operator[](size_t column) const;
 
   /// @returns the number of columns in the row.
-  size_t size() const noexcept;
+  [[nodiscard]] size_t size() const noexcept;
 
   /// @returns the viewed table slice.
-  const table_slice& slice() const noexcept;
+  [[nodiscard]] const table_slice& slice() const noexcept;
 
   /// @returns the viewed row's index.
-  size_t index() const noexcept;
+  [[nodiscard]] size_t index() const noexcept;
 
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>

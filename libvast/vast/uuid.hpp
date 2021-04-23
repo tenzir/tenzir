@@ -51,9 +51,9 @@ public:
   // Container interface.
   iterator begin();
   iterator end();
-  const_iterator begin() const;
-  const_iterator end() const;
-  size_type size() const;
+  [[nodiscard]] const_iterator begin() const;
+  [[nodiscard]] const_iterator end() const;
+  [[nodiscard]] size_type size() const;
 
   friend bool operator==(const uuid& x, const uuid& y);
   friend bool operator<(const uuid& x, const uuid& y);

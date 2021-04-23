@@ -56,7 +56,7 @@ public:
     return xs_.begin();
   }
 
-  const_iterator begin() const {
+  [[nodiscard]] const_iterator begin() const {
     return xs_.begin();
   }
 
@@ -64,7 +64,7 @@ public:
     return xs_.end();
   }
 
-  const_iterator end() const {
+  [[nodiscard]] const_iterator end() const {
     return xs_.end();
   }
 
@@ -72,7 +72,7 @@ public:
     return xs_.rbegin();
   }
 
-  const_reverse_iterator rbegin() const {
+  [[nodiscard]] const_reverse_iterator rbegin() const {
     return xs_.rbegin();
   }
 
@@ -80,17 +80,17 @@ public:
     return xs_.rend();
   }
 
-  const_reverse_iterator rend() const {
+  [[nodiscard]] const_reverse_iterator rend() const {
     return xs_.rend();
   }
 
   // -- capacity -------------------------------------------------------------
 
-  bool empty() const {
+  [[nodiscard]] bool empty() const {
     return xs_.empty();
   }
 
-  size_type size() const {
+  [[nodiscard]] size_type size() const {
     return xs_.size();
   }
 
@@ -160,7 +160,7 @@ public:
 
   // -- lookup ---------------------------------------------------------------
 
-  size_type count(const value_type& x) const {
+  [[nodiscard]] size_type count(const value_type& x) const {
     return find(x) == end() ? 0 : 1;
   }
 
@@ -168,7 +168,7 @@ public:
     return Policy::lookup(xs_, x);
   }
 
-  const_iterator find(const value_type& x) const {
+  [[nodiscard]] const_iterator find(const value_type& x) const {
     return Policy::lookup(xs_, x);
   }
 

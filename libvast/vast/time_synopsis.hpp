@@ -19,7 +19,7 @@ public:
 
   time_synopsis(time start, time end);
 
-  bool equals(const synopsis& other) const noexcept override;
+  [[nodiscard]] bool equals(const synopsis& other) const noexcept override;
 };
 
 } // namespace vast

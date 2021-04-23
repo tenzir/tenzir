@@ -80,9 +80,9 @@ public:
 
   explicit pattern_view(std::string_view str);
 
-  bool match(std::string_view x) const;
-  bool search(std::string_view x) const;
-  std::string_view string() const;
+  [[nodiscard]] bool match(std::string_view x) const;
+  [[nodiscard]] bool search(std::string_view x) const;
+  [[nodiscard]] std::string_view string() const;
 
   template <class Hasher>
   friend void hash_append(Hasher& h, pattern_view x) {
@@ -210,19 +210,19 @@ public:
     return *ptr_;
   }
 
-  iterator begin() const {
+  [[nodiscard]] iterator begin() const {
     return {ptr_.get(), 0};
   }
 
-  iterator end() const {
+  [[nodiscard]] iterator end() const {
     return {ptr_.get(), size()};
   }
 
-  size_t size() const {
+  [[nodiscard]] size_t size() const {
     return ptr_ ? ptr_->size() : 0;
   }
 
-  bool empty() const {
+  [[nodiscard]] bool empty() const {
     return size() == 0;
   }
 
@@ -277,7 +277,7 @@ public:
     // nop
   }
 
-  auto dereference() const {
+  [[nodiscard]] auto dereference() const {
     return view_->at(position_);
   }
 
@@ -294,11 +294,11 @@ public:
     position_ += n;
   }
 
-  bool equals(container_view_iterator other) const {
+  [[nodiscard]] bool equals(container_view_iterator other) const {
     return view_ == other.view_ && position_ == other.position_;
   }
 
-  auto distance_to(container_view_iterator other) const {
+  [[nodiscard]] auto distance_to(container_view_iterator other) const {
     return other.position_ - position_;
   }
 

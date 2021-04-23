@@ -256,7 +256,8 @@ public:
     return result;
   }
 
-  std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const override {
+  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
+  arrow_builder() const override {
     return arrow_builder_;
   }
 
@@ -305,7 +306,8 @@ public:
     return result;
   }
 
-  std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const override {
+  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
+  arrow_builder() const override {
     return arrow_builder_;
   }
 
@@ -368,7 +370,8 @@ public:
     return result;
   }
 
-  std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const override {
+  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
+  arrow_builder() const override {
     return list_builder_;
   }
 
@@ -424,7 +427,8 @@ public:
     return result;
   }
 
-  std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const override {
+  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
+  arrow_builder() const override {
     return struct_builder_;
   }
 

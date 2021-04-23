@@ -35,21 +35,22 @@ public:
   static caf::expected<segment> make(chunk_ptr chunk);
 
   /// @returns The unique ID of this segment.
-  uuid id() const;
+  [[nodiscard]] uuid id() const;
 
   /// @returns the event IDs of all contained table slice.
-  vast::ids ids() const;
+  [[nodiscard]] vast::ids ids() const;
 
   // @returns The number of table slices in this segment.
-  size_t num_slices() const;
+  [[nodiscard]] size_t num_slices() const;
 
   /// @returns The underlying chunk.
-  chunk_ptr chunk() const;
+  [[nodiscard]] chunk_ptr chunk() const;
 
   /// Locates the table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
-  caf::expected<std::vector<table_slice>> lookup(const vast::ids& xs) const;
+  [[nodiscard]] caf::expected<std::vector<table_slice>>
+  lookup(const vast::ids& xs) const;
 
 private:
   explicit segment(chunk_ptr chk);

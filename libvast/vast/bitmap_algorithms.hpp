@@ -307,21 +307,21 @@ public:
 
   /// @returns The current bit sequence.
   /// @pre `!done()`
-  const bits_type& bits() const {
+  [[nodiscard]] const bits_type& bits() const {
     VAST_ASSERT(!done());
     return rng_.get();
   }
 
   /// @returns The current position in the range.
   /// @pre `!done()`
-  id offset() const {
+  [[nodiscard]] id offset() const {
     VAST_ASSERT(!done());
     return n_ + i_;
   }
 
   /// @returns The bit value at the current position.
   /// @pre `!done()`
-  bool value() const {
+  [[nodiscard]] bool value() const {
     VAST_ASSERT(!done());
     return bits()[i_];
   }
@@ -330,13 +330,13 @@ public:
 
   /// Retrieves the current position in the range.
   /// @pre `!done()`
-  size_type get() const {
+  [[nodiscard]] size_type get() const {
     VAST_ASSERT(!done());
     return offset();
   }
 
   /// @returns `true` if the range is done.
-  bool done() const {
+  [[nodiscard]] bool done() const {
     return rng_.done() && i_ == npos;
   }
 
@@ -461,11 +461,11 @@ public:
       next();
   }
 
-  auto get() const {
+  [[nodiscard]] auto get() const {
     return rng_.get();
   }
 
-  bool done() const {
+  [[nodiscard]] bool done() const {
     return rng_.done();
   }
 

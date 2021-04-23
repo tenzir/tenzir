@@ -22,7 +22,7 @@ public:
     return !empty();
   }
 
-  bool empty() const {
+  [[nodiscard]] bool empty() const {
     auto d = static_cast<const Derived*>(this);
     return d->begin() == d->end();
   }
@@ -47,7 +47,7 @@ private:
   explicit range_iterator(Range& rng) : rng_{&rng} {
   }
 
-  bool equals(const range_iterator&) const {
+  [[nodiscard]] bool equals(const range_iterator&) const {
     return rng_->complete();
   }
 
@@ -57,7 +57,7 @@ private:
     rng_->increment();
   }
 
-  decltype(auto) dereference() const {
+  [[nodiscard]] decltype(auto) dereference() const {
     VAST_ASSERT(rng_);
     return rng_->dereference();
   }
@@ -71,18 +71,18 @@ public:
   using iterator = range_iterator<range_facade<Derived>>;
   using const_iterator = iterator;
 
-  const_iterator begin() const {
+  [[nodiscard]] const_iterator begin() const {
     return const_iterator{const_cast<range_facade&>(*this)};
   }
 
-  const_iterator end() const {
+  [[nodiscard]] const_iterator end() const {
     return const_iterator{};
   }
 
 protected:
   friend iterator;
 
-  bool complete() const {
+  [[nodiscard]] bool complete() const {
     return static_cast<const Derived*>(this)->done();
   }
 
@@ -94,7 +94,7 @@ protected:
 #if VAST_GCC
 public:
 #endif
-  decltype(auto) dereference() const {
+  [[nodiscard]] decltype(auto) dereference() const {
     return static_cast<const Derived*>(this)->get();
   }
 };

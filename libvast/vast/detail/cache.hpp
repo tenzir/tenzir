@@ -74,7 +74,7 @@ public:
 
   /// Retrieves the maximum number elements the cache can hold.
   /// @returns The cache's capacity.
-  size_t capacity() const {
+  [[nodiscard]] size_t capacity() const {
     return capacity_;
   }
 
@@ -92,13 +92,13 @@ public:
 
   /// Retrieves the current number of elements in the cache.
   /// @returns The number of elements in the cache.
-  size_t size() const {
+  [[nodiscard]] size_t size() const {
     return xs_.size();
   }
 
   /// Checks whether the cache is empty.
   /// @returns `true` iff the cache holds no elements.
-  bool empty() const {
+  [[nodiscard]] bool empty() const {
     return xs_.empty();
   }
 

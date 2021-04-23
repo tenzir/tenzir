@@ -133,7 +133,7 @@ private:
     return caf::visit(f, d);
   }
 
-  caf::expected<ids>
+  [[nodiscard]] caf::expected<ids>
   lookup_impl(relational_operator op, data_view d) const override {
     auto f = detail::overload{
       [&](auto x) -> caf::expected<ids> {
@@ -154,7 +154,7 @@ private:
     return caf::visit(f, d);
   };
 
-  size_t memusage_impl() const override {
+  [[nodiscard]] size_t memusage_impl() const override {
     return bmi_.memusage();
   }
 
