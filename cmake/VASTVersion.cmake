@@ -13,7 +13,11 @@ if (NOT VAST_VERSION_TAG)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE VAST_GIT_DESCRIBE_RESULT)
       if (NOT VAST_GIT_DESCRIBE_RESULT EQUAL 0)
-        message(FATAL_ERROR "git describe failed: ${VAST_GIT_DESCRIBE_RESULT}")
+        message(
+          WARNING
+            "git-describe failed: ${VAST_GIT_DESCRIBE_RESULT}; using fallback version"
+        )
+        unset(VAST_VERSION_TAG)
       endif ()
     endif ()
   endif ()
