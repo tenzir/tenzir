@@ -45,9 +45,6 @@ struct exporter_state {
   /// Stores a handle to the ACCOUNTANT that collects various statistics.
   accountant_actor accountant;
 
-  /// Stores hits from the INDEX.
-  ids hits;
-
   /// Caches tailored candidate checkers.
   std::unordered_map<type, expression> checkers;
 
