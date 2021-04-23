@@ -71,13 +71,14 @@ void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
   if (st.statistics_subscriber)
     self->anon_send(st.statistics_subscriber, st.name, st.query);
   if (st.accountant) {
-    auto hits = rank(st.hits);
     auto processed = st.query.processed;
     auto shipped = st.query.shipped;
     auto results = shipped + st.results.size();
-    auto selectivity = double(results) / processed;
+    auto selectivity = processed != 0
+                         ? detail::narrow_cast<double>(results)
+                             / detail::narrow_cast<double>(processed)
+                         : 1.0;
     auto msg = report{
-      {"exporter.hits", hits},
       {"exporter.processed", processed},
       {"exporter.results", results},
       {"exporter.shipped", shipped},
@@ -316,7 +317,6 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       if (v >= status_verbosity::detailed) {
         caf::settings exp;
         put(exp, "expression", to_string(self->state.expr));
-        put(exp, "hits", rank(self->state.hits));
         put(exp, "start", caf::deep_to_string(self->state.start));
         auto& xs = put_list(result, "queries");
         xs.emplace_back(std::move(exp));

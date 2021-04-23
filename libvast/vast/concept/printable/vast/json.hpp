@@ -56,6 +56,9 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     template <class T>
     bool operator()(const T& x) {
       if constexpr (std::is_arithmetic_v<T>) {
+        // Print non-finite numbers as `null`.
+        if (!std::isfinite(x))
+          return printers::str.print(out_, "null");
         auto str = std::to_string(x);
         real i;
         if constexpr (std::is_floating_point_v<T>) {
