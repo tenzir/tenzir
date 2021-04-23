@@ -219,4 +219,22 @@ function (VASTRegisterPlugin)
     endif ()
     add_dependencies(integration ${PLUGIN_TARGET}-integration)
   endif ()
+
+  # Provide niceties for external plugins that are usually part of VAST.
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    # Support tools like clang-tidy by creating a compilation database and
+    # copying it to the project root.
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+    add_custom_target(
+      ${PLUGIN_TARGET}-compilation-database ALL
+      COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json"
+      DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"
+      BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json"
+      COMMENT
+        "Copying compilation database for ${PLUGIN_TARGET} to ${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+  endif ()
 endfunction ()
