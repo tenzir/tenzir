@@ -6,7 +6,7 @@ nix-prefetch-github --version
 
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
-desc="$(git -C ${dir} describe --tags --long --abbrev=10 --dirty )"
+desc="$(git -C ${dir} describe --tags --long --abbrev=10 --dirty)"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 echo "rev is ${vast_rev}"
 
@@ -15,7 +15,7 @@ target="${STATIC_BINARY_TARGET:-vast}"
 USE_HEAD="off"
 cmakeFlags=""
 # Enable the PCAP plugin by default.
-plugins=("plugins/pcap")
+plugins=("${toplevel}/plugins/pcap")
 
 while [ $# -ne 0 ]; do
   case "$1" in
