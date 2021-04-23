@@ -56,6 +56,9 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     template <class T>
     bool operator()(const T& x) {
       if constexpr (std::is_arithmetic_v<T>) {
+        // Print non-finite numbers as `null`.
+        if (!std::isfinite(x))
+          return printers::str.print(out_, "null");
         auto str = std::to_string(x);
         real i;
         if constexpr (std::is_floating_point_v<T>) {
@@ -83,11 +86,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     }
 
     bool operator()(const std::string& str) {
-      return (*this)(std::string_view{str});
+      return (*this) (std::string_view{str});
     }
 
     bool operator()(const view<pattern>& x) {
-      return (*this)(x.string());
+      return (*this) (x.string());
     }
 
     bool operator()(const view<duration>& x) {
@@ -102,7 +105,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
     bool operator()(const std::pair<std::string_view, view<data>>& kvp) {
       using namespace printers;
-      if (!(*this)(kvp.first))
+      if (!(*this) (kvp.first))
         return false;
       if (!str.print(out_, ": "))
         return false;
@@ -165,7 +168,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       while (begin != end) {
         if (!indent())
           return false;
-        if (!(*this)(begin->first))
+        if (!(*this) (begin->first))
           return false;
         if (!str.print(out_, ": "))
           return false;
