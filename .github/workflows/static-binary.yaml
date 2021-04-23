@@ -16,9 +16,7 @@ on:
       - '**.cmake'
       - '**CMakeLists.txt'
   release:
-    types:
-      - released
-      - prereleased
+    types: published
 
 jobs:
   static_binary:

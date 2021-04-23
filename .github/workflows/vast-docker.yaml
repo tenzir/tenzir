@@ -9,8 +9,7 @@ on:
     - '**.cmake'
     - '**CMakeLists.txt'
   release:
-    types:
-    - released
+    types: published
 
 env:
   DEBIAN_FRONTEND: noninteractive
