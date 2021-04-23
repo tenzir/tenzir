@@ -50,13 +50,19 @@ function (VASTRegisterPlugin)
     endif ()
   endif ()
 
-  # Craete a stub source file with an identfier if no sources except for the
-  # entrypoint exist.
   if (NOT PLUGIN_SOURCES)
+    # Create a stub source file with an identfier if no sources except for the
+    # entrypoint exist.
     string(MAKE_C_IDENTIFIER "${PLUGIN_TARGET}" plugin_identifier)
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.cpp"
          "void vast_plugin_${plugin_identifier}_stub() {}")
     set(PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.cpp")
+  else ()
+    # Deduplicate the entrypoint so plugin authors can grep for sources while
+    # still specifying the entrypoint manually.
+    if ("${PLUGIN_ENTRYPOINT}" IN_LIST PLUGIN_SOURCES)
+      list(REMOVE_ITEM PLUGIN_SPURCES "${PLUGIN_ENTRYPOINT}")
+    endif ()
   endif ()
 
   # Create a static library target for our plugin _without_ the entrypoint.
