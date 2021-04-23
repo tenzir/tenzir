@@ -75,7 +75,10 @@ void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
     auto processed = st.query.processed;
     auto shipped = st.query.shipped;
     auto results = shipped + st.results.size();
-    auto selectivity = double(results) / processed;
+    auto selectivity = processed != 0
+                         ? detail::narrow_cast<double>(results)
+                             / detail::narrow_cast<double>(processed)
+                         : 1.0;
     auto msg = report{
       {"exporter.hits", hits},
       {"exporter.processed", processed},
