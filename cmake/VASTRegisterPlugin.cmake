@@ -1,6 +1,19 @@
 include_guard(GLOBAL)
 
 function (VASTRegisterPlugin)
+  # Safeguard against repeated VASTRegisterPlugin calls from the same project.
+  # While technically possible for external pluigins, doing so makes it
+  # impossible to build the plugin alongside VAST.
+  get_property(VAST_PLUGIN_PROJECT_SOURCE_DIRS GLOBAL
+               PROPERTY "VAST_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY")
+  if ("${PROJECT_SOURCE_DIR}" IN_LIST VAST_PLUGIN_PROJECT_SOURCE_DIRS)
+    message(
+      FATAL_ERROR
+        "VASTRegisterPlugin called twice in CMake project ${PROJECT_NAME}")
+  endif ()
+  set_property(GLOBAL APPEND PROPERTY "VAST_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY"
+                                      "${PROJECT_SOURCE_DIR}")
+
   include(GNUInstallDirs)
 
   cmake_parse_arguments(PLUGIN "" "TARGET;ENTRYPOINT" "SOURCES;TEST_SOURCES"
