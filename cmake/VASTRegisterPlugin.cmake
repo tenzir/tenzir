@@ -44,6 +44,18 @@ function (VASTExportCompileCommands)
 endfunction ()
 
 function (VASTRegisterPlugin)
+  cmake_parse_arguments(
+    # <prefix>
+    PLUGIN
+    # <options>
+    ""
+    # <one_value_keywords>
+    "TARGET;ENTRYPOINT"
+    # <multi_value_keywords>
+    "SOURCES;TEST_SOURCES;INCLUDE_DIRECTORIES"
+    # <args>...
+    ${ARGN})
+
   # Safeguard against repeated VASTRegisterPlugin calls from the same project.
   # While technically possible for external pluigins, doing so makes it
   # impossible to build the plugin alongside VAST.
@@ -79,10 +91,9 @@ function (VASTRegisterPlugin)
     endif ()
   endif ()
 
+  # Provides install directory variables as defined for GNU software:
+  # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
-
-  cmake_parse_arguments(PLUGIN "" "TARGET;ENTRYPOINT" "SOURCES;TEST_SOURCES"
-                        ${ARGN})
 
   # A replacement for target_link_libraries that links static libraries using
   # the platform-specific whole-archive options. Please test any changes to this
@@ -150,6 +161,15 @@ function (VASTRegisterPlugin)
     PUBLIC vast::libvast
     PRIVATE vast::internal)
 
+  # Set up the target's include directories.
+  if (PLUGIN_INCLUDE_DIRECTORIES)
+    # We intentionally omit the install interface include directories and do not
+    # install the given include directories, as installed plugin libraries are
+    # not meant to be developed against.
+    target_include_directories(
+      ${PLUGIN_TARGET} PUBLIC $<BUILD_INTERFACE:${PLUGIN_INCLUDE_DIRECTORIES}>)
+  endif ()
+
   # Create a static library target for our plugin with the entrypoint, and use
   # static versions of VAST_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
@@ -173,6 +193,9 @@ function (VASTRegisterPlugin)
 
     # Install the plugin library to <libdir>/vast/plugins, and also configure
     # the library output directory accordingly.
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+      message(FATAL_ERROR "CMAKE_INSTALL_LIBDIR must be a relative path")
+    endif ()
     set_target_properties(
       ${PLUGIN_TARGET}-shared
       PROPERTIES LIBRARY_OUTPUT_DIRECTORY
@@ -181,7 +204,7 @@ function (VASTRegisterPlugin)
     install(TARGETS ${PLUGIN_TARGET}-shared
             DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins")
 
-    # Ensure that VAST only runs after all pluigns are built.
+    # Ensure that VAST only runs after all dynamic plugin libraries are built.
     if (TARGET vast)
       add_dependencies(vast ${PLUGIN_TARGET}-shared)
     endif ()
