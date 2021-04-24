@@ -191,7 +191,7 @@ private:
 } // namespace vast::plugins
 
 // Register the example_plugin with version 0.1.0-0.
-VAST_REGISTER_PLUGIN(vast::plugins::example_plugin, 0, 1, 0, 0)
+VAST_REGISTER_PLUGIN(vast::plugins::example_plugin, 0, 1)
 
 // Register the type IDs in our type ID block with VAST. This can be omitted
 // when not adding additional type IDs. The macro supports up to two type ID
