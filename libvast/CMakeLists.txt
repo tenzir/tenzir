@@ -378,6 +378,11 @@ target_include_directories(
          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
+# Make dlopen and dlclose available if we're building a shared library.
+if (BUILD_SHARED_LIBS)
+  target_link_libraries(libvast PUBLIC ${CMAKE_DL_LIBS})
+endif ()
+
 # Link against CAF.
 target_link_libraries(libvast PUBLIC CAF::core CAF::io)
 if (VAST_ENABLE_OPENSSL)
