@@ -111,7 +111,7 @@ caf::error configuration::parse(int argc, char** argv) {
           = add_configs(std::filesystem::path{*home} / ".config" / "vast"))
         return err;
     }
-    if (auto err = add_configs(std::filesystem::path{VAST_SYSCONFDIR} / "vast"))
+    if (auto err = add_configs(std::filesystem::path{VAST_CONFIGDIR}))
       return err;
   }
   // If the user provided a config file on the command line, we attempt to

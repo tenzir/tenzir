@@ -227,7 +227,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
     for (auto&& path : detail::split(*vast_schema_directories, ":"))
       result.insert({path});
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  result.insert(VAST_DATADIR "/vast/schema");
+  result.insert(VAST_SCHEMADIR);
 #endif
   // Get filesystem path to the executable.
   for (const void* addr : objpath_addresses) {
@@ -238,7 +238,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
       VAST_ERROR("{} failed to get program path", __func__);
   }
   if (!disable_default_config_dirs) {
-    result.insert(std::filesystem::path{VAST_SYSCONFDIR} / "vast" / "schema");
+    result.insert(std::filesystem::path{VAST_CONFIGDIR} / "schema");
     if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
       result.insert(std::filesystem::path{*xdg_config_home} / "vast"
                     / "schema");

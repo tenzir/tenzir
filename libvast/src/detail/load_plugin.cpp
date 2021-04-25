@@ -42,7 +42,7 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
     VAST_ERROR("{} failed to get program path", __func__);
   if (!disable_default_config_dirs) {
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-    result.insert(std::filesystem::path{VAST_LIBDIR} / "vast" / "plugins");
+    result.insert(std::filesystem::path{VAST_PLUGINDIR});
 #endif
     if (auto home = locked_getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
