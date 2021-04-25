@@ -1,5 +1,6 @@
 #include "vast/systemd.hpp"
 
+#include "vast/detail/env.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -21,16 +22,20 @@ namespace vast::systemd {
 // which conditions should result in errors.
 caf::error notify_ready() {
   caf::detail::scope_guard guard([] {
-    ::unsetenv("NOTIFY_SOCKET"); // Always unset $NOTIFY_SOCKET.
+    // Always unset $NOTIFY_SOCKET.
+    auto result = detail::unset_env("NOTIFY_SOCKET");
+    static_cast<void>(result);
+    // TODO: Should we check the result here?
+    // VAST_ASSERT(result);
   });
-  auto notify_socket_env = ::getenv("NOTIFY_SOCKET");
+  auto notify_socket_env = detail::env("NOTIFY_SOCKET");
   if (!notify_socket_env)
     return caf::none;
-  VAST_VERBOSE("notifying systemd at {}", notify_socket_env);
+  VAST_VERBOSE("notifying systemd at {}", *notify_socket_env);
   int socket = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
   if (socket < 0)
     return caf::make_error(ec::system_error, "failed to create unix socket");
-  if (detail::uds_sendmsg(socket, notify_socket_env, "READY=1\n") < 0)
+  if (detail::uds_sendmsg(socket, *notify_socket_env, "READY=1\n") < 0)
     return caf::make_error(ec::system_error, "failed to send ready message");
   return caf::none;
 }
