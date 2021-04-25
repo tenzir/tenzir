@@ -168,10 +168,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
                                _GLIBCXX_USE_C99_MATH_TR1)
 endif ()
 
-if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-  target_link_libraries(libvast_internal INTERFACE dl)
-endif ()
-
 # -- optimizations -------------------------------------------------------------
 
 # TODO add option to disable SSE
