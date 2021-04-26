@@ -6,7 +6,7 @@ This file is generated automatically. Add indivual changelog entries to the'chan
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.04.29-rc2]
+## [2021.04.29-rc3]
 
 ### :zap: Breaking Changes
 
@@ -24,9 +24,16 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :warning: Changes
 
+- The metrics for Suricata Eve JSON and Zeek Streaming JSON imports are now under the categories `suricata-reader` and `zeek-reader` respectively so they can be distinguished from the regular JSON import, which is still under `json-reader`.
+  [#1498](https://github.com/tenzir/vast/pull/1498)
+
 - VAST now ships with a schema record type for Suricata's `rfb` event type.
   [#1499](https://github.com/tenzir/vast/pull/1499)
   [@satta](https://github.com/satta)
+
+- The `exporter.hits` metric has been removed.
+  [#1514](https://github.com/tenzir/vast/pull/1514)
+  [#1574](https://github.com/tenzir/vast/pull/1574)
 
 - We upstreamed the Debian patches provided by [@satta](https://github.com/satta). VAST now prefers an installed `tsl-robin-map>=0.6.2` to the bundled one unless configured with `--with-bundled-robin-map`, and we provide a manpage for `lsvast` if `pandoc` is installed.
   [#1515](https://github.com/tenzir/vast/pull/1515)
@@ -96,6 +103,21 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST now correctly builds within shallow clones of the repository. If the build system is unable to determine the correct version from `git-describe`, it now always falls back to the version of the last release.
   [#1570](https://github.com/tenzir/vast/pull/1570)
+
+- We fixed a regression that made it impossible to build static binaries from outside of the repository root directory.
+  [#1573](https://github.com/tenzir/vast/pull/1573)
+
+- The `VASTRegisterPlugin` CMake function now correctly removes the `ENTRYPOINT` from the given `SOURCES`, allowing for plugin developers to easily glob for sources again.
+  [#1573](https://github.com/tenzir/vast/pull/1573)
+
+- The `exporter.selectivity` metric is now 1.0 instead of NaN for idle periods.
+  [#1574](https://github.com/tenzir/vast/pull/1574)
+
+- VAST no longer renders JSON numbers with non-finite numbers as `NaN`, `-NaN`, `inf`, or `-inf`, resulting in invalid JSON output. Instead, such numbers are now rendered as `null`.
+  [#1574](https://github.com/tenzir/vast/pull/1574)
+
+- Specifying relative `CMAKE_INSTALL_*DIR` in the build configuration no longer causes VAST not to pick up system-wide installed configuration files, schemas, and plugins. The configured install prefix is now used correctly. The defunct `VAST_SYSCONFDIR`, `VAST_DATADIR`, and `VAST_LIBDIR` CMake options no longer exist. Use a combination of `CMAKE_INSTALL_PREFIX` and `CMAKE_INSTALL_*DIR` instead.
+  [#1580](https://github.com/tenzir/vast/pull/1580)
 
 ## [2021.03.25]
 
@@ -1049,7 +1071,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.04.29-rc2]: https://github.com/tenzir/vast/releases/tag/2021.04.29-rc2
+[2021.04.29-rc3]: https://github.com/tenzir/vast/releases/tag/2021.04.29-rc3
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
 [2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
 [2021.01.28]: https://github.com/tenzir/vast/releases/tag/2021.01.28
