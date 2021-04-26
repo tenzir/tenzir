@@ -122,7 +122,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                   self->state.dbdir, size.error());
         return;
       }
-      VAST_VERBOSE("{} checks db-directory of size {} bytes", self, *size);
+      VAST_VERBOSE("{} checks db-directory of size {}", self, *size);
       if (*size > self->state.high_water_mark && !self->state.purging) {
         self->state.purging = true;
         // TODO: Remove the static_cast when switching to CAF 0.18.
@@ -206,8 +206,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                     VAST_WARN("{} failed to calculate size of {}: {}", self,
                               self->state.dbdir, size.error());
                   } else {
-                    VAST_VERBOSE("{} erased ids from index; {} bytes "
-                                 "left on disk",
+                    VAST_VERBOSE("{} erased ids from index; leftover size is "
+                                 "{}",
                                  self, *size);
                     if (*size > self->state.low_water_mark) {
                       // Repeat until we're below the low water mark
