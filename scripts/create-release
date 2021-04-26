@@ -1,8 +1,11 @@
 #! /usr/bin/env zsh -euo pipefail
 
 # Check if exactly one argument was passed: the new version.
-if (( $# != 1 )); then
-  >&2 echo "Error: expected new version as only argument"
+if (( $# != 1 )) || [[ "$1" == "--help" ]]; then
+  >&2 {
+    echo "Usage: $0 <version>"
+    echo "  version: The new version, e.g., 2021.04.29 or 2021.04.29-rc1"
+  }
   exit 1
 fi
 
@@ -73,9 +76,11 @@ ${source_dir}/configure --build-dir="${build_dir}"
 cmake --build "${build_dir}" --target update-changelog
 
 # Commit and open a PR against tenzir/vast.
+pushd "${source_dir}"
 git add --all
 git commit -m "Prepare repository for VAST ${new_version}"
 gh pr create --web
+popd
 
 # Switch back to the branch we started on.
 git switch -
