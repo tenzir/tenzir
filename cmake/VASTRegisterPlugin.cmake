@@ -1,5 +1,46 @@
 include_guard(GLOBAL)
 
+# Support tools like clang-tidy by creating a compilation database and copying
+# it to the project root.
+function (VASTExportCompileCommands)
+  if (TARGET compilation-database)
+    message(FATAL_ERROR "VASTExportCompileCommands must be called only once")
+  endif ()
+
+  if (NOT ${ARGC} EQUAL 1)
+    message(FATAL_ERROR "VASTExportCompileCommands takes exactly one argument")
+  endif ()
+
+  if (NOT TARGET ${ARGV0})
+    message(FATAL_ERROR "VASTExportCompileCommands provided invalid target")
+  endif ()
+
+  # Globally enable compilation databases.
+  # TODO: Use the EXPORT_COMPILE_COMMANDS property when using CMake >= 3.20.
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+  # Link once when configuring the build to make the compilation database
+  # immediately available.
+  execute_process(
+    COMMAND
+      ${CMAKE_COMMAND} -E create_symlink
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${CMAKE_SOURCE_DIR}/compile_commands.json")
+
+  # Link again when building the specified target. This ensures the file is
+  # available even after the user ran `git-clean` or similar and triggered
+  # another build.
+  add_custom_target(
+    compilation-database
+    BYPRODUCTS "${CMAKE_SOURCE_DIR}/compile_commands.json"
+    COMMAND
+      ${CMAKE_COMMAND} -E create_symlink
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${CMAKE_SOURCE_DIR}/compile_commands.json"
+    COMMENT "Linking compilation database for ${ARGV0} to ${CMAKE_SOURCE_DIR}")
+  add_dependencies(${ARGV0} compilation-database)
+endfunction ()
+
 function (VASTRegisterPlugin)
   # Safeguard against repeated VASTRegisterPlugin calls from the same project.
   # While technically possible for external pluigins, doing so makes it
@@ -237,16 +278,6 @@ function (VASTRegisterPlugin)
   if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
     # Support tools like clang-tidy by creating a compilation database and
     # copying it to the project root.
-    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-    add_custom_target(
-      ${PLUGIN_TARGET}-compilation-database ALL
-      COMMAND
-        ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"
-        "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json"
-      BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json"
-      COMMENT
-        "Copying compilation database for ${PLUGIN_TARGET} to ${CMAKE_CURRENT_SOURCE_DIR}"
-    )
+    VASTExportCompileCommands(${PLUGIN_TARGET})
   endif ()
 endfunction ()
