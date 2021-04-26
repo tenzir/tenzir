@@ -258,10 +258,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->state.index = std::move(index);
     self->state.stage->add_outbound_path(self->state.index);
   }
-  for (auto& plugin : plugins::get())
-    if (auto* p = plugin.as<analyzer_plugin>())
-      if (auto analyzer = p->analyzer())
-        self->state.stage->add_outbound_path(analyzer);
   return {
     // Register the ACCOUNTANT actor.
     [self](accountant_actor accountant) {
