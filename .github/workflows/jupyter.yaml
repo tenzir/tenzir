@@ -29,6 +29,7 @@ jobs:
         # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
         wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
         sudo apt-get -y install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+        sudo sed -i'' -e 's,https://apache.bintray.com/,https://apache.jfrog.io/artifactory/,g' /etc/apt/sources.list.d/apache-arrow.sources
         sudo apt-get update
         sudo apt-get -y install libarrow-dev
 
