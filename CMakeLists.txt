@@ -359,18 +359,9 @@ add_feature_info("VAST_ENABLE_DEVELOPER_MODE" VAST_ENABLE_DEVELOPER_MODE
                  "enables build settings for a nicer development environment.")
 
 if (VAST_ENABLE_DEVELOPER_MODE)
-  # Support tools like clang-tidy by creating a compilation database.
-  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-  # Link the compilation database to the project root by default.
-  add_custom_target(
-    link_compilation_database ALL
-    COMMAND
-      ${CMAKE_COMMAND} -E create_symlink
-      "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json" compile_commands.json
-    BYPRODUCTS compile_commands.json
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Linking compilation database")
+  # Support tools like clang-tidy by creating a compilation database and
+  # copying it to the project root.
+  VASTExportCompileCommands(libvast_internal)
 
   # Force colored output for the Ninja generator
   if ("${CMAKE_GENERATOR}" MATCHES "Ninja")
