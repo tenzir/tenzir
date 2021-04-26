@@ -15,6 +15,7 @@
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/env.hpp"
 #include "vast/detail/filter_dir.hpp"
 #include "vast/detail/load_contents.hpp"
 #include "vast/detail/process.hpp"
@@ -222,8 +223,8 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   const auto disable_default_config_dirs
     = caf::get_or(cfg, "vast.disable-default-config-dirs", false);
   detail::stable_set<std::filesystem::path> result;
-  if (const char* vast_schema_directories = std::getenv("VAST_SCHEMA_DIRS"))
-    for (auto&& path : detail::split(vast_schema_directories, ":"))
+  if (auto vast_schema_directories = detail::locked_getenv("VAST_SCHEMA_DIRS"))
+    for (auto&& path : detail::split(*vast_schema_directories, ":"))
       result.insert({path});
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   result.insert(VAST_DATADIR "/vast/schema");
@@ -238,10 +239,11 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   }
   if (!disable_default_config_dirs) {
     result.insert(std::filesystem::path{VAST_SYSCONFDIR} / "vast" / "schema");
-    if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
-      result.insert(std::filesystem::path{xdg_config_home} / "vast" / "schema");
-    else if (const char* home = std::getenv("HOME"))
-      result.insert(std::filesystem::path{home} / ".config" / "vast"
+    if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
+      result.insert(std::filesystem::path{*xdg_config_home} / "vast"
+                    / "schema");
+    else if (auto home = detail::locked_getenv("HOME"))
+      result.insert(std::filesystem::path{*home} / ".config" / "vast"
                     / "schema");
     if (auto dirs = caf::get_if<std::vector<std::string>>( //
           &cfg, "vast.schema-dirs"))

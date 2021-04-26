@@ -14,6 +14,7 @@
 #include "vast/detail/add_message_types.hpp"
 #include "vast/detail/append.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/env.hpp"
 #include "vast/detail/load_contents.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/process.hpp"
@@ -101,13 +102,13 @@ caf::error configuration::parse(int argc, char** argv) {
     return caf::none;
   };
   if (!caf::get_or(content, "vast.disable-default-config-dirs", false)) {
-    if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME")) {
+    if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME")) {
       if (auto err
-          = add_configs(std::filesystem::path{xdg_config_home} / "vast"))
+          = add_configs(std::filesystem::path{*xdg_config_home} / "vast"))
         return err;
-    } else if (const char* home = std::getenv("HOME")) {
+    } else if (auto home = detail::locked_getenv("HOME")) {
       if (auto err
-          = add_configs(std::filesystem::path{home} / ".config" / "vast"))
+          = add_configs(std::filesystem::path{*home} / ".config" / "vast"))
         return err;
     }
     if (auto err = add_configs(std::filesystem::path{VAST_SYSCONFDIR} / "vast"))
