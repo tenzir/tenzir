@@ -223,7 +223,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   const auto disable_default_config_dirs
     = caf::get_or(cfg, "vast.disable-default-config-dirs", false);
   detail::stable_set<std::filesystem::path> result;
-  if (auto vast_schema_directories = detail::env("VAST_SCHEMA_DIRS"))
+  if (auto vast_schema_directories = detail::locked_getenv("VAST_SCHEMA_DIRS"))
     for (auto&& path : detail::split(*vast_schema_directories, ":"))
       result.insert({path});
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
@@ -239,10 +239,10 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   }
   if (!disable_default_config_dirs) {
     result.insert(std::filesystem::path{VAST_SYSCONFDIR} / "vast" / "schema");
-    if (auto xdg_config_home = detail::env("XDG_CONFIG_HOME"))
+    if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
       result.insert(std::filesystem::path{*xdg_config_home} / "vast"
                     / "schema");
-    else if (auto home = detail::env("HOME"))
+    else if (auto home = detail::locked_getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".config" / "vast"
                     / "schema");
     if (auto dirs = caf::get_if<std::vector<std::string>>( //

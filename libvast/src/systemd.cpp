@@ -23,12 +23,10 @@ namespace vast::systemd {
 caf::error notify_ready() {
   caf::detail::scope_guard guard([] {
     // Always unset $NOTIFY_SOCKET.
-    auto result = detail::unset_env("NOTIFY_SOCKET");
-    static_cast<void>(result);
-    // TODO: Should we check the result here?
-    // VAST_ASSERT(result);
+    if (auto result = detail::locked_unsetenv("NOTIFY_SOCKET"); !result)
+      VAST_WARN("failed to unset NOTIFY_SOCKET: {}", result.error());
   });
-  auto notify_socket_env = detail::env("NOTIFY_SOCKET");
+  auto notify_socket_env = detail::locked_getenv("NOTIFY_SOCKET");
   if (!notify_socket_env)
     return caf::none;
   VAST_VERBOSE("notifying systemd at {}", *notify_socket_env);

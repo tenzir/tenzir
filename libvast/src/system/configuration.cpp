@@ -102,11 +102,11 @@ caf::error configuration::parse(int argc, char** argv) {
     return caf::none;
   };
   if (!caf::get_or(content, "vast.disable-default-config-dirs", false)) {
-    if (auto xdg_config_home = detail::env("XDG_CONFIG_HOME")) {
+    if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME")) {
       if (auto err
           = add_configs(std::filesystem::path{*xdg_config_home} / "vast"))
         return err;
-    } else if (auto home = detail::env("HOME")) {
+    } else if (auto home = detail::locked_getenv("HOME")) {
       if (auto err
           = add_configs(std::filesystem::path{*home} / ".config" / "vast"))
         return err;

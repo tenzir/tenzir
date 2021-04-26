@@ -29,7 +29,7 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
   stable_set<std::filesystem::path> result;
   const auto disable_default_config_dirs
     = caf::get_or(cfg, "vast.disable-default-config-dirs", false);
-  if (auto vast_plugin_directories = env("VAST_PLUGIN_DIRS"))
+  if (auto vast_plugin_directories = locked_getenv("VAST_PLUGIN_DIRS"))
     for (auto&& path : detail::split(*vast_plugin_directories, ":"))
       result.insert({path});
   // FIXME: we technically should not use "lib" relative to the parent,
@@ -44,7 +44,7 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
     result.insert(std::filesystem::path{VAST_LIBDIR} / "vast" / "plugins");
 #endif
-    if (auto home = env("HOME"))
+    if (auto home = locked_getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
                     / "plugins");
     if (auto dirs = caf::get_if<std::vector<std::string>>( //
