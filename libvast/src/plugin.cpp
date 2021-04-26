@@ -10,6 +10,8 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/node.hpp"
 
 #include <caf/expected.hpp>
 
@@ -61,6 +63,16 @@ system::analyzer_plugin_actor analyzer_plugin::analyzer(
   if (spawned_once_ || !node)
     return {};
   auto handle = make_analyzer(node);
+  auto [importer] = node->state.registry.find<system::importer_actor>();
+  VAST_ASSERT(importer);
+  node
+    ->request(importer, caf::infinite,
+              static_cast<system::stream_sink_actor<table_slice>>(handle))
+    .then([](const caf::outbound_stream_slot<table_slice>&) {},
+          [&](const caf::error& error) {
+            VAST_ERROR("failed to connect analyzer {} to the importer: {}",
+                       name(), error);
+          });
   weak_handle_ = caf::actor_cast<caf::weak_actor_ptr>(handle);
   spawned_once_ = true;
   return handle;
