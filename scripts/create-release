@@ -76,9 +76,11 @@ ${source_dir}/configure --build-dir="${build_dir}"
 cmake --build "${build_dir}" --target update-changelog
 
 # Commit and open a PR against tenzir/vast.
+pushd "${source_dir}"
 git add --all
 git commit -m "Prepare repository for VAST ${new_version}"
 gh pr create --web
+popd
 
 # Switch back to the branch we started on.
 git switch -
