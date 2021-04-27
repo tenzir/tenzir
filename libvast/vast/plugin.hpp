@@ -266,7 +266,7 @@ public:
   /// @tparam Plugin The specific plugin type to try to upcast to.
   /// @returns A pointer to the upcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
-  [[nodiscard]] [[nodiscard]] [[nodiscard]] const Plugin* as() const {
+  [[nodiscard]] const Plugin* as() const {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'vast::plugin'");
     return dynamic_cast<const Plugin*>(instance_);

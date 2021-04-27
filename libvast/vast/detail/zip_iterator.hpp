@@ -81,7 +81,7 @@ public:
   }
 
   template <std::size_t N = 0>
-  [[nodiscard]] [[nodiscard]] [[nodiscard]] decltype(auto) get() const {
+  [[nodiscard]] decltype(auto) get() const {
     return *std::get<N>(ptr_);
   }
 
@@ -199,8 +199,7 @@ class zip_iterator {
   }
 
   template <std::size_t I = 0>
-  [[nodiscard]] [[nodiscard]] [[nodiscard]] bool
-  none_is_equal(const zip_iterator& rhs) const {
+  [[nodiscard]] bool none_is_equal(const zip_iterator& rhs) const {
     if (std::get<I>(it_) == std::get<I>(rhs.it_))
       return false;
     if constexpr (I + 1 < sizeof...(Iterator))
