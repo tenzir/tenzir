@@ -12,6 +12,7 @@
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/string/char.hpp"
+#include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/si_literals.hpp"
 
 #include <type_traits>
@@ -28,19 +29,20 @@ struct si_parser : parser<si_parser<T>> {
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     using namespace si_literals;
     auto num = make_parser<T>{};
+    auto ws = ignore(*parsers::space);
     // clang-format off
-    auto p = (num >> "Ki") ->* [](T x) { return x * 1_Ki; }
-           | (num >> "Mi") ->* [](T x) { return x * 1_Mi; }
-           | (num >> "Gi") ->* [](T x) { return x * 1_Gi; }
-           | (num >> "Ti") ->* [](T x) { return x * 1_Ti; }
-           | (num >> "Pi") ->* [](T x) { return x * 1_Pi; }
-           | (num >> "Ei") ->* [](T x) { return x * 1_Ei; }
-           | (num >> 'k') ->* [](T x) { return x * 1_k; }
-           | (num >> 'M') ->* [](T x) { return x * 1_M; }
-           | (num >> 'G') ->* [](T x) { return x * 1_G; }
-           | (num >> 'T') ->* [](T x) { return x * 1_T; }
-           | (num >> 'P') ->* [](T x) { return x * 1_P; }
-           | (num >> 'E') ->* [](T x) { return x * 1_E; }
+    auto p = (num >> ws >> "Ki") ->* [](T x) { return x * 1_Ki; }
+           | (num >> ws >> "Mi") ->* [](T x) { return x * 1_Mi; }
+           | (num >> ws >> "Gi") ->* [](T x) { return x * 1_Gi; }
+           | (num >> ws >> "Ti") ->* [](T x) { return x * 1_Ti; }
+           | (num >> ws >> "Pi") ->* [](T x) { return x * 1_Pi; }
+           | (num >> ws >> "Ei") ->* [](T x) { return x * 1_Ei; }
+           | (num >> ws >> 'k') ->* [](T x) { return x * 1_k; }
+           | (num >> ws >> 'M') ->* [](T x) { return x * 1_M; }
+           | (num >> ws >> 'G') ->* [](T x) { return x * 1_G; }
+           | (num >> ws >> 'T') ->* [](T x) { return x * 1_T; }
+           | (num >> ws >> 'P') ->* [](T x) { return x * 1_P; }
+           | (num >> ws >> 'E') ->* [](T x) { return x * 1_E; }
            | num;
     // clang-format on
     return p(f, l, a);
