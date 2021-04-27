@@ -15,6 +15,12 @@
 #include "vast/schema.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/report.hpp"
+#include "vast/system/status_verbosity.hpp"
+#include "vast/system/transformer.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_builder_factory.hpp"
+#include "vast/type_set.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/stream_source.hpp>
@@ -46,7 +52,11 @@ struct source_state {
   accountant_actor accountant;
 
   /// Actor that receives events.
-  stream_sink_actor<table_slice, std::string> sink;
+  transformer_actor transformer;
+
+  /// The `source` only supports a single sink, so we track here if we
+  /// already got it.
+  bool has_sink;
 
   /// Wraps the format-specific parser.
   format::reader_ptr reader;
@@ -104,6 +114,7 @@ caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
        const type_registry_actor& type_registry, vast::schema local_schema,
-       std::string type_filter, accountant_actor accountant);
+       std::string type_filter, accountant_actor accountant,
+       std::vector<transform>&& input_transformations);
 
 } // namespace vast::system

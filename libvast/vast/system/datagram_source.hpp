@@ -51,12 +51,14 @@ using datagram_source_actor
 /// @oaram local_schema Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
+/// @param transforms This is currently ignored.
 caf::behavior
 datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
                 format::reader_ptr reader, size_t table_slice_size,
                 caf::optional<size_t> max_events,
                 const type_registry_actor& type_registry,
                 vast::schema local_schema, std::string type_filter,
-                accountant_actor accountant);
+                accountant_actor accountant,
+                std::vector<transform>&& transforms);
 
 } // namespace vast::system

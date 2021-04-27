@@ -62,7 +62,8 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
     st.query.cached -= rows;
     st.query.requested -= rows;
     st.query.shipped += rows;
-    self->anon_send(st.sink, std::move(slice));
+    auto transformed = self->state.transformer.apply(std::move(slice));
+    self->anon_send(st.sink, std::move(*transformed));
   }
 }
 
@@ -176,9 +177,10 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options) {
+         query_options options, std::vector<transform>&& transforms) {
   self->state.options = options;
   self->state.expr = std::move(expr);
+  self->state.transformer = transformation_engine{std::move(transforms)};
   if (has_continuous_option(options))
     VAST_DEBUG("{} has continuous query option", self);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
