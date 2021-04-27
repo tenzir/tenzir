@@ -35,8 +35,7 @@ struct parser {
   }
 
   template <class Action>
-  [[nodiscard]] [[nodiscard]] [[nodiscard]] [[nodiscard]] [[nodiscard]] auto
-  then(Action fun) const {
+  [[nodiscard]] auto then(Action fun) const {
     return action_parser<Derived, Action>{derived(), fun};
   }
 
@@ -46,7 +45,7 @@ struct parser {
   }
 
   template <class Guard>
-  [[nodiscard]] [[nodiscard]] auto with(Guard fun) const {
+  [[nodiscard]] auto with(Guard fun) const {
     return guard_parser<Derived, Guard>{derived(), fun};
   }
 

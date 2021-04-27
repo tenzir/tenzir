@@ -35,7 +35,7 @@ struct printer {
   }
 
   template <class Guard>
-  [[nodiscard]] [[nodiscard]] auto with(Guard fun) const {
+  [[nodiscard]] auto with(Guard fun) const {
     return guard_printer<Derived, Guard>{derived(), fun};
   }
 
