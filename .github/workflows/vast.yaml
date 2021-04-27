@@ -1,4 +1,4 @@
-name: "VAST"
+name: VAST
 on:
   push:
     branches:
@@ -16,24 +16,10 @@ on:
   release:
     types: published
 
-env:
-  CMAKE_GENERATOR: Ninja
-  CMAKE_MAKE_PROGRAM: ninja
-  CMAKE_C_COMPILER_LAUNCHER: ccache
-  CMAKE_CXX_COMPILER_LAUNCHER: ccache
-  CCACHE_HASH_DIR: true
-  CCACHE_UNIFY: true
-  CCACHE_SLOPPINESS: 'file_macro,time_macros'
-  CCACHE_DIR: '${{ github.workspace }}/.ccache'
-  CCACHE_COMPRESS: true
-  CCACHE_COMPRESSLEVEL: 9
-  CCACHE_ABSSTDERR: true
-  BUILD_DIR: build
 jobs:
   build-debian:
     name: Debian - ${{ matrix.build.compiler }} ${{ matrix.configure.tag }}
     runs-on: ubuntu-20.04
-    # run everything inside a Debian container on an ubuntu-20.04 host
     container: debian:buster-backports
     strategy:
       fail-fast: false
@@ -56,10 +42,22 @@ jobs:
           flags: --release
           ci-flags: --ci-build
     env:
-      DEBIAN_FRONTEND: noninteractive
-      DOCKER_BUILDKIT: 1
+      BUILD_DIR: build
       CC: ${{ matrix.build.cc }}
       CXX: ${{ matrix.build.cxx }}
+      CCACHE_ABSSTDERR: true
+      CCACHE_COMPRESS: true
+      CCACHE_COMPRESSLEVEL: 9
+      CCACHE_DIR: '${{ github.workspace }}/.ccache'
+      CCACHE_HASH_DIR: true
+      CCACHE_SLOPPINESS: 'file_macro,time_macros'
+      CCACHE_UNIFY: true
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      DEBIAN_FRONTEND: noninteractive
+      DOCKER_BUILDKIT: 1
     steps:
       - name: Install Dependencies
         run: |
@@ -195,7 +193,6 @@ jobs:
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
-            --with-example-plugin \
             --with-lsvast \
             --with-dscat \
             --with-bundled-caf \
@@ -320,8 +317,20 @@ jobs:
           flags: --release
           ci-flags: --ci-build
     env:
+      BUILD_DIR: build
       CC: ${{ matrix.build.cc }}
       CXX: ${{ matrix.build.cxx }}
+      CCACHE_ABSSTDERR: true
+      CCACHE_COMPRESS: true
+      CCACHE_COMPRESSLEVEL: 9
+      CCACHE_DIR: '${{ github.workspace }}/.ccache'
+      CCACHE_HASH_DIR: true
+      CCACHE_SLOPPINESS: 'file_macro,time_macros'
+      CCACHE_UNIFY: true
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
     steps:
       - uses: actions/checkout@v2
         with:
@@ -427,7 +436,6 @@ jobs:
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
-            --with-example-plugin \
             --with-pcap-plugin \
             --with-lsvast \
             --with-dscat \
@@ -513,3 +521,91 @@ jobs:
           # for builds of the latest release.
           asset_name: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
           asset_content_type: application/gzip
+
+  plugins:
+    runs-on: ubuntu-20.04
+    needs: build-debian
+    container: debian:buster-backports
+    strategy:
+      matrix:
+        plugin:
+          - name: Example
+            target: example
+            path: examples/plugins/example
+    env:
+      INSTALL_DIR: '${{ github.workspace }}/_install'
+      BUILD_DIR: '${{ github.workspace }}/_build'
+      CC: 'gcc'
+      CXX: 'g++'
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      CTEST_OUTPUT_ON_FAILURE: YES
+      DEBIAN_FRONTEND: noninteractive
+      DESTDIR: '${{ github.workspace }}'
+    name: ${{ matrix.plugin.name }} Plugin
+    steps:
+      - name: Install Dependencies
+        run: |
+          apt-get update
+          apt-get -y install git libsnappy-dev libbrotli-dev zlib1g-dev wget liblz4-dev libzstd-dev ninja-build libpcap-dev libssl-dev libbenchmark-dev tcpdump lsb-release libflatbuffers-dev flatbuffers-compiler-dev libyaml-cpp-dev libsimdjson-dev gnupg2 gcc-8 g++-8 python3 python3-pip python3-venv jq apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+          # Need to specify backports explicitly, since spdlog and fmt also have
+          # buster packages.
+          apt-get -y -t buster-backports install libspdlog-dev libfmt-dev
+          # Apache Arrow (c.f. https://arrow.apache.org/install/)
+          wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+          apt-get -y install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+          sed -i'' -e 's,https://apache.bintray.com/,https://apache.jfrog.io/artifactory/,g' /etc/apt/sources.list.d/apache-arrow.sources
+          apt-get update
+          apt-get -y install libarrow-dev
+          # Install CMake from pip
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --upgrade cmake
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Fetch Submodules
+        run: |
+          git submodule update --init --recursive '${{ matrix.plugin.path }}'
+      - name: Determine VAST Package Name
+        id: configure
+        run: |
+          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-release-gcc" | awk '{ print tolower($0) }')"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+      - name: Download VAST
+        uses: actions/download-artifact@v2
+        with:
+          name: '${{ env.PACKAGE_NAME }}.tar.gz'
+      - name: Install VAST
+        run: |
+          mkdir ${INSTALL_DIR}
+          tar -C ${INSTALL_DIR} -xzvf "${PACKAGE_NAME}.tar.gz" --strip-components 1
+          echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
+      - name: Configure Build
+        env:
+          VAST_DIR: '${{ env.INSTALL_DIR }}'
+        run: |
+          python3 --version
+          python3 -m pip --version
+          cmake --version
+          cmake -S '${{ matrix.plugin.path }}' -B "$BUILD_DIR"
+      - name: Build
+        run: |
+          cmake --build "$BUILD_DIR" --target all --parallel
+      - name: Run Unit Tests
+        run: |
+          cmake --build "$BUILD_DIR" --target test
+      - name: Run Integration Tests
+        id: integration_tests
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Upload Integration Test Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v2
+        with:
+          name: 'vast-${{ matrix.plugin.target }}-integration-test'
+          path: '${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test'
+          if-no-files-found: ignore
+      - name: Install
+        run: |
+          cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
