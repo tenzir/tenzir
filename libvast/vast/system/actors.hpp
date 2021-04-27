@@ -230,12 +230,8 @@ using archive_actor = typed_actor_fwd<
   caf::reacts_to<atom::internal, atom::resume>,
   // The internal telemetry loop of the ARCHIVE.
   caf::reacts_to<atom::telemetry>>
-  // Conform to the protocol of the STORE actor.
-  ::extend_with<store_actor>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the procotol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+  // Conform to the protocol of the STORE BUILDER actor.
+  ::extend_with<store_builder_actor>::unwrap;
 
 /// The TYPE REGISTRY actor interface.
 using type_registry_actor = typed_actor_fwd<

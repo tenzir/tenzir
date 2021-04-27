@@ -112,7 +112,7 @@ struct importer_state {
 /// @param type_registry A handle to the type-registry module.
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, const store_actor& store,
+         const std::filesystem::path& dir, const store_builder_actor& store,
          index_actor index, const type_registry_actor& type_registry);
 
 } // namespace vast::system
