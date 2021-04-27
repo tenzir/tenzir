@@ -780,6 +780,9 @@ TEST(si count) {
   CHECK_EQUAL(to_count("8Gi"), 8_Gi);
   CHECK_EQUAL(to_count("9Ti"), 9_Ti);
   CHECK_EQUAL(to_count("10Ei"), 10_Ei);
+  MESSAGE("spaces before unit");
+  CHECK_EQUAL(to_count("1 Mi"), 1_Mi);
+  CHECK_EQUAL(to_count("1  Mi"), 1_Mi);
 }
 
 TEST(si int) {
