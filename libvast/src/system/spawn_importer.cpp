@@ -11,9 +11,14 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/logger.hpp"
+#include "vast/qualified_record_field.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/importer.hpp"
+#include "vast/system/make_transforms.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/system/transformer.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/settings.hpp>
@@ -30,6 +35,10 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   auto [archive, index, type_registry, accountant]
     = self->state.registry.find<archive_actor, index_actor, type_registry_actor,
                                 accountant_actor>();
+  auto transforms
+    = make_transforms(transforms_location::server_import, args.inv.options);
+  if (!transforms)
+    return transforms.error();
   if (!archive)
     return caf::make_error(ec::missing_component, "archive");
   if (!index)
@@ -37,7 +46,7 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   if (!type_registry)
     return caf::make_error(ec::missing_component, "type-registry");
   auto handle = self->spawn(importer, args.dir / args.label, archive, index,
-                            type_registry);
+                            type_registry, std::move(*transforms));
   VAST_VERBOSE("{} spawned the importer", self);
   if (accountant) {
     self->send(handle, atom::telemetry_v);

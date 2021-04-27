@@ -19,6 +19,7 @@ namespace vast::system {
 /// Tries to spawn a new IMPORTER.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
+/// @param transforms Input transformations to be applied.
 /// @returns a handle to the spawned actor on success, an error otherwise
 caf::expected<caf::actor>
 spawn_importer(node_actor::stateful_pointer<node_state> self,

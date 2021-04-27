@@ -226,6 +226,15 @@ public:
   make_writer(const caf::settings& options) const = 0;
 };
 
+// -- transform plugin ---------------------------------------------------------
+
+/// A base class for plugins that add new transform steps.
+class transform_plugin : public virtual plugin {
+public:
+  [[nodiscard]] virtual caf::expected<transform_step_ptr>
+  make_transform_step(const caf::settings&) const = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.

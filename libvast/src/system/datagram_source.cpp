@@ -41,7 +41,10 @@ caf::behavior datagram_source(
   uint16_t udp_listening_port, format::reader_ptr reader,
   size_t table_slice_size, std::optional<size_t> max_events,
   const type_registry_actor& type_registry, vast::schema local_schema,
-  std::string type_filter, accountant_actor accountant) {
+  std::string type_filter, accountant_actor accountant, std::vector<transform>&& transforms) {
+  if (!transforms.empty()) {
+    VAST_WARN("{} ignores configured transforms; not supported yet", self);
+  }
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -58,7 +61,6 @@ caf::behavior datagram_source(
   self->state.local_schema = std::move(local_schema);
   self->state.accountant = std::move(accountant);
   self->state.table_slice_size = table_slice_size;
-  self->state.sink = nullptr;
   self->state.done = false;
   // Register with the accountant.
   self->send(self->state.accountant, atom::announce_v, self->state.name);

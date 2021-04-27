@@ -12,8 +12,10 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
+#include "vast/qualified_record_field.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/transformer.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
@@ -84,6 +86,8 @@ struct importer_state {
                         caf::broadcast_downstream_manager<table_slice>>
     stage;
 
+  transformer_actor transformer;
+
   /// Pointer to the owning actor.
   importer_actor::pointer self;
 
@@ -113,6 +117,7 @@ struct importer_state {
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, const store_builder_actor& store,
-         index_actor index, const type_registry_actor& type_registry);
+         index_actor index, const type_registry_actor& type_registry,
+         std::vector<transform>&& input_transformations = {});
 
 } // namespace vast::system

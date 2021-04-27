@@ -85,6 +85,8 @@ class synopsis;
 class table_slice;
 class table_slice_builder;
 class table_slice_column;
+class transform;
+class transform_step;
 class type;
 class uuid;
 class value_index;
@@ -161,6 +163,7 @@ using column_index_ptr = std::unique_ptr<column_index>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
+using transform_step_ptr = std::unique_ptr<transform_step>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.

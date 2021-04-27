@@ -12,6 +12,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/make_source.hpp"
+#include "vast/system/make_transforms.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
 #include <caf/settings.hpp>
@@ -30,6 +31,10 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
                            "unable to spawn a remote source when spawning a "
                            "node locally instead of connecting to one; please "
                            "unset the option vast.node");
+  auto transforms
+    = make_transforms(transforms_location::client_source, args.inv.options);
+  if (!transforms)
+    return transforms.error();
   auto [accountant, importer, type_registry]
     = self->state.registry
         .find<accountant_actor, importer_actor, type_registry_actor>();
@@ -42,7 +47,8 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
     = make_source(self->system(), format, args.inv,
                   caf::actor_cast<accountant_actor>(accountant),
                   caf::actor_cast<type_registry_actor>(type_registry),
-                  caf::actor_cast<importer_actor>(importer), true);
+                  caf::actor_cast<importer_actor>(importer),
+                  std::move(*transforms), true);
   if (!src_result)
     return src_result.error();
   auto src = *src_result;

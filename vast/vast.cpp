@@ -26,6 +26,7 @@
 #include "vast/schema.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
+#include "vast/system/make_transforms.hpp"
 
 #include <caf/actor_system.hpp>
 
@@ -154,6 +155,15 @@ int main(int argc, char** argv) {
                  init_err);
       return EXIT_FAILURE;
     }
+  }
+  // Eagerly verify the export transform configuration, to avoid hidden
+  // configuration errors that pop up the first time a user tries to run
+  // `vast export`.
+  if (auto err
+      = make_transforms(transforms_location::server_export, cfg.content);
+      !err) {
+    VAST_ERROR("invalid export transform configuration: {}", err.error());
+    return EXIT_FAILURE;
   }
   // Set up the event types singleton.
   if (auto schema = load_schema(cfg)) {

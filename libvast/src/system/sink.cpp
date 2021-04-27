@@ -40,8 +40,17 @@ void sink_state::send_report() {
 
 caf::behavior sink(caf::stateful_actor<sink_state>* self,
                    format::writer_ptr&& writer, uint64_t max_events) {
+  return transforming_sink(self, std::move(writer), std::vector<transform>{},
+                           max_events);
+}
+
+caf::behavior
+transforming_sink(caf::stateful_actor<sink_state>* self,
+                  format::writer_ptr&& writer,
+                  std::vector<transform>&& transforms, uint64_t max_events) {
   using namespace std::chrono;
   self->state.writer = std::move(writer);
+  self->state.transforms = transformation_engine{std::move(transforms)};
   self->state.name = self->state.writer->name();
   self->state.last_flush = steady_clock::now();
   if (max_events > 0) {
@@ -65,6 +74,13 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
         VAST_INFO("{} received first result with a latency of {}",
                   self->state.name, to_string(time_since_flush));
       }
+      auto transformed = self->state.transforms.apply(std::move(slice));
+      if (!transformed) {
+        VAST_WARN("discarding slice; error in output transformation: {}",
+                  transformed.error());
+        return;
+      }
+      slice = std::move(*transformed);
       auto reached_max_events = [&] {
         VAST_INFO("{} reached limit of {} events", self,
                   self->state.max_events);

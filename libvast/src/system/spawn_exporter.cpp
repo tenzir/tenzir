@@ -14,8 +14,10 @@
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/exporter.hpp"
+#include "vast/system/make_transforms.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/system/transformer.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
@@ -33,6 +35,10 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   auto expr = get_expression(args);
   if (!expr)
     return expr.error();
+  auto transforms
+    = make_transforms(transforms_location::server_export, args.inv.options);
+  if (!transforms)
+    return transforms.error();
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))
@@ -45,7 +51,8 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   // Check if we need to preserve ids during export.
   if (get_or(args.inv.options, "vast.export.preserve-ids", false))
     query_opts = query_opts + preserve_ids;
-  auto handle = self->spawn(exporter, *expr, query_opts);
+  auto handle
+    = self->spawn(exporter, *expr, query_opts, std::move(*transforms));
   VAST_VERBOSE("{} spawned an exporter for {}", self, to_string(*expr));
   // Wire the exporter to all components.
   auto [accountant, importer, index]

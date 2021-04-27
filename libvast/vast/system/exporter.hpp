@@ -16,6 +16,7 @@
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/query_status.hpp"
+#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
@@ -34,6 +35,9 @@ struct exporter_state {
 
   /// Stores a handle to the INDEX for querying results.
   index_actor index;
+
+  /// Stores a transformation_engine for transforming the results.
+  transformation_engine transformer;
 
   /// Stores a handle to the SINK that processes results.
   caf::actor sink;
@@ -73,9 +77,10 @@ struct exporter_state {
 /// It also performs a candidate check to filter out false positives.
 /// @param self The actor handle of the exporter.
 /// @param expr The AST of the query.
-/// @param opts The query options.
+/// @param options The query options.
+/// @param transforms The applied transforms.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options);
+         query_options options, std::vector<transform>&& transforms);
 
 } // namespace vast::system

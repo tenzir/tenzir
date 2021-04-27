@@ -381,6 +381,19 @@ using datagram_source_actor
   // Conform to the protocol of the SOURCE actor.
   ::extend_with<source_actor>::unwrap_as_broker;
 
+/// The interface of an TRANSFORMER actor.
+using transformer_actor = typed_actor_fwd<
+  caf::reacts_to<stream_sink_actor<table_slice>>,
+  // The `int` is a dummy argument to disambiguate the call.
+  caf::replies_to<stream_sink_actor<table_slice>, int>::with< //
+    caf::outbound_stream_slot<table_slice>>,
+  // Named stream. (TODO: Switch to varargs)
+  caf::reacts_to<stream_sink_actor<table_slice, std::string>, std::string>>
+  // Conform to the protocol of the STREAM SINK actor for table slices
+  ::extend_with<stream_sink_actor<table_slice>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
+
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
   // Run an invocation in the node.
