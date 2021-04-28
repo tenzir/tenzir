@@ -75,10 +75,11 @@ load_plugin(const std::filesystem::path& path_or_name,
     // current working directory.
     if (specified_by_name && root.empty())
       return caf::no_error;
-    auto file
-      = specified_by_name
-          ? root / std::filesystem::path{"lib" + path_or_name.string() + ext}
-          : path_or_name;
+    auto file = specified_by_name
+                  ? root
+                      / std::filesystem::path{"libvast-plugin-"
+                                              + path_or_name.string() + ext}
+                  : path_or_name;
     if (!file.is_absolute() && !root.empty())
       file = root / file;
     if (!exists(file))
