@@ -61,7 +61,7 @@ file(
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
      app=\"$<TARGET_FILE:vast::vast>\"
      set -e
-     if [ ! -d \"$env_dir\" ]; then
+     if [ ! -f \"$env_dir/bin/activate\" ]; then
        python3 -m venv \"$env_dir\"
      fi
      . \"$env_dir/bin/activate\"
