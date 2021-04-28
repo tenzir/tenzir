@@ -55,6 +55,28 @@ function (VASTRegisterPlugin)
   set_property(GLOBAL APPEND PROPERTY "VAST_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY"
                                       "${PROJECT_SOURCE_DIR}")
 
+  # Set a default build type if none was specified
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    set(default_build_type "Release")
+    if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
+      set(default_build_type "Debug")
+    endif ()
+
+    if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+      message(
+        STATUS
+          "Setting build type to '${default_build_type}' as none was specified."
+      )
+      set(CMAKE_BUILD_TYPE
+          "${default_build_type}"
+          CACHE STRING "Choose the type of build." FORCE)
+      # Set the possible values of build type for cmake-gui
+      set_property(
+        CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel"
+                                        "RelWithDebInfo")
+    endif ()
+  endif ()
+
   include(GNUInstallDirs)
 
   cmake_parse_arguments(PLUGIN "" "TARGET;ENTRYPOINT" "SOURCES;TEST_SOURCES"
@@ -247,7 +269,7 @@ function (VASTRegisterPlugin)
         env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
         app=\"$<TARGET_FILE:vast::vast>\"
         set -e
-        if [ ! -d \"$env_dir\" ]; then
+        if [ ! -f \"$env_dir/bin/activate\" ]; then
           python3 -m venv \"$env_dir\"
         fi
         . \"$env_dir/bin/activate\"
