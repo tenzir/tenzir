@@ -170,7 +170,7 @@ proceedings][nsdi-proceedings].
 [changelog-url]: CHANGELOG.md
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
-[since-release-url]: https://github.com/tenzir/vast/compare/2021.03.25...master
+[since-release-url]: https://github.com/tenzir/vast/compare/2021.04.29...master
 [installation-url]: INSTALLATION.md
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
