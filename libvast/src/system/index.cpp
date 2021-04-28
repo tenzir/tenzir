@@ -528,10 +528,9 @@ index_state::index_filename(const std::filesystem::path& basename) const {
 
 caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
-  VAST_DEBUG("{} persists {} uuids of definitely persisted and {}"
+  VAST_DEBUG("index persists {} uuids of definitely persisted and {}"
              "uuids of maybe persisted partitions",
-             state.self, state.persisted_partitions.size(),
-             state.unpersisted.size());
+             state.persisted_partitions.size(), state.unpersisted.size());
   std::vector<flatbuffers::Offset<fbs::uuid::v0>> partition_offsets;
   for (auto uuid : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
