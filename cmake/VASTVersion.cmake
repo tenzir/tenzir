@@ -79,9 +79,11 @@ get_filename_component(parent_dir "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
 file(
   GLOB_RECURSE
   hash_files
+  "${parent_dir}/libvast/*.cpp"
+  "${parent_dir}/libvast/*.cpp.in"
+  "${parent_dir}/libvast/*.fbs"
   "${parent_dir}/libvast/*.hpp"
   "${parent_dir}/libvast/*.hpp.in"
-  "${parent_dir}/libvast/*.cpp"
   "${parent_dir}/cmake/*"
   "${parent_dir}/CMakeLists.txt")
 list(SORT hash_files)
