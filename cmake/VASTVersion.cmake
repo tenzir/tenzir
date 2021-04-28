@@ -75,23 +75,23 @@ if (POLICY CMP0009)
   cmake_policy(SET CMP0009 NEW)
 endif ()
 
+get_filename_component(parent_dir "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
 file(
   GLOB_RECURSE
   hash_files
-  "${CMAKE_CURRENT_LIST_DIR}/../libvast/*.hpp"
-  "${CMAKE_CURRENT_LIST_DIR}/../libvast/*.hpp.in"
-  "${CMAKE_CURRENT_LIST_DIR}/../libvast/*.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/../cmake/*"
-  "${CMAKE_CURRENT_LIST_DIR}/../CMakeLists.txt")
+  "${parent_dir}/libvast/*.cpp"
+  "${parent_dir}/libvast/*.cpp.in"
+  "${parent_dir}/libvast/*.fbs"
+  "${parent_dir}/libvast/*.hpp"
+  "${parent_dir}/libvast/*.hpp.in"
+  "${parent_dir}/cmake/*"
+  "${parent_dir}/CMakeLists.txt")
 list(SORT hash_files)
 
 cmake_policy(POP)
 
-list(FILTER hash_files EXCLUDE REGEX
-     "^${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/")
-
-list(FILTER hash_files EXCLUDE REGEX
-     "^${CMAKE_CURRENT_SOURCE_DIR}/libvast/test/")
+list(FILTER hash_files EXCLUDE REGEX "^${parent_dir}/libvast/aux/")
+list(FILTER hash_files EXCLUDE REGEX "^${parent_dir}/libvast/test/")
 
 list(
   SORT hash_files
