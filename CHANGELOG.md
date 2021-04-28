@@ -73,7 +73,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1547](https://github.com/tenzir/vast/pull/1547)
   [#1588](https://github.com/tenzir/vast/pull/1588)
 
-- *Reader Plugins* and *Writer Plugins* are a new family opf plugins that add import/export formats. The previously optional PCAP format moved into a dedicated plugin. Configure with `--with-pcap-plugin` and add `pcap` to `vast.plugins` to enable the PCAP plugin.
+- *Reader Plugins* and *Writer Plugins* are a new family of plugins that add import/export formats. The previously optional PCAP format moved into a dedicated plugin. Configure with `--with-pcap-plugin` and add `pcap` to `vast.plugins` to enable the PCAP plugin.
   [#1549](https://github.com/tenzir/vast/pull/1549)
 
 ### :beetle: Bug Fixes
