@@ -115,24 +115,12 @@ add_feature_info("VAST_ENABLE_STATIC_PLUGINS" VAST_ENABLE_STATIC_PLUGINS
       "Force plugins to be linked statically.")
 if (VAST_PLUGINS)
   foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
-    if (NOT IS_ABSOLUTE "${plugin_source_dir}"
-        OR NOT EXISTS "${plugin_source_dir}/CMakeLists.txt")
-      message(
-        FATAL_ERROR
-          "Specified plugin \"${plugin_source_dir}\" must be an absolute path to an existing directory that contains a CMakeLists.txt file."
-      )
+    if (NOT IS_ABSOLUTE "${plugin_source_dir}")
+      string(PREPEND plugin_source_dir "${PROJECT_SOURCE_DIR}/")
     endif ()
-    # Note that we must explicitly specify a binary directory, because the
-    # plugin source directory may not be a subdirectory of the current list
-    # directory.
-    string(MD5 plugin_path_hash "${plugin_source_dir}")
-    string(SUBSTRING "${plugin_path_hash}" 0 8 plugin_path_hash)
-    get_filename_component(plugin_name "${plugin_source_dir}" NAME)
-    string(TOLOWER "${plugin_name}" plugin_name)
-    list(APPEND bundled_plugins "${plugin_name}")
-    set(plugin_binary_dir "plugin-${plugin_name}-${plugin_path_hash}")
+    get_filename_component(plugin_binary_dir "${plugin_source_dir}" NAME)
+    string(PREPEND plugin_binary_dir "${PROJECT_BINARY_DIR}/plugins/")
     add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
-    dependency_summary("${plugin_name}" "${plugin_source_dir}" "Plugins")
   endforeach ()
 endif ()
 
@@ -141,10 +129,12 @@ cmake_dependent_option(VAST_ENABLE_PLUGIN_AUTOLOADING
 add_feature_info(
   "VAST_ENABLE_PLUGIN_AUTOLOADING" VAST_ENABLE_PLUGIN_AUTOLOADING
   "always load all bundled plugins.")
-if (VAST_ENABLE_PLUGIN_AUTOLOADING AND bundled_plugins)
-  list(TRANSFORM bundled_plugins PREPEND "\"")
-  list(TRANSFORM bundled_plugins APPEND "\"")
-  list(JOIN bundled_plugins ", " joined_bundled_plugins)
+get_property(VAST_BUNDLED_PLUGINS GLOBAL
+  PROPERTY "VAST_BUNDLED_PLUGINS_PROPERTY")
+if (VAST_ENABLE_PLUGIN_AUTOLOADING AND VAST_BUNDLED_PLUGINS)
+  list(TRANSFORM VAST_BUNDLED_PLUGINS PREPEND "\"")
+  list(TRANSFORM VAST_BUNDLED_PLUGINS APPEND "\"")
+  list(JOIN VAST_BUNDLED_PLUGINS "," joined_bundled_plugins)
   target_compile_definitions(
     vast PRIVATE "VAST_ENABLED_PLUGINS=${joined_bundled_plugins}")
 endif ()
