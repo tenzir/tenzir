@@ -10,6 +10,14 @@
 
 #include "vast/fwd.hpp"
 
+// clang-format off
+// We need to define SPDLOG_ACTIVE_LEVEL before we include spdlog.h,
+// so we have to include `logger.hpp` first in case someone else is
+// including this header directly without going through `vast/logger.hpp`
+// himself.
+#include "vast/logger.hpp"
+// clang-format on
+
 #include "vast/concept/printable/print.hpp"
 #include "vast/detail/logger.hpp"
 #include "vast/detail/type_traits.hpp"
