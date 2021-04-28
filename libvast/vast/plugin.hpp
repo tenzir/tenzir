@@ -12,6 +12,7 @@
 
 #include "vast/command.hpp"
 #include "vast/config.hpp"
+#include "vast/detail/pp.hpp"
 #include "vast/system/actors.hpp"
 
 #include <caf/actor_system_config.hpp>
