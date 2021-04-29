@@ -322,10 +322,13 @@ function (VASTRegisterPlugin)
     add_dependencies(integration ${PLUGIN_TARGET}-integration)
   endif ()
 
-  # Provide niceties for external plugins that are usually part of VAST.
-  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
-    # Support tools like clang-tidy by creating a compilation database and
-    # copying it to the project root.
+  if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    # Provide niceties for building alongside VAST.
+    dependency_summary("${PLUGIN_TARGET}" "${CMAKE_CURRENT_LIST_DIR}" "Plugins")
+    set_property(GLOBAL APPEND PROPERTY "VAST_BUNDLED_PLUGINS_PROPERTY"
+                                        "${PLUGIN_TARGET}")
+  else ()
+    # Provide niceties for external plugins that are usually part of VAST.
     VASTExportCompileCommands(${PLUGIN_TARGET})
   endif ()
 endfunction ()
