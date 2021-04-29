@@ -6,7 +6,7 @@ This file is generated automatically. Add indivual changelog entries to the'chan
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.04.29-rc3]
+## [2021.04.29]
 
 ### :zap: Breaking Changes
 
@@ -21,6 +21,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Plugins must define a separate entrypoint in their build scaffolding using the argument `ENTRYPOINT` to the CMake function `VASTRegisterPlugin`. If only a single value is given to the argument `SOURCES`, it is interpreted as the `ENTRYPOINT` automatically.
   [#1549](https://github.com/tenzir/vast/pull/1549)
+
+- To avoid confusion between the PCAP plugin and libpcap, which both have a library file named `libpcap.so`, we now generally prefix the plugin library output names with `vast-plugin-`. E.g., The PCAP plugin library file is now named `libvast-plugin-pcap.so`. Plugins specified with a full path in the configuration under `vast.plugins` must be adapted accordingly.
+  [#1593](https://github.com/tenzir/vast/pull/1593)
 
 ### :warning: Changes
 
@@ -50,6 +53,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Building VAST now requires CMake >= 3.15.
   [#1559](https://github.com/tenzir/vast/pull/1559)
 
+- The VAST community chat moved from Element to Gitter. Join us at [gitter.im/tenzir/vast](https://gitter.im/tenzir/vast) or via Matrix at `#tenzir_vast:gitter.im`.
+  [#1591](https://github.com/tenzir/vast/pull/1591)
+
 ### :gift: Features
 
 - The disk monitor gained a new `vast.start.disk-budget-check-binary` option that can be used to specify an external binary to determine the size of the database directory. This can be useful in cases where `stat()` does not give the correct answer, e.g. on compressed filesystems.
@@ -65,8 +71,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - *Component Plugins* are a new category of plugins that execute code within the VAST server process. *Analyzer Plugins* are now a specialization of *Component Plugins*, and their API remains unchanged.
   [#1544](https://github.com/tenzir/vast/pull/1544)
   [#1547](https://github.com/tenzir/vast/pull/1547)
+  [#1588](https://github.com/tenzir/vast/pull/1588)
 
-- *Reader Plugins* and *Writer Plugins* are a new family opf plugins that add import/export formats. The previously optional PCAP format moved into a dedicated plugin. Configure with `--with-pcap-plugin` and add `pcap` to `vast.plugins` to enable the PCAP plugin.
+- *Reader Plugins* and *Writer Plugins* are a new family of plugins that add import/export formats. The previously optional PCAP format moved into a dedicated plugin. Configure with `--with-pcap-plugin` and add `pcap` to `vast.plugins` to enable the PCAP plugin.
   [#1549](https://github.com/tenzir/vast/pull/1549)
 
 ### :beetle: Bug Fixes
@@ -118,6 +125,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Specifying relative `CMAKE_INSTALL_*DIR` in the build configuration no longer causes VAST not to pick up system-wide installed configuration files, schemas, and plugins. The configured install prefix is now used correctly. The defunct `VAST_SYSCONFDIR`, `VAST_DATADIR`, and `VAST_LIBDIR` CMake options no longer exist. Use a combination of `CMAKE_INSTALL_PREFIX` and `CMAKE_INSTALL_*DIR` instead.
   [#1580](https://github.com/tenzir/vast/pull/1580)
+
+- Spaces before SI prefixes in command line arguments and configuration options are now generally ignored, e.g., it is now possible to set the disk monitor budgets to `2 GiB` rather than `2GiB`.
+  [#1590](https://github.com/tenzir/vast/pull/1590)
 
 ## [2021.03.25]
 
@@ -1071,7 +1081,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.04.29-rc3]: https://github.com/tenzir/vast/releases/tag/2021.04.29-rc3
+[2021.04.29]: https://github.com/tenzir/vast/releases/tag/2021.04.29
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
 [2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
 [2021.01.28]: https://github.com/tenzir/vast/releases/tag/2021.01.28
