@@ -650,8 +650,8 @@ bool arrow_table_slice_builder::add_impl(data_view x) {
 std::shared_ptr<arrow::Schema> make_arrow_schema(const record_type& t) {
   std::vector<std::shared_ptr<arrow::Field>> arrow_fields;
   arrow_fields.reserve(t.fields.size());
-  for (auto& field : t.fields) {
-    auto field_ptr = arrow::field(field.name, make_arrow_type(field.type));
+  for (const auto& field : record_type::each(t)) {
+    auto field_ptr = arrow::field(field.key(), make_arrow_type(field.type()));
     arrow_fields.emplace_back(std::move(field_ptr));
   }
   auto metadata = arrow::key_value_metadata({{"name", t.name()}});
