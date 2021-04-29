@@ -32,7 +32,7 @@ extern const char* build_tree_hash;
 
 } // namespace vast::version
 
-#define VAST_SCHEMADIR "@CMAKE_INSTALL_FULL_DATADIR@/vast/schema"
+#define VAST_DATADIR "@CMAKE_INSTALL_FULL_DATADIR@/vast"
 #define VAST_CONFIGDIR "@CMAKE_INSTALL_FULL_SYSCONFDIR@/vast"
 #define VAST_PLUGINDIR "@CMAKE_INSTALL_FULL_LIBDIR@/vast/plugins"
 
