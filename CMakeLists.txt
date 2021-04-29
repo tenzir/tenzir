@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
 # -- project setup -------------------------------------------------------------
 
 # Semicolon-separated list of directories specifying a search path for CMake.
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(VAST_VERSION_TAG_BACKUP "${VAST_VERSION_TAG}")
 include(VASTVersion)
 
