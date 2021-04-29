@@ -52,8 +52,14 @@ record retrieve_versions() {
   result["jemalloc"] = data{};
 #endif
   record plugin_versions;
-  for (auto& plugin : plugins::get())
-    plugin_versions[plugin->name()] = to_string(plugin.version());
+  for (auto& plugin : plugins::get()) {
+    const auto& version = plugin.version();
+    if (version.major == version::major && version.minor == version::minor
+        && version.patch == version::patch && version.tweak == version::tweak)
+      plugin_versions[plugin->name()] = version::version;
+    else
+      plugin_versions[plugin->name()] = to_string(version);
+  }
   result["plugins"] = std::move(plugin_versions);
   return result;
 }

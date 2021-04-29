@@ -12,6 +12,7 @@
 
 #include "vast/command.hpp"
 #include "vast/config.hpp"
+#include "vast/detail/pp.hpp"
 #include "vast/system/actors.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -303,8 +304,7 @@ private:
 
 #if defined(VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
 
-// NOLINTNEXTLINE
-#  define VAST_REGISTER_PLUGIN(name, major, minor, tweak, patch)               \
+#  define VAST_REGISTER_PLUGIN_5(name, major, minor, patch, tweak)             \
     template <class Plugin>                                                    \
     struct auto_register_plugin {                                              \
       auto_register_plugin() {                                                 \
@@ -313,19 +313,13 @@ private:
       static bool init() {                                                     \
         ::vast::plugins::get().push_back(::vast::plugin_ptr::make(             \
           new Plugin, +[](::vast::plugin* plugin) noexcept { delete plugin; }, \
-          ::vast::plugin_version{major, minor, tweak, patch}));                \
+          ::vast::plugin_version{major, minor, patch, tweak}));                \
         return true;                                                           \
       }                                                                        \
       inline static auto flag = init();                                        \
     };                                                                         \
     template struct auto_register_plugin<name>;
 
-// NOLINTNEXTLINE
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                              \
-    VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_, __VA_ARGS__)         \
-    (__VA_ARGS__)
-
-// NOLINTNEXTLINE
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     struct auto_register_type_id_##name {                                      \
       auto_register_type_id_##name() {                                         \
@@ -343,34 +337,13 @@ private:
       inline static auto flag = init();                                        \
     };
 
-// NOLINTNEXTLINE
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                   \
-    struct auto_register_type_id_##name1##name2 {                              \
-      auto_register_type_id_##name1##name2() {                                 \
-        static_cast<void>(flag);                                               \
-      }                                                                        \
-      static bool init() {                                                     \
-        ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
-          ::vast::plugin_type_id_block{::caf::id_block::name1::begin,          \
-                                       ::caf::id_block::name1::end},           \
-          +[](::caf::actor_system_config& cfg) noexcept {                      \
-            cfg.add_message_types<::caf::id_block::name1>();                   \
-          });                                                                  \
-        ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
-          ::vast::plugin_type_id_block{::caf::id_block::name2::begin,          \
-                                       ::caf::id_block::name2::end},           \
-          +[](::caf::actor_system_config& cfg) noexcept {                      \
-            cfg.add_message_types<::caf::id_block::name2>();                   \
-          });                                                                  \
-        return true;                                                           \
-      }                                                                        \
-      inline static auto flag = init();                                        \
-    };
+    VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name1)                                \
+    VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name2)
 
 #else // if !defined(VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
 
-// NOLINTNEXTLINE
-#  define VAST_REGISTER_PLUGIN(name, major, minor, tweak, patch)               \
+#  define VAST_REGISTER_PLUGIN_5(name, major, minor, patch, tweak)             \
     extern "C" ::vast::plugin* vast_plugin_create() {                          \
       return new (name);                                                       \
     }                                                                          \
@@ -379,7 +352,7 @@ private:
       delete plugin;                                                           \
     }                                                                          \
     extern "C" struct ::vast::plugin_version vast_plugin_version() {           \
-      return {major, minor, tweak, patch};                                     \
+      return {major, minor, patch, tweak};                                     \
     }                                                                          \
     extern "C" const char* vast_libvast_version() {                            \
       return ::vast::version::version;                                         \
@@ -388,12 +361,6 @@ private:
       return ::vast::version::build_tree_hash;                                 \
     }
 
-// NOLINTNEXTLINE
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                              \
-    VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_, __VA_ARGS__)         \
-    (__VA_ARGS__)
-
-// NOLINTNEXTLINE
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     extern "C" void vast_plugin_register_type_id_block(                        \
       ::caf::actor_system_config& cfg) {                                       \
@@ -403,7 +370,6 @@ private:
       return {::caf::id_block::name::begin, ::caf::id_block::name::end};       \
     }
 
-// NOLINTNEXTLINE
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                   \
     extern "C" void vast_plugin_register_type_id_block(                        \
       ::caf::actor_system_config& cfg) {                                       \
@@ -420,3 +386,23 @@ private:
     }
 
 #endif // !defined(VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+
+#define VAST_REGISTER_PLUGIN_1(name)                                           \
+  VAST_REGISTER_PLUGIN_5(name, ::vast::version::major, ::vast::version::minor, \
+                         ::vast::version::patch, ::vast::version::tweak)
+
+#define VAST_REGISTER_PLUGIN_2(name, major)                                    \
+  VAST_REGISTER_PLUGIN_5(name, major, 0, 0, 0)
+
+#define VAST_REGISTER_PLUGIN_3(name, major, minor)                             \
+  VAST_REGISTER_PLUGIN_5(name, major, minor, 0, 0)
+
+#define VAST_REGISTER_PLUGIN_4(name, major, minor, patch)                      \
+  VAST_REGISTER_PLUGIN_5(name, major, minor, patch, 0)
+
+#define VAST_REGISTER_PLUGIN(...)                                              \
+  VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_, __VA_ARGS__)(__VA_ARGS__)
+
+#define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                                \
+  VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_, __VA_ARGS__)           \
+  (__VA_ARGS__)

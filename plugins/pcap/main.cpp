@@ -785,6 +785,4 @@ private:
 
 } // namespace vast::plugins::pcap
 
-VAST_REGISTER_PLUGIN(vast::plugins::pcap::plugin, vast::version::major,
-                     vast::version::minor, vast::version::patch,
-                     vast::version::tweak)
+VAST_REGISTER_PLUGIN(vast::plugins::pcap::plugin)
