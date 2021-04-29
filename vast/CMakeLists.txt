@@ -24,7 +24,7 @@ install(
 # vast binary. This makes it possible to statically link a plugin against the
 # vast::vast target, or to write built-in plugins that are always loaded with
 # VAST.
-target_compile_definitions(vast PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+target_compile_definitions(vast PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL=2)
 
 # -- init system integration ---------------------------------------------------
 

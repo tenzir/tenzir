@@ -185,7 +185,7 @@ function (VASTRegisterPlugin)
   target_link_whole_archive(${PLUGIN_TARGET}-static PRIVATE ${PLUGIN_TARGET})
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
-                             PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+                             PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL=1)
 
   if (VAST_ENABLE_STATIC_PLUGINS)
     # Link our static library against the vast binary directly.

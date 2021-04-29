@@ -86,7 +86,8 @@ system::component_plugin_actor analyzer_plugin::make_component(
 // -- plugin_ptr ---------------------------------------------------------------
 
 caf::expected<plugin_ptr>
-plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
+plugin_ptr::make(const char* filename, caf::actor_system_config& cfg,
+                 enum visible visible) noexcept {
   auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
   if (!library)
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
@@ -163,12 +164,14 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
     plugin_register_type_id_block(cfg);
     old_blocks.push_back(new_block);
   }
-  return plugin_ptr{library, plugin_create(), plugin_destroy, plugin_version()};
+  return plugin_ptr{library, plugin_create(), plugin_destroy, plugin_version(),
+                    visible};
 }
 
-plugin_ptr plugin_ptr::make(plugin* instance, void (*deleter)(plugin*),
-                            plugin_version version) noexcept {
-  return plugin_ptr{nullptr, instance, deleter, version};
+plugin_ptr
+plugin_ptr::make(plugin* instance, void (*deleter)(plugin*),
+                 plugin_version version, enum visible visible) noexcept {
+  return plugin_ptr{nullptr, instance, deleter, version, visible};
 }
 
 plugin_ptr::~plugin_ptr() noexcept {
@@ -183,13 +186,15 @@ plugin_ptr::~plugin_ptr() noexcept {
     library_ = {};
   }
   version_ = {};
+  visible_ = {};
 }
 
 plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
   : library_{std::exchange(other.library_, {})},
     instance_{std::exchange(other.instance_, {})},
     deleter_{std::exchange(other.deleter_, {})},
-    version_{std::exchange(other.version_, {})} {
+    version_{std::exchange(other.version_, {})},
+    visible_{std::exchange(other.visible_, {})} {
   // nop
 }
 
@@ -198,6 +203,7 @@ plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept {
   instance_ = std::exchange(rhs.instance_, {});
   deleter_ = std::exchange(rhs.deleter_, {});
   version_ = std::exchange(rhs.version_, {});
+  visible_ = std::exchange(rhs.visible_, {});
   return *this;
 }
 
@@ -222,14 +228,22 @@ plugin& plugin_ptr::operator&() noexcept {
 }
 
 plugin_ptr::plugin_ptr(void* library, plugin* instance,
-                       void (*deleter)(plugin*),
-                       plugin_version version) noexcept
-  : library_{library}, instance_{instance}, deleter_{deleter}, version_{version} {
+                       void (*deleter)(plugin*), plugin_version version,
+                       enum visible visible) noexcept
+  : library_{library},
+    instance_{instance},
+    deleter_{deleter},
+    version_{version},
+    visible_{visible} {
   // nop
 }
 
-const plugin_version& plugin_ptr::version() const {
+const plugin_version& plugin_ptr::version() const noexcept {
   return version_;
+}
+
+enum plugin_ptr::visible plugin_ptr::visible() const noexcept {
+  return visible_;
 }
 
 } // namespace vast
