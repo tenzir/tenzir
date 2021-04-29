@@ -18,6 +18,7 @@
 #  include "vast/die.hpp"
 #  include "vast/fbs/table_slice.hpp"
 #  include "vast/fbs/utils.hpp"
+#  include "vast/logger.hpp"
 
 #  include <arrow/api.h>
 #  include <arrow/io/api.h>
@@ -578,7 +579,9 @@ table_slice arrow_table_slice_builder::finish(
 table_slice arrow_table_slice_builder::create(
   const std::shared_ptr<arrow::RecordBatch>& record_batch,
   const record_type& layout, size_t initial_buffer_size) {
-  VAST_ASSERT(record_batch->schema()->Equals(make_arrow_schema(layout)));
+  VAST_ASSERT(
+    record_batch->schema()->Equals(make_arrow_schema(flatten(layout))),
+    "record layout doesn't match record batch schema");
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
   // Pack layout.
   auto flat_layout = std::vector<char>{};
