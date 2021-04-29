@@ -17,7 +17,9 @@ function (VASTExportCompileCommands)
 
   # Globally enable compilation databases.
   # TODO: Use the EXPORT_COMPILE_COMMANDS property when using CMake >= 3.20.
-  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+  set(CMAKE_EXPORT_COMPILE_COMMANDS
+      ON
+      PARENT_SCOPE)
 
   # Link once when configuring the build to make the compilation database
   # immediately available.
