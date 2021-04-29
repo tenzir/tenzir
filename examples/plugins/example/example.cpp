@@ -74,8 +74,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
       for (auto& [key, value] : config) {
         if (key == "max-events") {
           if (auto max_events = caf::get_if<integer>(&value)) {
-            VAST_VERBOSE("{} sets max-events to {}", self, *max_events);
-            self->state.max_events = *max_events;
+            VAST_VERBOSE("{} sets max-events to {}", self, max_events->value);
+            self->state.max_events = max_events->value;
           }
         }
       }
