@@ -118,6 +118,14 @@ function (VASTRegisterPlugin)
         $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
         $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>
       )
+    elseif (target_type STREQUAL "OBJECT_LIBRARY")
+      target_link_options(
+        ${target}
+        ${visibility}
+        $<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<JOIN:$<TARGET_OBJECTS:${library}>,",">>
+        $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<JOIN:$<TARGET_OBJECTS:${library}>,",">,--no-whole-archive>
+        $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<JOIN:$<TARGET_OBJECTS:${library}>,",">>
+      )
     endif ()
     target_link_libraries(${target} ${visibility} ${library})
   endmacro ()
@@ -139,23 +147,16 @@ function (VASTRegisterPlugin)
     endif ()
   endif ()
 
-  if (NOT PLUGIN_SOURCES)
-    # Create a stub source file with an identfier if no sources except for the
-    # entrypoint exist.
-    string(MAKE_C_IDENTIFIER "${PLUGIN_TARGET}" plugin_identifier)
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.cpp"
-         "void vast_plugin_${plugin_identifier}_stub() {}")
-    set(PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.cpp")
-  else ()
-    # Deduplicate the entrypoint so plugin authors can grep for sources while
-    # still specifying the entrypoint manually.
-    if ("${PLUGIN_ENTRYPOINT}" IN_LIST PLUGIN_SOURCES)
-      list(REMOVE_ITEM PLUGIN_SPURCES "${PLUGIN_ENTRYPOINT}")
-    endif ()
+  # Deduplicate the entrypoint so plugin authors can grep for sources while
+  # still specifying the entrypoint manually.
+  if ("${PLUGIN_ENTRYPOINT}" IN_LIST PLUGIN_SOURCES)
+    list(REMOVE_ITEM PLUGIN_SPURCES "${PLUGIN_ENTRYPOINT}")
   endif ()
 
-  # Create a static library target for our plugin _without_ the entrypoint.
-  add_library(${PLUGIN_TARGET} STATIC ${PLUGIN_SOURCES})
+  # Create an object library target for our plugin _without_ the entrypoint.
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.h" "")
+  list(APPEND PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.h")
+  add_library(${PLUGIN_TARGET} OBJECT ${PLUGIN_SOURCES})
   target_link_libraries(
     ${PLUGIN_TARGET}
     PUBLIC vast::libvast
