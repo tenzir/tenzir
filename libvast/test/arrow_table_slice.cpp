@@ -316,6 +316,15 @@ TEST(single column - serialization) {
   CHECK_VARIANT_EQUAL(slice1, slice2);
 }
 
+TEST(arrow schema from type with nested records) {
+  auto t
+    = record_type{{"a", record_type{{"b", record_type{{"c", string_type{}}}}}}};
+  auto ft = flatten(t);
+  auto af = make_arrow_schema(t);
+  auto aft = make_arrow_schema(ft);
+  CHECK(af->Equals(aft));
+}
+
 FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)
 
 TEST_TABLE_SLICE(arrow_table_slice_builder, arrow)
