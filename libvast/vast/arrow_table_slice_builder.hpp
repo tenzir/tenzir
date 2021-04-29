@@ -102,9 +102,6 @@ private:
   /// Number of filled rows.
   size_t rows_ = 0;
 
-  /// Schema of the Record Batch corresponding to the layout.
-  record_type flat_layout_;
-
   /// The serialized layout can be cached because every builder instance only
   /// produces slices of a single layout.
   mutable std::vector<char> serialized_layout_cache_;

@@ -498,7 +498,9 @@ arrow_table_slice_builder::~arrow_table_slice_builder() noexcept {
 // -- properties ---------------------------------------------------------------
 
 size_t arrow_table_slice_builder::columns() const noexcept {
-  return flat_layout_.fields.size();
+  auto result = schema_->num_fields();
+  VAST_ASSERT(result >= 0);
+  return detail::narrow_cast<size_t>(result);
 }
 
 table_slice arrow_table_slice_builder::finish(
@@ -577,22 +579,21 @@ void arrow_table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {
 arrow_table_slice_builder::arrow_table_slice_builder(record_type layout,
                                                      size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
-    flat_layout_{flatten(this->layout())},
-    schema_{make_arrow_schema(this->flat_layout_)},
+    schema_{make_arrow_schema(this->layout())},
     builder_{initial_buffer_size} {
   VAST_ASSERT(schema_);
   VAST_ASSERT(schema_->num_fields()
-              == detail::narrow_cast<int>(flat_layout_.fields.size()));
-  column_builders_.reserve(flat_layout_.fields.size());
-  auto pool = arrow::default_memory_pool();
-  for (auto& field : flat_layout_.fields)
-    column_builders_.emplace_back(column_builder::make(field.type, pool));
+              == detail::narrow_cast<int>(this->layout().num_leaves()));
+  column_builders_.reserve(columns());
+  auto* pool = arrow::default_memory_pool();
+  for (const auto& field : record_type::each(this->layout()))
+    column_builders_.emplace_back(column_builder::make(field.type(), pool));
 }
 
 bool arrow_table_slice_builder::add_impl(data_view x) {
   if (!column_builders_[column_]->add(x))
     return false;
-  if (++column_ == flat_layout_.fields.size()) {
+  if (++column_ == columns()) {
     ++rows_;
     column_ = 0;
   }
