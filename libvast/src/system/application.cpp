@@ -109,6 +109,9 @@ auto make_export_command() {
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
+      .add<std::string>("timeout", "timeout to stop the export after")
+      .add<bool>("error-on-timeout", "error if the export was stopped because "
+                                     "a configured timeout was hit")
       // We don't expose the `preserve-ids` option to the user because it
       // doesnt' affect the formatted output.
       //.add<bool>("preserve-ids", "don't substitute taxonomy identifiers")

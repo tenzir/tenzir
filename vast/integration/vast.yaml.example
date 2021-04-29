@@ -152,6 +152,12 @@ vast:
     continuous: false
     # Mark a query as unified.
     unified: false
+    # Dont substitute taxonomy identifiers.
+    disable-taxonomies: false
+    # Timeout to stop the export after.
+    #timeout: <infinite>
+    # Error if the export was stopped because a configured timeout was hit.
+    error-on-timeout: false
     # The maximum number of events to export.
     #max-events: <infinity>
     # Path for reading the query or "-" for reading from stdin.
