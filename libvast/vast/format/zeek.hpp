@@ -43,9 +43,7 @@ namespace vast::format::zeek {
 template <class Iterator, class Attribute>
 struct zeek_parser {
   zeek_parser(Iterator& f, const Iterator& l, Attribute& attr)
-    : f_{f},
-      l_{l},
-      attr_{attr} {
+    : f_{f}, l_{l}, attr_{attr} {
   }
 
   template <class Parser>
@@ -63,12 +61,14 @@ struct zeek_parser {
   }
 
   bool operator()(const integer_type&) const {
-    static auto p = parsers::i64 ->* [](integer x) { return x; };
+    static auto p = parsers::i64->*[](integer::value_type x) { //
+      return integer{x};
+    };
     return parse(p);
   }
 
   bool operator()(const count_type&) const {
-    static auto p = parsers::u64 ->* [](count x) { return x; };
+    static auto p = parsers::u64->*[](count x) { return x; };
     return parse(p);
   }
 
@@ -88,24 +88,24 @@ struct zeek_parser {
   }
 
   bool operator()(const string_type&) const {
-    static auto p = +parsers::any
-      ->* [](std::string x) { return detail::byte_unescape(x); };
+    static auto p
+      = +parsers::any->*[](std::string x) { return detail::byte_unescape(x); };
     return parse(p);
   }
 
   bool operator()(const pattern_type&) const {
-    static auto p = +parsers::any
-      ->* [](std::string x) { return detail::byte_unescape(x); };
+    static auto p
+      = +parsers::any->*[](std::string x) { return detail::byte_unescape(x); };
     return parse(p);
   }
 
   bool operator()(const address_type&) const {
-    static auto p = parsers::addr ->* [](address x) { return x; };
+    static auto p = parsers::addr->*[](address x) { return x; };
     return parse(p);
   }
 
   bool operator()(const subnet_type&) const {
-    static auto p = parsers::net ->* [](subnet x) { return x; };
+    static auto p = parsers::net->*[](subnet x) { return x; };
     return parse(p);
   }
 
@@ -137,11 +137,11 @@ struct zeek_parser_factory {
   }
 
   result_type operator()(const integer_type&) const {
-    return parsers::i64 ->* [](integer x) { return x; };
+    return parsers::i64->*[](integer::value_type x) { return integer{x}; };
   }
 
   result_type operator()(const count_type&) const {
-    return parsers::u64 ->* [](count x) { return x; };
+    return parsers::u64->*[](count x) { return x; };
   }
 
   result_type operator()(const time_type&) const {
@@ -159,28 +159,30 @@ struct zeek_parser_factory {
 
   result_type operator()(const string_type&) const {
     if (set_separator_.empty())
-      return +parsers::any
-        ->* [](std::string x) { return detail::byte_unescape(x); };
+      return +parsers::any->*
+             [](std::string x) { return detail::byte_unescape(x); };
     else
-      return +(parsers::any - set_separator_)
-               ->*[](std::string x) { return detail::byte_unescape(x); };
+      return +(parsers::any - set_separator_)->*[](std::string x) {
+        return detail::byte_unescape(x);
+      };
   }
 
   result_type operator()(const pattern_type&) const {
     if (set_separator_.empty())
-      return +parsers::any
-        ->* [](std::string x) { return detail::byte_unescape(x); };
+      return +parsers::any->*
+             [](std::string x) { return detail::byte_unescape(x); };
     else
-      return +(parsers::any - set_separator_)
-        ->* [](std::string x) { return detail::byte_unescape(x); };
+      return +(parsers::any - set_separator_)->*[](std::string x) {
+        return detail::byte_unescape(x);
+      };
   }
 
   result_type operator()(const address_type&) const {
-    return parsers::addr ->* [](address x) { return x; };
+    return parsers::addr->*[](address x) { return x; };
   }
 
   result_type operator()(const subnet_type&) const {
-    return parsers::net ->* [](subnet x) { return x; };
+    return parsers::net->*[](subnet x) { return x; };
   }
 
   result_type operator()(const list_type& t) const {
@@ -203,7 +205,7 @@ make_zeek_parser(const type& t, const std::string& set_separator = ",") {
 /// Parses non-container Zeek data.
 template <class Iterator, class Attribute = data>
 bool zeek_basic_parse(const type& t, Iterator& f, const Iterator& l,
-                     Attribute& attr) {
+                      Attribute& attr) {
   return caf::visit(zeek_parser<Iterator, Attribute>{f, l, attr}, t);
 }
 
@@ -227,8 +229,8 @@ public:
   const char* name() const override;
 
 protected:
-  caf::error read_impl(size_t max_events, size_t max_slice_size,
-                       consumer& f) override;
+  caf::error
+  read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
   using iterator_type = std::string_view::const_iterator;

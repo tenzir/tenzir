@@ -32,8 +32,8 @@ namespace vast::format::test {
 namespace {
 
 caf::expected<distribution> make_distribution(const type& t) {
-  using parsers::real_opt_dot;
   using parsers::alpha;
+  using parsers::real_opt_dot;
   auto i = std::find_if(t.attributes().begin(), t.attributes().end(),
                         [](auto& attr) { return attr.key == "default"; });
   if (i == t.attributes().end() || !i->value)
@@ -47,8 +47,9 @@ caf::expected<distribution> make_distribution(const type& t) {
                                             "specification");
   if (name == "uniform") {
     if (holds_alternative<integer_type>(t))
-      return {std::uniform_int_distribution<integer>{static_cast<integer>(p0),
-                                                     static_cast<integer>(p1)}};
+      return {std::uniform_int_distribution<vast::integer::value_type>{
+        static_cast<vast::integer::value_type>(p0),
+        static_cast<vast::integer::value_type>(p1)}};
     else if (holds_alternative<bool_type>(t) || holds_alternative<count_type>(t)
              || holds_alternative<string_type>(t))
       return {std::uniform_int_distribution<count>{static_cast<count>(p0),
@@ -65,8 +66,7 @@ caf::expected<distribution> make_distribution(const type& t) {
 
 struct initializer {
   initializer(blueprint& bp)
-    : distributions_{bp.distributions},
-      data_{&bp.data} {
+    : distributions_{bp.distributions}, data_{&bp.data} {
   }
 
   template <class T>
@@ -112,8 +112,8 @@ struct sampler {
   }
 
   template <class Distribution>
-  long double operator()(Distribution& dist) {
-    return static_cast<long double>(dist(gen_));
+  auto operator()(Distribution& dist) {
+    return dist(gen_);
   }
 
   Generator& gen_;
@@ -133,15 +133,15 @@ struct randomizer {
   }
 
   void operator()(const integer_type&, integer& x) {
-    x = static_cast<integer>(sample());
+    x.value = static_cast<integer::value_type>(sample());
   }
 
   void operator()(const count_type&, count& x) {
-    x = static_cast<count>(sample());
+    x = sample();
   }
 
   void operator()(const real_type&, real& x) {
-    x = static_cast<real>(sample());
+    x = sample();
   }
 
   auto operator()(const time_type&, time& x) {
@@ -228,7 +228,7 @@ auto default_schema() {
 
 using default_randomizer = randomizer<std::mt19937_64>;
 
-} // namespace <anonymous>
+} // namespace
 
 reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
   : super{options},
@@ -282,8 +282,8 @@ const char* reader::name() const {
   return "test-reader";
 }
 
-caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
-                             consumer& f) {
+caf::error
+reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(max_events), VAST_ARG(max_slice_size),
                    VAST_ARG(num_events_));
   // Sanity checks.
@@ -323,8 +323,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     num_events_ -= rows;
     produced += rows;
     if (schema_.size() > 1) {
-     if (++next_ == schema_.end())
-       next_ = schema_.begin();
+      if (++next_ == schema_.end())
+        next_ = schema_.begin();
     }
   }
   finish(f);

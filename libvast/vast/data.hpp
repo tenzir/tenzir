@@ -12,6 +12,7 @@
 #include "vast/aliases.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/data/integer.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/offset.hpp"
@@ -65,6 +66,7 @@ using to_data_type = std::conditional_t<
           std::string,
           std::conditional_t<
                std::is_same_v<T, caf::none_t>
+            || std::is_same_v<T, integer>
             || std::is_same_v<T, duration>
             || std::is_same_v<T, time>
             || std::is_same_v<T, pattern>

@@ -103,6 +103,7 @@ struct duration_type;
 struct enumeration_type;
 struct field_extractor;
 struct flow;
+struct integer;
 struct integer_type;
 struct invocation;
 struct list_type;
@@ -168,9 +169,6 @@ using duration = caf::timespan;
 /// An absolute point in time with nanosecond resolution. It is capable to
 /// represent +/- 292 years around the UNIX epoch.
 using time = caf::timestamp;
-
-/// Signed integer type.
-using integer = int64_t;
 
 /// Unsigned integer type.
 using count = uint64_t;
@@ -283,6 +281,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::ec))
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::field_extractor))
+  VAST_ADD_TYPE_ID((vast::integer))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::pattern))

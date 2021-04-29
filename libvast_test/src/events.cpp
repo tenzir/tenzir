@@ -50,9 +50,9 @@ std::vector<table_slice> make_integers(size_t count) {
   while (i < count) {
     integer x;
     if constexpr (std::is_same_v<Policy, ascending>)
-      x = i;
+      x.value = i;
     else if constexpr (std::is_same_v<Policy, alternating>)
-      x = i % 2;
+      x.value = i % 2;
     else
       static_assert(detail::always_false_v<Policy>, "invalid policy");
     if (!builder->add(make_view(x)))

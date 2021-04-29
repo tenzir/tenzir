@@ -42,8 +42,8 @@ TEST(random integer slices) {
     for (size_t row = 0; row < slice.rows(); ++row)
       values.emplace_back(get<integer>(slice.at(row, 0, t)));
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
-  CHECK_GREATER_EQUAL(*lowest, 100);
-  CHECK_LESS_EQUAL(*highest, 200);
+  CHECK_GREATER_EQUAL(*lowest, integer{100});
+  CHECK_LESS_EQUAL(*highest, integer{200});
 }
 
 TEST(column view) {

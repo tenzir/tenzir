@@ -17,6 +17,7 @@
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/integer.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
@@ -77,9 +78,7 @@ TEST(choice - unused LHS) {
 TEST(choice triple) {
   using namespace parsers;
   auto fired = false;
-  auto p = chr{'x'}
-         | i32
-         | eps ->* [&] { fired = true; };
+  auto p = chr{'x'} | i32 | eps->*[&] { fired = true; };
   caf::variant<char, int32_t> x;
   CHECK(skip_to_eoi(p)("foobar", x));
   CHECK(fired);
@@ -109,7 +108,7 @@ TEST(maybe) {
   f = &c;
   result = '\0';
   CHECK(maybe_x(f, l, result));
-  CHECK(f == &c); // Iterator not advanced.
+  CHECK(f == &c);        // Iterator not advanced.
   CHECK(result == '\0'); // Result not modified.
 }
 
@@ -123,7 +122,7 @@ TEST(container attribute folding) {
 TEST(action) {
   using namespace parsers;
   auto make_v4 = [](uint32_t a) { return address::v4(&a); };
-  auto ipv4_addr = b32be ->* make_v4;
+  auto ipv4_addr = b32be->*make_v4;
   address x;
   CHECK(ipv4_addr("\x0A\x00\x00\x01", x));
   CHECK_EQUAL(x, unbox(to<address>("10.0.0.1")));
@@ -787,9 +786,11 @@ TEST(si count) {
 
 TEST(si int) {
   auto to_int = to_si<integer>;
-  auto as_int = [](auto x) { return detail::narrow_cast<integer>(x); };
+  auto as_int = [](auto x) {
+    return integer{detail::narrow_cast<integer::value_type>(x)};
+  };
   using namespace si_literals;
-  CHECK_EQUAL(to_int("-42"), -42);
+  CHECK_EQUAL(to_int("-42"), -as_int(42));
   CHECK_EQUAL(to_int("-1k"), -as_int(1_k));
   CHECK_EQUAL(to_int("-2M"), -as_int(2_M));
   CHECK_EQUAL(to_int("-3G"), -as_int(3_G));

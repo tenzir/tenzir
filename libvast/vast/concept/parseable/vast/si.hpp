@@ -52,7 +52,6 @@ struct si_parser : parser<si_parser<T>> {
 namespace parsers {
 
 static auto const count = si_parser<vast::count>{};
-static auto const integer = si_parser<vast::integer>{};
 static auto const bytesize = count >> ~ch<'B'>;
 
 } // namespace parsers

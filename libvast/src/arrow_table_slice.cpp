@@ -276,9 +276,8 @@ auto real_at = [](const auto& arr, int64_t row) {
   return static_cast<real>(arr.Value(row));
 };
 
-auto integer_at = [](const auto& arr, int64_t row) {
-  return static_cast<integer>(arr.Value(row));
-};
+auto integer_at
+  = [](const auto& arr, int64_t row) { return integer{arr.Value(row)}; };
 
 auto count_at = [](const auto& arr, int64_t row) {
   return static_cast<count>(arr.Value(row));
@@ -315,7 +314,7 @@ auto subnet_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
 }
 
 auto timestamp_at(const arrow::TimestampArray& arr, int64_t row) {
-  auto ts_value = static_cast<integer>(arr.Value(row));
+  auto ts_value = static_cast<integer::value_type>(arr.Value(row));
   duration time_since_epoch{0};
   auto& ts_type = static_cast<const arrow::TimestampType&>(*arr.type());
   switch (ts_type.unit()) {

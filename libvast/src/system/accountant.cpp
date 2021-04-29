@@ -282,7 +282,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     [self](const std::string& key, integer value) {
       VAST_TRACE_SCOPE("{} received {} from {}", self, key,
                        self->current_sender());
-      self->state->record(key, value);
+      self->state->record(key, value.value);
     },
     [self](const std::string& key, count value) {
       VAST_TRACE_SCOPE("{} received {} from {}", self, key,

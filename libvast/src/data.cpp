@@ -345,9 +345,11 @@ caf::error convert(const data& d, caf::config_value& cv) {
   auto f = detail::overload{
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
-      if constexpr (detail::is_any_v<value_type, bool, integer, count, real,
-                                     duration, std::string>)
+      if constexpr (detail::is_any_v<value_type, bool, count, real, duration,
+                                     std::string>)
         cv = x;
+      else if constexpr (std::is_same_v<value_type, integer>)
+        cv = x.value;
       else
         cv = to_string(x);
       return caf::none;
@@ -550,7 +552,7 @@ void print(YAML::Emitter& out, const data& x) {
   auto f = detail::overload{
     [&out](caf::none_t) { out << YAML::Null; },
     [&out](bool x) { out << (x ? "true" : "false"); },
-    [&out](integer x) { out << x; },
+    [&out](integer x) { out << x.value; },
     [&out](count x) { out << x; },
     [&out](real x) { out << to_string(x); },
     [&out](duration x) { out << to_string(x); },

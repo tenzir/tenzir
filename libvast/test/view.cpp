@@ -18,7 +18,7 @@ TEST(copying views) {
   MESSAGE("calling view directly");
   CHECK_VARIANT_EQUAL(view<caf::none_t>{caf::none}, caf::none);
   CHECK_VARIANT_EQUAL(view<bool>{true}, true);
-  CHECK_VARIANT_EQUAL(view<integer>{42}, 42);
+  CHECK_VARIANT_EQUAL(view<integer>{42}, integer{42});
   CHECK_VARIANT_EQUAL(view<count>{42}, 42u);
   CHECK_VARIANT_EQUAL(view<real>{4.2}, 4.2);
   MESSAGE("using make_view");
