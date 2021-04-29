@@ -145,7 +145,8 @@ data_view decode(msgpack::overlay& objects, const T& t) {
     if (auto x = get<bool>(o))
       return make_data_view(*x);
   } else if constexpr (std::is_same_v<T, integer_type>) {
-    auto f = make_signed_visitor();
+    auto to_integer = [](auto x) { return integer{x}; };
+    auto f = make_signed_visitor(to_integer);
     return visit(f, o);
   } else if constexpr (std::is_same_v<T, count_type>) {
     auto f = make_unsigned_visitor<converter<count>>();

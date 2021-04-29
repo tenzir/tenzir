@@ -419,6 +419,10 @@ bool convert(const caf::config_value& x, data& y) {
       y = value;
       return true;
     },
+    [&](const caf::config_value::integer& value) -> bool {
+      y = integer{value};
+      return true;
+    },
     [&](caf::config_value::atom value) -> bool {
       y = to_string(value);
       return true;

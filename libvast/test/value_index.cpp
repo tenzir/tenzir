@@ -38,7 +38,7 @@ struct fixture : fixtures::events {
   }
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(value_index_tests, fixture)
 
@@ -77,23 +77,24 @@ TEST(integer) {
   auto idx = factory<value_index>::make(integer_type{}, std::move(opts));
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
-  REQUIRE(idx->append(make_data_view(-7)));
-  REQUIRE(idx->append(make_data_view(42)));
-  REQUIRE(idx->append(make_data_view(10000)));
-  REQUIRE(idx->append(make_data_view(4711)));
-  REQUIRE(idx->append(make_data_view(31337)));
-  REQUIRE(idx->append(make_data_view(42)));
-  REQUIRE(idx->append(make_data_view(42)));
+  REQUIRE(idx->append(make_data_view(integer{-7})));
+  REQUIRE(idx->append(make_data_view(integer{42})));
+  REQUIRE(idx->append(make_data_view(integer{10000})));
+  REQUIRE(idx->append(make_data_view(integer{4711})));
+  REQUIRE(idx->append(make_data_view(integer{31337})));
+  REQUIRE(idx->append(make_data_view(integer{42})));
+  REQUIRE(idx->append(make_data_view(integer{42})));
   MESSAGE("lookup");
-  auto leet = idx->lookup(relational_operator::equal, make_data_view(31337));
+  auto leet
+    = idx->lookup(relational_operator::equal, make_data_view(integer{31337}));
   CHECK(to_string(unbox(leet)) == "0000100");
   auto less_than_leet
-    = idx->lookup(relational_operator::less, make_data_view(31337));
+    = idx->lookup(relational_operator::less, make_data_view(integer{31337}));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
   auto greater_zero
-    = idx->lookup(relational_operator::greater, make_data_view(0));
+    = idx->lookup(relational_operator::greater, make_data_view(integer{0}));
   CHECK(to_string(unbox(greater_zero)) == "0111111");
-  auto xs = list{42, 10, 4711};
+  auto xs = list{integer{42}, integer{10}, integer{4711}};
   auto multi = unbox(idx->lookup(relational_operator::in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "0101011");
   MESSAGE("serialization");
@@ -102,7 +103,7 @@ TEST(integer) {
   value_index_ptr idx2;
   REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
   less_than_leet
-    = idx2->lookup(relational_operator::less, make_data_view(31337));
+    = idx2->lookup(relational_operator::less, make_data_view(integer{31337}));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
 }
 
@@ -110,12 +111,12 @@ TEST(integer) {
 TEST(regression - checking the result single bitmap) {
   ewah_bitmap bm;
   bm.append<0>(680);
-  bm.append<1>();     //  681
-  bm.append<0>();     //  682
-  bm.append<1>();     //  683
-  bm.append<0>(36);   //  719
-  bm.append<1>();     //  720
-  bm.append<1>();     //  721
+  bm.append<1>();   //  681
+  bm.append<0>();   //  682
+  bm.append<1>();   //  683
+  bm.append<0>(36); //  719
+  bm.append<1>();   //  720
+  bm.append<1>();   //  721
   for (auto i = bm.size(); i < 6464; ++i)
     bm.append<0>();
   CHECK_EQUAL(rank(bm), 4u); // regression had rank 5

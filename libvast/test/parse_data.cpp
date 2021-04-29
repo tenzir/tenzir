@@ -36,9 +36,9 @@ TEST(data) {
   CHECK_EQUAL(to_data("T"), data{true});
   CHECK_EQUAL(to_data("F"), data{false});
   MESSAGE("int");
-  CHECK_EQUAL(to_data("+42"), data{42});
-  CHECK_EQUAL(to_data("-42"), data{-42});
-  CHECK_EQUAL(to_data("-42k"), data{-42'000});
+  CHECK_EQUAL(to_data("+42"), integer{42});
+  CHECK_EQUAL(to_data("-42"), integer{-42});
+  CHECK_EQUAL(to_data("-42k"), integer{-42'000});
   MESSAGE("count");
   CHECK_EQUAL(to_data("42"), data{42u});
   CHECK_EQUAL(to_data("42M"), data{42'000'000u});
@@ -57,8 +57,10 @@ TEST(data) {
   CHECK_EQUAL(to_data("[42, 4.2, nil]"), (list{42u, 4.2, caf::none}));
   MESSAGE("map");
   CHECK_EQUAL(to_data("{}"), map{});
-  CHECK_EQUAL(to_data("{+1->T,+2->F}"), (map{{1, true}, {2, false}}));
-  CHECK_EQUAL(to_data("{-1 -> T, -2 -> F}"), (map{{-1, true}, {-2, false}}));
+  CHECK_EQUAL(to_data("{+1->T,+2->F}"),
+              (map{{integer{1}, true}, {integer{2}, false}}));
+  CHECK_EQUAL(to_data("{-1 -> T, -2 -> F}"),
+              (map{{integer{-1}, true}, {integer{-2}, false}}));
   MESSAGE("record - named fields");
   CHECK_EQUAL(to_data("<>"), record{});
   CHECK_EQUAL(to_data("<foo: 1>"), (record{{"foo", 1u}}));
