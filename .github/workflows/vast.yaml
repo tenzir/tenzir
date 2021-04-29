@@ -564,9 +564,12 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Fetch Submodules
+      - name: Fetch Submodules and Tags
         run: |
-          git submodule update --init --recursive '${{ matrix.plugin.path }}'
+          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
+          git submodule sync --recursive
+          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
+          git fetch origin +refs/tags/*:refs/tags/*
       - name: Determine VAST Package Name
         id: configure
         run: |
