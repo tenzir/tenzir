@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#pragma once
+
 #include "vast/atoms.hpp"
 #include "vast/command.hpp"
 #include "vast/defaults.hpp"
