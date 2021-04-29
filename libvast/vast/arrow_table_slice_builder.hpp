@@ -128,6 +128,7 @@ private:
 // -- utility functions --------------------------------------------------------
 
 /// Converts a VAST `record_type` to an Arrow `Schema`.
+/// @pre `t` must be a flattened.
 /// @param t The record type to convert.
 /// @returns An arrow representation of `t`.
 std::shared_ptr<arrow::Schema> make_arrow_schema(const record_type& t);
