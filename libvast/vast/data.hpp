@@ -185,6 +185,12 @@ public:
     return !is_equal(lhs, rhs);
   }
 
+  /// Returns the "basic type" of this datum. For basic data objects this is
+  /// just the regular type, for complex objects it is a default-constructed
+  /// type object without extended information. (eg. just "a record" with no
+  /// further information about the record fields)
+  vast::type basic_type() const;
+
   /// @cond PRIVATE
 
   [[nodiscard]] variant& get_data() {

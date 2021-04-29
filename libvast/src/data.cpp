@@ -120,6 +120,16 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   }
 }
 
+vast::type data::basic_type() const {
+  return caf::visit(
+    detail::overload{
+      [](const auto& x) -> vast::type {
+        return typename data_traits<std::decay_t<decltype(x)>>::type{};
+      },
+    },
+    *this);
+}
+
 bool is_basic(const data& x) {
   return caf::visit(detail::overload{
                       [](const auto&) { return true; },
