@@ -150,7 +150,7 @@ function (VASTRegisterPlugin)
   # Deduplicate the entrypoint so plugin authors can grep for sources while
   # still specifying the entrypoint manually.
   if ("${PLUGIN_ENTRYPOINT}" IN_LIST PLUGIN_SOURCES)
-    list(REMOVE_ITEM PLUGIN_SPURCES "${PLUGIN_ENTRYPOINT}")
+    list(REMOVE_ITEM PLUGIN_SOURCES "${PLUGIN_ENTRYPOINT}")
   endif ()
 
   # Create an object library target for our plugin _without_ the entrypoint.
