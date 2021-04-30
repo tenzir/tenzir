@@ -174,8 +174,9 @@ function (VASTRegisterPlugin)
     # We intentionally omit the install interface include directories and do not
     # install the given include directories, as installed plugin libraries are
     # not meant to be developed against.
-    target_include_directories(
-      ${PLUGIN_TARGET} PUBLIC $<BUILD_INTERFACE:${PLUGIN_INCLUDE_DIRECTORIES}>)
+    list(JOIN PLUGIN_INCLUDE_DIRECTORIES " " include_directories)
+    target_include_directories(${PLUGIN_TARGET}
+                               PUBLIC $<BUILD_INTERFACE:${include_directories}>)
   endif ()
 
   # Create a static library target for our plugin with the entrypoint, and use
