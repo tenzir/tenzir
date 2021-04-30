@@ -230,9 +230,9 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   auto insert_dirs_for_datadir = [&](const std::filesystem::path& datadir) {
     result.insert(datadir / "schema");
     for (const auto& plugin : plugins::get()) {
-      std::error_code err{};
       auto dir = datadir / "plugin" / plugin->name() / "schema";
-      if (auto err = std::error_code{}; std::filesystem::exists(dir, err))
+      auto err = std::error_code{};
+      if (std::filesystem::exists(dir, err))
         result.insert(std::move(dir));
     }
   };

@@ -62,11 +62,11 @@ int main(int argc, char** argv) {
   // tests that rely on this feature to avoid accidentally loading undesired
   // plugins.
   if (!caf::get_or(cfg, "vast.disable-default-config-dirs", false))
-    for (auto&& plugin_names : std::vector<std::string>{VAST_ENABLED_PLUGINS})
+    for (auto&& plugin_name : std::vector<std::string>{VAST_ENABLED_PLUGINS})
       if (std::none_of(plugin_paths_or_names.begin(),
                        plugin_paths_or_names.end(),
-                       [&](auto&& x) { return x == plugin_names; }))
-        plugin_paths_or_names.push_back(std::move(plugin_names));
+                       [&](auto&& x) { return x == plugin_name; }))
+        plugin_paths_or_names.push_back(std::move(plugin_name));
 #endif
   auto& plugins = plugins::get();
   // Check if any of the specified plugins is already loaded as a static
