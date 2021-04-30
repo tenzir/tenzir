@@ -95,7 +95,7 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param config The relevant subsection of the configuration.
-  virtual caf::error initialize(data config) = 0;
+  [[nodiscard]] virtual caf::error initialize(data config) = 0;
 
   /// Returns the unique name of the plugin.
   [[nodiscard]] virtual const char* name() const = 0;

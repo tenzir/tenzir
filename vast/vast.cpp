@@ -129,10 +129,11 @@ int main(int argc, char** argv) {
   // Initialize successfully loaded plugins.
   for (auto& plugin : plugins) {
     auto key = "plugins."s + plugin->name();
+    auto init_err = caf::error{};
     if (auto opts = caf::get_if<caf::settings>(&cfg, key)) {
       if (auto config = to<data>(*opts)) {
         VAST_DEBUG("initializing plugin with options: {}", *config);
-        plugin->initialize(std::move(*config));
+        init_err = plugin->initialize(std::move(*config));
       } else {
         VAST_ERROR("invalid plugin configuration for plugin {}: {}",
                    plugin->name(), config.error());
@@ -140,7 +141,12 @@ int main(int argc, char** argv) {
       }
     } else {
       VAST_DEBUG("no configuration found for plugin {}", plugin->name());
-      plugin->initialize(data{});
+      init_err = plugin->initialize(data{});
+    }
+    if (init_err) {
+      VAST_ERROR("failed to initialize plugin {}: {}", plugin->name(),
+                 init_err);
+      return EXIT_FAILURE;
     }
   }
   // Set up the event types singleton.

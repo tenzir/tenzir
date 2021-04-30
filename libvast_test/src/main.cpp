@@ -10,6 +10,7 @@
 #include "vast/test/test.hpp"
 
 #include "vast/data.hpp"
+#include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 
 #include <caf/message_builder.hpp>
@@ -84,8 +85,13 @@ int main(int argc, char** argv) {
     }
     vast::test::config = std::move(res.opts);
   }
-  for (auto& plugin : vast::plugins::get())
-    plugin->initialize({});
+  for (auto& plugin : vast::plugins::get()) {
+    if (auto err = plugin->initialize({})) {
+      fmt::print(stderr, "failed to initialize plugin {}: {}", plugin->name(),
+                 err);
+      return EXIT_FAILURE;
+    }
+  }
   // Run the unit tests.
   return caf::test::main(argc, argv);
 }
