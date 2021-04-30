@@ -545,7 +545,7 @@ make_application(std::string_view path) {
   auto root_factory = make_command_factory();
   // Add additional commands from plugins.
   for (auto& plugin : plugins::get()) {
-    if (auto *cp = plugin.as<command_plugin>()) {
+    if (auto* cp = plugin.as<command_plugin>()) {
       auto&& [cmd, cmd_factory] = cp->make_command();
       if (!cmd || cmd_factory.empty())
         continue;

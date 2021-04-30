@@ -118,14 +118,6 @@ function (VASTRegisterPlugin)
         $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
         $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>
       )
-    elseif (target_type STREQUAL "OBJECT_LIBRARY")
-      target_link_options(
-        ${target}
-        ${visibility}
-        $<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<JOIN:$<TARGET_OBJECTS:${library}>,",">>
-        $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<JOIN:$<TARGET_OBJECTS:${library}>,",">,--no-whole-archive>
-        $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<JOIN:$<TARGET_OBJECTS:${library}>,",">>
-      )
     endif ()
     target_link_libraries(${target} ${visibility} ${library})
   endmacro ()
