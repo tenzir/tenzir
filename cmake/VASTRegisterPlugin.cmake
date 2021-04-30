@@ -130,6 +130,16 @@ function (VASTRegisterPlugin)
     target_link_libraries(${target} ${visibility} ${library})
   endmacro ()
 
+  macro (make_absolute vars)
+    foreach (var IN LISTS "${vars}")
+      get_filename_component(var_abs "${var}" ABSOLUTE)
+      list(APPEND vars_abs "${var_abs}")
+    endforeach ()
+    set("${vars}" "${vars_abs}")
+    unset(vars)
+    unset(vars_abs)
+  endmacro ()
+
   if (NOT PLUGIN_TARGET)
     message(
       FATAL_ERROR "TARGET must be specified in call to VASTRegisterPlugin")
@@ -146,6 +156,11 @@ function (VASTRegisterPlugin)
       )
     endif ()
   endif ()
+
+  # Make all given paths absolute.
+  make_absolute(PLUGIN_ENTRYPOINT)
+  make_absolute(PLUGIN_SOURCES)
+  make_absolute(PLUGIN_INCLUDE_DIRECTORIES)
 
   # Deduplicate the entrypoint so plugin authors can grep for sources while
   # still specifying the entrypoint manually.
