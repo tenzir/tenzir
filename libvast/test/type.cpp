@@ -266,7 +266,7 @@ TEST(record resolving) {
   CHECK_EQUAL(*k, "c.x");
 }
 
-TEST(record flattening / unflattening) {
+TEST(record flattening) {
   // clang-format off
   auto x = record_type{
     {"x", record_type{
@@ -295,8 +295,6 @@ TEST(record flattening / unflattening) {
   // clang-format on
   auto f = flatten(x);
   CHECK(f == y);
-  auto u = unflatten(f);
-  CHECK(u == x);
 }
 
 TEST(record flat index computation) {

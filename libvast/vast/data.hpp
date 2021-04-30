@@ -294,21 +294,8 @@ record flatten(const record& r);
 /// @param rt The record type according to which *r* should be flattened.
 /// @returns The flattened record if the nested structure of *r* is a valid
 ///          subset of *rt*.
-/// @see unflatten
 caf::optional<record> flatten(const record& r, const record_type& rt);
 caf::optional<data> flatten(const data& x, const type& t);
-
-/// Unflattens a flattened record.
-record unflatten(const record& r);
-
-/// Unflattens a record according to a record type such that the record becomes
-/// a recursive structure.
-/// @param r The record to unflatten according to *rt*.
-/// @param rt The type that defines the record structure.
-/// @returns The unflattened record of *r* according to *rt*.
-/// @see flatten
-caf::optional<record> unflatten(const record& r, const record_type& rt);
-caf::optional<data> unflatten(const data& x, const type& t);
 
 /// Merges one record into another such that the source overwrites potential
 /// keys in the destination.

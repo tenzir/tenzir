@@ -591,41 +591,6 @@ size_t flat_size(const type& t) {
   return 1;
 }
 
-record_type unflatten(const record_type& rec) {
-  record_type result;
-  for (auto& f : rec.fields) {
-    auto names = detail::split(f.name, ".");
-    VAST_ASSERT(!names.empty());
-    record_type* r = &result;
-    for (size_t i = 0; i < names.size() - 1; ++i) {
-      if (r->fields.empty() || r->fields.back().name != names[i])
-        r->fields.emplace_back(std::string(names[i]), record_type{});
-      r = const_cast<record_type*>(get_if<record_type>(&r->fields.back().type));
-    }
-    r->fields.emplace_back(std::string{names.back()}, f.type);
-  }
-  std::vector<std::vector<const record_type*>> rs(1);
-  rs.back().push_back(&result);
-  auto more = true;
-  while (more) {
-    std::vector<const record_type*> next;
-    for (auto& current : rs.back())
-      for (auto& f : current->fields)
-        if (auto r = get_if<record_type>(&f.type))
-          next.push_back(r);
-    if (next.empty())
-      more = false;
-    else
-      rs.push_back(std::move(next));
-  }
-  return result;
-}
-
-type unflatten(const type& t) {
-  auto r = get_if<record_type>(&t);
-  return r ? unflatten(*r) : t;
-}
-
 bool is_basic(const type& x) {
   return x && is<type_flags::basic>(x->flags());
 }
