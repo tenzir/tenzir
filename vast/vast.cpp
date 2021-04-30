@@ -134,9 +134,9 @@ int main(int argc, char** argv) {
         VAST_DEBUG("initializing plugin with options: {}", *config);
         plugin->initialize(std::move(*config));
       } else {
-        VAST_ERROR("invalid plugin configuration for plugin {}",
-                   plugin->name());
-        plugin->initialize(data{});
+        VAST_ERROR("invalid plugin configuration for plugin {}: {}",
+                   plugin->name(), config.error());
+        return EXIT_FAILURE;
       }
     } else {
       VAST_DEBUG("no configuration found for plugin {}", plugin->name());
