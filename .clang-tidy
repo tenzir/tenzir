@@ -9,6 +9,7 @@ Checks: >
   -hicpp-*,
   -bugprone-lambda-function-name,
   -cert-err58-cpp,
+  -cert-dcl16-c,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-avoid-non-const-global-variables,
   -cppcoreguidelines-macro-usage,
