@@ -12,6 +12,7 @@ if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
   if (tsl-robin-map_FOUND)
     string(APPEND VAST_FIND_DEPENDENCY_LIST
       "\nfind_package(tsl-robin-map 0.6.2 REQUIRED)")
+    dependency_summary("robin-map" tsl::robin_map "Dependencies")
   endif ()
 endif ()
 if (NOT tsl-robin-map_FOUND)
@@ -20,6 +21,10 @@ if (NOT tsl-robin-map_FOUND)
       "Cannot find installed tsl-robin-map; falling back to bundled version")
   endif ()
   add_subdirectory(aux/robin-map)
+  dependency_summary(
+    "robin-map"
+    "${CMAKE_CURRENT_SOURCE_DIR}/aux/robin-map"
+    "Dependencies")
   export(
     EXPORT tsl-robin-mapTargets
     FILE tsl-robin-mapTargets.cmake
@@ -448,7 +453,8 @@ dependency_summary("simdjson" simdjson::simdjson "Dependencies")
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
-dependency_summary("robin-map" tsl::robin_map "Dependencies")
+# This is broken for the bundled robin-map, so we special-case it above.
+# dependency_summary("robin-map" tsl::robin_map "Dependencies")
 
 # Link against Apache Arrow.
 if (VAST_ENABLE_ARROW)
