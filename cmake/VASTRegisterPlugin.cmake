@@ -214,7 +214,7 @@ function (VASTRegisterPlugin)
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
     # Install the bundled schema files to <datadir>/vast.
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-            DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}")
     # Copy schemas from bundled plugins to the build directory so they can be
     # used from a VAST in a build directory (instead if just an installed VAST).
     file(
@@ -232,10 +232,10 @@ function (VASTRegisterPlugin)
       add_custom_target(
         vast-schema-${plugin_schema_file_hash} ALL
         BYPRODUCTS
-          "${CMAKE_BINARY_DIR}/share/vast/schema/${relative_plugin_schema_file}"
+          "${CMAKE_BINARY_DIR}/share/vast/plugin/${PLUGIN_TARGET}/schema/${relative_plugin_schema_file}"
         COMMAND
-          ${CMAKE_COMMAND} -E copy "${plugin_schema_file}"
-          "${CMAKE_BINARY_DIR}/share/vast/schema/${relative_plugin_schema_file}"
+          "${CMAKE_COMMAND}" -E copy "${plugin_schema_file}"
+          "${CMAKE_BINARY_DIR}/share/vast/plugin/${PLUGIN_TARGET}/schema/${relative_plugin_schema_file}"
         COMMENT
           "Copying schema file ${relative_plugin_schema_file} for plugin ${PLUGIN_TARGET}"
       )
