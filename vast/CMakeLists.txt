@@ -29,11 +29,11 @@ VASTInstallExampleConfiguration(vast "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 
 # -- init system integration ---------------------------------------------------
 
-# TODO: This should be behind an option, and work for macOS and Linux as well.
+# TODO: This should be behind an option, and work for Linux as well.
 
 # Install rc.d script on FreeBSD into PREFIX/etc/rc.d.
-if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/freebsd-rc-vast"
+if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+  file(STRINGS "${PROJECT_SOURCE_DIR}/scripts/freebsd-rc-vast"
        rc_template NEWLINE_CONSUME)
   string(REPLACE "%%PREFIX%%" ${CMAKE_INSTALL_PREFIX} rc_content ${rc_template})
   set(rc_file "${CMAKE_CURRENT_BINARY_DIR}/freebsd-rc-vast")
@@ -43,6 +43,39 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     DESTINATION "${CMAKE_INSTALL_PREFIX}/etc/rc.d"
     RENAME "vast"
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE)
+elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+  install(CODE "\
+if (IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
+  set(prefix \"\${CMAKE_INSTALL_PREFIX}\")
+else ()
+  set(prefix \"${CMAKE_SOURCE_DIR}/\${CMAKE_INSTALL_PREFIX}\")
+endif ()
+message(STATUS \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
+file(WRITE \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\"
+  \"\\
+<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>
+<!DOCTYPE plist PUBLIC \\\"-//Apple//DTD PLIST 1.0//EN\\\" \\\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\\\">
+<plist version=\\\"1.0\\\">
+<dict>
+  <key>Label</key>
+  <string>com.tenzir.vast</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>\${prefix}/bin/$<TARGET_FILE_NAME:vast></string>
+    <string>start</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>\${prefix}/share/vast</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+</dict>
+</plist>
+\")
+")
 endif ()
 
 # -- integration tests ---------------------------------------------------------
