@@ -118,16 +118,18 @@ function (VASTRegisterPlugin)
         $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
         $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>
       )
-    elseif (target_type STREQUAL "OBJECT_LIBRARY")
-      target_link_options(
-        ${target}
-        ${visibility}
-        $<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<JOIN:$<TARGET_OBJECTS:${library}>,",">>
-        $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<JOIN:$<TARGET_OBJECTS:${library}>,",">,--no-whole-archive>
-        $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<JOIN:$<TARGET_OBJECTS:${library}>,",">>
-      )
     endif ()
     target_link_libraries(${target} ${visibility} ${library})
+  endmacro ()
+
+  macro (make_absolute vars)
+    foreach (var IN LISTS "${vars}")
+      get_filename_component(var_abs "${var}" ABSOLUTE)
+      list(APPEND vars_abs "${var_abs}")
+    endforeach ()
+    set("${vars}" "${vars_abs}")
+    unset(vars)
+    unset(vars_abs)
   endmacro ()
 
   if (NOT PLUGIN_TARGET)
@@ -147,10 +149,15 @@ function (VASTRegisterPlugin)
     endif ()
   endif ()
 
+  # Make all given paths absolute.
+  make_absolute(PLUGIN_ENTRYPOINT)
+  make_absolute(PLUGIN_SOURCES)
+  make_absolute(PLUGIN_INCLUDE_DIRECTORIES)
+
   # Deduplicate the entrypoint so plugin authors can grep for sources while
   # still specifying the entrypoint manually.
   if ("${PLUGIN_ENTRYPOINT}" IN_LIST PLUGIN_SOURCES)
-    list(REMOVE_ITEM PLUGIN_SPURCES "${PLUGIN_ENTRYPOINT}")
+    list(REMOVE_ITEM PLUGIN_SOURCES "${PLUGIN_ENTRYPOINT}")
   endif ()
 
   # Create an object library target for our plugin _without_ the entrypoint.
@@ -167,8 +174,9 @@ function (VASTRegisterPlugin)
     # We intentionally omit the install interface include directories and do not
     # install the given include directories, as installed plugin libraries are
     # not meant to be developed against.
-    target_include_directories(
-      ${PLUGIN_TARGET} PUBLIC $<BUILD_INTERFACE:${PLUGIN_INCLUDE_DIRECTORIES}>)
+    list(JOIN PLUGIN_INCLUDE_DIRECTORIES " " include_directories)
+    target_include_directories(${PLUGIN_TARGET}
+                               PUBLIC $<BUILD_INTERFACE:${include_directories}>)
   endif ()
 
   # Create a static library target for our plugin with the entrypoint, and use
