@@ -12,7 +12,7 @@
 # vast_enable (bool): Set to YES to enable VAST
 #                     Default: NO
 # vast_config (path): Path to the VAST configuratio file
-#                     Default: %%PREFIX%%/etc/vast/vast.yaml
+#                     Default: @CMAKE_INSTALL_FULL_SYSCONFDIR@/vast/vast.yaml
 
 . /etc/rc.subr
 
@@ -32,7 +32,7 @@ check_cmd="${name}_check"
 
 load_rc_config $name
 : ${vast_enable:=NO}
-: ${vast_config:=%%PREFIX%%/etc/${name}/${name}.yaml}
+: ${vast_config:=@CMAKE_INSTALL_FULL_SYSCONFDIR@/${name}/${name}.yaml}
 : ${vast_dir:=/var/db/${name}}
 : ${vast_proc_user:=${name}}
 : ${vast_proc_group:=${vast_proc_user}}
@@ -42,7 +42,7 @@ pidfile="${vast_pidfile}"
 required_files="${vast_config}"
 vast_program="/usr/sbin/daemon"
 vast_flags="-f -P ${pidfile} -r -u ${vast_proc_user}"
-command_args="%%PREFIX%%/bin/${name} -d ${vast_dir} start"
+command_args="@CMAKE_INSTALL_FULL_BINDIR@/${name} -d ${vast_dir} start"
 
 vast_check()
 {
