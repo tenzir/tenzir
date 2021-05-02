@@ -45,37 +45,16 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   install(CODE "\
-if (IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
-  set(prefix \"\${CMAKE_INSTALL_PREFIX}\")
-else ()
-  set(prefix \"${CMAKE_SOURCE_DIR}/\${CMAKE_INSTALL_PREFIX}\")
-endif ()
-message(STATUS \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
-file(WRITE \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\"
-  \"\\
-<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>
-<!DOCTYPE plist PUBLIC \\\"-//Apple//DTD PLIST 1.0//EN\\\" \\\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\\\">
-<plist version=\\\"1.0\\\">
-<dict>
-  <key>Label</key>
-  <string>com.tenzir.vast</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>\${prefix}/bin/$<TARGET_FILE_NAME:vast></string>
-    <string>start</string>
-  </array>
-  <key>WorkingDirectory</key>
-  <string>\${prefix}/share/vast</string>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>ProcessType</key>
-  <string>Interactive</string>
-</dict>
-</plist>
-\")
-")
+    if (NOT IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
+      string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
+    endif ()
+    set(VAST_BINARY \"\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:vast>\")
+    set(VAST_WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/vast\")
+    message(STATUS
+      \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
+    configure_file(
+      \"${CMAKE_CURRENT_LIST_DIR}/services/launchd/com.tenzir.vast.plist.in\"
+      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\" @ONLY)")
 endif ()
 
 # -- integration tests ---------------------------------------------------------
