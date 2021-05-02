@@ -174,6 +174,25 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   unset(_install)
 endif ()
 
+# CMake allows for overriding the install prefix at install-time, e.g., via
+# `cmake --install <path/to/build> --prefix <path/to/install>` or
+# `DESTDIR=<path/to/install> cmake --build <path/to/build> --target install`.
+# Doing so breaks non-relocatable installations, so we abort the installation
+# when encountering this.
+if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+  install(CODE "\
+    get_filename_component(build_time_prefix
+      \"${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
+    get_filename_component(install_time_prefix
+      \"\${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
+    if (NOT \"\${build_time_prefix}\" STREQUAL \"\${install_time_prefix}\")
+      message(FATAL_ERROR
+        \"For non-relocatable builds the configured build-time install prefix (\${build_time_prefix}) must match the configured install-time install prefix (\${install_time_prefix})\"
+      )
+    endif ()
+  ")
+endif ()
+
 # -- silence policy-related warnings -------------------------------------------
 
 # TODO: When updating to CAF 0.18, this should no longer be needed.
