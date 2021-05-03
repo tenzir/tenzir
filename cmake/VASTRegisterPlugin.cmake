@@ -301,7 +301,7 @@ function (VASTRegisterPlugin)
         fi
         base_dir=\"${integration_test_path}\"
         env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-        app=\"$<TARGET_FILE:vast::vast>\"
+        app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::vast>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::vast>>\"
         set -e
         if [ ! -f \"$env_dir/bin/activate\" ]; then
           python3 -m venv \"$env_dir\"

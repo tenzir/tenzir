@@ -259,6 +259,9 @@ public:
   static plugin_ptr make_native(plugin* instance, void (*deleter)(plugin*),
                                 plugin_version version) noexcept;
 
+  /// Default-construct an invalid plugin.
+  plugin_ptr() noexcept;
+
   /// Unload a plugin and its required resources.
   ~plugin_ptr() noexcept;
 
@@ -271,7 +274,7 @@ public:
   plugin_ptr& operator=(plugin_ptr&& rhs) noexcept;
 
   /// Pointer facade.
-  explicit operator bool() noexcept;
+  explicit operator bool() const noexcept;
   const plugin* operator->() const noexcept;
   plugin* operator->() noexcept;
   const plugin& operator*() const noexcept;

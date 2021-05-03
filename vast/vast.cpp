@@ -55,13 +55,13 @@ int main(int argc, char** argv) {
   auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
   auto plugin_paths_or_names
     = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
+  const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
 #ifdef VAST_ENABLED_PLUGINS
   // If plugins are enabled at compile time to always be loaded, add them here
   // if they were not already configured as part of vast.plugins, unless
-  // --disable-default-config-dirs is set, which would break the integration
-  // tests that rely on this feature to avoid accidentally loading undesired
-  // plugins.
-  if (!caf::get_or(cfg, "vast.disable-default-config-dirs", false))
+  // --bare-mode is set, which would break the integration tests that rely on
+  // this feature to avoid accidentally loading undesired plugins.
+  if (!bare_mode)
     for (auto&& plugin_name : std::vector<std::string>{VAST_ENABLED_PLUGINS})
       if (std::none_of(plugin_paths_or_names.begin(),
                        plugin_paths_or_names.end(),
@@ -72,7 +72,9 @@ int main(int argc, char** argv) {
   // Check if any of the specified plugins is already loaded as a static
   // plugin, and remove it from the list of specified plugins if that's the
   // case (essentially a custom set difference with preserved order).
-  for (const auto& plugin : plugins) {
+  // If --bare-mode is set, unload the static plugins that were not specified
+  // explicitly to avoid accidentaly running with undesired plugins.
+  for (auto& plugin : plugins) {
     if (auto it = std::find_if(plugin_paths_or_names.begin(),
                                plugin_paths_or_names.end(),
                                [&](const auto& plugin_path_or_name) {
@@ -80,7 +82,13 @@ int main(int argc, char** argv) {
                                });
         it != plugin_paths_or_names.end())
       plugin_paths_or_names.erase(it);
+    else if (bare_mode && plugin.type() != plugin_ptr::type::native)
+      plugin = {};
   }
+  // Remove all possibly invalidated static plugins.
+  plugins.erase(std::remove_if(plugins.begin(), plugins.end(),
+                               [](const auto& plugin) { return !plugin; }),
+                plugins.end());
   // Load the specified dynamic plugins.
   for (const auto& plugin_path_or_name : plugin_paths_or_names) {
     if (auto loaded_plugin = detail::load_plugin(plugin_path_or_name, cfg)) {

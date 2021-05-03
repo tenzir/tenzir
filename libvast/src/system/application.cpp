@@ -494,10 +494,10 @@ auto make_root_command(std::string_view path) {
   auto ob
     = opts("?vast")
         .add<std::string>("config", "path to a configuration file")
-        .add<bool>("disable-default-config-dirs",
+        .add<bool>("bare-mode",
                    "disable user and system configuration, schema and plugin "
-                   "directories lookup and plugin autoloading (this may only "
-                   "be used on the command line)")
+                   "directories lookup and static and dynamic plugin "
+                   "autoloading (this may only be used on the command line)")
         .add<caf::atom_value>("verbosity", "output verbosity level on the "
                                            "console")
         .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())

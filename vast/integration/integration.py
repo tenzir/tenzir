@@ -316,7 +316,7 @@ class Server:
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
-        command = [self.app, "--disable-default-config-dirs"]
+        command = [self.app, "--bare-mode"]
         if self.config_arg:
             command.append(self.config_arg)
         command = command + args

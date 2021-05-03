@@ -275,6 +275,10 @@ jobs:
           run: |
             cmake --build "$BUILD_DIR" --target test
 
+        - name: Install
+          run: |
+            cmake --build "$BUILD_DIR" --target install
+
         - name: Run Integration Tests
           id: integration_test_step
           run: |
@@ -291,10 +295,6 @@ jobs:
           with:
             name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
             path: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
-
-        - name: Install
-          run: |
-            cmake --build "$BUILD_DIR" --target install
 
         - name: Package
           env:
@@ -538,6 +538,10 @@ jobs:
         run: |
           cmake --build "$BUILD_DIR" --target test
 
+      - name: Install
+        run: |
+          cmake --build "$BUILD_DIR" --target install
+
       - name: Run Integration Tests
         id: integration_test_step
         run: |
@@ -554,10 +558,6 @@ jobs:
         with:
           name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
           path: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
-
-      - name: Install
-        run: |
-          cmake --build "$BUILD_DIR" --target install
 
       - name: Package
         env:
@@ -673,6 +673,9 @@ jobs:
       - name: Run Unit Tests
         run: |
           cmake --build "$BUILD_DIR" --target test
+      - name: Install
+        run: |
+          cmake --build "$BUILD_DIR" --target install
       - name: Run Integration Tests
         id: integration_tests
         run: |
