@@ -81,11 +81,6 @@ TEST(flatten) {
   CHECK_EQUAL(fr, ftr);
   REQUIRE_EQUAL(fr.size(), values.size());
   CHECK_EQUAL(fr["b.c"], -42);
-  MESSAGE("unflatten");
-  auto ur = unflatten(fr);
-  CHECK_EQUAL(ur, xs);
-  auto utr = unbox(unflatten(fr, rt));
-  CHECK_EQUAL(utr, xs);
 }
 
 TEST(merge) {
@@ -368,6 +363,5 @@ TEST(nesting depth) {
   auto final = record{{"branch1", x}, {"branch2", 4}};
   CHECK_EQUAL(depth(final), defaults::max_recursion + 2);
   auto flattened = flatten(final);
-  auto unflattened = unflatten(flattened);
   CHECK_EQUAL(depth(flattened), 1ull);
 }

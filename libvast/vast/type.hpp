@@ -798,15 +798,6 @@ size_t flat_size(const record_type& rec);
 /// Computes the size of a flat representation of `rec`.
 size_t flat_size(const type&);
 
-/// Unflattens a flattened record type.
-/// @param rec the record to unflatten.
-/// @returns The unflattened record type.
-/// @relates record_type
-record_type unflatten(const record_type& rec);
-
-/// @relates type record_type
-type unflatten(const type& t);
-
 // -- helpers ----------------------------------------------------------------
 
 /// Maps a concrete type to a corresponding data type.
