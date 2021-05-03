@@ -84,7 +84,7 @@ load_plugin(const std::filesystem::path& path_or_name,
       file = root / file;
     if (!exists(file))
       return caf::no_error;
-    auto plugin = plugin_ptr::make(file.c_str(), cfg);
+    auto plugin = plugin_ptr::make_dynamic(file.c_str(), cfg);
     if (plugin) {
       VAST_ASSERT(*plugin);
       if (specified_by_name)
