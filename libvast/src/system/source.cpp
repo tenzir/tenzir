@@ -195,8 +195,10 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     },
     // done?
     [self](const caf::unit_t&) { return self->state.done; });
-  return {
-    [self](atom::get, atom::schema) { return self->state.reader->schema(); },
+  auto result = source_actor::behavior_type{
+    [self](atom::get, atom::schema) { //
+      return self->state.reader->schema();
+    },
     [self](atom::put, schema sch) -> caf::result<void> {
       VAST_DEBUG("{} received {}", self, VAST_ARG("schema", sch));
       if (auto err = self->state.reader->schema(std::move(sch));
@@ -223,8 +225,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         return;
       }
       self->state.sink = std::move(sink);
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
+      if (self->state.accountant)
+        self->delayed_send(self, defaults::system::telemetry_rate,
+                           atom::telemetry_v);
       // Start streaming.
       auto name = std::string{self->state.reader->name()};
       self->state.mgr->add_outbound_path(self->state.sink,
@@ -258,6 +261,10 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                            atom::telemetry_v);
     },
   };
+  // We cannot return the behavior directly and make the SOURCE a typed actor
+  // as long as SOURCE and DATAGRAM SOURCE coexist with the same interface,
+  // because the DATAGRAM SOURCE is a typed broker.
+  return result.unbox();
 }
 
 } // namespace vast::system
