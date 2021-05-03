@@ -61,8 +61,7 @@ const char* writer::name() const {
   return "arrow-writer";
 }
 
-bool writer::layout(const record_type& x) {
-  auto layout = flatten(x);
+bool writer::layout(const record_type& layout) {
   if (current_layout_ == layout)
     return true;
   if (current_batch_writer_ != nullptr) {
@@ -70,6 +69,8 @@ bool writer::layout(const record_type& x) {
       return false;
     current_batch_writer_ = nullptr;
   }
+  // As long as records cannot be empty, this check is faster than checking
+  // whether `layout.num_leaves() == 0`, so we use that instead.
   if (layout.fields.empty())
     return true;
   current_layout_ = layout;

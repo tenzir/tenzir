@@ -113,17 +113,18 @@ caf::error writer::write(const table_slice& x) {
     append('\n');
     write_buf();
   }
-  auto flat_layout = flatten(layout);
   // Print the cell contents.
   auto iter = std::back_inserter(buf_);
   for (size_t row = 0; row < x.rows(); ++row) {
     append(last_layout_);
-    for (size_t column = 0; column < x.columns(); ++column) {
+    size_t column = 0;
+    for (const auto& field : record_type::each{layout}) {
       append(separator);
-      if (auto err
-          = render(iter, x.at(row, column, flat_layout.fields[column].type)))
+      if (auto err = render(iter, x.at(row, column, field.type())))
         return err;
+      ++column;
     }
+    VAST_ASSERT(column == x.columns());
     append('\n');
     write_buf();
   }

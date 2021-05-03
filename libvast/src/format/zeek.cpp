@@ -241,8 +241,8 @@ const char* reader::name() const {
   return "zeek-reader";
 }
 
-caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
-                             consumer& f) {
+caf::error
+reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   // Sanity checks.
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
@@ -389,13 +389,8 @@ caf::error reader::parse_header() {
   }
   // Retrieve remaining header lines.
   const char* prefixes[] = {
-    "#set_separator",
-    "#empty_field",
-    "#unset_field",
-    "#path",
-    "#open",
-    "#fields",
-    "#types",
+    "#set_separator", "#empty_field", "#unset_field", "#path",
+    "#open",          "#fields",      "#types",
   };
   std::vector<std::string> header(sizeof(prefixes) / sizeof(const char*));
   for (auto i = 0u; i < header.size(); ++i) {
@@ -457,18 +452,17 @@ caf::error reader::parse_header() {
       return caf::make_error(ec::format_error,
                              "the zeek reader expects records for "
                              "the top level types in the schema");
-    auto flat = flatten(*r);
-    for (auto& f : flat.fields) {
+    for (const auto& field : record_type::each(*r)) {
       auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
-                            [&](auto& hf) { return hf.name == f.name; });
+                            [&](auto& hf) { return hf.name == field.key(); });
       if (i != layout_.fields.end()) {
-        if (!congruent(i->type, f.type))
+        if (!congruent(i->type, field.type()))
           VAST_WARN("{} encountered a type mismatch between the schema "
-                    "definition ({}) and the input data ({})",
-                    detail::pretty_type_name(this), f, *i);
-        else if (!f.type.attributes().empty()) {
-          i->type.attributes(f.type.attributes());
-        }
+                    "definition ({}: {}) and the input data ({})",
+                    detail::pretty_type_name(this), field.key(), field.type(),
+                    *i);
+        else if (!field.type().attributes().empty())
+          i->type.attributes(field.type().attributes());
       }
     }
   } // We still do attribute inference for the user provided layouts.
