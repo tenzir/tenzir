@@ -20,13 +20,13 @@ type annotate_parameters(type type, const bloom_filter_parameters& params) {
   return std::move(type).attributes({{"synopsis", std::move(v)}});
 }
 
-caf::optional<bloom_filter_parameters> parse_parameters(const type& x) {
+std::optional<bloom_filter_parameters> parse_parameters(const type& x) {
   auto pred = [](auto& attr) {
     return attr.key == "synopsis" && attr.value != caf::none;
   };
   auto i = std::find_if(x.attributes().begin(), x.attributes().end(), pred);
   if (i == x.attributes().end())
-    return caf::none;
+    return {};
   VAST_ASSERT(i->value);
   return parse_parameters(*i->value);
 }

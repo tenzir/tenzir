@@ -16,19 +16,20 @@
 
 #include <cmath>
 #include <cstddef>
+#include <optional>
 
 namespace vast {
 
-caf::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
+std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
   // Check basic invariants first.
   if (xs.m && *xs.m <= 0)
-    return caf::none;
+    return {};
   if (xs.n && *xs.n <= 0)
-    return caf::none;
+    return {};
   if (xs.k && *xs.k <= 0)
-    return caf::none;
+    return {};
   if (xs.p && (*xs.p < 0 || *xs.p > 1))
-    return caf::none;
+    return {};
   // Test if we can compute the missing parameters.
   static const double ln2 = std::log(2.0);
   if (xs.m && xs.n && xs.k && !xs.p) {
@@ -69,10 +70,10 @@ caf::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
     xs.p = std::pow(1 - q, k);
     return xs;
   }
-  return caf::none;
+  return {};
 }
 
-caf::optional<bloom_filter_parameters> parse_parameters(std::string_view x) {
+std::optional<bloom_filter_parameters> parse_parameters(std::string_view x) {
   using namespace parser_literals;
   using parsers::real_opt_dot;
   using parsers::u64;
@@ -82,7 +83,7 @@ caf::optional<bloom_filter_parameters> parse_parameters(std::string_view x) {
   xs.p = 0;
   if (parser(x, *xs.n, *xs.p))
     return xs;
-  return caf::none;
+  return {};
 }
 
 } // namespace vast

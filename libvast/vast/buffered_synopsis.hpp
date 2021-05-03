@@ -76,11 +76,11 @@ public:
     return sizeof(p_) + buffered_synopsis_traits<T>::memusage(data_);
   }
 
-  [[nodiscard]] caf::optional<bool>
+  [[nodiscard]] std::optional<bool>
   lookup(relational_operator op, data_view rhs) const override {
     switch (op) {
       default:
-        return caf::none;
+        return {};
       case relational_operator::equal:
         // TODO: Switch to tsl::robin_set here for heterogenous lookup.
         return data_.count(materialize(caf::get<view_type>(rhs)));
@@ -91,7 +91,7 @@ public:
               return true;
           return false;
         }
-        return caf::none;
+        return {};
       }
     }
   }

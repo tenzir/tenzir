@@ -37,16 +37,16 @@ public:
       max_ = *y;
   }
 
-  [[nodiscard]] caf::optional<bool>
+  [[nodiscard]] std::optional<bool>
   lookup(relational_operator op, data_view rhs) const override {
-    auto do_lookup = [this](relational_operator op,
-                         data_view xv) -> caf::optional<bool> {
+    auto do_lookup
+      = [this](relational_operator op, data_view xv) -> std::optional<bool> {
       if (auto x = caf::get_if<view<T>>(&xv))
         return {lookup_impl(op, *x)};
       else
-        return caf::none;
+        return {};
     };
-    auto membership = [&]() -> caf::optional<bool> {
+    auto membership = [&]() -> std::optional<bool> {
       if (auto xs = caf::get_if<view<list>>(&rhs)) {
         for (auto x : **xs) {
           auto result = do_lookup(relational_operator::equal, x);
@@ -55,7 +55,7 @@ public:
         }
         return false;
       }
-      return caf::none;
+      return {};
     };
     switch (op) {
       case relational_operator::in:
@@ -73,7 +73,7 @@ public:
       case relational_operator::greater_equal:
         return do_lookup(op, rhs);
       default:
-        return caf::none;
+        return {};
     }
   }
 

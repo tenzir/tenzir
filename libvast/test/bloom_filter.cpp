@@ -120,7 +120,7 @@ TEST(bloom filter parameters : mp) {
 }
 
 TEST(bloom filter parameters : from string) {
-  auto xs = unbox(parse_parameters("bloomfilter(1000,0.01)"));
+  auto xs = vast::test::unbox(parse_parameters("bloomfilter(1000,0.01)"));
   CHECK_EQUAL(*xs.n, 1000u);
   CHECK_EQUAL(*xs.p, 0.01);
   CHECK(!xs.m);
@@ -177,7 +177,7 @@ TEST(bloom filter - constructed from parameters) {
   bloom_filter_parameters xs;
   xs.m = 10_M;
   xs.p = 0.001;
-  auto x = unbox(make_bloom_filter<xxhash>(xs));
+  auto x = vast::test::unbox(make_bloom_filter<xxhash>(xs));
   CHECK_EQUAL(x.size(), 10_M);
   x.add(42);
   x.add("foo");
@@ -191,8 +191,8 @@ TEST(bloom filter - simple hasher and partitioning) {
   bloom_filter_parameters xs;
   xs.m = 10_M;
   xs.p = 0.001;
-  auto x
-    = unbox(make_bloom_filter<xxhash, simple_hasher, policy::partitioning>(xs));
+  auto x = vast::test::unbox(
+    make_bloom_filter<xxhash, simple_hasher, policy::partitioning>(xs));
   CHECK_EQUAL(x.size(), 10_M);
   CHECK_EQUAL(x.num_hash_functions(), 10u);
   x.add(42);

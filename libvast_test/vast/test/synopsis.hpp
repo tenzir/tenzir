@@ -8,26 +8,25 @@
 
 #pragma once
 
-#include <caf/optional.hpp>
+#include "vast/test/test.hpp"
 
 #include "vast/synopsis.hpp"
 
-#include "vast/test/test.hpp"
+#include <optional>
 
 namespace vast::test {
 
 namespace nft {
 
-inline constexpr auto N = caf::none;
-inline const auto T = caf::optional<bool>{true};
-inline const auto F = caf::optional<bool>{false};
-
+inline constexpr auto N = std::nullopt;
+inline const auto T = std::optional<bool>{true};
+inline const auto F = std::optional<bool>{false};
 }
 
 struct verifier {
   synopsis* syn;
-  inline
-  void operator()(data_view rhs, std::array<caf::optional<bool>, 12> ref) {
+  inline void
+  operator()(data_view rhs, std::array<std::optional<bool>, 12> ref) {
     CHECK_EQUAL(syn->lookup(relational_operator::match, rhs), ref[0]);
     CHECK_EQUAL(syn->lookup(relational_operator::not_match, rhs), ref[1]);
     CHECK_EQUAL(syn->lookup(relational_operator::in, rhs), ref[2]);

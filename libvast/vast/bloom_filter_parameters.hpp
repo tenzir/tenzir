@@ -10,8 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include <caf/optional.hpp>
-
+#include <optional>
 #include <string_view>
 
 namespace vast {
@@ -34,23 +33,23 @@ namespace vast {
 ///
 /// @relates bloom_filter
 struct bloom_filter_parameters {
-  caf::optional<size_t> m; ///< Number of cells/bits.
-  caf::optional<size_t> n; ///< Set cardinality.
-  caf::optional<size_t> k; ///< Number of hash functions.
-  caf::optional<double> p; ///< False-positive probability.
+  std::optional<size_t> m; ///< Number of cells/bits.
+  std::optional<size_t> n; ///< Set cardinality.
+  std::optional<size_t> k; ///< Number of hash functions.
+  std::optional<double> p; ///< False-positive probability.
 };
 
 /// Evaluates a set of Bloom filter parameters. Some parameters can derived
 /// from a specific combination of others. If the correct parameters are
 /// provided, this function computes the remaining ones.
 /// @returns The complete set of parameters
-caf::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs);
+std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs);
 
 /// Attempts to Bloom filter parameters of the form `bloom_filter(n,p)`, where
 /// `n` and `p` are floating-point values.
 /// @param x The input to parse.
 /// @returns The parsed Bloom filter parameters.
 /// @relates evaluate
-caf::optional<bloom_filter_parameters> parse_parameters(std::string_view x);
+std::optional<bloom_filter_parameters> parse_parameters(std::string_view x);
 
 } // namespace vast
