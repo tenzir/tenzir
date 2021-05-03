@@ -10,20 +10,19 @@
 
 #include "vast/system/datagram_source.hpp"
 
-#include "vast/test/test.hpp"
 #include "vast/test/data.hpp"
-
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
-#include <algorithm>
-#include <fstream>
-#include <iterator>
+#include "vast/format/zeek.hpp"
 
 #include <caf/exit_reason.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/send.hpp>
 
-#include "vast/format/zeek.hpp"
+#include <algorithm>
+#include <fstream>
+#include <iterator>
 
 using namespace vast;
 using namespace vast::system;
@@ -35,26 +34,39 @@ struct test_sink_state {
   inline static constexpr const char* name = "test-sink";
 };
 
-using test_sink_type = caf::stateful_actor<test_sink_state>;
+using test_sink_actor
+  = caf::typed_actor<caf::reacts_to<atom::ping>>::extend_with<
+    stream_sink_actor<table_slice, std::string>>;
 
-caf::behavior test_sink(test_sink_type* self, caf::actor src) {
-  self->send(src, atom::sink_v, self);
-  return {[=](caf::stream<table_slice> in) {
-    return self->make_sink(
-      in,
-      [](caf::unit_t&) {
-        // nop
-      },
-      [=](caf::unit_t&, table_slice slice) {
-        self->state.slices.emplace_back(std::move(slice));
-      },
-      [=](caf::unit_t&, const caf::error&) {
-        CAF_MESSAGE(self->name() << " is done");
-      });
-  }};
+test_sink_actor::behavior_type
+test_sink(test_sink_actor::stateful_pointer<test_sink_state> self,
+          const caf::actor& src) {
+  self->anon_send(
+    src, static_cast<stream_sink_actor<table_slice, std::string>>(self));
+  return {
+    [=](caf::stream<table_slice> in,
+        const std::string&) -> caf::inbound_stream_slot<table_slice> {
+      auto result = self->make_sink(
+        in,
+        [](caf::unit_t&) {
+          // nop
+        },
+        [=](caf::unit_t&, table_slice slice) {
+          self->state.slices.emplace_back(std::move(slice));
+        },
+        [=](caf::unit_t&, const caf::error&) {
+          CAF_MESSAGE(self->name() << " is done");
+        });
+      return result.inbound_slot();
+    },
+    [=](atom::ping) {
+      REQUIRE_EQUAL(self->state.slices.size(), 1u);
+      CHECK_EQUAL(self->state.slices.front().rows(), 20u);
+    },
+  };
 }
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
@@ -86,9 +98,8 @@ TEST(zeek conn source) {
   caf::anon_send(src, std::move(msg));
   MESSAGE("advance streams and verify results");
   run();
-  auto& st = deref<test_sink_type>(snk).state;
-  REQUIRE_EQUAL(st.slices.size(), 1u);
-  CHECK_EQUAL(st.slices.front().rows(), 20u);
+  caf::anon_send(snk, atom::ping_v);
+  run();
   caf::anon_send_exit(src, caf::exit_reason::user_shutdown);
   run();
 }

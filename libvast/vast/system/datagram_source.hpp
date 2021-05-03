@@ -13,7 +13,7 @@
 #include "vast/system/actors.hpp"
 #include "vast/system/source.hpp"
 
-#include <caf/io/broker.hpp>
+#include <caf/io/typed_broker.hpp>
 
 namespace vast::system {
 
@@ -38,9 +38,6 @@ struct datagram_source_state : source_state {
   caf::timestamp start_time;
 };
 
-using datagram_source_actor
-  = caf::stateful_actor<datagram_source_state, caf::io::broker>;
-
 /// An event producer.
 /// @param self The actor handle.
 /// @param udp_listening_port The requested port.
@@ -51,12 +48,11 @@ using datagram_source_actor
 /// @oaram local_schema Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
-caf::behavior
-datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
-                format::reader_ptr reader, size_t table_slice_size,
-                caf::optional<size_t> max_events,
-                const type_registry_actor& type_registry,
-                vast::schema local_schema, std::string type_filter,
-                accountant_actor accountant);
+caf::behavior datagram_source(
+  caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
+  uint16_t udp_listening_port, format::reader_ptr reader,
+  size_t table_slice_size, caf::optional<size_t> max_events,
+  const type_registry_actor& type_registry, vast::schema local_schema,
+  std::string type_filter, accountant_actor accountant);
 
 } // namespace vast::system

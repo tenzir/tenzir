@@ -35,13 +35,12 @@
 
 namespace vast::system {
 
-caf::behavior
-datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
-                format::reader_ptr reader, size_t table_slice_size,
-                caf::optional<size_t> max_events,
-                const type_registry_actor& type_registry,
-                vast::schema local_schema, std::string type_filter,
-                accountant_actor accountant) {
+caf::behavior datagram_source(
+  caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
+  uint16_t udp_listening_port, format::reader_ptr reader,
+  size_t table_slice_size, caf::optional<size_t> max_events,
+  const type_registry_actor& type_registry, vast::schema local_schema,
+  std::string type_filter, accountant_actor accountant) {
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -80,7 +79,7 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
     },
     // done?
     [self](const caf::unit_t&) { return self->state.done; });
-  return {
+  auto result = datagram_source_actor::behavior_type{
     [self](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
       VAST_DEBUG("{} got a new datagram of size {}", self, msg.buf.size());
@@ -115,24 +114,27 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
       if (self->state.done)
         self->state.send_report();
     },
-    [self](accountant_actor accountant) {
-      VAST_DEBUG("{} sets accountant to {}", self, accountant);
-      self->state.accountant = std::move(accountant);
-      self->send(self->state.accountant, "source.start",
-                 self->state.start_time);
-      self->send(self->state.accountant, atom::announce_v, self->state.name);
-      // Start the heartbeat loop
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
-    },
-    [self](atom::sink, const caf::actor& sink) {
+    [self](stream_sink_actor<table_slice, std::string> sink) {
+      VAST_ASSERT(sink);
+      VAST_DEBUG("{} (datagram) registers {}", self, VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
-      VAST_ASSERT(sink != nullptr);
-      VAST_DEBUG("{} registers sink {}", self, sink);
+      if (self->state.sink) {
+        self->quit(caf::make_error(ec::logic_error,
+                                   "source does not support "
+                                   "multiple sinks; sender =",
+                                   self->current_sender()));
+        return;
+      }
+      self->state.sink = std::move(sink);
+      if (self->state.accountant)
+        self->delayed_send(self, defaults::system::telemetry_rate,
+                           atom::telemetry_v);
       // Start streaming.
-      self->state.mgr->add_outbound_path(sink);
+      auto name = std::string{self->state.reader->name()};
+      self->state.mgr->add_outbound_path(self->state.sink,
+                                         std::make_tuple(std::move(name)));
     },
     [self](atom::get, atom::schema) -> caf::result<schema> {
       return self->state.reader->schema();
@@ -159,7 +161,11 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
       }
       return result;
     },
+    [](atom::wakeup) {
+      // nop
+    },
     [self](atom::telemetry) {
+      VAST_DEBUG("{} got a telemetry atom", self);
       self->state.send_report();
       if (self->state.dropped_packets > 0) {
         VAST_WARN("{} has no capacity left in stream and dropped {} packets",
@@ -171,6 +177,11 @@ datagram_source(datagram_source_actor* self, uint16_t udp_listening_port,
                            atom::telemetry_v);
     },
   };
+
+  // We cannot return the behavior directly and make the DATAGRAM SOURCE a
+  // typed actor as long as SOURCE and DATAGRAM SOURCE coexist with the same
+  // interface, because the DATAGRAM SOURCE is a typed broker.
+  return result.unbox();
 }
 
 } // namespace vast::system

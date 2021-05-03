@@ -12,6 +12,7 @@
 
 #include "vast/atoms.hpp"
 
+#include <caf/io/fwd.hpp>
 #include <caf/replies_to.hpp>
 
 #include <filesystem>
@@ -63,6 +64,7 @@ struct typed_actor_fwd {
   using extend_with = typename extend_with_helper<Handle>::type;
 
   using unwrap = caf::typed_actor<Fs...>;
+  using unwrap_as_broker = caf::io::typed_broker<Fs...>;
 };
 
 /// The STREAM SINK actor interface.
@@ -359,6 +361,30 @@ using importer_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
+/// The interface of a SOURCE actor.
+using source_actor = typed_actor_fwd<
+  // Retrieve the currently used schema of the SOURCE.
+  caf::replies_to<atom::get, atom::schema>::with<schema>,
+  // Update the currently used schema of the SOURCE.
+  caf::reacts_to<atom::put, schema>,
+  // Update the expression used for filtering data in the SOURCE.
+  caf::reacts_to<expression>,
+  // Set up a new stream sink for the generated data.
+  caf::reacts_to<stream_sink_actor<table_slice, std::string>>,
+  // INTERNAL: Cause the source to wake up.
+  caf::reacts_to<atom::wakeup>,
+  // INTERNAL: Telemetry loop handler.
+  caf::reacts_to<atom::telemetry>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
+
+/// The interface of a DATAGRAM SOURCE actor.
+using datagram_source_actor
+  // Reacts to datagram messages.
+  = typed_actor_fwd<caf::reacts_to<caf::io::new_datagram_msg>>
+  // Conform to the protocol of the SOURCE actor.
+  ::extend_with<source_actor>::unwrap_as_broker;
+
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
   // Run an invocation in the node.
@@ -414,11 +440,11 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::query_map))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_actor))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_master_actor))
-  VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>) )
+  VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>))
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
-  VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>) )
+  VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))
   VAST_ADD_TYPE_ID(
-    (vast::system::stream_sink_actor<vast::table_slice, std::string>) )
+    (vast::system::stream_sink_actor<vast::table_slice, std::string>))
   VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
