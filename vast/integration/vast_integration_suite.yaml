@@ -166,6 +166,16 @@ tests:
         expected_result: error
       - command: and that is not a command
         expected_result: error
+  Export Timeout:
+    tags: [server, export]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: export --timeout=0s ascii 'resp_h == 192.168.1.104'
+        expected_result: error
+      - command: export --continuous --timeout=0s ascii 'resp_h == 192.168.1.104'
+        expected_result: error
   Server Zeek conn log:
     tags: [server, import-export, zeek]
     fixture: ServerTester

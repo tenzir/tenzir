@@ -10,6 +10,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
@@ -109,24 +110,41 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   self->monitor(snk);
   self->monitor(exporter);
   guard.disable();
-  caf::error err;
+  // Set the configured timeout, if any.
+  if (auto timeout_str = caf::get_if<std::string>(&inv.options, //
+                                                  "vast.export.timeout")) {
+    if (auto timeout = to<duration>(*timeout_str))
+      self->delayed_send(self, *timeout, atom::shutdown_v, *timeout);
+    else
+      VAST_ERROR("{} was unable parse timeout option {} as duration: {}",
+                 inv.full_name, *timeout_str, timeout.error());
+  }
+  // Start the receive-loop.
+  caf::error err = caf::none;
   auto waiting_for_final_report = false;
   auto stop = false;
   self
     ->do_receive(
+      [&](atom::shutdown, const duration& timeout) {
+        VAST_INFO("{} shuts down after {} timeout", inv.full_name,
+                  to_string(timeout));
+        self->send_exit(exporter, caf::exit_reason::user_shutdown);
+        self->send_exit(snk, caf::exit_reason::user_shutdown);
+        waiting_for_final_report = true;
+        err = caf::make_error(ec::timeout,
+                              fmt::format("{} shut down after {} timeout",
+                                          inv.full_name, to_string(timeout)));
+      },
       [&](caf::down_msg& msg) {
         stop = true;
         if (msg.source == node) {
-          VAST_DEBUG("{} received DOWN from node",
-                     detail::pretty_type_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from node", inv.full_name);
           self->send_exit(snk, caf::exit_reason::user_shutdown);
         } else if (msg.source == exporter) {
-          VAST_DEBUG("{} received DOWN from exporter",
-                     detail::pretty_type_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from exporter", inv.full_name);
           self->send_exit(snk, caf::exit_reason::user_shutdown);
         } else if (msg.source == snk) {
-          VAST_DEBUG("{} received DOWN from sink",
-                     detail::pretty_type_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from sink", inv.full_name);
           self->send_exit(exporter, caf::exit_reason::user_shutdown);
           stop = false;
           waiting_for_final_report = true;
@@ -134,29 +152,25 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason && msg.reason != caf::exit_reason::user_shutdown) {
-          VAST_WARN("{} received error message: {}",
-                    detail::pretty_type_name(inv.full_name),
-                    self->system().render(msg.reason));
+          VAST_WARN("{} received error message: {}", inv.full_name, msg.reason);
           err = std::move(msg.reason);
         }
       },
-      [&]([[maybe_unused]] performance_report report) {
+      [&]([[maybe_unused]] const performance_report& report) {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         // Log a set of named measurements.
         for (const auto& [name, measurement] : report) {
           if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
             VAST_INFO("{} processed {} events at a rate of {} events/sec in {}",
-                      detail::pretty_type_name(name), measurement.events,
-                      static_cast<uint64_t>(rate),
+                      name, measurement.events, static_cast<uint64_t>(rate),
                       to_string(measurement.duration));
           else
-            VAST_INFO("{} processed {} events", detail::pretty_type_name(name),
-                      measurement.events);
+            VAST_INFO("{} processed {} events", name, measurement.events);
         }
 #endif
       },
-      [&]([[maybe_unused]] std::string name,
-          [[maybe_unused]] query_status query) {
+      [&]([[maybe_unused]] const std::string& name,
+          [[maybe_unused]] const query_status& query) {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         if (auto rate
             = measurement{query.runtime, query.processed}.rate_per_sec();
