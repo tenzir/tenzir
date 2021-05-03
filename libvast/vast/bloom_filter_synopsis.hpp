@@ -16,6 +16,8 @@
 #include <caf/optional.hpp>
 #include <caf/serializer.hpp>
 
+#include <optional>
+
 namespace vast {
 
 /// A Bloom filter synopsis.
@@ -34,11 +36,11 @@ public:
     bloom_filter_.add(caf::get<view<T>>(x));
   }
 
-  [[nodiscard]] caf::optional<bool>
+  [[nodiscard]] std::optional<bool>
   lookup(relational_operator op, data_view rhs) const override {
     switch (op) {
       default:
-        return caf::none;
+        return {};
       case relational_operator::equal:
         return bloom_filter_.lookup(caf::get<view<T>>(rhs));
       case relational_operator::in: {
@@ -48,7 +50,7 @@ public:
               return true;
           return false;
         }
-        return caf::none;
+        return {};
       }
     }
   }
@@ -90,6 +92,6 @@ type annotate_parameters(type type, const bloom_filter_parameters& params);
 /// @param x The type whose attributes to parse.
 /// @returns The parsed and evaluated Bloom filter parameters.
 /// @relates bloom_filter_synopsis
-caf::optional<bloom_filter_parameters> parse_parameters(const type& x);
+std::optional<bloom_filter_parameters> parse_parameters(const type& x);
 
 } // namespace vast

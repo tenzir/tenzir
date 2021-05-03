@@ -17,11 +17,11 @@
 
 #include <caf/meta/load_callback.hpp>
 #include <caf/meta/type_name.hpp>
-#include <caf/optional.hpp>
 
 #include <climits>
 #include <cstddef>
 #include <numeric>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -144,7 +144,7 @@ private:
 /// @relates bloom_filter bloom_filter_parameters
 template <class HashFunction, template <class> class Hasher = double_hasher,
           class PartitioningPolicy = policy::no_partitioning>
-caf::optional<bloom_filter<HashFunction, Hasher, PartitioningPolicy>>
+std::optional<bloom_filter<HashFunction, Hasher, PartitioningPolicy>>
 make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
   using result_type = bloom_filter<HashFunction, Hasher, PartitioningPolicy>;
   using hasher_type = typename result_type::hasher_type;
@@ -153,7 +153,7 @@ make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
                VAST_ARG(ys->k), VAST_ARG(ys->m), VAST_ARG(ys->n),
                VAST_ARG(ys->p));
     if (*ys->m == 0 || *ys->k == 0)
-      return caf::none;
+      return {};
     if (seeds.empty()) {
       if constexpr (std::is_same_v<hasher_type, double_hasher<HashFunction>>) {
         seeds = {0, 1};
@@ -162,11 +162,11 @@ make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
         std::iota(seeds.begin(), seeds.end(), 0);
       }
     } else if (seeds.size() != *ys->k) {
-      return caf::none;
+      return {};
     }
     return result_type{*ys->m, hasher_type{*ys->k, std::move(seeds)}};
   }
-  return caf::none;
+  return {};
 }
 
 } // namespace vast

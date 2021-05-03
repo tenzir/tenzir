@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/fbs/synopsis.hpp"
-#include "vast/fwd.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
@@ -18,6 +19,7 @@
 #include <caf/fwd.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace vast {
 
@@ -48,7 +50,7 @@ public:
   /// @param rhs The RHS of the predicate.
   /// @pre: The query has already been type-checked.
   /// @returns The evaluation result of `*this op rhs`.
-  [[nodiscard]] virtual caf::optional<bool>
+  [[nodiscard]] virtual std::optional<bool>
   lookup(relational_operator op, data_view rhs) const = 0;
 
   /// @returns A best-effort estimate of the size (in bytes) of this synopsis.
