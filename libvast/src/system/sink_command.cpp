@@ -131,10 +131,9 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         self->send_exit(exporter, caf::exit_reason::user_shutdown);
         self->send_exit(snk, caf::exit_reason::user_shutdown);
         waiting_for_final_report = true;
-        if (caf::get_or(inv.options, "vast.export.error-on-timeout", false))
-          err = caf::make_error(ec::timeout,
-                                fmt::format("{} shut down after {} timeout",
-                                            inv.full_name, to_string(timeout)));
+        err = caf::make_error(ec::timeout,
+                              fmt::format("{} shut down after {} timeout",
+                                          inv.full_name, to_string(timeout)));
       },
       [&](caf::down_msg& msg) {
         stop = true;
