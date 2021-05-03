@@ -53,7 +53,7 @@ record retrieve_versions() {
 #endif
   record plugin_versions;
   for (auto& plugin : plugins::get()) {
-    if (plugin.visible() == plugin_ptr::visible::no)
+    if (plugin.type() == plugin_ptr::type::native)
       continue;
     const auto& version = plugin.version();
     if (version.major == version::major && version.minor == version::minor

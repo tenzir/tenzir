@@ -357,7 +357,7 @@ target_link_libraries(libvast PRIVATE libvast_internal)
 # libvast library. This makes it possible to statically link a plugin against
 # the vast::libvast target, or to write built-in plugins that are always loaded
 # with libvast.
-target_compile_definitions(libvast PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL=2)
+target_compile_definitions(libvast PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 
 # GNU prior to 9.1 requires linking with stdc++fs when using std::filesystem library
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.1.0)

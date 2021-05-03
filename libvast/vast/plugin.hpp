@@ -232,27 +232,32 @@ public:
 /// @relates plugin
 class plugin_ptr final {
 public:
-  /// The display policy of a plugin.
-  enum class visible {
-    yes, ///< Show the plugin in the output of the version command.
-    no,  ///< Hide the plugin in the output of the version command.
+  /// The type of the plugin.
+  enum class type {
+    dynamic, ///< The plugin is dynamically linked.
+    static_, ///< The plugin is statically linked.
+    native,  ///< The plugin is builtin to the binary.
   };
 
-  /// Load a plugin from the specified library filename.
+  /// Load a dynamic plugin from the specified library filename.
   /// @param filename The filename that's passed to 'dlopen'.
   /// @param cfg The actor system config to register type IDs with.
-  /// @param visible The display policy of the plugin.
   static caf::expected<plugin_ptr>
-  make(const char* filename, caf::actor_system_config& cfg,
-       enum visible visible) noexcept;
+  make_dynamic(const char* filename, caf::actor_system_config& cfg) noexcept;
 
-  /// Take ownership of an already loaded plugin.
+  /// Take ownership of a static plugin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
-  /// @param visible The display policy of the plugin.
-  static plugin_ptr make(plugin* instance, void (*deleter)(plugin*),
-                         plugin_version version, enum visible visible) noexcept;
+  static plugin_ptr make_static(plugin* instance, void (*deleter)(plugin*),
+                                plugin_version version) noexcept;
+
+  /// Take ownership of a native plugin.
+  /// @param instance The plugin instance.
+  /// @param deleter A deleter for the plugin instance.
+  /// @param version The version of the plugin.
+  static plugin_ptr make_native(plugin* instance, void (*deleter)(plugin*),
+                                plugin_version version) noexcept;
 
   /// Unload a plugin and its required resources.
   ~plugin_ptr() noexcept;
@@ -295,34 +300,36 @@ public:
   /// Returns the plugin version.
   [[nodiscard]] const plugin_version& version() const noexcept;
 
-  /// Returns the plugins display policy.
-  [[nodiscard]] enum visible visible() const noexcept;
+  /// Returns the plugins type.
+  [[nodiscard]] enum type type() const noexcept;
 
 private:
   /// Create a plugin_ptr.
   plugin_ptr(void* library, plugin* instance, void (*deleter)(plugin*),
-             plugin_version version, enum visible visible) noexcept;
+             plugin_version version, enum type type) noexcept;
 
   /// Implementation details.
   void* library_ = {};
   plugin* instance_ = {};
   void (*deleter_)(plugin*) = {};
   plugin_version version_ = {};
-  enum visible visible_ = {};
+  enum type type_ = {};
 };
 
 } // namespace vast
 
 // -- helper macros ------------------------------------------------------------
 
-#if defined(VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+#if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_NATIVE_PLUGINS)
 
-#  if VAST_ENABLE_STATIC_PLUGINS_INTERNAL == 1
-#    define VAST_PLUGIN_VISIBILITY ::vast::plugin_ptr::visible::yes
-#  elif VAST_ENABLE_STATIC_PLUGINS_INTERNAL == 2
-#    define VAST_PLUGIN_VISIBILITY ::vast::plugin_ptr::visible::no
+#  error "Plugins cannot be both static and native"
+
+#elif defined(VAST_ENABLE_STATIC_PLUGINS) || defined(VAST_ENABLE_NATIVE_PLUGINS)
+
+#  if defined(VAST_ENABLE_STATIC_PLUGINS)
+#    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_static
 #  else
-#    error "VAST_ENABLE_STATIC_PLUGINS_INTERNAL must be 1 or 2"
+#    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_native
 #  endif
 
 #  define VAST_REGISTER_PLUGIN_5(name, major, minor, patch, tweak)             \
@@ -332,10 +339,9 @@ private:
         static_cast<void>(flag);                                               \
       }                                                                        \
       static bool init() {                                                     \
-        ::vast::plugins::get().push_back(::vast::plugin_ptr::make(             \
+        ::vast::plugins::get().push_back(VAST_MAKE_PLUGIN(                     \
           new Plugin, +[](::vast::plugin* plugin) noexcept { delete plugin; }, \
-          ::vast::plugin_version{major, minor, patch, tweak},                  \
-          VAST_PLUGIN_VISIBILITY));                                            \
+          ::vast::plugin_version{major, minor, patch, tweak}));                \
         return true;                                                           \
       }                                                                        \
       inline static auto flag = init();                                        \
@@ -363,7 +369,7 @@ private:
     VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name1)                                \
     VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name2)
 
-#else // if !defined(VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+#else
 
 #  define VAST_REGISTER_PLUGIN_5(name, major, minor, patch, tweak)             \
     extern "C" ::vast::plugin* vast_plugin_create() {                          \
@@ -407,7 +413,7 @@ private:
                 : ::caf::id_block::name2::end};                                \
     }
 
-#endif // !defined(VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+#endif
 
 #define VAST_REGISTER_PLUGIN_1(name)                                           \
   VAST_REGISTER_PLUGIN_5(name, ::vast::version::major, ::vast::version::minor, \

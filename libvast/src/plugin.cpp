@@ -86,13 +86,13 @@ system::component_plugin_actor analyzer_plugin::make_component(
 // -- plugin_ptr ---------------------------------------------------------------
 
 caf::expected<plugin_ptr>
-plugin_ptr::make(const char* filename, caf::actor_system_config& cfg,
-                 enum visible visible) noexcept {
+plugin_ptr::make_dynamic(const char* filename,
+                         caf::actor_system_config& cfg) noexcept {
   auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
   if (!library)
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
                            dlerror());
-  auto libvast_version = reinterpret_cast<const char* (*) ()>(
+  auto libvast_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "vast_libvast_version"));
   if (!libvast_version)
     return caf::make_error(ec::system_error,
@@ -101,7 +101,7 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg,
   if (strcmp(libvast_version(), version::version) != 0)
     return caf::make_error(ec::version_error, "libvast version mismatch in",
                            filename, libvast_version(), version::version);
-  auto libvast_build_tree_hash = reinterpret_cast<const char* (*) ()>(
+  auto libvast_build_tree_hash = reinterpret_cast<const char* (*)()>(
     dlsym(library, "vast_libvast_build_tree_hash"));
   if (!libvast_build_tree_hash)
     return caf::make_error(ec::system_error,
@@ -118,7 +118,7 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg,
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol vast_plugin_version in",
                            filename, dlerror());
-  auto plugin_create = reinterpret_cast<::vast::plugin* (*) ()>(
+  auto plugin_create = reinterpret_cast<::vast::plugin* (*)()>(
     dlsym(library, "vast_plugin_create"));
   if (!plugin_create)
     return caf::make_error(ec::system_error,
@@ -165,13 +165,17 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg,
     old_blocks.push_back(new_block);
   }
   return plugin_ptr{library, plugin_create(), plugin_destroy, plugin_version(),
-                    visible};
+                    type::dynamic};
 }
 
-plugin_ptr
-plugin_ptr::make(plugin* instance, void (*deleter)(plugin*),
-                 plugin_version version, enum visible visible) noexcept {
-  return plugin_ptr{nullptr, instance, deleter, version, visible};
+plugin_ptr plugin_ptr::make_static(plugin* instance, void (*deleter)(plugin*),
+                                   plugin_version version) noexcept {
+  return plugin_ptr{nullptr, instance, deleter, version, type::static_};
+}
+
+plugin_ptr plugin_ptr::make_native(plugin* instance, void (*deleter)(plugin*),
+                                   plugin_version version) noexcept {
+  return plugin_ptr{nullptr, instance, deleter, version, type::native};
 }
 
 plugin_ptr::~plugin_ptr() noexcept {
@@ -186,7 +190,7 @@ plugin_ptr::~plugin_ptr() noexcept {
     library_ = {};
   }
   version_ = {};
-  visible_ = {};
+  type_ = {};
 }
 
 plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
@@ -194,7 +198,7 @@ plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
     instance_{std::exchange(other.instance_, {})},
     deleter_{std::exchange(other.deleter_, {})},
     version_{std::exchange(other.version_, {})},
-    visible_{std::exchange(other.visible_, {})} {
+    type_{std::exchange(other.type_, {})} {
   // nop
 }
 
@@ -203,7 +207,7 @@ plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept {
   instance_ = std::exchange(rhs.instance_, {});
   deleter_ = std::exchange(rhs.deleter_, {});
   version_ = std::exchange(rhs.version_, {});
-  visible_ = std::exchange(rhs.visible_, {});
+  type_ = std::exchange(rhs.type_, {});
   return *this;
 }
 
@@ -229,12 +233,12 @@ plugin& plugin_ptr::operator&() noexcept {
 
 plugin_ptr::plugin_ptr(void* library, plugin* instance,
                        void (*deleter)(plugin*), plugin_version version,
-                       enum visible visible) noexcept
+                       enum type type) noexcept
   : library_{library},
     instance_{instance},
     deleter_{deleter},
     version_{version},
-    visible_{visible} {
+    type_{type} {
   // nop
 }
 
@@ -242,8 +246,8 @@ const plugin_version& plugin_ptr::version() const noexcept {
   return version_;
 }
 
-enum plugin_ptr::visible plugin_ptr::visible() const noexcept {
-  return visible_;
+enum plugin_ptr::type plugin_ptr::type() const noexcept {
+  return type_;
 }
 
 } // namespace vast
