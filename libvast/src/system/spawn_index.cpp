@@ -18,6 +18,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
+#include <string_view>
 
 namespace vast::system {
 
@@ -26,7 +27,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
             spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  auto opt = [&](caf::string_view key, auto default_value) {
+  auto opt = [&](std::string_view key, auto default_value) {
     return get_or(args.inv.options, key, default_value);
   };
   auto [archive, filesystem, accountant]
