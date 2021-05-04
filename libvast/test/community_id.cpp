@@ -27,7 +27,8 @@ namespace {
                               std::string_view dst_addr, uint16_t src_port,    \
                               uint16_t dst_port) {                             \
     constexpr auto proto = port_type::protocol;                                \
-    return unbox(make_flow<proto>(src_addr, dst_addr, src_port, dst_port));    \
+    return vast::test::unbox(                                                  \
+      make_flow<proto>(src_addr, dst_addr, src_port, dst_port));               \
   }
 
 FLOW_FACTORY(icmp)
