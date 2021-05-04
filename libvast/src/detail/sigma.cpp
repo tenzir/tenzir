@@ -15,8 +15,6 @@
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 
-#include <caf/optional.hpp>
-
 #include <map>
 #include <regex>
 #include <string>
@@ -186,7 +184,7 @@ struct detection_parser : parser<detection_parser> {
 // - Regular expressions are case-sensitive by default
 // - You don't have to escape characters except the string quotation
 //   marks '
-caf::optional<pattern> make_pattern(std::string_view str) {
+std::optional<pattern> make_pattern(std::string_view str) {
   auto f = str.begin();
   auto l = str.end();
   std::string rx;
@@ -231,7 +229,7 @@ caf::optional<pattern> make_pattern(std::string_view str) {
   // It's only a pattern if it differs from a regular string.
   // TODO: check whether we need ^ and $ anchors.
   if (str == rx)
-    return caf::none;
+    return {};
   return pattern{std::move(rx)};
 }
 
