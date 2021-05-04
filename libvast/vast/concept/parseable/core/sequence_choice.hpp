@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/concept/parseable/core/optional.hpp"
+#include "vast/concept/parseable/core/parser.hpp"
+
+#include <optional>
 #include <tuple>
 #include <type_traits>
-
-#include "vast/concept/parseable/core/parser.hpp"
-#include "vast/concept/parseable/core/optional.hpp"
-#include "vast/optional.hpp"
 
 namespace vast {
 
@@ -27,24 +27,19 @@ public:
   using rhs_attribute = typename Rhs::attribute;
 
   // LHS = unused && RHS = unused  =>  unused
-  // LHS = T && RHS = unused       =>  optional<LHS>
-  // LHS = unused && RHS = T       =>  optional<RHS>
-  // LHS = T && RHS = U            =>  std:tuple<optional<LHS>, optional<RHS>>
-  using attribute =
+  // LHS = T && RHS = unused       =>  std::optional<LHS>
+  // LHS = unused && RHS = T       =>  std::optional<RHS>
+  // LHS = T && RHS = U            =>  std:tuple<std::optional<LHS>,
+  // std::optional<RHS>>
+  using attribute = std::conditional_t<
+    std::is_same<lhs_attribute, unused_type>{}
+      && std::is_same<rhs_attribute, unused_type>{},
+    unused_type,
     std::conditional_t<
-      std::is_same<lhs_attribute, unused_type>{}
-        && std::is_same<rhs_attribute, unused_type>{},
-      unused_type,
+      std::is_same<rhs_attribute, unused_type>{}, std::optional<lhs_attribute>,
       std::conditional_t<
-        std::is_same<rhs_attribute, unused_type>{},
-        optional<lhs_attribute>,
-        std::conditional_t<
-          std::is_same<lhs_attribute, unused_type>{},
-          optional<rhs_attribute>,
-          std::tuple<optional<lhs_attribute>, optional<rhs_attribute>>
-        >
-      >
-    >;
+        std::is_same<lhs_attribute, unused_type>{}, std::optional<rhs_attribute>,
+        std::tuple<std::optional<lhs_attribute>, std::optional<rhs_attribute>>>>>;
 
   sequence_choice_parser(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{rhs}, rhs_opt_{std::move(rhs)} {
@@ -52,7 +47,7 @@ public:
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    optional<rhs_attribute> rhs_attr;
+    std::optional<rhs_attribute> rhs_attr;
     if (lhs_(f, l, left_attr(a)) && rhs_opt_(f, l, rhs_attr)) {
       right_attr(a) = std::move(rhs_attr);
       return true;
@@ -75,7 +70,7 @@ private:
   static auto left_attr(Attribute& a) -> std::enable_if_t<
     std::conjunction_v<std::negation<std::is_same<L, unused_type>>,
                        std::is_same<R, unused_type>>,
-    optional<L>&> {
+    std::optional<L>&> {
     return a;
   }
 
@@ -83,7 +78,7 @@ private:
   static auto left_attr(std::tuple<Ts...>& t) -> std::enable_if_t<
     std::negation_v<std::disjunction<std::is_same<L, unused_type>,
                                      std::is_same<R, unused_type>>>,
-    optional<L>&> {
+    std::optional<L>&> {
     return std::get<0>(t);
   }
 
@@ -101,7 +96,7 @@ private:
   static auto right_attr(Attribute& a) -> std::enable_if_t<
     std::conjunction_v<std::is_same<L, unused_type>,
                        std::negation<std::is_same<R, unused_type>>>,
-    optional<R>&> {
+    std::optional<R>&> {
     return a;
   }
 
@@ -109,7 +104,7 @@ private:
   static auto right_attr(std::tuple<Ts...>& t) -> std::enable_if_t<
     std::negation_v<std::disjunction<std::is_same<L, unused_type>,
                                      std::is_same<R, unused_type>>>,
-    optional<R>&> {
+    std::optional<R>&> {
     return std::get<1>(t);
   }
 

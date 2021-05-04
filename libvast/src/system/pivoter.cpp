@@ -30,7 +30,7 @@ namespace {
 
 /// Returns the field that shall be used to extract values from for
 /// the pivot membership query.
-caf::optional<record_field>
+std::optional<record_field>
 common_field(const pivoter_state& st, const record_type& indicator) {
   auto f = st.cache.find(indicator);
   if (f != st.cache.end())
@@ -64,10 +64,10 @@ common_field(const pivoter_state& st, const record_type& indicator) {
     }
   }
 #endif
-  st.cache.insert({indicator, caf::none});
+  st.cache.insert({indicator, std::nullopt});
   VAST_WARN("{} got slice without shared column: {}", st.self,
             indicator.name());
-  return caf::none;
+  return {};
 }
 
 } // namespace

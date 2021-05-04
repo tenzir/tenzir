@@ -28,6 +28,7 @@
 #include <fmt/format.h>
 
 #include <iterator>
+#include <optional>
 #include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
@@ -46,13 +47,11 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   auto eval_string_and_pattern = [](const auto& x, const auto& y) {
     return caf::visit(
       detail::overload{
-        [](const auto&, const auto&) -> caf::optional<bool> {
-          return caf::none;
-        },
-        [](const std::string& lhs, const pattern& rhs) -> caf::optional<bool> {
+        [](const auto&, const auto&) -> std::optional<bool> { return {}; },
+        [](const std::string& lhs, const pattern& rhs) -> std::optional<bool> {
           return rhs.match(lhs);
         },
-        [](const pattern& lhs, const std::string& rhs) -> caf::optional<bool> {
+        [](const pattern& lhs, const std::string& rhs) -> std::optional<bool> {
           return lhs.match(rhs);
         },
       },
@@ -173,22 +172,22 @@ size_t depth(const record& r) {
 namespace {
 
 template <class Iterator, class Sentinel>
-caf::optional<record> make_record(const record_type& rt, Iterator& begin,
+std::optional<record> make_record(const record_type& rt, Iterator& begin,
                                   Sentinel end, size_t max_recursion) {
   if (max_recursion == 0) {
     VAST_WARN("partially discarding record: recursion limit of {} exceeded",
               defaults::max_recursion);
-    return caf::none;
+    return {};
   }
   record result;
   for (const auto& field : rt.fields) {
     if (begin == end)
-      return caf::none;
+      return {};
     if (const auto* nested = caf::get_if<record_type>(&field.type)) {
       if (auto r = make_record(*nested, begin, end, --max_recursion))
         result.emplace(field.name, std::move(*r));
       else
-        return caf::none;
+        return {};
     } else {
       result.emplace(field.name, std::move(*begin));
       ++begin;
@@ -199,7 +198,7 @@ caf::optional<record> make_record(const record_type& rt, Iterator& begin,
 
 } // namespace
 
-caf::optional<record>
+std::optional<record>
 make_record(const record_type& rt, std::vector<data>&& xs) {
   auto begin = xs.begin();
   auto end = xs.end();
@@ -225,7 +224,7 @@ record flatten(const record& r, size_t max_recursion) {
   return result;
 }
 
-caf::optional<record>
+std::optional<record>
 flatten(const record& r, const record_type& rt, size_t max_recursion) {
   record result;
   if (max_recursion == 0) {
@@ -238,14 +237,14 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
       // Look for a matching field of type record.
       const auto* field = rt.find(k);
       if (field == nullptr)
-        return caf::none;
+        return {};
       const auto* irt = caf::get_if<record_type>(&field->type);
       if (!irt)
-        return caf::none;
+        return {};
       // Recurse.
       auto nested = flatten(*ir, *irt, --max_recursion);
       if (!nested)
-        return caf::none;
+        return {};
       // Hoist nested record into parent scope by prefixing field names.
       for (auto& [nk, nv] : *nested)
         result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
@@ -256,7 +255,7 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
   return result;
 }
 
-caf::optional<data>
+std::optional<data>
 flatten(const data& x, const type& t, size_t max_recursion) {
   if (max_recursion == 0) {
     VAST_WARN("partially discarding record: recursion limit of {} exceeded",
@@ -272,11 +271,11 @@ flatten(const data& x, const type& t, size_t max_recursion) {
 
 } // namespace
 
-caf::optional<data> flatten(const data& x, const type& t) {
+std::optional<data> flatten(const data& x, const type& t) {
   return flatten(x, t, defaults::max_recursion);
 }
 
-caf::optional<record> flatten(const record& r, const record_type& rt) {
+std::optional<record> flatten(const record& r, const record_type& rt) {
   return flatten(r, rt, defaults::max_recursion);
 }
 

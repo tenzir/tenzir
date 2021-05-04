@@ -19,7 +19,6 @@
 #include "vast/time.hpp"
 
 #include <caf/none.hpp>
-#include <caf/optional.hpp>
 #include <caf/variant.hpp>
 
 #include <array>
@@ -27,6 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 
 /// The [MessagePack](https://github.com/msgpack/msgpack/blob/master/spec.md)
 /// object serialization specification.
@@ -597,10 +597,10 @@ decltype(auto) visit(Visitor&& f, const object& x) {
 
 /// @relates object
 template <class T>
-caf::optional<T> get(const object& o) {
+std::optional<T> get(const object& o) {
   return visit(vast::detail::overload{
-                 [](auto&&) { return caf::optional<T>{}; },
-                 [](T x) { return caf::optional<T>{std::move(x)}; },
+                 [](auto&&) { return std::optional<T>{}; },
+                 [](T x) { return std::optional<T>{std::move(x)}; },
                },
                o);
 }

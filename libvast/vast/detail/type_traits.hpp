@@ -11,6 +11,7 @@
 #include <caf/detail/type_traits.hpp>
 
 #include <iterator>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -140,6 +141,11 @@ struct remove_optional {
 
 template <class T>
 struct remove_optional<caf::optional<T>> {
+  using type = T;
+};
+
+template <class T>
+struct remove_optional<std::optional<T>> {
   using type = T;
 };
 

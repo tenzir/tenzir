@@ -24,16 +24,16 @@ struct field_selector {
     // nop
   }
 
-  caf::optional<vast::record_type>
+  std::optional<vast::record_type>
   operator()(const ::simdjson::dom::object& j) {
     auto el = j.at_key(Specification::field);
     if (el.error())
-      return caf::none;
+      return {};
     auto event_type = el.value().get_string();
     if (event_type.error()) {
       VAST_WARN("{} got a {} field with a non-string value",
                 detail::pretty_type_name(this), Specification::field);
-      return caf::none;
+      return {};
     }
     auto field = std::string{event_type.value()};
     auto it = types.find(field);
@@ -42,7 +42,7 @@ struct field_selector {
       if (unknown_types.insert(field).second)
         VAST_WARN("{} does not have a layout for {} {}",
                   detail::pretty_type_name(this), Specification::field, field);
-      return caf::none;
+      return {};
     }
     return it->second;
   }

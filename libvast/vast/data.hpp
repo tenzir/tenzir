@@ -26,11 +26,11 @@
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/none.hpp>
-#include <caf/optional.hpp>
 #include <caf/variant.hpp>
 
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -137,7 +137,7 @@ public:
   /// Constructs data from optional data.
   /// @param x The optional data instance.
   template <class T>
-  data(caf::optional<T> x) : data{x ? std::move(*x) : data{}} {
+  data(std::optional<T> x) : data{x ? std::move(*x) : data{}} {
     // nop
   }
 
@@ -280,7 +280,7 @@ size_t depth(const record& r);
 /// @param rt The record type
 /// @param xs The record fields.
 /// @returns A record according to the fields as defined in *rt*.
-caf::optional<record>
+std::optional<record>
 make_record(const record_type& rt, std::vector<data>&& xs);
 
 /// Flattens a record recursively.
@@ -292,8 +292,8 @@ record flatten(const record& r);
 /// @param rt The record type according to which *r* should be flattened.
 /// @returns The flattened record if the nested structure of *r* is a valid
 ///          subset of *rt*.
-caf::optional<record> flatten(const record& r, const record_type& rt);
-caf::optional<data> flatten(const data& x, const type& t);
+std::optional<record> flatten(const record& r, const record_type& rt);
+std::optional<data> flatten(const data& x, const type& t);
 
 /// Merges one record into another such that the source overwrites potential
 /// keys in the destination.

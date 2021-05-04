@@ -12,6 +12,7 @@
 #include "vast/concept/parseable/vast.hpp"
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
+#include "vast/optional.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/explorer.hpp"
 #include "vast/system/node.hpp"
@@ -73,13 +74,12 @@ spawn_explorer(node_actor::stateful_pointer<node_state> self,
     return unexpected_arguments(args);
   if (auto error = explorer_validate_args(args.inv.options))
     return error;
-  auto maybe_parse
-    = [](caf::optional<std::string>&& str) -> std::optional<vast::duration> {
+  auto maybe_parse = [](auto&& str) -> std::optional<vast::duration> {
     if (!str)
-      return std::nullopt;
+      return {};
     auto parsed = to<vast::duration>(*str);
     if (!parsed)
-      return std::nullopt;
+      return {};
     return *parsed;
   };
   const auto& options = args.inv.options;

@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include <caf/fwd.hpp>
+
+#include <cstdint>
+#include <optional>
 
 namespace vast {
 
@@ -50,12 +51,12 @@ enum class icmp6_type : uint8_t {
 /// @param x The ICMP type.
 /// @returns For a request type, the response type - and vice versa.
 /// @relates icmp_type
-caf::optional<icmp_type> dual(icmp_type x);
+std::optional<icmp_type> dual(icmp_type x);
 
 /// Computes the dual to a given ICMP6 type.
 /// @param x The ICMP6 type.
 /// @returns For a request type, the response type - and vice versa.
 /// @relates icmp6_type
-caf::optional<icmp6_type> dual(icmp6_type x);
+std::optional<icmp6_type> dual(icmp6_type x);
 
 } // namespace vast

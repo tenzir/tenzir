@@ -151,8 +151,6 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       }
       std::optional<table_slice_column> by_column;
       if (st.by) {
-        // Need to pivot from caf::optional to std::optional here, as the
-        // former doesnt support emplace or value assignment.
         if (auto col = table_slice_column::make(slice, *st.by))
           by_column.emplace(std::move(*col));
         if (!by_column) {

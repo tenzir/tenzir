@@ -13,15 +13,17 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/detail/assert.hpp"
 
+#include <optional>
+
 namespace vast {
 
-caf::optional<flow>
+std::optional<flow>
 make_flow(std::string_view src_addr, std::string_view dst_addr,
           uint16_t src_port, uint16_t dst_port, port_type protocol) {
   using parsers::addr;
   flow result;
   if (!addr(src_addr, result.src_addr) || !addr(dst_addr, result.dst_addr))
-    return caf::none;
+    return {};
   result.src_port = port{src_port, protocol};
   result.dst_port = port{dst_port, protocol};
   return result;

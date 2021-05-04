@@ -20,8 +20,8 @@
 #include "vast/schema.hpp"
 
 #include <caf/expected.hpp>
-#include <caf/optional.hpp>
 
+#include <optional>
 #include <simdjson.h>
 
 namespace vast::format::json {
@@ -52,10 +52,10 @@ private:
   }
 
 public:
-  caf::optional<record_type>
+  std::optional<record_type>
   operator()(const ::simdjson::dom::object& obj) const {
     if (type_cache.empty())
-      return caf::none;
+      return {};
     // Iff there is only one type in the type cache, allow the JSON reader to
     // use it despite not being an exact match.
     if (type_cache.size() == 1)
@@ -63,7 +63,7 @@ public:
     if (auto search_result = type_cache.find(make_names_layout(obj));
         search_result != type_cache.end())
       return search_result->second;
-    return caf::none;
+    return {};
   }
 
   caf::error schema(vast::schema sch) {

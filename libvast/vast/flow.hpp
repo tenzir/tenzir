@@ -8,13 +8,12 @@
 
 #pragma once
 
-#include <functional>
-#include <string_view>
-
-#include <caf/optional.hpp>
-
 #include "vast/address.hpp"
 #include "vast/port.hpp"
+
+#include <functional>
+#include <optional>
+#include <string_view>
 
 namespace vast {
 
@@ -62,7 +61,7 @@ flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
 /// @param protocol The transport-layer protocol in use.
 /// @return An instance of a flow.
 /// @relates flow
-caf::optional<flow>
+std::optional<flow>
 make_flow(std::string_view src_addr, std::string_view dst_addr,
           uint16_t src_port, uint16_t dst_port, port_type protocol);
 

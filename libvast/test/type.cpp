@@ -318,7 +318,7 @@ TEST(record flat index computation) {
     }}
   };
   // clang-format on
-  using os = caf::optional<size_t>;
+  using os = std::optional<size_t>;
   static const os invalid;
   CHECK_EQUAL(flat_size(x), 6u);
   CHECK_EQUAL(x.flat_index_at(offset({0, 0, 0})), os(0u));

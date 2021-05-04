@@ -22,11 +22,11 @@
 #include <caf/config_value.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
-#include <caf/optional.hpp>
 #include <caf/settings.hpp>
 #include <caf/string_algorithms.hpp>
 
 #include <filesystem>
+#include <optional>
 
 namespace vast::system {
 
@@ -75,17 +75,17 @@ caf::expected<expression> get_expression(const spawn_arguments& args) {
   return *expr;
 }
 
-caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
+caf::expected<std::optional<schema>> read_schema(const spawn_arguments& args) {
   auto schema_file_ptr = caf::get_if<std::string>(&args.inv.options, "schema");
   if (!schema_file_ptr)
-    return caf::optional<schema>{caf::none};
+    return std::optional<schema>{std::nullopt};
   auto str = detail::load_contents(std::filesystem::path{*schema_file_ptr});
   if (!str)
     return str.error();
   auto result = to<schema>(*str);
   if (!result)
     return result.error();
-  return caf::optional<schema>{std::move(*result)};
+  return std::optional<schema>{std::move(*result)};
 }
 
 caf::error unexpected_arguments(const spawn_arguments& args) {
