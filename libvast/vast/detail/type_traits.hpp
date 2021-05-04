@@ -11,7 +11,6 @@
 #include <caf/detail/type_traits.hpp>
 
 #include <iterator>
-#include <streambuf>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -32,18 +31,6 @@ struct is_tuple<std::tuple<Ts...>> : std::true_type {};
 
 template <class T>
 constexpr bool is_tuple_v = is_tuple<T>::value;
-
-/// Checks whether a type derives from `basic_streambuf<Char>`.
-template <class T, class U = void>
-struct is_streambuf : std::false_type {};
-
-template <class T>
-struct is_streambuf<T, std::enable_if_t<std::is_base_of_v<
-                         std::basic_streambuf<typename T::char_type>, T>>>
-  : std::true_type {};
-
-template <class T>
-constexpr bool is_streambuf_v = is_streambuf<T>::value;
 
 // std::pair<T, U>
 
@@ -158,33 +145,6 @@ struct remove_optional<caf::optional<T>> {
 
 template <class T>
 using remove_optional_t = typename remove_optional<T>::type;
-
-// -- checks for stringification functions -----------------------------------
-
-template <typename T>
-using to_string_t = decltype(to_string(std::declval<T>()));
-
-template <typename T>
-inline constexpr bool has_to_string
-  = std::experimental::is_detected_v<to_string_t, T>;
-
-template <typename T>
-using name_getter_t =
-  typename std::is_convertible<decltype(std::declval<T>().name()),
-                               std::string_view>::type;
-
-template <typename T>
-inline constexpr bool has_name_getter
-  = std::experimental::is_detected_v<name_getter_t, T>;
-
-template <typename T>
-using name_member_t =
-  typename std::is_convertible<decltype(std::declval<T>().name),
-                               std::string_view>::type;
-
-template <typename T>
-inline constexpr bool has_name_member
-  = std::experimental::is_detected_v<name_member_t, T>;
 
 // -- compile time computation of sum -----------------------------------------
 template <auto... Values>
