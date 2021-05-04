@@ -20,9 +20,10 @@
 #include "vast/detail/stack_vector.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
-#include "vast/optional.hpp"
 #include "vast/time.hpp"
 
+#include <caf/detail/apply_args.hpp>
+#include <caf/detail/int_list.hpp>
 #include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
@@ -34,6 +35,7 @@
 #include <caf/sum_type.hpp>
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -654,12 +656,12 @@ struct record_type final : recursive_type<record_type> {
   /// Attemps to resolve a key to an offset.
   /// @param key The key to resolve.
   /// @returns The offset corresponding to *key*.
-  caf::optional<offset> resolve(std::string_view key) const;
+  std::optional<offset> resolve(std::string_view key) const;
 
   /// Attemps to resolve an offset to a key.
   /// @param o The offset to resolve.
   /// @returns The key corresponding to *o*.
-  caf::optional<std::string> resolve(const offset& o) const;
+  std::optional<std::string> resolve(const offset& o) const;
 
   /// Finds a record field by exact name.
   /// @param field_name The name of the field to lookup.
@@ -693,15 +695,15 @@ struct record_type final : recursive_type<record_type> {
   ///   auto r = record_type{{"x", record_type{"y", count_type{}}}};
   ///   ASSERT_EQ(r.flat_field_at({0,0}), record_field{"x.y", count_type{}});
   /// @endcode
-  caf::optional<record_field> flat_field_at(offset o) const;
+  std::optional<record_field> flat_field_at(offset o) const;
 
   /// Converts an offset into an index for the flattened representation.
   /// @param o The offset to resolve.
-  caf::optional<size_t> flat_index_at(offset o) const;
+  std::optional<size_t> flat_index_at(offset o) const;
 
   /// Converts an index for the flattened representation into an offset.
   /// @param i The index to resolve.
-  caf::optional<offset> offset_from_index(size_t i) const;
+  std::optional<offset> offset_from_index(size_t i) const;
 
   friend bool operator==(const record_type& x, const record_type& y);
   friend bool operator<(const record_type& x, const record_type& y);

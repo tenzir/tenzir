@@ -19,6 +19,7 @@
 #include "vast/pattern.hpp"
 #include "vast/schema.hpp"
 
+#include <optional>
 #include <tuple>
 #include <typeindex>
 #include <utility>
@@ -253,10 +254,10 @@ size_t record_type::num_leaves() const {
   return count;
 }
 
-caf::optional<offset> record_type::resolve(std::string_view key) const {
+std::optional<offset> record_type::resolve(std::string_view key) const {
   offset result;
   if (key.empty())
-    return caf::none;
+    return {};
   auto offset = offset::size_type{0};
   for (auto i = fields.begin(); i != fields.end(); ++i, ++offset) {
     auto& field = *i;
@@ -273,33 +274,33 @@ caf::optional<offset> record_type::resolve(std::string_view key) const {
       auto remainder = key.substr(1 + name.size());
       auto rec = get_if<record_type>(&field.type);
       if (!rec)
-        return caf::none;
+        return {};
       auto sub_result = rec->resolve(remainder);
       if (!sub_result)
-        return caf::none;
+        return {};
       result.insert(result.end(), sub_result->begin(), sub_result->end());
       return result;
     }
   }
-  return caf::none;
+  return {};
 }
 
-caf::optional<std::string> record_type::resolve(const offset& o) const {
+std::optional<std::string> record_type::resolve(const offset& o) const {
   if (o.empty())
-    return caf::none;
+    return {};
   std::string result;
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
     auto x = o[i];
     if (x >= r->fields.size())
-      return caf::none;
+      return {};
     if (!result.empty())
       result += '.';
     result += r->fields[x].name;
     if (i != o.size() - 1) {
       r = get_if<record_type>(&r->fields[x].type);
       if (!r)
-        return caf::none;
+        return {};
     }
   }
   return result;
@@ -395,7 +396,7 @@ bool record_type::less_than(const abstract_type& other) const {
   return super::less_than(other) || fields < downcast(other).fields;
 }
 
-caf::optional<record_field> record_type::flat_field_at(offset o) const {
+std::optional<record_field> record_type::flat_field_at(offset o) const {
   record_field result;
   auto r = this;
   size_t x = 0;
@@ -405,7 +406,7 @@ caf::optional<record_field> record_type::flat_field_at(offset o) const {
     if (auto next_record = get_if<record_type>(&next.type))
       r = next_record;
     else
-      return caf::none;
+      return {};
   }
   auto next = r->fields[o[x]];
   result.name += next.name + '.';
@@ -413,13 +414,13 @@ caf::optional<record_field> record_type::flat_field_at(offset o) const {
   return result;
 }
 
-caf::optional<size_t> record_type::flat_index_at(offset o) const {
+std::optional<size_t> record_type::flat_index_at(offset o) const {
   // Empty offsets are invalid.
   if (o.empty())
-    return caf::none;
+    return {};
   // Bounds check.
   if (o[0] >= fields.size())
-    return caf::none;
+    return {};
   // Example: o = [1] picks the second element. However, we still need the
   // total amount of nested elements of the first element.
   size_t flat_index = 0;
@@ -427,34 +428,34 @@ caf::optional<size_t> record_type::flat_index_at(offset o) const {
     flat_index += flat_size(fields[i].type);
   // Now, we know how many fields are on the left. We're done if the offset
   // points to a non-record field in this record.
-  auto record_field = get_if<record_type>(&fields[o[0]].type);
+  auto record_field = caf::get_if<record_type>(&fields[o[0]].type);
   if (o.size() == 1) {
     // Sanity check: the offset is invalid if it points to a record type.
     if (record_field != nullptr)
-      return caf::none;
+      return {};
     return flat_index;
   }
   // The offset points into the field, therefore it must be a record type.
   if (record_field == nullptr)
-    return caf::none;
+    return {};
   // Drop index of the first dimension and dispatch to field recursively.
   o.erase(o.begin());
   auto sub_result = record_field->flat_index_at(o);
   if (!sub_result)
-    return caf::none;
+    return {};
   return flat_index + *sub_result;
 }
 
-caf::optional<offset> record_type::offset_from_index(size_t i) const {
+std::optional<offset> record_type::offset_from_index(size_t i) const {
   auto e = each(*this);
   auto it = e.begin();
   auto end = e.end();
   for (size_t j = 0; j < i; ++j, ++it) {
     if (it == end)
-      return caf::none;
+      return {};
   }
   if (it == end)
-    return caf::none;
+    return {};
   return it->offset;
 }
 
