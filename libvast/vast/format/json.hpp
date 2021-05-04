@@ -27,6 +27,7 @@
 #include <caf/settings.hpp>
 
 #include <chrono>
+#include <optional>
 #include <simdjson.h>
 
 namespace vast::format::json {
@@ -92,7 +93,7 @@ private:
   ::simdjson::dom::parser json_parser_;
 
   std::unique_ptr<detail::line_range> lines_;
-  caf::optional<size_t> proto_field_;
+  std::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
   mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
