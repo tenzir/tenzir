@@ -180,6 +180,8 @@ vast:
     json:
       # Flatten nested objects into the top-level object.
       flatten: false
+      # Render durations as numbers as opposed to human-readable strings.
+      numeric-durations: false
 
     # The `vast export pcap` command exports events in the PCAP format.
     pcap:

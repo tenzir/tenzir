@@ -128,7 +128,7 @@ struct accountant_state_impl {
                                  std::ostream& os, bool real_time) {
     using namespace std::string_view_literals;
     auto actor_id = self->current_sender()->id();
-    json_printer<policy::oneline> printer;
+    json_printer<policy::oneline, policy::human_readable_durations> printer;
     std::vector<char> buf;
     auto iter = std::back_inserter(buf);
     *iter++ = '{';

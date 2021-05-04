@@ -23,16 +23,25 @@ namespace vast {
 
 namespace policy {
 
+// Tree policies.
 struct tree {};
 struct oneline {};
 
+// Duration policies.
+struct numeric_durations {};
+struct human_readable_durations {};
+
 } // namespace policy
 
-template <class TreePolicy, int Indent = 2, int Padding = 0>
-struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
+template <class TreePolicy, class DurationPolicy, int Indent = 2,
+          int Padding = 0>
+struct json_printer
+  : printer<json_printer<TreePolicy, DurationPolicy, Indent, Padding>> {
   using attribute = json;
 
-  static constexpr bool tree = std::is_same_v<TreePolicy, policy::tree>;
+  inline static constexpr bool tree = std::is_same_v<TreePolicy, policy::tree>;
+  inline static constexpr bool human_readable_durations
+    = std::is_same_v<DurationPolicy, policy::human_readable_durations>;
 
   static_assert(Padding >= 0, "padding must not be negative");
 
@@ -59,6 +68,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
     template <class T>
     bool operator()(const T& x) {
+      if constexpr (human_readable_durations
+                    && std::is_same_v<T, view<duration>>) {
+        static auto p = '"' << make_printer<duration>{} << '"';
+        return p.print(out_, x);
+      }
       if constexpr (std::is_arithmetic_v<T>) {
         // Print non-finite numbers as `null`.
         if (!std::isfinite(x))
@@ -95,11 +109,6 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
     bool operator()(const view<pattern>& x) {
       return (*this)(x.string());
-    }
-
-    bool operator()(const view<duration>& x) {
-      static auto p = '"' << make_printer<duration>{} << '"';
-      return p.print(out_, x);
     }
 
     bool operator()(const view<time>& x) {
@@ -250,13 +259,10 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   }
 };
 
-template <class TreePolicy, int Indent, int Padding>
-constexpr bool json_printer<TreePolicy, Indent, Padding>::tree;
-
 namespace printers {
 
-template <class Policy>
-auto json = json_printer<Policy>{};
+template <class TreePolicy, class DurationPolicy>
+auto json = json_printer<TreePolicy, DurationPolicy>{};
 
 } // namespace printers
 } // namespace vast

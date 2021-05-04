@@ -422,16 +422,21 @@ lookup(std::string_view field, const ::simdjson::dom::object& xs) {
 writer::writer(ostream_ptr out, const caf::settings& options)
   : super{std::move(out)} {
   flatten_ = get_or(options, "vast.export.json.flatten", false);
+  numeric_durations_
+    = get_or(options, "vast.export.json.numeric-durations", false);
 }
 
 caf::error writer::write(const table_slice& x) {
-  json_printer<policy::oneline> printer;
-  if (flatten_)
-    return print<policy::include_field_names, policy::flatten_layout>(
-      printer, x, {", ", ": ", "{", "}"});
-  else
+  auto run = [&](const auto& printer) {
+    if (flatten_)
+      return print<policy::include_field_names, policy::flatten_layout>(
+        printer, x, {", ", ": ", "{", "}"});
     return print<policy::include_field_names>(printer, x,
                                               {", ", ": ", "{", "}"});
+  };
+  if (numeric_durations_)
+    return run(json_printer<policy::oneline, policy::numeric_durations>{});
+  return run(json_printer<policy::oneline, policy::human_readable_durations>{});
 }
 
 const char* writer::name() const {
