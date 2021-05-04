@@ -10,14 +10,12 @@
 
 #include <cstdint>
 
-#include <caf/optional.hpp>
-
 namespace vast {
 
-caf::optional<icmp_type> dual(icmp_type x) {
+std::optional<icmp_type> dual(icmp_type x) {
   switch (x) {
     default:
-      return caf::none;
+      return {};
     case icmp_type::echo:
       return icmp_type::echo_reply;
     case icmp_type::echo_reply:
@@ -41,10 +39,10 @@ caf::optional<icmp_type> dual(icmp_type x) {
   }
 }
 
-caf::optional<icmp6_type> dual(icmp6_type x) {
+std::optional<icmp6_type> dual(icmp6_type x) {
   switch (x) {
     default:
-      return caf::none;
+      return {};
     case icmp6_type::echo_request:
       return icmp6_type::echo_reply;
     case icmp6_type::echo_reply:
