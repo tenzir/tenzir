@@ -8,23 +8,20 @@
 
 #pragma once
 
+#include "vast/concept/parseable/parse.hpp"
+
+#include <caf/optional.hpp>
+
 #include <string>
 #include <type_traits>
 
-#include "vast/optional.hpp"
-#include "vast/concept/parseable/parse.hpp"
-
 namespace vast {
 
-template <
-  class To,
-  class Parser = make_parser<To>,
-  class Iterator,
-  class... Args
->
+template <class To, class Parser = make_parser<To>, class Iterator,
+          class... Args>
 auto from_string(Iterator begin, Iterator end, Args&&... args)
-  -> std::enable_if_t<is_parseable_v<Iterator, To>, optional<To>> {
-  optional<To> t{To{}};
+  -> std::enable_if_t<is_parseable_v<Iterator, To>, caf::optional<To>> {
+  caf::optional<To> t{To{}};
   if (Parser{std::forward<Args>(args)...}(begin, end, *t))
     return t;
   return {};

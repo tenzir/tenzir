@@ -15,6 +15,8 @@
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
 
+#include <caf/optional.hpp>
+
 namespace vast {
 
 template <class T>
@@ -27,7 +29,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   // clang-format off
   // Attributes: type meta data
   static auto to_attr =
-    [](std::tuple<std::string, optional<std::string>> xs) {
+    [](std::tuple<std::string, caf::optional<std::string>> xs) {
       auto& [key, value] = xs;
       return vast::attribute{std::move(key), std::move(value)};
     };
