@@ -15,6 +15,7 @@
 #include "vast/data/integer.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/detail/type_traits.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
 #include "vast/subnet.hpp"
@@ -41,52 +42,37 @@ class data;
 
 namespace detail {
 
-// clang-format off
+struct invalid_data_type {};
+
 template <class T>
-using to_data_type = std::conditional_t<
-  std::is_floating_point_v<T>,
-  real,
-  std::conditional_t<
-    std::is_same_v<T, bool>,
-    bool,
-    std::conditional_t<
-      std::is_unsigned_v<T>,
-      std::conditional_t<
-        // TODO (ch7585): Define enumeration and count as strong typedefs to
-        //                avoid error-prone heuristics like this one.
-        sizeof(T) == 1,
-        enumeration,
-        count
-      >,
-      std::conditional_t<
-        std::is_convertible_v<T, std::string>,
-        std::string,
-        std::conditional_t<
-             std::is_same_v<T, caf::none_t>
-          || std::is_same_v<T, integer>
-          || std::is_same_v<T, duration>
-          || std::is_same_v<T, time>
-          || std::is_same_v<T, pattern>
-          || std::is_same_v<T, address>
-          || std::is_same_v<T, subnet>
-          || std::is_same_v<T, list>
-          || std::is_same_v<T, map>
-          || std::is_same_v<T, record>,
-          T,
-          std::false_type
-        >
-      >
-    >
-  >
->;
-// clang-format on
+constexpr auto to_data_type() {
+  if constexpr (std::is_floating_point_v<T>)
+    return real{};
+  else if constexpr (std::is_same_v<T, bool>)
+    return bool{};
+  else if constexpr (std::is_unsigned_v<T>) {
+    // TODO (ch7585): Define enumeration and count as strong typedefs to
+    //                avoid error-prone heuristics like this one.
+    if constexpr (sizeof(T) == 1)
+      return enumeration{};
+    else
+      return count{};
+  } else if constexpr (std::is_convertible_v<T, std::string>)
+    return std::string{};
+  else if constexpr (detail::is_any_v<T, caf::none_t, integer, duration, time,
+                                      pattern, address, subnet, list, map,
+                                      record>)
+    return T{};
+  else
+    return invalid_data_type{};
+}
 
 } // namespace detail
 
 /// Converts a C++ type to the corresponding VAST data type.
 /// @relates data
 template <class T>
-using to_data_type = detail::to_data_type<std::decay_t<T>>;
+using to_data_type = decltype(detail::to_data_type<std::decay_t<T>>());
 
 /// A type-erased represenation of various types of data.
 /// @note Be careful when constructing a `vector<data>` from a single `list`.
@@ -150,8 +136,8 @@ public:
 
   /// Constructs data.
   /// @param x The instance to construct data from.
-  template <class T, class = std::enable_if_t<std::negation_v<
-                       std::is_same<to_data_type<T>, std::false_type>>>>
+  template <class T, class = std::enable_if_t<!std::is_same_v<
+                       to_data_type<T>, detail::invalid_data_type>>>
   data(T&& x) : data_{to_data_type<T>(std::forward<T>(x))} {
     // nop
   }
