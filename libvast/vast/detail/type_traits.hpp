@@ -104,10 +104,10 @@ inline constexpr bool is_same_or_derived_v = is_same_or_derived<A, B>::value;
 // -- traits -----------------------------------------------------------------
 
 template <class T, class... Ts>
-inline constexpr bool is_any_v = std::disjunction_v<std::is_same<T, Ts>...>;
+inline constexpr bool is_any_v = (std::is_same_v<T, Ts> or ...);
 
 template <class T, class... Ts>
-inline constexpr bool are_same_v = std::conjunction_v<std::is_same<T, Ts>...>;
+inline constexpr bool are_same_v = (std::is_same_v<T, Ts> and ...);
 
 // Utility for usage in `static_assert`. For example:
 //
