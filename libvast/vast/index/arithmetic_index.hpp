@@ -44,7 +44,7 @@ public:
       detail::is_any_v<T, time, duration>,
       duration::rep,
       std::conditional_t<
-        detail::is_any_v<T, bool, integer, count, real>,
+        detail::is_any_v<T, bool, integer::value_type, count, real>,
         T,
         std::false_type
       >
@@ -124,7 +124,7 @@ private:
     auto f = detail::overload{
       [&](auto&&) { return false; },
       [&](view<bool> x) { return append(x); },
-      [&](view<integer> x) { return append(x); },
+      [&](view<integer> x) { return append(x.value); },
       [&](view<count> x) { return append(x); },
       [&](view<real> x) { return append(x); },
       [&](view<duration> x) { return append(x.count()); },
@@ -140,7 +140,9 @@ private:
         return caf::make_error(ec::type_clash, value_type{}, materialize(x));
       },
       [&](view<bool> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
-      [&](view<integer> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<integer> x) -> caf::expected<ids> {
+        return bmi_.lookup(op, x.value);
+      },
       [&](view<count> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
       [&](view<real> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
       [&](view<duration> x) -> caf::expected<ids> {

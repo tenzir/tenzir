@@ -61,11 +61,25 @@ struct column_builder_trait;
       : primitive_column_builder_trait_base<VastType, ArrowType> {}
 
 PRIMITIVE_COLUMN_BUILDER_TRAIT(bool_type, arrow::BooleanType);
-PRIMITIVE_COLUMN_BUILDER_TRAIT(integer_type, arrow::Int64Type);
 PRIMITIVE_COLUMN_BUILDER_TRAIT(count_type, arrow::UInt64Type);
 PRIMITIVE_COLUMN_BUILDER_TRAIT(real_type, arrow::DoubleType);
 
 #  undef PRIMITIVE_COLUMN_BUILDER_TRAIT
+
+template <>
+struct column_builder_trait<integer_type>
+  : column_builder_trait_base<integer_type, arrow::Int64Type> {
+  using super = column_builder_trait_base<integer_type, arrow::Int64Type>;
+
+  static auto make_arrow_type() {
+    return super::type_singleton();
+  }
+
+  static bool
+  append(typename super::BuilderType& builder, typename super::view_type x) {
+    return builder.Append(x.value).ok();
+  }
+};
 
 template <>
 struct column_builder_trait<time_type>

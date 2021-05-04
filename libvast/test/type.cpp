@@ -503,7 +503,7 @@ TEST(type_check) {
   MESSAGE("basic types");
   TYPE_CHECK(none_type{}, caf::none);
   TYPE_CHECK(bool_type{}, false);
-  TYPE_CHECK(integer_type{}, 42);
+  TYPE_CHECK(integer_type{}, integer{42});
   TYPE_CHECK(count_type{}, 42u);
   TYPE_CHECK(real_type{}, 4.2);
   TYPE_CHECK(duration_type{}, duration{0});
@@ -516,11 +516,12 @@ TEST(type_check) {
   TYPE_CHECK(enumeration_type{{"foo"}}, enumeration{0});
   TYPE_CHECK_FAIL(enumeration_type{{"foo"}}, enumeration{1});
   MESSAGE("containers");
-  TYPE_CHECK(list_type{integer_type{}}, list({1, 2, 3}));
-  TYPE_CHECK(list_type{}, list({1, 2, 3}));
+  TYPE_CHECK(list_type{integer_type{}},
+             list({integer{1}, integer{2}, integer{3}}));
+  TYPE_CHECK(list_type{}, list({integer{1}, integer{2}, integer{3}}));
   TYPE_CHECK(list_type{}, list{});
   TYPE_CHECK(list_type{string_type{}}, list{});
-  auto xs = map{{1, true}, {2, false}};
+  auto xs = map{{integer{1}, true}, {integer{2}, false}};
   TYPE_CHECK((map_type{integer_type{}, bool_type{}}), xs);
   TYPE_CHECK(map_type{}, xs);
   TYPE_CHECK(map_type{}, map{});
@@ -531,7 +532,7 @@ TEST(type_check - nested record) {
   data x = record{
     {"x", "foo"},
     {"r", record{
-      {"i", -42},
+      {"i", integer{-42}},
       {"r", record{
         {"u", 1001u}
       }},

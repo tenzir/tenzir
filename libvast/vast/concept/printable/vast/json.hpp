@@ -45,6 +45,10 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return printers::str.print(out_, "null");
     }
 
+    bool operator()(const integer& x) {
+      return printers::str.print(out_, std::to_string(x.value));
+    }
+
     bool operator()(const data& x) {
       return caf::visit(*this, x);
     }

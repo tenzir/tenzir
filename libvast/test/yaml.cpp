@@ -31,7 +31,7 @@ struct fixture {
   fixture() {
     // clang-format off
     rec = record{
-      {"foo", -42},
+      {"foo", integer{-42}},
       {"bar", 3.14},
       {"baz", list{"a", caf::none, true}},
       {"qux", record{

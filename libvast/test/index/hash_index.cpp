@@ -91,10 +91,11 @@ TEST(hash index for integer) {
   REQUIRE(idx != nullptr);
   auto ptr = dynamic_cast<hash_index<3>*>(idx.get());
   REQUIRE(ptr != nullptr);
-  CHECK(idx->append(make_data_view(42)));
-  CHECK(idx->append(make_data_view(43)));
-  CHECK(idx->append(make_data_view(44)));
-  auto result = idx->lookup(relational_operator::not_equal, make_data_view(42));
+  CHECK(idx->append(make_data_view(integer{42})));
+  CHECK(idx->append(make_data_view(integer{43})));
+  CHECK(idx->append(make_data_view(integer{44})));
+  auto result
+    = idx->lookup(relational_operator::not_equal, make_data_view(integer{42}));
   CHECK_EQUAL(to_string(unbox(result)), "011");
 }
 
@@ -103,15 +104,15 @@ TEST(hash index for list) {
   auto t = list_type{address_type{}}.attributes({{"index", "hash"}});
   auto idx = factory<value_index>::make(t, caf::settings{});
   REQUIRE(idx != nullptr);
-  auto xs = list{1, 2, 3};
-  auto ys = list{7, 5, 4};
-  auto zs = list{0, 0, 0};
+  auto xs = list{integer{1}, integer{2}, integer{3}};
+  auto ys = list{integer{7}, integer{5}, integer{4}};
+  auto zs = list{integer{0}, integer{0}, integer{0}};
   CHECK(idx->append(make_data_view(xs)));
   CHECK(idx->append(make_data_view(xs)));
   CHECK(idx->append(make_data_view(zs)));
   auto result = idx->lookup(relational_operator::equal, make_data_view(zs));
   CHECK_EQUAL(to_string(unbox(result)), "001");
-  result = idx->lookup(relational_operator::ni, make_data_view(1));
+  result = idx->lookup(relational_operator::ni, make_data_view(integer{1}));
   REQUIRE(!result);
   CHECK(result.error() == ec::unsupported_operator);
 }

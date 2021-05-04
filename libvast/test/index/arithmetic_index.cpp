@@ -146,13 +146,13 @@ TEST(none values - arithmetic) {
   auto idx = factory<value_index>::make(count_type{}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
-  REQUIRE(idx->append(make_data_view(42)));
-  REQUIRE(idx->append(make_data_view(43)));
+  REQUIRE(idx->append(make_data_view(integer{42})));
+  REQUIRE(idx->append(make_data_view(integer{43})));
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(caf::none)));
-  auto bm = idx->lookup(relational_operator::less, make_data_view(50));
+  auto bm = idx->lookup(relational_operator::less, make_data_view(integer{50}));
   CHECK_EQUAL(to_string(unbox(bm)), "01100");
-  bm = idx->lookup(relational_operator::greater, make_data_view(42));
+  bm = idx->lookup(relational_operator::greater, make_data_view(integer{42}));
   CHECK_EQUAL(to_string(unbox(bm)), "00100");
 }
 

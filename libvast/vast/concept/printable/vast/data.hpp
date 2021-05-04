@@ -8,18 +8,18 @@
 
 #pragma once
 
-#include "vast/data.hpp"
-
+#include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/print.hpp"
-#include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
+#include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/vast/address.hpp"
-#include "vast/concept/printable/vast/subnet.hpp"
-#include "vast/concept/printable/vast/pattern.hpp"
+#include "vast/concept/printable/vast/integer.hpp"
 #include "vast/concept/printable/vast/none.hpp"
+#include "vast/concept/printable/vast/pattern.hpp"
+#include "vast/concept/printable/vast/subnet.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/escapers.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
@@ -35,9 +35,6 @@ struct data_printer : printer<data_printer> {
       detail::overload{
         [&](const auto& x) {
           return make_printer<std::decay_t<decltype(x)>>{}(out, x);
-        },
-        [&](integer x) {
-          return printers::integral<integer, policy::force_sign>(out, x);
         },
         [&](const std::string& x) {
           static auto escaper = detail::make_extra_print_escaper("\"");

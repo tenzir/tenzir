@@ -80,7 +80,7 @@ caf::expected<size_t> disk_monitor_state::compute_dbdir_size() const {
     return cmd_output.error();
   if (cmd_output->back() == '\n')
     cmd_output->pop_back();
-  if (!parsers::integer(*cmd_output, result.value())) {
+  if (!parsers::count(*cmd_output, result.value())) {
     result = caf::make_error(ec::parse_error,
                              fmt::format("{} failed to interpret output "
                                          "'{}' of command '{}'",

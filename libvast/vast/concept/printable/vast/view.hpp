@@ -15,6 +15,7 @@
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/vast/address.hpp"
+#include "vast/concept/printable/vast/integer.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/port.hpp"
 #include "vast/concept/printable/vast/subnet.hpp"
@@ -50,9 +51,6 @@ struct data_view_printer : printer<data_view_printer> {
     auto f = detail::overload{
       [&](const auto& x) {
         return make_printer<std::decay_t<decltype(x)>>{}(out, x);
-      },
-      [&](const view<integer>& x) {
-        return printers::integral<integer, policy::force_sign>(out, x);
       },
       [&](const view<std::string>& x) { return string_view_printer{}(out, x); },
     };

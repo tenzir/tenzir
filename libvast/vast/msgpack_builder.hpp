@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/data/integer.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -499,6 +500,11 @@ auto put(Builder& builder, T x)
       return builder.template add<int32>(x);
     return builder.template add<int64>(x);
   }
+}
+
+template <class Builder>
+size_t put(Builder& builder, integer x) {
+  return builder.template add<int64>(x.value);
 }
 
 template <class Builder, class T>

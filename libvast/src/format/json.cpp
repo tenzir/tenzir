@@ -9,6 +9,7 @@
 #include "vast/format/json.hpp"
 
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/integer.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
@@ -114,14 +115,20 @@ type_biased_convert_impl<std::string_view, bool>(std::string_view s,
 
 template <>
 caf::expected<data>
+type_biased_convert_impl<int64_t, integer>(int64_t n, const type&) {
+  return integer{n};
+}
+
+template <>
+caf::expected<data>
 type_biased_convert_impl<std::string_view, integer>(std::string_view s,
                                                     const type&) {
   // Simdjson cannot be reused here as it doesn't accept hex numbers.
-  if (integer x; parsers::json_int(s, x))
-    return x;
+  if (int64_t x; parsers::json_int(s, x))
+    return integer{x};
   if (real x; parsers::json_number(s, x)) {
     VAST_WARN("json-reader narrowed {} to type int", std::string{s});
-    return detail::narrow_cast<integer>(x);
+    return integer{detail::narrow_cast<integer::value_type>(x)};
   }
   return caf::make_error(ec::convert_error, "cannot convert from",
                          std::string{s}, "to int");
@@ -129,7 +136,7 @@ type_biased_convert_impl<std::string_view, integer>(std::string_view s,
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<integer, count>(integer n, const type&) {
+type_biased_convert_impl<int64_t, count>(int64_t n, const type&) {
   return detail::narrow_cast<count>(n);
 }
 
@@ -149,7 +156,7 @@ type_biased_convert_impl<std::string_view, count>(std::string_view s,
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<integer, real>(integer n, const type&) {
+type_biased_convert_impl<int64_t, real>(int64_t n, const type&) {
   return detail::narrow_cast<real>(n);
 }
 
@@ -177,7 +184,7 @@ auto to_duration_convert_impl(NumberType s) {
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<integer, duration>(integer s, const type&) {
+type_biased_convert_impl<int64_t, duration>(int64_t s, const type&) {
   return to_duration_convert_impl(s);
 }
 
@@ -195,7 +202,7 @@ type_biased_convert_impl<real, duration>(real s, const type&) {
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<integer, time>(integer s, const type&) {
+type_biased_convert_impl<int64_t, time>(int64_t s, const type&) {
   return time{to_duration_convert_impl(s)};
 }
 
@@ -224,7 +231,7 @@ type_biased_convert_impl<count, std::string>(count s, const type&) {
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<integer, std::string>(integer s, const type&) {
+type_biased_convert_impl<int64_t, std::string>(int64_t s, const type&) {
   return to_string(s);
 }
 template <>

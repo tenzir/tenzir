@@ -37,13 +37,13 @@ TEST(bloom filter synopsis) {
   xs.p = 0.1;
   auto bf = unbox(make_bloom_filter<xxhash64>(std::move(xs)));
   bloom_filter_synopsis<integer, xxhash64> x{integer_type{}, std::move(bf)};
-  x.add(make_data_view(0));
-  x.add(make_data_view(1));
-  x.add(make_data_view(2));
+  x.add(make_data_view(integer{0}));
+  x.add(make_data_view(integer{1}));
+  x.add(make_data_view(integer{2}));
   auto verify = verifier{&x};
   MESSAGE("{0, 1, 2}");
-  verify(make_data_view(0), {N, N, N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(1), {N, N, N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(2), {N, N, N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(42), {N, N, N, N, N, N, F, N, N, N, N, N});
+  verify(make_data_view(integer{0}), {N, N, N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(integer{1}), {N, N, N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(integer{2}), {N, N, N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(integer{42}), {N, N, N, N, N, N, F, N, N, N, N, N});
 }

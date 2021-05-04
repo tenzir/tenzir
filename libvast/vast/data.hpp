@@ -12,6 +12,7 @@
 #include "vast/aliases.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/data/integer.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/offset.hpp"
@@ -58,24 +59,21 @@ using to_data_type = std::conditional_t<
         count
       >,
       std::conditional_t<
-        std::is_signed_v<T>,
-        integer,
+        std::is_convertible_v<T, std::string>,
+        std::string,
         std::conditional_t<
-          std::is_convertible_v<T, std::string>,
-          std::string,
-          std::conditional_t<
-               std::is_same_v<T, caf::none_t>
-            || std::is_same_v<T, duration>
-            || std::is_same_v<T, time>
-            || std::is_same_v<T, pattern>
-            || std::is_same_v<T, address>
-            || std::is_same_v<T, subnet>
-            || std::is_same_v<T, list>
-            || std::is_same_v<T, map>
-            || std::is_same_v<T, record>,
-            T,
-            std::false_type
-          >
+             std::is_same_v<T, caf::none_t>
+          || std::is_same_v<T, integer>
+          || std::is_same_v<T, duration>
+          || std::is_same_v<T, time>
+          || std::is_same_v<T, pattern>
+          || std::is_same_v<T, address>
+          || std::is_same_v<T, subnet>
+          || std::is_same_v<T, list>
+          || std::is_same_v<T, map>
+          || std::is_same_v<T, record>,
+          T,
+          std::false_type
         >
       >
     >

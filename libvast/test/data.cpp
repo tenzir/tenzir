@@ -61,8 +61,8 @@ TEST(flatten) {
   auto xs = record{
     {"a", "foo"},
     {"b", record{
-      {"c", -42},
-      {"d", list{1, 2, 3}}
+      {"c", integer{-42}},
+      {"d", list{integer{1}, integer{2}, integer{3}}}
     }},
     {"e", record{
       {"f", caf::none},
@@ -71,8 +71,9 @@ TEST(flatten) {
     {"h", true}
   };
   // clang-format on
-  auto values
-    = std::vector<data>{"foo", -42, list{1, 2, 3}, caf::none, caf::none, true};
+  auto values = std::vector<data>{
+    "foo",     integer{-42}, list{integer{1}, integer{2}, integer{3}},
+    caf::none, caf::none,    true};
   auto r = unbox(make_record(rt, std::vector<data>(values)));
   REQUIRE_EQUAL(r, xs);
   MESSAGE("flatten");
@@ -80,7 +81,7 @@ TEST(flatten) {
   auto ftr = unbox(flatten(r, rt));
   CHECK_EQUAL(fr, ftr);
   REQUIRE_EQUAL(fr.size(), values.size());
-  CHECK_EQUAL(fr["b.c"], -42);
+  CHECK_EQUAL(fr["b.c"], integer{-42});
 }
 
 TEST(merge) {
@@ -88,8 +89,8 @@ TEST(merge) {
   auto xs = record{
     {"a", "foo"},
     {"b", record{
-      {"c", -42},
-      {"d", list{1, 2, 3}}
+      {"c", integer{-42}},
+      {"d", list{integer{1}, integer{2}, integer{3}}}
     }},
     {"c", record{
       {"a", "bar"}
@@ -98,17 +99,17 @@ TEST(merge) {
   auto ys = record{
     {"a", "bar"},
     {"b", record{
-      {"a", 42},
-      {"d", list{1, 2, 3}}
+      {"a", integer{42}},
+      {"d", list{integer{1}, integer{2}, integer{3}}}
     }},
     {"c", "not a record yet"}
   };
   auto expected = record{
     {"a", "foo"},
     {"b", record{
-      {"a", 42},
-      {"d", list{1, 2, 3}},
-      {"c", -42}
+      {"a", integer{42}},
+      {"d", list{integer{1}, integer{2}, integer{3}}},
+      {"c", integer{-42}}
     }},
     {"c", record{
       {"a", "bar"}
@@ -123,9 +124,9 @@ TEST(construction) {
   CHECK(caf::holds_alternative<caf::none_t>(data{}));
   CHECK(caf::holds_alternative<bool>(data{true}));
   CHECK(caf::holds_alternative<bool>(data{false}));
-  CHECK(caf::holds_alternative<integer>(data{0}));
-  CHECK(caf::holds_alternative<integer>(data{42}));
-  CHECK(caf::holds_alternative<integer>(data{-42}));
+  CHECK(caf::holds_alternative<integer>(data{integer{0}}));
+  CHECK(caf::holds_alternative<integer>(data{integer{42}}));
+  CHECK(caf::holds_alternative<integer>(data{integer{-42}}));
   CHECK(caf::holds_alternative<count>(data{42u}));
   CHECK(caf::holds_alternative<real>(data{4.2}));
   CHECK(caf::holds_alternative<std::string>(data{"foo"}));
@@ -146,14 +147,14 @@ TEST(relational_operators) {
   CHECK(d1 >= d2);
   CHECK(!(d1 > d2));
 
-  d2 = 42;
+  d2 = integer{42};
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
   CHECK(!(d1 >= d2));
   CHECK(!(d1 > d2));
 
-  d1 = 42;
+  d1 = integer{42};
   d2 = caf::none;
   CHECK(d1 != d2);
   CHECK(!(d1 < d2));
@@ -161,7 +162,7 @@ TEST(relational_operators) {
   CHECK(d1 >= d2);
   CHECK(d1 > d2);
 
-  d2 = 1377;
+  d2 = integer{1377};
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
@@ -240,8 +241,8 @@ TEST(parseable) {
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == 1001);
+  CHECK_EQUAL(f, l);
+  CHECK_EQUAL(d, integer{1001});
   str = "1001"s;
   f = str.begin();
   l = str.end();
@@ -296,7 +297,7 @@ TEST(convert - caf::config_value) {
   auto x = record{
     {"x", "foo"},
     {"r", record{
-      {"i", -42},
+      {"i", integer{-42}},
       {"u", 42u},
       {"r", record{
         {"u", 3.14}
@@ -304,8 +305,8 @@ TEST(convert - caf::config_value) {
     }},
     {"delta", 12ms},
     {"uri", "https://tenzir.com/"},
-    {"xs", list{1, 2, 3}},
-    {"ys", list{1, "foo", 3.14}},
+    {"xs", list{integer{1}, integer{2}, integer{3}}},
+    {"ys", list{integer{1}, "foo", 3.14}},
     {"zs", list{record{{"z", true}}, map{{42u, 4.2}}}}
   };
   // clang-format on
@@ -355,12 +356,12 @@ TEST(convert - caf::config_value - null) {
 // instead we test here that the fields that are nested deeper than
 // `max_recursion_depth` are cut off during `flatten()`.
 TEST(nesting depth) {
-  auto x = record{{"leaf", 1}};
+  auto x = record{{"leaf", integer{1}}};
   for (size_t i = 0; i < defaults::max_recursion; ++i) {
     auto tmp = record{{"nested", std::exchange(x, {})}};
     x = tmp;
   }
-  auto final = record{{"branch1", x}, {"branch2", 4}};
+  auto final = record{{"branch1", x}, {"branch2", integer{4}}};
   CHECK_EQUAL(depth(final), defaults::max_recursion + 2);
   auto flattened = flatten(final);
   CHECK_EQUAL(depth(flattened), 1ull);

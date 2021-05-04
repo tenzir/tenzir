@@ -253,7 +253,7 @@ TEST(zeek data parsing) {
   CHECK(zeek_parse(subnet_type{}, "10.0.0.0/24", d));
   CHECK(d == *to<subnet>("10.0.0.0/24"));
   CHECK(zeek_parse(list_type{integer_type{}}, "49329", d));
-  CHECK(d == list{49329});
+  CHECK(d == list{integer{49329}});
   CHECK(zeek_parse(list_type{string_type{}}, "49329,42", d));
   CHECK(d == list{"49329", "42"});
 }

@@ -136,10 +136,14 @@ auto add_arithmetic_index_factory() {
   static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
                                  real_type, duration_type, time_type>);
   using concrete_data = type_to_data<T>;
-  return add_value_index_factory<T, arithmetic_index<concrete_data>>();
+  if constexpr (detail::is_any_v<concrete_data, integer>)
+    return add_value_index_factory<
+      T, arithmetic_index<typename concrete_data::value_type>>();
+  else
+    return add_value_index_factory<T, arithmetic_index<concrete_data>>();
 }
 
-} // namespace <anonymous>
+} // namespace
 
 void factory_traits<value_index>::initialize() {
   add_value_index_factory<bool_type, arithmetic_index<bool>>();
