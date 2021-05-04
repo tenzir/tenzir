@@ -421,7 +421,7 @@ caf::error reader::parse_header() {
     return caf::make_error(ec::format_error, "fields and types have different "
                                              "size");
   std::vector<record_field> record_fields;
-  proto_field_ = caf::none;
+  proto_field_.reset();
   for (auto i = 0u; i < fields.size(); ++i) {
     auto t = parse_type(types[i]);
     if (!t)

@@ -33,6 +33,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -246,7 +247,7 @@ private:
   vast::schema schema_;
   type type_;
   record_type layout_;
-  caf::optional<size_t> proto_field_;
+  std::optional<size_t> proto_field_;
   std::vector<rule<iterator_type, data>> parsers_;
 };
 
