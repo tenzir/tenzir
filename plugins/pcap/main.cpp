@@ -19,6 +19,7 @@
 
 #include <caf/settings.hpp>
 
+#include <optional>
 #include <pcap.h>
 #include <random>
 
@@ -548,7 +549,7 @@ private:
 
   std::unordered_map<flow, flow_state> flows_;
   std::string input_;
-  caf::optional<std::string> interface_;
+  std::optional<std::string> interface_;
   uint64_t cutoff_;
   size_t max_flows_;
   std::mt19937 generator_;
