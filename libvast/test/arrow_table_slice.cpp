@@ -74,7 +74,7 @@ enumeration operator"" _e(unsigned long long int x) {
 }
 
 integer operator"" _i(unsigned long long int x) {
-  return integer{static_cast<integer::value_type>(x)};
+  return integer{detail::narrow_cast<integer::value_type>(x)};
 }
 
 } // namespace

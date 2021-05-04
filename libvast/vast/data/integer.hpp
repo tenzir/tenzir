@@ -40,13 +40,12 @@ struct integer : detail::totally_ordered<integer> {
   friend typename Inspector::result_type inspect(Inspector& f, integer& x) {
     return f(caf::meta::type_name("vast.integer"), x.value);
   }
-};
 
-/// @relates integer
-template <class Hasher>
-void hash_append(Hasher& h, const integer& x) {
-  hash_append(h, x.value);
-}
+  template <class Hasher>
+  friend void hash_append(Hasher& h, const integer& x) {
+    hash_append(h, x.value);
+  }
+};
 
 } // namespace vast
 

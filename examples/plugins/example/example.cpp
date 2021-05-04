@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/concept/printable/vast/integer.hpp"
 #include "vast/data.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -74,7 +75,7 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
       for (auto& [key, value] : config) {
         if (key == "max-events") {
           if (auto max_events = caf::get_if<integer>(&value)) {
-            VAST_VERBOSE("{} sets max-events to {}", self, max_events->value);
+            VAST_VERBOSE("{} sets max-events to {}", self, *max_events);
             self->state.max_events = max_events->value;
           }
         }
