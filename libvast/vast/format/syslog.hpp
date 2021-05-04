@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
@@ -18,14 +20,13 @@
 #include "vast/detail/line_range.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
 
-#include <caf/optional.hpp>
 #include <caf/sum_type.hpp>
 
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -39,7 +40,7 @@ template <class Parser>
 struct maybe_nil_parser : parser<maybe_nil_parser<Parser>> {
   using value_type = typename std::decay_t<Parser>::attribute;
   using attribute = std::conditional_t<detail::is_container_v<value_type>,
-                                       value_type, caf::optional<value_type>>;
+                                       value_type, std::optional<value_type>>;
 
   explicit maybe_nil_parser(Parser parser) : parser_{std::move(parser)} {
   }
@@ -69,7 +70,7 @@ struct header {
   uint16_t facility;
   uint16_t severity;
   uint16_t version;
-  caf::optional<time> ts;
+  std::optional<time> ts;
   std::string hostname;
   std::string app_name;
   std::string process_id;
@@ -227,7 +228,7 @@ struct message_content_parser : parser<message_content_parser> {
 struct message {
   header hdr;
   structured_data data;
-  caf::optional<message_content> msg;
+  std::optional<message_content> msg;
 };
 
 /// Parser for Syslog messages.
