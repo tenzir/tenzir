@@ -17,6 +17,7 @@
 #include <caf/actor.hpp>
 #include <caf/fwd.hpp>
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -54,7 +55,7 @@ struct pivoter_state {
 
   /// A cache for the connections between a source type and the target type,
   /// to avoid multiple computations of those.
-  mutable std::unordered_map<record_type, caf::optional<record_field>> cache;
+  mutable std::unordered_map<record_type, std::optional<record_field>> cache;
 
   /// A tracking counter of spawned exporters. Used for lifetime management.
   size_t running_exporters = 0;
