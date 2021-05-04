@@ -32,6 +32,7 @@
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>
+#include <optional>
 
 namespace vast::system {
 
@@ -103,7 +104,7 @@ void source_state::send_report() {
 
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
-       size_t table_slice_size, caf::optional<size_t> max_events,
+       size_t table_slice_size, std::optional<size_t> max_events,
        const type_registry_actor& type_registry, vast::schema local_schema,
        std::string type_filter, accountant_actor accountant) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(self));
@@ -111,7 +112,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.self = self;
   self->state.name = reader->name();
   self->state.reader = std::move(reader);
-  self->state.requested = std::move(max_events);
+  self->state.requested = max_events;
   self->state.local_schema = std::move(local_schema);
   self->state.accountant = std::move(accountant);
   self->state.table_slice_size = table_slice_size;

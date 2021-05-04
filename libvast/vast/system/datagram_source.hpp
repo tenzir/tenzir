@@ -15,6 +15,8 @@
 
 #include <caf/io/typed_broker.hpp>
 
+#include <optional>
+
 namespace vast::system {
 
 struct datagram_source_state : source_state {
@@ -51,7 +53,7 @@ struct datagram_source_state : source_state {
 caf::behavior datagram_source(
   caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
   uint16_t udp_listening_port, format::reader_ptr reader,
-  size_t table_slice_size, caf::optional<size_t> max_events,
+  size_t table_slice_size, std::optional<size_t> max_events,
   const type_registry_actor& type_registry, vast::schema local_schema,
   std::string type_filter, accountant_actor accountant);
 

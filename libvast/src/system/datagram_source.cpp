@@ -32,13 +32,14 @@
 #include <caf/streambuf.hpp>
 
 #include <chrono>
+#include <optional>
 
 namespace vast::system {
 
 caf::behavior datagram_source(
   caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
   uint16_t udp_listening_port, format::reader_ptr reader,
-  size_t table_slice_size, caf::optional<size_t> max_events,
+  size_t table_slice_size, std::optional<size_t> max_events,
   const type_registry_actor& type_registry, vast::schema local_schema,
   std::string type_filter, accountant_actor accountant) {
   // Try to open requested UDP port.
@@ -53,7 +54,7 @@ caf::behavior datagram_source(
   self->state.self = self;
   self->state.name = reader->name();
   self->state.reader = std::move(reader);
-  self->state.requested = std::move(max_events);
+  self->state.requested = max_events;
   self->state.local_schema = std::move(local_schema);
   self->state.accountant = std::move(accountant);
   self->state.table_slice_size = table_slice_size;

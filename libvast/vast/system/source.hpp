@@ -20,6 +20,7 @@
 #include <caf/stream_source.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <optional>
 #include <unordered_map>
 
 namespace vast::system {
@@ -61,7 +62,7 @@ struct source_state {
   size_t count = 0;
 
   /// The maximum number of events to ingest.
-  caf::optional<size_t> requested;
+  std::optional<size_t> requested;
 
   /// The import-local schema.
   vast::schema local_schema;
@@ -102,7 +103,7 @@ struct source_state {
 /// @param accountant_actor The actor handle for the accountant component.
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
-       size_t table_slice_size, caf::optional<size_t> max_events,
+       size_t table_slice_size, std::optional<size_t> max_events,
        const type_registry_actor& type_registry, vast::schema local_schema,
        std::string type_filter, accountant_actor accountant);
 

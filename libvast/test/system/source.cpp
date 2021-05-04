@@ -20,6 +20,8 @@
 #include "vast/format/zeek.hpp"
 #include "vast/table_slice.hpp"
 
+#include <optional>
+
 using namespace vast;
 using namespace vast::system;
 
@@ -68,7 +70,7 @@ TEST(zeek source) {
                                                        std::move(stream));
   MESSAGE("start source for producing table slices of size 10");
   auto src
-    = self->spawn(source, std::move(reader), events::slice_size, caf::none,
+    = self->spawn(source, std::move(reader), events::slice_size, std::nullopt,
                   vast::system::type_registry_actor{}, vast::schema{},
                   std::string{}, vast::system::accountant_actor{});
   run();

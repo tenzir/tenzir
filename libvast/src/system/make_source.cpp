@@ -23,6 +23,7 @@
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
+#include "vast/optional.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -58,7 +59,8 @@ make_source(caf::actor_system& sys, const std::string& format,
   auto udp_port = std::optional<uint16_t>{};
   // Parse options.
   const auto& options = inv.options;
-  auto max_events = caf::get_if<size_t>(&options, "vast.import.max-events");
+  auto max_events
+    = to_std(caf::get_if<size_t>(&options, "vast.import.max-events"));
   auto uri = caf::get_if<std::string>(&options, "vast.import.listen");
   auto file = caf::get_if<std::string>(&options, "vast.import.read");
   auto type = caf::get_if<std::string>(&options, "vast.import.type");
@@ -67,8 +69,8 @@ make_source(caf::actor_system& sys, const std::string& format,
     return caf::make_error(ec::invalid_configuration, "failed to extract "
                                                       "batch-encoding option");
   VAST_ASSERT(encoding != table_slice_encoding::none);
-  auto slice_size = get_or(options, "vast.import.batch-size",
-                           defaults::import::table_slice_size);
+  auto slice_size = caf::get_or(options, "vast.import.batch-size",
+                                defaults::import::table_slice_size);
   if (slice_size == 0)
     slice_size = std::numeric_limits<decltype(slice_size)>::max();
   // Parse schema local to the import command.

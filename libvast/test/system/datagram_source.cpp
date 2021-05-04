@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <optional>
 
 using namespace vast;
 using namespace vast::system;
@@ -79,7 +80,7 @@ TEST(zeek conn source) {
   auto& mm = sys.middleman();
   mpx.provide_datagram_servant(8080, hdl);
   auto src = mm.spawn_broker(datagram_source, uint16_t{8080}, std::move(reader),
-                             100u, caf::none, type_registry_actor{},
+                             100u, std::nullopt, type_registry_actor{},
                              vast::schema{}, std::string{}, accountant_actor{});
   run();
   MESSAGE("start sink and initialize stream");
