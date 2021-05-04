@@ -188,7 +188,7 @@ TEST(fixarray) {
   CHECK_EQUAL(builder.add(std::move(proxy)), 11u);
   auto o = object{buf};
   REQUIRE(is_fixarray(o.format()));
-  auto view = unbox(get<array_view>(o));
+  auto view = vast::test::unbox(get<array_view>(o));
   CHECK_EQUAL(view.size(), 3u);
   auto xs = view.data();
   auto x0 = xs.get();
@@ -208,7 +208,7 @@ TEST(array16) {
   CHECK_EQUAL(builder.add(std::move(proxy)), 53u);
   auto o = object{buf};
   REQUIRE_EQUAL(o.format(), array16);
-  auto view = unbox(get<array_view>(o));
+  auto view = vast::test::unbox(get<array_view>(o));
   auto xs = view.data();
   REQUIRE_EQUAL(view.size(), 10u);
   auto first = xs.get();
@@ -283,15 +283,16 @@ TEST(ext8 via proxy) {
   CHECK_EQUAL(result, size);
   auto inner = as_bytes(
     span{buf.data() + header_size<ext8>(), buf.size() - header_size<ext8>()});
-  auto view = unbox(get<ext_view>(object{span<const std::byte>{buf}}));
+  auto view
+    = vast::test::unbox(get<ext_view>(object{span<const std::byte>{buf}}));
   auto expected = ext_view{ext8, 42, inner};
   CHECK_EQUAL(view, expected);
   MESSAGE("verify inner data");
   auto o = overlay{view.data()};
-  auto str = unbox(get<std::string_view>(o.get()));
+  auto str = vast::test::unbox(get<std::string_view>(o.get()));
   CHECK_EQUAL(str, foobar);
   CHECK_EQUAL(o.next(), foobar.size() + 1);
-  auto seven = unbox(get<uint8_t>(o.get()));
+  auto seven = vast::test::unbox(get<uint8_t>(o.get()));
   CHECK_EQUAL(seven, 7u);
 }
 
@@ -374,13 +375,13 @@ TEST(put vector) {
   CHECK_EQUAL(put(builder, xs), 1u + 4);
   auto o = object{buf};
   REQUIRE(is_fixarray(o.format()));
-  auto v = unbox(get<array_view>(o));
+  auto v = vast::test::unbox(get<array_view>(o));
   CHECK_EQUAL(v.size(), 4u);
   auto ys = v.data();
-  auto first = unbox(get<uint8_t>(ys.get())); // positive_fixint
+  auto first = vast::test::unbox(get<uint8_t>(ys.get())); // positive_fixint
   CHECK_EQUAL(first, 1);
   ys.next(3);
-  auto last = unbox(get<uint8_t>(ys.get())); // positive_fixint
+  auto last = vast::test::unbox(get<uint8_t>(ys.get())); // positive_fixint
   CHECK_EQUAL(last, 4);
 }
 
@@ -389,18 +390,18 @@ TEST(put map) {
   CHECK_EQUAL(put(builder, xs), 1u + 3 * 2);
   auto o = object{buf};
   REQUIRE(is_fixmap(o.format()));
-  auto v = unbox(get<array_view>(o));
+  auto v = vast::test::unbox(get<array_view>(o));
   CHECK_EQUAL(v.size(), 3u * 2);
   auto ys = v.data();
-  auto first_key = unbox(get<uint8_t>(ys.get()));
+  auto first_key = vast::test::unbox(get<uint8_t>(ys.get()));
   ys.next();
-  auto first_value = unbox(get<bool>(ys.get()));
+  auto first_value = vast::test::unbox(get<bool>(ys.get()));
   CHECK_EQUAL(first_key, 1u);
   CHECK(first_value);
   ys.next(1 + 2);
-  auto last_key = unbox(get<uint8_t>(ys.get()));
+  auto last_key = vast::test::unbox(get<uint8_t>(ys.get()));
   ys.next();
-  auto last_value = unbox(get<bool>(ys.get()));
+  auto last_value = vast::test::unbox(get<bool>(ys.get()));
   CHECK_EQUAL(last_key, 3u);
   CHECK(!last_value);
 }
