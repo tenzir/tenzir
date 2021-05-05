@@ -132,7 +132,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
     self->state.done = true;
-    self->send_exit(self->state.transformer, msg.reason);
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
@@ -143,7 +142,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [self](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
+    [self](caf::unit_t&, caf::downstream<detail::framed<table_slice>>& out,
+           size_t num) {
       VAST_DEBUG("{} tries to generate {} messages", self, num);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
@@ -161,6 +161,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto finish = [&] {
         self->state.done = true;
         self->state.send_report();
+        out.push(detail::framed<vast::table_slice>::make_eof());
         self->quit();
       };
       if (self->state.requested

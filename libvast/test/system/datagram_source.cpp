@@ -86,6 +86,7 @@ TEST(zeek conn source) {
   run();
   MESSAGE("start sink and initialize stream");
   auto snk = self->spawn(test_sink, src);
+  REQUIRE(snk);
   run();
   MESSAGE("'send' datagram to src with a small Zeek conn log");
   caf::io::new_datagram_msg msg;

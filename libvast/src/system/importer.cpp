@@ -36,16 +36,18 @@ namespace vast::system {
 
 namespace {
 
-class driver : public caf::stream_stage_driver<
-                 table_slice, caf::broadcast_downstream_manager<table_slice>> {
+class driver
+  : public caf::stream_stage_driver<
+      table_slice,
+      caf::broadcast_downstream_manager<detail::framed<table_slice>>> {
 public:
-  driver(caf::broadcast_downstream_manager<table_slice>& out,
+  driver(caf::broadcast_downstream_manager<detail::framed<table_slice>>& out,
          importer_state& state)
     : stream_stage_driver(out), state{state} {
     // nop
   }
 
-  void process(caf::downstream<table_slice>& out,
+  void process(caf::downstream<detail::framed<table_slice>>& out,
                std::vector<table_slice>& slices) override {
     VAST_TRACE_SCOPE("{}", VAST_ARG(slices));
     uint64_t events = 0;
@@ -250,7 +252,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
-    self->send_exit(self->state.transformer, msg.reason);
+    self->state.stage->out().push(detail::framed<table_slice>::make_eof());
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);

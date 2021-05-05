@@ -60,6 +60,9 @@ public:
 
   /// Takes a record batch with a corresponding vast layout and transforms it
   /// into a new batch with a new layout.
+  //  TODO: When we have implemented a way to recover the `layout` from the
+  //  metadata stored in a record batch, we can drop the record type from
+  //  this function signature.
   [[nodiscard]] virtual std::pair<vast::record_type,
                                   std::shared_ptr<arrow::RecordBatch>>
   operator()(vast::record_type layout,

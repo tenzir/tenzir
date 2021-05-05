@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/framed.hpp"
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/schema.hpp"
@@ -36,7 +37,8 @@ namespace vast::system {
 struct source_state {
   // -- member types -----------------------------------------------------------
 
-  using downstream_manager = caf::broadcast_downstream_manager<table_slice>;
+  using downstream_manager
+    = caf::broadcast_downstream_manager<detail::framed<table_slice>>;
 
   // -- member variables -------------------------------------------------------
 

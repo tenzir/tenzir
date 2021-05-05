@@ -41,9 +41,14 @@ caf::behavior datagram_source(
   uint16_t udp_listening_port, format::reader_ptr reader,
   size_t table_slice_size, std::optional<size_t> max_events,
   const type_registry_actor& type_registry, vast::schema local_schema,
-  std::string type_filter, accountant_actor accountant, std::vector<transform>&& transforms) {
-  if (!transforms.empty()) {
-    VAST_WARN("{} ignores configured transforms; not supported yet", self);
+  std::string type_filter, accountant_actor accountant,
+  std::vector<transform>&& transforms) {
+  self->state.transformer
+    = self->spawn(transformer, "source_transformer", std::move(transforms));
+  if (!self->state.transformer) {
+    VAST_ERROR("{} failed to spawn transformer", self);
+    self->quit();
+    return {};
   }
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
@@ -68,6 +73,7 @@ caf::behavior datagram_source(
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
     self->state.done = true;
+    self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
@@ -77,7 +83,7 @@ caf::behavior datagram_source(
       self->state.start_time = std::chrono::system_clock::now();
     },
     // get next element
-    [](caf::unit_t&, caf::downstream<table_slice>&, size_t) {
+    [](caf::unit_t&, caf::downstream<detail::framed<table_slice>>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
@@ -98,7 +104,7 @@ caf::behavior datagram_source(
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
         VAST_DEBUG("{} produced a slice with {} rows", self, slice.rows());
-        self->state.mgr->out().push(std::move(slice));
+        self->state.mgr->out().push(detail::framed{std::move(slice)});
       };
       auto events = capacity * self->state.table_slice_size;
       if (self->state.requested)
@@ -123,21 +129,20 @@ caf::behavior datagram_source(
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
-      if (self->state.sink) {
+      if (self->state.has_sink) {
         self->quit(caf::make_error(ec::logic_error,
                                    "source does not support "
                                    "multiple sinks; sender =",
                                    self->current_sender()));
         return;
       }
-      self->state.sink = std::move(sink);
       if (self->state.accountant)
         self->delayed_send(self, defaults::system::telemetry_rate,
                            atom::telemetry_v);
       // Start streaming.
+      self->state.mgr->add_outbound_path(self->state.transformer);
       auto name = std::string{self->state.reader->name()};
-      self->state.mgr->add_outbound_path(self->state.sink,
-                                         std::make_tuple(std::move(name)));
+      self->delegate(self->state.transformer, sink, name);
     },
     [self](atom::get, atom::schema) -> caf::result<schema> {
       return self->state.reader->schema();
