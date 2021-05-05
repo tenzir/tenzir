@@ -226,8 +226,8 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: export ascii 'conn.duration <= 1.0s'
-      - command: export json 'duration >= 10.0s'
-      - command: export json --numeric-durations 'duration < 2.0s'
+      - command: export json 'duration >= 10.0s && duration < 15s'
+      - command: export json --numeric-durations 'duration >= 1.8s && duration < 2.0s'
       - command: export ascii 'service  == "smtp"'
       - command: export ascii 'missed_bytes  != 0'
       - command: export ascii 'id.orig_h !in 192.168.1.0/24'
