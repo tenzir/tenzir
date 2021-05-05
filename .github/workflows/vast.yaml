@@ -377,6 +377,10 @@ jobs:
             compiler: AppleClang
             cc: clang
             cxx: clang++
+          - extra-flags:
+            compiler: Clang
+            cc: clang
+            cxx: clang++
         configure:
           - tag: Release
             flags: --release
@@ -450,6 +454,15 @@ jobs:
           else
             echo "DOCKER_RELEASE_VERSION=$(echo ${GITHUB_SHA})" >> $GITHUB_ENV
           fi
+
+      - name: Setup Homebrew Clang
+        if: matrix.build.compiler == 'Clang'
+        run: |
+          llvm_root="$(brew --prefix llvm)"
+          echo "${llvm_root}/bin" >> $GITHUB_PATH
+          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
+          echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
 
       # For 'pull_request' events we want to take the latest build on the PR
       # branch, or if that fails the latest build from the branch we're merging
