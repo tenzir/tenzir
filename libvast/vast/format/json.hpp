@@ -44,6 +44,7 @@ public:
 
 private:
   bool flatten_ = false;
+  bool numeric_durations_ = false;
 };
 
 /// Adds a JSON object to a table slice builder according to a given layout.

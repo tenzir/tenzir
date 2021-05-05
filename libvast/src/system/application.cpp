@@ -133,7 +133,10 @@ auto make_export_command() {
                           documentation::vast_export_json,
                           opts("?vast.export.json")
                             .add<bool>("flatten", "flatten nested objects into "
-                                                  "the top-level"));
+                                                  "the top-level")
+                            .add<bool>("numeric-durations",
+                                       "render durations as numbers as opposed "
+                                       "to human-readable strings"));
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
