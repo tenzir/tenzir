@@ -89,10 +89,6 @@ jobs:
       matrix:
         build:
           - extra-flags:
-            compiler: GCC-9
-            cc: gcc-9
-            cxx: g++-9
-          - extra-flags:
             compiler: GCC
             cc: gcc-8
             cxx: g++-8
