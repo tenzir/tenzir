@@ -15,9 +15,8 @@ namespace vast {
 attribute::attribute(std::string key) : key{std::move(key)} {
 }
 
-attribute::attribute(std::string key, optional<std::string> value)
-  : key{std::move(key)},
-    value{std::move(value)} {
+attribute::attribute(std::string key, caf::optional<std::string> value)
+  : key{std::move(key)}, value{std::move(value)} {
 }
 
 bool operator==(const attribute& x, const attribute& y) {

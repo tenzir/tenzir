@@ -8,17 +8,19 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/fwd.hpp"
 #include "vast/time.hpp"
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
+#include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/variant.hpp>
 
@@ -475,7 +477,7 @@ data_view make_data_view(const T& x) {
 
 /// @relates view_trait
 template <class T>
-data_view make_data_view(const optional<T>& x) {
+data_view make_data_view(const caf::optional<T>& x) {
   if (!x)
     return make_view(caf::none);
   return make_view(*x);

@@ -9,7 +9,8 @@
 #pragma once
 
 #include "vast/detail/operators.hpp"
-#include "vast/optional.hpp"
+
+#include <caf/optional.hpp>
 
 #include <string>
 
@@ -18,7 +19,7 @@ namespace vast {
 /// A qualifier in the form of a key and optional value.
 struct attribute : detail::totally_ordered<attribute> {
   attribute(std::string key = {});
-  attribute(std::string key, optional<std::string> value);
+  attribute(std::string key, caf::optional<std::string> value);
 
   friend bool operator==(const attribute& x, const attribute& y);
 
@@ -30,7 +31,7 @@ struct attribute : detail::totally_ordered<attribute> {
   }
 
   std::string key;
-  optional<std::string> value;
+  caf::optional<std::string> value;
 };
 
 } // namespace vast
