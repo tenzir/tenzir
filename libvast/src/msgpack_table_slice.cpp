@@ -189,8 +189,8 @@ data_view decode(msgpack::overlay& objects, const T& t) {
       return data_view{view<subnet>{make_view(addr), length}};
     }
   } else if constexpr (std::is_same_v<T, enumeration_type>) {
-    if (auto x = get<uint8_t>(o))
-      return make_data_view(enumeration{*x});
+    if (auto x = get<enumeration>(o))
+      return make_data_view(*x);
   } else if constexpr (std::is_same_v<T, list_type>) {
     if (auto xs = get<array_view>(o)) {
       auto ptr = caf::make_counted<msgpack_array_view>(t.value_type, *xs);
