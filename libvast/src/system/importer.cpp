@@ -263,15 +263,34 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   }
   self->state.stage->add_outbound_path(self->state.transformer);
   if (type_registry)
-    self->send(self->state.transformer,
-               static_cast<stream_sink_actor<table_slice>>(type_registry));
+    self
+      ->request(self->state.transformer, caf::infinite,
+                static_cast<stream_sink_actor<table_slice>>(type_registry))
+      .then([](const caf::outbound_stream_slot<table_slice>&) {},
+            [self](caf::error& error) {
+              VAST_ERROR("failed to connect type registry to the importer: {}",
+                         error);
+              self->quit(std::move(error));
+            });
   if (store)
-    self->send(self->state.transformer,
-               static_cast<stream_sink_actor<table_slice>>(store));
+    self
+      ->request(self->state.transformer, caf::infinite,
+                static_cast<stream_sink_actor<table_slice>>(store))
+      .then([](const caf::outbound_stream_slot<table_slice>&) {},
+            [self](caf::error& error) {
+              VAST_ERROR("failed to connect store to the importer: {}", error);
+              self->quit(std::move(error));
+            });
   if (index) {
     self->state.index = std::move(index);
-    self->send(self->state.transformer,
-               static_cast<stream_sink_actor<table_slice>>(self->state.index));
+    self
+      ->request(self->state.transformer, caf::infinite,
+                static_cast<stream_sink_actor<table_slice>>(self->state.index))
+      .then([](const caf::outbound_stream_slot<table_slice>&) {},
+            [self](caf::error& error) {
+              VAST_ERROR("failed to connect store to the importer: {}", error);
+              self->quit(std::move(error));
+            });
   }
   return {
     // Register the ACCOUNTANT actor.
@@ -283,7 +302,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) {
       VAST_DEBUG("{} adds a new sink: {}", self, sink);
-      return self->delegate(self->state.transformer, sink, 0);
+      return self->delegate(self->state.transformer, sink);
     },
     // Register a FLUSH LISTENER actor.
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {

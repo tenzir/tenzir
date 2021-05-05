@@ -57,13 +57,9 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
     caf::actor_cast<stream_sink_actor<table_slice>::pointer>(self),
     std::move(transforms));
   return {
-    [self](const stream_sink_actor<table_slice>& out) {
-      VAST_DEBUG("{} adding stream sink {}", self->state.transformer_name, out);
-      self->state.stage->add_outbound_path(out);
-    },
-    [self](const stream_sink_actor<table_slice>& out,
-           int) -> caf::outbound_stream_slot<table_slice> {
-      VAST_DEBUG("{} adding stream sink {}", self->state.transformer_name, out);
+    [self](const stream_sink_actor<table_slice>& out)
+      -> caf::outbound_stream_slot<table_slice> {
+      VAST_DEBUG("{} adds stream sink {}", self->state.transformer_name, out);
       return self->state.stage->add_outbound_path(out);
     },
     [self](const stream_sink_actor<table_slice, std::string>& sink,
