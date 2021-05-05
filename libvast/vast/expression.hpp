@@ -274,35 +274,11 @@ struct predicate_transformer {
   }
 
   result_type operator()(const conjunction& c) const {
-    conjunction result;
-    for (auto& op : c) {
-      auto x = caf::visit(*this, op);
-      if constexpr (std::is_convertible_v<result_type, conjunction::value_type>) {
-        result.push_back(std::move(x));
-      } else {
-        if (!x)
-          return x;
-        else
-          result.push_back(std::move(*x));
-      }
-    }
-    return result;
+    return make_result(c);
   }
 
   result_type operator()(const disjunction& c) const {
-    disjunction result;
-    for (auto& op : c) {
-      auto x = caf::visit(*this, op);
-      if constexpr (std::is_convertible_v<result_type, disjunction::value_type>) {
-        result.push_back(std::move(x));
-      } else {
-        if (!x)
-          return x;
-        else
-          result.push_back(std::move(*x));
-      }
-    }
-    return result;
+    return make_result(c);
   }
 
   result_type operator()(const negation& n) const {
@@ -319,6 +295,24 @@ struct predicate_transformer {
   }
 
   F f;
+
+private:
+  template <class T>
+  result_type make_result(const T& input) const {
+    T result;
+    for (const auto& op : input) {
+      auto x = caf::visit(*this, op);
+      if constexpr (std::is_convertible_v<result_type, typename T::value_type>) {
+        result.push_back(std::move(x));
+      } else {
+        if (!x)
+          return x;
+        else
+          result.push_back(std::move(*x));
+      }
+    }
+    return result;
+  }
 };
 
 /// Applies a transformation for every predicate in an expression.
