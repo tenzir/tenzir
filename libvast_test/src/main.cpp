@@ -73,8 +73,13 @@ int main(int argc, char** argv) {
       break;
     }
   }
+  std::string vast_loglevel = "quiet";
   if (start != argc) {
-    auto res = caf::message_builder(argv + start, argv + argc).extract_opts({});
+    auto res
+      = caf::message_builder(argv + start, argv + argc)
+          .extract_opts({
+            {"vast-verbosity", "console verbosity for libvast", vast_loglevel},
+          });
     if (!res.error.empty()) {
       std::cout << res.error << std::endl;
       return 1;
@@ -92,6 +97,9 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
+  caf::settings log_settings;
+  put(log_settings, "vast.console-verbosity", vast_loglevel);
+  auto log_context = vast::create_log_context(vast::invocation{}, log_settings);
   // Run the unit tests.
   return caf::test::main(argc, argv);
 }

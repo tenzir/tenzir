@@ -333,7 +333,7 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   if (state.combined_layout.fields.size() < indexes->size()) {
     VAST_ERROR("{} found incoherent number of indexers in deserialized "
                "state; {} fields for {} indexes",
-               state.self, state.combined_layout.fields.size(),
+               state.name, state.combined_layout.fields.size(),
                indexes->size());
     return caf::make_error(ec::format_error, "incoherent number of indexers");
   }
@@ -341,7 +341,7 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // vector must be the same as in `combined_layout`. The actual indexers are
   // deserialized and spawned lazily on demand.
   state.indexers.resize(indexes->size());
-  VAST_DEBUG("{} found {} indexers for partition {}", state.self,
+  VAST_DEBUG("{} found {} indexers for partition {}", state.name,
              indexes->size(), state.id);
   auto type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
@@ -352,7 +352,7 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
     if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
   }
-  VAST_DEBUG("{} restored {} type-to-ids mapping for partition {}", state.self,
+  VAST_DEBUG("{} restored {} type-to-ids mapping for partition {}", state.name,
              state.type_ids.size(), state.id);
   return caf::none;
 }
