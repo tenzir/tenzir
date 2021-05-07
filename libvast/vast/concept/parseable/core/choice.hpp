@@ -32,34 +32,32 @@ constexpr bool is_choice_parser_v = is_choice_parser<T>::value;
 /// Attempts to parse either LHS or RHS.
 template <class Lhs, class Rhs>
 class choice_parser : public parser<choice_parser<Lhs, Rhs>> {
-public:
+private:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;
 
   // LHS = unused && RHS = unused  =>  unused
-  // LHS = T && RHS = unused       =>  LHS
   // LHS = unused && RHS = T       =>  RHS
+  // LHS = T && RHS = unused       =>  LHS
   // LHS = T && RHS = T            =>  T
   // LHS = T && RHS = U            =>  variant<T, U>
-  using attribute =
-    std::conditional_t<
-      std::is_same_v<lhs_attribute, unused_type>
-        && std::is_same_v<rhs_attribute, unused_type>,
-      unused_type,
-      std::conditional_t<
-        std::is_same_v<lhs_attribute, unused_type>,
-        rhs_attribute,
-        std::conditional_t<
-          std::is_same_v<rhs_attribute, unused_type>,
-          lhs_attribute,
-          std::conditional_t<
-            std::is_same_v<lhs_attribute, rhs_attribute>,
-            lhs_attribute,
-            detail::flattened_variant<lhs_attribute, rhs_attribute>
-          >
-        >
-      >
-    >;
+  static constexpr auto attribute_type() {
+    if constexpr (std::is_same_v<
+                    lhs_attribute,
+                    unused_type> && std::is_same_v<rhs_attribute, unused_type>)
+      return unused_type{};
+    else if constexpr (std::is_same_v<lhs_attribute, unused_type>)
+      return rhs_attribute{};
+    else if constexpr (
+      std::is_same_v<rhs_attribute,
+                     unused_type> || std::is_same_v<lhs_attribute, rhs_attribute>)
+      return lhs_attribute{};
+    else
+      return detail::flattened_variant<lhs_attribute, rhs_attribute>{};
+  }
+
+public:
+  using attribute = decltype(attribute_type());
 
   constexpr choice_parser(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
