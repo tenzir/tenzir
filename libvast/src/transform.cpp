@@ -21,10 +21,14 @@ caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
   bool enable_arrow = VAST_ENABLE_ARROW > 0;
   const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
   const auto* generic_step = dynamic_cast<const generic_transform_step*>(this);
+  VAST_ASSERT(arrow_step || generic_step);
   if (arrow_step && enable_arrow) {
     return (*arrow_step)(std::move(slice));
+  } else if (generic_step) {
+    return (*generic_step)(std::move(slice));
   }
-  return (*generic_step)(std::move(slice));
+  return caf::make_error(ec::invalid_configuration, "step requires arrow "
+                                                    "support");
 }
 
 caf::expected<table_slice>
@@ -66,25 +70,11 @@ caf::expected<table_slice> transform::apply(table_slice&& x) const {
       == event_types_.end())
     return std::move(x);
   // TODO: Use the fast-path overload if all steps are `arrow_transform_step`s.
-  bool enable_arrow = VAST_ENABLE_ARROW > 0;
   for (const auto& step : steps_) {
-    if (const auto* arrow_step
-        = dynamic_cast<const arrow_transform_step*>(step.get());
-        enable_arrow && arrow_step) {
-      auto transformed = (*arrow_step)(std::move(x));
-      if (!transformed)
-        return transformed;
-      x = std::move(*transformed);
-    } else if (const auto* generic_step
-               = dynamic_cast<const generic_transform_step*>(step.get())) {
-      auto transformed = (*generic_step)(std::move(x));
-      if (!transformed)
-        return transformed;
-      x = std::move(*transformed);
-    } else {
-      // There are currently no more kinds of `transform_step` implemented.
-      VAST_ASSERT(!"Invalid transform step type");
-    }
+    auto transformed = step->apply(std::move(x));
+    if (!transformed)
+      return transformed.error();
+    x = std::move(*transformed);
   }
   return std::move(x);
 }

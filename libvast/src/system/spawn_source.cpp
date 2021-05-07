@@ -32,7 +32,7 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
                            "node locally instead of connecting to one; please "
                            "unset the option vast.node");
   auto transforms
-    = make_transforms(transforms_location::client_source, args.inv.options);
+    = make_transforms(transforms_location::server_import, args.inv.options);
   if (!transforms)
     return transforms.error();
   // TODO: Remove this check once ch25395 is implemented.
