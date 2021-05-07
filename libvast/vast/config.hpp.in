@@ -32,20 +32,6 @@ extern const char* build_tree_hash;
 
 } // namespace vast::version
 
-// NOTE: Do not use these directly, but rather use
-// `vast::detail::install_*dir()` functions that correctly use the rpath for
-// non-relocatable builds.
-
-#if VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-#  define VAST_DATADIR "@CMAKE_INSTALL_DATADIR@/vast"
-#  define VAST_CONFIGDIR "@CMAKE_INSTALL_SYSCONFDIR@/vast"
-#  define VAST_PLUGINDIR "@CMAKE_INSTALL_LIBDIR@/vast/plugins"
-#else
-#  define VAST_FULL_DATADIR "@CMAKE_INSTALL_FULL_DATADIR@/vast"
-#  define VAST_FULL_CONFIGDIR "@CMAKE_INSTALL_FULL_SYSCONFDIR@/vast"
-#  define VAST_FULL_PLUGINDIR "@CMAKE_INSTALL_FULL_LIBDIR@/vast/plugins"
-#endif
-
 #include <caf/config.hpp>
 
 #define VAST_LOG_LEVEL_QUIET CAF_LOG_LEVEL_QUIET

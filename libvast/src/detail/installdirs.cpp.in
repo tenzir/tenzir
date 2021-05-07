@@ -30,25 +30,25 @@ std::filesystem::path install_prefix() {
 
 std::filesystem::path install_datadir() {
 #if VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  return install_prefix() / VAST_DATADIR;
+  return install_prefix() / "@CMAKE_INSTALL_DATADIR@/vast";
 #else
-  return VAST_FULL_DATADIR;
+  return "@CMAKE_INSTALL_FULL_DATADIR@/vast";
 #endif
 }
 
 std::filesystem::path install_configdir() {
 #if VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  return install_prefix() / VAST_CONFIGDIR;
+  return install_prefix() / "@CMAKE_INSTALL_SYSCONFDIR@/vast";
 #else
-  return VAST_FULL_CONFIGDIR;
+  return "@CMAKE_INSTALL_FULL_SYSCONFDIR@/vast";
 #endif
 }
 
 std::filesystem::path install_plugindir() {
 #if VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  return install_prefix() / VAST_PLUGINDIR;
+  return install_prefix() / "@CMAKE_INSTALL_LIBDIR@/vast/plugins";
 #else
-  return VAST_FULL_PLUGINDIR;
+  return "@CMAKE_INSTALL_FULL_LIBDIR@/vast/plugins";
 #endif
 }
 
