@@ -381,11 +381,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         auto batch = state(encoded, slice.state_)->record_batch();
         const auto data = batch.get();
         auto result = std::shared_ptr<arrow::RecordBatch>{
-          data,
-          [batch = std::move(batch), slice](arrow::RecordBatch*) noexcept {
-            static_cast<void>(batch);
-            static_cast<void>(slice);
-          }};
+          data, table_slice_life_extender{slice, std::move(batch)}};
         return result;
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.

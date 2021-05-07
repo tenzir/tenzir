@@ -29,7 +29,12 @@ caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
 
 caf::expected<table_slice>
 arrow_transform_step::operator()(table_slice&& x) const {
-  auto [layout, transformed] = (*this)(x.layout(), as_record_batch(x));
+  // NOTE: It's important that `batch` is kept alive until `create()`
+  // is finished: If a copy was made, `batch` will hold the only reference
+  // to its underlying table slice, but the RecordBatches created by the
+  // transform step will most likely reference some of same underlying data.
+  auto batch = as_record_batch(x);
+  auto [layout, transformed] = (*this)(x.layout(), batch);
   return arrow_table_slice_builder::create(transformed, layout);
 }
 
@@ -124,7 +129,12 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
   if (arrow_fast_path) {
     VAST_INFO("selected fast path because all transforms support arrow");
     auto layout = x.layout();
-    auto batch = as_record_batch(x);
+    // NOTE: It's important that `batch` is kept alive until `create()`
+    // is finished: If a copy was made, `batch` will hold the only reference
+    // to its underlying table slice, but the RecordBatches created by the
+    // transform step will most likely reference some of same underlying data.
+    auto original_batch = as_record_batch(x);
+    auto batch = original_batch;
     for (auto idx : indices) {
       const auto& t = transforms_.at(idx);
       std::tie(layout, batch) = t.apply(std::move(layout), std::move(batch));

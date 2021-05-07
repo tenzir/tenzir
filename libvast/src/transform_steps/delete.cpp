@@ -58,7 +58,12 @@ delete_step::operator()(vast::record_type layout,
     return std::make_pair(std::move(layout), nullptr);
   auto transformed = maybe_transformed.ValueOrDie();
   layout.fields.erase(layout.fields.begin() + column_index);
-  return std::make_pair(std::move(layout), std::move(transformed));
+  auto* deleter = std::get_deleter<table_slice_life_extender>(batch);
+  auto result = std::shared_ptr<arrow::RecordBatch>{
+    transformed.get(), [deleter_ = *deleter, transformed](arrow::RecordBatch*) {
+      static_cast<void>(deleter_);
+    }};
+  return std::make_pair(std::move(layout), result);
 }
 
 #endif

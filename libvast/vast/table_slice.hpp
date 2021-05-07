@@ -23,6 +23,8 @@
 
 namespace vast {
 
+struct table_slice_life_extender;
+
 /// A horizontal partition of a table. A slice defines a tabular interface for
 /// accessing homogenous data independent of the concrete carrier format.
 class table_slice final {
@@ -274,6 +276,13 @@ private:
 
   /// The number of in-memory table slices.
   inline static std::atomic<size_t> num_instances_ = {};
+};
+
+struct table_slice_life_extender {
+  vast::table_slice slice;
+  std::shared_ptr<arrow::RecordBatch> batch;
+  void operator()(arrow::RecordBatch*) {
+  }
 };
 
 // -- operations ---------------------------------------------------------------
