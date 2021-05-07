@@ -99,6 +99,7 @@ int main(int argc, char** argv) {
   }
   caf::settings log_settings;
   put(log_settings, "vast.console-verbosity", vast_loglevel);
+  put(log_settings, "vast.console-format", "%^[%s:%#] %v%$");
   auto log_context = vast::create_log_context(vast::invocation{}, log_settings);
   // Run the unit tests.
   return caf::test::main(argc, argv);
