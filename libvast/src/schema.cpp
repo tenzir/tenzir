@@ -17,8 +17,8 @@
 #include "vast/data.hpp"
 #include "vast/detail/env.hpp"
 #include "vast/detail/filter_dir.hpp"
+#include "vast/detail/installdirs.hpp"
 #include "vast/detail/load_contents.hpp"
-#include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
@@ -219,38 +219,22 @@ caf::expected<schema> get_schema(const caf::settings& options) {
 }
 
 detail::stable_set<std::filesystem::path>
-get_schema_dirs(const caf::actor_system_config& cfg,
-                const std::vector<const void*>& objpath_addresses) {
-  const auto disable_default_config_dirs
-    = caf::get_or(cfg, "vast.disable-default-config-dirs", false);
+get_schema_dirs(const caf::actor_system_config& cfg) {
+  const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
   detail::stable_set<std::filesystem::path> result;
   if (auto vast_schema_directories = detail::locked_getenv("VAST_SCHEMA_DIRS"))
     for (auto&& path : detail::split(*vast_schema_directories, ":"))
       result.insert({path});
-  auto insert_dirs_for_datadir = [&](const std::filesystem::path& datadir) {
-    result.insert(datadir / "schema");
-    for (const auto& plugin : plugins::get()) {
-      auto dir = datadir / "plugin" / plugin->name() / "schema";
-      auto err = std::error_code{};
-      if (std::filesystem::exists(dir, err))
-        result.insert(std::move(dir));
-    }
-  };
-#if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  insert_dirs_for_datadir(VAST_DATADIR);
-#endif
-  // Get filesystem path to the executable.
-  for (const void* addr : objpath_addresses) {
-    if (const auto& binary = detail::objectpath(addr); binary) {
-      const auto datadir
-        = binary->parent_path().parent_path() / "share" / "vast";
-      insert_dirs_for_datadir(datadir);
-    } else {
-      VAST_ERROR("{} failed to get program path", __func__);
-    }
+  const auto datadir = detail::install_datadir();
+  result.insert(datadir / "schema");
+  for (const auto& plugin : plugins::get()) {
+    auto dir = datadir / "plugin" / plugin->name() / "schema";
+    auto err = std::error_code{};
+    if (std::filesystem::exists(dir, err))
+      result.insert(std::move(dir));
   }
-  if (!disable_default_config_dirs) {
-    result.insert(std::filesystem::path{VAST_CONFIGDIR} / "schema");
+  if (!bare_mode) {
+    result.insert(detail::install_configdir() / "schema");
     if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
       result.insert(std::filesystem::path{*xdg_config_home} / "vast"
                     / "schema");

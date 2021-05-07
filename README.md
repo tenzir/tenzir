@@ -87,8 +87,8 @@ Once you have all dependencies in place, build VAST with the following commands:
 ./configure
 cmake --build build
 cmake --build build --target test
-cmake --build build --target integration
 cmake --build build --target install
+cmake --build build --target integration
 ```
 
 The [installation guide][installation-url] contains more detailed and

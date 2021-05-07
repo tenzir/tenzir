@@ -49,8 +49,8 @@ RUN ./configure \
     --generator=Ninja
 RUN cmake --build build --parallel
 RUN CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test
-RUN cmake --build build --target integration
 RUN cmake --build build --target install
+RUN cmake --build build --target integration
 
 # copy prebuilt image
 FROM debian:buster-backports as prebuilt

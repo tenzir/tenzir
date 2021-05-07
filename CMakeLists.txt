@@ -136,12 +136,62 @@ add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
 
 # Setting this option removes configuration dependent absolute paths from the
 # VAST installation. Concretely, it enables the dynamic binary and libraries to
-# use relative paths for loading their dependencies.
-option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS "Enable relocatable installations"
-       ON)
+# use relative paths for loading their dependencies. On macOS, always enable
+# relocatable installations as it's very uncommon not to do so.
+cmake_dependent_option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS
+  "Enable relocatable installations" ON "NOT APPLE" ON)
 add_feature_info(
   "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   "enable relocatable installations.")
+
+# For relocatable builds we need the configured install directories to be
+# relative so we can interpret them relative to the object path of the running
+# binary instead of a fixed install prefix.
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+  foreach (_install IN ITEMS
+      "BIN" "SBIN" "LIBEXEC" "SYSCONF" "SHAREDSTATE" "LOCALSTATE" "RUNSTATE"
+      "LIB" "INCLUDE" "OLDINCLUDE" "DATAROOT" "DATA" "INFO" "LOCALE" "MAN" "DOC"
+  )
+    # Try removing CMAKE_INSTALL_PREFIX with a trailing slash from the full path
+    # to get the correct relative path because some package managers do this
+    # stupid thing where they put absolute paths into variables that are
+    # supposed to be interpreted as relative to the install preifx.
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
+      string(REGEX REPLACE "^${CMAKE_INSTALL_PREFIX}/" ""
+        "CMAKE_INSTALL_${_install}DIR"
+        "${CMAKE_INSTALL_FULL_${install}DIR}")
+    endif ()
+    # If the path is still absolute, e.g., because the full install dirs did
+    # were not subdirectories if the install prefix, give up and error. Nothing
+    # we can do here.
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
+      message(
+        FATAL_ERROR
+          "CMAKE_INSTALL_${_install}DIR must not be an absolute path for relocatable installations."
+      )
+    endif ()
+  endforeach ()
+  unset(_install)
+endif ()
+
+# CMake allows for overriding the install prefix at install-time, e.g., via
+# `cmake --install <path/to/build> --prefix <path/to/install>` or
+# `DESTDIR=<path/to/install> cmake --build <path/to/build> --target install`.
+# Doing so breaks non-relocatable installations, so we abort the installation
+# when encountering this.
+if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+  install(CODE "\
+    get_filename_component(build_time_prefix
+      \"${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
+    get_filename_component(install_time_prefix
+      \"\${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
+    if (NOT \"\${build_time_prefix}\" STREQUAL \"\${install_time_prefix}\")
+      message(FATAL_ERROR
+        \"For non-relocatable builds the configured build-time install prefix (\${build_time_prefix}) must match the configured install-time install prefix (\${install_time_prefix})\"
+      )
+    endif ()
+  ")
+endif ()
 
 # -- silence policy-related warnings -------------------------------------------
 
@@ -152,17 +202,6 @@ if (POLICY CMP0048)
   unset(PROJECT_VERSION_MINOR)
   unset(PROJECT_VERSION_PATCH)
   unset(PROJECT_VERSION_TWEAK)
-endif ()
-
-if (POLICY CMP0042)
-  if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
-    set(CMAKE_SKIP_BUILD_RPATH FALSE)
-    set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-    # TODO: Verify that this is indeed correct.
-    if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-      set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-    endif ()
-  endif ()
 endif ()
 
 # -- internal target -----------------------------------------------------------

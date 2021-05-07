@@ -15,9 +15,9 @@
 #include "vast/detail/append.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/env.hpp"
+#include "vast/detail/installdirs.hpp"
 #include "vast/detail/load_contents.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/logger.hpp"
@@ -62,12 +62,12 @@ caf::error configuration::parse(int argc, char** argv) {
     for (const auto& [old, new_] : replacements)
       if (option == old)
         option = new_;
-  // Detect when running with --disable-default-config-dirs, and remove the
-  // option from the command line.
-  if (auto it = std::find(command_line.begin(), command_line.end(),
-                          "--disable-default-config-dirs");
+  // Detect when running with --bare-mode, and remove the option from the
+  // command line.
+  if (auto it
+      = std::find(command_line.begin(), command_line.end(), "--bare-mode");
       it != command_line.end()) {
-    caf::put(content, "vast.disable-default-config-dirs", true);
+    caf::put(content, "vast.bare-mode", true);
     command_line.erase(it);
   }
   // Move CAF options to the end of the command line, parse them, and then
@@ -101,7 +101,8 @@ caf::error configuration::parse(int argc, char** argv) {
       config_files.emplace_back(std::move(conf_yml));
     return caf::none;
   };
-  if (!caf::get_or(content, "vast.disable-default-config-dirs", false)) {
+  const auto bare_mode = caf::get_or(content, "vast.bare-mode", false);
+  if (!bare_mode) {
     if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME")) {
       if (auto err
           = add_configs(std::filesystem::path{*xdg_config_home} / "vast"))
@@ -111,7 +112,7 @@ caf::error configuration::parse(int argc, char** argv) {
           = add_configs(std::filesystem::path{*home} / ".config" / "vast"))
         return err;
     }
-    if (auto err = add_configs(std::filesystem::path{VAST_CONFIGDIR}))
+    if (auto err = add_configs(detail::install_configdir()))
       return err;
   }
   // If the user provided a config file on the command line, we attempt to

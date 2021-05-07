@@ -326,8 +326,12 @@ file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
 list(APPEND libvast_sources
   "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
-  "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp")
+  "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 list(SORT libvast_sources)
+
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
@@ -341,7 +345,7 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake" "\
   set(VAST_VERSION_TAG \"${VAST_VERSION_TAG_BACKUP}\")
   include(VASTVersion)
   configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
-                 \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
+                 \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\" @ONLY)")
 
 # We generate config.cpp as a byproduct of a custom target so we can re-generate
 # the version string and build tree hash on every build. Note that this must not

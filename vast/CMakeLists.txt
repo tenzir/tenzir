@@ -59,7 +59,7 @@ file(
      fi
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     app=\"$<TARGET_FILE:vast::vast>\"
+     app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::vast>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::vast>>\"
      set -e
      if [ ! -f \"$env_dir/bin/activate\" ]; then
        python3 -m venv \"$env_dir\"
@@ -153,7 +153,7 @@ if (PANDOC_FOUND)
   file(
     WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
     "execute_process(
-      COMMAND ${CMAKE_BINARY_DIR}/bin/vast --disable-default-config-dirs manual
+      COMMAND ${CMAKE_BINARY_DIR}/bin/vast --bare-mode manual
       OUTPUT_FILE ${man_generated}.md)
     execute_process(
       COMMAND pandoc -s -f markdown -t man ${man_generated}.md

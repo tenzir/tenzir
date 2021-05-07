@@ -11,7 +11,7 @@
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/env.hpp"
-#include "vast/detail/process.hpp"
+#include "vast/detail/installdirs.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -27,23 +27,12 @@ namespace {
 stable_set<std::filesystem::path>
 get_plugin_dirs(const caf::actor_system_config& cfg) {
   stable_set<std::filesystem::path> result;
-  const auto disable_default_config_dirs
-    = caf::get_or(cfg, "vast.disable-default-config-dirs", false);
+  const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
   if (auto vast_plugin_directories = locked_getenv("VAST_PLUGIN_DIRS"))
     for (auto&& path : detail::split(*vast_plugin_directories, ":"))
       result.insert({path});
-  // FIXME: we technically should not use "lib" relative to the parent,
-  // because it may be lib64 or something else. CMAKE_INSTALL_LIBDIR is
-  // probably the best choice.
-  if (auto binary = objectpath(nullptr))
-    result.insert(binary->parent_path().parent_path() / "lib" / "vast"
-                  / "plugins");
-  else
-    VAST_ERROR("{} failed to get program path", __func__);
-  if (!disable_default_config_dirs) {
-#if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-    result.insert(std::filesystem::path{VAST_PLUGINDIR});
-#endif
+  if (!bare_mode) {
+    result.insert(install_plugindir());
     if (auto home = locked_getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
                     / "plugins");

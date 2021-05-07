@@ -178,6 +178,8 @@ plugin_ptr plugin_ptr::make_native(plugin* instance, void (*deleter)(plugin*),
   return plugin_ptr{nullptr, instance, deleter, version, type::native};
 }
 
+plugin_ptr::plugin_ptr() noexcept = default;
+
 plugin_ptr::~plugin_ptr() noexcept {
   if (instance_) {
     VAST_ASSERT(deleter_);
@@ -211,7 +213,7 @@ plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept {
   return *this;
 }
 
-plugin_ptr::operator bool() noexcept {
+plugin_ptr::operator bool() const noexcept {
   return static_cast<bool>(instance_);
 }
 

@@ -37,14 +37,17 @@ Building VAST involves the following steps:
   ```sh
   cmake --build build --target all
   ```
-4. Run the tests to verify everything works as expected:
+4. Run the unit tests to verify everything works as expected:
   ```sh
   cmake --build build --target test
-  cmake --build build --target integration
   ```
 5. Install VAST system-wide or into your configured prefix:
   ```sh
   cmake --build build --target install
+  ```
+4. Run the integration tests to verify everything works as expected:
+  ```sh
+  cmake --build build --target integration
   ```
 
 ## Nix
