@@ -35,6 +35,10 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
     = make_transforms(transforms_location::client_source, args.inv.options);
   if (!transforms)
     return transforms.error();
+  // TODO: Remove this check once ch25395 is implemented.
+  if (!transforms->empty())
+    return caf::make_error(ec::invalid_configuration,
+                           "import transformations currently not permitted");
   auto [accountant, importer, type_registry]
     = self->state.registry
         .find<accountant_actor, importer_actor, type_registry_actor>();
