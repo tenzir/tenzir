@@ -38,6 +38,17 @@ struct partitioning;
 /// @relates bloom_filter
 struct no_partitioning;
 
+/// A tag type for controlling the return type of `bloom_filter::add`. With
+/// this policy the function returns `false` if a value is already present and
+/// `true` if it is new.
+/// @relates bloom_filter
+struct duplicate_tracking;
+
+/// A tag type for controlling the return type of `bloom_filter::add`. This
+/// policy.
+/// @relates bloom_filter
+struct no_duplicate_tracking;
+
 } // namespace vast::policy
 
 namespace vast {
@@ -47,13 +58,16 @@ namespace vast {
 /// @tparam Hasher The hasher type to generate digests.
 /// @tparam PartitioningPolicy The partitioning policy.
 template <class HashFunction, template <class> class Hasher = double_hasher,
-          class PartitioningPolicy = policy::no_partitioning>
-class bloom_filter : detail::equality_comparable<
-                       bloom_filter<HashFunction, Hasher, PartitioningPolicy>> {
+          class PartitioningPolicy = policy::no_partitioning,
+          class TrackingPolicy = policy::no_duplicate_tracking>
+class bloom_filter
+  : detail::equality_comparable<
+      bloom_filter<HashFunction, Hasher, PartitioningPolicy, TrackingPolicy>> {
 public:
   using hash_function = HashFunction;
   using hasher_type = Hasher<hash_function>;
   using partitioning_policy = PartitioningPolicy;
+  using tracking_policy = TrackingPolicy;
 
   /// Constructs a Bloom filter with a fixed size and a hasher.
   /// @param size The number of cells/bits in the Bloom filter.
@@ -65,11 +79,26 @@ public:
 
   /// Adds an element to the Bloom filter.
   /// @param x The element to add.
+  /// @returns `void` if the tracking policy is `no_duplicate_tracking`,
+  /// otherwise a `bool` that is `false` iff *x* already exists in the filter.
   template <class T>
-  void add(T&& x) {
+  auto add(T&& x) {
     auto& digests = hasher_(std::forward<T>(x));
-    for (size_t i = 0; i < digests.size(); ++i)
-      bits_[position(i, digests[i])] = true;
+    if constexpr (std::is_same_v<tracking_policy,
+                                 policy::no_duplicate_tracking>) {
+      for (size_t i = 0; i < digests.size(); ++i)
+        bits_[position(i, digests[i])] = true;
+    }
+    if constexpr (std::is_same_v<tracking_policy, policy::duplicate_tracking>) {
+      auto unique = false;
+      for (size_t i = 0; i < digests.size(); ++i) {
+        auto bit = bits_[position(i, digests[i])];
+        if (!bit)
+          unique = true;
+        bit = true;
+      }
+      return unique;
+    }
   }
 
   /// Test whether an element exists in the Bloom filter.
@@ -143,10 +172,13 @@ private:
 ///              integers from 0 to *k-1* will be used.
 /// @relates bloom_filter bloom_filter_parameters
 template <class HashFunction, template <class> class Hasher = double_hasher,
-          class PartitioningPolicy = policy::no_partitioning>
-std::optional<bloom_filter<HashFunction, Hasher, PartitioningPolicy>>
+          class PartitioningPolicy = policy::no_partitioning,
+          class TrackingPolicy = policy::no_duplicate_tracking>
+std::optional<
+  bloom_filter<HashFunction, Hasher, PartitioningPolicy, TrackingPolicy>>
 make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
-  using result_type = bloom_filter<HashFunction, Hasher, PartitioningPolicy>;
+  using result_type
+    = bloom_filter<HashFunction, Hasher, PartitioningPolicy, TrackingPolicy>;
   using hasher_type = typename result_type::hasher_type;
   if (auto ys = evaluate(xs)) {
     VAST_DEBUG("evaluated bloom filter parameters: {} {} {} {}",

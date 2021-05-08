@@ -209,3 +209,16 @@ TEST(bloom filter - simple hasher and partitioning) {
   REQUIRE_EQUAL(err, caf::none);
   CHECK(x == y);
 }
+
+TEST(bloom filter - duplicate tracking) {
+  bloom_filter_parameters xs;
+  xs.m = 1_M;
+  xs.p = 0.1;
+  auto x = vast::test::unbox(
+    make_bloom_filter<xxhash, double_hasher, policy::no_partitioning,
+                      policy::duplicate_tracking>(xs));
+  CHECK(!x.lookup(42));
+  CHECK(x.add(42));
+  CHECK(x.lookup(42));
+  CHECK(!x.add(42));
+}
