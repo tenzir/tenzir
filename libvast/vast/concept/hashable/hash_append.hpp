@@ -331,19 +331,10 @@ void hash_append(Hasher& h,
 
 namespace detail {
 
-inline void for_each_item(...) noexcept {
-}
-
-template <class Hasher, class T>
-int hash_one(Hasher& h, const T& t) noexcept {
-  hash_append(h, t);
-  return 0;
-}
-
 template <class Hasher, class ...T, size_t ...I>
 void tuple_hash(Hasher& h, const std::tuple<T...>& t,
                 std::index_sequence<I...>) noexcept {
-  for_each_item(hash_one(h, std::get<I>(t))...);
+  (hash_append(h, std::get<I>(t)), ...);
 }
 
 } // namespace detail
