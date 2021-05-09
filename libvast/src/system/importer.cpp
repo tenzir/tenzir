@@ -36,16 +36,18 @@ namespace vast::system {
 
 namespace {
 
-class driver : public caf::stream_stage_driver<
-                 table_slice, caf::broadcast_downstream_manager<table_slice>> {
+class driver
+  : public caf::stream_stage_driver<
+      table_slice,
+      caf::broadcast_downstream_manager<detail::framed<table_slice>>> {
 public:
-  driver(caf::broadcast_downstream_manager<table_slice>& out,
+  driver(caf::broadcast_downstream_manager<detail::framed<table_slice>>& out,
          importer_state& state)
     : stream_stage_driver(out), state{state} {
     // nop
   }
 
-  void process(caf::downstream<table_slice>& out,
+  void process(caf::downstream<detail::framed<table_slice>>& out,
                std::vector<table_slice>& slices) override {
     VAST_TRACE_SCOPE("{}", VAST_ARG(slices));
     uint64_t events = 0;
@@ -234,9 +236,12 @@ void importer_state::send_report() {
 
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, const store_actor& store,
-         index_actor index, const type_registry_actor& type_registry) {
+         const std::filesystem::path& dir, const store_builder_actor& store,
+         index_actor index, const type_registry_actor& type_registry,
+         std::vector<transform>&& input_transformations) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(dir));
+  for (const auto& x : input_transformations)
+    VAST_VERBOSE("Loaded import transformation {}", x.name());
   self->state.dir = dir;
   auto err = self->state.read_state();
   if (err) {
@@ -247,16 +252,47 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
+    self->state.stage->out().push(detail::framed<table_slice>::make_eof());
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
+  self->state.transformer = self->spawn(transformer, "input_transformer",
+                                        std::move(input_transformations));
+  if (!self->state.transformer) {
+    VAST_ERROR("{} failed to spawn transformer", self);
+    self->quit(std::move(err));
+    return importer_actor::behavior_type::make_empty_behavior();
+  }
+  self->state.stage->add_outbound_path(self->state.transformer);
   if (type_registry)
-    self->state.stage->add_outbound_path(type_registry);
+    self
+      ->request(self->state.transformer, caf::infinite,
+                static_cast<stream_sink_actor<table_slice>>(type_registry))
+      .then([](const caf::outbound_stream_slot<table_slice>&) {},
+            [self](caf::error& error) {
+              VAST_ERROR("failed to connect type registry to the importer: {}",
+                         error);
+              self->quit(std::move(error));
+            });
   if (store)
-    self->state.stage->add_outbound_path(store);
+    self
+      ->request(self->state.transformer, caf::infinite,
+                static_cast<stream_sink_actor<table_slice>>(store))
+      .then([](const caf::outbound_stream_slot<table_slice>&) {},
+            [self](caf::error& error) {
+              VAST_ERROR("failed to connect store to the importer: {}", error);
+              self->quit(std::move(error));
+            });
   if (index) {
     self->state.index = std::move(index);
-    self->state.stage->add_outbound_path(self->state.index);
+    self
+      ->request(self->state.transformer, caf::infinite,
+                static_cast<stream_sink_actor<table_slice>>(self->state.index))
+      .then([](const caf::outbound_stream_slot<table_slice>&) {},
+            [self](caf::error& error) {
+              VAST_ERROR("failed to connect store to the importer: {}", error);
+              self->quit(std::move(error));
+            });
   }
   return {
     // Register the ACCOUNTANT actor.
@@ -268,7 +304,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) {
       VAST_DEBUG("{} adds a new sink: {}", self, sink);
-      return self->state.stage->add_outbound_path(std::move(sink));
+      return self->delegate(self->state.transformer, sink);
     },
     // Register a FLUSH LISTENER actor.
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
@@ -284,14 +320,24 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     },
     // -- stream_sink_actor<table_slice> ---------------------------------------
     [self](caf::stream<table_slice> in) {
-      VAST_DEBUG("{} adds a new source: {}", self, self->current_sender());
+      // NOTE: Architecturally it would make more sense to put the transformer
+      // stage *before* the import actor, but that is not possible: The message
+      // sent is originally sent from the other side is a `caf::open_stream_msg`.
+      // This contains a field `msg` with a `caf::stream<>`. The caf streaming
+      // system recognizes this message and only passes the `caf::stream<>` to
+      // the handler. This means we can not delegate() this message, since we
+      // would only create a new message containing a `caf::stream` object but
+      // lose the surrounding `open_stream_msg` which contains the important
+      // parts. Sadly, the current actor is already stored as the "other side"
+      // of the stream in the outbound path, so we can't even hack around this
+      // with `caf::unsafe_send_as()` or similar black magic.
+      VAST_DEBUG("{} adds a new source", self);
       return self->state.stage->add_inbound_path(in);
     },
     // -- stream_sink_actor<table_slice, std::string> --------------------------
     [self](caf::stream<table_slice> in, std::string desc) {
       self->state.inbound_description = std::move(desc);
-      VAST_DEBUG("{} adds a new {} source: {}", self, desc,
-                 self->current_sender());
+      VAST_DEBUG("{} adds a new {} source", self, desc);
       return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------

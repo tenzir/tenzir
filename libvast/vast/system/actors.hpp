@@ -230,12 +230,8 @@ using archive_actor = typed_actor_fwd<
   caf::reacts_to<atom::internal, atom::resume>,
   // The internal telemetry loop of the ARCHIVE.
   caf::reacts_to<atom::telemetry>>
-  // Conform to the protocol of the STORE actor.
-  ::extend_with<store_actor>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the procotol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+  // Conform to the protocol of the STORE BUILDER actor.
+  ::extend_with<store_builder_actor>::unwrap;
 
 /// The TYPE REGISTRY actor interface.
 using type_registry_actor = typed_actor_fwd<
@@ -384,6 +380,17 @@ using datagram_source_actor
   = typed_actor_fwd<caf::reacts_to<caf::io::new_datagram_msg>>
   // Conform to the protocol of the SOURCE actor.
   ::extend_with<source_actor>::unwrap_as_broker;
+
+/// The interface of an TRANSFORMER actor.
+using transformer_actor = typed_actor_fwd<
+  caf::replies_to<stream_sink_actor<table_slice>>::with< //
+    caf::outbound_stream_slot<table_slice>>,
+  // Named stream.
+  caf::reacts_to<stream_sink_actor<table_slice, std::string>, std::string>>
+  // Conform to the protocol of the STREAM SINK actor for table slices
+  ::extend_with<stream_sink_actor<detail::framed<table_slice>>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<

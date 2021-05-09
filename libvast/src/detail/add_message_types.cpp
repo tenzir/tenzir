@@ -14,6 +14,7 @@
 #include "vast/chunk.hpp"
 #include "vast/command.hpp"
 #include "vast/config.hpp"
+#include "vast/detail/framed.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/die.hpp"
 #include "vast/expression.hpp"

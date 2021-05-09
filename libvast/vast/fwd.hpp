@@ -85,6 +85,8 @@ class synopsis;
 class table_slice;
 class table_slice_builder;
 class table_slice_column;
+class transform;
+class transform_step;
 class type;
 class uuid;
 class value_index;
@@ -153,6 +155,13 @@ class span;
 template <class>
 class scope_linked;
 
+namespace detail {
+
+template <class>
+class framed;
+
+}
+
 void intrusive_ptr_add_ref(const table_slice_builder*);
 void intrusive_ptr_release(const table_slice_builder*);
 
@@ -161,6 +170,7 @@ using column_index_ptr = std::unique_ptr<column_index>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
+using transform_step_ptr = std::unique_ptr<transform_step>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.
@@ -316,6 +326,10 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>) )
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>) )
   VAST_ADD_TYPE_ID((std::vector<vast::uuid>) )
+
+  VAST_ADD_TYPE_ID((vast::detail::framed<vast::table_slice>))
+  VAST_ADD_TYPE_ID((std::vector<vast::detail::framed<vast::table_slice>>))
+  VAST_ADD_TYPE_ID((caf::stream<vast::detail::framed<vast::table_slice>>))
 
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>) )
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>) )

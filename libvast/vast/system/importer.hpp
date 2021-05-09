@@ -12,8 +12,11 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/framed.hpp"
+#include "vast/qualified_record_field.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/transformer.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
@@ -80,9 +83,11 @@ struct importer_state {
   std::filesystem::path dir;
 
   /// The continous stage that moves data from all sources to all subscribers.
-  caf::stream_stage_ptr<table_slice,
-                        caf::broadcast_downstream_manager<table_slice>>
+  caf::stream_stage_ptr<
+    table_slice, caf::broadcast_downstream_manager<detail::framed<table_slice>>>
     stage;
+
+  transformer_actor transformer;
 
   /// Pointer to the owning actor.
   importer_actor::pointer self;
@@ -112,7 +117,8 @@ struct importer_state {
 /// @param type_registry A handle to the type-registry module.
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, const store_actor& store,
-         index_actor index, const type_registry_actor& type_registry);
+         const std::filesystem::path& dir, const store_builder_actor& store,
+         index_actor index, const type_registry_actor& type_registry,
+         std::vector<transform>&& input_transformations = {});
 
 } // namespace vast::system

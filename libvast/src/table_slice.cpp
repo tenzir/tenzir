@@ -28,6 +28,7 @@
 
 #if VAST_ENABLE_ARROW
 #  include "vast/arrow_table_slice.hpp"
+#  include "vast/arrow_table_slice_builder.hpp"
 #endif // VAST_ENABLE_ARROW
 
 namespace vast {
@@ -190,6 +191,15 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
   // Delegate the sliced chunk to the constructor.
   *this = table_slice{std::move(chunk), verify};
 }
+
+#if VAST_ENABLE_ARROW
+
+table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+                         const record_type& layout) {
+  *this = arrow_table_slice_builder::create(record_batch, layout);
+}
+
+#endif // VAST_ENABLE_ARROW
 
 table_slice::table_slice(const table_slice& other) noexcept = default;
 
@@ -371,11 +381,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         auto batch = state(encoded, slice.state_)->record_batch();
         const auto data = batch.get();
         auto result = std::shared_ptr<arrow::RecordBatch>{
-          data,
-          [batch = std::move(batch), slice](arrow::RecordBatch*) noexcept {
-            static_cast<void>(batch);
-            static_cast<void>(slice);
-          }};
+          data, table_slice_life_extender{slice, std::move(batch)}};
         return result;
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.

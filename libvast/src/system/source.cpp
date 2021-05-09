@@ -106,7 +106,8 @@ caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
        const type_registry_actor& type_registry, vast::schema local_schema,
-       std::string type_filter, accountant_actor accountant) {
+       std::string type_filter, accountant_actor accountant,
+       std::vector<transform>&& transforms) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(self));
   // Initialize state.
   self->state.self = self;
@@ -116,8 +117,15 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.local_schema = std::move(local_schema);
   self->state.accountant = std::move(accountant);
   self->state.table_slice_size = table_slice_size;
-  self->state.sink = nullptr;
+  self->state.has_sink = false;
   self->state.done = false;
+  self->state.transformer
+    = self->spawn(transformer, "source_transformer", std::move(transforms));
+  if (!self->state.transformer) {
+    VAST_ERROR("{} failed to spawn transformer", self);
+    self->quit();
+    return {};
+  }
   // Register with the accountant.
   self->send(self->state.accountant, atom::announce_v, self->state.name);
   self->state.initialize(type_registry, std::move(type_filter));
@@ -134,7 +142,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [self](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
+    [self](caf::unit_t&, caf::downstream<detail::framed<table_slice>>& out,
+           size_t num) {
       VAST_DEBUG("{} tries to generate {} messages", self, num);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
@@ -152,6 +161,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto finish = [&] {
         self->state.done = true;
         self->state.send_report();
+        out.push(detail::framed<vast::table_slice>::make_eof());
         self->quit();
       };
       if (self->state.requested
@@ -214,25 +224,28 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     },
     [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
-      VAST_DEBUG("{} registers {}", self, VAST_ARG(sink));
+      VAST_DEBUG("{} registers sink {}", self, VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
-      if (self->state.sink) {
+      if (self->state.has_sink) {
         self->quit(caf::make_error(ec::logic_error,
                                    "source does not support "
                                    "multiple sinks; sender =",
                                    self->current_sender()));
         return;
       }
-      self->state.sink = std::move(sink);
+      // Start streaming.
+      self->state.has_sink = true;
       if (self->state.accountant)
         self->delayed_send(self, defaults::system::telemetry_rate,
                            atom::telemetry_v);
-      // Start streaming.
+      // Start streaming. Note that we add the outbound path only now,
+      // otherwise for small imports the source might already shut down
+      // before we receive a sink.
+      self->state.mgr->add_outbound_path(self->state.transformer);
       auto name = std::string{self->state.reader->name()};
-      self->state.mgr->add_outbound_path(self->state.sink,
-                                         std::make_tuple(std::move(name)));
+      self->delegate(self->state.transformer, sink, name);
     },
     [self](atom::status, status_verbosity v) {
       caf::settings result;

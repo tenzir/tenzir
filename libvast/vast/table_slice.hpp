@@ -23,6 +23,8 @@
 
 namespace vast {
 
+struct table_slice_life_extender;
+
 /// A horizontal partition of a table. A slice defines a tabular interface for
 /// accessing homogenous data independent of the concrete carrier format.
 class table_slice final {
@@ -76,6 +78,18 @@ public:
   /// FlatBuffers table fails.
   table_slice(const fbs::FlatTableSlice& flat_slice,
               const chunk_ptr& parent_chunk, enum verify verify) noexcept;
+
+#if VAST_ENABLE_ARROW
+
+  /// Construct an Arrow-encoded table slice from an existing record batch and
+  /// layout. Note that the record batch's schema and the layout must match
+  /// exactly.
+  /// @param record_batch The record batch containing the table slice data.
+  /// @param layout The layout of the tbale slice.
+  table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+              const record_type& layout);
+
+#endif // VAST_ENABLE_ARROW
 
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.
@@ -262,6 +276,13 @@ private:
 
   /// The number of in-memory table slices.
   inline static std::atomic<size_t> num_instances_ = {};
+};
+
+struct table_slice_life_extender {
+  vast::table_slice slice;
+  std::shared_ptr<arrow::RecordBatch> batch;
+  void operator()(arrow::RecordBatch*) {
+  }
 };
 
 // -- operations ---------------------------------------------------------------

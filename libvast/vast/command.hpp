@@ -181,7 +181,7 @@ struct invocation {
 
   // -- mutators -------------------------------------------------------------
 
-  /// Sets the members `full_nane`, and `arguments`.
+  /// Sets the members `full_name`, and `arguments`.
   void assign(const command* cmd, command::argument_iterator first,
               command::argument_iterator last) {
     full_name = cmd->full_name();

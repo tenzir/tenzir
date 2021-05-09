@@ -72,7 +72,8 @@ TEST(zeek source) {
   auto src
     = self->spawn(source, std::move(reader), events::slice_size, std::nullopt,
                   vast::system::type_registry_actor{}, vast::schema{},
-                  std::string{}, vast::system::accountant_actor{});
+                  std::string{}, vast::system::accountant_actor{},
+                  std::vector<vast::transform>{});
   run();
   MESSAGE("start sink and run exhaustively");
   auto snk = self->spawn(test_sink, src);
