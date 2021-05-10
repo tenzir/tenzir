@@ -28,15 +28,10 @@
 
 namespace vast::policy {
 
-/// A tag type for choosing partitioning of a Bloom filter. This
-/// policy slices the Bloom filter bits into *k* equi-distant partitions.
+/// A policy that controls the cell layout of a Bloom filter.
+/// If `yes`, the Bloom filter bits are split into *k* equi-distant partitions.
 /// @relates bloom_filter
-struct partitioning;
-
-/// A tag type for avoiding partitioning in a Bloom filter. This policy
-/// considers the Bloom filter bits as one contiguous chunk.
-/// @relates bloom_filter
-struct no_partitioning;
+enum class partitioning { yes, no };
 
 } // namespace vast::policy
 
@@ -45,15 +40,16 @@ namespace vast {
 /// A data structure for probabilistic set membership.
 /// @tparam HashFunction The hash function to use in the hasher.
 /// @tparam Hasher The hasher type to generate digests.
-/// @tparam PartitioningPolicy The partitioning policy.
+/// @tparam Partitioning The partitioning policy.
 template <class HashFunction, template <class> class Hasher = double_hasher,
-          class PartitioningPolicy = policy::no_partitioning>
+          policy::partitioning Partitioning = policy::partitioning::no>
 class bloom_filter : detail::equality_comparable<
-                       bloom_filter<HashFunction, Hasher, PartitioningPolicy>> {
+                       bloom_filter<HashFunction, Hasher, Partitioning>> {
 public:
   using hash_function = HashFunction;
   using hasher_type = Hasher<hash_function>;
-  using partitioning_policy = PartitioningPolicy;
+
+  static constexpr policy::partitioning partitioning_policy = Partitioning;
 
   /// Constructs a Bloom filter with a fixed size and a hasher.
   /// @param size The number of cells/bits in the Bloom filter.
@@ -65,11 +61,17 @@ public:
 
   /// Adds an element to the Bloom filter.
   /// @param x The element to add.
+  /// @returns `false` iff *x* already exists in the filter.
   template <class T>
-  void add(T&& x) {
+  bool add(T&& x) {
     auto& digests = hasher_(std::forward<T>(x));
-    for (size_t i = 0; i < digests.size(); ++i)
-      bits_[position(i, digests[i])] = true;
+    auto unique = false;
+    for (size_t i = 0; i < digests.size(); ++i) {
+      auto bit = bits_[position(i, digests[i])];
+      unique |= bit == false;
+      bit = true;
+    }
+    return unique;
   }
 
   /// Test whether an element exists in the Bloom filter.
@@ -122,9 +124,9 @@ public:
 private:
   template <class Digest>
   size_t position([[maybe_unused]] size_t i, Digest x) const {
-    if constexpr (std::is_same_v<partitioning_policy, policy::no_partitioning>)
+    if constexpr (partitioning_policy == policy::partitioning::no)
       return x % bits_.size();
-    if constexpr (std::is_same_v<partitioning_policy, policy::partitioning>) {
+    if constexpr (partitioning_policy == policy::partitioning::yes) {
       auto num_partition_cells = bits_.size() / hasher_.size();
       return i * num_partition_cells + (x % num_partition_cells);
     }
@@ -137,16 +139,16 @@ private:
 /// Constructs a Bloom filter for a given set of parameters.
 /// @tparam HashFunction The hash function to use in the hasher.
 /// @tparam Hasher The hasher type to generate digests.
-/// @tparam PartitioningPolicy The partitioning policy.
+/// @tparam Partitioning The partitioning policy.
 /// @param xs The Bloom filter parameters.
 /// @param seeds The seeds for the hash functions. If empty, ascending
 ///              integers from 0 to *k-1* will be used.
 /// @relates bloom_filter bloom_filter_parameters
 template <class HashFunction, template <class> class Hasher = double_hasher,
-          class PartitioningPolicy = policy::no_partitioning>
-std::optional<bloom_filter<HashFunction, Hasher, PartitioningPolicy>>
+          policy::partitioning Partitioning = policy::partitioning::no>
+std::optional<bloom_filter<HashFunction, Hasher, Partitioning>>
 make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
-  using result_type = bloom_filter<HashFunction, Hasher, PartitioningPolicy>;
+  using result_type = bloom_filter<HashFunction, Hasher, Partitioning>;
   using hasher_type = typename result_type::hasher_type;
   if (auto ys = evaluate(xs)) {
     VAST_DEBUG("evaluated bloom filter parameters: {} {} {} {}",
