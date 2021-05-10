@@ -602,11 +602,15 @@ jobs:
     runs-on: ubuntu-20.04
     container: debian:buster-backports
     strategy:
+      fail-fast: false
       matrix:
         plugin:
           - name: Example
             target: example
             path: examples/plugins/example
+          - name: Example Transform
+            target: example-transform
+            path: examples/plugins/transform
     env:
       INSTALL_DIR: '${{ github.workspace }}/_install'
       BUILD_DIR: '${{ github.workspace }}/_build'
@@ -712,6 +716,7 @@ jobs:
     name: Nix Static (${{ matrix.args }})
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
         args:
           - 'vast'
