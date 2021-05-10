@@ -602,6 +602,7 @@ jobs:
     runs-on: ubuntu-20.04
     container: debian:buster-backports
     strategy:
+      fail-fast: false
       matrix:
         plugin:
           - name: Example
@@ -715,6 +716,7 @@ jobs:
     name: Nix Static (${{ matrix.args }})
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
         args:
           - 'vast'
