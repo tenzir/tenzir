@@ -73,7 +73,7 @@ public:
   /// @returns `void` if the tracking policy is `tracking::no`,
   /// otherwise a `bool` that is `false` iff *x* already exists in the filter.
   template <class T>
-  auto add(T&& x) {
+  [[nodiscard]] auto add(T&& x) {
     auto& digests = hasher_(std::forward<T>(x));
     if constexpr (tracking_policy == policy::tracking::no) {
       for (size_t i = 0; i < digests.size(); ++i)
