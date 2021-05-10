@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/access.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/pattern.hpp"
