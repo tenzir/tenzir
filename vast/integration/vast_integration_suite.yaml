@@ -172,9 +172,11 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: export --timeout=0s ascii 'resp_h == 192.168.1.104'
+        # We use the `null` export format since timeouts are always racy; we
+        # cannot reliably make a 0 second timeout return 0 events.
+      - command: export --timeout=0s null 'resp_h == 192.168.1.104'
         expected_result: error
-      - command: export --continuous --timeout=0s ascii 'resp_h == 192.168.1.104'
+      - command: export --continuous --timeout=0s null 'resp_h == 192.168.1.104'
         expected_result: error
   Server Zeek conn log:
     tags: [server, import-export, zeek]
