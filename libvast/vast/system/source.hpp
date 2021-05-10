@@ -18,10 +18,7 @@
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status_verbosity.hpp"
-#include "vast/system/transformer.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/type_set.hpp"
+#include "vast/transform.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/stream_source.hpp>
@@ -113,6 +110,7 @@ struct source_state {
 /// @oaram local_schema Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
+/// @param input_transformations The input transformations to be applied.
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,

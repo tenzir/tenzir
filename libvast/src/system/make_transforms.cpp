@@ -79,9 +79,9 @@ make_transforms(transforms_location loc, const caf::settings& opts) {
   }
   auto transforms_list = caf::get_if<caf::config_value::list>(&opts, key);
   if (!transforms_list) {
-    // TODO: Distinguish between the case whre no transforms were specified
+    // TODO: Distinguish between the case where no transforms were specified
     // (= return) and where there is something other than a list (= error).
-    VAST_VERBOSE("No transformations found for key {}", key);
+    VAST_DEBUG("unable to find transformations for key {}", key);
     return result;
   }
   // (name, [event_type]), ...

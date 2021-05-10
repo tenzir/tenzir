@@ -383,11 +383,13 @@ using datagram_source_actor
 
 /// The interface of an TRANSFORMER actor.
 using transformer_actor = typed_actor_fwd<
+  // Send transformed slices to this sink.
   caf::replies_to<stream_sink_actor<table_slice>>::with< //
     caf::outbound_stream_slot<table_slice>>,
-  // Named stream.
+  // Send transformed slices to this sink; pass the string through along with
+  // the stream handshake.
   caf::reacts_to<stream_sink_actor<table_slice, std::string>, std::string>>
-  // Conform to the protocol of the STREAM SINK actor for table slices
+  // Conform to the protocol of the STREAM SINK actor for framed table slices
   ::extend_with<stream_sink_actor<detail::framed<table_slice>>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;

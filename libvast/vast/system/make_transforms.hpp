@@ -27,7 +27,11 @@ enum class transforms_location {
   client_sink,
 };
 
+/// Validates the passed `settings` and creates the set of transforms
+/// that were configured for the desired location.
+/// @param location Selects which part of the config file should be parsed.
+/// @param settings The VAST settings objects including transform configuration.
 caf::expected<std::vector<transform>>
-make_transforms(transforms_location, const caf::settings& args);
+make_transforms(transforms_location location, const caf::settings& settings);
 
 } // namespace vast::system

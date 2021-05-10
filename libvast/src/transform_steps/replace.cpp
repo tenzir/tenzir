@@ -48,7 +48,7 @@ caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-#if VAST_ENABLE_ARROW > 0
+#if VAST_ENABLE_ARROW
 
 [[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 replace_step::operator()(vast::record_type layout,
