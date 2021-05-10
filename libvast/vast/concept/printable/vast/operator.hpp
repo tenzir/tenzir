@@ -118,4 +118,3 @@ struct printer_registry<bool_operator> {
 };
 
 } // namespace vast
-

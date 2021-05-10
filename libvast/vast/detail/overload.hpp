@@ -24,4 +24,3 @@ template <class... Ts>
 overload(Ts...) -> overload<Ts...>;
 
 } // namespace vast::detail
-

@@ -19,11 +19,11 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
+#include <sys/file.h>
+
 #include <fcntl.h>
 #include <system_error>
 #include <unistd.h>
-
-#include <sys/file.h>
 
 namespace vast::detail {
 

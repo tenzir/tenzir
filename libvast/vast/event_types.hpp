@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <caf/optional.hpp>
-
 #include "vast/schema.hpp"
+
+#include <caf/optional.hpp>
 
 namespace vast::event_types {
 

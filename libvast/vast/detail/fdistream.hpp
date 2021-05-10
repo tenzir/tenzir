@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/detail/fdinbuf.hpp"
+
 #include <cstddef>
 #include <istream>
-
-#include "vast/detail/fdinbuf.hpp"
 
 namespace vast::detail {
 
@@ -25,4 +25,3 @@ private:
 };
 
 } // namespace vast::detail
-

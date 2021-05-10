@@ -108,4 +108,3 @@ constexpr auto printable = any - cntrl;
 
 } // namespace parsers
 } // namespace vast
-

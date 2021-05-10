@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <ostream>
-
 #include "vast/detail/fdoutbuf.hpp"
+
+#include <ostream>
 
 namespace vast::detail {
 
@@ -24,4 +24,3 @@ private:
 };
 
 } // namespace vast::detail
-

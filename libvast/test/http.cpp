@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/concept/parseable/vast/http.hpp"
+
 #include "vast/concept/parseable/vast/uri.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/http.hpp"
@@ -129,4 +130,3 @@ TEST(URI with path only) {
   CHECK(u.fragment == "");
   CHECK(f == l);
 }
-

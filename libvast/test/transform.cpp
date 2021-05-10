@@ -10,11 +10,10 @@
 
 #include "vast/transform.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/test/test.hpp"
 #include "vast/transform_steps/delete.hpp"
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/replace.hpp"

@@ -7,11 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/bitmap.hpp"
+
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
 #include "vast/null_bitmap.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/bitmap.hpp"
 
 #define SUITE bitmap
 #include "vast/test/test.hpp"

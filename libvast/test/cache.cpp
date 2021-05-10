@@ -10,10 +10,9 @@
 
 #include "vast/detail/cache.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 
@@ -31,7 +30,7 @@ struct fixture {
   detail::cache<std::string, int, Policy> xs;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(lru_cache_tests, fixture<detail::lru>)
 

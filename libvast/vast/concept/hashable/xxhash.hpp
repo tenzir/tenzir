@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/detail/endian.hpp"
+
 #include <cstddef>
 #include <type_traits>
-
-#include "vast/detail/endian.hpp"
 
 namespace vast {
 
@@ -87,4 +87,3 @@ private:
 using xxhash = std::conditional_t<sizeof(void*) == 4, xxhash32, xxhash64>;
 
 } // namespace vast
-

@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <vector>
-#include <scoped_allocator>
-
 #include "vast/detail/short_alloc.hpp"
+
+#include <scoped_allocator>
+#include <vector>
 
 namespace vast::detail {
 

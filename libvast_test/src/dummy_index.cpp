@@ -8,10 +8,10 @@
 
 #include "fixtures/dummy_index.hpp"
 
+#include "vast/system/instrumentation.hpp"
+
 #include <caf/exit_reason.hpp>
 #include <caf/send.hpp>
-
-#include "vast/system/instrumentation.hpp"
 
 using void_fun = std::function<void()>;
 
@@ -46,7 +46,7 @@ dummy_index_actor(caf::stateful_actor<index_state>* self, path dir) {
   return {[](std::function<void()> f) { f(); }};
 }
 
-} // namespace <anonymous>
+} // namespace
 
 dummy_index::dummy_index() {
   idx_handle = sys.spawn(dummy_index_actor, directory);

@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #define SUITE operators
-#include "vast/test/test.hpp"
-
 #include "vast/detail/operators.hpp"
+
+#include "vast/test/test.hpp"
 
 using namespace vast::detail;
 
@@ -34,7 +34,7 @@ struct foo : addable<foo>,
   int value;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 TEST(commutative operators) {
   auto x = foo{42};

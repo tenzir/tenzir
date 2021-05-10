@@ -6,12 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <cstring>
-#include <vector>
+#include "vast/detail/string.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/escapers.hpp"
-#include "vast/detail/string.hpp"
+
+#include <cstring>
+#include <vector>
 
 namespace vast {
 namespace detail {

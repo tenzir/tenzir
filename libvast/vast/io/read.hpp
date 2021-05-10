@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "caf/fwd.hpp"
 #include "vast/fwd.hpp"
 
 #include "vast/span.hpp"
@@ -13,8 +14,6 @@
 #include <cstddef>
 #include <filesystem>
 #include <vector>
-
-#include "caf/fwd.hpp"
 
 namespace vast::io {
 

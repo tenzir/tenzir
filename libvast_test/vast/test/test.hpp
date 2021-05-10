@@ -9,13 +9,13 @@
 #pragma once
 
 #ifdef SUITE
-#define CAF_SUITE SUITE
+#  define CAF_SUITE SUITE
 #endif
+
+#include <caf/test/unit_test.hpp>
 
 #include <set>
 #include <string>
-
-#include <caf/test/unit_test.hpp>
 
 namespace vast::test::detail {
 
@@ -169,4 +169,3 @@ T unbox(const std::optional<T>& x) {
 extern std::set<std::string> config;
 
 } // namespace vast::test
-

@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #define SUITE set_operations
-#include "vast/test/test.hpp"
-
 #include "vast/detail/set_operations.hpp"
+
+#include "vast/test/test.hpp"
 
 using namespace vast::detail;
 
@@ -29,7 +29,7 @@ struct fixture {
   std::vector<int> unification;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(set_operations_tests, fixture)
 

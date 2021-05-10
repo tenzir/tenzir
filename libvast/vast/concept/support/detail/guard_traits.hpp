@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include <caf/detail/type_traits.hpp>
+
+#include <type_traits>
 
 namespace vast::detail {
 
@@ -26,5 +26,3 @@ struct guard_traits {
 };
 
 } // namespace vast::detail
-
-

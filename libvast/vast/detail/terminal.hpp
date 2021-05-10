@@ -51,4 +51,3 @@ bool enable_echo();
 bool get(char& c, int timeout = 100);
 
 } // namespace vast::detail::terminal
-

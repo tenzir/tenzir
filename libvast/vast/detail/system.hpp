@@ -26,4 +26,3 @@ size_t page_size();
 int32_t process_id();
 
 } // namespace vast::detail
-

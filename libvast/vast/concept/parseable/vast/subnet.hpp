@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include "vast/subnet.hpp"
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/subnet.hpp"
 
 namespace vast {
 
@@ -55,4 +54,3 @@ static auto const net = make_parser<vast::subnet>();
 } // namespace parsers
 
 } // namespace vast
-

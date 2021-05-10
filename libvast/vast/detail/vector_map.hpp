@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/detail/operators.hpp"
+#include "vast/detail/raise_error.hpp"
+
 #include <algorithm>
 #include <functional>
 #include <vector>
-
-#include "vast/detail/operators.hpp"
-#include "vast/detail/raise_error.hpp"
 
 namespace vast::detail {
 

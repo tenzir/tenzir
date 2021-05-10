@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "vast/detail/string.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/detail/string.hpp"
 
 #include <caf/config_option_set.hpp>
 #include <caf/error.hpp>

@@ -18,9 +18,9 @@
 
 #include "vast/concept/hashable/sha1.hpp"
 
-#include <cstring>
-
 #include "vast/detail/byte_swap.hpp"
+
+#include <cstring>
 
 namespace vast {
 namespace {

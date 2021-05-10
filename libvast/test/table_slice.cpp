@@ -10,9 +10,6 @@
 
 #include "vast/table_slice.hpp"
 
-#include "vast/test/fixtures/table_slices.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
@@ -20,6 +17,8 @@
 #include "vast/project.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/table_slice_row.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>

@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <vector>
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/detail/container.hpp"
+
+#include <vector>
 
 namespace vast {
 
@@ -43,4 +43,3 @@ private:
 };
 
 } // namespace vast
-

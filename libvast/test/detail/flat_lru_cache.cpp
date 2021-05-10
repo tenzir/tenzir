@@ -7,13 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #define SUITE flat_lru_cache
-#include "vast/test/test.hpp"
-
 #include "vast/detail/flat_lru_cache.hpp"
 
-#include <string>
+#include "vast/test/test.hpp"
 
 #include <caf/meta/type_name.hpp>
+
+#include <string>
 
 using std::literals::operator""sv;
 
@@ -57,7 +57,7 @@ struct fixture {
   vast::detail::flat_lru_cache<kvp, has_key, make_kvp> cache;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(lru_cache_tests, fixture)
 

@@ -10,16 +10,15 @@
 
 #include "vast/segment_store.hpp"
 
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-#include "vast/test/fixtures/table_slices.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
+#include "vast/test/test.hpp"
 
 #include <algorithm>
 #include <filesystem>

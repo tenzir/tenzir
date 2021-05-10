@@ -12,14 +12,13 @@
 
 #define SUITE format
 
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/fixtures/events.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

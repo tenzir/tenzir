@@ -10,14 +10,13 @@
 
 #include "vast/concept/parseable/vast/yaml.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/data.hpp"
 #include "vast/error.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

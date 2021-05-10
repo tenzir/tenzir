@@ -8,13 +8,12 @@
 
 #pragma once
 
-#include "vast/test/data.hpp"
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/node.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/data.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/uuid.hpp"
 
 #include <string>
@@ -54,4 +53,3 @@ struct node : deterministic_actor_system_and_events {
 };
 
 } // namespace fixtures
-

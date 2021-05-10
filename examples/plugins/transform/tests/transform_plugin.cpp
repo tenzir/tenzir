@@ -11,7 +11,8 @@
 // exists to show how to setup unit tests.
 
 #define CAF_SUITE transform_plugin
-#include "vast/system/make_transform.hpp"
+
+#include <vast/system/make_transform.hpp>
 
 #include <caf/test/unit_test.hpp>
 

@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include "vast/test/fixtures/filesystem.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/error.hpp"
 #include "vast/system/configuration.hpp"
+#include "vast/test/fixtures/filesystem.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/actor_system.hpp>
@@ -58,7 +57,6 @@ using test_node_base_fixture = test_coordinator_fixture<test_configuration>;
 /// determinstic testing of actors.
 struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
                                     filesystem {
-
   deterministic_actor_system();
 
   auto error_handler() {

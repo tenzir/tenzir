@@ -44,4 +44,3 @@ struct printer_registry<uuid> {
 };
 
 } // namespace vast
-

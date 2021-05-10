@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/numeric/real.hpp"
 #include "vast/concept/printable/string/any.hpp"
 #include "vast/concept/printable/string/string.hpp"
 #include "vast/http.hpp"
+
+#include <string>
 
 namespace vast {
 
@@ -66,4 +66,3 @@ struct printer_registry<http::response> {
 };
 
 } // namespace vast
-

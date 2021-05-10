@@ -8,12 +8,6 @@
 
 #define SUITE printable
 
-#include "vast/test/test.hpp"
-
-#include <sstream>
-
-#include <caf/optional.hpp>
-
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/print.hpp"
@@ -25,6 +19,11 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/escapers.hpp"
+#include "vast/test/test.hpp"
+
+#include <caf/optional.hpp>
+
+#include <sstream>
 
 using namespace std::string_literals;
 using namespace vast;

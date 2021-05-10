@@ -6,11 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+
+#include "vast/address.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/address.hpp"
-#include "vast/address.hpp"
 
 #define SUITE address
 #include "vast/test/test.hpp"

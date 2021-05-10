@@ -8,8 +8,6 @@
 
 #define SUITE parseable
 
-#include "vast/test/test.hpp"
-
 #include "vast/address.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
@@ -23,6 +21,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

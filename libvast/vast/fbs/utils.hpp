@@ -8,16 +8,16 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
-#include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
-
 #include <flatbuffers/flatbuffers.h>
 
 #include <cstddef>

@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "vast/error.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/string.hpp"
+#include "vast/error.hpp"
 
 namespace vast {
 
@@ -30,4 +30,3 @@ struct printer_registry<caf::error> {
 };
 
 } // namespace vast
-

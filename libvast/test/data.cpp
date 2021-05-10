@@ -10,8 +10,6 @@
 
 #include "vast/data.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
@@ -21,6 +19,7 @@
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

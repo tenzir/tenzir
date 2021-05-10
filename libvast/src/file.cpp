@@ -14,11 +14,11 @@
 #include "vast/logger.hpp"
 
 #if VAST_POSIX
-#  include <fcntl.h>
-#  include <stdio.h>
-
 #  include <sys/stat.h>
 #  include <sys/types.h>
+
+#  include <fcntl.h>
+#  include <stdio.h>
 #endif // VAST_POSIX
 
 namespace vast {

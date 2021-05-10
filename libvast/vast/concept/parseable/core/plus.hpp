@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <utility>
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/detail/container.hpp"
+
+#include <utility>
 
 namespace vast {
 

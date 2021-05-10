@@ -35,12 +35,10 @@
 #include <caf/io/broker.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>
-
-#include <spdlog/spdlog.h>
-
 #include <fmt/chrono.h>
 #include <fmt/ostream.h>
 #include <fmt/ranges.h>
+#include <spdlog/spdlog.h>
 
 #include <cstddef>
 #include <optional>

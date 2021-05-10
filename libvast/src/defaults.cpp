@@ -8,12 +8,12 @@
 
 #include "vast/defaults.hpp"
 
-#include <random>
-#include <string>
-
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/settings.hpp>
+
+#include <random>
+#include <string>
 
 namespace vast::defaults::import {
 

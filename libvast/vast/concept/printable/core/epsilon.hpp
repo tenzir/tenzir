@@ -28,5 +28,3 @@ auto const eps = epsilon_printer{};
 
 } // namespace printers
 } // namespace vast
-
-

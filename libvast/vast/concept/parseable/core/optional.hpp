@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <caf/optional.hpp>
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/attr_fold.hpp"
+
+#include <caf/optional.hpp>
 
 namespace vast {
 

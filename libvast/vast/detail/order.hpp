@@ -8,14 +8,14 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
+#include "vast/die.hpp"
+
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <type_traits>
 #include <utility>
-
-#include "vast/die.hpp"
-#include "vast/detail/assert.hpp"
 
 namespace vast::detail {
 

@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/any.hpp"
+
+#include <type_traits>
 
 namespace vast {
 
@@ -36,4 +36,3 @@ auto const tf = bool_printer{};
 
 } // namespace printers
 } // namespace vast
-

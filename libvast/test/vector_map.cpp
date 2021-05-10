@@ -12,9 +12,8 @@
 #include <string_view>
 
 #define SUITE detail
-#include "vast/test/test.hpp"
-
 #include "vast/config.hpp"
+#include "vast/test/test.hpp"
 
 using namespace std::string_view_literals;
 using namespace vast;
@@ -33,7 +32,7 @@ struct fixture {
   map xs;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(stable_map_tests, fixture)
 

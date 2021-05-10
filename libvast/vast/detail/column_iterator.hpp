@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/detail/narrow.hpp"
+
 #include <cstddef>
 #include <iterator>
-
-#include "vast/detail/narrow.hpp"
 
 namespace vast::detail {
 

@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/concept/parseable/parse.hpp"
+
 #include <istream>
 #include <type_traits>
-
-#include "vast/concept/parseable/parse.hpp"
 
 namespace vast {
 
@@ -27,4 +27,3 @@ auto operator>>(std::basic_istream<CharT, Traits>& in, T& x)
 }
 
 } // namespace vast
-

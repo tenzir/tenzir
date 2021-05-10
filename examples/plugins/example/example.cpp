@@ -6,13 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/printable/vast/integer.hpp"
-#include "vast/data.hpp"
-#include "vast/error.hpp"
-#include "vast/logger.hpp"
-#include "vast/plugin.hpp"
-#include "vast/system/node.hpp"
-#include "vast/table_slice.hpp"
+#include <vast/concept/printable/vast/integer.hpp>
+#include <vast/data.hpp>
+#include <vast/error.hpp>
+#include <vast/logger.hpp>
+#include <vast/plugin.hpp>
+#include <vast/system/node.hpp>
+#include <vast/table_slice.hpp>
 
 #include <caf/actor_cast.hpp>
 #include <caf/actor_system_config.hpp>

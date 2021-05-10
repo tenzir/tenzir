@@ -108,4 +108,3 @@ constexpr auto operator|(LHS&& lhs, RHS&& rhs)
 }
 
 } // namespace vast
-

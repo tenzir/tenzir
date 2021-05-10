@@ -10,10 +10,6 @@
 
 #include "vast/system/transformer.hpp"
 
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-#include "vast/test/fixtures/table_slices.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
@@ -23,6 +19,9 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/system/make_transforms.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
+#include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
 
 std::string TRANSFORM_CONFIG = R"_(

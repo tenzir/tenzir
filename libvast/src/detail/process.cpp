@@ -23,17 +23,17 @@
 #  include "vast/concept/parseable/vast/si.hpp"
 #  include "vast/detail/line_range.hpp"
 
+#  include <sys/stat.h>
+
 #  include <fstream>
 #  include <limits.h>
 #  include <unistd.h>
-
-#  include <sys/stat.h>
 #elif VAST_MACOS
-#  include <unistd.h>
-
 #  include <mach/mach_init.h>
 #  include <mach/task.h>
 #  include <sys/types.h>
+
+#  include <unistd.h>
 #endif
 
 #if VAST_POSIX && !VAST_LINUX

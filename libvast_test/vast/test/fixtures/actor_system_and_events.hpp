@@ -27,4 +27,3 @@ struct deterministic_actor_system_and_events : deterministic_actor_system,
 };
 
 } // namespace fixtures
-

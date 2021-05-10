@@ -38,4 +38,3 @@ private:
 };
 
 } // namespace vast
-

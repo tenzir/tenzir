@@ -6,8 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
+
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/subnet.hpp"
 #include "vast/subnet.hpp"
@@ -53,7 +54,6 @@ TEST(containment) {
   CHECK(!v4.contains(*to<address>("ff00::")));
 }
 
-
 TEST(printable) {
   auto sn = subnet{*to<address>("10.0.0.0"), 8};
   CHECK_EQUAL(to_string(sn), "10.0.0.0/8");
@@ -79,4 +79,3 @@ TEST(subnet) {
   CHECK(s == subnet{*to<address>("beef::cafe"), 40});
   CHECK(s.network().is_v6());
 }
-

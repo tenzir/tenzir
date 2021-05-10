@@ -10,10 +10,6 @@
 
 #include "vast/address_synopsis.hpp"
 
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/synopsis.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/address.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
@@ -22,6 +18,9 @@
 #include "vast/si_literals.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/synopsis.hpp"
+#include "vast/test/test.hpp"
 #include "vast/type.hpp"
 
 #include <caf/actor_system.hpp>

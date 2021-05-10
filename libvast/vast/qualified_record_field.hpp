@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
-#include "vast/fwd.hpp"
 #include "vast/type.hpp"
 
 #include <string>

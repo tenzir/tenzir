@@ -30,4 +30,3 @@ struct is_convertible
   : decltype(detail::is_convertible::test<std::decay_t<From>, To>(0, 0)) {};
 
 } // namespace vast
-

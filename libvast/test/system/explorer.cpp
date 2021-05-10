@@ -8,9 +8,8 @@
 
 #define SUITE explorer
 
-#include "vast/test/test.hpp"
-
 #include "vast/system/spawn_explorer.hpp"
+#include "vast/test/test.hpp"
 #include "vast/time.hpp"
 
 #include <caf/settings.hpp>

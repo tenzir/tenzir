@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/detail/math.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <type_traits>
-
-#include "vast/detail/math.hpp"
 
 namespace vast {
 

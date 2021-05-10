@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "vast/detail/stable_set.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/detail/stable_set.hpp"
 #include "vast/type.hpp"
 
 namespace vast {

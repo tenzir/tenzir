@@ -8,16 +8,16 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/defaults.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/fwd.hpp"
 #include "vast/type.hpp"
-
-#include <caf/error.hpp>
-#include <caf/expected.hpp>
 
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
+#include <caf/error.hpp>
+#include <caf/expected.hpp>
 
 #include <memory>
 #include <vector>

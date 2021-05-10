@@ -12,12 +12,12 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
+#include <sys/select.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <termios.h>
 #include <unistd.h>
-
-#include <sys/select.h>
 
 namespace vast {
 namespace detail {
@@ -46,7 +46,7 @@ bool initialize() {
   return true;
 }
 
-} // namespace <anonymous>
+} // namespace
 
 unbufferer::unbufferer() {
   unbuffer();

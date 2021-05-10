@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include <tuple>
-
+#include "vast/detail/operators.hpp"
 #include "vast/word.hpp"
 
-#include "vast/detail/operators.hpp"
+#include <tuple>
 
 namespace vast {
 

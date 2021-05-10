@@ -6,13 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <iomanip>
-
 #include "vast/concept/hashable/crc.hpp"
 #include "vast/concept/hashable/sha1.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/coding.hpp"
+
+#include <iomanip>
 
 #define SUITE hash
 #include "vast/test/test.hpp"

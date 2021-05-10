@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/support/detail/variant.hpp"
+
+#include <type_traits>
 
 namespace vast {
 

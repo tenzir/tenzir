@@ -9,7 +9,6 @@
 #pragma once
 
 #include "vast/config.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 

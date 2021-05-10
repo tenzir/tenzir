@@ -9,11 +9,10 @@
 #define SUITE msgpack
 #include "vast/msgpack.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/msgpack_builder.hpp"
+#include "vast/test/test.hpp"
 #include "vast/time.hpp"
 
 #include <caf/test/dsl.hpp>

@@ -8,12 +8,6 @@
 
 #pragma once
 
-#include <cstdint>
-#include <limits>
-#include <string>
-#include <vector>
-#include <type_traits>
-
 #include "vast/bits.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
@@ -21,6 +15,12 @@
 #include "vast/detail/raise_error.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/word.hpp"
+
+#include <cstdint>
+#include <limits>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace vast {
 namespace detail {

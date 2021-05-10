@@ -53,7 +53,7 @@ std::unique_ptr<abstract> double_make(int x, int y) {
   return std::make_unique<concrete>(x * 2, y * 2);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 namespace vast {
 

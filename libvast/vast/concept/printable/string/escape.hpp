@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/concept/printable/core/printer.hpp"
+
+#include <string>
 
 namespace vast {
 

@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include <tuple>
-#include <type_traits>
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/attr_fold.hpp"
 #include "vast/concept/support/detail/sequence.hpp"
 #include "vast/detail/type_traits.hpp"
+
+#include <tuple>
+#include <type_traits>
 
 namespace vast {
 

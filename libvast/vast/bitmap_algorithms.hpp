@@ -8,19 +8,19 @@
 
 #pragma once
 
+#include "vast/aliases.hpp"
+#include "vast/bits.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/range.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/optional.hpp"
+
+#include <caf/error.hpp>
+
 #include <algorithm>
 #include <iterator>
 #include <queue>
 #include <type_traits>
-
-#include <caf/error.hpp>
-
-#include "vast/aliases.hpp"
-#include "vast/bits.hpp"
-#include "vast/optional.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/range.hpp"
-#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 

@@ -8,10 +8,11 @@
 
 #include "vast/system/shutdown.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/die.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/terminate.hpp"
 

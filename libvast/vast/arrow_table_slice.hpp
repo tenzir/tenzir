@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/table_slice.hpp"
 
 #include <caf/meta/type_name.hpp>

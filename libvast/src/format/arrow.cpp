@@ -21,10 +21,9 @@
 #  include "vast/table_slice_builder.hpp"
 #  include "vast/type.hpp"
 
-#  include <caf/none.hpp>
-
 #  include <arrow/util/config.h>
 #  include <arrow/util/io_util.h>
+#  include <caf/none.hpp>
 
 #  include <stdexcept>
 

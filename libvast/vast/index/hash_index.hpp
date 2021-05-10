@@ -22,6 +22,7 @@
 #include <caf/expected.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
+#include <tsl/robin_map.h>
 
 #include <algorithm>
 #include <array>
@@ -32,8 +33,6 @@
 #include <type_traits>
 #include <unordered_set>
 #include <vector>
-
-#include <tsl/robin_map.h>
 
 namespace vast {
 

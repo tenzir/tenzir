@@ -13,4 +13,3 @@
 /// Throws an exception with string `msg` or terminates the application when
 /// compiling exceptions disabled.
 #define VAST_RAISE_ERROR(...) CAF_RAISE_ERROR(__VA_ARGS__)
-

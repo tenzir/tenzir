@@ -46,7 +46,6 @@ bool operator==(const null_bitmap& x, const null_bitmap& y) {
   return x.bitvector_ == y.bitvector_;
 }
 
-
 null_bitmap_range::null_bitmap_range(const null_bitmap& bm)
   : bitvector_{&bm.bitvector_},
     block_{bm.bitvector_.blocks().begin()},

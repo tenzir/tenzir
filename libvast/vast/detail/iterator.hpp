@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <memory>
-
 #include "vast/detail/operators.hpp"
+
+#include <memory>
 
 namespace vast::detail {
 

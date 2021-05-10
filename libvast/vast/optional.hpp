@@ -23,4 +23,3 @@ std::optional<T> to_std(caf::optional<T>&& opt) {
 }
 
 } // namespace vast
-

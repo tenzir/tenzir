@@ -8,20 +8,19 @@
 
 #define SUITE pcap
 
-#include "vast/test/data.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/test.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/config.hpp"
-#include "vast/defaults.hpp"
-#include "vast/error.hpp"
-#include "vast/format/reader_factory.hpp"
-#include "vast/format/writer_factory.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_column.hpp"
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/address.hpp>
+#include <vast/config.hpp>
+#include <vast/defaults.hpp>
+#include <vast/error.hpp>
+#include <vast/format/reader_factory.hpp>
+#include <vast/format/writer_factory.hpp>
+#include <vast/table_slice.hpp>
+#include <vast/table_slice_builder_factory.hpp>
+#include <vast/table_slice_column.hpp>
+#include <vast/test/data.hpp>
+#include <vast/test/fixtures/actor_system.hpp>
+#include <vast/test/test.hpp>
 
 #include <filesystem>
 

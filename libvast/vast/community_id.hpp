@@ -8,12 +8,6 @@
 
 #pragma once
 
-#include <cstddef>
-#include <string>
-#include <type_traits>
-
-#include <caf/optional.hpp>
-
 #include "vast/address.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/sha1.hpp"
@@ -27,6 +21,12 @@
 #include "vast/icmp.hpp"
 #include "vast/port.hpp"
 #include "vast/span.hpp"
+
+#include <caf/optional.hpp>
+
+#include <cstddef>
+#include <string>
+#include <type_traits>
 
 namespace vast {
 namespace policy {

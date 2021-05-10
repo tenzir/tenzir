@@ -6,11 +6,10 @@
 #include "vast/logger.hpp"
 
 #include <caf/detail/scope_guard.hpp>
+#include <sys/socket.h>
 
 #include <cstdlib>
 #include <cstring>
-
-#include <sys/socket.h>
 
 namespace vast::systemd {
 

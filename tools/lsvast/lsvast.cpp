@@ -6,25 +6,24 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/chunk.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/type.hpp"
-#include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/error.hpp"
-#include "vast/fbs/index.hpp"
-#include "vast/fbs/partition.hpp"
-#include "vast/fbs/segment.hpp"
-#include "vast/fbs/utils.hpp"
-#include "vast/ids.hpp"
-#include "vast/io/read.hpp"
-#include "vast/qualified_record_field.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/type.hpp"
-#include "vast/uuid.hpp"
+#include <vast/chunk.hpp>
+#include <vast/concept/printable/to_string.hpp>
+#include <vast/concept/printable/vast/type.hpp>
+#include <vast/concept/printable/vast/uuid.hpp>
+#include <vast/error.hpp>
+#include <vast/fbs/index.hpp>
+#include <vast/fbs/partition.hpp>
+#include <vast/fbs/segment.hpp>
+#include <vast/fbs/utils.hpp>
+#include <vast/ids.hpp>
+#include <vast/io/read.hpp>
+#include <vast/qualified_record_field.hpp>
+#include <vast/table_slice.hpp>
+#include <vast/type.hpp>
+#include <vast/uuid.hpp>
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/error.hpp>
-
 #include <flatbuffers/flatbuffers.h>
 
 #include <cstddef>

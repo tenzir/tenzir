@@ -12,9 +12,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
@@ -27,6 +24,8 @@
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 #include <filesystem>
 

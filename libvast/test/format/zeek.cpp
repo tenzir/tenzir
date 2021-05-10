@@ -17,15 +17,14 @@
 
 #define SUITE format
 
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/fixtures/events.hpp"
-#include "vast/test/fixtures/filesystem.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/detail/fdinbuf.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/events.hpp"
+#include "vast/test/fixtures/filesystem.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -228,7 +227,7 @@ struct fixture : fixtures::deterministic_actor_system {
   }
 };
 
-} // namspace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(zeek_reader_tests, fixture)
 

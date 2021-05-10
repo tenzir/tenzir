@@ -8,15 +8,15 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/detail/print_delimited.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/string/any.hpp"
 #include "vast/concept/printable/string/string.hpp"
-#include "vast/concept/printable/detail/print_delimited.hpp"
-#include "vast/uri.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/uri.hpp"
+
+#include <string>
 
 namespace vast {
 

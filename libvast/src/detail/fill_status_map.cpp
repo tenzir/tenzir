@@ -28,10 +28,10 @@
 #    define _GNU_SOURCE
 #  endif // _GNU_SOURCE
 
-#  include <unistd.h>
-
 #  include <sys/syscall.h>
 #  include <sys/types.h>
+
+#  include <unistd.h>
 
 #endif // VAST_LINUX
 

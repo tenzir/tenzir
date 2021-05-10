@@ -8,15 +8,14 @@
 
 #define SUITE command
 
-#include "vast/test/test.hpp"
-
 #include "vast/command.hpp"
+
+#include "vast/system/version_command.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
-
-#include "vast/system/version_command.hpp"
 
 using namespace vast;
 
@@ -70,7 +69,7 @@ bool is_error(const T& x) {
   return caf::holds_alternative<caf::error>(x);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(command_tests, fixture)
 

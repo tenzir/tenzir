@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/span.hpp"
 #include "vast/view.hpp"
 

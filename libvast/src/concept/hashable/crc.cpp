@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/concept/hashable/crc.hpp"
+
 #include "vast/detail/assert.hpp"
 
 namespace vast {
@@ -36,7 +37,6 @@ namespace vast {
 // jloup@gzip.org          madler@alumni.caltech.edu
 //
 namespace {
-
 
 /*
  * Table of CRC-32's of all single-byte values (made by make_crc_table)

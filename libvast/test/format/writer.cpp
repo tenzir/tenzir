@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/detail/string.hpp"
-
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
@@ -52,7 +51,7 @@ std::vector<std::string> generate(const std::vector<table_slice>& xs) {
   return lines;
 }
 
-} // namespace <anonymous>
+} // namespace
 
 TEST(Zeek writer) {
   auto lines = generate<format::ascii::writer>(zeek_http_log);

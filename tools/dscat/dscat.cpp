@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/detail/fdinbuf.hpp"
-#include "vast/detail/fdoutbuf.hpp"
-#include "vast/detail/posix.hpp"
-#include "vast/file.hpp"
+#include <vast/detail/fdinbuf.hpp>
+#include <vast/detail/fdoutbuf.hpp>
+#include <vast/detail/posix.hpp>
+#include <vast/file.hpp>
 
 #include <caf/message_builder.hpp>
 

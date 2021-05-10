@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include <cstddef>
-#include <type_traits>
-#include <string>
-
 #include "vast/concept/parseable/core/ignore.hpp"
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/literal.hpp"
 #include "vast/concept/parseable/string/string.hpp"
+
+#include <cstddef>
+#include <string>
+#include <type_traits>
 
 namespace vast::parser_literals {
 

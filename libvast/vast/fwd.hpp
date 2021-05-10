@@ -312,27 +312,27 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))
 
-  VAST_ADD_TYPE_ID((vast::detail::stable_map<std::string, vast::data>) )
-  VAST_ADD_TYPE_ID((vast::detail::stable_map<vast::data, vast::data>) )
+  VAST_ADD_TYPE_ID((vast::detail::stable_map<std::string, vast::data>))
+  VAST_ADD_TYPE_ID((vast::detail::stable_map<vast::data, vast::data>))
 
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
   VAST_ADD_TYPE_ID((vast::system::status_verbosity))
 
-  VAST_ADD_TYPE_ID((std::pair<std::string, vast::data>) )
-  VAST_ADD_TYPE_ID((std::vector<uint32_t>) )
-  VAST_ADD_TYPE_ID((std::vector<std::string>) )
-  VAST_ADD_TYPE_ID((std::vector<vast::table_slice>) )
-  VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>) )
-  VAST_ADD_TYPE_ID((std::vector<vast::uuid>) )
+  VAST_ADD_TYPE_ID((std::pair<std::string, vast::data>))
+  VAST_ADD_TYPE_ID((std::vector<uint32_t>))
+  VAST_ADD_TYPE_ID((std::vector<std::string>))
+  VAST_ADD_TYPE_ID((std::vector<vast::table_slice>))
+  VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>))
+  VAST_ADD_TYPE_ID((std::vector<vast::uuid>))
 
   VAST_ADD_TYPE_ID((vast::detail::framed<vast::table_slice>))
   VAST_ADD_TYPE_ID((std::vector<vast::detail::framed<vast::table_slice>>))
   VAST_ADD_TYPE_ID((caf::stream<vast::detail::framed<vast::table_slice>>))
 
-  VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>) )
-  VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>) )
+  VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>))
+  VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>))
 
 CAF_END_TYPE_ID_BLOCK(vast_types)
 

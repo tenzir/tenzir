@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <cstdint>
-
 #include "vast/word.hpp"
+
+#include <cstdint>
 
 #define SUITE word
 #include "vast/test/test.hpp"

@@ -14,13 +14,13 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/word.hpp"
 
-#include <cstdlib>
-#include <cstring>
-#include <utility>
-
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+
+#include <cstdlib>
+#include <cstring>
+#include <utility>
 
 std::array<uint8_t, 12> const vast::address::v4_mapped_prefix
   = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};

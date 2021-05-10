@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <caf/variant.hpp>
-#include <caf/detail/type_list.hpp>
-
 #include "vast/detail/type_list.hpp"
+
+#include <caf/detail/type_list.hpp>
+#include <caf/variant.hpp>
 
 namespace vast::detail {
 

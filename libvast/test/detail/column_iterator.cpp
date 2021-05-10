@@ -10,11 +10,10 @@
 
 #include "vast/detail/column_iterator.hpp"
 
+#include "vast/detail/range.hpp"
 #include "vast/test/test.hpp"
 
 #include <numeric>
-
-#include "vast/detail/range.hpp"
 
 using namespace vast;
 
@@ -37,7 +36,7 @@ struct fixture {
   }
 };
 
-} // namespace <anonymous>
+} // namespace
 
 #define CHECK_RANGE(rng, ...)                                                  \
   {                                                                            \

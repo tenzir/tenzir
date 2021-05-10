@@ -36,4 +36,3 @@ auto const any = any_printer{};
 
 } // namespace printers
 } // namespace vast
-

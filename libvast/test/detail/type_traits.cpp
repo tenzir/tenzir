@@ -8,13 +8,12 @@
 
 #define SUITE type_traits
 
-#include "vast/test/test.hpp"
-
 #include "vast/detail/type_traits.hpp"
+
+#include "vast/test/test.hpp"
 
 TEST(sum) {
   static_assert(vast::detail::sum<> == 0);
   static_assert(vast::detail::sum<1, 2, 3> == 6);
   static_assert(vast::detail::sum<42, 58> == 100);
 }
-

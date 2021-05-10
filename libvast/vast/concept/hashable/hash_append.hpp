@@ -8,12 +8,18 @@
 
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+#include "vast/detail/endian.hpp"
+#include "vast/detail/type_traits.hpp"
+
+#include <caf/detail/type_traits.hpp>
+#include <caf/meta/save_callback.hpp>
+#include <caf/meta/type_name.hpp>
 
 #include <array>
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <set>
@@ -23,13 +29,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-#include <caf/detail/type_traits.hpp>
-#include <caf/meta/save_callback.hpp>
-#include <caf/meta/type_name.hpp>
-
-#include "vast/detail/endian.hpp"
-#include "vast/detail/type_traits.hpp"
 
 // In order to be hashable, a type T must satisfy at least one of the following
 // requirements:

@@ -8,10 +8,9 @@
 
 #define SUITE parseable
 
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

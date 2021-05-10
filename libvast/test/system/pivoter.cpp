@@ -10,15 +10,14 @@
 
 #include "vast/system/pivoter.hpp"
 
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/command.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/event_based_actor.hpp>

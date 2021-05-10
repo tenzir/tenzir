@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <utility>
-#include <type_traits>
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
 
 #include <experimental/type_traits>
+
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
 
 namespace vast {
 

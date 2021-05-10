@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/die.hpp"
+
 #include <cstdlib>
 #include <iostream>
-
-#include "vast/die.hpp"
 
 namespace vast {
 

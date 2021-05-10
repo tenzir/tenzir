@@ -11,13 +11,12 @@
 
 #include "vast/detail/sigma.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/expression.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

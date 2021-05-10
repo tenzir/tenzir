@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include <atomic>
-#include <chrono>
-#include <thread>
-
 #include <caf/actor.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/detail/scope_guard.hpp>
 #include <caf/logger.hpp>
+
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 namespace vast::system {
 

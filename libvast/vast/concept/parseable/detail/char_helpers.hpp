@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/concept/support/unused_type.hpp"
+
 #include <string>
 #include <vector>
-
-#include "vast/concept/support/unused_type.hpp"
 
 namespace vast {
 namespace detail {

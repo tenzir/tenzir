@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/detail/endian.hpp"
+
 #include <cstddef>
 #include <cstdint>
-
-#include "vast/detail/endian.hpp"
 
 namespace vast {
 
@@ -37,4 +37,3 @@ private:
 };
 
 } // namespace vast
-

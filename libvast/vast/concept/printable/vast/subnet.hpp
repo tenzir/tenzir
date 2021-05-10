@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "vast/subnet.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/vast/address.hpp"
+#include "vast/subnet.hpp"
 
 namespace vast {
 
@@ -32,4 +32,3 @@ struct printer_registry<subnet> {
 };
 
 } // namespace vast
-

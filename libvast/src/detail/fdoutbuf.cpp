@@ -6,11 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <unistd.h>
+#include "vast/detail/fdoutbuf.hpp"
 
 #include <cstdio>
-
-#include "vast/detail/fdoutbuf.hpp"
+#include <unistd.h>
 
 namespace vast {
 namespace detail {

@@ -8,9 +8,6 @@
 
 #define SUITE expression
 
-#include "vast/test/fixtures/events.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
@@ -19,6 +16,8 @@
 #include "vast/ids.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <type_traits>
+#include "vast/detail/type_list.hpp"
 
 #include <caf/detail/type_traits.hpp>
 
-#include "vast/detail/type_list.hpp"
+#include <type_traits>
 
 namespace vast::detail {
 
@@ -34,5 +34,3 @@ struct action_traits {
 };
 
 } // namespace vast::detail
-
-

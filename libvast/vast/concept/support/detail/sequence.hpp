@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include <tuple>
-
 #include "vast/concept/support/unused_type.hpp"
 #include "vast/detail/type_traits.hpp"
 
 #include <experimental/type_traits>
+
+#include <tuple>
 
 namespace vast::detail {
 

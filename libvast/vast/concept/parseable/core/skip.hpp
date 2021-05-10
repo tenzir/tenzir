@@ -40,4 +40,3 @@ inline auto skip(size_t n) {
 
 } // namespace parsers
 } // namespace vast
-

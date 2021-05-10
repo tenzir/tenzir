@@ -9,10 +9,10 @@
 #pragma once
 
 #include "vast/access.hpp"
-#include "vast/pattern.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string/any.hpp"
 #include "vast/concept/printable/string/string.hpp"
+#include "vast/pattern.hpp"
 
 namespace vast {
 
@@ -34,4 +34,3 @@ struct printer_registry<pattern> {
 };
 
 } // namespace vast
-

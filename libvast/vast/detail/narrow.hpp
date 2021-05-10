@@ -18,10 +18,10 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/config.hpp"
 #include "vast/detail/raise_error.hpp"
+
+#include <type_traits>
 
 namespace vast::detail {
 

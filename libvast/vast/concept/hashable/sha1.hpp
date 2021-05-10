@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "vast/detail/endian.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
-
-#include "vast/detail/endian.hpp"
 
 namespace vast {
 

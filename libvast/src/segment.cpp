@@ -28,7 +28,6 @@
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
-
 #include <flatbuffers/base.h> // FLATBUFFERS_MAX_BUFFER_SIZE
 
 namespace vast {

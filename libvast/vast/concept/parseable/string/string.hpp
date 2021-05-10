@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/concept/parseable/core/parser.hpp"
+
+#include <string>
 
 namespace vast {
 
@@ -59,4 +59,3 @@ using str = string_parser;
 
 } // namespace parsers
 } // namespace vast
-

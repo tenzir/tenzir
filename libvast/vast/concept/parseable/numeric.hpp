@@ -12,4 +12,3 @@
 #include "vast/concept/parseable/numeric/byte.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
-

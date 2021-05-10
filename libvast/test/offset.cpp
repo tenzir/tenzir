@@ -7,11 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/offset.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
-
 #include "vast/test/test.hpp"
 
 using namespace vast;

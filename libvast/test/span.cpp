@@ -6,13 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/span.hpp"
+
+#include "vast/detail/narrow.hpp"
+
 #include <array>
 #include <cstddef>
 #include <string>
 #include <vector>
-
-#include "vast/detail/narrow.hpp"
-#include "vast/span.hpp"
 
 #define SUITE span
 #include "vast/test/test.hpp"

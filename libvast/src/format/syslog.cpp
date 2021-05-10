@@ -8,8 +8,9 @@
 
 #include "vast/format/syslog.hpp"
 
-#include "vast/error.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/error.hpp"
 #include "vast/type.hpp"
 
 #include <caf/expected.hpp>

@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include <cstdint>
-#include <type_traits>
-
+#include "vast/concept/parseable/core/parser.hpp"
 #include "vast/detail/byte_swap.hpp"
 
-#include "vast/concept/parseable/core/parser.hpp"
+#include <cstdint>
+#include <type_traits>
 
 namespace vast {
 namespace detail {

@@ -8,19 +8,18 @@
 
 #pragma once
 
-#include <cstddef>
-#include <functional>
-#include <list>
-#include <unordered_map>
-#include <type_traits>
-
-#include <caf/meta/load_callback.hpp>
-
-#include "vast/error.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/error.hpp"
+
+#include <caf/meta/load_callback.hpp>
+
+#include <cstddef>
+#include <functional>
+#include <list>
+#include <type_traits>
+#include <unordered_map>
 
 namespace vast::detail {
 
@@ -274,4 +273,3 @@ struct mru {
 };
 
 } // namespace vast::detail
-

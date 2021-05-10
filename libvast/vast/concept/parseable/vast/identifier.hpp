@@ -9,8 +9,8 @@
 #pragma once
 
 #include "vast/concept/parseable/core/choice.hpp"
-#include "vast/concept/parseable/core/plus.hpp"
 #include "vast/concept/parseable/core/operators.hpp"
+#include "vast/concept/parseable/core/plus.hpp"
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 

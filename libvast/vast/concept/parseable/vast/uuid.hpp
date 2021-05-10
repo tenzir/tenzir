@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/uuid.hpp"
+
 #include <algorithm>
 #include <cstddef>
-
-#include "vast/uuid.hpp"
-#include "vast/concept/parseable/core/parser.hpp"
 
 namespace vast {
 
@@ -90,4 +90,3 @@ static auto const uuid = make_parser<vast::uuid>();
 } // namespace parsers
 
 } // namespace vast
-

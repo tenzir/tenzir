@@ -28,4 +28,3 @@ private:
 };
 
 } // namespace vast::detail
-

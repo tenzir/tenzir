@@ -10,14 +10,13 @@
 
 #include "vast/segment.hpp"
 
-#include "vast/test/fixtures/events.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/ids.hpp"
 #include "vast/segment_builder.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

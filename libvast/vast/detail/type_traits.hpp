@@ -9,6 +9,7 @@
 #pragma once
 
 #include <caf/detail/type_traits.hpp>
+#include <experimental/type_traits>
 
 #include <iterator>
 #include <optional>
@@ -16,8 +17,6 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-
-#include <experimental/type_traits>
 
 namespace vast::detail {
 

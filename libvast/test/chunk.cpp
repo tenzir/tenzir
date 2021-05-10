@@ -10,12 +10,11 @@
 
 #include "vast/chunk.hpp"
 
-#include "vast/test/fixtures/filesystem.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/span.hpp"
+#include "vast/test/fixtures/filesystem.hpp"
+#include "vast/test/test.hpp"
 
 #include <cstddef>
 

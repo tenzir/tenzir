@@ -17,4 +17,4 @@ unsigned short patch = @VAST_VERSION_PATCH@;
 unsigned short tweak = @VAST_VERSION_TWEAK@;
 const char* build_tree_hash = "@VAST_BUILD_TREE_HASH@";
 
-} // namespace vast
+} // namespace vast::version

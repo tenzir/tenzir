@@ -10,10 +10,9 @@
 
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
-#include "vast/uuid.hpp"
-
 #include "vast/system/node.hpp"
 #include "vast/system/query_status.hpp"
+#include "vast/uuid.hpp"
 
 using namespace vast;
 

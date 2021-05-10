@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/detail/type_list.hpp"
+
 #include <cmath>
 #include <limits>
 #include <type_traits>
-
-#include "vast/concept/parseable/numeric/integral.hpp"
-#include "vast/detail/type_list.hpp"
 
 namespace vast {
 namespace policy {

@@ -10,8 +10,6 @@
 
 #include "vast/index/arithmetic_index.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
@@ -22,6 +20,7 @@
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/test.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/test/dsl.hpp>
