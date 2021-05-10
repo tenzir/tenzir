@@ -10,37 +10,50 @@
 // does not contain any meaningful tests for the example plugin. It merely
 // exists to show how to setup unit tests.
 
-#define CAF_SUITE transform_plugin
+#define SUITE transform_plugin
 
-#include <vast/system/make_transform.hpp>
+#include <vast/concept/convertible/to.hpp>
+#include <vast/data.hpp>
+#include <vast/system/make_transforms.hpp>
+#include <vast/test/test.hpp>
 
-#include <caf/test/unit_test.hpp>
+#include <caf/settings.hpp>
 
 namespace {
 
 const std::string config = R"_(
 vast:
   transforms:
-    example_transform:
-      - example_transform_step:
-        field: foo
+    my-transform:
+      - example-transform
   transform-triggers:
     import:
-      - transform: example_transform
+      - transform: my-transform
         location: server
-        events: vast.test
+        events:
+          - vast.test
 )_";
 
 } // namespace
 
 // Verify that we can use the transform names to load
-CAF_TEST(load plugins from config) {
+TEST(load plugins from config) {
   auto yaml = vast::from_yaml(config);
   REQUIRE(yaml);
-  auto rec = caf::get_if<vast::record>(&*yaml);
+  auto* rec = caf::get_if<vast::record>(&*yaml);
   REQUIRE(rec);
   auto settings = vast::to<caf::settings>(*rec);
   REQUIRE(settings);
-  auto transforms = parse_transforms(location, *settings);
-  CAF_REQUIRE(transforms);
+  auto client_source_transforms = vast::system::make_transforms(
+    vast::system::transforms_location::client_source, *settings);
+  CHECK(client_source_transforms);
+  auto server_import_transforms = vast::system::make_transforms(
+    vast::system::transforms_location::server_import, *settings);
+  CHECK(!server_import_transforms); // currently disabled
+  auto server_export_transforms = vast::system::make_transforms(
+    vast::system::transforms_location::server_export, *settings);
+  REQUIRE(server_export_transforms);
+  auto client_sink_transforms = vast::system::make_transforms(
+    vast::system::transforms_location::client_sink, *settings);
+  REQUIRE(client_sink_transforms);
 }

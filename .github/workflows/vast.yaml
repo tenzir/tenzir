@@ -607,6 +607,9 @@ jobs:
           - name: Example
             target: example
             path: examples/plugins/example
+          - name: Example Transform
+            target: example-transform
+            path: examples/plugins/transform
     env:
       INSTALL_DIR: '${{ github.workspace }}/_install'
       BUILD_DIR: '${{ github.workspace }}/_build'

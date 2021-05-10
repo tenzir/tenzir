@@ -60,12 +60,12 @@ public:
   //       transforms:
   //         transform1:
   //           - step1:
-  //           - example_transform_step:
+  //           - example-transform:
   //              setting: value
   //           - step3:
   //
   [[nodiscard]] const char* name() const override {
-    return "example_transform_step";
+    return "example-transform";
   };
 
   // This is called once for every time this transform step appears in a
