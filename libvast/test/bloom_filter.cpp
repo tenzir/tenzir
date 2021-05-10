@@ -215,8 +215,7 @@ TEST(bloom filter - duplicate tracking) {
   xs.m = 1_M;
   xs.p = 0.1;
   auto x = vast::test::unbox(
-    make_bloom_filter<xxhash, double_hasher, policy::partitioning::no,
-                      policy::tracking::yes>(xs));
+    make_bloom_filter<xxhash, double_hasher, policy::partitioning::no>(xs));
   CHECK(!x.lookup(42));
   CHECK(x.add(42));
   CHECK(x.lookup(42));
