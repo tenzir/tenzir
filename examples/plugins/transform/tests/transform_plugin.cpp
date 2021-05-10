@@ -16,6 +16,8 @@
 
 #include <caf/test/unit_test.hpp>
 
+namespace {
+
 const std::string config = R"_(
 vast:
   transforms:
@@ -28,6 +30,8 @@ vast:
         location: server
         events: vast.test
 )_";
+
+} // namespace
 
 // Verify that we can use the transform names to load
 CAF_TEST(load plugins from config) {
