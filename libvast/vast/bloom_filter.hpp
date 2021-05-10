@@ -46,7 +46,7 @@ namespace vast {
 /// A data structure for probabilistic set membership.
 /// @tparam HashFunction The hash function to use in the hasher.
 /// @tparam Hasher The hasher type to generate digests.
-/// @tparam partitioning The partitioning policy.
+/// @tparam Partitioning The partitioning policy.
 template <class HashFunction, template <class> class Hasher = double_hasher,
           policy::partitioning Partitioning = policy::partitioning::no,
           policy::tracking Tracking = policy::tracking::no>
@@ -156,7 +156,7 @@ private:
 /// Constructs a Bloom filter for a given set of parameters.
 /// @tparam HashFunction The hash function to use in the hasher.
 /// @tparam Hasher The hasher type to generate digests.
-/// @tparam partitioning The partitioning policy.
+/// @tparam Partitioning The partitioning policy.
 /// @param xs The Bloom filter parameters.
 /// @param seeds The seeds for the hash functions. If empty, ascending
 ///              integers from 0 to *k-1* will be used.
