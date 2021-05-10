@@ -191,7 +191,7 @@ TEST(bloom filter - simple hasher and partitioning) {
   xs.m = 10_M;
   xs.p = 0.001;
   auto x = vast::test::unbox(
-    make_bloom_filter<xxhash, simple_hasher, policy::partitioning>(xs));
+    make_bloom_filter<xxhash, simple_hasher, policy::partitioning::yes>(xs));
   CHECK_EQUAL(x.size(), 10_M);
   CHECK_EQUAL(x.num_hash_functions(), 10u);
   x.add(42);
@@ -204,7 +204,7 @@ TEST(bloom filter - simple hasher and partitioning) {
   std::vector<char> buf;
   auto err = detail::serialize(buf, x);
   REQUIRE_EQUAL(err, caf::none);
-  bloom_filter<xxhash, simple_hasher, policy::partitioning> y;
+  bloom_filter<xxhash, simple_hasher, policy::partitioning::yes> y;
   err = detail::deserialize(buf, y);
   REQUIRE_EQUAL(err, caf::none);
   CHECK(x == y);
@@ -215,8 +215,8 @@ TEST(bloom filter - duplicate tracking) {
   xs.m = 1_M;
   xs.p = 0.1;
   auto x = vast::test::unbox(
-    make_bloom_filter<xxhash, double_hasher, policy::no_partitioning,
-                      policy::duplicate_tracking>(xs));
+    make_bloom_filter<xxhash, double_hasher, policy::partitioning::no,
+                      policy::tracking::yes>(xs));
   CHECK(!x.lookup(42));
   CHECK(x.add(42));
   CHECK(x.lookup(42));

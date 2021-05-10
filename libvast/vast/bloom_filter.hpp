@@ -28,26 +28,16 @@
 
 namespace vast::policy {
 
-/// A tag type for choosing partitioning of a Bloom filter. This
-/// policy slices the Bloom filter bits into *k* equi-distant partitions.
+/// A policy that controls the cell layout of a Bloom filter.
+/// If `yes`, the Bloom filter bits are split into *k* equi-distant partitions.
 /// @relates bloom_filter
-struct partitioning;
+enum class partitioning { yes, no };
 
-/// A tag type for avoiding partitioning in a Bloom filter. This policy
-/// considers the Bloom filter bits as one contiguous chunk.
+/// A policy that controls the return type of `bloom_filter::add`.
+/// If `yes`, `add` returns `false` if a value is already present (or
+/// constitutes a collision) and `true` if it is new.
 /// @relates bloom_filter
-struct no_partitioning;
-
-/// A tag type for controlling the return type of `bloom_filter::add`. With
-/// this policy the function returns `false` if a value is already present and
-/// `true` if it is new.
-/// @relates bloom_filter
-struct duplicate_tracking;
-
-/// A tag type for controlling the return type of `bloom_filter::add`. This
-/// policy.
-/// @relates bloom_filter
-struct no_duplicate_tracking;
+enum class tracking { yes, no };
 
 } // namespace vast::policy
 
@@ -56,18 +46,19 @@ namespace vast {
 /// A data structure for probabilistic set membership.
 /// @tparam HashFunction The hash function to use in the hasher.
 /// @tparam Hasher The hasher type to generate digests.
-/// @tparam PartitioningPolicy The partitioning policy.
+/// @tparam partitioning The partitioning policy.
 template <class HashFunction, template <class> class Hasher = double_hasher,
-          class PartitioningPolicy = policy::no_partitioning,
-          class TrackingPolicy = policy::no_duplicate_tracking>
+          policy::partitioning Partitioning = policy::partitioning::no,
+          policy::tracking Tracking = policy::tracking::no>
 class bloom_filter
   : detail::equality_comparable<
-      bloom_filter<HashFunction, Hasher, PartitioningPolicy, TrackingPolicy>> {
+      bloom_filter<HashFunction, Hasher, Partitioning, Tracking>> {
 public:
   using hash_function = HashFunction;
   using hasher_type = Hasher<hash_function>;
-  using partitioning_policy = PartitioningPolicy;
-  using tracking_policy = TrackingPolicy;
+
+  static constexpr policy::partitioning partitioning_policy = Partitioning;
+  static constexpr policy::tracking tracking_policy = Tracking;
 
   /// Constructs a Bloom filter with a fixed size and a hasher.
   /// @param size The number of cells/bits in the Bloom filter.
@@ -79,17 +70,16 @@ public:
 
   /// Adds an element to the Bloom filter.
   /// @param x The element to add.
-  /// @returns `void` if the tracking policy is `no_duplicate_tracking`,
+  /// @returns `void` if the tracking policy is `tracking::no`,
   /// otherwise a `bool` that is `false` iff *x* already exists in the filter.
   template <class T>
   auto add(T&& x) {
     auto& digests = hasher_(std::forward<T>(x));
-    if constexpr (std::is_same_v<tracking_policy,
-                                 policy::no_duplicate_tracking>) {
+    if constexpr (tracking_policy == policy::tracking::no) {
       for (size_t i = 0; i < digests.size(); ++i)
         bits_[position(i, digests[i])] = true;
     }
-    if constexpr (std::is_same_v<tracking_policy, policy::duplicate_tracking>) {
+    if constexpr (tracking_policy == policy::tracking::yes) {
       auto unique = false;
       for (size_t i = 0; i < digests.size(); ++i) {
         auto bit = bits_[position(i, digests[i])];
@@ -151,9 +141,9 @@ public:
 private:
   template <class Digest>
   size_t position([[maybe_unused]] size_t i, Digest x) const {
-    if constexpr (std::is_same_v<partitioning_policy, policy::no_partitioning>)
+    if constexpr (partitioning_policy == policy::partitioning::no)
       return x % bits_.size();
-    if constexpr (std::is_same_v<partitioning_policy, policy::partitioning>) {
+    if constexpr (partitioning_policy == policy::partitioning::yes) {
       auto num_partition_cells = bits_.size() / hasher_.size();
       return i * num_partition_cells + (x % num_partition_cells);
     }
@@ -166,19 +156,18 @@ private:
 /// Constructs a Bloom filter for a given set of parameters.
 /// @tparam HashFunction The hash function to use in the hasher.
 /// @tparam Hasher The hasher type to generate digests.
-/// @tparam PartitioningPolicy The partitioning policy.
+/// @tparam partitioning The partitioning policy.
 /// @param xs The Bloom filter parameters.
 /// @param seeds The seeds for the hash functions. If empty, ascending
 ///              integers from 0 to *k-1* will be used.
 /// @relates bloom_filter bloom_filter_parameters
 template <class HashFunction, template <class> class Hasher = double_hasher,
-          class PartitioningPolicy = policy::no_partitioning,
-          class TrackingPolicy = policy::no_duplicate_tracking>
-std::optional<
-  bloom_filter<HashFunction, Hasher, PartitioningPolicy, TrackingPolicy>>
+          policy::partitioning Partitioning = policy::partitioning::no,
+          policy::tracking Tracking = policy::tracking::no>
+std::optional<bloom_filter<HashFunction, Hasher, Partitioning, Tracking>>
 make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
   using result_type
-    = bloom_filter<HashFunction, Hasher, PartitioningPolicy, TrackingPolicy>;
+    = bloom_filter<HashFunction, Hasher, Partitioning, Tracking>;
   using hasher_type = typename result_type::hasher_type;
   if (auto ys = evaluate(xs)) {
     VAST_DEBUG("evaluated bloom filter parameters: {} {} {} {}",
