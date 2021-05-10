@@ -69,22 +69,17 @@ function (VASTRegisterPlugin)
   set_property(GLOBAL APPEND PROPERTY "VAST_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY"
                                       "${PROJECT_SOURCE_DIR}")
 
-  # Set a default build type if none was specified
+  # Set a default build type if none was specified.
   if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
-    set(default_build_type "Release")
-    if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
-      set(default_build_type "Debug")
-    endif ()
-
     if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
       message(
         STATUS
           "Setting build type to '${default_build_type}' as none was specified."
       )
       set(CMAKE_BUILD_TYPE
-          "${default_build_type}"
+          "${VAST_CMAKE_BUILD_TYPE}"
           CACHE STRING "Choose the type of build." FORCE)
-      # Set the possible values of build type for cmake-gui
+      # Set the possible values of build type for cmake-gui.
       set_property(
         CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel"
                                         "RelWithDebInfo")
