@@ -265,6 +265,12 @@ function (VASTRegisterPlugin)
                                                      vast_unit_test_fixture)
   endif ()
 
+  # Ensure that a target integration always exists, even if a plugin does not
+  # define integration tests.
+  if (NOT TARGET integration)
+    add_custom_target(integration)
+  endif ()
+
   # Setup integration tests.
   if (TARGET vast::vast
       AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
@@ -319,9 +325,6 @@ function (VASTRegisterPlugin)
         "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
         -v DEBUG
       USES_TERMINAL)
-    if (NOT TARGET integration)
-      add_custom_target(integration)
-    endif ()
     add_dependencies(integration ${PLUGIN_TARGET}-integration)
   endif ()
 
