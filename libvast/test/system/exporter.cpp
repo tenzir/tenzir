@@ -10,10 +10,6 @@
 
 #include "vast/system/exporter.hpp"
 
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-#include "vast/test/fixtures/table_slices.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/spawn_container_source.hpp"
@@ -24,6 +20,9 @@
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

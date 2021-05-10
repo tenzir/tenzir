@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/string/char.hpp"
-#include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 
 namespace vast {

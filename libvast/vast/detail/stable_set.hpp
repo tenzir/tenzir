@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/detail/vector_set.hpp"
+
 #include <algorithm>
 #include <functional>
 #include <memory>
 #include <utility>
-
-#include "vast/detail/vector_set.hpp"
 
 namespace vast::detail {
 
@@ -38,4 +38,3 @@ template <class T, class Allocator = std::allocator<T>>
 using stable_set = vector_set<T, Allocator, stable_set_policy>;
 
 } // namespace vast::detail
-

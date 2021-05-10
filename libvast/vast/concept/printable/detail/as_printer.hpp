@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/literal.hpp"
+
+#include <string>
 
 namespace vast {
 namespace detail {
@@ -103,5 +103,3 @@ constexpr as_printer(T&& x, U&& y) {
 
 } // namespace detail
 } // namespace vast
-
-

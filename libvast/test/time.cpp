@@ -33,7 +33,7 @@ void check_duration(const Input& str, T x) {
   CHECK_EQUAL(t, duration_cast<vast::duration>(x));
 }
 
-} // namespace <anonymous>
+} // namespace
 
 TEST(positive durations) {
   MESSAGE("nanoseconds");

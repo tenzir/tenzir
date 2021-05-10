@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/concept/printable/print.hpp"
+
 #include <string>
 #include <type_traits>
-
-#include "vast/concept/printable/print.hpp"
 
 namespace vast {
 

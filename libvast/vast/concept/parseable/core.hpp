@@ -31,4 +31,3 @@
 #include "vast/concept/parseable/core/sequence_choice.hpp"
 #include "vast/concept/parseable/core/skip.hpp"
 #include "vast/concept/parseable/core/when.hpp"
-

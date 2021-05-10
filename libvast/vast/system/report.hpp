@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/instrumentation.hpp"
 #include "vast/time.hpp"
 

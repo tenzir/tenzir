@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/uri.hpp"
+
 #include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include "vast/uri.hpp"
 
 namespace vast::http {
 
@@ -45,4 +45,3 @@ struct response : message {
 };
 
 } // namespace vast::http
-

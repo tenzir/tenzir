@@ -55,7 +55,7 @@ struct fixture {
   Set xs;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(stable_set_tests, fixture<stable_set<int>>)
 

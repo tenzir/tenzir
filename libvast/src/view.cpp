@@ -167,7 +167,7 @@ Result materialize_container(const T& xs) {
   return result;
 }
 
-} // namespace <anonymous>
+} // namespace
 
 list materialize(list_view_handle xs) {
   return materialize_container<list>(xs);

@@ -18,7 +18,6 @@
 #include "vast/system/configuration.hpp"
 
 #include <caf/local_actor.hpp>
-
 #include <spdlog/async.h>
 #include <spdlog/common.h>
 #include <spdlog/sinks/ansicolor_sink.h>

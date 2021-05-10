@@ -18,6 +18,8 @@
 #include <caf/deserializer.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/serializer.hpp>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 #include <cstddef>
 #include <cstring>
@@ -26,9 +28,6 @@
 #include <memory>
 #include <tuple>
 #include <unistd.h>
-
-#include <sys/mman.h>
-#include <sys/stat.h>
 
 namespace vast {
 

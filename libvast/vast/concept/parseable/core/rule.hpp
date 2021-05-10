@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include <memory>
-#include <utility>
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
+
+#include <memory>
+#include <utility>
 
 namespace vast {
 namespace detail {

@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/access.hpp"
 #include "vast/concept/printable/core/printer.hpp"
+
+#include <type_traits>
 
 namespace vast {
 
@@ -71,4 +71,3 @@ template <class I, class T>
 constexpr bool is_printable_v = is_printable<I, T>::value;
 
 } // namespace vast
-

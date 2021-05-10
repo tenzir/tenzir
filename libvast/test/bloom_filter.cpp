@@ -10,14 +10,13 @@
 
 #include "vast/bloom_filter.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>

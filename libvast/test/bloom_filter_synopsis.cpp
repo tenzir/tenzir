@@ -10,12 +10,11 @@
 
 #include "vast/bloom_filter_synopsis.hpp"
 
-#include "vast/test/synopsis.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/test/synopsis.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

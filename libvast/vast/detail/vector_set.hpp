@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/detail/operators.hpp"
+
 #include <algorithm>
 #include <vector>
-
-#include "vast/detail/operators.hpp"
 
 namespace vast::detail {
 

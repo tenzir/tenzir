@@ -10,9 +10,8 @@
 
 #include "vast/bitmap_base.hpp"
 #include "vast/bitvector.hpp"
-#include "vast/word.hpp"
-
 #include "vast/detail/operators.hpp"
+#include "vast/word.hpp"
 
 namespace vast {
 

@@ -8,18 +8,17 @@
 
 #pragma once
 
-#include <cstring>
+#include "vast/access.hpp"
+#include "vast/address.hpp"
+#include "vast/concept/parseable/core.hpp"
+#include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/concept/parseable/string/char_class.hpp"
+#include "vast/detail/assert.hpp"
 
 #include <arpa/inet.h>  // inet_pton
 #include <sys/socket.h> // AF_INET*
 
-#include "vast/access.hpp"
-#include "vast/address.hpp"
-#include "vast/detail/assert.hpp"
-
-#include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/numeric/integral.hpp"
-#include "vast/concept/parseable/string/char_class.hpp"
+#include <cstring>
 
 namespace vast {
 

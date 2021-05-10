@@ -43,7 +43,7 @@ extern "C" void signal_monitor_handler(int sig) {
   signals[sig] = true;
 }
 
-} // namespace <anonymous>
+} // namespace
 
 namespace vast::system {
 

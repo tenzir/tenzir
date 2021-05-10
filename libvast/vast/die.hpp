@@ -17,4 +17,3 @@ namespace vast {
 [[noreturn]] void die(const std::string& = "");
 
 } // namespace vast
-

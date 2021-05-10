@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "vast/detail/coding.hpp"
+
 #include <array>
 #include <cctype>
 #include <string>
-
-#include "vast/detail/coding.hpp"
 
 namespace vast::detail {
 

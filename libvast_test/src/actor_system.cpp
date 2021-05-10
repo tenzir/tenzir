@@ -54,4 +54,3 @@ deterministic_actor_system::deterministic_actor_system() {
 }
 
 } // namespace fixtures
-

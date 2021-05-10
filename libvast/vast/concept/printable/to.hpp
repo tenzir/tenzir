@@ -30,4 +30,3 @@ auto to(From&& from, Opts&&... opts)
 }
 
 } // namespace vast
-

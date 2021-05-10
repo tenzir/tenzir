@@ -10,9 +10,6 @@
 
 #include "vast/coder.hpp"
 
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/base.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -21,6 +18,8 @@
 #include "vast/detail/order.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/null_bitmap.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 
@@ -49,7 +48,7 @@ void fill(Coder& c, Ts... xs) {
   (c.encode(xs), ...);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 TEST(bitwise total ordering (integral)) {
   using detail::order;

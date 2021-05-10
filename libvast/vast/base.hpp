@@ -8,14 +8,14 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
+
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <type_traits>
 #include <vector>
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/operators.hpp"
 
 namespace vast {
 
@@ -123,4 +123,3 @@ private:
 };
 
 } // namespace vast
-

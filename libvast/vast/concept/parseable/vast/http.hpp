@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include <algorithm>
-#include <cctype>
-#include <string>
-
 #include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
+#include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast/uri.hpp"
 #include "vast/http.hpp"
 #include "vast/uri.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <string>
 
 namespace vast {
 

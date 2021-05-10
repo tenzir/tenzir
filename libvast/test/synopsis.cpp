@@ -10,16 +10,15 @@
 
 #include "vast/synopsis.hpp"
 
-#include "vast/test/test.hpp"
-#include "vast/test/synopsis.hpp"
+#include "vast/bool_synopsis.hpp"
+#include "vast/synopsis_factory.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/synopsis.hpp"
+#include "vast/test/test.hpp"
+#include "vast/time_synopsis.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
-
-#include "vast/bool_synopsis.hpp"
-#include "vast/synopsis_factory.hpp"
-#include "vast/time_synopsis.hpp"
 
 using namespace std::chrono_literals;
 using namespace vast;
@@ -29,7 +28,7 @@ namespace {
 
 const vast::time epoch;
 
-} // namespace <anonymous>
+} // namespace
 
 TEST(min-max synopsis) {
   using vast::time;

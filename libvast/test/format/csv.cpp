@@ -10,12 +10,11 @@
 
 #define SUITE format
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast.hpp"
 
 #include <algorithm>
 

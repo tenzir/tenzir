@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/http.hpp"
+
 #include <algorithm>
 #include <cctype>
-
-#include "vast/http.hpp"
 
 namespace vast {
 namespace http {
@@ -27,5 +27,5 @@ const header* message::header(const std::string& name) const {
   return i == headers.end() ? nullptr : &*i;
 }
 
-} // namspace http
-} // namspace vast
+} // namespace http
+} // namespace vast

@@ -10,10 +10,6 @@
 
 #include "vast/system/importer.hpp"
 
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-#include "vast/test/fixtures/table_slices.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/printable/stream.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
@@ -23,6 +19,9 @@
 #include "vast/system/source.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
+#include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
 
 #include <optional>

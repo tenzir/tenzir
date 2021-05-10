@@ -8,15 +8,15 @@
 
 #pragma once
 
-#include <chrono>
-#include <ctime>
-#include <cstring>
-
 #include "vast/access.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/time.hpp"
+
+#include <chrono>
+#include <cstring>
+#include <ctime>
 
 namespace vast {
 

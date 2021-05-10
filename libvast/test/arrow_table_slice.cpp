@@ -12,20 +12,18 @@
 
 #if VAST_ENABLE_ARROW
 
-#  include "vast/test/fixtures/table_slices.hpp"
-#  include "vast/test/test.hpp"
-
 #  include "vast/arrow_table_slice.hpp"
 #  include "vast/arrow_table_slice_builder.hpp"
 #  include "vast/concept/parseable/to.hpp"
 #  include "vast/concept/parseable/vast/address.hpp"
 #  include "vast/concept/parseable/vast/subnet.hpp"
+#  include "vast/test/fixtures/table_slices.hpp"
+#  include "vast/test/test.hpp"
 #  include "vast/type.hpp"
 
+#  include <arrow/api.h>
 #  include <caf/make_copy_on_write.hpp>
 #  include <caf/test/dsl.hpp>
-
-#  include <arrow/api.h>
 
 using namespace vast;
 using namespace std::chrono_literals;

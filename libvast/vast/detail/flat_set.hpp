@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/detail/vector_set.hpp"
+
 #include <algorithm>
 #include <functional>
 #include <memory>
 #include <utility>
-
-#include "vast/detail/vector_set.hpp"
 
 namespace vast::detail {
 

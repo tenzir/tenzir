@@ -6,12 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/test/data.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
+#include "vast/test/data.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/message_builder.hpp>
 #include <caf/test/unit_test.hpp>

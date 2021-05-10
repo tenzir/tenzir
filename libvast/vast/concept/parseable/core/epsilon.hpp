@@ -28,5 +28,3 @@ auto const eps = epsilon_parser{};
 
 } // namespace parsers
 } // namespace vast
-
-

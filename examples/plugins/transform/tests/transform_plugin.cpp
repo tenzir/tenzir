@@ -11,9 +11,12 @@
 // exists to show how to setup unit tests.
 
 #define CAF_SUITE transform_plugin
-#include "vast/system/make_transform.hpp"
+
+#include <vast/system/make_transform.hpp>
 
 #include <caf/test/unit_test.hpp>
+
+namespace {
 
 const std::string config = R"_(
 vast:
@@ -27,6 +30,8 @@ vast:
         location: server
         events: vast.test
 )_";
+
+} // namespace
 
 // Verify that we can use the transform names to load
 CAF_TEST(load plugins from config) {

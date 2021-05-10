@@ -10,8 +10,8 @@
 
 #include "vast/scope_linked.hpp"
 
-#include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 
@@ -25,7 +25,7 @@ caf::behavior dummy() {
   };
 }
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(scope_linked_tests, fixtures::deterministic_actor_system)
 

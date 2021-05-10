@@ -8,10 +8,10 @@
 
 #include "vast/bool_synopsis.hpp"
 
+#include "vast/detail/assert.hpp"
+
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
-
-#include "vast/detail/assert.hpp"
 
 namespace vast {
 

@@ -81,4 +81,3 @@ constexpr bool has_access_converter_v
   = decltype(detail::has_access_converter::test<T>(0))::value;
 
 } // namespace vast
-

@@ -6,24 +6,23 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/community_id.hpp"
-#include "vast/data.hpp"
-#include "vast/error.hpp"
-#include "vast/ether_type.hpp"
-#include "vast/format/reader.hpp"
-#include "vast/format/single_layout_reader.hpp"
-#include "vast/format/writer.hpp"
-#include "vast/logger.hpp"
-#include "vast/plugin.hpp"
-#include "vast/schema.hpp"
+#include <vast/community_id.hpp>
+#include <vast/data.hpp>
+#include <vast/error.hpp>
+#include <vast/ether_type.hpp>
+#include <vast/format/reader.hpp>
+#include <vast/format/single_layout_reader.hpp>
+#include <vast/format/writer.hpp>
+#include <vast/logger.hpp>
+#include <vast/plugin.hpp>
+#include <vast/schema.hpp>
 
 #include <caf/settings.hpp>
+#include <netinet/in.h>
 
 #include <optional>
 #include <pcap.h>
 #include <random>
-
-#include <netinet/in.h>
 
 namespace vast::defaults {
 

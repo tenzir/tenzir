@@ -12,4 +12,3 @@
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/string/escape.hpp"
 #include "vast/concept/printable/string/string.hpp"
-

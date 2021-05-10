@@ -51,4 +51,3 @@ bool print_delimited(InputIterator begin, InputIterator end,
 
 } // namespace detail
 } // namespace vast
-

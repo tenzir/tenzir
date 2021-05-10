@@ -49,4 +49,3 @@ auto const a_zA_Z0_9 = char_range_parser<'a', 'z', 'A', 'Z', '0', '9'>{};
 
 } // namespace parsers
 } // namespace vast
-

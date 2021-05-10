@@ -21,12 +21,8 @@ public:
   using action_traits = detail::action_traits<Action>;
   using action_arg_type = typename action_traits::first_arg_type;
 
-  using attribute =
-    std::conditional_t<
-      action_traits::returns_void,
-      unused_type,
-      typename action_traits::result_type
-    >;
+  using attribute = std::conditional_t<action_traits::returns_void, unused_type,
+                                       typename action_traits::result_type>;
 
   action_printer(Printer p, Action fun) : printer_{std::move(p)}, action_(fun) {
     // nop
@@ -55,4 +51,3 @@ private:
 };
 
 } // namespace vast
-

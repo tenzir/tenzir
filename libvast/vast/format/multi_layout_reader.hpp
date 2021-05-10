@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include "vast/format/reader.hpp"
 #include "vast/table_slice_builder.hpp"
+
+#include <unordered_map>
 
 namespace vast::format {
 

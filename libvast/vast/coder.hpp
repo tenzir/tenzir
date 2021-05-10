@@ -8,19 +8,19 @@
 
 #pragma once
 
-#include <algorithm>
-#include <array>
-#include <limits>
-#include <vector>
-#include <type_traits>
+#include "vast/base.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/operator.hpp"
 
 #include <caf/meta/load_callback.hpp>
 #include <caf/meta/save_callback.hpp>
 
-#include "vast/base.hpp"
-#include "vast/operator.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/operators.hpp"
+#include <algorithm>
+#include <array>
+#include <limits>
+#include <type_traits>
+#include <vector>
 
 namespace vast {
 

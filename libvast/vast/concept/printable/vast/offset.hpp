@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "vast/offset.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/detail/print_delimited.hpp"
-#include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
+#include "vast/concept/printable/string/char.hpp"
+#include "vast/offset.hpp"
 
 namespace vast {
 

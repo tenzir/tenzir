@@ -8,13 +8,12 @@
 
 #pragma once
 
-#include <cstddef>
-#include <vector>
-
 #include "vast/offset.hpp"
+#include "vast/test/test.hpp"
 #include "vast/type.hpp"
 
-#include "vast/test/test.hpp"
+#include <cstddef>
+#include <vector>
 
 /// Returns the type at `offset{xs...}`.
 template <class... Offsets>

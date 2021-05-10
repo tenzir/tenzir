@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/actor_system.hpp>
@@ -17,6 +15,8 @@
 #include <caf/is_actor_handle.hpp>
 #include <caf/is_typed_actor.hpp>
 #include <caf/typed_actor.hpp>
+
+#include <type_traits>
 
 namespace vast::detail {
 

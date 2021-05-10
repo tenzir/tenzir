@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <map>
-#include <tuple>
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
+
+#include <map>
+#include <tuple>
 
 namespace vast::detail {
 
@@ -296,4 +296,3 @@ private:
 };
 
 } // namespace vast::detail
-

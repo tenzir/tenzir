@@ -10,13 +10,12 @@
 
 #include "vast/flow.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/address.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
 #include "vast/port.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

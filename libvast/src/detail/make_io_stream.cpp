@@ -17,7 +17,6 @@
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
-
 #include <fmt/format.h>
 
 #include <filesystem>

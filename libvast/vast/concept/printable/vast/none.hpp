@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <caf/none.hpp>
-
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/string.hpp"
+
+#include <caf/none.hpp>
 
 namespace vast {
 
@@ -30,4 +30,3 @@ struct printer_registry<caf::none_t> {
 };
 
 } // namespace vast
-

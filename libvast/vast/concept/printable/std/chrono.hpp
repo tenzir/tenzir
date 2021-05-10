@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include <chrono>
-#include <string>
-
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/numeric/real.hpp"
 #include "vast/time.hpp"
+
+#include <chrono>
+#include <string>
 
 namespace vast {
 namespace policy {

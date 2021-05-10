@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/variant.hpp"
-
 #include "vast/detail/type_traits.hpp"
+
+#include <type_traits>
 
 namespace vast {
 

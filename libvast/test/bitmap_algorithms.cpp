@@ -10,9 +10,8 @@
 
 #include "vast/bitmap_algorithms.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/ids.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

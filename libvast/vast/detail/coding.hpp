@@ -8,13 +8,13 @@
 
 #pragma once
 
+#include "vast/detail/type_traits.hpp"
+#include "vast/span.hpp"
+
 #include <cstddef>
 #include <limits>
 #include <string>
 #include <type_traits>
-
-#include "vast/detail/type_traits.hpp"
-#include "vast/span.hpp"
 
 namespace vast::policy {
 

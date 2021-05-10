@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <random>
-
 #include "vast/detail/operators.hpp"
+
+#include <random>
 
 namespace vast::detail {
 
@@ -127,4 +127,3 @@ R pareto_distribution<R>::operator()(
 }
 
 } // namespace vast::detail
-

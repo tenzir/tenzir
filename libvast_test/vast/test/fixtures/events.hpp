@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include "vast/test/data.hpp"
-#include "vast/test/test.hpp"
+#include "vast/fwd.hpp"
 
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/data.hpp"
+#include "vast/test/test.hpp"
 
 namespace fixtures {
 

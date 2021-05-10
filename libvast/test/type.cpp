@@ -10,9 +10,6 @@
 
 #include "vast/type.hpp"
 
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/to.hpp"
@@ -23,6 +20,8 @@
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include <string_view>
 

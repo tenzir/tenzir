@@ -10,10 +10,9 @@
 
 #include "vast/index/enumeration_index.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

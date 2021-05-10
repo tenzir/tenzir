@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "vast/schema.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/string/string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/schema.hpp"
 
 namespace vast {
 

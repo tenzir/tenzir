@@ -82,4 +82,3 @@ relational_operator negate(relational_operator op);
 relational_operator flip(relational_operator op);
 
 } // namespace vast
-

@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/uuid.hpp"
 

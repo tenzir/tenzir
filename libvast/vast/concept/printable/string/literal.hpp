@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/concept/printable/string/string.hpp"
+
 #include <string>
 #include <type_traits>
-
-#include "vast/concept/printable/string/string.hpp"
 
 namespace vast {
 
@@ -62,4 +62,3 @@ using lit = literal_printer;
 
 } // namespace printers
 } // namespace vast
-

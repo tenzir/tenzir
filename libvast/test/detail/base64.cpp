@@ -8,9 +8,9 @@
 
 #define SUITE base64
 
-#include "vast/test/test.hpp"
-
 #include "vast/detail/base64.hpp"
+
+#include "vast/test/test.hpp"
 
 using namespace std::string_view_literals;
 using namespace vast::detail;

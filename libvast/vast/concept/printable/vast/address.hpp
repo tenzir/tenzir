@@ -8,15 +8,15 @@
 
 #pragma once
 
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-
-#include <cstring>
-
 #include "vast/address.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/string.hpp"
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+#include <cstring>
 
 namespace vast {
 

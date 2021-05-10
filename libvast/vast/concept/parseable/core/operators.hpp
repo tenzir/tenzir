@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/concept/parseable/core/to_parser.hpp"
+
+#include <type_traits>
 
 namespace vast {
 

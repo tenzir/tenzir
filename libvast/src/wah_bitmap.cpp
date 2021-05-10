@@ -6,10 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2017 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <iostream>
+#include "vast/wah_bitmap.hpp"
+
 #include <caf/detail/scope_guard.hpp>
 
-#include "vast/wah_bitmap.hpp"
+#include <iostream>
 
 namespace vast {
 

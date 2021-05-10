@@ -8,15 +8,15 @@
 
 #pragma once
 
-#include <cstdint>
-#include <limits>
-
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/bits.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/die.hpp"
 #include "vast/word.hpp"
+
+#include <cstdint>
+#include <limits>
 
 namespace vast {
 

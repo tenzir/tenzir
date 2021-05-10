@@ -10,10 +10,9 @@
 
 #include "vast/detail/range_map.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace vast::detail;

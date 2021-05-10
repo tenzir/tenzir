@@ -27,4 +27,3 @@ auto unique_values(const Collection& xs) {
 }
 
 } // namespace vast::detail
-

@@ -16,7 +16,6 @@
 
 #include <arrow/array/builder_binary.h>
 #include <arrow/scalar.h>
-
 #include <fmt/format.h>
 
 namespace vast {

@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <array>
-
 #include "vast/concept/printable/core/printer.hpp"
+
+#include <array>
 
 namespace vast {
 
@@ -41,4 +41,3 @@ auto chr = char_printer<Char...>{};
 
 } // namespace printers
 } // namespace vast
-

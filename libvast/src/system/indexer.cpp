@@ -30,7 +30,6 @@
 
 #include <caf/attach_stream_sink.hpp>
 #include <caf/binary_serializer.hpp>
-
 #include <flatbuffers/flatbuffers.h>
 
 namespace vast::system {

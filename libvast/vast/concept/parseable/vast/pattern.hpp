@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "vast/pattern.hpp"
-
+#include "vast/access.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
+#include "vast/pattern.hpp"
 
 namespace vast {
 
@@ -44,4 +44,3 @@ static auto const pattern = make_parser<vast::pattern>();
 } // namespace parsers
 
 } // namespace vast
-

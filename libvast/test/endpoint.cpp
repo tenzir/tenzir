@@ -8,10 +8,10 @@
 
 #define SUITE endpoint
 
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/vast/endpoint.hpp"
+
 #include "vast/endpoint.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -22,7 +22,7 @@ struct fixture {
   endpoint x;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(endpoint_tests, fixture)
 

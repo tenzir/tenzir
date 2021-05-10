@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "vast/defaults.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/terminator.hpp"
 

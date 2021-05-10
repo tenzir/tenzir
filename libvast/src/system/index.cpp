@@ -51,7 +51,6 @@
 #include <caf/response_promise.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
-
 #include <flatbuffers/flatbuffers.h>
 
 #include <algorithm>

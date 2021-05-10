@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <iterator>
-#include <vector>
-
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/support/detail/attr_fold.hpp"
+
+#include <iterator>
+#include <vector>
 
 namespace vast {
 

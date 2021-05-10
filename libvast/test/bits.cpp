@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <cstdint>
-
 #include "vast/bits.hpp"
+
+#include <cstdint>
 
 #define SUITE bits
 #include "vast/test/test.hpp"
@@ -23,7 +23,7 @@ using w8 = bits8::word_type;
 using bits64 = bits<uint64_t>;
 using w64 = bits64::word_type;
 
-} // namespace <anonymous>
+} // namespace
 
 TEST(construction) {
   CHECK(bits8{}.empty());

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/configuration.hpp"
 
 namespace vast::system {

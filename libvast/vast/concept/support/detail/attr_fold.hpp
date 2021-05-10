@@ -9,9 +9,9 @@
 #pragma once
 
 #include <string>
-#include <vector>
 #include <tuple>
 #include <type_traits>
+#include <vector>
 
 namespace vast {
 

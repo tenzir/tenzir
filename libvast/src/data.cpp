@@ -24,7 +24,6 @@
 #include "vast/logger.hpp"
 
 #include <caf/config_value.hpp>
-
 #include <fmt/format.h>
 
 #include <iterator>

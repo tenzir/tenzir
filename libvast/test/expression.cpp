@@ -10,8 +10,6 @@
 
 #include "vast/expression.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
@@ -25,6 +23,7 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/schema.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 

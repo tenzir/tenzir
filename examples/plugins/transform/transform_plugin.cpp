@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/plugin.hpp"
-#include "vast/transform_step.hpp"
+#include <vast/plugin.hpp>
+#include <vast/transform_step.hpp>
 
 namespace vast::plugins {
 

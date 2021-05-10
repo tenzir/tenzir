@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/base.hpp"
 #include "vast/binner.hpp"
 #include "vast/coder.hpp"
 #include "vast/detail/order.hpp"
+
+#include <type_traits>
 
 namespace vast {
 

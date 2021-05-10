@@ -8,15 +8,14 @@
 
 #pragma once
 
-#include <caf/variant.hpp>
-#include <caf/detail/type_list.hpp>
-
 #include "vast/bitmap_base.hpp"
+#include "vast/detail/operators.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/wah_bitmap.hpp"
 
-#include "vast/detail/operators.hpp"
+#include <caf/detail/type_list.hpp>
+#include <caf/variant.hpp>
 
 namespace vast {
 

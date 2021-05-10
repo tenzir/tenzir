@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/aliases.hpp"
 
 namespace vast::system {
 

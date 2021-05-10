@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <vector>
-#include <type_traits>
-
 #include "vast/concept/support/detail/attr_fold.hpp"
 #include "vast/detail/type_traits.hpp"
+
+#include <type_traits>
+#include <vector>
 
 namespace vast {
 namespace detail {

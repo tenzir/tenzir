@@ -9,13 +9,12 @@
 #define SUITE format
 #include "vast/format/syslog.hpp"
 
-#include "vast/test/data.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
+#include "vast/test/data.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

@@ -9,10 +9,10 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
-#include <map>
 
 namespace vast {
 
@@ -57,4 +57,3 @@ struct uri {
 };
 
 } // namespace vast
-

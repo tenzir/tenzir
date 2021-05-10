@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/detail/print_numeric.hpp"
+
 #include <cmath>
 #include <cstdint>
 #include <type_traits>
-
-#include "vast/concept/printable/detail/print_numeric.hpp"
-#include "vast/concept/printable/core/printer.hpp"
 
 namespace vast {
 namespace policy {

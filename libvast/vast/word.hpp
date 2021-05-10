@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
+#include "vast/detail/type_traits.hpp"
+
 #include <cstdint>
 #include <limits>
 #include <type_traits>
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/type_traits.hpp"
 
 namespace vast::detail {
 

@@ -6,8 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/parseable/from_string.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
+
+#include "vast/concept/parseable/from_string.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/pattern.hpp"
 #include "vast/pattern.hpp"

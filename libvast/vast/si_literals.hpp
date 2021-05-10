@@ -127,5 +127,5 @@ constexpr unsigned long long operator""_EiB(unsigned long long x) {
   return x * 1_Ei;
 }
 
-} // namespace byte_literals
+} // namespace binary_byte_literals
 } // namespace vast

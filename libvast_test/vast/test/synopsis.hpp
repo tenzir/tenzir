@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "vast/test/test.hpp"
-
 #include "vast/synopsis.hpp"
+#include "vast/test/test.hpp"
 
 #include <optional>
 
@@ -21,7 +20,7 @@ namespace nft {
 inline constexpr auto N = std::nullopt;
 inline const auto T = std::optional<bool>{true};
 inline const auto F = std::optional<bool>{false};
-}
+} // namespace nft
 
 struct verifier {
   synopsis* syn;

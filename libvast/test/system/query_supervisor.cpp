@@ -12,13 +12,12 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/query.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>

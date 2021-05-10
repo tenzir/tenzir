@@ -6,14 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/error.hpp"
-#include "vast/format/zeek.hpp"
 #include "vast/system/sink.hpp"
 
+#include "vast/error.hpp"
+#include "vast/format/zeek.hpp"
+
 #define SUITE system
-#include "vast/test/test.hpp"
 #include "vast/test/data.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace vast::system;

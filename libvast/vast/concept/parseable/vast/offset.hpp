@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include "vast/offset.hpp"
-
 #include "vast/concept/parseable/core/list.hpp"
 #include "vast/concept/parseable/core/operators.hpp"
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/offset.hpp"
 
 namespace vast {
 
@@ -39,4 +38,3 @@ static auto const offset = make_parser<vast::offset>();
 } // namespace parsers
 
 } // namespace vast
-

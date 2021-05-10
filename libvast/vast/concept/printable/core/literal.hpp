@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "vast/concept/printable/string/literal.hpp"
+
 #include <cstddef>
 #include <string>
 #include <type_traits>
-
-#include "vast/concept/printable/string/literal.hpp"
 
 namespace vast::printer_literals {
 

@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/concept/parseable/core/ignore.hpp"
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/string.hpp"
+
+#include <string>
 
 namespace vast {
 

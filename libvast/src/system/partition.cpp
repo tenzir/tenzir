@@ -44,7 +44,6 @@
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/sec.hpp>
-
 #include <flatbuffers/base.h> // FLATBUFFERS_MAX_BUFFER_SIZE
 #include <flatbuffers/flatbuffers.h>
 
