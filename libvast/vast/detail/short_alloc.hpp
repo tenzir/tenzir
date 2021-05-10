@@ -32,12 +32,13 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
+
 #include <cassert>
 #include <cstddef>
+#include <new>
 #include <type_traits>
 #include <utility>
-
-#include "vast/detail/assert.hpp"
 
 namespace vast::detail {
 
