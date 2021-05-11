@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/accountant/config.hpp"
+#include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -54,6 +55,7 @@
 #include "vast/system/spawn_type_registry.hpp"
 #include "vast/system/status_verbosity.hpp"
 #include "vast/system/terminate.hpp"
+#include "vast/system/version_command.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
 
@@ -142,6 +144,19 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   };
   auto req_state = std::make_shared<req_state_t>();
   req_state->rp = std::move(status_promise);
+  // Pre-fill the version information. Note that we must remove all nil values
+  // first, as the conversion to a caf::settings object fails otherwise. We can
+  // remove the cleansing step once we use record instead of caf::settings for
+  // retrieving the status.
+  auto version_data = retrieve_versions();
+  for (auto& [_, value] : version_data)
+    if (value == caf::none)
+      value = record{};
+  if (auto version = to<caf::settings>(version_data))
+    put(req_state->content, "remote-version", *version);
+  else
+    VAST_WARN("{} failed to add remote version to status: {}", self,
+              version.error());
   // Pre-fill our result with system stats.
   auto& sys = self->system();
   auto& system = put_dictionary(req_state->content, "system");

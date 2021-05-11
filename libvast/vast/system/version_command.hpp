@@ -10,9 +10,12 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/aliases.hpp"
+#include "vast/data.hpp"
 
 namespace vast::system {
+
+/// Puts the version information into a record.
+record retrieve_versions();
 
 /// Prints the version information to stdout.
 void print_version(const record& extra_content = {});

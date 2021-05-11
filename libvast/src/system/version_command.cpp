@@ -30,6 +30,15 @@ namespace vast::system {
 
 namespace {
 
+record combine(const record& lhs, const record& rhs) {
+  auto result = lhs;
+  for (const auto& field : rhs)
+    result.insert(field);
+  return result;
+}
+
+} // namespace
+
 record retrieve_versions() {
   record result;
   result["VAST"] = version::version;
@@ -65,15 +74,6 @@ record retrieve_versions() {
   result["plugins"] = std::move(plugin_versions);
   return result;
 }
-
-record combine(const record& lhs, const record& rhs) {
-  auto result = lhs;
-  for (const auto& field : rhs)
-    result.insert(field);
-  return result;
-}
-
-} // namespace
 
 void print_version(const record& extra_content) {
   auto version = retrieve_versions();
