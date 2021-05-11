@@ -1,9 +1,0 @@
-{
-  "name": "query_parser",
-  "displayName": "query_parser",
-  "cApi": {
-    "api": {
-      "relativePath": ".code-intelligence/fuzz_targets/query_parser.cpp"
-    }
-  }
-}

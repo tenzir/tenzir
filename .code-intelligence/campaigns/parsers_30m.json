@@ -3,8 +3,8 @@
   "displayName": "parsers_30m",
   "maxRunTime": "1800s",
   "fuzzTargets": [
-    "cli_parser",
-    "query_parser"
+    "LmNvZGUtaW50ZWxsaWdlbmNlL2Z1enpfdGFyZ2V0cy9jbGlfcGFyc2VyLmNwcA==",
+    "LmNvZGUtaW50ZWxsaWdlbmNlL2Z1enpfdGFyZ2V0cy9xdWVyeV9wYXJzZXIuY3Bw"
   ],
   "fuzzerRunConfigurations": [
     {
