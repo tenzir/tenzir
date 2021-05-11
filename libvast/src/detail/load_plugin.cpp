@@ -51,7 +51,7 @@ load_plugin(const std::filesystem::path& path_or_name,
   auto& plugins = plugins::get();
   auto try_load_plugin = [&](const std::filesystem::path& root,
                              const std::filesystem::path& path_or_name)
-    -> caf::expected<plugin_ptr> {
+    -> caf::expected<std::pair<std::filesystem::path, plugin_ptr>> {
 #if VAST_MACOS
     static constexpr auto ext = ".dylib";
 #else
@@ -87,7 +87,7 @@ load_plugin(const std::filesystem::path& path_or_name,
         return !std::strcmp(name, other->name());
       };
       if (std::none_of(plugins.begin(), plugins.end(), has_same_name))
-        return plugin;
+        return std::pair{file, std::move(*plugin)};
       return caf::make_error(ec::invalid_configuration,
                              fmt::format("failed to load plugin {} because "
                                          "another plugin already uses the "
@@ -100,14 +100,14 @@ load_plugin(const std::filesystem::path& path_or_name,
   // First, check if the plugin file is specified as an absolute path.
   auto plugin = try_load_plugin({}, path_or_name);
   if (plugin)
-    return std::pair{path_or_name, std::move(*plugin)};
+    return plugin;
   if (plugin.error() != caf::no_error)
     load_errors.push_back(std::move(plugin.error()));
   // Second, check if the plugin file is specified relative to the specified
   // plugin directories.
   for (const auto& dir : get_plugin_dirs(cfg)) {
     if (auto plugin = try_load_plugin(dir, path_or_name))
-      return std::pair{dir / path_or_name, std::move(*plugin)};
+      return plugin;
     else if (plugin.error() != caf::no_error)
       load_errors.push_back(std::move(plugin.error()));
   }
