@@ -173,12 +173,12 @@ while [ $# -ne 0 ]; do
       append_cache_entry VAST_ENABLE_LSVAST BOOL yes
       ;;
     --with-example-plugins)
+      example_plugins="${sourcedir}/examples/plugins/analyzer;${sourcedir}/examples/plugins/transform"
       if [ -z "${plugins}" ]; then
-        plugins="${sourcedir}/examples/plugins/example"
+        plugins="${example_plugins}"
       else
-        plugins="${plugins};${sourcedir}/examples/plugins/example"
+        plugins="${plugins};${example_plugins}"
       fi
-      plugins="${plugins};${sourcedir}/examples/plugins/transform"
       ;;
     --with-pcap-plugin)
       if [ -z "${plugins}" ]; then

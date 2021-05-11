@@ -10,29 +10,34 @@
 // does not contain any meaningful tests for the example plugin. It merely
 // exists to show how to setup unit tests.
 
-#define CAF_SUITE example
-#include <caf/test/unit_test.hpp>
+#define SUITE example
 
-CAF_TEST(multiply) {
+#include <vast/test/test.hpp>
+
+TEST(multiply) {
   CAF_REQUIRE(0 * 1 == 0);
   CAF_CHECK(42 + 42 == 84);
 }
 
+namespace {
+
 struct fixture {
   fixture() {
-    CAF_MESSAGE("entering test");
+    MESSAGE("entering test");
   }
 
   ~fixture() {
-    CAF_MESSAGE("leaving test");
+    MESSAGE("leaving test");
   }
 };
 
-CAF_TEST_FIXTURE_SCOPE(tracing_scope, fixture)
+} // namespace
 
-CAF_TEST(divide) {
+FIXTURE_SCOPE(tracing_scope, fixture)
+
+TEST(divide) {
   CAF_CHECK_EQUAL(0 / 1, 0);
   CAF_CHECK_NOT_EQUAL(1 / 1, 0);
 }
 
-CAF_TEST_FIXTURE_SCOPE_END()
+FIXTURE_SCOPE_END()
