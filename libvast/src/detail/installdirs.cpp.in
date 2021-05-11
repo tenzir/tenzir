@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/detail/installdirs.hpp"
-
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/installdirs.hpp"
 #include "vast/detail/process.hpp"
+#include "vast/detail/string.hpp"
 
 namespace vast::detail {
 
@@ -18,10 +18,30 @@ namespace vast::detail {
 
 namespace {
 
-std::filesystem::path install_prefix() {
-  const auto binary = detail::objectpath(nullptr);
-  VAST_ASSERT(binary);
-  return binary->parent_path().parent_path();
+std::filesystem::path install_libdir() {
+  return detail::objectpath()->parent_path();
+}
+
+/// Returns the install prefix and a possible suffix for the current library
+/// location. The suffix is only applied to archive, library, and binary
+/// directories for multi-config generators.
+std::pair<std::filesystem::path, std::filesystem::path>
+install_prefix_and_suffix() {
+  auto prefix_from_libdir = [](const auto& libdir) {
+    auto err = std::error_code{};
+    auto prefix = libdir / "@VAST_LIBDIR_TO_PREFIX@";
+    prefix = std::filesystem::canonical(prefix, err);
+    VAST_ASSERT(!err);
+    return prefix;
+  };
+  const auto libdir = install_libdir();
+  if (std::string_view configuration_types = "@CMAKE_CONFIGURATION_TYPES@";
+      !configuration_types.empty())
+    for (const auto& configuration_type :
+         detail::split(configuration_types, ";"))
+      if (libdir.filename() == configuration_type)
+        return {prefix_from_libdir(libdir.parent_path()), libdir.filename()};
+  return {prefix_from_libdir(libdir), {}};
 }
 
 } // namespace
@@ -30,7 +50,8 @@ std::filesystem::path install_prefix() {
 
 std::filesystem::path install_datadir() {
 #if VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  return install_prefix() / "@CMAKE_INSTALL_DATADIR@/vast";
+  const auto [prefix, _] = install_prefix_and_suffix();
+  return prefix / "@CMAKE_INSTALL_DATADIR@/vast";
 #else
   return "@CMAKE_INSTALL_FULL_DATADIR@/vast";
 #endif
@@ -38,7 +59,8 @@ std::filesystem::path install_datadir() {
 
 std::filesystem::path install_configdir() {
 #if VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  return install_prefix() / "@CMAKE_INSTALL_SYSCONFDIR@/vast";
+  const auto [prefix, _] = install_prefix_and_suffix();
+  return prefix / "@CMAKE_INSTALL_SYSCONFDIR@/vast";
 #else
   return "@CMAKE_INSTALL_FULL_SYSCONFDIR@/vast";
 #endif
@@ -46,7 +68,8 @@ std::filesystem::path install_configdir() {
 
 std::filesystem::path install_plugindir() {
 #if VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  return install_prefix() / "@CMAKE_INSTALL_LIBDIR@/vast/plugins";
+  const auto [prefix, suffix] = install_prefix_and_suffix();
+  return prefix / "@CMAKE_INSTALL_LIBDIR@/vast/plugins" / suffix;
 #else
   return "@CMAKE_INSTALL_FULL_LIBDIR@/vast/plugins";
 #endif

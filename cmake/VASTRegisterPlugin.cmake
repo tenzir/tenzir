@@ -72,13 +72,13 @@ function (VASTRegisterPlugin)
   # Set a default build type if none was specified.
   if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
     if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-      message(
-        STATUS
-          "Setting build type to '${default_build_type}' as none was specified."
-      )
       set(CMAKE_BUILD_TYPE
           "${VAST_CMAKE_BUILD_TYPE}"
           CACHE STRING "Choose the type of build." FORCE)
+      set(CMAKE_CONFIGURATION_TYPES
+          "${VAST_CMAKE_CONFIGURATION_TYPES}"
+          CACHE STRING
+                "Choose the types of builds for multi-config generators." FORCE)
       # Set the possible values of build type for cmake-gui.
       set_property(
         CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel"
