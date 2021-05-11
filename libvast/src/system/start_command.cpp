@@ -10,6 +10,7 @@
 
 #include "vast/command.hpp"
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/systemd.hpp"
 
 #include <caf/actor_system_config.hpp>
