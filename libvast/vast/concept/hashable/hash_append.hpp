@@ -328,20 +328,12 @@ void hash_append(Hasher& h,
 
 // -- tuple -------------------------------------------------------------------
 
-namespace detail {
-
-template <class Hasher, class ...T, size_t ...I>
-void tuple_hash(Hasher& h, const std::tuple<T...>& t,
-                std::index_sequence<I...>) noexcept {
-  (hash_append(h, std::get<I>(t)), ...);
-}
-
-} // namespace detail
-
 template <class Hasher, class ...T>
 std::enable_if_t<!detail::is_contiguously_hashable<std::tuple<T...>, Hasher>{}>
 hash_append(Hasher& h, const std::tuple<T...>& t) noexcept {
-  detail::tuple_hash(h, t, std::index_sequence_for<T...>{});
+  std::apply(
+    [&h](auto&&... xs) { hash_append(h, std::forward<decltype(xs)>(xs)...); },
+    t);
 }
 
 // -- variadic ----------------------------------------------------------------
