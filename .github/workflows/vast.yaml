@@ -605,9 +605,9 @@ jobs:
       fail-fast: false
       matrix:
         plugin:
-          - name: Example
-            target: example
-            path: examples/plugins/example
+          - name: Example Analyzer
+            target: example-analyzer
+            path: examples/plugins/analyzer
           - name: Example Transform
             target: example-transform
             path: examples/plugins/transform

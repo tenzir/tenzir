@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
 
-project(example
-  DESCRIPTION "Example plugin for VAST"
+project(example-analyzer
+  DESCRIPTION "Example analyzer plugin for VAST"
   LANGUAGES CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the
@@ -12,10 +12,10 @@ include(CTest)
 
 find_package(VAST REQUIRED)
 VASTRegisterPlugin(
-  TARGET example
+  TARGET example-analyzer
   ENTRYPOINT
-    example.cpp
+    example_analyzer.cpp
   # SOURCES
   #   list additional source files here
   TEST_SOURCES
-    tests/example.cpp)
+    tests/example_analyzer.cpp)

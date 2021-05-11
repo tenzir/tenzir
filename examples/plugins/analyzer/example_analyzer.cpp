@@ -57,7 +57,7 @@ struct example_actor_state {
   bool done = false;
 
   /// The name of the EXAMPLE actor in logs.
-  constexpr static inline auto name = "example";
+  constexpr static inline auto name = "example-analyzer";
 
   /// Support CAF type-inspection.
   template <class Inspector>
@@ -119,7 +119,7 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
     [](atom::status, system::status_verbosity) -> caf::settings {
       // Return an arbitrary settings object here for use in the status command.
       auto result = caf::settings{};
-      caf::put(result, "example.answer", 42);
+      caf::put(result, "example-analyzer.answer", 42);
       return result;
     },
   };
@@ -143,14 +143,14 @@ public:
   /// file, i.e., `plugin.<NAME>`.
   /// @param config The relevant subsection of the configuration.
   caf::error initialize(data config) override {
-    if (auto r = caf::get_if<record>(&config))
+    if (auto* r = caf::get_if<record>(&config))
       config_ = *r;
     return caf::none;
   }
 
   /// Returns the unique name of the plugin.
   const char* name() const override {
-    return "example";
+    return "example-analyzer";
   }
 
   /// Creates an actor that hooks into the input table slice stream.
