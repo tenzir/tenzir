@@ -389,7 +389,9 @@ auto make_start_command() {
       .add<std::string>("disk-budget-check-binary",
                         "binary to run to determine current disk usage")
       .add<std::string>("disk-budget-high", "high-water mark for disk budget")
-      .add<std::string>("disk-budget-low", "low-water mark for disk budget"));
+      .add<std::string>("disk-budget-low", "low-water mark for disk budget")
+      .add<size_t>("disk-budget-step-size", "number of partitions to erase "
+                                            "before re-checking size"));
 }
 
 auto make_stop_command() {

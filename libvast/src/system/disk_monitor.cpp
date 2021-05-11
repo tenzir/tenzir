@@ -45,6 +45,9 @@ std::shared_ptr<caf::detail::scope_guard<Fun>> make_shared_guard(Fun f) {
 } // namespace
 
 caf::error validate(const disk_monitor_config& config) {
+  if (config.step_size < 1)
+    return caf::make_error(ec::invalid_configuration, "step size must be "
+                                                      "greater than zero");
   if (config.low_water_mark > config.high_water_mark)
     return caf::make_error(ec::invalid_configuration, "low-water mark greater "
                                                       "than high-water mark");
@@ -103,6 +106,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
   }
   self->state.high_water_mark = config.high_water_mark;
   self->state.low_water_mark = config.low_water_mark;
+  self->state.step_size = config.step_size;
   self->state.scan_interval = config.scan_interval;
   self->state.dbdir = dbdir;
   self->state.archive = archive;
@@ -193,43 +197,49 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                 [](const auto& lhs, const auto& rhs) {
                   return lhs.mtime < rhs.mtime;
                 });
-      auto oldest = partitions.front();
-      VAST_VERBOSE("{} erases partition {} from index", self, oldest.id);
-      self->request(self->state.index, caf::infinite, atom::erase_v, oldest.id)
-        .then(
-          [=, sg = shared_guard](ids erased_ids) {
-            // TODO: It would be more natural if we could chain these futures,
-            // instead of nesting them.
-            VAST_VERBOSE("{} erases removed ids from archive", self);
-            self
-              ->request(self->state.archive, caf::infinite, atom::erase_v,
-                        erased_ids)
-              .then(
-                [=, sg = shared_guard](atom::done) {
-                  // TODO: There's a race condition here: We calculate the size
-                  // of the database directory while we might be deleting files
-                  // from it.
-                  if (const auto size = self->state.compute_dbdir_size();
-                      !size) {
-                    VAST_WARN("{} failed to calculate size of {}: {}", self,
-                              self->state.dbdir, size.error());
-                  } else {
-                    VAST_VERBOSE("{} erased ids from index; leftover size is "
-                                 "{}",
-                                 self, *size);
-                    if (*size > self->state.low_water_mark) {
-                      // Repeat until we're below the low water mark
-                      self->send(self, atom::erase_v);
+      // Delete up to `step_size` partitions at once.
+      auto idx = std::min(partitions.size(), self->state.step_size);
+      for (size_t i = 0; i < idx; ++i) {
+        auto& partition = partitions.at(i);
+        VAST_VERBOSE("{} erases partition {} from index", self, partition.id);
+        self
+          ->request(self->state.index, caf::infinite, atom::erase_v,
+                    partition.id)
+          .then(
+            [=, sg = shared_guard](ids erased_ids) {
+              // TODO: It would be more natural if we could chain these futures,
+              // instead of nesting them.
+              VAST_VERBOSE("{} erases removed ids from archive", self);
+              self
+                ->request(self->state.archive, caf::infinite, atom::erase_v,
+                          erased_ids)
+                .then(
+                  [=, sg = shared_guard](atom::done) {
+                    // TODO: There's a race condition here: We calculate the
+                    // size of the database directory while we might be deleting
+                    // files from it.
+                    if (const auto size = self->state.compute_dbdir_size();
+                        !size) {
+                      VAST_WARN("{} failed to calculate size of {}: {}", self,
+                                self->state.dbdir, size.error());
+                    } else {
+                      VAST_VERBOSE("{} erased ids from index; leftover size is "
+                                   "{}",
+                                   self, *size);
+                      if (*size > self->state.low_water_mark) {
+                        // Repeat until we're below the low water mark
+                        self->send(self, atom::erase_v);
+                      }
                     }
-                  }
-                },
-                [=, sg = shared_guard](caf::error err) {
-                  VAST_WARN("{} failed to erase from archive: {}", self, err);
-                });
-          },
-          [=, sg = shared_guard](caf::error e) {
-            VAST_WARN("{} failed to erase from index: {}", self, render(e));
-          });
+                  },
+                  [=, sg = shared_guard](caf::error err) {
+                    VAST_WARN("{} failed to erase from archive: {}", self, err);
+                  });
+            },
+            [=, sg = shared_guard](caf::error e) {
+              VAST_WARN("{} failed to erase from index: {}", self, render(e));
+            });
+      }
       return {};
     },
     [](atom::status, status_verbosity) {

@@ -27,6 +27,10 @@ struct disk_monitor_state {
   size_t high_water_mark;
   size_t low_water_mark;
 
+  /// How many partitions to delete at once when reaching the high-water
+  /// mark.
+  size_t step_size;
+
   /// The command to use to determine file size.
   std::optional<std::string> scan_command;
 
@@ -55,6 +59,7 @@ struct disk_monitor_state {
 struct disk_monitor_config {
   size_t high_water_mark;
   size_t low_water_mark;
+  size_t step_size;
   std::optional<std::string> scan_binary;
   std::chrono::seconds scan_interval;
 };

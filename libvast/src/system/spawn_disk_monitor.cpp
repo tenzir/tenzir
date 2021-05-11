@@ -47,12 +47,14 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
   // Set low == high as the default value.
   if (!*lowater)
     *lowater = *hiwater;
+  auto step_size = caf::get_or(opts, "vast.start.disk-budget-step-size",
+                               defaults::system::disk_monitor_step_size);
   auto default_seconds
     = std::chrono::seconds{defaults::system::disk_scan_interval}.count();
   auto interval = caf::get_or(opts, "vast.start.disk-budget-check-interval",
                               default_seconds);
   struct disk_monitor_config config
-    = {*hiwater, *lowater, command, std::chrono::seconds{interval}};
+    = {*hiwater, *lowater, step_size, command, std::chrono::seconds{interval}};
   if (auto error = validate(config))
     return error;
   if (!*hiwater) {
