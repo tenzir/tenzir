@@ -99,7 +99,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
                     local_version["plugins"], remote_version["plugins"]);
         }
       },
-      [&](caf::error error) { //
+      [&](caf::error& error) {
         result = std::move(error);
       });
   return result;

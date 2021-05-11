@@ -153,7 +153,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     if (value == caf::none)
       value = record{};
   if (auto version = to<caf::settings>(version_data))
-    put(req_state->content, "remote-version", *version);
+    put(req_state->content, "version", *version);
   else
     VAST_WARN("{} failed to add remote version to status: {}", self,
               version.error());
