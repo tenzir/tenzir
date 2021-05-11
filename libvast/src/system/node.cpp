@@ -777,7 +777,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
                  result);
       return result;
     },
-    [](atom::get, atom::version) -> data { //
+    [](atom::get, atom::version) { //
       return retrieve_versions();
     },
     [self](atom::signal, int signal) {

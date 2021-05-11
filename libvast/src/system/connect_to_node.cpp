@@ -84,10 +84,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
               atom::version_v)
     .receive(
-      [&](data remote_version_data) {
-        VAST_ASSERT(caf::holds_alternative<record>(remote_version_data));
+      [&](record& remote_version) {
         auto local_version = retrieve_versions();
-        auto remote_version = caf::get<record>(remote_version_data);
         if (local_version["VAST"] != remote_version["VAST"]) {
           VAST_WARN("client version {} does not match remote version {}; "
                     "this may caused unexpected behavior",

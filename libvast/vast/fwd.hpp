@@ -312,6 +312,9 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))
 
+  // TODO: Make list, record, and map concrete typs to we don't need to do
+  // these kinda things. See vast/aliases.hpp for their definitions.
+  VAST_ADD_TYPE_ID((std::vector<vast::data>))
   VAST_ADD_TYPE_ID((vast::detail::stable_map<std::string, vast::data>))
   VAST_ADD_TYPE_ID((vast::detail::stable_map<vast::data, vast::data>))
 
