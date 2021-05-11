@@ -25,6 +25,7 @@ namespace vast::system {
 /// @param accountant A handle to the accountant component.
 /// @param type_registry A handle to the type registry component.
 /// @param importer A handle to the importer component.
+/// @param transforms The input transformations to apply.
 /// @returns a handle to the spawned actor on success, an error otherwise.
 caf::expected<caf::actor>
 make_source(caf::actor_system& sys, const std::string& format,

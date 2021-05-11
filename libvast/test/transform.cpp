@@ -60,7 +60,7 @@ TEST(delete_ step) {
   CHECK_EQUAL(deleted->layout().fields.size(), 1ull);
   vast::delete_step invalid_delete_step("xxx");
   auto not_deleted = invalid_delete_step.apply(vast::table_slice{slice});
-#if VAST_ENABLE_ARROW > 0
+#if VAST_ENABLE_ARROW
   // If arrow is enabled the default format is arrow, so we do one more
   // test where we force msgpack.
   auto msgpack_slice

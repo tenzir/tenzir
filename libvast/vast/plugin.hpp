@@ -231,8 +231,12 @@ public:
 /// A base class for plugins that add new transform steps.
 class transform_plugin : public virtual plugin {
 public:
+  /// Creates a new transform step that maps input to output table
+  /// slices. This will be called when constructing plugins from the
+  /// VAST configuration.
+  /// @param options The settings configured for this step.
   [[nodiscard]] virtual caf::expected<transform_step_ptr>
-  make_transform_step(const caf::settings&) const = 0;
+  make_transform_step(const caf::settings& options) const = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

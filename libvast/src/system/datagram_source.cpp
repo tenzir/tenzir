@@ -22,6 +22,7 @@
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/status_verbosity.hpp"
+#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/downstream.hpp>
@@ -44,7 +45,7 @@ caf::behavior datagram_source(
   std::string type_filter, accountant_actor accountant,
   std::vector<transform>&& transforms) {
   self->state.transformer
-    = self->spawn(transformer, "source_transformer", std::move(transforms));
+    = self->spawn(transformer, "source-transformer", std::move(transforms));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", self);
     self->quit();

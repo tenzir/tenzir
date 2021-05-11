@@ -13,7 +13,7 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
-#if VAST_ENABLE_ARROW > 0
+#if VAST_ENABLE_ARROW
 #  include "arrow/type.h"
 #endif
 
@@ -50,7 +50,7 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-#if VAST_ENABLE_ARROW > 0
+#if VAST_ENABLE_ARROW
 
 std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 delete_step::operator()(vast::record_type layout,
@@ -66,12 +66,7 @@ delete_step::operator()(vast::record_type layout,
     return std::make_pair(std::move(layout), nullptr);
   auto transformed = maybe_transformed.ValueOrDie();
   layout.fields.erase(layout.fields.begin() + column_index);
-  auto* deleter = std::get_deleter<table_slice_life_extender>(batch);
-  auto result = std::shared_ptr<arrow::RecordBatch>{
-    transformed.get(), [deleter_ = *deleter, transformed](arrow::RecordBatch*) {
-      static_cast<void>(deleter_);
-    }};
-  return std::make_pair(std::move(layout), result);
+  return std::make_pair(std::move(layout), std::move(transformed));
 }
 
 #endif

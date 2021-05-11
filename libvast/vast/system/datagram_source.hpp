@@ -12,6 +12,7 @@
 
 #include "vast/system/actors.hpp"
 #include "vast/system/source.hpp"
+#include "vast/transform.hpp"
 
 #include <caf/io/typed_broker.hpp>
 

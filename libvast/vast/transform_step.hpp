@@ -12,7 +12,7 @@
 
 #include <caf/expected.hpp>
 
-#if VAST_ENABLE_ARROW > 0
+#if VAST_ENABLE_ARROW
 #  include <arrow/record_batch.h>
 #endif
 
@@ -50,7 +50,7 @@ public:
 //   [...]
 // };
 
-#if VAST_ENABLE_ARROW > 0
+#if VAST_ENABLE_ARROW
 
 class arrow_transform_step : public virtual transform_step {
 public:

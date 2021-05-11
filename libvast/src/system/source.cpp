@@ -23,6 +23,7 @@
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/status_verbosity.hpp"
+#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type_set.hpp"
 
@@ -120,7 +121,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.has_sink = false;
   self->state.done = false;
   self->state.transformer
-    = self->spawn(transformer, "source_transformer", std::move(transforms));
+    = self->spawn(transformer, "source-transformer", std::move(transforms));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", self);
     self->quit();

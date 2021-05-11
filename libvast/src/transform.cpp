@@ -111,7 +111,7 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
   const auto& indices = matching->second;
   VAST_INFO("applying {} transforms for received table slice w/ layout {}",
             indices.size(), x.layout().name());
-#if VAST_ENABLE_ARROW > 0
+#if VAST_ENABLE_ARROW
   auto arrow_fast_path
     = std::all_of(indices.begin(), indices.end(), [&](size_t idx) {
         return transforms_.at(idx).arrow_fast_path_;
