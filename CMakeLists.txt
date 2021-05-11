@@ -183,6 +183,14 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   endwhile()
   unset(_libdir)
   list(JOIN VAST_LIBDIR_TO_PREFIX "/" VAST_LIBDIR_TO_PREFIX)
+
+  # Single output directory.
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
+    CACHE PATH "Single directory for all binaries.")
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
+    CACHE PATH "Single directory for all libraries.")
 endif ()
 
 # CMake allows for overriding the install prefix at install-time, e.g., via
@@ -567,17 +575,6 @@ if (VAST_ENABLE_MORE_WARNINGS)
                 -Wno-redundant-move)
   endif ()
 endif ()
-
-# -- single output directory ---------------------------------------------------
-
-# Use a single output directory for executable and library files.
-# TODO These are deprecated; do we actually need this?
-set(EXECUTABLE_OUTPUT_PATH
-    ${CMAKE_CURRENT_BINARY_DIR}/bin
-    CACHE PATH "Single directory for all executables")
-set(LIBRARY_OUTPUT_PATH
-    ${CMAKE_CURRENT_BINARY_DIR}/lib
-    CACHE PATH "Single directory for all libraries")
 
 # -- compiler setup ------------------------------------------------------------
 
