@@ -13,6 +13,7 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/detail/type_traits.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
@@ -237,7 +238,7 @@ public:
   /// Constructs an expression.
   /// @param x The node to construct an expression from.
   template <class T, class = std::enable_if_t<
-                       caf::detail::tl_contains<types, std::decay_t<T>>::value>>
+                       detail::contains_type_v<types, std::decay_t<T>>>>
   expression(T&& x) : node_(std::forward<T>(x)) {
     // nop
   }

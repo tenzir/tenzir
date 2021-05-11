@@ -10,6 +10,7 @@
 
 #include "vast/bitmap_base.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/detail/type_traits.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/wah_bitmap.hpp"
@@ -44,12 +45,8 @@ public:
 
   /// Constructs a bitmap from a concrete bitmap type.
   /// @param bm The bitmap instance to type-erase.
-  template <
-    class Bitmap,
-    class = std::enable_if_t<
-      caf::detail::tl_contains<types, std::decay_t<Bitmap>>::value
-    >
-  >
+  template <class Bitmap, class = std::enable_if_t<detail::contains_type_v<
+                            types, std::decay_t<Bitmap>>>>
   bitmap(Bitmap&& bm) : bitmap_(std::forward<Bitmap>(bm)) {
   }
 

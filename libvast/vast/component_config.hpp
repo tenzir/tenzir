@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/concept/parseable/parse.hpp"
+#include "vast/detail/type_traits.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
@@ -29,8 +30,8 @@ bool extract_settings(T& to, const caf::settings& from, std::string_view path) {
   // in the future.
   if (!cv)
     return true;
-  if constexpr (caf::detail::tl_contains<caf::config_value::variant_type::types,
-                                         T>::value) {
+  if constexpr (detail::contains_type_v<caf::config_value::variant_type::types,
+                                        T>) {
     auto x = caf::get_if<T>(&*cv);
     if (!x)
       return false;

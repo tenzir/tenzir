@@ -18,6 +18,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
+#include "vast/detail/type_traits.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
@@ -72,7 +73,7 @@ constexpr type_id_type invalid_type_id = -1;
 
 template <class T>
 constexpr type_id_type type_id() {
-  static_assert(caf::detail::tl_contains<concrete_types, T>::value,
+  static_assert(detail::contains_type_v<concrete_types, T>,
                 "type IDs only available for concrete types");
   return caf::detail::tl_index_of<concrete_types, T>::value;
 }
@@ -96,8 +97,8 @@ public:
   /// Constructs a type from a concrete instance.
   /// @tparam T a type that derives from @ref abstract_type.
   /// @param x An instance of a type.
-  template <class T, class = std::enable_if_t<
-                       caf::detail::tl_contains<concrete_types, T>::value>>
+  template <class T,
+            class = std::enable_if_t<detail::contains_type_v<concrete_types, T>>>
   type(T x) : ptr_{caf::make_counted<T>(std::move(x))} {
     // nop
   }
@@ -115,8 +116,8 @@ public:
   type& operator=(type&&) noexcept = default;
 
   /// Assigns a type from another instance
-  template <class T, class = std::enable_if_t<
-                       caf::detail::tl_contains<concrete_types, T>::value>>
+  template <class T,
+            class = std::enable_if_t<detail::contains_type_v<concrete_types, T>>>
   type& operator=(T x) {
     ptr_ = caf::make_counted<T>(std::move(x));
     return *this;

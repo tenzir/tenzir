@@ -12,8 +12,30 @@
 
 #include "vast/test/test.hpp"
 
+#include <caf/variant.hpp>
+
+#include <variant>
+
 TEST(sum) {
   static_assert(vast::detail::sum<> == 0);
   static_assert(vast::detail::sum<1, 2, 3> == 6);
   static_assert(vast::detail::sum<42, 58> == 100);
+}
+
+namespace {
+template <class... Ts>
+struct fake_list {};
+
+template <template <class...> class TList>
+constexpr auto check() {
+  static_assert(vast::detail::contains_type_v<TList<int, double>, double>);
+  static_assert(not vast::detail::contains_type_v<TList<int, double>, char>);
+}
+} // namespace
+
+TEST(contains_type) {
+  check<std::variant>();
+  check<std::tuple>();
+  check<fake_list>();
+  check<caf::variant>();
 }

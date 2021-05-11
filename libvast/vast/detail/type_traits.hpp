@@ -155,4 +155,15 @@ using remove_optional_t = typename remove_optional<T>::type;
 template <auto... Values>
 constexpr auto sum = (0 + ... + Values);
 
+template <class T, template <class...> class TList, class... Ts>
+constexpr auto contains_type_impl(TList<Ts...>) {
+  return std::bool_constant<is_any_v<T, Ts...>>{};
+}
+
+template <class TList, class T>
+using contains_type_t = decltype(contains_type_impl<T>(std::declval<TList>()));
+
+template <class TList, class T>
+inline constexpr bool contains_type_v = contains_type_t<TList, T>::value;
+
 } // namespace vast::detail
