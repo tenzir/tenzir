@@ -15,10 +15,12 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/port.hpp"
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/version_command.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
@@ -76,26 +78,30 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   }();
   if (!result)
     return result.error();
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
-  if (caf::logger::current_logger()->accepts(VAST_LOG_LEVEL_WARNING,
-                                             caf::atom("vast"))) {
-    VAST_VERBOSE("client connected to VAST node at {}:{}", node_endpoint.host,
-                 to_string(*node_endpoint.port));
-    self
-      ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
-                atom::version_v)
-      .receive(
-        [&](std::string node_version) {
-          if (node_version != version::version)
-            VAST_WARN("client version {} does not match VAST node version {}; "
-                      "this may caused unexpected behavior",
-                      version::version, node_version);
-        },
-        [&](caf::error error) { //
-          result = std::move(error);
-        });
-  }
-#endif
+  VAST_DEBUG("client connected to VAST node at {}:{}", node_endpoint.host,
+             to_string(*node_endpoint.port));
+  self
+    ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
+              atom::version_v)
+    .receive(
+      [&](data remote_version_data) {
+        VAST_ASSERT(caf::holds_alternative<record>(remote_version_data));
+        auto local_version = retrieve_versions();
+        auto remote_version = caf::get<record>(remote_version_data);
+        if (local_version["VAST"] != remote_version["VAST"]) {
+          VAST_WARN("client version {} does not match remote version {}; "
+                    "this may caused unexpected behavior",
+                    local_version["VAST"], remote_version["VAST"]);
+        }
+        if (local_version["plugins"] != remote_version["plugins"]) {
+          VAST_WARN("client plugins {} do not match remote plugins {}; "
+                    "this may caused unexpected behavior",
+                    local_version["plugins"], remote_version["plugins"]);
+        }
+      },
+      [&](caf::error error) { //
+        result = std::move(error);
+      });
   return result;
 }
 

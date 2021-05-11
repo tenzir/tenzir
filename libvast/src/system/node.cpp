@@ -777,8 +777,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
                  result);
       return result;
     },
-    [](atom::get, atom::version) -> std::string { //
-      return version::version;
+    [](atom::get, atom::version) -> data { //
+      return retrieve_versions();
     },
     [self](atom::signal, int signal) {
       VAST_WARN("{} got signal {}", self, ::strsignal(signal));
