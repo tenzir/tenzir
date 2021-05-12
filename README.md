@@ -84,7 +84,7 @@ git clone --recursive https://github.com/tenzir/vast
 Once you have all dependencies in place, build VAST with the following commands:
 
 ```sh
-./configure
+cmake -B build
 cmake --build build
 cmake --build build --target test
 cmake --build build --target install

@@ -27,11 +27,9 @@ Building VAST involves the following steps:
   ```sh
   git clone --recursive https://github.com/tenzir/vast
   ```
-2. Configure the build, either with our `configure` wrapper script or manually
-   with CMake:
+2. Configure the build:
   ```sh
-  cd vast
-  ./configure
+  cmake -B build 
   ```
 3. Build the executable:
   ```sh

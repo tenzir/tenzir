@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       arguments:
-        description: 'Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`'
+        description: 'Additional arguments to pass, e.g., `-D<CMake Option>` for a VAST build or `--with-plugin=<path/to/plugin/>` for the nix build script'
         required: false
         default: ''
   push:
@@ -60,7 +60,7 @@ jobs:
           CC: gcc-8
           CXX: g++-8
         run: |
-          ./configure --with-bundled-caf --without-arrow
+          cmake -B build -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON -DVAST_ENABLE_ARROW:BOOL=OFF
       - name: Generate CHANGELOG.md
         run: |
           cmake --build build --target changelog
@@ -98,8 +98,8 @@ jobs:
             cxx: clang++-10
         configure:
           - tag: Release
-            flags: --release
-            ci-flags: --ci-build
+            flags: -DCMAKE_BUILD_TYPE=Release
+            ci-flags: -DCMAKE_BUILD_TYPE=CI -DVAST_ENABLE_ASAN:BOOL=on
     env:
       BUILD_DIR: build
       CC: ${{ matrix.build.cc }}
@@ -248,13 +248,13 @@ jobs:
             # Zero the cache statistics (but not the configuration options).
             ccache --zero-stats
             ccache --show-config
-            ./configure \
-              --prefix="${PWD}/opt/vast" \
-              --build-dir="$BUILD_DIR" \
-              --package-name="$PACKAGE_NAME" \
-              --with-lsvast \
-              --with-dscat \
-              --with-bundled-caf \
+            cmake -B "$BUILD_DIR" \
+              -DCMAKE_INSTALL_PREFIX="${PWD}/opt/vast" \
+              -DCPACK_PACKAGE_FILE_NAME="$PACKAGE_NAME" \
+              -DCPACK_GENERATOR:STRING=TGZ \
+              -DVAST_ENABLE_LSVAST:BOOL=ON \
+              -DVAST_ENABLE_DSCAT:BOOL=ON \
+              -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
               ${{ matrix.build.extra-flags }} \
               ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 
@@ -379,8 +379,8 @@ jobs:
             cxx: clang++
         configure:
           - tag: Release
-            flags: --release
-            ci-flags: --ci-build
+            flags: -DCMAKE_BUILD_TYPE=Release
+            ci-flags: -DCMAKE_BUILD_TYPE=CI -DVAST_ENABLE_ASAN:BOOL=one
     env:
       BUILD_DIR: build
       CC: ${{ matrix.build.cc }}
@@ -506,14 +506,14 @@ jobs:
           # Zero the cache statistics (but not the configuration options).
           ccache --zero-stats
           ccache --show-config
-          ./configure \
-            --prefix="${PWD}/opt/vast" \
-            --build-dir="$BUILD_DIR" \
-            --package-name="$PACKAGE_NAME" \
-            --with-pcap-plugin \
-            --with-lsvast \
-            --with-dscat \
-            --with-bundled-caf \
+          cmake -B "$BUILD_DIR" \
+            -DCMAKE_INSTALL_PREFIX="${PWD}/opt/vast" \
+            -DCPACK_PACKAGE_FILE_NAME="$PACKAGE_NAME" \
+            -DCPACK_GENERATOR:STRING=TGZ \
+            -DVAST_PLUGINS:STRING="${PWD}/plugins/pcap" \
+            -DVAST_ENABLE_LSVAST:BOOL=ON \
+            -DVAST_ENABLE_DSCAT:BOOL=ON \
+            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 

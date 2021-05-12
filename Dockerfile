@@ -41,12 +41,11 @@ COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
-COPY .clang-format .cmake-format LICENSE LICENSE.3rdparty README.md BANNER CHANGELOG.md CMakeLists.txt configure vast.yaml.example ./
-RUN ./configure \
-    --prefix=$PREFIX \
-    --build-type=$BUILD_TYPE \
-    --log-level=INFO \
-    --generator=Ninja
+COPY .clang-format .cmake-format LICENSE LICENSE.3rdparty README.md BANNER CHANGELOG.md CMakeLists.txt vast.yaml.example ./
+RUN cmake -B build -G Ninja \
+    -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+    -DCMAKE_VAST_LOG_LEVEL=INFO
 RUN cmake --build build --parallel
 RUN CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test
 RUN cmake --build build --target install
