@@ -1,7 +1,7 @@
 #! /bin/bash
 
 # This script runs ClangBuildAanlyzer on a clean build of vast
-#   Usage: ./scripts/clang-build-analyzer [<additional-configure-flags>]
+#   Usage: ./scripts/clang-build-analyzer [<additional-build-flags>]
 
 set -e
 
@@ -34,8 +34,9 @@ git diff | git -C "${WORKING_DIR}" apply
 # Configure VAST to build with time-traces enabled
 pushd "${WORKING_DIR}"
 on_exit=('popd' "${on_exit[@]}")
-./configure "${@}" --build-dir="${WORKING_DIR}/build" \
-  --extra-flags="-ftime-trace"
+cmake "${@}" -B "${WORKING_DIR}/build" \
+  -DCMAKE_CXX_COMPILER="clang++" \
+  -DCMAKE_CXX_FLAGS="-ftime-trace"
 
 # When not on master, build first, then touch the changed files
 if [ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]; then
