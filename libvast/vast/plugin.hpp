@@ -76,6 +76,11 @@ std::vector<plugin_ptr>& get_mutable() noexcept;
 /// Retrieves the system-wide plugin singleton.
 const std::vector<plugin_ptr>& get() noexcept;
 
+/// Retrieves the plugin of type `Plugin` with the given name, or nullptr
+/// if it doesn't exist.
+template <typename Plugin>
+const Plugin* find(const std::string& name);
+
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
 std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
 get_static_type_id_blocks() noexcept;
@@ -352,6 +357,24 @@ private:
 };
 
 } // namespace vast
+
+// -- template function definitions -------------------------------------------
+
+namespace vast::plugins {
+
+template <typename Plugin>
+const Plugin* find(const std::string& name) {
+  const auto& plugins = get();
+  auto it
+    = std::find_if(plugins.begin(), plugins.end(), [&](const plugin_ptr& p) {
+        return name == p->name();
+      });
+  if (it == plugins.end())
+    return nullptr;
+  return it->template as<Plugin>();
+}
+
+} // namespace vast::plugins
 
 // -- helper macros ------------------------------------------------------------
 
