@@ -33,11 +33,18 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   auto [archive, index, type_registry, accountant]
     = self->state.registry.find<archive_actor, index_actor, type_registry_actor,
                                 accountant_actor>();
+  auto partition_local_stores
+    = caf::get_or(args.inv.options, "vast.partition-local-stores",
+                  defaults::system::partition_local_stores);
   auto transforms
     = make_transforms(transforms_location::server_import, args.inv.options);
   if (!transforms)
     return transforms.error();
-  if (!archive)
+  // Don't send incoming data to the global archive if we use partition-local
+  // stores.
+  if (partition_local_stores)
+    archive = nullptr;
+  if (!archive && !partition_local_stores)
     return caf::make_error(ec::missing_component, "archive");
   if (!index)
     return caf::make_error(ec::missing_component, "index");

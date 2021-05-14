@@ -201,8 +201,10 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                     partition.id)
           .then(
             [=, sg = shared_guard](ids erased_ids) {
-              // TODO: It would be more natural if we could chain these futures,
-              // instead of nesting them.
+              // TODO: This currently only erases data from the global archive.
+              // We should remove this continuation from the disk monitor and
+              // let the partition do this instead, to support partition-local
+              // stores.
               VAST_VERBOSE("{} erases removed ids from archive", self);
               self
                 ->request(self->state.archive, caf::infinite, atom::erase_v,

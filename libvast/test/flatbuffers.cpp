@@ -147,6 +147,9 @@ TEST(empty partition roundtrip) {
   REQUIRE_EQUAL(partition->partition_type(),
                 vast::fbs::partition::Partition::v0);
   auto partition_v0 = partition->partition_as_v0();
+  REQUIRE(partition_v0->store());
+  REQUIRE(partition_v0->store()->id());
+  REQUIRE_EQUAL(partition_v0->store()->id()->str(), "global_segment_store");
   REQUIRE(partition_v0);
   auto error = unpack(*partition_v0, recovered_state);
   CHECK(!error);
@@ -191,7 +194,8 @@ TEST(full partition roundtrip) {
   auto partition_uuid = vast::uuid::random();
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid, fs,
-                caf::settings{}, caf::settings{}, vast::system::store_actor{});
+                caf::settings{}, caf::settings{}, vast::system::store_actor{},
+                std::string{}, vast::chunk::empty());
   run();
   REQUIRE(partition);
   // Add data to the partition.
@@ -221,9 +225,8 @@ TEST(full partition roundtrip) {
   self->send_exit(partition, caf::exit_reason::user_shutdown);
   // Spawn a read-only partition from this chunk and try to query the data we
   // added. We make two queries, one "#type"-query and one "normal" query
-  auto readonly_partition
-    = sys.spawn(vast::system::passive_partition, partition_uuid, fs,
-                persist_path, vast::system::store_actor{});
+  auto readonly_partition = sys.spawn(vast::system::passive_partition,
+                                      partition_uuid, fs, persist_path);
   REQUIRE(readonly_partition);
   run();
   // A minimal `partition_client_actor`that stores the results in a local

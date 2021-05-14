@@ -93,6 +93,8 @@ vast:
   # The false positive rate for lossy structures in the meta index.
   meta-index-fp-rate: 0.01
 
+  # Opt-in to the experimental partition-local stores.
+  partition-local-stores: false
   # The maximum number of segments cached by the archive.
   segments: 10
   # The maximum size per segment, in MiB.

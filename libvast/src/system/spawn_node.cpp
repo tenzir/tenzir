@@ -14,6 +14,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/pid_file.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/node.hpp"
 
@@ -131,6 +132,13 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
              [&](caf::error& err) { error = std::move(err); });
   if (error)
     return error;
+  // Setup the store backends.
+  // TODO: Figure out the correct place to do this.
+  for (auto& plugin : plugins::get_mutable())
+    if (auto store = plugin.as<store_plugin>())
+      if (auto error = store->setup(node.get()))
+        VAST_ERROR("error setting up '{}' store backend: {}", plugin->name(),
+                   render(error));
   return node;
 }
 
