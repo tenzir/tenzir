@@ -113,7 +113,8 @@ archive_actor::behavior_type
 archive(archive_actor::stateful_pointer<archive_state> self,
         const std::filesystem::path& dir, size_t capacity,
         size_t max_segment_size) {
-  VAST_VERBOSE("{} initializes archive in {} with a maximum segment "
+  VAST_VERBOSE("{} initializes global segment store in {} with a maximum "
+               "segment "
                "size of {} and {} segments in memory",
                self, dir, max_segment_size, capacity);
   self->state.self = self;

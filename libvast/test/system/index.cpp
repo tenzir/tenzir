@@ -51,7 +51,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto index_dir = directory / "index";
     archive
       = self->spawn(system::archive, archive_dir, segments, max_segment_size);
-    index = self->spawn(system::index, archive, fs, index_dir, slice_size,
+    index = self->spawn(system::index, fs, index_dir, false, slice_size,
                         in_mem_partitions, taste_count, num_query_supervisors,
                         index_dir, meta_index_fp_rate);
   }

@@ -27,9 +27,11 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
+#include "vast/system/local_segment_store.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/status_verbosity.hpp"
 #include "vast/system/terminate.hpp"
@@ -272,6 +274,14 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto maybe_ps = pack(builder, *x.synopsis);
   if (!maybe_ps)
     return maybe_ps.error();
+  auto store_name = builder.CreateString(x.store_backend);
+  auto store_data = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(x.store_header->data()),
+    x.store_header->size());
+  fbs::partition::store_header::v0Builder store_builder(builder);
+  store_builder.add_id(store_name);
+  store_builder.add_data(store_data);
+  auto store_header = store_builder.Finish();
   fbs::partition::v0Builder v0_builder(builder);
   v0_builder.add_uuid(*uuid);
   v0_builder.add_offset(x.offset);
@@ -280,6 +290,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   v0_builder.add_partition_synopsis(*maybe_ps);
   v0_builder.add_combined_layout(*combined_layout);
   v0_builder.add_type_ids(type_ids);
+  v0_builder.add_store(store_header);
   auto partition_v0 = v0_builder.Finish();
   fbs::PartitionBuilder partition_builder(builder);
   partition_builder.add_partition_type(fbs::partition::Partition::v0);
@@ -301,6 +312,15 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
     return caf::make_error(ec::format_error,
                            "missing 'layouts' field in partition "
                            "flatbuffer");
+  auto store_header = partition.store();
+  // If no store_id is set, use the global store for backwards compatibility.
+  if (store_header && !store_header->id())
+    return caf::make_error(ec::format_error, "missing 'id' field in partition store header");
+  state.store_backend = store_header ? store_header->id()->str()
+                                     : std::string{"global_segment_store"};
+  state.store_header
+    = span{reinterpret_cast<const std::byte*>(store_header->data()->data()),
+           store_header->data()->size()};
   auto indexes = partition.indexes();
   if (!indexes)
     return caf::make_error(ec::format_error,
@@ -367,18 +387,24 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts, store_actor store) {
+  caf::settings synopsis_opts, store_actor store, std::string store_backend,
+  chunk_ptr header) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
   self->state.offset = invalid_id;
   self->state.events = 0;
   self->state.filesystem = std::move(filesystem);
-  self->state.store = std::move(store);
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
+  self->state.store_backend = store_backend;
+  self->state.store_header = std::move(header);
   put(self->state.synopsis_opts, "buffer-input-data", true);
+  self->state.partition_local_stores
+    = get_or(index_opts, "partition-local-stores",
+             defaults::system::partition_local_stores);
+  self->state.store = std::move(store);
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
@@ -706,10 +732,8 @@ active_partition_actor::behavior_type active_partition(
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, const std::filesystem::path& path,
-  store_actor store) {
+  filesystem_actor filesystem, const std::filesystem::path& path) {
   self->state.self = self;
-  self->state.store = std::move(store);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
@@ -783,6 +807,26 @@ partition_actor::behavior_type passive_partition(
           self->quit(std::move(error));
           return;
         }
+        // TODO: Decide if we want to implement the lazy spawning here or inside
+        // the store.
+        auto plugin = plugins::find<store_plugin>(self->state.store_backend);
+        if (!plugin) {
+          auto error = caf::make_error(ec::format_error,
+                                       "encountered unhandled store backend");
+          VAST_ERROR("{} encountered unknown store backend '{}'", self,
+                     self->state.store_backend);
+          self->quit(std::move(error));
+          return;
+        }
+        auto store = plugin->make_store(self->state.store_header);
+        if (!store) {
+          VAST_ERROR("{} failed to spawn store: {}", self,
+                     render(store.error()));
+          self->quit(caf::make_error(ec::system_error, "failed to spawn "
+                                                       "store"));
+          return;
+        }
+        self->state.store = *store;
         if (id != self->state.id)
           VAST_WARN("{} encountered partition id mismatch: restored {}"
                     "from disk, expected {}",
