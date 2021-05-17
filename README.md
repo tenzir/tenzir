@@ -86,7 +86,7 @@ Once you have all dependencies in place, build VAST with the following commands:
 ```sh
 cmake -B build
 cmake --build build
-cmake --build build --target test
+ctest --test-dir build
 cmake --build build --target integration
 cmake --install build [--prefix /path/to/prefix]
 ```

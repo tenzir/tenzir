@@ -30,7 +30,7 @@ Building VAST involves the following steps:
 2. Configure the build:
   ```sh
   cd vast
-  cmake -B build 
+  cmake -B build
   ```
 3. Build the executable:
   ```sh
@@ -38,11 +38,12 @@ Building VAST involves the following steps:
   ```
 4. Run the unit tests to verify everything works as expected:
   ```sh
-  cmake --build build --target test
+  ctest --test-dir build
   ```
 5. Install VAST system-wide or into your configured prefix:
   ```sh
-  cmake --build build --target install
+  # Optionally pass a custom install prefix via `--prefix /path/to/install`
+  cmake --install build
   ```
 4. Run the integration tests to verify everything works as expected:
   ```sh
@@ -135,7 +136,7 @@ The following steps install VAST as a persistent service:
 1. Copy the rc script to `/usr/local/etc/rc.d`.
 
    **Note**: this happens automatically when invoking the `install` target,
-   e.g., via `cmake --build build --target install`.
+   e.g., via `cmake --install build`.
 
 2. Add the following line to `/etc/rc.conf`:
 

@@ -264,11 +264,11 @@ jobs:
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
         run: |
-          cmake --build "$BUILD_DIR" --target test
+          ctest --test-dir "$BUILD_DIR" --parallel
 
       - name: Install
         run: |
-          cmake --build "$BUILD_DIR" --target install
+          cmake --install "$BUILD_DIR"
 
       - name: Run Integration Tests
         id: integration_test_step
@@ -527,11 +527,11 @@ jobs:
           # entirely, so we disable that check for macOS only (ch21254).
           ASAN_OPTIONS: detect_container_overflow=0
         run: |
-          cmake --build "$BUILD_DIR" --target test
+          ctest --test-dir "$BUILD_DIR" --parallel
 
       - name: Install
         run: |
-          cmake --build "$BUILD_DIR" --target install
+          cmake --install "$BUILD_DIR"
 
       - name: Run Integration Tests
         id: integration_test_step
@@ -667,10 +667,10 @@ jobs:
           cmake --build "$BUILD_DIR" --target all --parallel
       - name: Run Unit Tests
         run: |
-          cmake --build "$BUILD_DIR" --target test
+          ctest --test-dir "$BUILD_DIR" --parallel
       - name: Install
         run: |
-          cmake --build "$BUILD_DIR" --target install
+          cmake --install "$BUILD_DIR"
       - name: Run Integration Tests
         id: integration_tests
         run: |
