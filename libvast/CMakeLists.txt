@@ -242,6 +242,9 @@ if (NOT CAF_FOUND)
                  CXX_EXTENSIONS OFF)
     add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
     target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
+    target_compile_options(
+      libcaf_core_${_linkage_suffix} PRIVATE -Wno-maybe-uninitialized
+                                             -Wno-unknown-warning-option)
     set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME
                                                                   io)
     target_compile_options(

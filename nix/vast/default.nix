@@ -92,8 +92,6 @@ stdenv.mkDerivation rec {
   ] ++ lib.optionals isStatic [
     "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-    # Workaround for false positives in LTO mode.
-    "-DCMAKE_CXX_FLAGS:STRING=-Wno-error=maybe-uninitialized"
   ] ++ lib.optional disableTests "-DVAST_ENABLE_UNIT_TESTS=OFF"
     # Plugin Section
     ++ lib.optional (withPlugins != [])
