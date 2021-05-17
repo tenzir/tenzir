@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/detail/pp.hpp"
+
 #include <filesystem>
 
 namespace fixtures {
@@ -16,10 +18,11 @@ struct filesystem {
   filesystem() {
     // Fresh afresh.
     std::filesystem::remove_all(directory);
-    std::filesystem::create_directory(directory);
+    std::filesystem::create_directories(directory);
   }
 
-  const std::filesystem::path directory = "vast-unit-test";
+  const std::filesystem::path directory
+    = "vast-unit-test/" VAST_PP_STRINGIFY(SUITE);
 };
 
 } // namespace fixtures

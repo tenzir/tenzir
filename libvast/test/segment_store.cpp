@@ -152,8 +152,8 @@ TEST(flushing filled store) {
   auto err = store->flush();
   CHECK_EQUAL(err, caf::none);
   CHECK_EQUAL(store->dirty(), false);
-  std::vector expected_files{std::filesystem::path{"vast-unit-test"}
-                             / "segments" / "segments" / to_string(active)};
+  std::vector expected_files{directory / "segments" / "segments"
+                             / to_string(active)};
   CHECK_EQUAL(segment_files(), expected_files);
 }
 
