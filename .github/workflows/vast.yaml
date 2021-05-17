@@ -95,7 +95,7 @@ jobs:
         configure:
           - tag: Release
             flags: -DCMAKE_BUILD_TYPE:STRING=Release
-            ci-flags: -DCMAKE_BUILD_TYPE:STRING=CI -DVAST_ENABLE_ASAN:BOOL=ON
+            ci-flags: -DCMAKE_BUILD_TYPE:STRING=CI
     env:
       BUILD_DIR: build
       CC: ${{ matrix.build.cc }}
@@ -371,7 +371,7 @@ jobs:
         configure:
           - tag: Release
             flags: -DCMAKE_BUILD_TYPE=Release
-            ci-flags: -DCMAKE_BUILD_TYPE=CI -DVAST_ENABLE_ASAN:BOOL=one
+            ci-flags: -DCMAKE_BUILD_TYPE=CI
     env:
       BUILD_DIR: build
       CC: ${{ matrix.build.cc }}

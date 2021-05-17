@@ -342,11 +342,21 @@ endif ()
 # -- sanitizers ----------------------------------------------------------------
 
 # Address Sanitizer
+if ("${CMAKE_BUILD_TYPE}" IN_LIST "Debug;CI")
+  set(_VAST_ENABLE_ASAN_DEFAULT ON)
+else ()
+  set(_VAST_ENABLE_ASAN_DEFAULT OFF)
+endif ()
+
 option(VAST_ENABLE_ASAN
-       "Insert pointer and reference checks into the generated binaries" OFF)
+  "Insert pointer and reference checks into the generated binaries"
+  _VAST_ENABLE_ASAN_DEFAULT)
 add_feature_info(
   "VAST_ENABLE_ASAN" VAST_ENABLE_ASAN
   "inserts pointer and reference checks into the generated binaries.")
+
+unset(_VAST_ENABLE_ASAN_DEFAULT)
+
 if (VAST_ENABLE_ASAN)
   target_compile_options(libvast_internal INTERFACE -fsanitize=address
                                                     -fno-omit-frame-pointer)
