@@ -242,6 +242,7 @@ jobs:
               -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
               -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
               -DCPACK_GENERATOR:STRING=TGZ \
+              -DVAST_PLUGINS:STRING="plugins/pcap" \
               -DVAST_ENABLE_LSVAST:BOOL=ON \
               -DVAST_ENABLE_DSCAT:BOOL=ON \
               -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
@@ -500,7 +501,7 @@ jobs:
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_GENERATOR:STRING=TGZ \
-            -DVAST_PLUGINS:STRING="${PWD}/plugins/pcap" \
+            -DVAST_PLUGINS:STRING="plugins/pcap" \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
