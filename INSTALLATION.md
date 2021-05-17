@@ -29,6 +29,7 @@ Building VAST involves the following steps:
   ```
 2. Configure the build:
   ```sh
+  cd vast
   cmake -B build 
   ```
 3. Build the executable:

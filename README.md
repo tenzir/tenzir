@@ -87,9 +87,12 @@ Once you have all dependencies in place, build VAST with the following commands:
 cmake -B build
 cmake --build build
 cmake --build build --target test
-cmake --build build --target install
 cmake --build build --target integration
+cmake --install build [--prefix /path/to/prefix]
 ```
+
+For custom compilation options, you can either pass `-DCMAKE_OPTION=foo` to
+the cmake invocation, or use `ccmake` in the build directory.
 
 The [installation guide][installation-url] contains more detailed and
 platform-specific instructions on how to build and install VAST.

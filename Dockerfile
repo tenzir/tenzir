@@ -45,7 +45,7 @@ COPY .clang-format .cmake-format LICENSE LICENSE.3rdparty README.md BANNER CHANG
 RUN cmake -B build -G Ninja \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DCMAKE_VAST_LOG_LEVEL=INFO
+    -DVAST_LOG_LEVEL=INFO
 RUN cmake --build build --parallel
 RUN CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test
 RUN cmake --build build --target install

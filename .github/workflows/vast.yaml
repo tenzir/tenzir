@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       arguments:
-        description: 'Additional arguments to pass, e.g., `-D<CMake Option>` for a VAST build or `--with-plugin=<path/to/plugin/>` for the nix build script'
+        description: 'Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`'
         required: false
         default: ''
   push:
@@ -98,8 +98,8 @@ jobs:
             cxx: clang++-10
         configure:
           - tag: Release
-            flags: -DCMAKE_BUILD_TYPE=Release
-            ci-flags: -DCMAKE_BUILD_TYPE=CI -DVAST_ENABLE_ASAN:BOOL=on
+            flags: -DCMAKE_BUILD_TYPE:STRING=Release
+            ci-flags: -DCMAKE_BUILD_TYPE:STRING=CI -DVAST_ENABLE_ASAN:BOOL=ON
     env:
       BUILD_DIR: build
       CC: ${{ matrix.build.cc }}
@@ -249,8 +249,8 @@ jobs:
             ccache --zero-stats
             ccache --show-config
             cmake -B "$BUILD_DIR" \
-              -DCMAKE_INSTALL_PREFIX="${PWD}/opt/vast" \
-              -DCPACK_PACKAGE_FILE_NAME="$PACKAGE_NAME" \
+              -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
+              -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
               -DCPACK_GENERATOR:STRING=TGZ \
               -DVAST_ENABLE_LSVAST:BOOL=ON \
               -DVAST_ENABLE_DSCAT:BOOL=ON \
@@ -507,8 +507,8 @@ jobs:
           ccache --zero-stats
           ccache --show-config
           cmake -B "$BUILD_DIR" \
-            -DCMAKE_INSTALL_PREFIX="${PWD}/opt/vast" \
-            -DCPACK_PACKAGE_FILE_NAME="$PACKAGE_NAME" \
+            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
+            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DVAST_PLUGINS:STRING="${PWD}/plugins/pcap" \
             -DVAST_ENABLE_LSVAST:BOOL=ON \

@@ -35,8 +35,7 @@ git diff | git -C "${WORKING_DIR}" apply
 pushd "${WORKING_DIR}"
 on_exit=('popd' "${on_exit[@]}")
 cmake "${@}" -B "${WORKING_DIR}/build" \
-  -DCMAKE_CXX_COMPILER="clang++" \
-  -DCMAKE_CXX_FLAGS="-ftime-trace"
+  -DVAST_ENABLE_TIME_TRACE:BOOL=ON
 
 # When not on master, build first, then touch the changed files
 if [ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]; then
