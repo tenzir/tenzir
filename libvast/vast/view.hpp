@@ -11,6 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/aliases.hpp"
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
@@ -264,12 +266,8 @@ namespace detail {
 /// @relates view_trait
 template <class T>
 class container_view_iterator
-  : public detail::iterator_facade<
-      container_view_iterator<T>,
-      T,
-      std::random_access_iterator_tag,
-      T
-    > {
+  : public detail::iterator_facade<container_view_iterator<T>, T,
+                                   std::random_access_iterator_tag, T> {
   friend iterator_access;
 
 public:
@@ -314,9 +312,8 @@ private:
 /// Base class for container views.
 /// @relates view_trait
 template <class T>
-struct container_view
-  : caf::ref_counted,
-    detail::totally_ordered<container_view<T>> {
+struct container_view : caf::ref_counted,
+                        detail::totally_ordered<container_view<T>> {
   using value_type = T;
   using size_type = size_t;
   using iterator = detail::container_view_iterator<T>;
@@ -390,9 +387,8 @@ struct map_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
 
 /// A view over a @ref map.
 /// @relates view_trait
-class default_map_view
-  : public container_view<std::pair<data_view, data_view>>,
-    detail::totally_ordered<default_map_view> {
+class default_map_view : public container_view<std::pair<data_view, data_view>>,
+                         detail::totally_ordered<default_map_view> {
 public:
   explicit default_map_view(const map& xs);
 
@@ -534,3 +530,43 @@ data_view to_canonical(const type& t, const data_view& x);
 data_view to_internal(const type& t, const data_view& x);
 
 } // namespace vast
+
+namespace std {
+
+template <>
+struct hash<vast::data_view> {
+  auto operator()(const vast::data_view& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+
+  auto operator()(const vast::data& x) const {
+    // The hash computation for `data` and `data_view` is subtly different when
+    // not creating a view here: For `data_view` a hash of the contents of the
+    // view is created (so that the same data compares equal whether it's
+    // stored in a default/msgpack/arrow view), but for `data` the hashing is
+    // forwarded to the actual container classes, which can define their own
+    // hash functions.
+    return (*this)(vast::make_view(x));
+  }
+};
+
+template <>
+struct hash<vast::data> : hash<vast::data_view> {};
+
+template <>
+struct equal_to<vast::data_view> {
+  using is_transparent = void; // Opt-in to heterogenous lookups.
+
+  template <class Lhs, class Rhs>
+  constexpr bool operator()(const Lhs& lhs, const Rhs& rhs) const
+    noexcept(noexcept(lhs == rhs)) {
+    static_assert(vast::detail::is_any_v<Lhs, vast::data, vast::data_view>);
+    static_assert(vast::detail::is_any_v<Rhs, vast::data, vast::data_view>);
+    return lhs == rhs;
+  }
+};
+
+template <>
+struct equal_to<vast::data> : equal_to<vast::data_view> {};
+
+} // namespace std

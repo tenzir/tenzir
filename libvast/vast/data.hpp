@@ -358,14 +358,3 @@ template <>
 struct sum_type_access<vast::data> : default_sum_type_access<vast::data> {};
 
 } // namespace caf
-
-namespace std {
-
-template <>
-struct hash<vast::data> {
-  size_t operator()(const vast::data& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
-  }
-};
-
-} // namespace std

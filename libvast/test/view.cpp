@@ -162,12 +162,20 @@ TEST(hashing views) {
   data v = list{integer{42}, true, "foo", 4.2};
   data m = map{{integer{42}, true}, {integer{84}, false}};
   data r = record{{"foo", integer{42}}, {"bar", true}};
-  using hash = vast::uhash<vast::xxhash>;
-  CHECK_EQUAL(hash{}(i), hash{}(make_view(i)));
-  CHECK_EQUAL(hash{}(c), hash{}(make_view(c)));
-  CHECK_EQUAL(hash{}(st), hash{}(make_view(st)));
-  CHECK_EQUAL(hash{}(p), hash{}(make_view(p)));
-  CHECK_EQUAL(hash{}(v), hash{}(make_view(v)));
-  CHECK_EQUAL(hash{}(m), hash{}(make_view(m)));
-  CHECK_EQUAL(hash{}(r), hash{}(make_view(r)));
+  using xxhash = vast::uhash<vast::xxhash>;
+  CHECK_EQUAL(xxhash{}(i), xxhash{}(make_view(i)));
+  CHECK_EQUAL(xxhash{}(c), xxhash{}(make_view(c)));
+  CHECK_EQUAL(xxhash{}(st), xxhash{}(make_view(st)));
+  CHECK_EQUAL(xxhash{}(p), xxhash{}(make_view(p)));
+  CHECK_EQUAL(xxhash{}(v), xxhash{}(make_view(v)));
+  CHECK_EQUAL(xxhash{}(m), xxhash{}(make_view(m)));
+  CHECK_EQUAL(xxhash{}(r), xxhash{}(make_view(r)));
+  using stdhash = std::hash<data>;
+  CHECK_EQUAL(stdhash{}(i), stdhash{}(make_view(i)));
+  CHECK_EQUAL(stdhash{}(c), stdhash{}(make_view(c)));
+  CHECK_EQUAL(stdhash{}(st), stdhash{}(make_view(st)));
+  CHECK_EQUAL(stdhash{}(p), stdhash{}(make_view(p)));
+  CHECK_EQUAL(stdhash{}(v), stdhash{}(make_view(v)));
+  CHECK_EQUAL(stdhash{}(m), stdhash{}(make_view(m)));
+  CHECK_EQUAL(stdhash{}(r), stdhash{}(make_view(r)));
 }
