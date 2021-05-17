@@ -173,17 +173,6 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   endforeach ()
   unset(_install)
 
-  # For relocatable builds we need to find the relative difference between the
-  # install prefix and the library location.
-  unset(VAST_LIBDIR_TO_PREFIX)
-  set(_libdir "${CMAKE_INSTALL_FULL_LIBDIR}")
-  while (NOT "${_libdir}" STREQUAL "${CMAKE_INSTALL_PREFIX}")
-    get_filename_component(_libdir "${_libdir}" DIRECTORY)
-    list(APPEND VAST_LIBDIR_TO_PREFIX "..")
-  endwhile()
-  unset(_libdir)
-  list(JOIN VAST_LIBDIR_TO_PREFIX "/" VAST_LIBDIR_TO_PREFIX)
-
   # Single output directory.
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
     "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
@@ -399,7 +388,7 @@ if (VAST_ENABLE_UBSAN)
   target_link_libraries(libvast_internal INTERFACE -fsanitize=undefined)
 endif ()
 
-# -- static build support -----------------------------------
+# -- static build support ------------------------------------------------------
 
 cmake_dependent_option(
   VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
@@ -415,17 +404,35 @@ if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   message(FATAL_ERROR "Cannot create static binary with dynamic libraries")
 endif ()
 
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS AND NOT VAST_ENABLE_STATIC_EXECUTABLE)
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   # Note that we cannot use the target property INSTALL_RPATH on
   # libvast_internal, because it is an interface library. We should probably fix
   # this by making the config header part of libvast_internal so it is not just
   # an interface library.
-  if (APPLE)
-    list(PREPEND CMAKE_INSTALL_RPATH
-         "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
-  else ()
-    list(PREPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+  if (NOT VAST_ENABLE_STATIC_EXECUTABLE)
+    if (APPLE)
+      list(PREPEND CMAKE_INSTALL_RPATH
+          "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
+    else ()
+      list(PREPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+    endif ()
   endif ()
+
+  # For relocatable builds we need to find the relative difference between the
+  # install prefix and the library location, or the binary location for static
+  # VAST binaries.
+  unset(VAST_LIBDIR_TO_PREFIX)
+  if (VAST_ENABLE_STATIC_EXECUTABLE)
+    set(_libdir "${CMAKE_INSTALL_FULL_BINDIR}")
+  else ()
+    set(_libdir "${CMAKE_INSTALL_FULL_LIBDIR}")
+  endif ()
+  while (NOT "${_libdir}" STREQUAL "${CMAKE_INSTALL_PREFIX}")
+    get_filename_component(_libdir "${_libdir}" DIRECTORY)
+    list(APPEND VAST_LIBDIR_TO_PREFIX "..")
+  endwhile()
+  unset(_libdir)
+  list(JOIN VAST_LIBDIR_TO_PREFIX "/" VAST_LIBDIR_TO_PREFIX)
 endif ()
 
 # -- jemalloc ------------------------------------------------------------------
