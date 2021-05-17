@@ -41,4 +41,6 @@
 // Overloading.
 #define VAST_PP_OVERLOAD(PREFIX, ...) VAST_PP_PASTE2(PREFIX, VAST_PP_SIZE(__VA_ARGS__))
 
-
+// Stringification.
+#define VAST_PP_STRINGIFY(s) VAST_PP_STRINGIFY_IMPL(s)
+#define VAST_PP_STRINGIFY_IMPL(s) #s
