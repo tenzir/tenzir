@@ -37,11 +37,6 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
     = make_transforms(transforms_location::server_import, args.inv.options);
   if (!transforms)
     return transforms.error();
-  // TODO: Remove this check once ch25395 is implemented.
-  if (!transforms->empty())
-    return caf::make_error(ec::invalid_configuration, "import transformations "
-                                                      "are currently not "
-                                                      "permitted");
   if (!archive)
     return caf::make_error(ec::missing_component, "archive");
   if (!index)

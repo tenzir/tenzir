@@ -132,9 +132,6 @@ void type_registry_state::insert(vast::type layout) {
 
 type_set type_registry_state::types() const {
   auto result = type_set{};
-  for (const auto& [_, v] : data)
-    for (const auto& x : v)
-      result.insert(x);
   for (const auto& x : configuration_schema)
     result.insert(x);
   return result;
