@@ -92,10 +92,6 @@ jobs:
             compiler: GCC
             cc: gcc-8
             cxx: g++-8
-          - extra-flags:
-            compiler: Clang
-            cc: clang-10
-            cxx: clang++-10
         configure:
           - tag: Release
             flags: --release
@@ -127,12 +123,6 @@ jobs:
             # buster packages.
             apt-get -y -t buster-backports install libspdlog-dev libfmt-dev
 
-            # clang-10 (c.f. https://apt.llvm.org/)
-            curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
-            echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" | tee -a /etc/apt/sources.list
-            apt-get update
-            apt-get -y install clang-10
-
             # Apache Arrow (c.f. https://arrow.apache.org/install/)
             wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
             apt-get -y install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
@@ -149,7 +139,7 @@ jobs:
             # newer Debian dependencies from testing
             echo 'deb http://deb.debian.org/debian testing main' >> /etc/apt/sources.list
             apt-get update
-            apt-get -y install gcc-9 g++-9 ccache
+            apt-get -y install ccache
 
             # install CMake from pip -- we need at least 3.17 in CI for CCache
             python3 -m pip install --upgrade pip
