@@ -44,8 +44,7 @@ COPY vast ./vast
 COPY .clang-format .cmake-format LICENSE LICENSE.3rdparty README.md BANNER CHANGELOG.md CMakeLists.txt vast.yaml.example ./
 RUN cmake -B build -G Ninja \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DVAST_LOG_LEVEL=INFO
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 RUN cmake --build build --parallel
 RUN CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test
 RUN cmake --build build --target install
