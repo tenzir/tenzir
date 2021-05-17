@@ -72,7 +72,7 @@ if [[ "${last_rc_version}" == *"-rc"* ]]; then
 fi
 
 # Configure the build and update the local changelog.
-${source_dir}/configure --build-dir="${build_dir}"
+cmake -B "${build_dir}"
 cmake --build "${build_dir}" --target update-changelog
 
 # Commit and open a PR against tenzir/vast.
