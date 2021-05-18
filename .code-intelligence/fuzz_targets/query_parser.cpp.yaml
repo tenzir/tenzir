@@ -34,3 +34,11 @@ compiler_extra_args:
 
 ## Additional arguments to pass to the fuzz target when it is executed
 # run_extra_args:
+
+##### This section is only for Java fuzz targets #####
+
+## Package filters to apply when instrumenting the source code.
+# instrumentation_filters:
+
+## List of jar dependencies needed by the fuzz target
+# jars:
