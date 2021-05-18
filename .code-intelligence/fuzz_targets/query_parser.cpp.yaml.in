@@ -7,7 +7,8 @@ type: "c++"
 # no_initial_corpus: false
 
 ## Additional arguments to pass to the compiler during build
-# compiler_extra_args:
+compiler_extra_args:
+@@JSON_BUILD_FLAGS@@
 
 ## Additional arguments to pass to the fuzz target when it is executed
 # run_extra_args:
