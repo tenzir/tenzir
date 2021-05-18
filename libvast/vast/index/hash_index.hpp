@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
@@ -256,36 +254,11 @@ private:
   std::vector<digest_type> digests_;
   std::unordered_set<key, key_hasher> unique_digests_;
 
-  struct data_hash {
-    size_t operator()(const data& x) const {
-      // The default hash computation for `data` and `data_view` is subtly
-      // different: For `data_view` a hash of the contents of the view is
-      // created (so that the same data compares equal whether it's stored
-      // in a default/msgpack/arrow view), but for `data` the hashing is
-      // forwarded to the actual container classes, which can define their own
-      // hash functions.
-      // To ensure the same method is used consistently, we create a view here.
-      return vast::uhash<vast::xxhash>{}(make_view(x));
-    };
-    size_t operator()(const data_view& x) const {
-      return vast::uhash<vast::xxhash>{}(x);
-    };
-  };
-
-  struct data_equal {
-    using is_transparent = void; // Opt-in to heterogenous lookups.
-
-    template <typename L, typename R>
-    bool operator()(const L& x, const R& y) const {
-      static_assert(std::is_same_v<L, data> || std::is_same_v<L, data_view>);
-      static_assert(std::is_same_v<R, data> || std::is_same_v<R, data_view>);
-      return x == y;
-    }
-  };
-
   // We use a robin_map here because it supports heterogenous lookup, which
   // has a major performance impact for `seeds_`, see ch13760.
-  tsl::robin_map<data, size_t, data_hash, data_equal> seeds_;
+  using seeds_map = tsl::robin_map<data, size_t>;
+  static_assert(detail::has_is_transparent_v<seeds_map::key_equal>);
+  seeds_map seeds_;
 };
 
 } // namespace vast
