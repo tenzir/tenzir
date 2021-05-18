@@ -356,4 +356,17 @@ TEST(project column lists) {
   CHECK_EQUAL(answers, 4u);
 }
 
+TEST(roundtrip) {
+  auto slice = zeek_dns_log[0];
+  slice.offset(42u);
+  table_slice slice_copy;
+  std::vector<char> buf;
+  caf::binary_serializer sink{nullptr, buf};
+  CHECK_EQUAL(inspect(sink, slice), caf::none);
+  caf::binary_deserializer source{nullptr, buf};
+  CHECK_EQUAL(inspect(source, slice_copy), caf::none);
+  CHECK_EQUAL(slice_copy.offset(), 42u);
+  CHECK_EQUAL(slice, slice_copy);
+}
+
 FIXTURE_SCOPE_END()
