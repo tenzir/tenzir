@@ -12,8 +12,6 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths-ignore:
-      - '**.md'
-      - '!doc/**.md'
       - 'pyvast'
       - 'systemd'
       - '.github/workflows/jupyter.yaml'
