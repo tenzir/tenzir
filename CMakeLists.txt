@@ -251,9 +251,13 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning-option)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning)
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS_EQUAL 8)
-    target_compile_options(libvast_internal INTERFACE -Wno-unused-parameter
-      -Wno-unused-variable)
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+    target_compile_options(libvast_internal INTERFACE
+      -Wno-unused-parameter
+      -Wno-unused-variable
+      # Work around false positives in LTO mode.
+      $<$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>:-Wno-maybe-uninitialized>
+    )
   endif ()
 endif ()
 
@@ -265,6 +269,7 @@ target_compile_options(
             -Werror=switch
             -Wundef
             $<$<CONFIG:CI>:-Werror
+            # Never treat deprecation warnings as errors.
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>
             $<$<CXX_COMPILER_ID:GNU>:-Wno-redundant-move>)
@@ -342,11 +347,21 @@ endif ()
 # -- sanitizers ----------------------------------------------------------------
 
 # Address Sanitizer
+if ("${CMAKE_BUILD_TYPE}" IN_LIST "Debug;CI")
+  set(_VAST_ENABLE_ASAN_DEFAULT ON)
+else ()
+  set(_VAST_ENABLE_ASAN_DEFAULT OFF)
+endif ()
+
 option(VAST_ENABLE_ASAN
-       "Insert pointer and reference checks into the generated binaries" OFF)
+  "Insert pointer and reference checks into the generated binaries"
+  _VAST_ENABLE_ASAN_DEFAULT)
 add_feature_info(
   "VAST_ENABLE_ASAN" VAST_ENABLE_ASAN
   "inserts pointer and reference checks into the generated binaries.")
+
+unset(_VAST_ENABLE_ASAN_DEFAULT)
+
 if (VAST_ENABLE_ASAN)
   target_compile_options(libvast_internal INTERFACE -fsanitize=address
                                                     -fno-omit-frame-pointer)
