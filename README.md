@@ -71,31 +71,12 @@ tar xfz vast-static-latest.tar.gz
 bin/vast --help
 ```
 
-To install VAST properly for your local user simly place the unpacked folders in
-`/usr/local/`.
-
-FreeBSD and macOS users have to build from source. Clone the `master` branch to
-get the most recent version of VAST.
-
-```sh
-git clone --recursive https://github.com/tenzir/vast
-```
-
-Once you have all dependencies in place, build VAST with the following commands:
-
-```sh
-cmake -B build
-cmake --build build
-ctest --test-dir build
-cmake --build build --target integration
-cmake --install build [--prefix /path/to/prefix]
-```
-
-For custom compilation options, you can either pass `-DCMAKE_OPTION=foo` to
-the cmake invocation, or use `ccmake` in the build directory.
+To install VAST locally, simply place the unpacked directories in your install
+prefix, e.g., `/usr/local`.
 
 The [installation guide][installation-url] contains more detailed and
-platform-specific instructions on how to build and install VAST.
+platform-specific instructions on how to build and install VAST for all
+supported platforms.
 
 ## Getting Started
 
@@ -174,7 +155,7 @@ proceedings][nsdi-proceedings].
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [since-release-url]: https://github.com/tenzir/vast/compare/2021.04.29...master
-[installation-url]: INSTALLATION.md
+[installation-url]: https://docs.tenzir.com/vast/installation/overview
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
