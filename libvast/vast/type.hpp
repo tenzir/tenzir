@@ -689,6 +689,10 @@ struct record_type final : recursive_type<record_type> {
   const record_field* at(const offset& o) const&;
   const record_field* at(const offset& o) && = delete;
 
+  /// Replaces the field at a given offset with `field`.
+  [[nodiscard]] caf::expected<record_type>
+  assign(const offset& o, const record_field& field) const;
+
   /// Returns the field at the given offset with the full name as if the record
   /// was flattened.
   /// @param o The offset to resolve.
@@ -777,6 +781,10 @@ priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p);
 /// @relates record_type
 std::optional<record_type>
 remove_field(const record_type& r, std::vector<std::string_view> path);
+
+/// As above, but use an offset instead of a vector of string to specify
+/// the field to be removed.
+std::optional<record_type> remove_field(const record_type& r, offset o);
 
 /// Recursively flattens the arguments of a record type.
 /// @param rec The record to flatten.

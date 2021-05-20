@@ -31,10 +31,12 @@ caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
     return std::move(slice);
   // We just got the offset from `layout`, so we can safely dereference.
   auto column_index = *layout.flat_index_at(*offset);
-  vast::data anonymized_value;
-  auto type = layout.fields.at(column_index).type;
+  auto new_layout
+    = layout.assign(*offset, record_field{field_, value_.basic_type()});
+  if (!new_layout)
+    return std::move(new_layout.error());
   auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), slice.layout());
+    = factory<table_slice_builder>::make(slice.encoding(), *new_layout);
   for (size_t i = 0; i < slice.rows(); ++i) {
     for (size_t j = 0; j < slice.columns(); ++j) {
       const auto& item = slice.at(i, j);
@@ -68,16 +70,19 @@ replace_step::operator()(vast::record_type layout,
   auto values_column = cb->finish();
   auto removed = batch->RemoveColumn(column_index);
   if (!removed.ok())
-    return std::make_pair(std::move(layout), nullptr);
+    return {};
   batch = removed.ValueOrDie();
   // SetColumn inserts *before* the element at the given index.
   auto added = batch->AddColumn(column_index, field_, values_column);
   if (!added.ok())
-    return std::make_pair(std::move(layout), nullptr);
+    return {};
   batch = added.ValueOrDie();
   // Adjust layout.
-  layout.fields[column_index].type = value_.basic_type();
-  return std::make_pair(std::move(layout), std::move(batch));
+  auto new_layout
+    = layout.assign(*offset, record_field{field_, value_.basic_type()});
+  if (!new_layout)
+    return {};
+  return std::make_pair(std::move(*new_layout), std::move(batch));
 }
 
 #endif

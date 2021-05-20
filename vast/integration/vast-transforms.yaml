@@ -1,0 +1,48 @@
+vast:
+  endpoint: '127.0.0.1:42000'
+  plugins: []
+  export:
+    zeek:
+      disable-timestamp-tags: true
+  transforms:
+    remove_flow:
+      - delete:
+          field: flow_id
+    remove_action:
+      - delete:
+          field: alert.action
+    replace_rrname:
+      - replace:
+          field : dns.rrname
+          value: "foobar.net"
+    hash_uid:
+      - hash:
+          field: fileinfo.filename
+          out: filename_hash
+
+  transform-triggers:
+    import:
+      - transform: remove_flow
+        events: [suricata.http]
+        location: server
+
+      - transform: remove_flow
+        events: [suricata.netflow]
+        location: client
+
+    export:
+      - transform: replace_rrname
+        events: [suricata.dns]
+        location: server
+
+      - transform: remove_flow
+        events: [suricata.dns]
+        location: server
+
+      - transform: hash_uid
+        events: [suricata.fileinfo]
+        location: client
+
+      - transform: remove_action
+        events: [suricata.alert]
+        location: server

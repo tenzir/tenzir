@@ -388,6 +388,34 @@ const record_field* record_type::at(const offset& o) const& {
   return nullptr;
 }
 
+// TODO: Make an inplace version of this function after type flatbuffers allow
+// us to modify the fields in place.
+caf::expected<record_type>
+record_type::assign(const offset& o, const record_field& field) const {
+  std::vector<std::string> names;
+  const auto* r = this;
+  for (size_t i = 0; i < o.size() - 1; ++i) {
+    const auto& idx = o[i];
+    if (idx >= r->fields.size())
+      return caf::make_error(ec::invalid_argument, "invalid offset");
+    const auto* f = &r->fields[idx];
+    names.push_back(f->name);
+    r = get_if<record_type>(&f->type);
+    if (!r)
+      return caf::make_error(ec::invalid_argument, "invalid offset");
+  }
+  vast::record_type update_type;
+  update_type.fields.push_back(field);
+  for (auto it = names.rbegin(); it != names.rend(); ++it) {
+    vast::record_type container;
+    container.fields.emplace_back(*it, std::move(update_type));
+    update_type = std::move(container);
+  }
+  vast::record_type result = *this;
+  priority_merge(result, update_type, merge_policy::prefer_right);
+  return result;
+}
+
 bool record_type::equals(const abstract_type& other) const {
   return super::equals(other) && fields == downcast(other).fields;
 }
@@ -542,6 +570,33 @@ remove_field(const record_type& r, std::vector<std::string_view> path) {
           result.fields.emplace_back(f.name, *new_rec);
       }
       // else skips this field. It is the leaf to remove!
+    } else {
+      result.fields.push_back(f);
+    }
+  }
+  return result;
+}
+
+std::optional<record_type> remove_field(const record_type& r, offset o) {
+  VAST_ASSERT(!o.empty());
+  auto result = record_type{}.name(r.name()).attributes(r.attributes());
+  if (o.front() >= r.fields.size())
+    return {};
+  const auto& field = r.fields[o.front()];
+  for (const auto& f : r.fields) {
+    if (&f == &field) {
+      if (o.size() > 1) {
+        o.erase(o.begin());
+        const auto* field_rec = caf::get_if<record_type>(&field.type);
+        if (!field_rec)
+          return {};
+        auto new_rec = remove_field(*field_rec, std::move(o));
+        if (!new_rec)
+          return {};
+        // TODO: Remove this condition if empty records get allowed.
+        if (!new_rec->fields.empty())
+          result.fields.emplace_back(f.name, *new_rec);
+      }
     } else {
       result.fields.push_back(f);
     }

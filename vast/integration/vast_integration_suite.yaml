@@ -29,6 +29,17 @@ fixtures:
     exit: | # python
       node.stop()
 
+  TransformsTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file='vast-transforms.yaml')
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
@@ -472,3 +483,15 @@ tests:
         input: data/zeek/conn.log.gz
       - command: export json
         input: data/sigma/zeek-conn.yaml
+  Transforms:
+    tags: [server, client, import-export, transforms, zeek]
+    fixture: TransformsTester
+    steps:
+      - command: --config=@./vast-transforms.yaml import suricata
+        input: data/suricata/eve.json
+      - command: export json '#type == "suricata.http"'
+      - command: export json '#type == "suricata.netflow"'
+      - command: export json '#type == "suricata.dns"'
+      - command: export json '#type == "suricata.fileinfo"'
+      - command: --config=@./vast-transforms.yaml export json '#type == "suricata.fileinfo"'
+      - command: export json '#type == "suricata.alert"'
