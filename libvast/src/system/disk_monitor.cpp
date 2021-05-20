@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/concept/parseable/from_string.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/detail/process.hpp"
