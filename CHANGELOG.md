@@ -50,7 +50,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - A recent change caused imports over UDP not to forward its events to the VAST server process. Running `vast import -l :<port>/udp <format>` now works as expected again.
   [#1622](https://github.com/tenzir/vast/pull/1622)
 
-- Non-relocateeable VAST binaries no longer look for configuration, schemas, and plugins in directories relative to the binary location. Vice versa, relocateable VAST binaries no longer look for configuration, schemas, and plugins in their original install directory, and instead always use paths relative to their binary location. On macOS, we now always build relocatable binaries. Relocateable binaries now work correctly on systems where the libary install directory is `lib64` instead of `lib`.
+- Non-relocatable VAST binaries no longer look for configuration, schemas, and plugins in directories relative to the binary location. Vice versa, relocatable VAST binaries no longer look for configuration, schemas, and plugins in their original install directory, and instead always use paths relative to their binary location. On macOS, we now always build relocatable binaries. Relocatable binaries now work correctly on systems where the libary install directory is `lib64` instead of `lib`.
   [#1624](https://github.com/tenzir/vast/pull/1624)
 
 - VAST no longer erroneously skips the version mismatch detection between client and server. The check now additionally compares running plugins.
