@@ -579,9 +579,8 @@ table_slice arrow_table_slice_builder::finish(
 table_slice arrow_table_slice_builder::create(
   const std::shared_ptr<arrow::RecordBatch>& record_batch,
   const record_type& layout, size_t initial_buffer_size) {
-  VAST_ASSERT(
-    record_batch->schema()->Equals(make_arrow_schema(flatten(layout))),
-    "record layout doesn't match record batch schema");
+  VAST_ASSERT(record_batch->schema()->Equals(make_arrow_schema(layout)),
+              "record layout doesn't match record batch schema");
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
   // Pack layout.
   auto flat_layout = std::vector<char>{};

@@ -30,9 +30,11 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   auto flat_index = layout.flat_index_at(*offset);
   // We just got the offset from `layout`, so it should be valid.
   VAST_ASSERT(flat_index);
-  auto column_index = static_cast<int>(*flat_index);
   auto modified_fields = layout.fields;
-  modified_fields.erase(modified_fields.begin() + column_index);
+  auto new_layout = remove_field(layout, *offset);
+  if (!new_layout)
+    return caf::make_error(ec::unspecified, "failed to remove field from "
+                                            "layout");
   vast::record_type modified_layout(modified_fields);
   modified_layout.name(layout.name());
   auto builder_ptr
@@ -63,10 +65,12 @@ delete_step::operator()(vast::record_type layout,
   auto column_index = static_cast<int>(*flat_index);
   auto maybe_transformed = batch->RemoveColumn(column_index);
   if (!maybe_transformed.ok())
-    return std::make_pair(std::move(layout), nullptr);
+    return {};
   auto transformed = maybe_transformed.ValueOrDie();
-  layout.fields.erase(layout.fields.begin() + column_index);
-  return std::make_pair(std::move(layout), std::move(transformed));
+  auto new_layout = remove_field(layout, *offset);
+  if (!new_layout)
+    return {};
+  return std::make_pair(std::move(*new_layout), std::move(transformed));
 }
 
 #endif

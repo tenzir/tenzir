@@ -35,6 +35,7 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
     = make_transforms(transforms_location::server_import, args.inv.options);
   if (!transforms)
     return transforms.error();
+  VAST_DEBUG("{} parsed {} transforms for source", self, transforms->size());
   auto [accountant, importer, type_registry]
     = self->state.registry
         .find<accountant_actor, importer_actor, type_registry_actor>();
