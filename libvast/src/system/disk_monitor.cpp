@@ -72,10 +72,10 @@ caf::error validate(const disk_monitor_config& config) {
 
 caf::expected<size_t> disk_monitor_state::compute_dbdir_size() const {
   caf::expected<size_t> result = 0;
-  if (!scan_command) {
+  if (!config.scan_binary) {
     return detail::recursive_size(dbdir);
   }
-  const auto& command = *scan_command;
+  const auto& command = fmt::format("{} {}", *config.scan_binary, dbdir);
   VAST_VERBOSE("{} executing command '{}' to determine size of dbdir", name,
                command);
   auto cmd_output = detail::execute_blocking(command);
@@ -104,19 +104,14 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
     self->quit(error);
     return disk_monitor_actor::behavior_type::make_empty_behavior();
   }
-  self->state.high_water_mark = config.high_water_mark;
-  self->state.low_water_mark = config.low_water_mark;
-  self->state.step_size = config.step_size;
-  self->state.scan_interval = config.scan_interval;
+  self->state.config = config;
   self->state.dbdir = dbdir;
   self->state.archive = archive;
   self->state.index = index;
   self->send(self, atom::ping_v);
-  if (config.scan_binary)
-    self->state.scan_command = fmt::format("{} {}", *config.scan_binary, dbdir);
   return {
     [self](atom::ping) {
-      self->delayed_send(self, self->state.scan_interval, atom::ping_v);
+      self->delayed_send(self, self->state.config.scan_interval, atom::ping_v);
       if (self->state.purging) {
         VAST_DEBUG("{} ignores ping because a deletion is still in "
                    "progress",
@@ -135,7 +130,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         return;
       }
       VAST_VERBOSE("{} checks db-directory of size {}", self, *size);
-      if (*size > self->state.high_water_mark && !self->state.purging) {
+      if (*size > self->state.config.high_water_mark && !self->state.purging) {
         self->state.purging = true;
         // TODO: Remove the static_cast when switching to CAF 0.18.
         self
@@ -198,7 +193,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                   return lhs.mtime < rhs.mtime;
                 });
       // Delete up to `step_size` partitions at once.
-      auto idx = std::min(partitions.size(), self->state.step_size);
+      auto idx = std::min(partitions.size(), self->state.config.step_size);
       for (size_t i = 0; i < idx; ++i) {
         auto& partition = partitions.at(i);
         VAST_VERBOSE("{} erases partition {} from index", self, partition.id);
@@ -226,7 +221,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                       VAST_VERBOSE("{} erased ids from index; leftover size is "
                                    "{}",
                                    self, *size);
-                      if (*size > self->state.low_water_mark) {
+                      if (*size > self->state.config.low_water_mark) {
                         // Repeat until we're below the low water mark
                         self->send(self, atom::erase_v);
                       }

@@ -18,24 +18,32 @@
 
 namespace vast::system {
 
+struct disk_monitor_config {
+  /// When current disk space is above the high water mark, stuff
+  /// is deleted until we get below the low water mark.
+  size_t high_water_mark = 0;
+  size_t low_water_mark = 0;
+
+  /// How many partitions to delete at once before re-checking the disk size,
+  /// while erasing.
+  size_t step_size = 1;
+
+  /// The command to use to determine file size.
+  std::optional<std::string> scan_binary = std::nullopt;
+
+  /// The timespan between scans.
+  std::chrono::seconds scan_interval = std::chrono::seconds{60};
+};
+
+/// Tests if the passed config options represent a valid disk monitor
+/// configuration.
+caf::error validate(const disk_monitor_config&);
+
 struct disk_monitor_state {
   /// The path to the database directory.
   std::filesystem::path dbdir;
 
-  /// When current disk space is above the high water mark, stuff
-  /// is deleted until we get below the low water mark.
-  size_t high_water_mark;
-  size_t low_water_mark;
-
-  /// How many partitions to delete at once when reaching the high-water
-  /// mark.
-  size_t step_size;
-
-  /// The command to use to determine file size.
-  std::optional<std::string> scan_command;
-
-  /// The timespan between scans.
-  std::chrono::seconds scan_interval;
+  disk_monitor_config config;
 
   /// Whether an erasing run is currently in progress.
   bool purging;
@@ -53,20 +61,6 @@ struct disk_monitor_state {
 
   constexpr static const char* name = "disk-monitor";
 };
-
-/// Contains values for the fields of `disk_monitor_state` with
-/// the same name.
-struct disk_monitor_config {
-  size_t high_water_mark;
-  size_t low_water_mark;
-  size_t step_size;
-  std::optional<std::string> scan_binary;
-  std::chrono::seconds scan_interval;
-};
-
-/// Tests if the passed config options represent a valid disk monitor
-/// configuration.
-caf::error validate(const disk_monitor_config&);
 
 /// Periodically scans the size of the database directory and deletes data
 /// once it exceeds some threshold.
