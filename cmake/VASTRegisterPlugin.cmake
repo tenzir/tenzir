@@ -177,7 +177,7 @@ function (VASTRegisterPlugin)
   # Create a static library target for our plugin with the entrypoint, and use
   # static versions of VAST_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
-  target_link_whole_archive(${PLUGIN_TARGET}-static PRIVATE ${PLUGIN_TARGET})
+  target_link_whole_archive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
                              PRIVATE VAST_ENABLE_STATIC_PLUGINS)
@@ -192,7 +192,7 @@ function (VASTRegisterPlugin)
 
     # Create a shared library target for our plugin.
     add_library(${PLUGIN_TARGET}-shared SHARED ${PLUGIN_ENTRYPOINT})
-    target_link_whole_archive(${PLUGIN_TARGET}-shared PRIVATE ${PLUGIN_TARGET})
+    target_link_whole_archive(${PLUGIN_TARGET}-shared PUBLIC ${PLUGIN_TARGET})
     target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE vast::internal)
 
     # Install the plugin library to <libdir>/vast/plugins, and also configure
