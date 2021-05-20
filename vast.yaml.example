@@ -135,6 +135,9 @@ vast:
     disk-budget-low: 0GiB
     # Seconds between successive disk space checks.
     disk-budget-check-interval: 90
+    # When erasing, how many partitions to erase in one go before rechecking
+    # the size of the database directory.
+    disk-budget-step-size: 1
     # Binary to use for checking the size of the database directory. If left
     # unset, VAST will recursively add up the size of all files in the
     # database directory to compute the size. Mainly useful for e.g. compressed

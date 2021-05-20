@@ -211,6 +211,9 @@ constexpr caf::timespan aging_frequency = std::chrono::hours{24};
 /// Interval between two disk scanning cycles.
 constexpr std::chrono::seconds disk_scan_interval = std::chrono::minutes{1};
 
+/// Number of partitions to remove before re-checking disk size.
+constexpr size_t disk_monitor_step_size = 1;
+
 /// Maximum number of events per INDEX partition.
 constexpr size_t max_partition_size = 1'048'576; // 1_Mi
 
