@@ -40,28 +40,6 @@ vast::table_slice make_data(const vast::record_type& layout, Ts&&... ts) {
   return builder->finish();
 }
 
-const vast::record_type mock_layout_a = vast::record_type{
-  {"a", vast::string_type{}},
-  {"b", vast::count_type{}},
-  {"c", vast::real_type{}},
-}.name("mock");
-
-vast::table_slice make_data_a(std::string a, vast::count b, vast::real c) {
-  return make_data(mock_layout_a, a, b, c);
-}
-
-const vast::record_type mock_layout_b = vast::record_type{
-  {"a", vast::string_type{}},
-  {"b", vast::count_type{}},
-  {"c", vast::real_type{}},
-  {"d", vast::string_type{}},
-}.name("mock");
-
-vast::table_slice
-make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
-  return make_data(mock_layout_b, a, b, c, d);
-}
-
 } // namespace
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -94,47 +72,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 };
 
 FIXTURE_SCOPE(type_registry_tests, fixture)
-
-TEST(type_registry) {
-  MESSAGE("importing mock data");
-  {
-    auto slices_a = std::vector{1000, make_data_a("1", 2u, 3.0)};
-    auto slices_b = std::vector{1000, make_data_b("1", 2u, 3.0, "4")};
-    vast::detail::spawn_container_source(sys, std::move(slices_a), aut);
-    vast::detail::spawn_container_source(sys, std::move(slices_b), aut);
-    run();
-    CHECK_EQUAL(state().data.size(), 1u);
-  }
-  MESSAGE("retrieving layouts");
-  {
-    size_t size = -1;
-    self->send(aut, atom::get_v);
-    run();
-    bool done = false;
-    self
-      ->do_receive([&](vast::type_set result) {
-        size = result.size();
-        done = true;
-      })
-      .until(done);
-    CHECK_EQUAL(size, 2u);
-  }
-  MESSAGE("retrieving layouts");
-  {
-    size_t size = -1;
-    self->send(aut, atom::get_v);
-    run();
-    bool done = false;
-    self
-      ->do_receive([&](vast::type_set result) {
-        size = result.size();
-        done = true;
-      })
-      .until(done);
-    CHECK_EQUAL(size, 2u);
-  }
-  self->send_exit(aut, caf::exit_reason::user_shutdown);
-}
 
 TEST(taxonomies) {
   MESSAGE("setting a taxonomy");

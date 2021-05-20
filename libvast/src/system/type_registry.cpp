@@ -132,9 +132,6 @@ void type_registry_state::insert(vast::type layout) {
 
 type_set type_registry_state::types() const {
   auto result = type_set{};
-  for (const auto& [_, v] : data)
-    for (const auto& x : v)
-      result.insert(x);
   for (const auto& x : configuration_schema)
     result.insert(x);
   return result;
@@ -189,15 +186,6 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
         },
         [=](caf::unit_t&, table_slice x) { self->state.insert(x.layout()); });
       return result.inbound_slot();
-    },
-    [self](atom::put, vast::type x) {
-      VAST_TRACE_SCOPE("{} tries to add {}", self, VAST_ARG("type", x.name()));
-      self->state.insert(std::move(x));
-    },
-    [self](atom::put, vast::schema x) {
-      VAST_TRACE_SCOPE("{} tries to add {}", self, VAST_ARG("schema", x));
-      for (auto& type : x)
-        self->state.insert(std::move(type));
     },
     [self](atom::get) {
       VAST_TRACE_SCOPE("{} retrieves a list of all known types", self);

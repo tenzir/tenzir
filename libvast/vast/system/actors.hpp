@@ -238,10 +238,6 @@ using archive_actor = typed_actor_fwd<
 using type_registry_actor = typed_actor_fwd<
   // The internal telemetry loop of the TYPE REGISTRY.
   caf::reacts_to<atom::telemetry>,
-  // Registers the given type.
-  caf::reacts_to<atom::put, vast::type>,
-  // Registers all types in the given schema.
-  caf::reacts_to<atom::put, vast::schema>,
   // Retrieves all known types.
   caf::replies_to<atom::get>::with<type_set>,
   // Registers the given taxonomies.
