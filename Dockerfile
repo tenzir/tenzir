@@ -46,7 +46,8 @@ RUN cmake -B build -G Ninja \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 RUN cmake --build build --parallel
-RUN CTEST_OUTPUT_ON_FAILURE=1 ctest --test-dir build --parallel
+# --test-dir is not yet supported in the ctest version we're using here.
+RUN CTEST_OUTPUT_ON_FAILURE=1 cd build && ctest --parallel
 RUN cmake --install build
 RUN cmake --build build --target integration
 

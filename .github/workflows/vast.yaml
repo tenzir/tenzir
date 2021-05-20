@@ -261,8 +261,10 @@ jobs:
       - name: Run Unit Tests
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
         run: |
-          ctest --test-dir "$BUILD_DIR" --parallel
+          ctest --parallel
 
       - name: Install
         run: |
@@ -664,8 +666,12 @@ jobs:
         run: |
           cmake --build "$BUILD_DIR" --target all --parallel
       - name: Run Unit Tests
+        env:
+          CTEST_OUTPUT_ON_FAILURE: 1
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
         run: |
-          ctest --test-dir "$BUILD_DIR" --parallel
+          ctest --parallel
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"
