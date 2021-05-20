@@ -57,6 +57,9 @@ fi
 
 # Copy the unreleased changelog directory.
 if [ -d "${source_dir}/changelog/unreleased" ]; then
+  for entry in "${source_dir}/changelog/unreleased/"**/*.md; do
+    mv "$entry" "${entry/--*.md/.md}"
+  done
   rsync -avzh "${source_dir}/changelog/unreleased/" \
     "${source_dir}/changelog/${new_version}"
   rm -r "${source_dir}/changelog/unreleased"
