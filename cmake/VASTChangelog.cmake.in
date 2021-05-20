@@ -69,6 +69,7 @@ foreach (release IN LISTS releases)
         foreach (entry IN LISTS entries)
           file(READ "${changelog_directory}/${release}/${category}/${entry}"
             entry_texts)
+          string(REGEX REPLACE "--.*$" "" entry "${entry}")
           string(STRIP "${entry_texts}" entry_texts)
           string(REPLACE ";" ":semicolon:" entry_texts "${entry_texts}")
           string(REPLACE "\n\n" ";" entry_texts "${entry_texts}")
