@@ -12,13 +12,7 @@
 
 namespace vast {
 
-#if VAST_ENABLE_ARROW
-class hash_step : public generic_transform_step,
-                  public arrow_transform_step
-#else  // !VAST_ENABLE_ARROW
-class hash_step : public generic_transform_step
-#endif // VAST_ENABLE_ARROW
-{
+class hash_step : public generic_transform_step, public arrow_transform_step {
 public:
   hash_step(const std::string& fieldname, const std::string& out,
             const std::optional<std::string>& salt = std::nullopt);

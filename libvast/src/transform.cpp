@@ -21,26 +21,22 @@
 namespace vast {
 
 caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
+  auto enable_arrow = VAST_ENABLE_ARROW > 0;
   const auto* generic_step = dynamic_cast<const generic_transform_step*>(this);
-#if VAST_ENABLE_ARROW
   const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
   VAST_ASSERT(arrow_step || generic_step);
-  if (arrow_step) {
+  if (arrow_step && enable_arrow) {
     return (*arrow_step)(std::move(slice));
   } else if (generic_step) {
     return (*generic_step)(std::move(slice));
   }
   return caf::make_error(ec::invalid_configuration, "step requires arrow "
                                                     "support");
-#else  // !VAST_ENABLE_ARROW
-  VAST_ASSERT(generic_step);
-  return (*generic_step)(std::move(slice));
-#endif // VAST_ENBALE_ARROW
 }
 
-#if VAST_ENABLE_ARROW
 caf::expected<table_slice>
 arrow_transform_step::operator()(table_slice&& x) const {
+#if VAST_ENABLE_ARROW
   // NOTE: It's important that `batch` is kept alive until `create()`
   // is finished: If a copy was made, `batch` will hold the only reference
   // to its underlying table slice, but the RecordBatches created by the
@@ -48,23 +44,23 @@ arrow_transform_step::operator()(table_slice&& x) const {
   auto batch = as_record_batch(x);
   auto [layout, transformed] = (*this)(x.layout(), batch);
   return arrow_table_slice_builder::create(transformed, layout);
-}
+#else
+  static_cast<void>(x);
+  VAST_ASSERT(false, "invoked an arrow transform step, but VAST was built "
+                     "without arrow support");
 #endif // VAST_ENABLE_ARROW
+}
 
 transform::transform(std::string name, std::vector<std::string>&& event_types)
   : name_(std::move(name)),
-#if VAST_ENABLE_ARROW
     arrow_fast_path_(true),
-#endif // VAST_ENABLE_ARROW
     event_types_(std::move(event_types)) {
 }
 
 void transform::add_step(transform_step_ptr step) {
   steps_.emplace_back(std::move(step));
-#if VAST_ENABLE_ARROW
   arrow_fast_path_
     = arrow_fast_path_ && dynamic_cast<arrow_transform_step*>(step.get());
-#endif // VAST_ENABLE_ARROW
 }
 
 const std::string& transform::name() const {
