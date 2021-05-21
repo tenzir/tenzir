@@ -159,12 +159,6 @@ jobs:
           git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
           git fetch origin +refs/tags/*:refs/tags/*
 
-      - name: Configure GCloud Credentials
-        uses: google-github-actions/setup-gcloud@master
-        with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
-
       - name: Configure Environment
         id: configure_env
         run: |
@@ -321,6 +315,13 @@ jobs:
         with:
           name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
           path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
+
+      - name: Configure GCS Credentials
+        if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
 
       - name: Upload Artifact to GCS
         if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
@@ -761,8 +762,8 @@ jobs:
         with:
           python-version: '3.7'
 
-      - name: Configure GCloud Credentials
-        if: github.event_name != 'pull_request'
+      - name: Configure GCS Credentials
+        if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
         uses: google-github-actions/setup-gcloud@master
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
