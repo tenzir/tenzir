@@ -48,9 +48,11 @@ private:
   /// Sequence of transformation steps
   std::vector<transform_step_ptr> steps_;
 
+#if VAST_ENABLE_ARROW
   /// If all steps of this transform have specialized arrow handlers,
   /// we can save all intermediate (de)serialization steps.
   bool arrow_fast_path_;
+#endif // VAST_ENABLE_ARROW
 
   /// Triggers for this transform
   std::vector<std::string> event_types_;

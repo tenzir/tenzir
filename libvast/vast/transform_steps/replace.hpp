@@ -12,8 +12,13 @@
 
 namespace vast {
 
+#if VAST_ENABLE_ARROW
 class replace_step : public generic_transform_step,
-                     public arrow_transform_step {
+                     public arrow_transform_step
+#else  // !VAST_ENABLE_ARROW
+class replace_step : public generic_transform_step
+#endif // VAST_ENABLE_ARROW
+{
 public:
   replace_step(const std::string& fieldname, const vast::data& value);
 

@@ -10,13 +10,16 @@
 
 #include "vast/transform.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
 #include "vast/transform_steps/delete.hpp"
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/replace.hpp"
+
+#if VAST_ENABLE_ARROW
+#  include "vast/arrow_table_slice_builder.hpp"
+#endif // VAST_ENABLE_ARROW
 
 using namespace std::literals;
 
@@ -28,10 +31,7 @@ const auto testdata_layout = vast::record_type{
 
 struct transforms_fixture {
   transforms_fixture() {
-    vast::factory<vast::table_slice_builder>::add<
-      vast::arrow_table_slice_builder>(vast::table_slice_encoding::arrow);
-    vast::factory<vast::table_slice_builder>::add<
-      vast::msgpack_table_slice_builder>(vast::table_slice_encoding::msgpack);
+    vast::factory<vast::table_slice_builder>::initialize();
   }
 
   // Creates a table slice with a single string field and random data.

@@ -10,7 +10,6 @@
 
 #include "vast/system/transformer.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/data.hpp"
@@ -23,6 +22,10 @@
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
+
+#if VAST_ENABLE_ARROW
+#  include "vast/arrow_table_slice_builder.hpp"
+#endif // VAST_ENABLE_ARROW
 
 std::string TRANSFORM_CONFIG = R"_(
 vast:
@@ -56,7 +59,9 @@ dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
         [=](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, vast::table_slice&& x) { *result = std::move(x); });
+        [=](caf::unit_t&, vast::table_slice&& x) {
+          *result = std::move(x);
+        });
       return caf::inbound_stream_slot<vast::table_slice>{sink.inbound_slot()};
     },
   };
@@ -65,10 +70,7 @@ dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
 struct transformer_fixture
   : public fixtures::deterministic_actor_system_and_events {
   transformer_fixture() {
-    vast::factory<vast::table_slice_builder>::add<
-      vast::arrow_table_slice_builder>(vast::table_slice_encoding::arrow);
-    vast::factory<vast::table_slice_builder>::add<
-      vast::msgpack_table_slice_builder>(vast::table_slice_encoding::msgpack);
+    vast::factory<vast::table_slice_builder>::initialize();
   }
 
   // Creates a table slice with a single string field and random data.

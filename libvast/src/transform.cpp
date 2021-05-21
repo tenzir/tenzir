@@ -8,29 +8,37 @@
 
 #include "vast/transform.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
-#include <arrow/type.h>
+#if VAST_ENABLE_ARROW
+#  include "vast/arrow_table_slice_builder.hpp"
+
+#  include <arrow/type.h>
+#endif // VAST_ENABLE_ARROW
 
 namespace vast {
 
 caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
-  bool enable_arrow = VAST_ENABLE_ARROW > 0;
-  const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
   const auto* generic_step = dynamic_cast<const generic_transform_step*>(this);
+#if VAST_ENABLE_ARROW
+  const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
   VAST_ASSERT(arrow_step || generic_step);
-  if (arrow_step && enable_arrow) {
+  if (arrow_step) {
     return (*arrow_step)(std::move(slice));
   } else if (generic_step) {
     return (*generic_step)(std::move(slice));
   }
   return caf::make_error(ec::invalid_configuration, "step requires arrow "
                                                     "support");
+#else  // !VAST_ENABLE_ARROW
+  VAST_ASSERT(generic_step);
+  return (*generic_step)(std::move(slice));
+#endif // VAST_ENBALE_ARROW
 }
 
+#if VAST_ENABLE_ARROW
 caf::expected<table_slice>
 arrow_transform_step::operator()(table_slice&& x) const {
   // NOTE: It's important that `batch` is kept alive until `create()`
@@ -41,17 +49,22 @@ arrow_transform_step::operator()(table_slice&& x) const {
   auto [layout, transformed] = (*this)(x.layout(), batch);
   return arrow_table_slice_builder::create(transformed, layout);
 }
+#endif // VAST_ENABLE_ARROW
 
 transform::transform(std::string name, std::vector<std::string>&& event_types)
   : name_(std::move(name)),
+#if VAST_ENABLE_ARROW
     arrow_fast_path_(true),
+#endif // VAST_ENABLE_ARROW
     event_types_(std::move(event_types)) {
 }
 
 void transform::add_step(transform_step_ptr step) {
   steps_.emplace_back(std::move(step));
+#if VAST_ENABLE_ARROW
   arrow_fast_path_
     = arrow_fast_path_ && dynamic_cast<arrow_transform_step*>(step.get());
+#endif // VAST_ENABLE_ARROW
 }
 
 const std::string& transform::name() const {
@@ -79,6 +92,8 @@ caf::expected<table_slice> transform::apply(table_slice&& x) const {
   return std::move(x);
 }
 
+#if VAST_ENABLE_ARROW
+
 std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 transform::apply(vast::record_type layout,
                  std::shared_ptr<arrow::RecordBatch> batch) const {
@@ -93,6 +108,8 @@ transform::apply(vast::record_type layout,
   }
   return std::make_pair(std::move(layout), std::move(batch));
 }
+
+#endif // VAST_ENABLE_ARROW
 
 transformation_engine::transformation_engine(std::vector<transform>&& transforms)
   : transforms_(std::move(transforms)) {

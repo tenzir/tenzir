@@ -8,6 +8,10 @@
 
 #pragma once
 
+#if !VAST_ENABLE_ARROW
+#  error "Arrow not enabled"
+#endif // VAST_ENABLE_ARROW
+
 #include "vast/fwd.hpp"
 
 #include "vast/table_slice.hpp"
