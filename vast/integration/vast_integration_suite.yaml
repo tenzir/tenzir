@@ -499,7 +499,7 @@ tests:
   # enable it on builds that have arrow enabled.
   Transforms Requiring Arrow:
     condition: version | jq -e '."Apache Arrow"'
-    tags: [server, client, import-export, transforms, zeek]
+    tags: [server, client, import-export, transforms, suricata]
     fixture: TransformsTester
     steps:
       - command: --config=@./vast-transforms.yaml import suricata
