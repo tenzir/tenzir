@@ -18,6 +18,9 @@ on:
       - '.github/workflows/pyvast.yaml'
   release:
     types: published
+env:
+  # 5G divided by 4 entries in the Matrix with a little bit of room for error.
+  CCACHE_MAXSIZE: '1200M'
 
 jobs:
   cancel-previous-runs:
@@ -193,9 +196,9 @@ jobs:
       # For 'pull_request' events we want to take the latest build on the PR
       # branch, or if that fails the latest build from the branch we're merging
       # into.
-      - name: Fetch ccache Cache (Pull Request)
+      - name: Fetch ccache Cache
         if: github.event_name == 'pull_request'
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}-${{ github.sha }}
@@ -207,7 +210,7 @@ jobs:
       # For 'push' events we want to take the latest build on the branch we pushed to.
       - name: Fetch ccache Cache (Push)
         if: github.event_name == 'push'
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
@@ -218,7 +221,7 @@ jobs:
       # For 'release' events we want to take the latest master build.
       - name: Fetch ccache Cache (Release)
         if: github.event_name == 'release'
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master-${{ github.sha }}
@@ -456,7 +459,7 @@ jobs:
       # into.
       - name: Fetch ccache Cache (Pull Request)
         if: github.event_name == 'pull_request'
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}-${{ github.sha }}
@@ -468,7 +471,7 @@ jobs:
       # For 'push' events we want to take the latest build on the branch we pushed to.
       - name: Fetch ccache Cache (Push)
         if: github.event_name == 'push'
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
@@ -479,7 +482,7 @@ jobs:
       # For 'release' events we want to take the latest master build.
       - name: Fetch ccache Cache (Release)
         if: github.event_name == 'release'
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master-${{ github.sha }}
