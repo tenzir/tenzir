@@ -93,6 +93,10 @@ jobs:
             compiler: GCC
             cc: gcc-8
             cxx: g++-8
+          - extra-flags: -DVAST_ENABLE_ARROW:BOOL=OFF
+            compiler: GCC Arrow Disabled
+            cc: gcc-8
+            cxx: g++-8
         configure:
           - tag: Release
             flags: -DCMAKE_BUILD_TYPE:STRING=Release
