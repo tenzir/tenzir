@@ -13,6 +13,7 @@
 namespace vast {
 
 // Deletes a specific field from the input
+// #if VAST_ENABLE_ARROW
 class delete_step : public generic_transform_step, public arrow_transform_step {
 public:
   delete_step(const std::string& fieldname);

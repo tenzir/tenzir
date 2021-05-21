@@ -50,7 +50,6 @@ public:
 //   [...]
 // };
 
-#if VAST_ENABLE_ARROW
 
 class arrow_transform_step : public virtual transform_step {
 public:
@@ -58,6 +57,7 @@ public:
   /// passes it to the user-defined handler.
   [[nodiscard]] caf::expected<table_slice> operator()(table_slice&&) const;
 
+#if VAST_ENABLE_ARROW
   /// Takes a record batch with a corresponding vast layout and transforms it
   /// into a new batch with a new layout.
   //  TODO: When we have implemented a way to recover the `layout` from the
@@ -67,9 +67,9 @@ public:
                                   std::shared_ptr<arrow::RecordBatch>>
   operator()(vast::record_type layout,
              std::shared_ptr<arrow::RecordBatch> batch) const = 0;
+#endif
 };
 
-#endif
 
 caf::expected<transform_step_ptr>
 make_transform_step(const std::string& name, const caf::settings& opts);

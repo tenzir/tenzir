@@ -8,11 +8,14 @@
 
 #include "vast/transform_steps/replace.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/error.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+
+#if VAST_ENABLE_ARROW
+#  include "vast/arrow_table_slice_builder.hpp"
+#endif // VAST_ENABLE_ARROW
 
 #include <fmt/format.h>
 

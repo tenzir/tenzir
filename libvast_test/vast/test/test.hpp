@@ -17,6 +17,9 @@
 #include <set>
 #include <string>
 
+// Work around missing namespace qualification in CAF header.
+using ::caf::term;
+
 namespace vast::test::detail {
 
 struct equality_compare {
@@ -93,6 +96,14 @@ struct less_equal_compare {
   CAF_REQUIRE_FUNC(vast::test::detail::greater_compare, (x), (y))
 #define REQUIRE_GREATER_EQUAL(x, y)                                            \
   CAF_REQUIRE_FUNC(vast::test::detail::greater_equal_compare, (x), (y))
+#define REQUIRE_NOERROR(x)                                                     \
+  do {                                                                         \
+    if (!(x)) {                                                                \
+      FAIL((x).error());                                                       \
+    } else {                                                                   \
+      CAF_CHECK_PASSED(#x);                                                    \
+    }                                                                          \
+  } while (false)
 #define FAIL CAF_FAIL
 // Checks that continue with the current test on failure
 #define CHECK CAF_CHECK
@@ -108,6 +119,14 @@ struct less_equal_compare {
   CAF_CHECK_FUNC(vast::test::detail::greater_compare, (x), (y))
 #define CHECK_GREATER_EQUAL(x, y)                                              \
   CAF_CHECK_FUNC(vast::test::detail::greater_equal_compare, (x), (y))
+#define CHECK_NOERROR(x)                                                       \
+  do {                                                                         \
+    if {                                                                       \
+      (!(x)) CAF_CHECK_FAILED((x).error());                                    \
+    } else {                                                                   \
+      CAF_CHECK_PASSED(#x)                                                     \
+    }                                                                          \
+  } while (false)
 #define CHECK_FAIL CAF_CHECK_FAIL
 // Checks that automagically handle caf::variant types.
 #define CHECK_VARIANT_EQUAL CAF_CHECK_EQUAL

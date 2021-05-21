@@ -8,19 +8,22 @@
 
 #include "vast/transform.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
-#include <arrow/type.h>
+#if VAST_ENABLE_ARROW
+#  include "vast/arrow_table_slice_builder.hpp"
+
+#  include <arrow/type.h>
+#endif // VAST_ENABLE_ARROW
 
 namespace vast {
 
 caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
-  bool enable_arrow = VAST_ENABLE_ARROW > 0;
-  const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
+  auto enable_arrow = VAST_ENABLE_ARROW > 0;
   const auto* generic_step = dynamic_cast<const generic_transform_step*>(this);
+  const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
   VAST_ASSERT(arrow_step || generic_step);
   if (arrow_step && enable_arrow) {
     return (*arrow_step)(std::move(slice));
@@ -33,6 +36,7 @@ caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
 
 caf::expected<table_slice>
 arrow_transform_step::operator()(table_slice&& x) const {
+#if VAST_ENABLE_ARROW
   // NOTE: It's important that `batch` is kept alive until `create()`
   // is finished: If a copy was made, `batch` will hold the only reference
   // to its underlying table slice, but the RecordBatches created by the
@@ -40,6 +44,11 @@ arrow_transform_step::operator()(table_slice&& x) const {
   auto batch = as_record_batch(x);
   auto [layout, transformed] = (*this)(x.layout(), batch);
   return arrow_table_slice_builder::create(transformed, layout);
+#else
+  static_cast<void>(x);
+  VAST_ASSERT(false, "invoked an arrow transform step, but VAST was built "
+                     "without arrow support");
+#endif // VAST_ENABLE_ARROW
 }
 
 transform::transform(std::string name, std::vector<std::string>&& event_types)
@@ -79,6 +88,8 @@ caf::expected<table_slice> transform::apply(table_slice&& x) const {
   return std::move(x);
 }
 
+#if VAST_ENABLE_ARROW
+
 std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 transform::apply(vast::record_type layout,
                  std::shared_ptr<arrow::RecordBatch> batch) const {
@@ -93,6 +104,8 @@ transform::apply(vast::record_type layout,
   }
   return std::make_pair(std::move(layout), std::move(batch));
 }
+
+#endif // VAST_ENABLE_ARROW
 
 transformation_engine::transformation_engine(std::vector<transform>&& transforms)
   : transforms_(std::move(transforms)) {

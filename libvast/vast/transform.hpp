@@ -50,6 +50,7 @@ private:
 
   /// If all steps of this transform have specialized arrow handlers,
   /// we can save all intermediate (de)serialization steps.
+  /// NOTE: This is ignored if VAST is built without arrow support.
   bool arrow_fast_path_;
 
   /// Triggers for this transform
