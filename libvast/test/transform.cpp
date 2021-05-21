@@ -56,7 +56,7 @@ TEST(delete_ step) {
   auto slice = make_transforms_testdata();
   vast::delete_step delete_step("uid");
   auto deleted = delete_step.apply(vast::table_slice{slice});
-  REQUIRE(deleted);
+  REQUIRE_NOERROR(deleted);
   CHECK_EQUAL(deleted->layout().fields.size(), 1ull);
   vast::delete_step invalid_delete_step("xxx");
   auto not_deleted = invalid_delete_step.apply(vast::table_slice{slice});
@@ -76,6 +76,7 @@ TEST(replace step) {
   vast::replace_step replace_step("uid", "xxx");
   auto replaced = replace_step.apply(vast::table_slice{slice});
   REQUIRE(replaced);
+  REQUIRE_NOERROR(replaced);
   REQUIRE_EQUAL(replaced->layout().fields.size(), 2ull);
   CHECK_EQUAL(replaced->layout().fields[0].name, "uid");
   CHECK_EQUAL((*replaced).at(0, 0), vast::data_view{"xxx"sv});
@@ -85,7 +86,7 @@ TEST(anonymize step) {
   auto slice = make_transforms_testdata();
   vast::hash_step hash_step("uid", "hashed_uid");
   auto anonymized = hash_step.apply(vast::table_slice{slice});
-  REQUIRE(anonymized);
+  REQUIRE_NOERROR(anonymized);
   REQUIRE_EQUAL(anonymized->layout().fields.size(), 3ull);
   REQUIRE_EQUAL(anonymized->layout().fields[2].name, "hashed_uid");
   // TODO: Not sure how we can check that the data was correctly hashed.
@@ -97,7 +98,7 @@ TEST(transform with multiple steps) {
   transform.add_step(std::make_unique<vast::delete_step>("index"));
   auto slice = make_transforms_testdata();
   auto transformed = transform.apply(std::move(slice));
-  REQUIRE(transformed);
+  REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->layout().fields.size(), 1ull);
   CHECK_EQUAL(transformed->layout().fields[0].name, "uid");
   CHECK_EQUAL((*transformed).at(0, 0), vast::data_view{"xxx"sv});
@@ -107,8 +108,7 @@ TEST(transform with multiple steps) {
   REQUIRE(builder->add("asdf", vast::integer{23}));
   auto wrong_slice = builder->finish();
   auto not_transformed = transform.apply(std::move(wrong_slice));
-  REQUIRE(not_transformed);
-  // VAST_ERROR("transformed layout {}", not_transformed->layout());
+  REQUIRE_NOERROR(not_transformed);
   REQUIRE_EQUAL(not_transformed->layout().fields.size(), 2ull);
   CHECK_EQUAL(not_transformed->layout().fields[0].name, "uid");
   CHECK_EQUAL(not_transformed->layout().fields[1].name, "index");
@@ -145,7 +145,7 @@ TEST(transformation engine - multiple matching transforms) {
   auto transformed = engine.apply(std::move(slice));
   // We expect that both transforms have been applied, leaving us with an empty
   // table slice.
-  REQUIRE(transformed);
+  REQUIRE_NOERROR(transformed);
   CHECK_EQUAL(transformed->layout().fields.size(), 0ull);
 }
 
