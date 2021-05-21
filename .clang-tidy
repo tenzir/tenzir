@@ -22,7 +22,8 @@ Checks: >
   -readability-function-cognitive-complexity,
   -readability-magic-numbers,
   -readability-named-parameter,
-  -readability-uppercase-literal-suffix
+  -readability-uppercase-literal-suffix,
+  -dummy-must-be-last-entry-without-trailing-comma
 WarningsAsErrors:      ''
 HeaderFilterRegex:     '/vast/'
 AnalyzeTemporaryDtors: false
