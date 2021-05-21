@@ -30,15 +30,12 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   auto flat_index = layout.flat_index_at(*offset);
   // We just got the offset from `layout`, so it should be valid.
   VAST_ASSERT(flat_index);
-  auto modified_fields = layout.fields;
   auto new_layout = remove_field(layout, *offset);
   if (!new_layout)
     return caf::make_error(ec::unspecified, "failed to remove field from "
                                             "layout");
-  vast::record_type modified_layout(modified_fields);
-  modified_layout.name(layout.name());
   auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), modified_layout);
+    = factory<table_slice_builder>::make(slice.encoding(), *new_layout);
   builder_ptr->reserve(slice.rows());
   for (size_t i = 0; i < slice.rows(); ++i) {
     for (size_t j = 0; j < slice.columns(); ++j) {
