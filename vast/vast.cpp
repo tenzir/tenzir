@@ -64,8 +64,9 @@ int main(int argc, char** argv) {
   if (!bare_mode)
     for (auto&& plugin_name : std::vector<std::string>{VAST_ENABLED_PLUGINS})
       if (std::none_of(plugin_paths_or_names.begin(),
-                       plugin_paths_or_names.end(),
-                       [&](auto&& x) { return x == plugin_name; }))
+                       plugin_paths_or_names.end(), [&](auto&& x) {
+                         return x == plugin_name;
+                       }))
         plugin_paths_or_names.push_back(std::move(plugin_name));
 #endif
   auto& plugins = plugins::get();
@@ -86,7 +87,9 @@ int main(int argc, char** argv) {
   }
   // Remove all possibly invalidated static plugins.
   plugins.erase(std::remove_if(plugins.begin(), plugins.end(),
-                               [](const auto& plugin) { return !plugin; }),
+                               [](const auto& plugin) {
+                                 return !plugin;
+                               }),
                 plugins.end());
   // Load the specified dynamic plugins.
   for (const auto& plugin_path_or_name : plugin_paths_or_names) {
@@ -99,6 +102,11 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
+  // Sort the plugins by name.
+  std::sort(plugins::get().begin(), plugins::get().end(),
+            [](const auto& lhs, const auto& rhs) {
+              return lhs->name() < rhs->name();
+            });
   // Initialize factories.
   factory<format::reader>::initialize();
   factory<format::writer>::initialize();
@@ -180,7 +188,9 @@ int main(int argc, char** argv) {
   if (auto result = run(*invocation, sys, root_factory); !result)
     run_error = std::move(result.error());
   else
-    result->apply({[&](caf::error& err) { run_error = std::move(err); }});
+    result->apply({[&](caf::error& err) {
+      run_error = std::move(err);
+    }});
   if (run_error) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
