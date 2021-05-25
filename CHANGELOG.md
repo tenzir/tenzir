@@ -6,7 +6,7 @@ This file is generated automatically. Add indivual changelog entries to the'chan
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.05.27-rc1]
+## [2021.05.27-rc2]
 
 ### :zap: Breaking Changes
 
@@ -58,6 +58,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Executing VAST's unit test suite in parallel no longer fails.
   [#1659](https://github.com/tenzir/vast/pull/1659)
+
+- VAST and transform plugins now build without Arrow support again.
+  [#1673](https://github.com/tenzir/vast/pull/1673)
+
+- The `delete` transform step correctly deletes fields from the layout when running VAST with Arrow disabled.
+  [#1673](https://github.com/tenzir/vast/pull/1673)
 
 ## [2021.04.29]
 
@@ -1134,7 +1140,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.05.27-rc1]: https://github.com/tenzir/vast/releases/tag/2021.05.27-rc1
+[2021.05.27-rc2]: https://github.com/tenzir/vast/releases/tag/2021.05.27-rc2
 [2021.04.29]: https://github.com/tenzir/vast/releases/tag/2021.04.29
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
 [2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
