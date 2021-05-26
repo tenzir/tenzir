@@ -28,3 +28,5 @@ if (NOT _MAC_DEPENDENCY_PATHS)
     endif ()
   endif ()
 endif ()
+
+mark_as_advanced(MAC_PORTS_BIN MAC_HOMEBREW_BIN MAC_FINK_BIN)
