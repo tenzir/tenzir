@@ -16,6 +16,7 @@
 #include "vast/detail/settings.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/configuration.hpp"
+#include "vast/systemd.hpp"
 
 #include <caf/local_actor.hpp>
 #include <spdlog/async.h>
@@ -24,6 +25,11 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/syslog_sink.h>
+
+#ifdef VAST_ENABLE_JOURNALD_LOGGING
+#  include <spdlog/sinks/systemd_sink.h>
+#endif
 
 #include <cassert>
 #include <memory>
@@ -207,14 +213,41 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   spdlog::init_thread_pool(queue_size, defaults::logger::logger_threads);
   std::vector<spdlog::sink_ptr> sinks;
   // Add console sink.
-  auto stderr_sink
-    = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
-  stderr_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
+  std::string default_sink_type
+    = systemd::connected_to_journal() ? "journald" : "stderr";
+  auto sink_type
+    = caf::get_or(cfg_file, "vast.console-sink-type", default_sink_type);
+  auto console_sink = [&]() -> spdlog::sink_ptr {
+    if (sink_type == "stderr") {
+      auto stderr_sink
+        = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
+      return stderr_sink;
+    } else if (sink_type == "journald") {
+#ifndef VAST_ENABLE_JOURNALD_LOGGING
+      std::cerr << "Cannot use 'journald' sink, vast was built without systemd "
+                   "support\n";
+      return nullptr;
+#else
+      auto spdlog_sink = std::make_shared<spdlog::sinks::systemd_sink_mt>();
+      return std::static_pointer_cast<spdlog::sinks::sink>(spdlog_sink);
+#endif
+    } else if (sink_type == "syslog") {
+      auto syslog_sink = std::make_shared<spdlog::sinks::syslog_sink_mt>(
+        "vast", /*options = */ 0, LOG_USER, /*enable_formatting = */ true);
+      return std::static_pointer_cast<spdlog::sinks::sink>(syslog_sink);
+    } else {
+      std::cerr << "Illegal vast.console-sink-type " << sink_type << "\n";
+    }
+    return nullptr;
+  }();
+  if (!console_sink)
+    return false;
   auto console_format
     = caf::get_or(cfg_file, "vast.console-format",
                   std::string{defaults::logger::console_format});
-  stderr_sink->set_pattern(console_format);
-  sinks.push_back(stderr_sink);
+  console_sink->set_pattern(console_format);
+  console_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
+  sinks.push_back(console_sink);
   // Add file sink.
   if (vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
     bool disable_rotation = caf::get_or(cfg_file, "vast.disable-log-rotation",

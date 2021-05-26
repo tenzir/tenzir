@@ -129,6 +129,27 @@ else ()
   set(ARROW_LIBRARY arrow_static)
 endif ()
 
+# -- libsystemd ----------------------------------------------------------------
+
+option(VAST_ENABLE_JOURNALD_LOGGING "Build with support for native journald log output" OFF)
+add_feature_info("VAST_ENABLE_JOURNALD_LOGGING" VAST_ENABLE_JOURNALD_LOGGING
+                 "build with support for native journald log output.")
+if (VAST_ENABLE_JOURNALD_LOGGING)
+  find_package(PkgConfig)
+
+  pkg_check_modules(LIBSYSTEMD REQUIRED libsystemd)
+
+  find_path(SYSTEMD_INCLUDE_DIRS
+    NAMES systemd/sd-journal.h
+    PATHS ${LIBSYSTEMD_INCLUDE_DIRS}
+  )
+
+  find_library(SYSTEMD_LIBRARIES
+    NAMES systemd
+    PATHS ${LIBSYSTEMD_LIBRARY_DIRS}
+  )
+endif ()
+
 # -- log level -----------------------------------------------------------------
 
 # Choose a deafult log level based on build type.
@@ -432,6 +453,11 @@ dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
 find_package(yaml-cpp 0.6.2 REQUIRED)
 target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
+
+# Link against libsystemd
+if (VAST_ENABLE_JOURNALD_LOGGING)
+  target_link_libraries(libvast PRIVATE ${LIBSYSTEMD_LIBRARIES})
+endif ()
 
 target_compile_definitions(
   libvast

@@ -40,6 +40,12 @@ vast:
   # Maximum number of log messages in the logger queue.
   log-queue-size: 1000000
 
+  # The sink type to use for console logging.
+  # Possible values: stderr, syslog, journald.
+  # Note that 'journald' can only be selected on linux systems, and only if
+  # VAST was built with journald support.
+  console-sink-type: stderr
+
   # Mode for console log output generation. Automatic renders color only when
   # writing to a tty.
   # Possible values: always, automatic, never. (default automatic)

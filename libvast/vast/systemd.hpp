@@ -4,6 +4,10 @@
 
 namespace vast::systemd {
 
+/// Checks if the binary was set up to write its log output to journald,
+/// e.g. by using the `StandardError=journal` directive.
+bool connected_to_journal();
+
 /// Use the sd_notify() protocol to signal readyness to the service manager.
 /// Also unsets the environment variable `NOTIFY_SOCKET` unconditionally, so
 /// subsequent invocations will do nothing and always return success.
