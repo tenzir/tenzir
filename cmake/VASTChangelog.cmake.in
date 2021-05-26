@@ -19,8 +19,8 @@ set(changelog_directory "@CMAKE_CURRENT_SOURCE_DIR@/changelog")
 
 string(APPEND changelog
   "<!--\n"
-  "This file is generated automatically. Add indivual changelog entries to the"
-  "'changelog/' subdirectory instead.\n"
+  "This file is generated automatically. Add individual changelog entries to "
+  "the 'changelog/' subdirectory instead.\n"
   "-->\n\n"
   "# Changelog\n\n"
   "This changelog documents all notable changes to @PROJECT_NAME@ and is "
