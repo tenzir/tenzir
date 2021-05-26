@@ -115,8 +115,24 @@ if (VAST_ENABLE_ARROW)
     set(Arrow_ROOT ${ARROW_ROOT_DIR})
   endif ()
   find_package(Arrow 0.17 REQUIRED CONFIG)
+  mark_as_advanced(
+    BROTLI_COMMON_LIBRARY
+    BROTLI_DEC_LIBRARY
+    BROTLI_ENC_LIBRARY
+    LZ4_LIB
+    Snappy_INCLUDE_DIR
+    Snappy_LIB
+    ZSTD_LIB)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
-         "\nfind_package(Arrow REQUIRED CONFIG)")
+         "\nfind_package(Arrow REQUIRED CONFIG)"
+         "\nmark_as_advanced("
+         "\n BROTLI_COMMON_LIBRARY"
+         "\n BROTLI_DEC_LIBRARY"
+         "\n BROTLI_ENC_LIBRARY"
+         "\n LZ4_LIB"
+         "\n Snappy_INCLUDE_DIR"
+         "\n Snappy_LIB"
+         "\n ZSTD_LIB)")
   if (BUILD_SHARED_LIBS)
     set(ARROW_LIBRARY arrow_shared)
   else ()
@@ -306,8 +322,10 @@ if (NOT CAF_FOUND)
       EXPORT CAFTargets
       DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
       NAMESPACE CAF::)
+    mark_as_advanced(caf_build_header_path)
     string(APPEND VAST_EXTRA_TARGETS_FILES
-           "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
+           "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")"
+           "\nmark_as_advanced(caf_build_header_path)")
     set(CAF_FOUND true)
   endif ()
 endif ()
@@ -415,12 +433,10 @@ add_dependencies(libvast libvast_flatbuffers)
 dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
 
 # Link against yaml-cpp.
-option(YAML_CPP_ROOT "Install root of yaml-cpp" "")
-find_package(yaml-cpp 0.6.2 REQUIRED HINTS "${YAML_CPP_ROOT}")
+find_package(yaml-cpp 0.6.2 REQUIRED)
 target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 
-option(FMT_ROOT "Install root of fmt" "")
 target_compile_definitions(
   libvast
   PUBLIC
@@ -428,25 +444,21 @@ target_compile_definitions(
     FMT_SAFE_DURATION_CAST
     # Make fmt::internal an alias for fmt::detail. Remove when requiring fmt >= 7.
     FMT_USE_INTERNAL)
-find_package(fmt 5.2.1 REQUIRED HINTS "${FMT_ROOT}")
+find_package(fmt 5.2.1 REQUIRED)
 string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(fmt 5.2.1 REQUIRED)")
 target_link_libraries(libvast PUBLIC fmt::fmt)
 dependency_summary("fmt" fmt::fmt "Dependencies")
 
-option(SPDLOG_ROOT "Install root of spdlog" "")
 target_compile_definitions(libvast PUBLIC SPDLOG_FMT_EXTERNAL)
-find_package(spdlog 1.5.0 REQUIRED HINTS "${SPDLOG_ROOT}")
+find_package(spdlog 1.5.0 REQUIRED)
 string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(spdlog 1.5.0 REQUIRED)")
 target_link_libraries(libvast PUBLIC spdlog::spdlog)
 dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
 # Link against simdjson.
-option(SIMDJSON_ROOT "Install root of simdjson" "")
 find_package(
   simdjson
   REQUIRED
-  HINTS
-  "${SIMDJSON_ROOT}"
   # simdjson 0.8.0 exports it package configuration file under the wrong name,
   # so we look for "simdjson-targets.cmake" as well.
   CONFIGS
