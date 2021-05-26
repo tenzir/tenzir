@@ -467,6 +467,8 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 if (VAST_ENABLE_ARROW)
   target_link_libraries(libvast PRIVATE ${ARROW_LIBRARY})
   dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
+else ()
+  message(WARNING "Building without Apache Arrow is deprecated")
 endif ()
 
 # TODO: Should we move the bundled schemas to libvast?
