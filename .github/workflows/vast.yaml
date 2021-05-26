@@ -164,27 +164,11 @@ jobs:
           git fetch origin +refs/tags/*:refs/tags/*
 
       - name: Configure Environment
-        id: configure_env
         run: |
           PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          BUILD_DIR="build"
-          ## The upload artifact action cannot resolve environment variables.
-          echo "::set-output name=package_name::$PACKAGE_NAME"
-          echo "::set-output name=publish_name::$PUBLISH_NAME"
-          echo "::set-output name=build_dir::$BUILD_DIR"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
-          # Export slug variables for the cache action.
-          slug_ref() {
-            echo "$1" |
-              tr "[:upper:]" "[:lower:]" |
-              sed -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
-              cut -c1-63
-          }
-          echo "CACHE_REF_SLUG=$(slug_ref "$GITHUB_REF")" >> $GITHUB_ENV
-          echo "CACHE_HEAD_REF_SLUG=$(slug_ref "$GITHUB_HEAD_REF")" >> $GITHUB_ENV
-          echo "CACHE_BASE_REF_SLUG=$(slug_ref "$GITHUB_BASE_REF")" >> $GITHUB_ENV
+          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "DOCKER_RELEASE_VERSION=$(echo ${GITHUB_REF:10})" >> $GITHUB_ENV
           else
@@ -255,8 +239,8 @@ jobs:
         if: failure() && steps.integration_test_step.outputs.status == 'false'
         uses: actions/upload-artifact@v1
         with:
-          name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
-          path: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
 
       - name: Package
         env:
@@ -287,8 +271,8 @@ jobs:
       - name: Upload Artifact to GitHub
         uses: actions/upload-artifact@v1
         with:
-          name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
-          path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
 
       - name: Configure GCS Credentials
         if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
@@ -312,7 +296,7 @@ jobs:
           tag: ${{ github.ref }}
           fail-if-no-assets: false # don't fail if no previous assets exist
           fail-if-no-release: true # only delete assets when `tag` refers to a release
-          assets: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
+          assets: "${{ env.PUBLISH_NAME }}.tar.gz"
 
       - name: Publish to GitHub Release
         if: github.event_name == 'release'
@@ -321,12 +305,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          asset_path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
           # The asset names are constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-gcc.tar.gz
           # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-clang.tar.gz
           # for builds of the latest release.
-          asset_name: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
+          asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
           asset_content_type: application/gzip
 
   build-macos:
@@ -393,27 +377,11 @@ jobs:
           brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp simdjson spdlog fmt
 
       - name: Configure Environment
-        id: configure_env
         run: |
           PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          BUILD_DIR="build"
-          ## The upload artifact action cannot resolve environment variables.
-          echo "::set-output name=package_name::$PACKAGE_NAME"
-          echo "::set-output name=publish_name::$PUBLISH_NAME"
-          echo "::set-output name=build_dir::$BUILD_DIR"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
-          # Export slug variables for the cache action.
-          slug_ref() {
-            echo "$1" |
-              tr "[:upper:]" "[:lower:]" |
-              gsed -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
-              cut -c1-63
-          }
-          echo "CACHE_REF_SLUG=$(slug_ref "$GITHUB_REF")" >> $GITHUB_ENV
-          echo "CACHE_HEAD_REF_SLUG=$(slug_ref "$GITHUB_HEAD_REF")" >> $GITHUB_ENV
-          echo "CACHE_BASE_REF_SLUG=$(slug_ref "$GITHUB_BASE_REF")" >> $GITHUB_ENV
+          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "DOCKER_RELEASE_VERSION=$(echo ${GITHUB_REF:10})" >> $GITHUB_ENV
           else
@@ -495,8 +463,8 @@ jobs:
         if: failure() && steps.integration_test_step.outputs.status == 'false'
         uses: actions/upload-artifact@v1
         with:
-          name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
-          path: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
 
       - name: Package
         env:
@@ -507,8 +475,8 @@ jobs:
       - name: Upload Artifact to Github
         uses: actions/upload-artifact@v1
         with:
-          name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
-          path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
 
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
@@ -520,7 +488,7 @@ jobs:
           tag: ${{ github.ref }}
           fail-if-no-assets: false # don't fail if no previous assets exist
           fail-if-no-release: true # only delete assets when `tag` refers to a release
-          assets: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
+          assets: "${{ env.PUBLISH_NAME }}.tar.gz"
 
       - name: Publish to GitHub Release
         if: github.event_name == 'release'
@@ -529,10 +497,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          asset_path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
           # https://github.com/tenzir/vast/releases/latest/download/vast-darwin-release-appleclang.tar.gz
           # for builds of the latest release.
-          asset_name: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
+          asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
           asset_content_type: application/gzip
 
   build-plugins:
