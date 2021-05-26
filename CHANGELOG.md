@@ -6,7 +6,7 @@ This file is generated automatically. Add indivual changelog entries to the'chan
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.05.27-rc2]
+## [2021.05.27]
 
 ### :zap: Breaking Changes
 
@@ -20,6 +20,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The option `--bare-mode` supersedes the old `--disable-default-config-dirs` and causes VAST to unload static plugins that are not explicitly specified in an explicitly specified configuration file in addition to the previous functionality of disabling the loading of user and system configuration, schema, and plugin directories.
   [#1624](https://github.com/tenzir/vast/pull/1624)
+
+- Building VAST without Apache Arrow via `-DVAST_ENABLE_ARROW=OFF` is now deprecated, and support for the option will be removed in a future release. As the Arrow ecosystem and libraries matured, we feel confident in making it a required dependency and plan to build upon it more in the future.
+  [#1682](https://github.com/tenzir/vast/pull/1682)
 
 ### :gift: Features
 
@@ -64,6 +67,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The `delete` transform step correctly deletes fields from the layout when running VAST with Arrow disabled.
   [#1673](https://github.com/tenzir/vast/pull/1673)
+
+- VAST no longer erroneously warns about a version mismatch between client and server when their plugin load order differs.
+  [#1679](https://github.com/tenzir/vast/pull/1679)
 
 ## [2021.04.29]
 
@@ -1140,7 +1146,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.05.27-rc2]: https://github.com/tenzir/vast/releases/tag/2021.05.27-rc2
+[2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
 [2021.04.29]: https://github.com/tenzir/vast/releases/tag/2021.04.29
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
 [2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
