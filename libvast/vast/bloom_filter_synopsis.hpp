@@ -33,6 +33,7 @@ public:
   }
 
   void add(data_view x) override {
+    VAST_ASSERT(caf::holds_alternative<view<T>>(x), "invalid data");
     bloom_filter_.add(caf::get<view<T>>(x));
   }
 
@@ -42,12 +43,24 @@ public:
       default:
         return {};
       case relational_operator::equal:
+        // TODO: We should treat 'nil' as a normal value and
+        // hash it, so we can exclude synopsis where all values
+        // are non-nil.
+        if (caf::holds_alternative<view<caf::none_t>>(rhs))
+          return {};
+        if (!caf::holds_alternative<view<T>>(rhs))
+          return false;
         return bloom_filter_.lookup(caf::get<view<T>>(rhs));
       case relational_operator::in: {
         if (auto xs = caf::get_if<view<list>>(&rhs)) {
-          for (auto x : **xs)
+          for (auto x : **xs) {
+            if (caf::holds_alternative<view<caf::none_t>>(x))
+              return {};
+            if (!caf::holds_alternative<view<T>>(x))
+              continue;
             if (bloom_filter_.lookup(caf::get<view<T>>(x)))
               return true;
+          }
           return false;
         }
         return {};
