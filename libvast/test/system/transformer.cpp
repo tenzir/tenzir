@@ -10,6 +10,7 @@
 
 #include "vast/system/transformer.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/data.hpp"
@@ -23,11 +24,9 @@
 #include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
 
-#if VAST_ENABLE_ARROW
-#  include "vast/arrow_table_slice_builder.hpp"
-#endif // VAST_ENABLE_ARROW
+namespace {
 
-std::string TRANSFORM_CONFIG = R"_(
+const std::string transform_config = R"_(
 vast:
   transforms:
     delete_uid:
@@ -48,6 +47,8 @@ vast:
         location: client
         events: [vast.test]
 )_";
+
+}
 
 vast::system::stream_sink_actor<vast::table_slice>::behavior_type
 dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
@@ -112,13 +113,13 @@ FIXTURE_SCOPE(transformer_tests, transformer_fixture)
 
 TEST(transformer config) {
   auto client_sink_transforms = transforms_from_string(
-    vast::system::transforms_location::client_sink, TRANSFORM_CONFIG);
+    vast::system::transforms_location::client_sink, transform_config);
   auto client_source_transforms = transforms_from_string(
-    vast::system::transforms_location::client_source, TRANSFORM_CONFIG);
+    vast::system::transforms_location::client_source, transform_config);
   auto server_import_transforms = transforms_from_string(
-    vast::system::transforms_location::server_import, TRANSFORM_CONFIG);
+    vast::system::transforms_location::server_import, transform_config);
   auto server_export_transforms = transforms_from_string(
-    vast::system::transforms_location::server_export, TRANSFORM_CONFIG);
+    vast::system::transforms_location::server_export, transform_config);
 
   CHECK_EQUAL(client_sink_transforms.size(), 1ull);
   CHECK_EQUAL(client_source_transforms.size(), 0ull);
@@ -131,7 +132,7 @@ TEST(transformer) {
   auto snk = this->self->spawn(dummy_sink, &result);
   // This should return one transform, `delete_uid`.
   auto transforms = transforms_from_string(
-    vast::system::transforms_location::server_import, TRANSFORM_CONFIG);
+    vast::system::transforms_location::server_import, transform_config);
   REQUIRE_EQUAL(transforms.size(), 1ull);
   CHECK_EQUAL(transforms[0].name(), "delete_uid");
   CHECK_EQUAL(transforms[0].event_types(), std::vector<std::string>{"vast."

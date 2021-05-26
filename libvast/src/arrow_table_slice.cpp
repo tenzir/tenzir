@@ -6,28 +6,26 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/arrow_table_slice.hpp"
+
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/config.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/die.hpp"
+#include "vast/error.hpp"
+#include "vast/fbs/table_slice.hpp"
+#include "vast/fbs/utils.hpp"
+#include "vast/logger.hpp"
+#include "vast/value_index.hpp"
 
-#if VAST_ENABLE_ARROW
+#include <arrow/api.h>
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
 
-#  include "vast/arrow_table_slice.hpp"
-#  include "vast/arrow_table_slice_builder.hpp"
-#  include "vast/detail/byte_swap.hpp"
-#  include "vast/detail/narrow.hpp"
-#  include "vast/detail/overload.hpp"
-#  include "vast/die.hpp"
-#  include "vast/error.hpp"
-#  include "vast/fbs/table_slice.hpp"
-#  include "vast/fbs/utils.hpp"
-#  include "vast/logger.hpp"
-#  include "vast/value_index.hpp"
-
-#  include <arrow/api.h>
-#  include <arrow/io/api.h>
-#  include <arrow/ipc/api.h>
-
-#  include <type_traits>
-#  include <utility>
+#include <type_traits>
+#include <utility>
 
 namespace vast {
 
@@ -119,9 +117,9 @@ private:
 // -- decoding of Arrow column arrays ------------------------------------------
 
 // Safe ourselves redundant boilerplate code for dispatching to the visitor.
-#  define DECODE_TRY_DISPATCH(vast_type)                                       \
-    if (auto dt = caf::get_if<vast_type##_type>(&t))                           \
-    return f(arr, *dt)
+#define DECODE_TRY_DISPATCH(vast_type)                                         \
+  if (auto dt = caf::get_if<vast_type##_type>(&t))                             \
+  return f(arr, *dt)
 
 template <class F>
 void decode(const type& t, const arrow::BooleanArray& arr, F& f) {
@@ -264,7 +262,7 @@ void decode(const type& t, const arrow::Array& arr, F& f) {
   }
 }
 
-#  undef DECODE_TRY_DISPATCH
+#undef DECODE_TRY_DISPATCH
 
 // -- access to a single element -----------------------------------------------
 
@@ -276,8 +274,9 @@ auto real_at = [](const auto& arr, int64_t row) {
   return static_cast<real>(arr.Value(row));
 };
 
-auto integer_at
-  = [](const auto& arr, int64_t row) { return integer{arr.Value(row)}; };
+auto integer_at = [](const auto& arr, int64_t row) {
+  return integer{arr.Value(row)};
+};
 
 auto count_at = [](const auto& arr, int64_t row) {
   return static_cast<count>(arr.Value(row));
@@ -287,8 +286,9 @@ auto enumeration_at = [](const auto& arr, int64_t row) {
   return static_cast<enumeration>(arr.Value(row));
 };
 
-auto duration_at
-  = [](const auto& arr, int64_t row) { return duration{arr.Value(row)}; };
+auto duration_at = [](const auto& arr, int64_t row) {
+  return duration{arr.Value(row)};
+};
 
 auto string_at(const arrow::StringArray& arr, int64_t row) {
   auto offset = arr.value_offset(row);
@@ -552,8 +552,9 @@ public:
   }
 
   void operator()(const arrow::StructArray& arr, const record_type& t) {
-    apply(arr,
-          [&](const auto& arr, int64_t row) { return record_at(t, arr, row); });
+    apply(arr, [&](const auto& arr, int64_t row) {
+      return record_at(t, arr, row);
+    });
   }
 
 private:
@@ -726,5 +727,3 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 
 } // namespace vast
-
-#endif // VAST_ENABLE_ARROW

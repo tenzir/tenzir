@@ -13,6 +13,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/documentation.hpp"
+#include "vast/format/arrow.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
@@ -36,10 +37,6 @@
 #include "vast/system/stop_command.hpp"
 #include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
-
-#if VAST_ENABLE_ARROW
-#  include "vast/format/arrow.hpp"
-#endif
 
 namespace vast::system {
 
@@ -141,12 +138,10 @@ auto make_export_command() {
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
                           opts("?vast.export.null"));
-#if VAST_ENABLE_ARROW
   export_->add_subcommand("arrow", "exports query results in Arrow format",
                           documentation::vast_export_arrow,
                           opts("?vast.export.arrow"));
 
-#endif
   for (const auto& plugin : plugins::get()) {
     if (const auto* writer = plugin.as<writer_plugin>()) {
       auto opts_category
@@ -419,9 +414,7 @@ auto make_command_factory() {
     {"export csv", make_writer_command("csv")},
     {"export json", make_writer_command("json")},
     {"export null", make_writer_command("null")},
-#if VAST_ENABLE_ARROW
     {"export arrow", make_writer_command("arrow")},
-#endif
     {"export zeek", make_writer_command("zeek")},
     {"get", get_command},
     {"infer", infer_command},

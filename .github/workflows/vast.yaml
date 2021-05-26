@@ -19,8 +19,8 @@ on:
   release:
     types: published
 env:
-  # 5G divided by 4 entries in the Matrix with a little bit of room for error.
-  CCACHE_MAXSIZE: '1200M'
+  # 5G divided by 3 entries in the Matrix with a little bit of room for error.
+  CCACHE_MAXSIZE: '1600M'
 
 jobs:
   cancel-previous-runs:
@@ -61,7 +61,9 @@ jobs:
           CC: gcc-8
           CXX: g++-8
         run: |
-          cmake -B build -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON -DVAST_ENABLE_ARROW:BOOL=OFF
+          cmake -B build \
+            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
+            -DVAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
       - name: Generate CHANGELOG.md
         run: |
           cmake --build build --target changelog
@@ -91,10 +93,6 @@ jobs:
         build:
           - extra-flags:
             compiler: GCC
-            cc: gcc-8
-            cxx: g++-8
-          - extra-flags: -DVAST_ENABLE_ARROW:BOOL=OFF
-            compiler: GCC Arrow Disabled
             cc: gcc-8
             cxx: g++-8
         configure:

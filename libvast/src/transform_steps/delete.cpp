@@ -13,9 +13,7 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
-#if VAST_ENABLE_ARROW
-#  include "arrow/type.h"
-#endif
+#include <arrow/type.h>
 
 namespace vast {
 
@@ -49,8 +47,6 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-#if VAST_ENABLE_ARROW
-
 std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 delete_step::operator()(vast::record_type layout,
                         std::shared_ptr<arrow::RecordBatch> batch) const {
@@ -69,8 +65,6 @@ delete_step::operator()(vast::record_type layout,
     return {};
   return std::make_pair(std::move(*new_layout), std::move(transformed));
 }
-
-#endif
 
 class delete_step_plugin final : public virtual transform_plugin {
 public:

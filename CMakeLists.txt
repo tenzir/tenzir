@@ -119,6 +119,13 @@ add_custom_target(update-changelog
     "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
     "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md")
 
+option(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
+  "Skip build configuration after update-changelog target" OFF)
+mark_as_advanced(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
+if (VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
+  return ()
+endif ()
+
 # -- testing -------------------------------------------------------------------
 
 cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast"
