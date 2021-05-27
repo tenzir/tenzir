@@ -8,14 +8,11 @@
 
 #include "vast/transform_steps/replace.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/error.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-
-#if VAST_ENABLE_ARROW
-#  include "vast/arrow_table_slice_builder.hpp"
-#endif // VAST_ENABLE_ARROW
 
 #include <fmt/format.h>
 
@@ -53,8 +50,6 @@ caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-#if VAST_ENABLE_ARROW
-
 [[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 replace_step::operator()(vast::record_type layout,
                          std::shared_ptr<arrow::RecordBatch> batch) const {
@@ -87,8 +82,6 @@ replace_step::operator()(vast::record_type layout,
     return {};
   return std::make_pair(std::move(*new_layout), std::move(batch));
 }
-
-#endif
 
 class replace_step_plugin final : public virtual transform_plugin {
 public:

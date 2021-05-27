@@ -8,22 +8,20 @@
 
 #define SUITE arrow_table_slice
 
+#include "vast/arrow_table_slice.hpp"
+
+#include "vast/arrow_table_slice_builder.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
+#include "vast/test/test.hpp"
+#include "vast/type.hpp"
 
-#if VAST_ENABLE_ARROW
-
-#  include "vast/arrow_table_slice.hpp"
-#  include "vast/arrow_table_slice_builder.hpp"
-#  include "vast/concept/parseable/to.hpp"
-#  include "vast/concept/parseable/vast/address.hpp"
-#  include "vast/concept/parseable/vast/subnet.hpp"
-#  include "vast/test/fixtures/table_slices.hpp"
-#  include "vast/test/test.hpp"
-#  include "vast/type.hpp"
-
-#  include <arrow/api.h>
-#  include <caf/make_copy_on_write.hpp>
-#  include <caf/test/dsl.hpp>
+#include <arrow/api.h>
+#include <caf/make_copy_on_write.hpp>
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 using namespace std::chrono_literals;
@@ -76,9 +74,9 @@ integer operator"" _i(unsigned long long int x) {
 
 } // namespace
 
-#  define CHECK_OK(expression)                                                 \
-    if (!(expression).ok())                                                    \
-      FAIL("!! " #expression);
+#define CHECK_OK(expression)                                                   \
+  if (!(expression).ok())                                                      \
+    FAIL("!! " #expression);
 
 TEST(single column - equality) {
   auto t = count_type{};
@@ -369,5 +367,3 @@ FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)
 TEST_TABLE_SLICE(arrow_table_slice_builder, arrow)
 
 FIXTURE_SCOPE_END()
-
-#endif // VAST_ENABLE_ARROW

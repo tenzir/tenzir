@@ -103,41 +103,29 @@ endforeach ()
 
 # -- arrow ---------------------------------------------------------------------
 
-cmake_dependent_option(VAST_ENABLE_ARROW "Build with Apache Arrow support" ON
-                       "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" OFF)
-add_feature_info("VAST_ENABLE_ARROW" VAST_ENABLE_ARROW
-                 "build with Apache Arrow support.")
-if (VAST_ENABLE_ARROW)
-  if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
-    set(ARROW_ROOT_DIR ${VAST_PREFIX})
-  endif ()
-  if (ARROW_ROOT_DIR)
-    set(Arrow_ROOT ${ARROW_ROOT_DIR})
-  endif ()
-  find_package(Arrow 0.17 REQUIRED CONFIG)
-  mark_as_advanced(
-    BROTLI_COMMON_LIBRARY
-    BROTLI_DEC_LIBRARY
-    BROTLI_ENC_LIBRARY
-    LZ4_LIB
-    Snappy_INCLUDE_DIR
-    Snappy_LIB
-    ZSTD_LIB)
-  string(APPEND VAST_FIND_DEPENDENCY_LIST
-         "\nfind_package(Arrow REQUIRED CONFIG)"
-         "\nmark_as_advanced("
-         "\n BROTLI_COMMON_LIBRARY"
-         "\n BROTLI_DEC_LIBRARY"
-         "\n BROTLI_ENC_LIBRARY"
-         "\n LZ4_LIB"
-         "\n Snappy_INCLUDE_DIR"
-         "\n Snappy_LIB"
-         "\n ZSTD_LIB)")
-  if (BUILD_SHARED_LIBS)
-    set(ARROW_LIBRARY arrow_shared)
-  else ()
-    set(ARROW_LIBRARY arrow_static)
-  endif ()
+find_package(Arrow 0.17 REQUIRED CONFIG)
+mark_as_advanced(
+  BROTLI_COMMON_LIBRARY
+  BROTLI_DEC_LIBRARY
+  BROTLI_ENC_LIBRARY
+  LZ4_LIB
+  Snappy_INCLUDE_DIR
+  Snappy_LIB
+  ZSTD_LIB)
+string(APPEND VAST_FIND_DEPENDENCY_LIST
+        "\nfind_package(Arrow REQUIRED CONFIG)"
+        "\nmark_as_advanced("
+        "\n BROTLI_COMMON_LIBRARY"
+        "\n BROTLI_DEC_LIBRARY"
+        "\n BROTLI_ENC_LIBRARY"
+        "\n LZ4_LIB"
+        "\n Snappy_INCLUDE_DIR"
+        "\n Snappy_LIB"
+        "\n ZSTD_LIB)")
+if (BUILD_SHARED_LIBS)
+  set(ARROW_LIBRARY arrow_shared)
+else ()
+  set(ARROW_LIBRARY arrow_static)
 endif ()
 
 # -- log level -----------------------------------------------------------------
@@ -476,12 +464,8 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 # dependency_summary("robin-map" tsl::robin_map "Dependencies")
 
 # Link against Apache Arrow.
-if (VAST_ENABLE_ARROW)
-  target_link_libraries(libvast PRIVATE ${ARROW_LIBRARY})
-  dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
-else ()
-  message(WARNING "Building without Apache Arrow is deprecated")
-endif ()
+target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
+dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # TODO: Should we move the bundled schemas to libvast?
 if (TARGET vast-schema)

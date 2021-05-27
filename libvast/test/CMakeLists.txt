@@ -16,10 +16,6 @@ add_executable(vast-test ${test_sources} ${test_headers})
 target_link_libraries(vast-test PRIVATE libvast_test libvast libvast_internal
                                         ${CMAKE_THREAD_LIBS_INIT})
 
-if (VAST_ENABLE_ARROW)
-  target_link_libraries(vast-test PRIVATE ${ARROW_LIBRARY})
-endif ()
-
 add_test(NAME build-vast-test
          COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                  "$<CONFIG>" --target vast-test)

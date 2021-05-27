@@ -8,19 +8,15 @@
 
 #include "vast/transform_steps/hash.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/error.hpp"
 #include "vast/optional.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
+#include <arrow/array/builder_binary.h>
+#include <arrow/scalar.h>
 #include <fmt/format.h>
-
-#if VAST_ENABLE_ARROW
-#  include "vast/arrow_table_slice_builder.hpp"
-
-#  include <arrow/array/builder_binary.h>
-#  include <arrow/scalar.h>
-#endif // VAST_ENABLE_ARROW
 
 namespace vast {
 
@@ -62,8 +58,6 @@ caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-#if VAST_ENABLE_ARROW
-
 [[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 hash_step::operator()(vast::record_type layout,
                       std::shared_ptr<arrow::RecordBatch> batch) const {
@@ -97,8 +91,6 @@ hash_step::operator()(vast::record_type layout,
   layout.fields.emplace_back(out_, string_type{});
   return std::make_pair(std::move(layout), result_batch.ValueOrDie());
 }
-
-#endif
 
 class hash_step_plugin final : public virtual transform_plugin {
 public:

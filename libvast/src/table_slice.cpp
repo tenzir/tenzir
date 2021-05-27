@@ -8,6 +8,8 @@
 
 #include "vast/table_slice.hpp"
 
+#include "vast/arrow_table_slice.hpp"
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
@@ -26,11 +28,6 @@
 
 #include <cstddef>
 
-#if VAST_ENABLE_ARROW
-#  include "vast/arrow_table_slice.hpp"
-#  include "vast/arrow_table_slice_builder.hpp"
-#endif // VAST_ENABLE_ARROW
-
 namespace vast {
 
 // -- utility functions --------------------------------------------------------
@@ -47,13 +44,8 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
   std::conjunction_v<
     // Check whether the handlers for all other table slice encodings are
     // noexcept-specified. When adding a new encoding, add it here as well.
-    // NOTE: GCC does not quite respect the C++ standard and instantiates
-    // 'Visitor' with the encoded table, which is why we need to take extra care
-    // of builds without VAST_ENABLE_ARROW here.
     std::is_nothrow_invocable<Visitor>,
-#if VAST_ENABLE_ARROW
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
-#endif // VAST_ENABLE_ARROW
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>>) {
   if (!x)
     return std::invoke(std::forward<Visitor>(visitor));
@@ -61,19 +53,8 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     case fbs::table_slice::TableSlice::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
     case fbs::table_slice::TableSlice::arrow_v0:
-#if VAST_ENABLE_ARROW
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_arrow_v0());
-#else
-      static std::once_flag flag;
-      std::call_once(flag, [] {
-        VAST_ERROR("database contains Arrow-encoded table slice but "
-                   "this version of VAST does not support Apache "
-                   "Arrow; "
-                   "data may be missing from exports");
-      });
-      return std::invoke(std::forward<Visitor>(visitor));
-#endif
     case fbs::table_slice::TableSlice::msgpack_v0:
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_msgpack_v0());
@@ -143,14 +124,17 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   if (chunk_ && chunk_->unique()) {
     ++num_instances_;
     auto f = detail::overload{
-      []() noexcept { die("invalid table slice encoding"); },
+      []() noexcept {
+        die("invalid table slice encoding");
+      },
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
         auto state
           = std::make_unique<std::decay_t<decltype(*state_ptr)>>(encoded);
         state_ptr = state.get();
-        chunk_->add_deletion_step(
-          [state = std::move(state)]() noexcept { --num_instances_; });
+        chunk_->add_deletion_step([state = std::move(state)]() noexcept {
+          --num_instances_;
+        });
       },
     };
     visit(f, as_flatbuffer(chunk_));
@@ -163,14 +147,17 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
   if (chunk_ && chunk_->unique()) {
     ++num_instances_;
     auto f = detail::overload{
-      []() noexcept { die("invalid table slice encoding"); },
+      []() noexcept {
+        die("invalid table slice encoding");
+      },
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
         auto state = std::make_unique<std::decay_t<decltype(*state_ptr)>>(
           encoded, std::move(layout));
         state_ptr = state.get();
-        chunk_->add_deletion_step(
-          [state = std::move(state)]() noexcept { --num_instances_; });
+        chunk_->add_deletion_step([state = std::move(state)]() noexcept {
+          --num_instances_;
+        });
       },
     };
     visit(f, as_flatbuffer(chunk_));
@@ -192,14 +179,10 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
   *this = table_slice{std::move(chunk), verify};
 }
 
-#if VAST_ENABLE_ARROW
-
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
                          const record_type& layout) {
   *this = arrow_table_slice_builder::create(record_batch, layout);
 }
-
-#endif // VAST_ENABLE_ARROW
 
 table_slice::table_slice(const table_slice& other) noexcept = default;
 
@@ -257,7 +240,9 @@ bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
 
 enum table_slice_encoding table_slice::encoding() const noexcept {
   auto f = detail::overload{
-    []() noexcept { return table_slice_encoding::none; },
+    []() noexcept {
+      return table_slice_encoding::none;
+    },
     [&](const auto& encoded) noexcept {
       return state(encoded, state_)->encoding;
     },
@@ -280,7 +265,9 @@ const record_type& table_slice::layout() const noexcept {
 
 table_slice::size_type table_slice::rows() const noexcept {
   auto f = detail::overload{
-    []() noexcept { return size_type{}; },
+    []() noexcept {
+      return size_type{};
+    },
     [&](const auto& encoded) noexcept {
       return state(encoded, state_)->rows();
     },
@@ -290,7 +277,9 @@ table_slice::size_type table_slice::rows() const noexcept {
 
 table_slice::size_type table_slice::columns() const noexcept {
   auto f = detail::overload{
-    []() noexcept { return size_type{}; },
+    []() noexcept {
+      return size_type{};
+    },
     [&](const auto& encoded) noexcept {
       return state(encoded, state_)->columns();
     },
@@ -359,8 +348,6 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
-#if VAST_ENABLE_ARROW
-
 std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
   auto f = detail::overload{
     []() noexcept -> std::shared_ptr<arrow::RecordBatch> {
@@ -397,8 +384,6 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
   return visit(f, as_flatbuffer(slice.chunk_));
 }
 
-#endif // VAST_ENABLE_ARROW
-
 // -- concepts -----------------------------------------------------------------
 
 span<const std::byte> as_bytes(const table_slice& slice) noexcept {
@@ -410,7 +395,9 @@ span<const std::byte> as_bytes(const table_slice& slice) noexcept {
 table_slice
 rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
   auto f = detail::overload{
-    [&]() noexcept -> table_slice { return {}; },
+    [&]() noexcept -> table_slice {
+      return {};
+    },
     [&](const auto& encoded) noexcept -> table_slice {
       if (encoding == state(encoded, slice.state_)->encoding
           && state(encoded, slice.state_)->is_latest_version)
@@ -592,13 +579,15 @@ struct row_evaluator {
   }
 
   bool operator()(const conjunction& c) {
-    return std::all_of(c.begin(), c.end(),
-                       [&](const auto& op) { return caf::visit(*this, op); });
+    return std::all_of(c.begin(), c.end(), [&](const auto& op) {
+      return caf::visit(*this, op);
+    });
   }
 
   bool operator()(const disjunction& d) {
-    return std::any_of(d.begin(), d.end(),
-                       [&](const auto& op) { return caf::visit(*this, op); });
+    return std::any_of(d.begin(), d.end(), [&](const auto& op) {
+      return caf::visit(*this, op);
+    });
   }
 
   bool operator()(const negation& n) {

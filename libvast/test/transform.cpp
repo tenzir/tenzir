@@ -10,16 +10,13 @@
 
 #include "vast/transform.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
 #include "vast/transform_steps/delete.hpp"
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/replace.hpp"
-
-#if VAST_ENABLE_ARROW
-#  include "vast/arrow_table_slice_builder.hpp"
-#endif // VAST_ENABLE_ARROW
 
 using namespace std::literals;
 
@@ -61,15 +58,13 @@ TEST(delete_ step) {
   CHECK_EQUAL(deleted->layout().fields.size(), 2ull);
   vast::delete_step invalid_delete_step("xxx");
   auto not_deleted = invalid_delete_step.apply(vast::table_slice{slice});
-#if VAST_ENABLE_ARROW
-  // If arrow is enabled the default format is arrow, so we do one more
-  // test where we force msgpack.
+  // The default format is Arrow, so we do one more test where we force
+  // MessagePack.
   auto msgpack_slice
     = make_transforms_testdata(vast::table_slice_encoding::msgpack);
   auto msgpack_deleted = delete_step.apply(vast::table_slice{msgpack_slice});
   REQUIRE(msgpack_deleted);
   CHECK_EQUAL(msgpack_deleted->layout().fields.size(), 2ull);
-#endif
 }
 
 TEST(replace step) {

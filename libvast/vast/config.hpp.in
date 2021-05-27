@@ -1,6 +1,5 @@
 #pragma once
 
-#cmakedefine01 VAST_ENABLE_ARROW
 #cmakedefine01 VAST_ENABLE_ASAN
 #cmakedefine01 VAST_ENABLE_ASSERTIONS
 #cmakedefine01 VAST_ENABLE_BACKTRACE

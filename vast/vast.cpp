@@ -133,12 +133,6 @@ int main(int argc, char** argv) {
   auto log_context = vast::create_log_context(*invocation, cfg.content);
   if (!log_context)
     return EXIT_FAILURE;
-#if !VAST_ENABLE_ARROW
-  // Print deprecation warning for builds without Apache Arrow.
-  VAST_WARN("running VAST without Apache Arrow support; this build "
-            "configuration is deprecated and will be removed in a future "
-            "release.");
-#endif
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));

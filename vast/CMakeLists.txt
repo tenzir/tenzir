@@ -67,7 +67,6 @@ file(
      . \"$env_dir/bin/activate\"
      python -m pip install --upgrade pip
      python -m pip install -r \"$base_dir/requirements.txt\"
-     $<$<BOOL:${VAST_ENABLE_ARROW}>:python -m pip install pyarrow>
      python \"$base_dir/integration.py\" \
       --app \"$app\" \
       --directory vast-integration-test \
