@@ -655,7 +655,7 @@ jobs:
         env:
           STATIC_BINARY_TARGET: ${{ matrix.args }}
         run: |
-          nix/static-binary.sh --use-head ${{ github.event.inputs.arguments }}
+          nix/static-binary.sh ${{ github.event.inputs.arguments }}
 
       - name: Create Paths
         id: create_paths
