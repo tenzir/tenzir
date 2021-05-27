@@ -30,6 +30,9 @@ CBA="${WORKING_DIR}/clang-build-analyzer/build/ClangBuildAnalyzer"
 git -C "${WORKING_DIR}" submodule update --init --recursive
 git diff | git -C "${WORKING_DIR}" apply
 
+# Override CC and CXX only if unset.
+: ${CC:=clang}
+: ${CXX:=clang++}
 
 # Configure VAST to build with time-traces enabled
 pushd "${WORKING_DIR}"

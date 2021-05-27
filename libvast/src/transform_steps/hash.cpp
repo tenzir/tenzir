@@ -58,8 +58,6 @@ caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-#if VAST_ENABLE_ARROW
-
 [[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 hash_step::operator()(vast::record_type layout,
                       std::shared_ptr<arrow::RecordBatch> batch) const {
@@ -93,8 +91,6 @@ hash_step::operator()(vast::record_type layout,
   layout.fields.emplace_back(out_, string_type{});
   return std::make_pair(std::move(layout), result_batch.ValueOrDie());
 }
-
-#endif
 
 class hash_step_plugin final : public virtual transform_plugin {
 public:

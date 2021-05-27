@@ -24,7 +24,9 @@
 #include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
 
-std::string TRANSFORM_CONFIG = R"_(
+namespace {
+
+const std::string transform_config = R"_(
 vast:
   transforms:
     delete_uid:
@@ -46,6 +48,8 @@ vast:
         events: [vast.test]
 )_";
 
+}
+
 vast::system::stream_sink_actor<vast::table_slice>::behavior_type
 dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
            vast::table_slice* result) {
@@ -56,7 +60,9 @@ dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
         [=](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, vast::table_slice&& x) { *result = std::move(x); });
+        [=](caf::unit_t&, vast::table_slice&& x) {
+          *result = std::move(x);
+        });
       return caf::inbound_stream_slot<vast::table_slice>{sink.inbound_slot()};
     },
   };
@@ -65,10 +71,7 @@ dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
 struct transformer_fixture
   : public fixtures::deterministic_actor_system_and_events {
   transformer_fixture() {
-    vast::factory<vast::table_slice_builder>::add<
-      vast::arrow_table_slice_builder>(vast::table_slice_encoding::arrow);
-    vast::factory<vast::table_slice_builder>::add<
-      vast::msgpack_table_slice_builder>(vast::table_slice_encoding::msgpack);
+    vast::factory<vast::table_slice_builder>::initialize();
   }
 
   // Creates a table slice with a single string field and random data.
@@ -110,13 +113,13 @@ FIXTURE_SCOPE(transformer_tests, transformer_fixture)
 
 TEST(transformer config) {
   auto client_sink_transforms = transforms_from_string(
-    vast::system::transforms_location::client_sink, TRANSFORM_CONFIG);
+    vast::system::transforms_location::client_sink, transform_config);
   auto client_source_transforms = transforms_from_string(
-    vast::system::transforms_location::client_source, TRANSFORM_CONFIG);
+    vast::system::transforms_location::client_source, transform_config);
   auto server_import_transforms = transforms_from_string(
-    vast::system::transforms_location::server_import, TRANSFORM_CONFIG);
+    vast::system::transforms_location::server_import, transform_config);
   auto server_export_transforms = transforms_from_string(
-    vast::system::transforms_location::server_export, TRANSFORM_CONFIG);
+    vast::system::transforms_location::server_export, transform_config);
 
   CHECK_EQUAL(client_sink_transforms.size(), 1ull);
   CHECK_EQUAL(client_source_transforms.size(), 0ull);
@@ -129,7 +132,7 @@ TEST(transformer) {
   auto snk = this->self->spawn(dummy_sink, &result);
   // This should return one transform, `delete_uid`.
   auto transforms = transforms_from_string(
-    vast::system::transforms_location::server_import, TRANSFORM_CONFIG);
+    vast::system::transforms_location::server_import, transform_config);
   REQUIRE_EQUAL(transforms.size(), 1ull);
   CHECK_EQUAL(transforms[0].name(), "delete_uid");
   CHECK_EQUAL(transforms[0].event_types(), std::vector<std::string>{"vast."

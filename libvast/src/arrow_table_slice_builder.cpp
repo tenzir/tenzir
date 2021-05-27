@@ -6,24 +6,22 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/arrow_table_slice_builder.hpp"
+
+#include "vast/arrow_table_slice.hpp"
 #include "vast/config.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/die.hpp"
+#include "vast/fbs/table_slice.hpp"
+#include "vast/fbs/utils.hpp"
+#include "vast/logger.hpp"
 
-#if VAST_ENABLE_ARROW
-
-#  include "vast/arrow_table_slice.hpp"
-#  include "vast/arrow_table_slice_builder.hpp"
-#  include "vast/detail/byte_swap.hpp"
-#  include "vast/detail/narrow.hpp"
-#  include "vast/detail/overload.hpp"
-#  include "vast/die.hpp"
-#  include "vast/fbs/table_slice.hpp"
-#  include "vast/fbs/utils.hpp"
-#  include "vast/logger.hpp"
-
-#  include <arrow/api.h>
-#  include <arrow/io/api.h>
-#  include <arrow/ipc/api.h>
-#  include <arrow/util/config.h>
+#include <arrow/api.h>
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
+#include <arrow/util/config.h>
 
 namespace vast {
 
@@ -56,16 +54,16 @@ struct primitive_column_builder_trait_base
 template <class T>
 struct column_builder_trait;
 
-#  define PRIMITIVE_COLUMN_BUILDER_TRAIT(VastType, ArrowType)                  \
-    template <>                                                                \
-    struct column_builder_trait<VastType>                                      \
-      : primitive_column_builder_trait_base<VastType, ArrowType> {}
+#define PRIMITIVE_COLUMN_BUILDER_TRAIT(VastType, ArrowType)                    \
+  template <>                                                                  \
+  struct column_builder_trait<VastType>                                        \
+    : primitive_column_builder_trait_base<VastType, ArrowType> {}
 
 PRIMITIVE_COLUMN_BUILDER_TRAIT(bool_type, arrow::BooleanType);
 PRIMITIVE_COLUMN_BUILDER_TRAIT(count_type, arrow::UInt64Type);
 PRIMITIVE_COLUMN_BUILDER_TRAIT(real_type, arrow::DoubleType);
 
-#  undef PRIMITIVE_COLUMN_BUILDER_TRAIT
+#undef PRIMITIVE_COLUMN_BUILDER_TRAIT
 
 template <>
 struct column_builder_trait<integer_type>
@@ -540,12 +538,12 @@ table_slice arrow_table_slice_builder::finish(
                               ? use_layout(serialized_layout_cache_)
                               : gen_layout());
   // Pack schema.
-#  if ARROW_VERSION_MAJOR >= 2
+#if ARROW_VERSION_MAJOR >= 2
   auto flat_schema = arrow::ipc::SerializeSchema(*schema_).ValueOrDie();
-#  else
+#else
   auto flat_schema
     = arrow::ipc::SerializeSchema(*schema_, nullptr).ValueOrDie();
-#  endif
+#endif
   auto schema_buffer
     = builder_.CreateVector(flat_schema->data(), flat_schema->size());
   // Pack record batch.
@@ -591,13 +589,13 @@ table_slice arrow_table_slice_builder::create(
     reinterpret_cast<const unsigned char*>(flat_layout.data()),
     flat_layout.size());
   // Pack schema.
-#  if ARROW_VERSION_MAJOR >= 2
+#if ARROW_VERSION_MAJOR >= 2
   auto flat_schema
     = arrow::ipc::SerializeSchema(*record_batch->schema()).ValueOrDie();
-#  else
+#else
   auto flat_schema
     = arrow::ipc::SerializeSchema(*record_batch->schema(), nullptr).ValueOrDie();
-#  endif
+#endif
   auto schema_buffer
     = builder.CreateVector(flat_schema->data(), flat_schema->size());
   // Pack record batch.
@@ -704,5 +702,3 @@ std::shared_ptr<arrow::DataType> make_arrow_type(const type& t) {
 }
 
 } // namespace vast
-
-#endif // VAST_ENABLE_ARROW

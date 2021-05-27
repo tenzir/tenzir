@@ -8,29 +8,27 @@
 
 #define SUITE arrow
 
+#include "vast/format/arrow.hpp"
+
+#include "vast/arrow_table_slice.hpp"
+#include "vast/arrow_table_slice_builder.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/config.hpp"
+#include "vast/data.hpp"
+#include "vast/defaults.hpp"
+#include "vast/detail/make_io_stream.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
 
-#if VAST_ENABLE_ARROW
+#include <arrow/api.h>
+#include <arrow/io/memory.h>
+#include <arrow/ipc/reader.h>
+#include <caf/sum_type.hpp>
 
-#  include "vast/arrow_table_slice.hpp"
-#  include "vast/arrow_table_slice_builder.hpp"
-#  include "vast/concept/parseable/to.hpp"
-#  include "vast/concept/parseable/vast/address.hpp"
-#  include "vast/data.hpp"
-#  include "vast/defaults.hpp"
-#  include "vast/detail/make_io_stream.hpp"
-#  include "vast/detail/narrow.hpp"
-#  include "vast/format/arrow.hpp"
-#  include "vast/table_slice.hpp"
-#  include "vast/test/fixtures/events.hpp"
-#  include "vast/test/test.hpp"
-
-#  include <arrow/api.h>
-#  include <arrow/io/memory.h>
-#  include <arrow/ipc/reader.h>
-#  include <caf/sum_type.hpp>
-
-#  include <utility>
+#include <utility>
 
 using caf::get;
 
@@ -87,5 +85,3 @@ TEST(arrow batch) {
 }
 
 FIXTURE_SCOPE_END()
-
-#endif // VAST_ENABLE_ARROW

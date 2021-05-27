@@ -33,11 +33,9 @@ public:
   [[nodiscard]] const std::string& name() const;
 
 private:
-#if VAST_ENABLE_ARROW
   [[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
   apply(vast::record_type layout,
         std::shared_ptr<arrow::RecordBatch> batch) const;
-#endif
 
   // Grant access to the transformation engine so it can check the fast path.
   friend class transformation_engine;
@@ -50,6 +48,7 @@ private:
 
   /// If all steps of this transform have specialized arrow handlers,
   /// we can save all intermediate (de)serialization steps.
+  /// NOTE: This is ignored if VAST is built without arrow support.
   bool arrow_fast_path_;
 
   /// Triggers for this transform

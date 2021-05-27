@@ -77,8 +77,6 @@ public:
   table_slice(const fbs::FlatTableSlice& flat_slice,
               const chunk_ptr& parent_chunk, enum verify verify) noexcept;
 
-#if VAST_ENABLE_ARROW
-
   /// Construct an Arrow-encoded table slice from an existing record batch and
   /// layout. Note that the record batch's schema and the layout must match
   /// exactly.
@@ -86,8 +84,6 @@ public:
   /// @param layout The layout of the tbale slice.
   table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
               const record_type& layout);
-
-#endif // VAST_ENABLE_ARROW
 
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.
@@ -166,15 +162,11 @@ public:
   [[nodiscard]] data_view
   at(size_type row, size_type column, const type& t) const;
 
-#if VAST_ENABLE_ARROW
-
   /// Converts a table slice to an Apache Arrow Record Batch.
   /// @returns The pointer to the Record Batch.
   /// @param slice The table slice to convert.
   friend std::shared_ptr<arrow::RecordBatch>
   as_record_batch(const table_slice& slice);
-
-#endif // VAST_ENABLE_ARROW
 
   /// Creates a typed view on a given set of columns of a table slice.
   /// @note This function is defined and documented in 'vast/project.hpp'.

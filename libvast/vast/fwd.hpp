@@ -26,8 +26,6 @@
 // types we need forward-declared here. If this ever diverges between Arrow
 // versions, consider switching to including that file.
 
-#if VAST_ENABLE_ARROW
-
 namespace arrow {
 
 class Array;
@@ -38,8 +36,6 @@ class RecordBatch;
 class Schema;
 
 } // namespace arrow
-
-#endif // VAST_ENABLE_ARROW
 
 // -- caf ----------------------------------------------------------------------
 

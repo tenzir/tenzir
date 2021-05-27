@@ -234,8 +234,8 @@ public:
       VAST_WARN("{} has dropped {} of {} recent packets",
                 detail::pretty_type_name(this), drop + ifdrop, recv);
     if (discard > 0)
-      VAST_WARN("{} has discarded {} of {} recent packets",
-                detail::pretty_type_name(this), discard, recv);
+      VAST_DEBUG("{} has discarded {} of {} recent packets",
+                 detail::pretty_type_name(this), discard, recv);
     return {
       {name() + ".recv"s, recv},
       {name() + ".drop"s, drop},

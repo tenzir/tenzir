@@ -11,7 +11,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/atoms.hpp"
-#include "vast/config.hpp" // Needed for VAST_ENABLE_ARROW
 #include "vast/table_slice_encoding.hpp"
 
 #include <caf/fwd.hpp>
@@ -35,17 +34,8 @@ namespace import {
 /// Maximum size for sources that generate table slices.
 constexpr size_t table_slice_size = 1024;
 
-#if VAST_ENABLE_ARROW
-
 /// The default table slice type when arrow is available.
 constexpr auto table_slice_type = table_slice_encoding::arrow;
-
-#else // VAST_ENABLE_ARROW
-
-/// The default table slice type when arrow is unavailable.
-constexpr auto table_slice_type = table_slice_encoding::msgpack;
-
-#endif // VAST_ENABLE_ARROW
 
 /// Maximum number of results.
 constexpr size_t max_events = 0;

@@ -67,7 +67,6 @@ file(
      . \"$env_dir/bin/activate\"
      python -m pip install --upgrade pip
      python -m pip install -r \"$base_dir/requirements.txt\"
-     $<$<BOOL:${VAST_ENABLE_ARROW}>:python -m pip install pyarrow>
      python \"$base_dir/integration.py\" \
       --app \"$app\" \
       --directory vast-integration-test \
@@ -114,6 +113,7 @@ cmake_dependent_option(VAST_ENABLE_STATIC_PLUGINS
 add_feature_info("VAST_ENABLE_STATIC_PLUGINS" VAST_ENABLE_STATIC_PLUGINS
       "Force plugins to be linked statically.")
 if (VAST_PLUGINS)
+  list(SORT VAST_PLUGINS)
   foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
     if (NOT IS_ABSOLUTE "${plugin_source_dir}")
       string(PREPEND plugin_source_dir "${PROJECT_SOURCE_DIR}/")

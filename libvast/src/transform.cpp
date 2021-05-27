@@ -18,17 +18,12 @@
 namespace vast {
 
 caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
-  bool enable_arrow = VAST_ENABLE_ARROW > 0;
-  const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
   const auto* generic_step = dynamic_cast<const generic_transform_step*>(this);
+  const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
   VAST_ASSERT(arrow_step || generic_step);
-  if (arrow_step && enable_arrow) {
+  if (arrow_step)
     return (*arrow_step)(std::move(slice));
-  } else if (generic_step) {
-    return (*generic_step)(std::move(slice));
-  }
-  return caf::make_error(ec::invalid_configuration, "step requires arrow "
-                                                    "support");
+  return (*generic_step)(std::move(slice));
 }
 
 caf::expected<table_slice>
@@ -111,7 +106,6 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
   const auto& indices = matching->second;
   VAST_INFO("applying {} transforms for received table slice w/ layout {}",
             indices.size(), x.layout().name());
-#if VAST_ENABLE_ARROW
   auto arrow_fast_path
     = std::all_of(indices.begin(), indices.end(), [&](size_t idx) {
         return transforms_.at(idx).arrow_fast_path_;
@@ -139,7 +133,6 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
     return arrow_table_slice_builder::create(std::move(batch),
                                              std::move(layout));
   }
-#endif
   VAST_INFO("falling back to generic path because not all transforms support "
             "arrow");
   for (auto idx : indices) {

@@ -19,11 +19,9 @@ public:
 
   caf::expected<table_slice> operator()(table_slice&& slice) const override;
 
-#if VAST_ENABLE_ARROW
   std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
   operator()(vast::record_type layout,
              std::shared_ptr<arrow::RecordBatch> batch) const override;
-#endif
 
 private:
   std::string fieldname_;

@@ -15,9 +15,7 @@
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 
-#if VAST_ENABLE_ARROW
-#  include <arrow/util/config.h>
-#endif
+#include <arrow/util/config.h>
 
 #if VAST_ENABLE_JEMALLOC
 #  include <jemalloc/jemalloc.h>
@@ -47,14 +45,10 @@ record retrieve_versions() {
   caf_version << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
               << CAF_PATCH_VERSION;
   result["CAF"] = caf_version.str();
-#if VAST_ENABLE_ARROW
   std::ostringstream arrow_version;
   arrow_version << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
                 << ARROW_VERSION_PATCH;
   result["Apache Arrow"] = arrow_version.str();
-#else
-  result["Apache Arrow"] = data{};
-#endif
 #if VAST_ENABLE_JEMALLOC
   result["jemalloc"] = JEMALLOC_VERSION;
 #else

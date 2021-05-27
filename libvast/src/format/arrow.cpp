@@ -8,8 +8,6 @@
 
 #include "vast/config.hpp"
 
-#if VAST_ENABLE_ARROW
-
 #  include "vast/arrow_table_slice.hpp"
 #  include "vast/arrow_table_slice_builder.hpp"
 #  include "vast/detail/assert.hpp"
@@ -88,5 +86,3 @@ bool writer::layout(const record_type& layout) {
 }
 
 } // namespace vast::format::arrow
-
-#endif // VAST_ENABLE_ARROW

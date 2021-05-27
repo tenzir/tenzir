@@ -10,11 +10,8 @@
 
 #include "vast/table_slice.hpp"
 
+#include <arrow/record_batch.h>
 #include <caf/expected.hpp>
-
-#if VAST_ENABLE_ARROW
-#  include <arrow/record_batch.h>
-#endif
 
 namespace vast {
 
@@ -50,8 +47,6 @@ public:
 //   [...]
 // };
 
-#if VAST_ENABLE_ARROW
-
 class arrow_transform_step : public virtual transform_step {
 public:
   /// Convenience overload that converts the table slice into arrow format and
@@ -68,8 +63,6 @@ public:
   operator()(vast::record_type layout,
              std::shared_ptr<arrow::RecordBatch> batch) const = 0;
 };
-
-#endif
 
 caf::expected<transform_step_ptr>
 make_transform_step(const std::string& name, const caf::settings& opts);

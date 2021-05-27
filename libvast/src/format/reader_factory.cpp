@@ -10,6 +10,7 @@
 
 #include "vast/config.hpp"
 #include "vast/detail/make_io_stream.hpp"
+#include "vast/format/arrow.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/json/default_selector.hpp"
@@ -20,10 +21,6 @@
 #include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
-
-#if VAST_ENABLE_ARROW
-#  include "vast/format/arrow.hpp"
-#endif
 
 namespace vast {
 

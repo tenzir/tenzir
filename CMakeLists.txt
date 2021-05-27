@@ -119,6 +119,13 @@ add_custom_target(update-changelog
     "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
     "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md")
 
+option(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
+  "Skip build configuration after update-changelog target" OFF)
+mark_as_advanced(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
+if (VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
+  return ()
+endif ()
+
 # -- testing -------------------------------------------------------------------
 
 cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast"
@@ -309,12 +316,18 @@ if (VAST_ENABLE_TIME_REPORT)
   target_compile_options(libvast_internal INTERFACE "-ftime-report")
 endif ()
 
-cmake_dependent_option(
-  VAST_ENABLE_TIME_TRACE "Generate tracing JSON for compilation time profiling"
-  OFF "CMAKE_CXX_COMPILER_ID MATCHES Clang" OFF)
+option(VAST_ENABLE_TIME_TRACE
+  "Generate tracing JSON for compilation time profiling" OFF)
 add_feature_info("VAST_ENABLE_TIME_TRACE" VAST_ENABLE_TIME_TRACE
                  "generate tracing JSON for compilation time profiling.")
 if (VAST_ENABLE_TIME_TRACE)
+  include(CheckCXXSourceCompiles)
+  check_cxx_compiler_flag("-ftime-trace" _time_trace_supported)
+  if (NOT _time_trace_supported)
+    message(FATAL_ERROR
+      "-ftime-trace option not supported by compiler ${CMAKE_CXX_COMPILER}")
+  endif ()
+  unset(_time_trace_supported)
   target_compile_options(libvast_internal INTERFACE "-ftime-trace")
 endif ()
 

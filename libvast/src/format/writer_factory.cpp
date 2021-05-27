@@ -10,6 +10,7 @@
 
 #include "vast/config.hpp"
 #include "vast/detail/make_io_stream.hpp"
+#include "vast/format/arrow.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
@@ -17,10 +18,6 @@
 #include "vast/format/writer.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/plugin.hpp"
-
-#if VAST_ENABLE_ARROW
-#  include "vast/format/arrow.hpp"
-#endif
 
 namespace vast {
 
@@ -47,9 +44,7 @@ void factory_traits<format::writer>::initialize() {
   fac::add("json", make_writer<format::json::writer>);
   fac::add("null", make_writer<null::writer>);
   fac::add("zeek", make_writer<zeek::writer>);
-#if VAST_ENABLE_ARROW
   fac::add("arrow", make_writer<arrow::writer>);
-#endif
   for (const auto& plugin : plugins::get()) {
     if (const auto* reader = plugin.as<writer_plugin>()) {
       fac::add(

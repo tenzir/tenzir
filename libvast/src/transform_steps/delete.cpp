@@ -13,9 +13,7 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
-#if VAST_ENABLE_ARROW
-#  include "arrow/type.h"
-#endif
+#include <arrow/type.h>
 
 namespace vast {
 
@@ -30,15 +28,12 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   auto flat_index = layout.flat_index_at(*offset);
   // We just got the offset from `layout`, so it should be valid.
   VAST_ASSERT(flat_index);
-  auto modified_fields = layout.fields;
   auto new_layout = remove_field(layout, *offset);
   if (!new_layout)
     return caf::make_error(ec::unspecified, "failed to remove field from "
                                             "layout");
-  vast::record_type modified_layout(modified_fields);
-  modified_layout.name(layout.name());
   auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), modified_layout);
+    = factory<table_slice_builder>::make(slice.encoding(), *new_layout);
   builder_ptr->reserve(slice.rows());
   for (size_t i = 0; i < slice.rows(); ++i) {
     for (size_t j = 0; j < slice.columns(); ++j) {
@@ -51,8 +46,6 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   }
   return builder_ptr->finish();
 }
-
-#if VAST_ENABLE_ARROW
 
 std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
 delete_step::operator()(vast::record_type layout,
@@ -72,8 +65,6 @@ delete_step::operator()(vast::record_type layout,
     return {};
   return std::make_pair(std::move(*new_layout), std::move(transformed));
 }
-
-#endif
 
 class delete_step_plugin final : public virtual transform_plugin {
 public:
