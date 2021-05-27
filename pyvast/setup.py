@@ -38,5 +38,5 @@ setup(
     python_requires=">=3.7",
     setup_requires=["setuptools", "wheel"],
     url="https://github.com/tenzir/vast",
-    version="2021.04.29",
+    version="2021.05.27",
 )
