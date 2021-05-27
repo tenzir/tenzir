@@ -644,7 +644,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Setup Cachix
-        uses: cachix/cachix-action@v7
+        uses: cachix/cachix-action@v10
         with:
           name: vast
           signingKey: '${{ secrets.CACHIX_VAST_SIGNING_KEY }}'
