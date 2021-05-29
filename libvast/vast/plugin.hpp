@@ -349,20 +349,24 @@ private:
 #  endif
 
 #  define VAST_REGISTER_PLUGIN_5(name, major, minor, patch, tweak)             \
-    template <class Plugin>                                                    \
-    struct auto_register_plugin {                                              \
+    template <class>                                                           \
+    struct auto_register_plugin;                                               \
+    template <>                                                                \
+    struct auto_register_plugin<name> {                                        \
       auto_register_plugin() {                                                 \
         static_cast<void>(flag);                                               \
       }                                                                        \
       static bool init() {                                                     \
         ::vast::plugins::get().push_back(VAST_MAKE_PLUGIN(                     \
-          new Plugin, +[](::vast::plugin* plugin) noexcept { delete plugin; }, \
+          new name,                                                            \
+          +[](::vast::plugin* plugin) noexcept {                               \
+            delete plugin;                                                     \
+          },                                                                   \
           ::vast::plugin_version{major, minor, patch, tweak}));                \
         return true;                                                           \
       }                                                                        \
       inline static auto flag = init();                                        \
-    };                                                                         \
-    template struct auto_register_plugin<name>;
+    };
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     struct auto_register_type_id_##name {                                      \
