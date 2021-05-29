@@ -190,7 +190,9 @@ function (VASTRegisterPlugin)
     # depending on the plugin type. This must not be user-configurable for
     # plugins, as building external plugins should work without needing to enable
     # this explicitly.
-    set(BUILD_SHARED_LIBS ON PARENT_SCOPE)
+    set(BUILD_SHARED_LIBS
+        ON
+        PARENT_SCOPE)
 
     # Enable position-independent code for the static library if we're linking
     # it into shared one.

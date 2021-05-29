@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
 
-project(pcap
+project(
+  pcap
   DESCRIPTION "PCAP plugin for VAST"
   LANGUAGES CXX)
 
@@ -14,8 +15,7 @@ find_package(VAST REQUIRED)
 VASTRegisterPlugin(
   TARGET pcap
   ENTRYPOINT main.cpp
-  TEST_SOURCES
-    tests.cpp)
+  TEST_SOURCES tests.cpp)
 
 # Adjust the CMake Module Path to pick up our custom FindPCAP.cmake script.
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
