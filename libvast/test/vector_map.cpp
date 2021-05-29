@@ -20,8 +20,6 @@ using namespace vast;
 
 namespace {
 
-using map = detail::stable_map<std::string, int>;
-
 struct fixture {
   fixture() {
     xs.insert({"foo", 42});
@@ -29,7 +27,7 @@ struct fixture {
     xs.emplace("bar", 4711);
   }
 
-  map xs;
+  detail::stable_map<std::string, int> xs = {};
 };
 
 } // namespace
@@ -97,8 +95,9 @@ TEST(stable_map erase) {
 }
 
 TEST(stable_map comparison) {
-  CHECK(xs == map{{"foo", 42}, {"baz", 1337}, {"bar", 4711}});
-  CHECK(xs != map{{"foo", 42}, {"bar", 4711}, {"baz", 1337}});
+  using map_type = decltype(xs);
+  CHECK(xs == map_type{{"foo", 42}, {"baz", 1337}, {"bar", 4711}});
+  CHECK(xs != map_type{{"foo", 42}, {"bar", 4711}, {"baz", 1337}});
 }
 
 FIXTURE_SCOPE_END()

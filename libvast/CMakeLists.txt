@@ -348,6 +348,12 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
 add_library(libvast ${libvast_sources})
 add_library(vast::libvast ALIAS libvast)
 
+if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.16")
+  target_precompile_headers(libvast PUBLIC
+    [["vast/fwd.hpp"]]
+    <caf/fwd.hpp>)
+endif ()
+
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake" "\
   get_filename_component(CMAKE_MODULE_PATH
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
