@@ -186,6 +186,12 @@ function (VASTRegisterPlugin)
     # Link our static library against the vast binary directly.
     target_link_whole_archive(vast PRIVATE ${PLUGIN_TARGET}-static)
   else ()
+    # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
+    # depending on the plugin type. This must not be user-configurable for
+    # plugins, as building external plugins should work without needing to enable
+    # this explicitly.
+    set(BUILD_SHARED_LIBS ON PARENT_SCOPE)
+
     # Enable position-independent code for the static library if we're linking
     # it into shared one.
     set_property(TARGET ${PLUGIN_TARGET} PROPERTY POSITION_INDEPENDENT_CODE ON)
