@@ -313,7 +313,7 @@ option(VAST_ENABLE_TIME_TRACE
 add_feature_info("VAST_ENABLE_TIME_TRACE" VAST_ENABLE_TIME_TRACE
                  "generate tracing JSON for compilation time profiling.")
 if (VAST_ENABLE_TIME_TRACE)
-  include(CheckCXXSourceCompiles)
+  include(CheckCXXCompilerFlag)
   check_cxx_compiler_flag("-ftime-trace" _time_trace_supported)
   if (NOT _time_trace_supported)
     message(FATAL_ERROR
