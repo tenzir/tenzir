@@ -110,7 +110,7 @@ spdlog::level::level_enum vast_loglevel_to_spd(const int value) {
 namespace detail {
 
 bool setup_spdlog(const vast::invocation& cmd_invocation,
-                  const caf::settings& cfg_file) {
+                  const caf::settings& cfg_file) try {
   if (vast::detail::logger()->name() != "/dev/null") {
     VAST_ERROR("Log already up");
     return false;
@@ -243,6 +243,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   logger()->set_level(vast_loglevel_to_spd(vast_verbosity));
   spdlog::register_logger(logger());
   return true;
+} catch (const spdlog::spdlog_ex& err) {
+  std::cerr << err.what() << "\n";
+  return false;
 }
 
 void shutdown_spdlog() {
