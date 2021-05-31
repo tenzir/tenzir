@@ -128,6 +128,11 @@ vast:
     # connections. This comes in handy when letting the OS choose an available
     # random port, i.e., when specifying 0 as port value.
     print-endpoint: false
+    # An ordered list of commands to run inside the node after starting.
+    # As an example, this is how to configure an auto-starting PCAP source that
+    # listens on the interface 'en0' and lives inside the VAST node.
+    #commands:
+    #  - spawn source pcap -i en0
     # Triggers removal of old data when the disk budget is exceeded.
     disk-budget-high: 0GiB
     # When the budget was exceeded, data is erased until the disk space
