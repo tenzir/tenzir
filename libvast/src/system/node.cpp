@@ -335,6 +335,7 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self,
   auto cfg = to_accountant_config(metrics_opts);
   if (!cfg)
     return cfg.error();
+  VAST_INFO("accountant config is {}", *cfg);
   return caf::actor_cast<caf::actor>(self->spawn(accountant, std::move(*cfg)));
 }
 

@@ -8,7 +8,11 @@
 
 #pragma once
 
+#include "vast/span.hpp"
+
 #include <caf/fwd.hpp>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include <string>
 
@@ -17,6 +21,27 @@
 namespace vast::detail {
 
 enum class socket_type { datagram, stream, fd };
+
+/// Holds the necessary state to send unix datagrams to a destination socket.
+struct uds_datagram_sender {
+  /// The destructor unlinks the src socket.
+  ~uds_datagram_sender();
+
+  /// Helper function to create a sender.
+  static caf::expected<uds_datagram_sender> make(const std::string& path);
+
+  /// Send the content of `data to `dst`.
+  caf::error send(span<char> data);
+
+  /// The file descriptor for the "client" socket.
+  int src_fd;
+
+  /// The socket address object for the destination (not owned).
+  ::sockaddr_un dst;
+
+  /// The path of the local source (owned).
+  std::string src_path;
+};
 
 /// Constructs a UNIX domain socket.
 /// @param path The file system path where to construct the socket.

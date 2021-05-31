@@ -41,6 +41,13 @@ struct accountant_config {
   self_sink self_sink;
   file_sink file_sink;
   uds_sink uds_sink;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, accountant_config& x) {
+    f(caf::meta::type_name("vast::system::accountant_config"),
+      x.self_sink.enable, x.self_sink.slice_size, x.file_sink.enable,
+      x.file_sink.path, x.uds_sink.enable, x.uds_sink.path);
+  }
 };
 
 caf::expected<accountant_config>

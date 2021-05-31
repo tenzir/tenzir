@@ -60,6 +60,43 @@ int uds_accept(int socket) {
   return fd;
 }
 
+uds_datagram_sender::~uds_datagram_sender() {
+  ::unlink(src_path.c_str());
+}
+
+caf::expected<uds_datagram_sender>
+uds_datagram_sender::make(const std::string& path) {
+  auto result = uds_datagram_sender{};
+  result.src_fd = ::socket(AF_UNIX, SOCK_DGRAM, 0);
+  if (result.src_fd < 0)
+    return caf::make_error(ec::system_error,
+                           "failed to obtain an AF_UNIX DGRAM socket: {}",
+                           ::strerror(errno));
+  // TODO: Consider creating this inside the database directory instead.
+  result.src_path = path + "-client";
+  ::sockaddr_un src = {};
+  std::memset(&src, 0, sizeof(src));
+  src.sun_family = AF_UNIX;
+  std::strncpy(src.sun_path, result.src_path.data(), sizeof(src.sun_path) - 1);
+  ::unlink(result.src_path.c_str()); // Always remove previous socket file.
+  if (::bind(result.src_fd, reinterpret_cast<sockaddr*>(&src), sizeof(src)) < 0)
+    return caf::make_error(ec::system_error, "failed to bind client socket: {}",
+                           ::strerror(errno));
+  std::memset(&result.dst, 0, sizeof(dst));
+  result.dst.sun_family = AF_UNIX;
+  std::strncpy(result.dst.sun_path, path.data(),
+               sizeof(result.dst.sun_path) - 1);
+  return result;
+}
+
+caf::error uds_datagram_sender::send(span<char> data) {
+  if (::sendto(src_fd, data.data(), data.size(), 0,
+               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
+      < 0)
+    return caf::make_error(ec::system_error, "::sendto: {}", ::strerror(errno));
+  return caf::none;
+}
+
 VAST_DIAGNOSTIC_PUSH
 #if VAST_GCC
 #  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
