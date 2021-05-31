@@ -24,7 +24,9 @@ on_exit=('git worktree remove --force ${WORKING_DIR}' "${on_exit[@]}")
 git clone "https://github.com/aras-p/ClangBuildAnalyzer.git" \
   "${WORKING_DIR}/clang-build-analyzer"
 pushd "${WORKING_DIR}/clang-build-analyzer"
-make -f "projects/make/Makefile"; popd
+cmake -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+popd
 CBA="${WORKING_DIR}/clang-build-analyzer/build/ClangBuildAnalyzer"
 
 git -C "${WORKING_DIR}" submodule update --init --recursive

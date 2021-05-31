@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
 
-project(example-analyzer
+project(
+  example-analyzer
   DESCRIPTION "Example analyzer plugin for VAST"
   LANGUAGES CXX)
 
@@ -13,9 +14,7 @@ include(CTest)
 find_package(VAST REQUIRED)
 VASTRegisterPlugin(
   TARGET example-analyzer
-  ENTRYPOINT
-    example_analyzer.cpp
+  ENTRYPOINT example_analyzer.cpp
   # SOURCES
   #   list additional source files here
-  TEST_SOURCES
-    tests/example_analyzer.cpp)
+  TEST_SOURCES tests/example_analyzer.cpp)

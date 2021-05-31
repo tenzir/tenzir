@@ -11,20 +11,19 @@ if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map 0.6.2 QUIET)
   if (tsl-robin-map_FOUND)
     string(APPEND VAST_FIND_DEPENDENCY_LIST
-      "\nfind_package(tsl-robin-map 0.6.2 REQUIRED)")
+           "\nfind_package(tsl-robin-map 0.6.2 REQUIRED)")
     dependency_summary("robin-map" tsl::robin_map "Dependencies")
   endif ()
 endif ()
 if (NOT tsl-robin-map_FOUND)
   if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
-    message(STATUS
-      "Cannot find installed tsl-robin-map; falling back to bundled version")
+    message(
+      STATUS
+        "Cannot find installed tsl-robin-map; falling back to bundled version")
   endif ()
   add_subdirectory(aux/robin-map)
-  dependency_summary(
-    "robin-map"
-    "${CMAKE_CURRENT_SOURCE_DIR}/aux/robin-map"
-    "Dependencies")
+  dependency_summary("robin-map" "${CMAKE_CURRENT_SOURCE_DIR}/aux/robin-map"
+                     "Dependencies")
   export(
     EXPORT tsl-robin-mapTargets
     FILE tsl-robin-mapTargets.cmake
@@ -41,7 +40,7 @@ if (NOT tsl-robin-map_FOUND)
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
     NAMESPACE tsl::)
   string(APPEND VAST_EXTRA_TARGETS_FILES
-        "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
+         "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
   add_dependencies(robin_map tsl-robin-map-targets-link)
 endif ()
 
@@ -112,16 +111,18 @@ mark_as_advanced(
   Snappy_INCLUDE_DIR
   Snappy_LIB
   ZSTD_LIB)
-string(APPEND VAST_FIND_DEPENDENCY_LIST
-        "\nfind_package(Arrow REQUIRED CONFIG)"
-        "\nmark_as_advanced("
-        "\n BROTLI_COMMON_LIBRARY"
-        "\n BROTLI_DEC_LIBRARY"
-        "\n BROTLI_ENC_LIBRARY"
-        "\n LZ4_LIB"
-        "\n Snappy_INCLUDE_DIR"
-        "\n Snappy_LIB"
-        "\n ZSTD_LIB)")
+string(
+  APPEND
+  VAST_FIND_DEPENDENCY_LIST
+  "\nfind_package(Arrow REQUIRED CONFIG)"
+  "\nmark_as_advanced("
+  "\n BROTLI_COMMON_LIBRARY"
+  "\n BROTLI_DEC_LIBRARY"
+  "\n BROTLI_ENC_LIBRARY"
+  "\n LZ4_LIB"
+  "\n Snappy_INCLUDE_DIR"
+  "\n Snappy_LIB"
+  "\n ZSTD_LIB)")
 if (BUILD_SHARED_LIBS)
   set(ARROW_LIBRARY arrow_shared)
 else ()
@@ -333,10 +334,9 @@ endif ()
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
-list(APPEND libvast_sources
-  "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
-  "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
-  "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
+list(APPEND libvast_sources "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
+     "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
+     "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 list(SORT libvast_sources)
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
@@ -348,7 +348,13 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
 add_library(libvast ${libvast_sources})
 add_library(vast::libvast ALIAS libvast)
 
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake" "\
+if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.16")
+  target_precompile_headers(libvast PUBLIC [["vast/fwd.hpp"]] <caf/fwd.hpp>)
+endif ()
+
+file(
+  WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
+  "\
   get_filename_component(CMAKE_MODULE_PATH
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
   set(VAST_VERSION_TAG \"${VAST_VERSION_TAG_BACKUP}\")
@@ -360,7 +366,8 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake" "\
 # the version string and build tree hash on every build. Note that this must not
 # be added to the ALL target. The dependency is inferred from the byproduct
 # automatically.
-add_custom_target(libvast_update_config
+add_custom_target(
+  libvast_update_config
   BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
   COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
 
@@ -373,9 +380,10 @@ target_link_libraries(libvast PRIVATE libvast_internal)
 target_compile_definitions(libvast PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 
 # GNU prior to 9.1 requires linking with stdc++fs when using std::filesystem library
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.1.0)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION
+                                            VERSION_LESS 9.1.0)
   target_link_libraries(libvast PUBLIC stdc++fs)
-endif()
+endif ()
 
 set_target_properties(
   libvast
@@ -453,8 +461,8 @@ find_package(
   "simdjson-config.cmake"
   "simdjson-targets.cmake")
 string(APPEND VAST_FIND_DEPENDENCY_LIST
-  "\nfind_package(simdjson REQUIRED CONFIGS "
-  "\"simdjson-config.cmake\" \"simdjson-targets.cmake\")")
+       "\nfind_package(simdjson REQUIRED CONFIGS "
+       "\"simdjson-config.cmake\" \"simdjson-targets.cmake\")")
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
 dependency_summary("simdjson" simdjson::simdjson "Dependencies")
 
