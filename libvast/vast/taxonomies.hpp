@@ -97,6 +97,16 @@ struct taxonomies {
   }
 };
 
+/// Resolve a concept or field name to a list of field names.
+/// @param concepts The concepts map to apply.
+/// @param fields_or_concepts The fields or concepts to resolve.
+/// @returns The resolved fields.
+/// @note The resolved fields may contain duplicates if concepts or nested
+/// concepts resolve to duplicate fields.
+std::vector<std::string>
+resolve_concepts(const concepts_map& concepts,
+                 std::vector<std::string> fields_or_concepts);
+
 /// Substitutes concept and model identifiers in field extractors with
 /// replacement expressions containing only concrete field names.
 /// @param t The set of taxonomies to apply.
