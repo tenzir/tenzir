@@ -121,8 +121,8 @@ struct less_equal_compare {
   CAF_CHECK_FUNC(vast::test::detail::greater_equal_compare, (x), (y))
 #define CHECK_NOERROR(x)                                                       \
   do {                                                                         \
-    if {                                                                       \
-      (!(x)) CAF_CHECK_FAILED((x).error());                                    \
+    if (!(x)) {                                                                \
+      CAF_CHECK_FAILED((x).error());                                           \
     } else {                                                                   \
       CAF_CHECK_PASSED(#x)                                                     \
     }                                                                          \
