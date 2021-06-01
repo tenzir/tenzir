@@ -8,11 +8,19 @@
 
 #include "vast/plugin.hpp"
 
+#include "vast/concept/convertible/to.hpp"
+#include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/env.hpp"
+#include "vast/detail/installdirs.hpp"
+#include "vast/detail/stable_set.hpp"
+#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/system/node.hpp"
 
+#include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
 
 #include <dlfcn.h>
@@ -40,9 +48,51 @@ std::string to_string(plugin_version x) {
 
 namespace plugins {
 
-std::vector<plugin_ptr>& get() noexcept {
+namespace {
+
+detail::stable_set<std::filesystem::path>
+get_plugin_dirs(const caf::actor_system_config& cfg) {
+  detail::stable_set<std::filesystem::path> result;
+  const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
+  if (auto vast_plugin_directories = detail::locked_getenv("VAST_PLUGIN_DIRS"))
+    for (auto&& path : detail::split(*vast_plugin_directories, ":"))
+      result.insert({path});
+  if (!bare_mode) {
+    result.insert(detail::install_plugindir());
+    if (auto home = detail::locked_getenv("HOME"))
+      result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
+                    / "plugins");
+    if (auto dirs = caf::get_if<std::vector<std::string>>( //
+          &cfg, "vast.plugin-dirs"))
+      result.insert(dirs->begin(), dirs->end());
+  }
+  return result;
+}
+
+caf::expected<std::filesystem::path>
+resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs,
+                    std::string_view name) {
+  for (const auto& dir : plugin_dirs) {
+    auto maybe_path = dir
+                      / fmt::format("libvast-plugin-{}.{}", name,
+                                    VAST_MACOS ? "dylib" : "so");
+    auto ec = std::error_code{};
+    if (std::filesystem::is_regular_file(maybe_path, ec))
+      return maybe_path;
+  }
+  return caf::make_error(ec::invalid_configuration,
+                         fmt::format("failed to find plugin {}", name));
+}
+
+} // namespace
+
+std::vector<plugin_ptr>& get_mutable() noexcept {
   static auto plugins = std::vector<plugin_ptr>{};
   return plugins;
+}
+
+const std::vector<plugin_ptr>& get() noexcept {
+  return get_mutable();
 }
 
 std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
@@ -50,6 +100,134 @@ get_static_type_id_blocks() noexcept {
   static auto result = std::vector<
     std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>{};
   return result;
+}
+
+caf::expected<std::vector<std::filesystem::path>>
+load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
+  auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
+  // Step 1: Get the necessary options.
+  auto paths_or_names
+    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
+  if (paths_or_names.empty())
+    return loaded_plugin_paths;
+  const auto plugin_dirs = get_plugin_dirs(cfg);
+  // Step 2: Try to resolve the reserved identifier 'all'.
+  if (const auto all
+      = std::remove(paths_or_names.begin(), paths_or_names.end(), "all");
+      all != paths_or_names.end()) {
+    paths_or_names.erase(all, paths_or_names.end());
+    for (const auto& dir : plugin_dirs) {
+      auto ec = std::error_code{};
+      for (const auto& file : std::filesystem::directory_iterator{dir, ec}) {
+        if (ec || !file.is_regular_file())
+          break;
+        if (detail::starts_with(file.path().filename().string(), //
+                                "libvast-plugin-"))
+          paths_or_names.push_back(file.path());
+      }
+    }
+  }
+  // Step 3: Try to resolve the reserved identifier 'bundled'.
+  if (const auto bundled
+      = std::remove(paths_or_names.begin(), paths_or_names.end(), "bundled");
+      bundled != paths_or_names.end()) {
+    paths_or_names.erase(bundled, paths_or_names.end());
+    std::move(bundled_plugins.begin(), bundled_plugins.end(),
+              std::back_inserter(paths_or_names));
+  }
+  // Step 4: Disable static plugins that were not enabled.
+  auto is_disabled_static_plugin = [&](auto& plugin) -> bool {
+    switch (plugin.type()) {
+      case plugin_ptr::type::dynamic:
+        die("dynamic plugins must not be loaded at this point");
+      case plugin_ptr::type::static_: {
+        auto has_same_name = [&](const auto& name) {
+          return plugin->name() == name;
+        };
+        return std::none_of(paths_or_names.begin(), paths_or_names.end(),
+                            has_same_name);
+      }
+      case plugin_ptr::type::native:
+        return false;
+    }
+    die("unreachable");
+  };
+  get_mutable().erase(std::remove_if(get_mutable().begin(), get_mutable().end(),
+                                     is_disabled_static_plugin),
+                      get_mutable().end());
+  // Step 5: Try to resolve plugin names to plugin paths.
+  for (auto& path_or_name : paths_or_names) {
+    // Ignore paths.
+    if (auto maybe_path = std::filesystem::path{path_or_name};
+        maybe_path.is_absolute())
+      continue;
+    // At this point, we only have names—that we need to resolve to
+    // `{dir}/libvast-plugin-{name}.{ext}`. We take the first file that
+    // exists.
+    if (auto path = resolve_plugin_name(plugin_dirs, path_or_name))
+      path_or_name = path->string();
+    else
+      return std::move(path.error());
+  }
+  // Step 6: Deduplicate plugin paths.
+  auto paths = detail::stable_set<std::string>{};
+  paths.insert(std::make_move_iterator(paths_or_names.begin()),
+               std::make_move_iterator(paths_or_names.end()));
+  // Step 7: Load plugins.
+  for (auto path : std::move(paths)) {
+    if (auto plugin = plugin_ptr::make_dynamic(path.c_str(), cfg)) {
+      // Check for name clashes.
+      auto has_same_name = [&](const auto& other) {
+        return !std::strcmp((*plugin)->name(), other->name());
+      };
+      if (std::any_of(get().begin(), get().end(), has_same_name))
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("failed to load plugin {} because "
+                                           "another plugin already uses the "
+                                           "name {}",
+                                           path, (*plugin)->name()));
+      get_mutable().push_back(std::move(*plugin));
+      loaded_plugin_paths.emplace_back(std::move(path));
+    } else {
+      return std::move(plugin.error());
+    }
+  }
+  // Step 8: Sort loaded plugins by name.
+  std::sort(get_mutable().begin(), get_mutable().end(),
+            [](const auto& lhs, const auto& rhs) {
+              return lhs->name() < rhs->name();
+            });
+  return loaded_plugin_paths;
+}
+
+/// Initialize loaded plugins.
+caf::error initialize(caf::actor_system_config& cfg) {
+  using namespace std::string_literals;
+  for (auto& plugin : get_mutable()) {
+    auto key = "plugins."s + plugin->name();
+    auto init_err = caf::error{};
+    if (auto opts = caf::get_if<caf::settings>(&cfg, key)) {
+      if (auto config = to<data>(*opts)) {
+        VAST_DEBUG("initializing plugin with options: {}", *config);
+        if (auto err = plugin->initialize(std::move(*config)))
+          return caf::make_error(
+            ec::unspecified, fmt::format("failed to initialize plugin {}: {}",
+                                         plugin->name(), err));
+      } else {
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("invalid plugin configuration for "
+                                           "plugin {}: {}",
+                                           plugin->name(), config.error()));
+      }
+    } else {
+      VAST_DEBUG("no configuration found for plugin {}", plugin->name());
+      if (auto err = plugin->initialize(data{}))
+        return caf::make_error(ec::unspecified,
+                               fmt::format("failed to initialize plugin {}: {}",
+                                           plugin->name(), err));
+    }
+  }
+  return caf::none;
 }
 
 } // namespace plugins
