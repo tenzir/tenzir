@@ -186,6 +186,39 @@ bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
   return lhs.concepts == rhs.concepts && lhs.models == rhs.models;
 }
 
+std::vector<std::string>
+resolve_concepts(const concepts_map& concepts,
+                 std::vector<std::string> fields_or_concepts) {
+  auto resolved_concepts_cache = std::set<concepts_map::const_iterator>{};
+  auto try_resolve_concept
+    = [&](auto& self, auto&& field_or_concept,
+          const size_t recursion_limit = defaults::max_recursion) -> void {
+    if (recursion_limit == 0) {
+      VAST_WARN("reached recursion limit in concept resolution");
+      return;
+    }
+    if (auto it = concepts.find(field_or_concept); it != concepts.end()) {
+      // The field is a concept, so we need to resolve it first, however, we
+      // only want to resolve concepts once to avoid an infinite loopö
+      if (resolved_concepts_cache.insert(it).second) {
+        const auto& [_, concept_] = *it;
+        fields_or_concepts.insert(fields_or_concepts.end(),
+                                  concept_.fields.begin(),
+                                  concept_.fields.end());
+        for (const auto& nested_concept : concept_.concepts)
+          self(self, nested_concept, recursion_limit - 1);
+      }
+    } else {
+      // The field is not a concept, so we just add it back to the vector.
+      fields_or_concepts.push_back(
+        std::forward<decltype(field_or_concept)>(field_or_concept));
+    }
+  };
+  for (auto&& field_or_concept : std::exchange(fields_or_concepts, {}))
+    try_resolve_concept(try_resolve_concept, std::move(field_or_concept));
+  return fields_or_concepts;
+}
+
 static bool
 contains(const std::map<std::string, type_set>& seen, const std::string& x,
          relational_operator op, const vast::data& data) {
