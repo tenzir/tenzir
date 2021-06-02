@@ -22,10 +22,9 @@ bool connected_to_journal() {
   if (!journal_env)
     return false;
   size_t device_number = 0;
-  char colon = 0;
   size_t inode_number = 0;
-  auto parser = parsers::u64 >> parsers::ch<':'> >> parsers::u64;
-  if (parser(*journal_env, device_number, colon, inode_number)) {
+  auto parser = parsers::u64 >> ':' >> parsers::u64;
+  if (parser(*journal_env, device_number, inode_number)) {
     VAST_WARN("could not parse systemd environment variable "
               "$JOURNAL_STREAM='{}'",
               *journal_env);

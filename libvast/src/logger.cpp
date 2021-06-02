@@ -216,7 +216,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   std::string default_sink_type
     = systemd::connected_to_journal() ? "journald" : "stderr";
   auto sink_type
-    = caf::get_or(cfg_file, "vast.console-sink-type", default_sink_type);
+    = caf::get_or(cfg_file, "vast.console-sink", default_sink_type);
   auto console_sink = [&]() -> spdlog::sink_ptr {
     if (sink_type == "stderr") {
       auto stderr_sink
@@ -236,7 +236,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
         "vast", /*options = */ 0, LOG_USER, /*enable_formatting = */ true);
       return std::static_pointer_cast<spdlog::sinks::sink>(syslog_sink);
     } else {
-      std::cerr << "Illegal vast.console-sink-type " << sink_type << "\n";
+      std::cerr << "Illegal vast.console-sink value '" << sink_type << "', "
+                << "please refer to the example configuration for valid "
+                   "options.\n";
     }
     return nullptr;
   }();

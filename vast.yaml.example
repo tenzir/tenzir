@@ -44,7 +44,7 @@ vast:
   # Possible values: stderr, syslog, journald.
   # Note that 'journald' can only be selected on linux systems, and only if
   # VAST was built with journald support.
-  console-sink-type: stderr
+  console-sink: stderr
 
   # Mode for console log output generation. Automatic renders color only when
   # writing to a tty.
