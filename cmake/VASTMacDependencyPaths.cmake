@@ -18,8 +18,19 @@ if (NOT _MAC_DEPENDENCY_PATHS)
         COMMAND ${MAC_HOMEBREW_BIN} "--prefix"
         OUTPUT_VARIABLE HOMEBREW_PREFIX
         OUTPUT_STRIP_TRAILING_WHITESPACE)
-      list(INSERT CMAKE_PREFIX_PATH 0 ${HOMEBREW_PREFIX})
-      list(INSERT CMAKE_PREFIX_PATH 0 ${HOMEBREW_PREFIX}/opt/openssl)
+      list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}")
+      # Find OpenSSL correctly.
+      list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}/opt/openssl")
+      # Find libunwind-headers correctly. The headers must be installed
+      # separately; the library is available as under the umbrealla framework
+      # System.framework. Directly linking against libunwind at its location
+      # `$(xcrun --show-sdk-path)/usr/lib/system/libunwind.tbd` is not possible.
+      if (EXISTS "${HOMEBREW_PREFIX}/opt/libunwind-headers")
+        set(libunwind_INCLUDE_DIRS
+          "${HOMEBREW_PREFIX}/opt/libunwind-headers/include")
+        set(libunwind_LIBRARIES
+          "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks/System.framework")
+      endif ()
     endif ()
     # fink
     find_program(MAC_FINK_BIN fink)
