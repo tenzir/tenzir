@@ -13,20 +13,7 @@
 #if !VAST_ENABLE_BACKTRACE
 void backtrace(){};
 #else
-#  if __has_include(<execinfo.h>)
-#    include <execinfo.h>
-#    include <unistd.h>
-
-namespace vast::detail {
-
-void backtrace() {
-  void* vast_array[10];
-  auto vast_bt_size = ::backtrace(vast_array, 10);
-  ::backtrace_symbols_fd(vast_array, vast_bt_size, STDERR_FILENO);
-}
-
-} // namespace vast::detail
-#  elif __has_include(<libunwind.h>)
+#  if __has_include(<libunwind.h>)
 #    define UNW_LOCAL_ONLY
 #    include <cstdio>
 #    include <cstdlib>
@@ -54,7 +41,7 @@ void backtrace() {
     if (pc == 0)
       break;
     std::fprintf(stderr, "0x%lx:", pc);
-    char sym[256];
+    char sym[8196];
     if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
       char* nameptr = sym;
       int status;
@@ -68,6 +55,19 @@ void backtrace() {
                            "frame\n");
     }
   }
+}
+
+} // namespace vast::detail
+#  elif __has_include(<execinfo.h>)
+#    include <execinfo.h>
+#    include <unistd.h>
+
+namespace vast::detail {
+
+void backtrace() {
+  void* vast_array[10];
+  auto vast_bt_size = ::backtrace(vast_array, 10);
+  ::backtrace_symbols_fd(vast_array, vast_bt_size, STDERR_FILENO);
 }
 
 } // namespace vast::detail

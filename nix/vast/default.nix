@@ -72,9 +72,15 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap jemalloc libyamlcpp simdjson spdlog robin-map ]
-    # Required for backtrace on musl libc.
-    ++ lib.optional (stdenv.hostPlatform.isMusl) libunwind;
+  buildInputs = [ 
+    libpcap
+    jemalloc
+    libyamlcpp
+    simdjson
+    spdlog
+    robin-map
+    libunwind
+  ];
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
 
   cmakeFlags = [
