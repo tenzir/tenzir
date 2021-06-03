@@ -28,9 +28,6 @@ struct spawn_arguments {
   /// Current command executed by the node actor.
   const invocation& inv;
 
-  /// Path to persistent node state.
-  const std::filesystem::path& dir;
-
   /// Label for the new component.
   const std::string& label;
 
@@ -45,7 +42,7 @@ struct spawn_arguments {
   template <class Inspector>
   friend auto inspect(Inspector& f, spawn_arguments& x) ->
     typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.system.spawn_arguments"), x.inv, x.dir,
+    return f(caf::meta::type_name("vast.system.spawn_arguments"), x.inv,
              x.label, x.expr);
   }
 };

@@ -131,8 +131,7 @@ struct index_state {
 
   void flush_to_disk();
 
-  [[nodiscard]] std::filesystem::path
-  index_filename(const std::filesystem::path& basename = {}) const;
+  [[nodiscard]] std::filesystem::path index_filename() const;
 
   // Maps partitions to their expected location on the file system.
   [[nodiscard]] std::filesystem::path partition_path(const uuid& id) const;

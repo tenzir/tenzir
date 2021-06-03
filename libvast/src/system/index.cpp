@@ -520,9 +520,8 @@ index_state::collect_query_actors(query_state& lookup,
   return result;
 }
 
-std::filesystem::path
-index_state::index_filename(const std::filesystem::path& basename) const {
-  return basename / dir / "index.bin";
+std::filesystem::path index_state::index_filename() const {
+  return dir / "index.bin";
 }
 
 caf::expected<flatbuffers::Offset<fbs::Index>>

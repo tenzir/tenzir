@@ -87,7 +87,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
       return x.error();
   }
   // Pointer to the root command to system::node.
-  auto actor = self->spawn(system::node, id, abs_dir, shutdown_grace_period);
+  auto actor = self->spawn(system::node, id, db_dir, shutdown_grace_period);
   actor->attach_functor([=, pid_file = std::move(pid_file)](
                           const caf::error&) -> caf::result<void> {
     VAST_DEBUG("node removes PID lock: {}", pid_file);
@@ -128,7 +128,9 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     ->request(node.get(), caf::infinite, atom::internal_v, atom::spawn_v,
               atom::plugin_v)
     .receive([]() { /* nop */ },
-             [&](caf::error& err) { error = std::move(err); });
+             [&](caf::error& err) {
+               error = std::move(err);
+             });
   if (error)
     return error;
   return node;

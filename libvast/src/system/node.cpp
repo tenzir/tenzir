@@ -88,7 +88,9 @@ std::set<const char*> core_components
   = {"archive", "filesystem", "importer", "index"};
 
 bool is_core_component(std::string_view type) {
-  auto pred = [&](const char* x) { return x == type; };
+  auto pred = [&](const char* x) {
+    return x == type;
+  };
   return std::any_of(std::begin(core_components), std::end(core_components),
                      pred);
 }
@@ -107,7 +109,9 @@ bool is_singleton(std::string_view type) {
   const char* singletons[]
     = {"accountant", "archive",  "disk-monitor", "eraser",
        "filesystem", "importer", "index",        "type-registry"};
-  auto pred = [&](const char* x) { return x == type; };
+  auto pred = [&](const char* x) {
+    return x == type;
+  };
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
 }
 
@@ -310,7 +314,9 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
             request_error = std::move(json.error());
         }
       },
-      [=](caf::error& err) mutable { request_error = std::move(err); });
+      [=](caf::error& err) mutable {
+        request_error = std::move(err);
+      });
   if (request_error)
     return caf::make_message(std::move(request_error));
   return caf::none;
@@ -556,7 +562,7 @@ node_state::spawn_command(const invocation& inv,
   };
   auto handle_taxonomies = [=](expression e) mutable {
     VAST_DEBUG("{} received the substituted expression {}", self, to_string(e));
-    spawn_arguments args{spawn_inv, self->state.dir, label, std::move(e)};
+    spawn_arguments args{spawn_inv, label, std::move(e)};
     spawn_actually(args);
   };
   // Retrieve taxonomies and delay spawning until the response arrives if we're
@@ -583,7 +589,7 @@ node_state::spawn_command(const invocation& inv,
     }
   }
   // ... or spawn the component right away if not.
-  spawn_arguments args{spawn_inv, self->state.dir, label, std::nullopt};
+  spawn_arguments args{spawn_inv, label, std::nullopt};
   return spawn_actually(args);
 }
 
@@ -724,8 +730,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
         VAST_VERBOSE("{} encountered empty invocation response", self);
       } else {
         msg->apply({
-          [&](caf::error& x) { result = std::move(x); },
-          [&](caf::actor& x) { result = std::move(x); },
+          [&](caf::error& x) {
+            result = std::move(x);
+          },
+          [&](caf::actor& x) {
+            result = std::move(x);
+          },
           [&](caf::message& x) {
             VAST_ERROR("{} encountered invalid invocation response: {}", self,
                        deep_to_string(x));

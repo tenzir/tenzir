@@ -37,7 +37,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::lookup_error, "failed to find archive actor");
   if (!filesystem)
     return caf::make_error(ec::lookup_error, "failed to find filesystem actor");
-  const auto indexdir = args.dir / args.label;
+  const auto indexdir = std::filesystem::path{args.label};
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
     index, static_cast<store_actor>(archive), filesystem, indexdir,

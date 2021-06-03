@@ -12,6 +12,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
+#include "vast/logger.hpp"
 #include "vast/system/status_verbosity.hpp"
 
 #include <caf/config_value.hpp>
@@ -33,6 +34,10 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       VAST_ASSERT(chk != nullptr);
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
+      if (filename.is_absolute())
+        VAST_WARN("{} received request to write to absolute path {}; this is "
+                  "deprecated and will be disabled in the future",
+                  self, filename);
       if (auto err = io::save(path, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;
@@ -46,6 +51,10 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
            const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
+      if (filename.is_absolute())
+        VAST_WARN("{} received request to read from absolute path {}; this is "
+                  "deprecated and will be disabled in the future",
+                  self, filename);
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
         ++self->state.stats.reads.bytes += bytes->size();
@@ -59,6 +68,10 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
            const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
+      if (filename.is_absolute())
+        VAST_WARN("{} received request to mmap absolute path {}; this is "
+                  "deprecated and will be disabled in the future",
+                  self, filename);
       if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
         ++self->state.stats.mmaps.bytes += chk->get()->size();

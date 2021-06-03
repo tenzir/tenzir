@@ -43,7 +43,11 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::missing_component, "index");
   if (!type_registry)
     return caf::make_error(ec::missing_component, "type-registry");
-  auto handle = self->spawn(importer, args.dir / args.label, archive, index,
+  // TODO: The IMPORTER still does not use the FILESYSTEM actor for persisting
+  // its state. Until it does we need to prepend the `vast.db-directory` here.
+  auto db_dir = std::filesystem::path{caf::get_or(
+    args.inv.options, "vast.db-directory", defaults::system::db_directory)};
+  auto handle = self->spawn(importer, db_dir / args.label, archive, index,
                             type_registry, std::move(*transforms));
   VAST_VERBOSE("{} spawned the importer", self);
   if (accountant) {
