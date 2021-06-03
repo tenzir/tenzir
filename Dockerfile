@@ -34,17 +34,26 @@ WORKDIR $BUILD_DIR/vast
 COPY changelog ./changelog
 COPY cmake ./cmake
 COPY doc ./doc
+COPY examples ./examples
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
-COPY examples ./examples
+COPY plugins ./plugins
 COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
 COPY .clang-format .cmake-format LICENSE LICENSE.3rdparty README.md BANNER CHANGELOG.md CMakeLists.txt vast.yaml.example ./
+
+# Resolve repository-internal symlinks.
+RUN ln -sf ../../pyvast/pyvast examples/jupyter/pyvast && \
+  ln -sf ../../vast.yaml.example vast/integration/vast.yaml.example && \
+  ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
+  ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py
+
 RUN cmake -B build -G Ninja \
-    -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    -DCMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+    -DCMAKE_BUILD_TYPE:STRING="$BUILD_TYPE" \
+    -DVAST_PLUGINS:STRING="plugins/pcap"
 RUN cmake --build build --parallel
 # --test-dir is not yet supported in the ctest version we're using here.
 RUN CTEST_OUTPUT_ON_FAILURE=1 cd build && ctest --parallel
