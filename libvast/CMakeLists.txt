@@ -131,7 +131,8 @@ endif ()
 
 # -- libsystemd ----------------------------------------------------------------
 
-option(VAST_ENABLE_JOURNALD_LOGGING "Build with support for native journald log output" OFF)
+option(VAST_ENABLE_JOURNALD_LOGGING
+       "Build with support for native journald log output" OFF)
 add_feature_info("VAST_ENABLE_JOURNALD_LOGGING" VAST_ENABLE_JOURNALD_LOGGING
                  "build with support for native journald log output.")
 
