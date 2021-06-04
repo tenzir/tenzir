@@ -13,10 +13,22 @@ ENV BUILD_DIR /tmp/src
 
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
-  build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
-  libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2 wget \
-  libyaml-cpp-dev libsimdjson-dev libflatbuffers-dev flatbuffers-compiler-dev \
-  lsb-release ca-certificates
+  build-essential gcc-8 g++-8 ninja-build \
+  libyaml-cpp-dev \
+  libsimdjson-dev \
+  libflatbuffers-dev \
+  flatbuffers-compiler-dev \
+  libssl-dev \
+  libpcap-dev tcpdump \
+  git-core \
+  jq \
+  gnupg2 \
+  wget \
+  lsb-release \
+  ca-certificates \
+  python3-dev \
+  python3-pip \
+  python3-venv
 
 # Need to specify backports explicitly, since spdlog and fmt also have regular
 # buster packages. Also, this comes with a newer version of CMake.
