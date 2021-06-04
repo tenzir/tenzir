@@ -130,7 +130,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (cfg_console_verbosity) {
     auto atom_cv = caf::atom_from_string(*cfg_console_verbosity);
     if (loglevel_to_int(atom_cv, -1) < 0) {
-      std::cerr << "Illegal vast.console-verbosity " << *cfg_console_verbosity
+      std::cerr << "illegal vast.console-verbosity " << *cfg_console_verbosity
                 << "\n";
       return false;
     } else {
@@ -142,7 +142,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   auto verbosity = caf::get_if<caf::atom_value>(&cfg_cmd, "vast.verbosity");
   if (verbosity) {
     if (loglevel_to_int(*verbosity, -1) < 0) {
-      std::cerr << "Illegal vast.verbosity " << to_string(*verbosity) << "\n";
+      std::cerr << "illegal vast.verbosity " << to_string(*verbosity) << "\n";
       return false;
     }
     console_verbosity = *verbosity;
@@ -153,7 +153,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (cfg_file_verbosity) {
     auto atom_cv = caf::atom_from_string(*cfg_file_verbosity);
     if (loglevel_to_int(atom_cv, -1) < 0) {
-      std::cerr << "Illegal vast.file-verbosity " << *cfg_file_verbosity
+      std::cerr << "illegal vast.file-verbosity " << *cfg_file_verbosity
                 << "\n";
       return false;
     } else {
@@ -224,7 +224,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       return stderr_sink;
     } else if (sink_type == "journald") {
 #ifndef VAST_ENABLE_JOURNALD_LOGGING
-      std::cerr << "Cannot use 'journald' sink, vast was built without systemd "
+      std::cerr << "cannot use 'journald' sink, vast was built without systemd "
                    "support\n";
       return nullptr;
 #else
@@ -236,7 +236,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
         "vast", /*options = */ 0, LOG_USER, /*enable_formatting = */ true);
       return std::static_pointer_cast<spdlog::sinks::sink>(syslog_sink);
     } else {
-      std::cerr << "Illegal vast.console-sink value '" << sink_type << "', "
+      std::cerr << "illegal vast.console-sink value '" << sink_type << "', "
                 << "please refer to the example configuration for valid "
                    "options.\n";
     }
