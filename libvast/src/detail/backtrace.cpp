@@ -27,6 +27,7 @@ namespace vast::detail {
 // According to https://eli.thegreenplace.net/pages/about, it is generously
 // offered under the unlicense by Eli Bendersky.
 void backtrace() {
+  constexpr unsigned symbol_buffer_size = 8196;
   unw_cursor_t cursor;
   unw_context_t context;
 
@@ -41,7 +42,7 @@ void backtrace() {
     if (pc == 0)
       break;
     std::fprintf(stderr, "0x%lx:", pc);
-    char sym[8196];
+    char sym[symbol_buffer_size];
     if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
       char* nameptr = sym;
       int status;
