@@ -19,6 +19,7 @@ RUN apt-get -qq update && apt-get -qqy install \
   libflatbuffers-dev \
   flatbuffers-compiler-dev \
   libssl-dev \
+  libunwind-dev \
   libpcap-dev tcpdump \
   git-core \
   jq \
