@@ -227,7 +227,7 @@ struct accountant_state_impl {
       if (cfg.uds_sink.type == detail::socket_type::datagram) {
         auto s = detail::uds_datagram_sender::make(cfg.uds_sink.path);
         if (s) {
-          VAST_INFO("{} writing metrics to {}", self, cfg.uds_sink.path);
+          VAST_INFO("{} writes metrics to {}", self, cfg.uds_sink.path);
           // uds_datagram_sink = std::move(*s);
           uds_datagram_sink = std::make_unique<detail::uds_datagram_sender>(*s);
         } else {
@@ -238,7 +238,7 @@ struct accountant_state_impl {
         auto s
           = detail::make_output_stream(cfg.uds_sink.path, cfg.uds_sink.type);
         if (s) {
-          VAST_INFO("{} writing metrics to {}", self, cfg.uds_sink.path);
+          VAST_INFO("{} writes metrics to {}", self, cfg.uds_sink.path);
           uds_sink = std::move(*s);
         } else {
           VAST_INFO("{} could not open {} for metrics: {}", self,
