@@ -27,9 +27,9 @@ if (NOT _MAC_DEPENDENCY_PATHS)
       # `$(xcrun --show-sdk-path)/usr/lib/system/libunwind.tbd` is not possible.
       if (EXISTS "${HOMEBREW_PREFIX}/opt/libunwind-headers")
         set(libunwind_INCLUDE_DIRS
-          "${HOMEBREW_PREFIX}/opt/libunwind-headers/include")
+            "${HOMEBREW_PREFIX}/opt/libunwind-headers/include")
         set(libunwind_LIBRARIES
-          "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks/System.framework")
+            "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks/System.framework")
       endif ()
     endif ()
     # fink
