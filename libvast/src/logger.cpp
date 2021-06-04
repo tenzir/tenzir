@@ -16,6 +16,7 @@
 #include "vast/detail/settings.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/configuration.hpp"
+#include "vast/systemd.hpp"
 
 #include <caf/local_actor.hpp>
 #include <spdlog/async.h>
@@ -24,6 +25,11 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/syslog_sink.h>
+
+#ifdef VAST_ENABLE_JOURNALD_LOGGING
+#  include <spdlog/sinks/systemd_sink.h>
+#endif
 
 #include <cassert>
 #include <memory>
@@ -124,7 +130,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (cfg_console_verbosity) {
     auto atom_cv = caf::atom_from_string(*cfg_console_verbosity);
     if (loglevel_to_int(atom_cv, -1) < 0) {
-      std::cerr << "Illegal vast.console-verbosity " << *cfg_console_verbosity
+      std::cerr << "illegal vast.console-verbosity " << *cfg_console_verbosity
                 << "\n";
       return false;
     } else {
@@ -136,7 +142,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   auto verbosity = caf::get_if<caf::atom_value>(&cfg_cmd, "vast.verbosity");
   if (verbosity) {
     if (loglevel_to_int(*verbosity, -1) < 0) {
-      std::cerr << "Illegal vast.verbosity " << to_string(*verbosity) << "\n";
+      std::cerr << "illegal vast.verbosity " << to_string(*verbosity) << "\n";
       return false;
     }
     console_verbosity = *verbosity;
@@ -147,7 +153,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (cfg_file_verbosity) {
     auto atom_cv = caf::atom_from_string(*cfg_file_verbosity);
     if (loglevel_to_int(atom_cv, -1) < 0) {
-      std::cerr << "Illegal vast.file-verbosity " << *cfg_file_verbosity
+      std::cerr << "illegal vast.file-verbosity " << *cfg_file_verbosity
                 << "\n";
       return false;
     } else {
@@ -207,14 +213,43 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   spdlog::init_thread_pool(queue_size, defaults::logger::logger_threads);
   std::vector<spdlog::sink_ptr> sinks;
   // Add console sink.
-  auto stderr_sink
-    = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
-  stderr_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
+  std::string default_sink_type
+    = systemd::connected_to_journal() ? "journald" : "stderr";
+  auto sink_type
+    = caf::get_or(cfg_file, "vast.console-sink", default_sink_type);
+  auto console_sink = [&]() -> spdlog::sink_ptr {
+    if (sink_type == "stderr") {
+      auto stderr_sink
+        = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
+      return stderr_sink;
+    } else if (sink_type == "journald") {
+#ifndef VAST_ENABLE_JOURNALD_LOGGING
+      std::cerr << "cannot use 'journald' sink, vast was built without systemd "
+                   "support\n";
+      return nullptr;
+#else
+      auto spdlog_sink = std::make_shared<spdlog::sinks::systemd_sink_mt>();
+      return std::static_pointer_cast<spdlog::sinks::sink>(spdlog_sink);
+#endif
+    } else if (sink_type == "syslog") {
+      auto syslog_sink = std::make_shared<spdlog::sinks::syslog_sink_mt>(
+        "vast", /*options = */ 0, LOG_USER, /*enable_formatting = */ true);
+      return std::static_pointer_cast<spdlog::sinks::sink>(syslog_sink);
+    } else {
+      std::cerr << "illegal vast.console-sink value '" << sink_type << "', "
+                << "please refer to the example configuration for valid "
+                   "options.\n";
+    }
+    return nullptr;
+  }();
+  if (!console_sink)
+    return false;
   auto console_format
     = caf::get_or(cfg_file, "vast.console-format",
                   std::string{defaults::logger::console_format});
-  stderr_sink->set_pattern(console_format);
-  sinks.push_back(stderr_sink);
+  console_sink->set_pattern(console_format);
+  console_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
+  sinks.push_back(console_sink);
   // Add file sink.
   if (vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
     bool disable_rotation = caf::get_or(cfg_file, "vast.disable-log-rotation",

@@ -129,6 +129,13 @@ else ()
   set(ARROW_LIBRARY arrow_static)
 endif ()
 
+# -- libsystemd ----------------------------------------------------------------
+
+option(VAST_ENABLE_JOURNALD_LOGGING
+       "Build with support for native journald log output" OFF)
+add_feature_info("VAST_ENABLE_JOURNALD_LOGGING" VAST_ENABLE_JOURNALD_LOGGING
+                 "build with support for native journald log output.")
+
 # -- log level -----------------------------------------------------------------
 
 # Choose a deafult log level based on build type.
@@ -433,6 +440,14 @@ find_package(yaml-cpp 0.6.2 REQUIRED)
 target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 
+# Link against libsystemd.
+if (VAST_ENABLE_JOURNALD_LOGGING)
+  find_package(systemd REQUIRED)
+  target_link_libraries(libvast PRIVATE systemd::systemd)
+  dependency_summary("libsystemd" systemd::systemd "Dependencies")
+endif ()
+
+# Link against fmt.
 target_compile_definitions(
   libvast
   PUBLIC
