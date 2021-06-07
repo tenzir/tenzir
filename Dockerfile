@@ -95,7 +95,7 @@ ENV PREFIX /usr/local
 COPY --from=build_type $PREFIX/ $PREFIX/
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
   openssl libsimdjson4 libyaml-cpp0.6 libasan5 libflatbuffers1 wget gnupg2 \
-  lsb-release ca-certificates libunwind
+  lsb-release ca-certificates libunwind8
 
 # Need to specify backports explicitly, since spdlog and fmt also have regular
 # buster packages. For fmt we install the dev package, because libfmt is only
