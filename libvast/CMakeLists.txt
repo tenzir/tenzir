@@ -341,16 +341,7 @@ endif ()
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
-list(APPEND libvast_sources "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
-     "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
-     "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 list(SORT libvast_sources)
-
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
-
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
 
 add_library(libvast ${libvast_sources})
 add_library(vast::libvast ALIAS libvast)
@@ -358,25 +349,6 @@ add_library(vast::libvast ALIAS libvast)
 if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.16")
   target_precompile_headers(libvast PUBLIC [["vast/fwd.hpp"]] <caf/fwd.hpp>)
 endif ()
-
-file(
-  WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
-  "\
-  get_filename_component(CMAKE_MODULE_PATH
-    \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
-  set(VAST_VERSION_TAG \"${VAST_VERSION_TAG_BACKUP}\")
-  include(VASTVersion)
-  configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
-                 \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\" @ONLY)")
-
-# We generate config.cpp as a byproduct of a custom target so we can re-generate
-# the version string and build tree hash on every build. Note that this must not
-# be added to the ALL target. The dependency is inferred from the byproduct
-# automatically.
-add_custom_target(
-  libvast_update_config
-  BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
-  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
 
 target_link_libraries(libvast PRIVATE libvast_internal)
 
@@ -489,6 +461,64 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 # Link against Apache Arrow.
 target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
+
+# Link against a backtrace library.
+option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
+add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
+                 "print a backtrace on unexpected termination.")
+unset(VAST_ENABLE_LIBUNWIND)
+unset(VAST_ENABLE_LIBBACKTRACE)
+if (VAST_ENABLE_BACKTRACE)
+  find_package(libunwind)
+  if (libunwind_FOUND)
+    target_link_libraries(libvast PRIVATE unwind::unwind)
+    dependency_summary("libunwind" unwind::unwind "Dependencies")
+    set(VAST_ENABLE_LIBUNWIND ON)
+  else ()
+    find_package(Backtrace)
+    if (Backtrace_FOUND)
+      target_include_directories(libvast
+                                 PRIVATE ${Backtrace_INCLUDE_DIRECTORIES})
+      target_link_libraries(libvast PRIVATE ${Backtrace_LIBRARIES})
+      dependency_summary("backtrace" ${Backtrace_INCLUDE_DIR} "Dependencies")
+      set(VAST_ENABLE_LIBBACKTRACE ON)
+    endif ()
+    # NOTE: Availabiltiy of execinfo.h is checked using __has_include; The build
+    # will fail if none of these options are available.
+  endif ()
+endif ()
+
+# Configure options-dependent code files.
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
+
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
+
+file(
+  WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
+  "\
+  get_filename_component(CMAKE_MODULE_PATH
+    \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
+  set(VAST_VERSION_TAG \"${VAST_VERSION_TAG_BACKUP}\")
+  include(VASTVersion)
+  configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
+                 \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\" @ONLY)")
+
+# We generate config.cpp as a byproduct of a custom target so we can re-generate
+# the version string and build tree hash on every build. Note that this must not
+# be added to the ALL target. The dependency is inferred from the byproduct
+# automatically.
+add_custom_target(
+  libvast_update_config
+  BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
+  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
+
+target_sources(
+  libvast
+  PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
+          "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
+          "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 
 # TODO: Should we move the bundled schemas to libvast?
 if (TARGET vast-schema)
