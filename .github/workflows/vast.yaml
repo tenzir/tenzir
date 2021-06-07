@@ -407,7 +407,22 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp simdjson spdlog fmt
+          brew install \
+            apache-arrow \
+            ccache \
+            flatbuffers \
+            fmt \
+            gnu-sed \
+            libpcap \
+            libunwind-headers \
+            ninja \
+            pandoc \
+            pkg-config \
+            rsync \
+            simdjson \
+            spdlog \
+            tcpdump \
+            yaml-cpp
 
       - name: Configure Environment
         run: |
