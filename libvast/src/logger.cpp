@@ -130,8 +130,10 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (cfg_console_verbosity) {
     auto atom_cv = caf::atom_from_string(*cfg_console_verbosity);
     if (loglevel_to_int(atom_cv, -1) < 0) {
-      std::cerr << "illegal vast.console-verbosity " << *cfg_console_verbosity
-                << "\n";
+      fmt::print(stderr,
+                 "failed to start logger; vast.console-verbosity '{}' is "
+                 "invalid\n",
+                 *cfg_console_verbosity);
       return false;
     } else {
       console_verbosity = atom_cv;
@@ -142,7 +144,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   auto verbosity = caf::get_if<caf::atom_value>(&cfg_cmd, "vast.verbosity");
   if (verbosity) {
     if (loglevel_to_int(*verbosity, -1) < 0) {
-      std::cerr << "illegal vast.verbosity " << to_string(*verbosity) << "\n";
+      fmt::print(stderr,
+                 "failed to start logger; vast.verbosity '{}' is invalid\n",
+                 *verbosity);
       return false;
     }
     console_verbosity = *verbosity;
@@ -153,8 +157,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (cfg_file_verbosity) {
     auto atom_cv = caf::atom_from_string(*cfg_file_verbosity);
     if (loglevel_to_int(atom_cv, -1) < 0) {
-      std::cerr << "illegal vast.file-verbosity " << *cfg_file_verbosity
-                << "\n";
+      fmt::print(
+        stderr, "failed to start logger; vast.file-verbosity '{}' is invalid\n",
+        *cfg_file_verbosity);
       return false;
     } else {
       file_verbosity = atom_cv;
@@ -188,9 +193,10 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
         const auto created_log_dir
           = std::filesystem::create_directory(log_dir, err);
         if (!created_log_dir) {
-          std::cerr << fmt::format("unable to create directory {}: {}", log_dir,
-                                   err.message())
-                    << '\n';
+          fmt::print(stderr,
+                     "failed to start logger; unable to create directory {}: "
+                     "{}\n",
+                     log_dir, err.message());
           return false;
         }
       }
@@ -224,8 +230,8 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       return stderr_sink;
     } else if (sink_type == "journald") {
 #ifndef VAST_ENABLE_JOURNALD_LOGGING
-      std::cerr << "cannot use 'journald' sink, vast was built without systemd "
-                   "support\n";
+      fmt::print(stderr, "failed to start logger; vast.console-sink 'journald' "
+                         "required VAST built with systemd support\n");
       return nullptr;
 #else
       auto spdlog_sink = std::make_shared<spdlog::sinks::systemd_sink_mt>();
@@ -236,9 +242,10 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
         "vast", /*options = */ 0, LOG_USER, /*enable_formatting = */ true);
       return std::static_pointer_cast<spdlog::sinks::sink>(syslog_sink);
     } else {
-      std::cerr << "illegal vast.console-sink value '" << sink_type << "', "
-                << "please refer to the example configuration for valid "
-                   "options.\n";
+      fmt::print(stderr,
+                 "failed to start logger; vast.console-sink '{}' is invalid "
+                 "(expected 'stderr', 'journald', or 'syslog')\n",
+                 sink_type);
     }
     return nullptr;
   }();
@@ -259,9 +266,15 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       auto threshold_str
         = detail::get_bytesize(cfg_file, "vast.log-rotation-threshold",
                                defaults::logger::rotate_threshold);
+      if (!threshold_str) {
+        fmt::print(stderr,
+                   "failed to start logger; vast.log-rotation-threshold is "
+                   "invalid: {}\n",
+                   threshold_str.error());
+        return false;
+      }
       file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-        log_file, defaults::logger::rotate_threshold,
-        defaults::logger::rotate_files);
+        log_file, *threshold_str, defaults::logger::rotate_files);
     } else {
       file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file);
     }
