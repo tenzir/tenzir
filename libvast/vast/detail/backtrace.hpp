@@ -12,7 +12,7 @@ namespace vast::detail {
 
 /// Prints a stack backtrace on stderr.
 /// @note Tries to use the following mechanisms in order: libunwind,
-/// libbacktrace, execinfo.h, backtrace.h
+/// libbacktrace, execinfo.h.
 void backtrace();
 
 } // namespace vast::detail

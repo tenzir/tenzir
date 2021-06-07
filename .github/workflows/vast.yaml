@@ -50,6 +50,7 @@ jobs:
             libflatbuffers-dev \
             flatbuffers-compiler-dev \
             libssl-dev \
+            pkg-config \
             libunwind-dev \
             libpcap-dev tcpdump \
             git \
@@ -140,6 +141,7 @@ jobs:
             libflatbuffers-dev \
             flatbuffers-compiler-dev \
             libssl-dev \
+            pkg-config \
             libunwind-dev \
             libpcap-dev tcpdump \
             git \

@@ -18,7 +18,7 @@
 #   true if the TIRPC headers and libraries were found.
 #
 
-find_package(PkgConfig QUIET)
+find_package(PkgConfig)
 if (PkgConfig_FOUND)
   pkg_check_modules(PC_libunwind libunwind)
 

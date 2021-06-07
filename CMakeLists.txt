@@ -360,11 +360,14 @@ unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
 option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
 add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
                  "print a backtrace on unexpected termination.")
+unset(VAST_ENABLE_LIBUNWIND)
+unset(VAST_ENABLE_LIBBACKTRACE)
 if (VAST_ENABLE_BACKTRACE)
   find_package(libunwind)
   if (libunwind_FOUND)
     target_link_libraries(libvast_internal INTERFACE unwind::unwind)
     dependency_summary("libunwind" unwind::unwind "Dependencies")
+    set(VAST_ENABLE_LIBUNWIND ON)
   else ()
     find_package(Backtrace)
     if (Backtrace_FOUND)
@@ -372,9 +375,10 @@ if (VAST_ENABLE_BACKTRACE)
                                  INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
       target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
       dependency_summary("backtrace" ${Backtrace_INCLUDE_DIR} "Dependencies")
+      set(VAST_ENABLE_LIBBACKTRACE ON)
     endif ()
-    # NOTE: Availabiltiy of execinfo.h and backtrace.h is checked using
-    # __has_include; The build will fail if none of these options are available.
+    # NOTE: Availabiltiy of execinfo.h is checked using __has_include; The build
+    # will fail if none of these options are available.
   endif ()
 endif ()
 
