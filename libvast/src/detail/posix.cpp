@@ -60,8 +60,24 @@ int uds_accept(int socket) {
   return fd;
 }
 
+uds_datagram_sender::uds_datagram_sender(uds_datagram_sender&& other) noexcept
+  : src_fd{other.src_fd}, dst{other.dst} {
+  // Invalidate the original copy to avoid closing when `other` is destroyed.
+  other.src_fd = -1;
+}
+
+uds_datagram_sender&
+uds_datagram_sender::operator=(uds_datagram_sender&& other) noexcept {
+  src_fd = other.src_fd;
+  // Invalidate the original copy to avoid closing when `other` is destroyed.
+  other.src_fd = -1;
+  dst = other.dst;
+  return *this;
+}
+
 uds_datagram_sender::~uds_datagram_sender() {
-  ::unlink(src_path.c_str());
+  if (src_fd != -1)
+    ::close(src_fd);
 }
 
 caf::expected<uds_datagram_sender>
@@ -69,31 +85,57 @@ uds_datagram_sender::make(const std::string& path) {
   auto result = uds_datagram_sender{};
   result.src_fd = ::socket(AF_UNIX, SOCK_DGRAM, 0);
   if (result.src_fd < 0)
+    return caf::make_error(
+      ec::system_error,
+      "failed to obtain an AF_UNIX DGRAM socket: ", ::strerror(errno));
+  // Create a unique temporary directory for a place to bind the sending side
+  // to. There is no mktemp variant for sockets, so that is unfortunately
+  // necessary.
+  // NOTE: The temporary directory will be removed at the end of this function.
+  char mkd_template[] = u8"/tmp/vast-XXXXXX\0socket";
+  char* src_name = ::mkdtemp(&mkd_template[0]);
+  if (src_name == nullptr)
     return caf::make_error(ec::system_error,
-                           "failed to obtain an AF_UNIX DGRAM socket: {}",
-                           ::strerror(errno));
-  // TODO: Consider creating this inside the database directory instead.
-  result.src_path = path + "-client";
+                           fmt::format("failed in mkdtemp({}): {}",
+                                       mkd_template, ::strerror(errno)));
+  // Replace the fist null terminator with a directory separator to get the full
+  // path.
+  src_name[16] = '/';
   ::sockaddr_un src = {};
   std::memset(&src, 0, sizeof(src));
   src.sun_family = AF_UNIX;
-  std::strncpy(src.sun_path, result.src_path.data(), sizeof(src.sun_path) - 1);
-  ::unlink(result.src_path.c_str()); // Always remove previous socket file.
+  std::strncpy(src.sun_path, src_name, sizeof(src.sun_path) - 1);
   if (::bind(result.src_fd, reinterpret_cast<sockaddr*>(&src), sizeof(src)) < 0)
-    return caf::make_error(ec::system_error, "failed to bind client socket: {}",
-                           ::strerror(errno));
-  std::memset(&result.dst, 0, sizeof(dst));
+    return caf::make_error(ec::system_error,
+                           "failed to bind client socket:", ::strerror(errno));
+  // From https://man7.org/linux/man-pages/man2/unlink.2.html:
+  //   If the name was the last link to a file but any processes still
+  //   have the file open, the file will remain in existence until the
+  //   last file descriptor referring to it is closed.
+  // -> We can delegate the socket removal to the kernel by calling unlink on
+  //    it right away.
+  if (::unlink(src_name) != 0) {
+    VAST_WARN("{} failed in unlink({}): {}", __func__, src_name,
+              ::strerror(errno));
+  } else {
+    src_name[16] = '\0';
+    if (::rmdir(src_name) != 0)
+      VAST_WARN("{} failed in rmdir({}): {}", __func__, src_name,
+                ::strerror(errno));
+  }
+  // Prepare the destination socket address.
+  std::memset(&result.dst, 0, sizeof(result.dst));
   result.dst.sun_family = AF_UNIX;
   std::strncpy(result.dst.sun_path, path.data(),
                sizeof(result.dst.sun_path) - 1);
-  return result;
+  return std::move(result);
 }
 
 caf::error uds_datagram_sender::send(span<char> data) {
   if (::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
       < 0)
-    return caf::make_error(ec::system_error, "::sendto: {}", ::strerror(errno));
+    return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
   return caf::none;
 }
 

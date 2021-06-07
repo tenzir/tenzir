@@ -24,7 +24,15 @@ enum class socket_type { datagram, stream, fd };
 
 /// Holds the necessary state to send unix datagrams to a destination socket.
 struct uds_datagram_sender {
-  /// The destructor unlinks the src socket.
+  uds_datagram_sender() = default;
+
+  uds_datagram_sender(const uds_datagram_sender&) = delete;
+  uds_datagram_sender(uds_datagram_sender&&) noexcept;
+
+  uds_datagram_sender operator=(const uds_datagram_sender&) = delete;
+  uds_datagram_sender& operator=(uds_datagram_sender&&) noexcept;
+
+  /// The destructor closes the `src_fd`.
   ~uds_datagram_sender();
 
   /// Helper function to create a sender.
@@ -34,13 +42,10 @@ struct uds_datagram_sender {
   caf::error send(span<char> data);
 
   /// The file descriptor for the "client" socket.
-  int src_fd;
+  int src_fd = -1;
 
-  /// The socket address object for the destination (not owned).
+  /// The socket address object for the destination.
   ::sockaddr_un dst;
-
-  /// The path of the local source (owned).
-  std::string src_path;
 };
 
 /// Constructs a UNIX domain socket.

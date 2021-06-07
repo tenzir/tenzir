@@ -228,8 +228,8 @@ struct accountant_state_impl {
         auto s = detail::uds_datagram_sender::make(cfg.uds_sink.path);
         if (s) {
           VAST_INFO("{} writes metrics to {}", self, cfg.uds_sink.path);
-          // uds_datagram_sink = std::move(*s);
-          uds_datagram_sink = std::make_unique<detail::uds_datagram_sender>(*s);
+          uds_datagram_sink
+            = std::make_unique<detail::uds_datagram_sender>(std::move(*s));
         } else {
           VAST_INFO("{} could not open {} for metrics: {}", self,
                     cfg.uds_sink.path, s.error());
