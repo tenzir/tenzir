@@ -11,8 +11,12 @@
 #include "vast/config.hpp"
 
 #if !VAST_ENABLE_BACKTRACE
-void backtrace(){};
-#else
+
+void backtrace() {
+}
+
+#else // VAST_ENABLE_BACKTRACE
+
 #  if __has_include(<libunwind.h>)
 #    define UNW_LOCAL_ONLY
 #    include <cstdio>
@@ -83,8 +87,10 @@ void backtrace() {
 }
 
 } // namespace vast::detail
+
 #  else
 #    error                                                                     \
       "backtrace enabled but neither execino, libbacktrace, or libunwind are available"
 #  endif
-#endif
+
+#endif // VAST_ENABLE_BACKTRACE

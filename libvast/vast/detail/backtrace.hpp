@@ -11,10 +11,8 @@
 namespace vast::detail {
 
 /// Prints a stack backtrace on stderr.
-// Tries to use the following mechanisms in order:
-// 1. execinfo.h (via glibc or libexecinfo)
-// 2. libunwind
-// 3. libbacktrace
+/// @note Tries to use the following mechanisms in order: libunwind,
+/// libbacktrace, execinfo.h, backtrace.h
 void backtrace();
 
 } // namespace vast::detail
