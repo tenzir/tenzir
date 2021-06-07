@@ -14,21 +14,22 @@ ENV BUILD_DIR /tmp/src
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
   build-essential gcc-8 g++-8 ninja-build \
-  libyaml-cpp-dev \
-  libsimdjson-dev \
-  libflatbuffers-dev \
+  ca-certificates \
   flatbuffers-compiler-dev \
+  git-core \
+  gnupg2 \
+  jq \
+  libflatbuffers-dev \
+  libpcap-dev tcpdump \
+  libsimdjson-dev \
   libssl-dev \
   libunwind-dev \
-  libpcap-dev tcpdump \
-  git-core \
-  jq \
-  gnupg2 \
-  wget \
+  libyaml-cpp-dev \
   lsb-release \
-  ca-certificates \
+  pkg-config \
   python3-dev \
   python3-pip \
+  wget \
   python3-venv
 
 # Need to specify backports explicitly, since spdlog and fmt also have regular
