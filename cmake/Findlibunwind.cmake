@@ -55,8 +55,7 @@ if (PkgConfig_FOUND)
       add_library(unwind::unwind INTERFACE IMPORTED GLOBAL)
       set_target_properties(
         unwind::unwind
-        PROPERTIES IMPORTED_LOCATION "${libunwind_LIBRARIES}"
-                   INTERFACE_INCLUDE_DIRECTORIES "${libunwind_INCLUDE_DIRS}"
+        PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${libunwind_INCLUDE_DIRS}"
                    INTERFACE_LINK_LIBRARIES "${libunwind_LIBRARIES}")
     endif ()
   endif ()
