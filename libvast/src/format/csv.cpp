@@ -293,6 +293,8 @@ struct csv_parser_factory {
 
   template <class T>
   result_type operator()(const T& t) const {
+    [[maybe_unused]] const auto field
+      = parsers::qqstr | +(parsers::any - opt_.set_separator);
     if constexpr (std::is_same_v<T, alias_type>) {
       return caf::visit(*this, t.value_type);
     } else if constexpr (std::is_same_v<T, duration_type>) {
@@ -326,7 +328,7 @@ struct csv_parser_factory {
       // If we do not have an explicit unit given, we require the unit suffix.
       return (-parsers::duration).with(add_t<duration>{bptr_});
     } else if constexpr (std::is_same_v<T, string_type>) {
-      return (-+(parsers::any - opt_.separator)).with(add_t<std::string>{bptr_});
+      return (-field).with(add_t<std::string>{bptr_});
     } else if constexpr (std::is_same_v<T, pattern_type>) {
       return (-as<pattern>(as<std::string>(+(parsers::any - opt_.separator))))
         .with(add_t<pattern>{bptr_});
@@ -341,8 +343,7 @@ struct csv_parser_factory {
           std::distance(t.fields.begin(), i));
       };
       // clang-format off
-      return ((+(parsers::any - opt_.separator))
-              ->* to_enumeration).with(add_t<enumeration>{bptr_});
+      return (field ->* to_enumeration).with(add_t<enumeration>{bptr_});
       // clang-format on
     } else if constexpr (detail::is_any_v<T, list_type, map_type>) {
       return (-container_parser_builder<Iterator, data>{opt_}(t))
@@ -396,7 +397,7 @@ vast::system::report reader::status() const {
 
 caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto ws = ignore(*parsers::space);
-  auto column_name = +(parsers::printable - opt_.separator);
+  auto column_name = parsers::qqstr | +(parsers::printable - opt_.separator);
   auto p = (ws >> column_name >> ws) % opt_.separator;
   std::vector<std::string> columns;
   auto b = line.begin();
@@ -441,8 +442,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   while (produced < max_events) {
     // EOF check.
     if (lines_->done())
-      return finish(callback, caf::make_error(ec::end_of_input, "input "
-                                                                "exhausted"));
+      return finish(callback, caf::make_error(ec::end_of_input, //
+                                              "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
@@ -461,7 +462,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     ++num_lines_;
     if (!p(line)) {
       if (num_invalid_lines_ == 0)
-        VAST_WARN("{} failed to parse line {} : {}",
+        VAST_WARN("{} failed to parse line {}: {}",
                   detail::pretty_type_name(this), lines_->line_number(), line);
       ++num_invalid_lines_;
       continue;
