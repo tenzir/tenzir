@@ -51,7 +51,8 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 caf::expected<caf::actor>
 make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
-            type_registry_actor type_registry, importer_actor importer,
+            type_registry_actor type_registry,
+            stream_sink_actor<table_slice, std::string> importer,
             std::vector<transform>&& transforms, bool detached) {
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
@@ -143,8 +144,7 @@ make_source(caf::actor_system& sys, const std::string& format,
   }
   // Connect source to importer.
   VAST_DEBUG("{} connects to {}", inv.full_name, VAST_ARG(importer));
-  anon_send(src,
-            static_cast<stream_sink_actor<table_slice, std::string>>(importer));
+  anon_send(src, importer);
   return src;
 }
 
