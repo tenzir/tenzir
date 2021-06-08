@@ -432,18 +432,14 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   # For relocatable builds we need to find the relative difference between the
   # install prefix and the library location, or the binary location for static
   # VAST binaries.
-  unset(VAST_LIBDIR_TO_PREFIX)
   if (VAST_ENABLE_STATIC_EXECUTABLE)
     set(_libdir "${CMAKE_INSTALL_FULL_BINDIR}")
   else ()
     set(_libdir "${CMAKE_INSTALL_FULL_LIBDIR}")
   endif ()
-  while (NOT "${_libdir}" STREQUAL "${CMAKE_INSTALL_PREFIX}")
-    get_filename_component(_libdir "${_libdir}" DIRECTORY)
-    list(APPEND VAST_LIBDIR_TO_PREFIX "..")
-  endwhile()
+  file(RELATIVE_PATH VAST_LIBDIR_TO_PREFIX "${_libdir}"
+       "${CMAKE_INSTALL_PREFIX}")
   unset(_libdir)
-  list(JOIN VAST_LIBDIR_TO_PREFIX "/" VAST_LIBDIR_TO_PREFIX)
 endif ()
 
 # -- jemalloc ------------------------------------------------------------------
