@@ -46,3 +46,18 @@ TEST(bloom filter synopsis) {
   verify(make_data_view(integer{2}), {N, N, N, N, N, N, T, N, N, N, N, N});
   verify(make_data_view(integer{42}), {N, N, N, N, N, N, F, N, N, N, N, N});
 }
+
+TEST(bloom filter synopsis - wrong lookup type) {
+  bloom_filter_parameters xs;
+  xs.m = 1_k;
+  xs.p = 0.1;
+  auto bf = unbox(make_bloom_filter<xxhash64>(std::move(xs)));
+  bloom_filter_synopsis<std::string, xxhash64> synopsis{string_type{},
+                                                        std::move(bf)};
+  auto r1
+    = synopsis.lookup(relational_operator::equal, make_data_view(caf::none));
+  CHECK_EQUAL(r1, std::nullopt);
+  auto r2
+    = synopsis.lookup(relational_operator::equal, make_data_view(integer{17}));
+  CHECK_EQUAL(r2, false);
+}

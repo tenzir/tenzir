@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
 
-project(example-transform
+project(
+  example-transform
   DESCRIPTION "Example transform plugin for VAST"
   LANGUAGES CXX)
 
@@ -13,9 +14,7 @@ include(CTest)
 find_package(VAST REQUIRED)
 VASTRegisterPlugin(
   TARGET example-transform
-  ENTRYPOINT
-    transform_plugin.cpp
+  ENTRYPOINT transform_plugin.cpp
   # SOURCES
   #   list additional source files here
-  TEST_SOURCES
-    tests/transform_plugin.cpp)
+  TEST_SOURCES tests/transform_plugin.cpp)

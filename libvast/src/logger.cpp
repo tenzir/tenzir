@@ -16,6 +16,7 @@
 #include "vast/detail/settings.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/configuration.hpp"
+#include "vast/systemd.hpp"
 
 #include <caf/local_actor.hpp>
 #include <spdlog/async.h>
@@ -24,6 +25,11 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/syslog_sink.h>
+
+#ifdef VAST_ENABLE_JOURNALD_LOGGING
+#  include <spdlog/sinks/systemd_sink.h>
+#endif
 
 #include <cassert>
 #include <memory>
@@ -110,7 +116,7 @@ spdlog::level::level_enum vast_loglevel_to_spd(const int value) {
 namespace detail {
 
 bool setup_spdlog(const vast::invocation& cmd_invocation,
-                  const caf::settings& cfg_file) {
+                  const caf::settings& cfg_file) try {
   if (vast::detail::logger()->name() != "/dev/null") {
     VAST_ERROR("Log already up");
     return false;
@@ -124,8 +130,10 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (cfg_console_verbosity) {
     auto atom_cv = caf::atom_from_string(*cfg_console_verbosity);
     if (loglevel_to_int(atom_cv, -1) < 0) {
-      std::cerr << "Illegal vast.console-verbosity " << *cfg_console_verbosity
-                << "\n";
+      fmt::print(stderr,
+                 "failed to start logger; vast.console-verbosity '{}' is "
+                 "invalid\n",
+                 *cfg_console_verbosity);
       return false;
     } else {
       console_verbosity = atom_cv;
@@ -136,7 +144,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   auto verbosity = caf::get_if<caf::atom_value>(&cfg_cmd, "vast.verbosity");
   if (verbosity) {
     if (loglevel_to_int(*verbosity, -1) < 0) {
-      std::cerr << "Illegal vast.verbosity " << to_string(*verbosity) << "\n";
+      fmt::print(stderr,
+                 "failed to start logger; vast.verbosity '{}' is invalid\n",
+                 *verbosity);
       return false;
     }
     console_verbosity = *verbosity;
@@ -147,8 +157,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (cfg_file_verbosity) {
     auto atom_cv = caf::atom_from_string(*cfg_file_verbosity);
     if (loglevel_to_int(atom_cv, -1) < 0) {
-      std::cerr << "Illegal vast.file-verbosity " << *cfg_file_verbosity
-                << "\n";
+      fmt::print(
+        stderr, "failed to start logger; vast.file-verbosity '{}' is invalid\n",
+        *cfg_file_verbosity);
       return false;
     } else {
       file_verbosity = atom_cv;
@@ -182,9 +193,10 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
         const auto created_log_dir
           = std::filesystem::create_directory(log_dir, err);
         if (!created_log_dir) {
-          std::cerr << fmt::format("unable to create directory {}: {}", log_dir,
-                                   err.message())
-                    << '\n';
+          fmt::print(stderr,
+                     "failed to start logger; unable to create directory {}: "
+                     "{}\n",
+                     log_dir, err.message());
           return false;
         }
       }
@@ -207,14 +219,44 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   spdlog::init_thread_pool(queue_size, defaults::logger::logger_threads);
   std::vector<spdlog::sink_ptr> sinks;
   // Add console sink.
-  auto stderr_sink
-    = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
-  stderr_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
+  std::string default_sink_type
+    = systemd::connected_to_journal() ? "journald" : "stderr";
+  auto sink_type
+    = caf::get_or(cfg_file, "vast.console-sink", default_sink_type);
+  auto console_sink = [&]() -> spdlog::sink_ptr {
+    if (sink_type == "stderr") {
+      auto stderr_sink
+        = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
+      return stderr_sink;
+    } else if (sink_type == "journald") {
+#ifndef VAST_ENABLE_JOURNALD_LOGGING
+      fmt::print(stderr, "failed to start logger; vast.console-sink 'journald' "
+                         "required VAST built with systemd support\n");
+      return nullptr;
+#else
+      auto spdlog_sink = std::make_shared<spdlog::sinks::systemd_sink_mt>();
+      return std::static_pointer_cast<spdlog::sinks::sink>(spdlog_sink);
+#endif
+    } else if (sink_type == "syslog") {
+      auto syslog_sink = std::make_shared<spdlog::sinks::syslog_sink_mt>(
+        "vast", /*options = */ 0, LOG_USER, /*enable_formatting = */ true);
+      return std::static_pointer_cast<spdlog::sinks::sink>(syslog_sink);
+    } else {
+      fmt::print(stderr,
+                 "failed to start logger; vast.console-sink '{}' is invalid "
+                 "(expected 'stderr', 'journald', or 'syslog')\n",
+                 sink_type);
+    }
+    return nullptr;
+  }();
+  if (!console_sink)
+    return false;
   auto console_format
     = caf::get_or(cfg_file, "vast.console-format",
                   std::string{defaults::logger::console_format});
-  stderr_sink->set_pattern(console_format);
-  sinks.push_back(stderr_sink);
+  console_sink->set_pattern(console_format);
+  console_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
+  sinks.push_back(console_sink);
   // Add file sink.
   if (vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
     bool disable_rotation = caf::get_or(cfg_file, "vast.disable-log-rotation",
@@ -224,9 +266,15 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       auto threshold_str
         = detail::get_bytesize(cfg_file, "vast.log-rotation-threshold",
                                defaults::logger::rotate_threshold);
+      if (!threshold_str) {
+        fmt::print(stderr,
+                   "failed to start logger; vast.log-rotation-threshold is "
+                   "invalid: {}\n",
+                   threshold_str.error());
+        return false;
+      }
       file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-        log_file, defaults::logger::rotate_threshold,
-        defaults::logger::rotate_files);
+        log_file, *threshold_str, defaults::logger::rotate_files);
     } else {
       file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file);
     }
@@ -243,6 +291,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   logger()->set_level(vast_loglevel_to_spd(vast_verbosity));
   spdlog::register_logger(logger());
   return true;
+} catch (const spdlog::spdlog_ex& err) {
+  std::cerr << err.what() << "\n";
+  return false;
 }
 
 void shutdown_spdlog() {

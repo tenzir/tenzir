@@ -28,6 +28,17 @@ TEST(concepts - convert from data) {
 TEST(concepts - simple) {
   auto c = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
                          {"bar", {"", {"a.bar", "b.baR"}, {}}}}};
+  {
+    MESSAGE("resolve field names");
+    auto result = resolve_concepts(c, {"foo", "c.baz"});
+    auto expected = std::vector<std::string>{
+      "a.fo0",
+      "b.foO",
+      "x.foe",
+      "c.baz",
+    };
+    CHECK_EQUAL(result, expected);
+  }
   auto t = taxonomies{std::move(c), models_map{}};
   {
     MESSAGE("LHS");
@@ -52,6 +63,15 @@ TEST(concepts - cyclic definition) {
   // according to the expectation.
   auto c = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {"bar"}}},
                          {"bar", {"", {"a.bar", "b.baR"}, {"foo"}}}}};
+  {
+    MESSAGE("resolve field names");
+    auto result = resolve_concepts(c, {"foo", "c.baz"});
+    auto expected = std::vector<std::string>{
+      "a.fo0", "b.foO", "x.foe", "a.bar", "b.baR", "c.baz",
+    };
+    CHECK_EQUAL(result, expected);
+  }
+
   auto t = taxonomies{std::move(c), models_map{}};
   auto exp = unbox(to<expression>("foo == 1"));
   auto ref = unbox(to<expression>("a.fo0 == 1 || b.foO == 1 || x.foe == 1 || "

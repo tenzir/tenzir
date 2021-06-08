@@ -379,6 +379,9 @@ auto make_start_command() {
     "start", "starts a node", documentation::vast_start,
     opts("?vast.start")
       .add<bool>("print-endpoint", "print the client endpoint on stdout")
+      .add<std::vector<std::string>>("commands", "an ordered list of commands "
+                                                 "to run inside the node after "
+                                                 "starting")
       .add<size_t>("disk-budget-check-interval", "time between two disk size "
                                                  "scans")
       .add<std::string>("disk-budget-check-binary",
@@ -506,7 +509,10 @@ auto make_root_command(std::string_view path) {
         .add<bool>("enable-metrics", "keep track of performance metrics")
         .add<std::vector<std::string>>("plugin-dirs", "additional directories "
                                                       "to load plugins from")
-        .add<std::vector<std::string>>("plugins", "plugins to load at startup")
+        .add<std::vector<std::string>>(
+          "plugins", "plugins to load at startup; the special values 'bundled' "
+                     "and 'all' enable autoloading of bundled and all plugins "
+                     "respectively.")
         .add<std::string>("aging-frequency", "interval between two aging "
                                              "cycles")
         .add<std::string>("aging-query", "query for aging out obsolete data")

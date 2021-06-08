@@ -11,22 +11,13 @@
 #include "vast/config.hpp"
 
 #if !VAST_ENABLE_BACKTRACE
-void backtrace(){};
-#else
-#  if __has_include(<execinfo.h>)
-#    include <execinfo.h>
-#    include <unistd.h>
-
-namespace vast::detail {
 
 void backtrace() {
-  void* vast_array[10];
-  auto vast_bt_size = ::backtrace(vast_array, 10);
-  ::backtrace_symbols_fd(vast_array, vast_bt_size, STDERR_FILENO);
 }
 
-} // namespace vast::detail
-#  elif __has_include(<libunwind.h>)
+#else // VAST_ENABLE_BACKTRACE
+
+#  if VAST_ENABLE_LIBUNWIND
 #    define UNW_LOCAL_ONLY
 #    include <cstdio>
 #    include <cstdlib>
@@ -40,6 +31,7 @@ namespace vast::detail {
 // According to https://eli.thegreenplace.net/pages/about, it is generously
 // offered under the unlicense by Eli Bendersky.
 void backtrace() {
+  constexpr unsigned symbol_buffer_size = 8196;
   unw_cursor_t cursor;
   unw_context_t context;
 
@@ -54,7 +46,7 @@ void backtrace() {
     if (pc == 0)
       break;
     std::fprintf(stderr, "0x%lx:", pc);
-    char sym[256];
+    char sym[symbol_buffer_size];
     if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
       char* nameptr = sym;
       int status;
@@ -71,7 +63,9 @@ void backtrace() {
 }
 
 } // namespace vast::detail
-#  elif __has_include(<backtrace.h>)
+
+#  elif VAST_ENABLE_LIBBACKTRACE && __has_include(<backtrace.h>)
+
 #    include <backtrace.h>
 
 namespace vast::detail {
@@ -82,8 +76,27 @@ void backtrace() {
 }
 
 } // namespace vast::detail
+
+#  elif __has_include(<execinfo.h>)
+
+#    include <execinfo.h>
+#    include <unistd.h>
+
+namespace vast::detail {
+
+void backtrace() {
+  void* vast_array[10];
+  auto vast_bt_size = ::backtrace(vast_array, 10);
+  ::backtrace_symbols_fd(vast_array, vast_bt_size, STDERR_FILENO);
+}
+
+} // namespace vast::detail
+
 #  else
+
 #    error                                                                     \
-      "backtrace enabled but neither execino, libbacktrace, or libunwind are available"
+      "backtrace enabled but neither libunwind, libbacktrace, nor execinfo.h are available"
+
 #  endif
-#endif
+
+#endif // VAST_ENABLE_BACKTRACE

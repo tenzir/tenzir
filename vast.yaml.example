@@ -40,6 +40,12 @@ vast:
   # Maximum number of log messages in the logger queue.
   log-queue-size: 1000000
 
+  # The sink type to use for console logging.
+  # Possible values: stderr, syslog, journald.
+  # Note that 'journald' can only be selected on linux systems, and only if
+  # VAST was built with journald support.
+  console-sink: stderr
+
   # Mode for console log output generation. Automatic renders color only when
   # writing to a tty.
   # Possible values: always, automatic, never. (default automatic)
@@ -62,8 +68,10 @@ vast:
   # Additional directories to load plugins specified using `vast.plugins` from.
   plugin-dirs: []
   # The plugins to load at startup. For relative paths, VAST tries to find the
-  # files in the specified `vast.plugin-dirs`.
-  # Note: Add `example` or `/path/to/libexample.so` to load the example plugin.
+  # files in the specified `vast.plugin-dirs`. The special values 'bundled' and
+  # 'all' enable autoloading of bundled and all plugins respectively.
+  # Note: Add `example` or `/path/to/libvast-plugin-example.so` to load the
+  # example plugin.
   plugins: []
   # The unique ID of this node.
   node-id: "node"
@@ -128,6 +136,11 @@ vast:
     # connections. This comes in handy when letting the OS choose an available
     # random port, i.e., when specifying 0 as port value.
     print-endpoint: false
+    # An ordered list of commands to run inside the node after starting.
+    # As an example, this is how to configure an auto-starting PCAP source that
+    # listens on the interface 'en0' and lives inside the VAST node.
+    #commands:
+    #  - spawn source pcap -i en0
     # Triggers removal of old data when the disk budget is exceeded.
     disk-budget-high: 0GiB
     # When the budget was exceeded, data is erased until the disk space

@@ -11,6 +11,8 @@
 #include "vast/command.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/settings.hpp"
+#include "vast/system/application.hpp"
 #include "vast/systemd.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -104,6 +106,34 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   // A single line of output to publish out address for scripts.
   if (caf::get_or(inv.options, "vast.start.print-endpoint", false))
     std::cout << listen_addr << std::endl;
+  if (auto commands
+      = caf::get_if<std::vector<std::string>>(&inv.options, "vast.start."
+                                                            "commands")) {
+    if (!commands->empty()) {
+      auto [root, root_factory] = make_application("vast");
+      // We're already in the start command, so we can safely assert that
+      // make_application works as expected.
+      VAST_ASSERT(root);
+      for (const auto& command : *commands) {
+        // We use std::quoted for correct tokenization of quoted strings. The
+        // invocation parser expects a vector of strings that are correctly
+        // tokenized already.
+        auto tokenizer = std::stringstream{command};
+        auto cli = std::vector<std::string>{};
+        auto current = std::string{};
+        while (tokenizer >> std::quoted(current))
+          cli.push_back(std::move(current));
+        VAST_INFO("running post-start command {}", command);
+        auto hook_invocation = parse(*root, cli.begin(), cli.end());
+        if (!hook_invocation)
+          return caf::make_message(hook_invocation.error());
+        detail::merge_settings(inv.options, hook_invocation->options);
+        auto result = run(*hook_invocation, sys, root_factory);
+        if (!result)
+          return caf::make_message(result.error());
+      }
+    }
+  }
   self
     ->do_receive(
       [&](caf::down_msg& msg) {
@@ -120,7 +150,9 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         else
           self->send(node, atom::signal_v, signal);
       })
-    .until([&] { return stop; });
+    .until([&] {
+      return stop;
+    });
   return caf::make_message(std::move(err));
 }
 

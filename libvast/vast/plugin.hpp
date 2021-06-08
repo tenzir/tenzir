@@ -21,6 +21,7 @@
 #include <caf/typed_actor.hpp>
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -68,11 +69,29 @@ auto inspect(Inspector& f, plugin_type_id_block& x) ->
 namespace plugins {
 
 /// Retrieves the system-wide plugin singleton.
-std::vector<plugin_ptr>& get() noexcept;
+/// @note Use this function carefully; modifying the system-wide plugin
+/// singleton must only be done before the actor system is running.
+std::vector<plugin_ptr>& get_mutable() noexcept;
+
+/// Retrieves the system-wide plugin singleton.
+const std::vector<plugin_ptr>& get() noexcept;
 
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
 std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
 get_static_type_id_blocks() noexcept;
+
+/// Load plugins specified in the configuration.
+/// @param bundled_plugins The names of the bundled plugins.
+/// @param cfg The actor system configuration of VAST for registering additional
+/// type ID blocks.
+/// @returns A list of paths to the loaded plugins, or an error detailing what
+/// went wrong.
+/// @note Invoke exactly once before \ref get() may be used.
+caf::expected<std::vector<std::filesystem::path>>
+load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg);
+
+/// Initialize loaded plugins.
+caf::error initialize(caf::actor_system_config& cfg);
 
 } // namespace plugins
 
@@ -349,20 +368,24 @@ private:
 #  endif
 
 #  define VAST_REGISTER_PLUGIN_5(name, major, minor, patch, tweak)             \
-    template <class Plugin>                                                    \
-    struct auto_register_plugin {                                              \
+    template <class>                                                           \
+    struct auto_register_plugin;                                               \
+    template <>                                                                \
+    struct auto_register_plugin<name> {                                        \
       auto_register_plugin() {                                                 \
         static_cast<void>(flag);                                               \
       }                                                                        \
       static bool init() {                                                     \
-        ::vast::plugins::get().push_back(VAST_MAKE_PLUGIN(                     \
-          new Plugin, +[](::vast::plugin* plugin) noexcept { delete plugin; }, \
+        ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
+          new (name),                                                          \
+          +[](::vast::plugin* plugin) noexcept {                               \
+            delete plugin;                                                     \
+          },                                                                   \
           ::vast::plugin_version{major, minor, patch, tweak}));                \
         return true;                                                           \
       }                                                                        \
       inline static auto flag = init();                                        \
-    };                                                                         \
-    template struct auto_register_plugin<name>;
+    };
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     struct auto_register_type_id_##name {                                      \

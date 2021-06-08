@@ -34,34 +34,32 @@ endif ()
 # itself. This simplifies the plugin CMake by not requiring plugin developers to
 # check whether their plugin is built alongside VAST.
 if ("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
-  macro(find_package)
+  macro (find_package)
     if (NOT "${ARGV0}" STREQUAL "${CMAKE_PROJECT_NAME}")
       _find_package(${ARGV})
     endif ()
-  endmacro()
+  endmacro ()
 endif ()
 
 # Set a default build type if none was specified.
 set(default_build_type "Release")
-if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
+if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
   set(default_build_type "Debug")
-endif()
+endif ()
 
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(
       STATUS
-        "Setting build type to '${default_build_type}' as none was specified."
-    )
+        "Setting build type to '${default_build_type}' as none was specified.")
     set(CMAKE_BUILD_TYPE
         "${default_build_type}"
         CACHE STRING "Choose the type of build." FORCE)
     # Set the possible values of build type for cmake-gui.
-    set_property(
-      CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel"
-                                      "RelWithDebInfo")
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release"
+                                                 "MinSizeRel" "RelWithDebInfo")
   endif ()
-endif()
+endif ()
 
 # -- includes ------------------------------------------------------------------
 
@@ -97,39 +95,39 @@ unset(_VAST_PARENT_DIRECTORY)
 
 # -- changelog -----------------------------------------------------------------
 
-configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTChangelog.cmake.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake" @ONLY)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTChangelog.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake" @ONLY)
 
 file(GLOB_RECURSE changelog_dependencies CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/changelog/**.md")
+     "${CMAKE_CURRENT_SOURCE_DIR}/changelog/**.md")
 
-add_custom_target(changelog ALL
+add_custom_target(
+  changelog ALL
   BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-  DEPENDS
-    "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake"
-    ${changelog_dependencies}
-  COMMAND ${CMAKE_COMMAND} -P
-    "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake")
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake"
+          ${changelog_dependencies}
+  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake")
 
-add_custom_target(update-changelog
+add_custom_target(
+  update-changelog
   BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md"
   DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
     "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md")
 
 option(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
-  "Skip build configuration after update-changelog target" OFF)
+       "Skip build configuration after update-changelog target" OFF)
 mark_as_advanced(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
 if (VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
-  return ()
+  return()
 endif ()
 
 # -- testing -------------------------------------------------------------------
 
-cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast"
-                       ON "NOT CMAKE_CROSS_COMPILING" OFF)
+cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast" ON
+                       "NOT CMAKE_CROSS_COMPILING" OFF)
 add_feature_info("VAST_ENABLE_UNIT_TESTS" VAST_ENABLE_UNIT_TESTS
                  "build unit tests for libvast.")
 
@@ -146,7 +144,7 @@ add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
 # use relative paths for loading their dependencies. On macOS, always enable
 # relocatable installations as it's very uncommon not to do so.
 cmake_dependent_option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  "Enable relocatable installations" ON "NOT APPLE" ON)
+                       "Enable relocatable installations" ON "NOT APPLE" ON)
 add_feature_info(
   "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   "enable relocatable installations.")
@@ -155,18 +153,33 @@ add_feature_info(
 # relative so we can interpret them relative to the object path of the running
 # binary instead of a fixed install prefix.
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-  foreach (_install IN ITEMS
-      "BIN" "SBIN" "LIBEXEC" "SYSCONF" "SHAREDSTATE" "LOCALSTATE" "RUNSTATE"
-      "LIB" "INCLUDE" "OLDINCLUDE" "DATAROOT" "DATA" "INFO" "LOCALE" "MAN" "DOC"
-  )
+  foreach (
+    _install IN
+    ITEMS "BIN"
+          "SBIN"
+          "LIBEXEC"
+          "SYSCONF"
+          "SHAREDSTATE"
+          "LOCALSTATE"
+          "RUNSTATE"
+          "LIB"
+          "INCLUDE"
+          "OLDINCLUDE"
+          "DATAROOT"
+          "DATA"
+          "INFO"
+          "LOCALE"
+          "MAN"
+          "DOC")
     # Try removing CMAKE_INSTALL_PREFIX with a trailing slash from the full path
     # to get the correct relative path because some package managers do this
     # stupid thing where they put absolute paths into variables that are
     # supposed to be interpreted as relative to the install preifx.
     if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
-      string(REGEX REPLACE "^${CMAKE_INSTALL_PREFIX}/" ""
-        "CMAKE_INSTALL_${_install}DIR"
-        "${CMAKE_INSTALL_FULL_${install}DIR}")
+      string(
+        REGEX
+        REPLACE "^${CMAKE_INSTALL_PREFIX}/" "" "CMAKE_INSTALL_${_install}DIR"
+                "${CMAKE_INSTALL_FULL_${install}DIR}")
     endif ()
     # If the path is still absolute, e.g., because the full install dirs did
     # were not subdirectories if the install prefix, give up and error. Nothing
@@ -195,7 +208,8 @@ endif ()
 # Doing so breaks non-relocatable installations, so we abort the installation
 # when encountering this.
 if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-  install(CODE "\
+  install(
+    CODE "\
     get_filename_component(build_time_prefix
       \"${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
     get_filename_component(install_time_prefix
@@ -267,11 +281,13 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning)
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
-    target_compile_options(libvast_internal INTERFACE
-      -Wno-unused-parameter
-      -Wno-unused-variable
-      # Work around false positives in LTO mode.
-      $<$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>:-Wno-maybe-uninitialized>
+    target_compile_options(
+      libvast_internal
+      INTERFACE
+        -Wno-unused-parameter
+        -Wno-unused-variable
+        # Work around false positives in LTO mode.
+        $<$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>:-Wno-maybe-uninitialized>
     )
   endif ()
 endif ()
@@ -317,15 +333,16 @@ if (VAST_ENABLE_TIME_REPORT)
 endif ()
 
 option(VAST_ENABLE_TIME_TRACE
-  "Generate tracing JSON for compilation time profiling" OFF)
+       "Generate tracing JSON for compilation time profiling" OFF)
 add_feature_info("VAST_ENABLE_TIME_TRACE" VAST_ENABLE_TIME_TRACE
                  "generate tracing JSON for compilation time profiling.")
 if (VAST_ENABLE_TIME_TRACE)
-  include(CheckCXXSourceCompiles)
+  include(CheckCXXCompilerFlag)
   check_cxx_compiler_flag("-ftime-trace" _time_trace_supported)
   if (NOT _time_trace_supported)
-    message(FATAL_ERROR
-      "-ftime-trace option not supported by compiler ${CMAKE_CXX_COMPILER}")
+    message(
+      FATAL_ERROR
+        "-ftime-trace option not supported by compiler ${CMAKE_CXX_COMPILER}")
   endif ()
   unset(_time_trace_supported)
   target_compile_options(libvast_internal INTERFACE "-ftime-trace")
@@ -346,25 +363,6 @@ add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
 
 unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
 
-# -- backtrace -----------------------------------------------------------------
-
-option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
-add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
-                 "print a backtrace on unexpected termination.")
-if (VAST_ENABLE_BACKTRACE)
-  find_package(Backtrace)
-  if (Backtrace_FOUND)
-    target_include_directories(libvast_internal
-                               INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
-    target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
-    dependency_summary("backtrace" ${Backtrace_INCLUDE_DIR} "Dependencies")
-  else ()
-    find_package(libunwind REQUIRED)
-    target_link_libraries(libvast_internal INTERFACE unwind::unwind)
-    dependency_summary("libunwind" unwind::unwind "Dependencies")
-  endif ()
-endif ()
-
 # -- sanitizers ----------------------------------------------------------------
 
 # Address Sanitizer
@@ -375,8 +373,8 @@ else ()
 endif ()
 
 option(VAST_ENABLE_ASAN
-  "Insert pointer and reference checks into the generated binaries"
-  _VAST_ENABLE_ASAN_DEFAULT)
+       "Insert pointer and reference checks into the generated binaries"
+       _VAST_ENABLE_ASAN_DEFAULT)
 add_feature_info(
   "VAST_ENABLE_ASAN" VAST_ENABLE_ASAN
   "inserts pointer and reference checks into the generated binaries.")
@@ -688,11 +686,12 @@ configure_package_config_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
   INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
-              "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
-              "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
-              "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
+install(
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
 # -- scripts -------------------------------------------------------------------
 

@@ -43,11 +43,25 @@ jobs:
       - name: Install Dependencies
         run: |
           apt-get update
-          apt-get -y install git libsnappy-dev libbrotli-dev zlib1g-dev wget \
-            liblz4-dev libzstd-dev ninja-build libpcap-dev libssl-dev \
-            libbenchmark-dev libflatbuffers-dev  flatbuffers-compiler-dev \
-            libyaml-cpp-dev libsimdjson-dev gnupg2 gcc-8 g++-8 python3 \
-            python3-pip python3-venv jq software-properties-common
+          apt-get -y install \
+            build-essential gcc-8 g++-8 ninja-build \
+            libyaml-cpp-dev \
+            libsimdjson-dev \
+            libflatbuffers-dev \
+            flatbuffers-compiler-dev \
+            libssl-dev \
+            pkg-config \
+            libunwind-dev \
+            libpcap-dev tcpdump \
+            git \
+            jq \
+            gnupg2 \
+            wget \
+            lsb-release \
+            ca-certificates \
+            python3-dev \
+            python3-pip \
+            python3-venv
           apt-get -y -t buster-backports install libspdlog-dev libfmt-dev
           python3 -m pip install --upgrade pip
           python3 -m pip install --upgrade cmake
@@ -120,7 +134,28 @@ jobs:
       - name: Install Dependencies
         run: |
           apt-get update
-          apt-get -y install git libsnappy-dev libbrotli-dev zlib1g-dev wget liblz4-dev libzstd-dev ninja-build libpcap-dev libssl-dev libbenchmark-dev tcpdump lsb-release libflatbuffers-dev flatbuffers-compiler-dev libyaml-cpp-dev libsimdjson-dev gnupg2 gcc-8 g++-8 python3 python3-pip python3-venv jq apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+          apt-get -y install \
+            build-essential gcc-8 g++-8 ninja-build \
+            libyaml-cpp-dev \
+            libsimdjson-dev \
+            libflatbuffers-dev \
+            flatbuffers-compiler-dev \
+            libssl-dev \
+            pkg-config \
+            libunwind-dev \
+            libpcap-dev tcpdump \
+            git \
+            jq \
+            gnupg2 gnupg-agent \
+            curl \
+            wget \
+            lsb-release \
+            ca-certificates \
+            python3-dev \
+            python3-pip \
+            python3-venv \
+            apt-transport-https \
+            software-properties-common
 
           # Need to specify backports explicitly, since spdlog and fmt also have
           # buster packages.
@@ -177,7 +212,9 @@ jobs:
         uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-
 
       - name: Configure
         run: |
@@ -235,7 +272,7 @@ jobs:
 
       - name: Upload Integration Test Logs on Failure
         if: failure() && steps.integration_test_step.outputs.status == 'false'
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2.2.3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
@@ -267,7 +304,7 @@ jobs:
           docker push tenzir/vast:${{ env.DOCKER_RELEASE_VERSION }}
 
       - name: Upload Artifact to GitHub
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2.2.3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
@@ -360,7 +397,7 @@ jobs:
           git fetch origin +refs/tags/*:refs/tags/*
 
       - name: Setup Python
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v2.2.2
         with:
           python-version: '3.7'
 
@@ -372,7 +409,22 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp simdjson spdlog fmt
+          brew install \
+            apache-arrow \
+            ccache \
+            flatbuffers \
+            fmt \
+            gnu-sed \
+            libpcap \
+            libunwind-headers \
+            ninja \
+            pandoc \
+            pkg-config \
+            rsync \
+            simdjson \
+            spdlog \
+            tcpdump \
+            yaml-cpp
 
       - name: Configure Environment
         run: |
@@ -399,7 +451,9 @@ jobs:
         uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-
 
       - name: Configure
         run: |
@@ -459,7 +513,7 @@ jobs:
 
       - name: Upload Integration Test Logs on Failure
         if: failure() && steps.integration_test_step.outputs.status == 'false'
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2.2.3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
@@ -471,7 +525,7 @@ jobs:
           cmake --build "$BUILD_DIR" --target package
 
       - name: Upload Artifact to Github
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2.2.3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
@@ -531,7 +585,27 @@ jobs:
       - name: Install Dependencies
         run: |
           apt-get update
-          apt-get -y install git libsnappy-dev libbrotli-dev zlib1g-dev wget liblz4-dev libzstd-dev ninja-build libpcap-dev libssl-dev libbenchmark-dev tcpdump lsb-release libflatbuffers-dev flatbuffers-compiler-dev libyaml-cpp-dev libsimdjson-dev gnupg2 gcc-8 g++-8 python3 python3-pip python3-venv jq apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+          apt-get -y install \
+            build-essential gcc-8 g++-8 ninja-build \
+            libyaml-cpp-dev \
+            libsimdjson-dev \
+            libflatbuffers-dev \
+            flatbuffers-compiler-dev \
+            libssl-dev \
+            libunwind-dev \
+            libpcap-dev tcpdump \
+            git \
+            jq \
+            gnupg2 gnupg-agent \
+            curl \
+            wget \
+            lsb-release \
+            ca-certificates \
+            python3-dev \
+            python3-pip \
+            python3-venv \
+            apt-transport-https \
+            software-properties-common
           # Need to specify backports explicitly, since spdlog and fmt also have
           # buster packages.
           apt-get -y -t buster-backports install libspdlog-dev libfmt-dev
@@ -595,7 +669,7 @@ jobs:
           cmake --build "$BUILD_DIR" --target integration
       - name: Upload Integration Test Logs on Failure
         if: failure()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v2.2.3
         with:
           name: 'vast-${{ matrix.plugin.target }}-integration-test'
           path: '${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test'
@@ -644,7 +718,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Setup Cachix
-        uses: cachix/cachix-action@v7
+        uses: cachix/cachix-action@v10
         with:
           name: vast
           signingKey: '${{ secrets.CACHIX_VAST_SIGNING_KEY }}'
@@ -662,13 +736,13 @@ jobs:
           echo "::set-output name=artifact_name::${ARTIFACT_NAME}"
 
       - name: Upload Artifact to Github
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v2.2.3
         with:
           name: "${{ steps.create_paths.outputs.artifact_name }}"
           path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
 
       - name: Setup Python
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v2.2.2
         with:
           python-version: '3.7'
 

@@ -106,12 +106,14 @@ install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 
 # -- add plugins ---------------------------------------------------------------
 
-set(VAST_PLUGINS "" CACHE STRING "Specify a list of plugins to build with VAST")
-cmake_dependent_option(VAST_ENABLE_STATIC_PLUGINS
-  "Force plugins to be linked statically" OFF
+set(VAST_PLUGINS
+    ""
+    CACHE STRING "Specify a list of plugins to build with VAST")
+cmake_dependent_option(
+  VAST_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF
   "NOT VAST_ENABLE_STATIC_EXECUTABLE" ON)
 add_feature_info("VAST_ENABLE_STATIC_PLUGINS" VAST_ENABLE_STATIC_PLUGINS
-      "Force plugins to be linked statically.")
+                 "Force plugins to be linked statically.")
 if (VAST_PLUGINS)
   list(SORT VAST_PLUGINS)
   foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
@@ -124,20 +126,13 @@ if (VAST_PLUGINS)
   endforeach ()
 endif ()
 
-cmake_dependent_option(VAST_ENABLE_PLUGIN_AUTOLOADING
-  "Always load all bundled plugins" OFF "NOT VAST_ENABLE_STATIC_PLUGINS" OFF)
-add_feature_info(
-  "VAST_ENABLE_PLUGIN_AUTOLOADING" VAST_ENABLE_PLUGIN_AUTOLOADING
-  "always load all bundled plugins.")
 get_property(VAST_BUNDLED_PLUGINS GLOBAL
-  PROPERTY "VAST_BUNDLED_PLUGINS_PROPERTY")
-if (VAST_ENABLE_PLUGIN_AUTOLOADING AND VAST_BUNDLED_PLUGINS)
-  list(TRANSFORM VAST_BUNDLED_PLUGINS PREPEND "\"")
-  list(TRANSFORM VAST_BUNDLED_PLUGINS APPEND "\"")
-  list(JOIN VAST_BUNDLED_PLUGINS "," joined_bundled_plugins)
-  target_compile_definitions(
-    vast PRIVATE "VAST_ENABLED_PLUGINS=${joined_bundled_plugins}")
-endif ()
+             PROPERTY "VAST_BUNDLED_PLUGINS_PROPERTY")
+list(TRANSFORM VAST_BUNDLED_PLUGINS PREPEND "\"")
+list(TRANSFORM VAST_BUNDLED_PLUGINS APPEND "\"")
+list(JOIN VAST_BUNDLED_PLUGINS "," joined_bundled_plugins)
+target_compile_definitions(
+  vast PRIVATE "VAST_BUNDLED_PLUGINS=${joined_bundled_plugins}")
 
 # -- man page ------------------------------------------------------------------
 
@@ -158,7 +153,8 @@ if (PANDOC_FOUND)
     execute_process(
       COMMAND pandoc -s -f markdown -t man ${man_generated}.md
       OUTPUT_FILE ${man_generated})")
-  add_custom_target(vast-man ALL
+  add_custom_target(
+    vast-man ALL
     DEPENDS vast
     BYPRODUCTS ${man_generated}
     COMMAND ${CMAKE_COMMAND} -P make_man_${man_page}.cmake
