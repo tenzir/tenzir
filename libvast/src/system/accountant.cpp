@@ -16,6 +16,7 @@
 #include "vast/detail/coding.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/make_io_stream.hpp"
+#include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/report.hpp"
@@ -83,6 +84,9 @@ struct accountant_state_impl {
   /// Handle to the uds output channel.
   std::unique_ptr<std::ostream> uds_sink = nullptr;
 
+  /// Handle to the uds output channel.
+  std::unique_ptr<detail::uds_datagram_sender> uds_datagram_sink = nullptr;
+
   /// The configuration.
   accountant_config cfg;
 
@@ -124,8 +128,7 @@ struct accountant_state_impl {
       finish_slice();
   }
 
-  std::ostream& record_to_output(const std::string& key, real x, time ts,
-                                 std::ostream& os, bool real_time) {
+  std::vector<char> to_json_line(time ts, const std::string& key, real x) {
     using namespace std::string_view_literals;
     auto actor_id = self->current_sender()->id();
     json_printer<policy::oneline, policy::human_readable_durations> printer;
@@ -142,10 +145,22 @@ struct accountant_state_impl {
     printer.print(iter, std::pair{"value"sv, make_data_view(x)});
     *iter++ = '}';
     *iter++ = '\n';
+    return buf;
+  }
+
+  std::ostream& record_to_output(const std::string& key, real x, time ts,
+                                 std::ostream& os, bool real_time) {
+    auto buf = to_json_line(ts, key, x);
     os.write(buf.data(), buf.size());
     if (real_time)
       os << std::flush;
     return os;
+  }
+
+  void record_to_unix_datagram(const std::string& key, real x, time ts,
+                               detail::uds_datagram_sender& dest) {
+    auto buf = to_json_line(ts, key, x);
+    dest.send(buf);
   }
 
   void record(const std::string& key, real x,
@@ -156,6 +171,8 @@ struct accountant_state_impl {
       record_to_output(key, x, ts, *file_sink, cfg.file_sink.real_time);
     if (uds_sink)
       record_to_output(key, x, ts, *uds_sink, cfg.uds_sink.real_time);
+    if (uds_datagram_sink)
+      record_to_unix_datagram(key, x, ts, *uds_datagram_sink);
   }
 
   void record(const std::string& key, duration x,
@@ -207,13 +224,26 @@ struct accountant_state_impl {
       uds_sink.reset(nullptr);
     }
     if (start_uds_sink) {
-      auto s = detail::make_output_stream(cfg.uds_sink.path, cfg.uds_sink.type);
-      if (s) {
-        VAST_INFO("{} writing metrics to {}", self, cfg.uds_sink.path);
-        uds_sink = std::move(*s);
+      if (cfg.uds_sink.type == detail::socket_type::datagram) {
+        auto s = detail::uds_datagram_sender::make(cfg.uds_sink.path);
+        if (s) {
+          VAST_INFO("{} writes metrics to {}", self, cfg.uds_sink.path);
+          uds_datagram_sink
+            = std::make_unique<detail::uds_datagram_sender>(std::move(*s));
+        } else {
+          VAST_INFO("{} could not open {} for metrics: {}", self,
+                    cfg.uds_sink.path, s.error());
+        }
       } else {
-        VAST_INFO("{} could not open {} for metrics: {}", self,
-                  cfg.uds_sink.path, s.error());
+        auto s
+          = detail::make_output_stream(cfg.uds_sink.path, cfg.uds_sink.type);
+        if (s) {
+          VAST_INFO("{} writes metrics to {}", self, cfg.uds_sink.path);
+          uds_sink = std::move(*s);
+        } else {
+          VAST_INFO("{} could not open {} for metrics: {}", self,
+                    cfg.uds_sink.path, s.error());
+        }
       }
     }
     this->cfg = std::move(cfg);
