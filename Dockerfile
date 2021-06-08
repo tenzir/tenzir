@@ -13,10 +13,24 @@ ENV BUILD_DIR /tmp/src
 
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
-  build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
-  libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2 wget \
-  libyaml-cpp-dev libsimdjson-dev libflatbuffers-dev flatbuffers-compiler-dev \
-  lsb-release ca-certificates
+  build-essential gcc-8 g++-8 ninja-build \
+  ca-certificates \
+  flatbuffers-compiler-dev \
+  git-core \
+  gnupg2 \
+  jq \
+  libflatbuffers-dev \
+  libpcap-dev tcpdump \
+  libsimdjson-dev \
+  libssl-dev \
+  libunwind-dev \
+  libyaml-cpp-dev \
+  lsb-release \
+  pkg-config \
+  python3-dev \
+  python3-pip \
+  wget \
+  python3-venv
 
 # Need to specify backports explicitly, since spdlog and fmt also have regular
 # buster packages. Also, this comes with a newer version of CMake.
@@ -81,7 +95,7 @@ ENV PREFIX /usr/local
 COPY --from=build_type $PREFIX/ $PREFIX/
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
   openssl libsimdjson4 libyaml-cpp0.6 libasan5 libflatbuffers1 wget gnupg2 \
-  lsb-release ca-certificates
+  lsb-release ca-certificates libunwind8
 
 # Need to specify backports explicitly, since spdlog and fmt also have regular
 # buster packages. For fmt we install the dev package, because libfmt is only
