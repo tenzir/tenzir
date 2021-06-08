@@ -179,6 +179,9 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
       return std::move(path.error());
   }
   // Step 6: Deduplicate plugin paths.
+  // TODO: Consider moving steps 1-5 into a separate `resolve` function, and
+  // splitting step 3 into separate steps for modifying the list of bundled
+  // plugins and unloading unwanted static plugins.
   auto paths = detail::stable_set<std::string>{};
   paths.insert(std::make_move_iterator(paths_or_names.begin()),
                std::make_move_iterator(paths_or_names.end()));
