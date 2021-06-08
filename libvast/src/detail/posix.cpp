@@ -92,7 +92,7 @@ uds_datagram_sender::make(const std::string& path) {
   // to. There is no mktemp variant for sockets, so that is unfortunately
   // necessary.
   // NOTE: The temporary directory will be removed at the end of this function.
-  char mkd_template[] = u8"/tmp/vast-XXXXXX\0socket";
+  char mkd_template[] = "/tmp/vast-XXXXXX\0socket";
   char* src_name = ::mkdtemp(&mkd_template[0]);
   if (src_name == nullptr)
     return caf::make_error(ec::system_error,
