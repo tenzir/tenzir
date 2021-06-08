@@ -70,9 +70,30 @@ caf::error configuration::parse(int argc, char** argv) {
     caf::put(content, "vast.bare-mode", true);
     command_line.erase(it);
   }
+  // Detect when plugins or plugin-dirs are specified on the command line. This
+  // needs to happen before the regular parsing of the command line since
+  // plugins may add additional commands.
+  auto is_not_plugin_opt = [](auto& x) {
+    return !detail::starts_with(x, "--plugins=")
+           && !detail::starts_with(x, "--plugin-dirs=");
+  };
+  auto plugin_opt = std::stable_partition(
+    command_line.begin(), command_line.end(), is_not_plugin_opt);
+  auto plugin_args = std::vector<std::string>{};
+  std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
+  command_line.erase(plugin_opt, command_line.end());
+  auto plugin_opts
+    = caf::config_option_set{}
+        .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
+        .add<std::vector<std::string>>("?vast", "plugins", "");
+  auto [ec, it] = plugin_opts.parse(content, plugin_args);
+  VAST_ASSERT(ec == caf::pec::success);
+  VAST_ASSERT(it == plugin_args.end());
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
-  auto is_vast_opt = [](auto& x) { return !detail::starts_with(x, "--caf."); };
+  auto is_vast_opt = [](auto& x) {
+    return !detail::starts_with(x, "--caf.");
+  };
   auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
                                        is_vast_opt);
   std::vector<std::string> caf_args;
@@ -178,8 +199,12 @@ caf::error configuration::parse(int argc, char** argv) {
     // Hackish way to get a string representation that doesn't add double
     // quotes around the value.
     auto no_quote_stringify = detail::overload{
-      [](const auto& x) { return caf::deep_to_string(x); },
-      [](const std::string& x) { return x; },
+      [](const auto& x) {
+        return caf::deep_to_string(x);
+      },
+      [](const std::string& x) {
+        return x;
+      },
     };
     auto str = caf::visit(no_quote_stringify, val);
     auto result = opt.parse(str);

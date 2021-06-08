@@ -68,8 +68,10 @@ vast:
   # Additional directories to load plugins specified using `vast.plugins` from.
   plugin-dirs: []
   # The plugins to load at startup. For relative paths, VAST tries to find the
-  # files in the specified `vast.plugin-dirs`.
-  # Note: Add `example` or `/path/to/libexample.so` to load the example plugin.
+  # files in the specified `vast.plugin-dirs`. The special values 'bundled' and
+  # 'all' enable autoloading of bundled and all plugins respectively.
+  # Note: Add `example` or `/path/to/libvast-plugin-example.so` to load the
+  # example plugin.
   plugins: []
   # The unique ID of this node.
   node-id: "node"
