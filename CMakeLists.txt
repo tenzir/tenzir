@@ -195,11 +195,11 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
 
   # Single output directory.
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
-    "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
-    CACHE PATH "Single directory for all binaries.")
+      "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
+      CACHE PATH "Single directory for all binaries.")
   set(CMAKE_LIBRARY_OUTPUT_DIRECTORY
-    "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
-    CACHE PATH "Single directory for all libraries.")
+      "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
+      CACHE PATH "Single directory for all libraries.")
 endif ()
 
 # CMake allows for overriding the install prefix at install-time, e.g., via
@@ -423,7 +423,7 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   if (NOT VAST_ENABLE_STATIC_EXECUTABLE)
     if (APPLE)
       list(PREPEND CMAKE_INSTALL_RPATH
-          "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
+           "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
     else ()
       list(PREPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
     endif ()
