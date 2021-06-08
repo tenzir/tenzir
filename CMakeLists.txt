@@ -192,6 +192,14 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
     endif ()
   endforeach ()
   unset(_install)
+
+  # Single output directory.
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
+      "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
+      CACHE PATH "Single directory for all binaries.")
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY
+      "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
+      CACHE PATH "Single directory for all libraries.")
 endif ()
 
 # CMake allows for overriding the install prefix at install-time, e.g., via
@@ -391,7 +399,7 @@ if (VAST_ENABLE_UBSAN)
   target_link_libraries(libvast_internal INTERFACE -fsanitize=undefined)
 endif ()
 
-# -- static build support -----------------------------------
+# -- static build support ------------------------------------------------------
 
 cmake_dependent_option(
   VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
@@ -407,17 +415,31 @@ if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   message(FATAL_ERROR "Cannot create static binary with dynamic libraries")
 endif ()
 
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS AND NOT VAST_ENABLE_STATIC_EXECUTABLE)
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   # Note that we cannot use the target property INSTALL_RPATH on
   # libvast_internal, because it is an interface library. We should probably fix
   # this by making the config header part of libvast_internal so it is not just
   # an interface library.
-  if (APPLE)
-    list(PREPEND CMAKE_INSTALL_RPATH
-         "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
-  else ()
-    list(PREPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+  if (NOT VAST_ENABLE_STATIC_EXECUTABLE)
+    if (APPLE)
+      list(PREPEND CMAKE_INSTALL_RPATH
+           "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
+    else ()
+      list(PREPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+    endif ()
   endif ()
+
+  # For relocatable builds we need to find the relative difference between the
+  # install prefix and the library location, or the binary location for static
+  # VAST binaries.
+  if (VAST_ENABLE_STATIC_EXECUTABLE)
+    set(_libdir "${CMAKE_INSTALL_FULL_BINDIR}")
+  else ()
+    set(_libdir "${CMAKE_INSTALL_FULL_LIBDIR}")
+  endif ()
+  file(RELATIVE_PATH VAST_LIBDIR_TO_PREFIX "${_libdir}"
+       "${CMAKE_INSTALL_PREFIX}")
+  unset(_libdir)
 endif ()
 
 # -- jemalloc ------------------------------------------------------------------
@@ -568,17 +590,6 @@ if (VAST_ENABLE_MORE_WARNINGS)
   endif ()
 endif ()
 
-# -- single output directory ---------------------------------------------------
-
-# Use a single output directory for executable and library files.
-# TODO These are deprecated; do we actually need this?
-set(EXECUTABLE_OUTPUT_PATH
-    ${CMAKE_CURRENT_BINARY_DIR}/bin
-    CACHE PATH "Single directory for all executables")
-set(LIBRARY_OUTPUT_PATH
-    ${CMAKE_CURRENT_BINARY_DIR}/lib
-    CACHE PATH "Single directory for all libraries")
-
 # -- compiler setup ------------------------------------------------------------
 
 set(CLANG_MINIMUM_VERSION 8.0)
@@ -717,7 +728,11 @@ if (NOT VAST_IS_SUBPROJECT)
   message(" * Version: ${VAST_VERSION_TAG}")
   message(" * Build Tree Hash: ${VAST_BUILD_TREE_HASH}")
   message("")
-  message(" * Build Type: ${CMAKE_BUILD_TYPE}")
+  if (CMAKE_CONFIGURATION_TYPES)
+    message(" * Configuration Types: ${CMAKE_CONFIGURATION_TYPES}")
+  else ()
+    message(" * Build Type: ${CMAKE_BUILD_TYPE}")
+  endif ()
   message(" * Source Directory: ${CMAKE_SOURCE_DIR}")
   message(" * Binary Directory: ${CMAKE_BINARY_DIR}\n")
   foreach (lang IN ITEMS C CXX)
