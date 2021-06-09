@@ -241,6 +241,13 @@ caf::error configuration::parse(int argc, char** argv) {
       put(content, key, value);
     }
   }
+  // If the user specifies a VAST_ENDPOINT, potentially use it. Precedence:
+  // 1. CLI argument
+  // 2. Environment variables
+  // 3. Config files
+  // 4. Defaults
+  if (auto vast_endpoint_env = detail::locked_getenv("VAST_ENDPOINT"))
+    caf::put(content, "vast.endpoint", *vast_endpoint_env);
   // Try parsing all --caf.* settings. First, strip caf. prefix for the
   // CAF parser.
   for (auto& arg : caf_args)
