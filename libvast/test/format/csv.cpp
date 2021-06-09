@@ -52,12 +52,19 @@ struct fixture : fixtures::deterministic_actor_system {
                   {"mcs", map_type{count_type{}, string_type{}}}}
         .name("l2");
 
+  const record_type l3 = record_type{
+    {"s1", string_type{}},
+    {"s2", string_type{}},
+    {"s2,3",
+     string_type{}}}.name("l3");
+
   schema s;
 
   fixture() {
     s.add(l0);
     s.add(l1);
     s.add(l2);
+    s.add(l3);
   }
 
   const caf::settings options = {};
@@ -338,6 +345,47 @@ TEST(csv reader - line endings) {
         == data{unbox(to<duration>("10s"))});
   CHECK(slices[0].at(1, 1, duration_type{})
         == data{unbox(to<duration>("1days"))});
+}
+
+std::string_view l3_quoted_strings_header = R"__(s1,"s2,3"
+a,b
+c,d)__";
+
+TEST(csv reader - quoted strings in header) {
+  auto slices = run(l3_quoted_strings_header, 2, 2);
+  auto l3_strings
+    = record_type{{"s1", string_type{}}, {"s2,3", string_type{}}}.name("l3");
+  REQUIRE_EQUAL(slices[0].layout(), l3_strings);
+  CHECK(slices[0].at(0, 0, string_type{}) == data{"a"});
+  CHECK(slices[0].at(0, 1, string_type{}) == data{"b"});
+  CHECK(slices[0].at(1, 0, string_type{}) == data{"c"});
+  CHECK(slices[0].at(1, 1, string_type{}) == data{"d"});
+}
+
+std::string_view l3_quoted_strings_1 = R"__(s1
+"hello, world")__";
+
+std::string_view l3_quoted_strings_2 = R"__(s1,s2
+a,"b,c"
+"d,e,\"f",\"g)__";
+
+TEST(csv reader - quoted string) {
+  {
+    auto slices = run(l3_quoted_strings_1, 1, 1);
+    auto l3_strings = record_type{{"s1", string_type{}}}.name("l3");
+    REQUIRE_EQUAL(slices[0].layout(), l3_strings);
+    CHECK(slices[0].at(0, 0, string_type{}) == data{"hello, world"});
+  }
+  {
+    auto slices = run(l3_quoted_strings_2, 2, 2);
+    auto l3_strings
+      = record_type{{"s1", string_type{}}, {"s2", string_type{}}}.name("l3");
+    REQUIRE_EQUAL(slices[0].layout(), l3_strings);
+    CHECK(slices[0].at(0, 0, string_type{}) == data{"a"});
+    CHECK(slices[0].at(0, 1, string_type{}) == data{"b,c"});
+    CHECK(slices[0].at(1, 0, string_type{}) == data{"d,e,\"f"});
+    CHECK(slices[0].at(1, 1, string_type{}) == data{"\\\"g"});
+  }
 }
 
 FIXTURE_SCOPE_END()
