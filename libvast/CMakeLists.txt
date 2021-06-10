@@ -475,6 +475,10 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
+# wasmer hacky include
+target_include_directories(libvast PRIVATE ~/src/wasmer/package/include)
+target_link_libraries(libvast PRIVATE ~/src/wasmer/package/lib/libwasmer.so)
+
 # TODO: Should we move the bundled schemas to libvast?
 if (TARGET vast-schema)
   add_dependencies(libvast vast-schema)

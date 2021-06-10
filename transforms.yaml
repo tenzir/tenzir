@@ -1,0 +1,11 @@
+vast:
+  transforms:
+    apply_wasm:
+      - wasm:
+          program: /home/benno/tenzir/hackathons/hackathon-2021-06-09/wasm/hello.wasm
+
+  transform-triggers:
+    import:
+      - transform: apply_wasm
+        location: server
+        events: [zeek.conn]
