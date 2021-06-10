@@ -14,7 +14,6 @@
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/framed.hpp"
 #include "vast/detail/logger_formatters.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
@@ -50,20 +49,26 @@ vast:
 
 }
 
-vast::system::stream_sink_actor<vast::table_slice>::behavior_type
-dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
+vast::system::stream_sink_actor<
+  vast::system::stream_controlled<vast::table_slice>>::behavior_type
+dummy_sink(vast::system::stream_sink_actor<
+             vast::system::stream_controlled<vast::table_slice>>::pointer self,
            vast::table_slice* result) {
   return {
-    [=](caf::stream<vast::table_slice> in) {
+    [=](caf::stream<vast::system::stream_controlled<vast::table_slice>> in) {
       auto sink = self->make_sink(
         in,
         [=](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, vast::table_slice&& x) {
-          *result = std::move(x);
+        [=](caf::unit_t&,
+            vast::system::stream_controlled<vast::table_slice>&& x) {
+          REQUIRE(caf::holds_alternative<vast::table_slice>(x));
+          *result = std::move(caf::get<vast::table_slice>(x));
         });
-      return caf::inbound_stream_slot<vast::table_slice>{sink.inbound_slot()};
+      return caf::inbound_stream_slot<
+        vast::system::stream_controlled<vast::table_slice>>{
+        sink.inbound_slot()};
     },
   };
 }
@@ -75,7 +80,7 @@ struct transformer_fixture
   }
 
   // Creates a table slice with a single string field and random data.
-  static std::vector<vast::detail::framed<vast::table_slice>>
+  static std::vector<vast::system::stream_controlled<vast::table_slice>>
   make_transforms_testdata() {
     auto layout = vast::record_type{{"uid", vast::string_type{}},
                                     {"index", vast::integer_type{}}}
@@ -88,7 +93,8 @@ struct transformer_fixture
       auto str = fmt::format("{}", uuid);
       REQUIRE(builder->add(str, vast::integer{i}));
     }
-    return {builder->finish()};
+    auto slice = builder->finish();
+    return {vast::system::stream_controlled<vast::table_slice>{slice}};
   }
 };
 
@@ -147,12 +153,12 @@ TEST(transformer) {
   run(); // The dummy_sink should store the transformed table slice in `result`.
   auto layout_after_delete
     = vast::record_type{{"index", vast::integer_type{}}}.name("vast.test");
-  auto& slice = slices[0];
-  CHECK_EQUAL(slice.header, vast::detail::stream_control_header::data);
-  CHECK_EQUAL(slice.body.rows(), result.rows());
-  CHECK_EQUAL(slice.body.layout().name(), result.layout().name());
+  REQUIRE(caf::holds_alternative<vast::table_slice>(slices[0]));
+  auto& slice = caf::get<vast::table_slice>(slices[0]);
+  CHECK_EQUAL(slice.rows(), result.rows());
+  CHECK_EQUAL(slice.layout().name(), result.layout().name());
   CHECK_EQUAL(result.layout(), layout_after_delete);
-  CHECK_EQUAL(slice.body.offset(), result.offset());
+  CHECK_EQUAL(slice.offset(), result.offset());
   self->send_exit(transformer, caf::exit_reason::user_shutdown);
 }
 

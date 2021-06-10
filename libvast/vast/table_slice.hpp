@@ -345,3 +345,6 @@ filter(const table_slice& slice, const ids& hints);
                                       const expression& expr, const ids& hints);
 
 } // namespace vast
+
+// TODO remove this one; it's only for convenience rn
+#include "vast/system/stream_controlled.hpp"

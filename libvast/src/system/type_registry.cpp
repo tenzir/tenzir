@@ -176,15 +176,19 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       VAST_TRACE_SCOPE("{} sends out a status report", self);
       return self->state.status(v);
     },
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+    [self](caf::stream<stream_controlled<table_slice>> in)
+      -> caf::inbound_stream_slot<stream_controlled<table_slice>> {
       VAST_TRACE_SCOPE("{} attaches to {}", self, VAST_ARG("stream", in));
       auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, table_slice x) { self->state.insert(x.layout()); });
+        [=](caf::unit_t&, stream_controlled<table_slice> x) {
+          VAST_ASSERT(caf::holds_alternative<table_slice>(x));
+          auto& slice = caf::get<table_slice>(x);
+          self->state.insert(slice.layout());
+        });
       return result.inbound_slot();
     },
     [self](atom::get) {

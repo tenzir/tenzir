@@ -289,15 +289,17 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                  statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+    [self](caf::stream<stream_controlled<table_slice>> in)
+      -> caf::inbound_stream_slot<stream_controlled<table_slice>> {
       return self
         ->make_sink(
           in,
           [](caf::unit_t&) {
             // nop
           },
-          [=](caf::unit_t&, table_slice slice) {
+          [=](caf::unit_t&, stream_controlled<table_slice> x) {
+            VAST_ASSERT(caf::holds_alternative<table_slice>(x));
+            auto& slice = caf::get<table_slice>(x);
             handle_batch(self, std::move(slice));
           },
           [=](caf::unit_t&, const caf::error& err) {

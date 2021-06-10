@@ -74,7 +74,7 @@ caf::behavior datagram_source(
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
     self->state.done = true;
-    self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
+    self->state.mgr->out().push(end_of_stream_marker);
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
@@ -84,11 +84,13 @@ caf::behavior datagram_source(
       self->state.start_time = std::chrono::system_clock::now();
     },
     // get next element
-    [](caf::unit_t&, caf::downstream<detail::framed<table_slice>>&, size_t) {
+    [](caf::unit_t&, caf::downstream<stream_controlled<table_slice>>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
-    [self](const caf::unit_t&) { return self->state.done; });
+    [self](const caf::unit_t&) {
+      return self->state.done;
+    });
   auto result = datagram_source_actor::behavior_type{
     [self](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
@@ -105,7 +107,10 @@ caf::behavior datagram_source(
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
         VAST_DEBUG("{} produced a slice with {} rows", self, slice.rows());
-        self->state.mgr->out().push(detail::framed{std::move(slice)});
+        stream_controlled<table_slice> sc_slice{std::move(slice)};
+        if (self->state.flush_listener)
+          sc_slice.subscribe(self->state.flush_listener);
+        self->state.mgr->out().push(std::move(sc_slice));
       };
       auto events = capacity * self->state.table_slice_size;
       if (self->state.requested)
@@ -124,7 +129,13 @@ caf::behavior datagram_source(
       if (self->state.done)
         self->state.send_report();
     },
-    [self](stream_sink_actor<table_slice, std::string> sink) {
+    [self](atom::subscribe, atom::flush, flush_listener_actor& flush_listener) {
+      VAST_WARN("{} subscribes flush listener", self);
+      VAST_ASSERT(!self->state.flush_listener);
+      self->state.flush_listener = std::move(flush_listener);
+    },
+    [self](
+      stream_sink_actor<stream_controlled<table_slice>, std::string> sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG("{} (datagram) registers {}", self, VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to

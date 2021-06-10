@@ -237,8 +237,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       }
       self->send(self, atom::internal_v, atom::resume_v);
     },
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+    [self](caf::stream<stream_controlled<table_slice>> in)
+      -> caf::inbound_stream_slot<stream_controlled<table_slice>> {
       VAST_DEBUG("{} got a new stream source", self);
       return self
         ->make_sink(
@@ -246,11 +246,14 @@ archive(archive_actor::stateful_pointer<archive_state> self,
           [](caf::unit_t&) {
             // nop
           },
-          [=](caf::unit_t&, std::vector<table_slice>& batch) {
+          [=](caf::unit_t&,
+              std::vector<stream_controlled<table_slice>>& batch) {
             VAST_TRACE_SCOPE("{} got {} table slices", self, batch.size());
             auto t = timer::start(self->state.measurement);
             uint64_t events = 0;
-            for (auto& slice : batch) {
+            for (auto& x : batch) {
+              VAST_ASSERT(caf::holds_alternative<table_slice>(x));
+              auto& slice = caf::get<table_slice>(x);
               if (auto error = self->state.store->put(slice))
                 VAST_ERROR("{} failed to add table slice to store {}", self,
                            render(error));

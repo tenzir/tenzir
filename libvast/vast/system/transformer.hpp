@@ -23,9 +23,9 @@
 
 namespace vast::system {
 
-using transformer_stream_stage_ptr
-  = caf::stream_stage_ptr<detail::framed<table_slice>,
-                          caf::broadcast_downstream_manager<table_slice>>;
+using transformer_stream_stage_ptr = caf::stream_stage_ptr<
+  stream_controlled<table_slice>,
+  caf::broadcast_downstream_manager<stream_controlled<table_slice>>>;
 
 struct transformer_state {
   /// The transforms that can be applied.

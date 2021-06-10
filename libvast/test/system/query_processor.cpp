@@ -40,11 +40,16 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::worker, system::query_supervisor_actor) {
       FAIL("no mock implementation available");
     },
-    [=](atom::done, uuid) { FAIL("no mock implementation available"); },
-    [=](caf::stream<table_slice>) -> caf::inbound_stream_slot<table_slice> {
+    [=](atom::done, uuid) {
       FAIL("no mock implementation available");
     },
-    [=](system::accountant_actor) { FAIL("no mock implementation available"); },
+    [=](caf::stream<system::stream_controlled<table_slice>>)
+      -> caf::inbound_stream_slot<system::stream_controlled<table_slice>> {
+      FAIL("no mock implementation available");
+    },
+    [=](system::accountant_actor) {
+      FAIL("no mock implementation available");
+    },
     [=](atom::status,
         system::status_verbosity) -> caf::config_value::dictionary {
       FAIL("no mock implementation available");
@@ -69,7 +74,9 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
       anon_self->send(hdl, uint64_t{24});
       anon_self->send(hdl, atom::done_v);
     },
-    [=](atom::erase, uuid) -> ids { FAIL("no mock implementation available"); },
+    [=](atom::erase, uuid) -> ids {
+      FAIL("no mock implementation available");
+    },
   };
 }
 

@@ -143,12 +143,17 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [self](caf::unit_t&, caf::downstream<detail::framed<table_slice>>& out,
+    [self](caf::unit_t&, caf::downstream<stream_controlled<table_slice>>& out,
            size_t num) {
       VAST_DEBUG("{} tries to generate {} messages", self, num);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto push_slice = [&](table_slice slice) { out.push(std::move(slice)); };
+      auto push_slice = [&](table_slice slice) {
+        stream_controlled<table_slice> sc_slice{std::move(slice)};
+        if (self->state.flush_listener)
+          sc_slice.subscribe(self->state.flush_listener);
+        out.push(std::move(sc_slice));
+      };
       // We can produce up to num * table_slice_size events per run.
       auto events = num * self->state.table_slice_size;
       if (self->state.requested)
@@ -162,7 +167,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto finish = [&] {
         self->state.done = true;
         self->state.send_report();
-        out.push(detail::framed<vast::table_slice>::make_eof());
+        out.push(end_of_stream_marker);
         self->quit();
       };
       if (self->state.requested
@@ -206,8 +211,15 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       VAST_DEBUG("{} ended a generation round regularly", self);
     },
     // done?
-    [self](const caf::unit_t&) { return self->state.done; });
+    [self](const caf::unit_t&) {
+      return self->state.done;
+    });
   auto result = source_actor::behavior_type{
+    [self](atom::subscribe, atom::flush, flush_listener_actor& flush_listener) {
+      VAST_WARN("{} subscribes flush listener", self);
+      VAST_ASSERT(!self->state.flush_listener);
+      self->state.flush_listener = std::move(flush_listener);
+    },
     [self](atom::get, atom::schema) { //
       return self->state.reader->schema();
     },
@@ -223,7 +235,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // self->state.filter = std::move(expr);
       VAST_WARN("{} does not currently implement filter expressions", self);
     },
-    [self](stream_sink_actor<table_slice, std::string> sink) {
+    [self](
+      stream_sink_actor<stream_controlled<table_slice>, std::string> sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG("{} registers sink {}", self, VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to

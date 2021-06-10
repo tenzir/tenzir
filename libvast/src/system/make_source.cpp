@@ -48,12 +48,12 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 
 } // namespace
 
-caf::expected<caf::actor>
-make_source(caf::actor_system& sys, const std::string& format,
-            const invocation& inv, accountant_actor accountant,
-            type_registry_actor type_registry,
-            stream_sink_actor<table_slice, std::string> importer,
-            std::vector<transform>&& transforms, bool detached) {
+caf::expected<caf::actor> make_source(
+  caf::actor_system& sys, const std::string& format, const invocation& inv,
+  accountant_actor accountant, type_registry_actor type_registry,
+  stream_sink_actor<stream_controlled<table_slice>, std::string> importer,
+  std::optional<flush_listener_actor> flush_listener,
+  std::vector<transform>&& transforms, bool detached) {
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
   // Placeholder thingies.
@@ -142,6 +142,9 @@ make_source(caf::actor_system& sys, const std::string& format,
       return expr.error();
     anon_send(src, std::move(*expr));
   }
+  // Set up the flush listener.
+  if (flush_listener)
+    anon_send(src, atom::subscribe_v, atom::flush::value, *flush_listener);
   // Connect source to importer.
   VAST_DEBUG("{} connects to {}", inv.full_name, VAST_ARG(importer));
   anon_send(src, importer);

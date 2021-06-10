@@ -36,22 +36,26 @@ struct test_sink_state {
 
 using test_sink_actor
   = caf::typed_actor<caf::reacts_to<atom::ping>>::extend_with<
-    stream_sink_actor<table_slice, std::string>>;
+    stream_sink_actor<stream_controlled<table_slice>, std::string>>;
 
 test_sink_actor::behavior_type
 test_sink(test_sink_actor::stateful_pointer<test_sink_state> self,
           const caf::actor& src) {
   self->anon_send(
-    src, static_cast<stream_sink_actor<table_slice, std::string>>(self));
+    src,
+    static_cast<stream_sink_actor<stream_controlled<table_slice>, std::string>>(
+      self));
   return {
-    [=](caf::stream<table_slice> in,
-        const std::string&) -> caf::inbound_stream_slot<table_slice> {
+    [=](caf::stream<stream_controlled<table_slice>> in, const std::string&)
+      -> caf::inbound_stream_slot<stream_controlled<table_slice>> {
       auto result = self->make_sink(
         in,
         [](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, table_slice slice) {
+        [=](caf::unit_t&, stream_controlled<table_slice> x) {
+          REQUIRE(caf::holds_alternative<table_slice>(x));
+          auto& slice = caf::get<table_slice>(x);
           self->state.slices.emplace_back(std::move(slice));
         },
         [=](caf::unit_t&, const caf::error&) {

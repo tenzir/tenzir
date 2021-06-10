@@ -47,7 +47,7 @@ struct active_partition_state {
   // -- member types -----------------------------------------------------------
 
   using partition_stream_stage_ptr = caf::stream_stage_ptr<
-    table_slice,
+    stream_controlled<table_slice>,
     caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>;
 

@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/detail/framed.hpp"
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/schema.hpp"
@@ -35,7 +34,7 @@ struct source_state {
   // -- member types -----------------------------------------------------------
 
   using downstream_manager
-    = caf::broadcast_downstream_manager<detail::framed<table_slice>>;
+    = caf::broadcast_downstream_manager<stream_controlled<table_slice>>;
 
   // -- member variables -------------------------------------------------------
 
@@ -90,6 +89,9 @@ struct source_state {
 
   /// Indicates whether the stream source is done.
   bool done = false;
+
+  // TODO add comment
+  flush_listener_actor flush_listener = {};
 
   // -- utility functions -----------------------------------------------------
 

@@ -31,23 +31,29 @@ struct test_sink_state {
   inline static constexpr const char* name = "test-sink";
 };
 
-stream_sink_actor<table_slice, std::string>::behavior_type test_sink(
-  stream_sink_actor<table_slice, std::string>::stateful_pointer<test_sink_state>
-    self,
-  caf::actor src) {
+stream_sink_actor<system::stream_controlled<table_slice>,
+                  std::string>::behavior_type
+test_sink(stream_sink_actor<system::stream_controlled<table_slice>,
+                            std::string>::stateful_pointer<test_sink_state>
+            self,
+          caf::actor src) {
   self->anon_send(
-    src, static_cast<stream_sink_actor<table_slice, std::string>>(self));
+    src, static_cast<stream_sink_actor<system::stream_controlled<table_slice>,
+                                       std::string>>(self));
   return {
-    [=](caf::stream<table_slice> in,
-        const std::string&) -> caf::inbound_stream_slot<table_slice> {
+    [=](caf::stream<system::stream_controlled<table_slice>> in,
+        const std::string&)
+      -> caf::inbound_stream_slot<system::stream_controlled<table_slice>> {
       return self
         ->make_sink(
           in,
           [](caf::unit_t&) {
             // nop
           },
-          [=](caf::unit_t&, table_slice slice) {
-            self->state.slices.emplace_back(std::move(slice));
+          [=](caf::unit_t&, system::stream_controlled<table_slice> slice) {
+            REQUIRE(caf::holds_alternative<table_slice>(slice));
+            self->state.slices.emplace_back(
+              std::move(caf::get<table_slice>(slice)));
           },
           [=](caf::unit_t&, const caf::error&) {
             MESSAGE(self->name() << " is done");
@@ -79,7 +85,7 @@ TEST(zeek source) {
   run();
   MESSAGE("get slices");
   const auto& slices
-    = deref<stream_sink_actor<table_slice,
+    = deref<stream_sink_actor<system::stream_controlled<table_slice>,
                               std::string>::stateful_base<test_sink_state>>(snk)
         .state.slices;
   MESSAGE("compare slices to auto-generates ones");

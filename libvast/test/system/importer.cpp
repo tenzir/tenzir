@@ -32,11 +32,12 @@ using namespace vast;
 
 namespace {
 
-system::stream_sink_actor<table_slice>::behavior_type
-dummy_sink(system::stream_sink_actor<table_slice>::pointer self,
+system::stream_sink_actor<system::stream_controlled<table_slice>>::behavior_type
+dummy_sink(system::stream_sink_actor<
+             system::stream_controlled<table_slice>>::pointer self,
            size_t num_events, caf::actor overseer) {
   return {
-    [=](caf::stream<table_slice> in) {
+    [=](caf::stream<system::stream_controlled<table_slice>> in) {
       self->unbecome();
       anon_send(overseer, atom::ok_v);
       auto sink = self->make_sink(
@@ -44,14 +45,17 @@ dummy_sink(system::stream_sink_actor<table_slice>::pointer self,
         [=](std::vector<table_slice>&) {
           // nop
         },
-        [=](std::vector<table_slice>& xs, table_slice x) {
-          xs.emplace_back(std::move(x));
+        [=](std::vector<table_slice>& xs,
+            system::stream_controlled<table_slice> x) {
+          REQUIRE(caf::holds_alternative<table_slice>(x));
+          xs.emplace_back(std::move(caf::get<table_slice>(x)));
           if (rows(xs) == num_events)
             anon_send(overseer, xs);
           else if (rows(xs) > num_events)
             FAIL("dummy sink received too many events");
         });
-      return caf::inbound_stream_slot<table_slice>{sink.inbound_slot()};
+      return caf::inbound_stream_slot<system::stream_controlled<table_slice>>{
+        sink.inbound_slot()};
     },
   };
 }
@@ -133,8 +137,9 @@ struct deterministic_fixture : deterministic_fixture_base {
     if (!received<std::vector<table_slice>>(self))
       FAIL("no result available");
     std::vector<table_slice> result;
-    self->receive(
-      [&](std::vector<table_slice>& xs) { result = std::move(xs); });
+    self->receive([&](std::vector<table_slice>& xs) {
+      result = std::move(xs);
+    });
     return result;
   }
 };
@@ -178,9 +183,9 @@ TEST(deterministic importer with one sink and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(
-    src,
-    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
+  self->send(src,
+             static_cast<system::stream_sink_actor<
+               system::stream_controlled<table_slice>, std::string>>(importer));
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -194,9 +199,9 @@ TEST(deterministic importer with two sinks and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(
-    src,
-    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
+  self->send(src,
+             static_cast<system::stream_sink_actor<
+               system::stream_controlled<table_slice>, std::string>>(importer));
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -212,9 +217,9 @@ TEST(deterministic importer with one sink and failing zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(
-    src,
-    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
+  self->send(src,
+             static_cast<system::stream_sink_actor<
+               system::stream_controlled<table_slice>, std::string>>(importer));
   MESSAGE("loop until first ack_batch");
   if (!allow((caf::upstream_msg::ack_batch), from(importer).to(src)))
     sched.run_once();
@@ -232,7 +237,9 @@ TEST(deterministic importer with one sink and failing zeek source) {
   } while (sched.try_run_once());
   using namespace std::chrono_literals;
   self->receive(
-    [](const caf::down_msg& x) { FAIL("unexpected down message: " << x); },
+    [](const caf::down_msg& x) {
+      FAIL("unexpected down message: " << x);
+    },
     caf::after(0s) >>
       [] {
         // nop
@@ -262,8 +269,9 @@ struct nondeterministic_fixture : nondeterministic_fixture_base {
 
   auto fetch_result() {
     std::vector<table_slice> result;
-    self->receive(
-      [&](std::vector<table_slice>& xs) { result = std::move(xs); });
+    self->receive([&](std::vector<table_slice>& xs) {
+      result = std::move(xs);
+    });
     return result;
   }
 };
@@ -301,9 +309,9 @@ TEST(nondeterministic importer with one sink and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(
-    src,
-    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
+  self->send(src,
+             static_cast<system::stream_sink_actor<
+               system::stream_controlled<table_slice>, std::string>>(importer));
   MESSAGE("verify results");
   verify(fetch_result(), zeek_conn_log);
 }
@@ -314,9 +322,9 @@ TEST(nondeterministic importer with two sinks and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(
-    src,
-    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
+  self->send(src,
+             static_cast<system::stream_sink_actor<
+               system::stream_controlled<table_slice>, std::string>>(importer));
   MESSAGE("verify results");
   auto result = fetch_result();
   MESSAGE("got first result");

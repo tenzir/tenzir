@@ -310,7 +310,7 @@ void index_state::notify_flush_listeners() {
       self->send(active_partition.actor, atom::subscribe_v, atom::flush_v,
                  listener);
     else
-      self->send(listener, atom::flush_v);
+      self->send(listener, atom::flush_v, atom::sub_v);
   }
   flush_listeners.clear();
 }
@@ -633,30 +633,33 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
     [](caf::unit_t&) {
       // nop
     },
-    [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      VAST_ASSERT(x.encoding() != table_slice_encoding::none);
-      auto&& layout = x.layout();
-      self->state.stats.layouts[layout.name()].count += x.rows();
+    [self](caf::unit_t&, caf::downstream<stream_controlled<table_slice>>& out,
+           stream_controlled<table_slice> x) {
+      VAST_ASSERT(caf::holds_alternative<table_slice>(x));
+      auto& slice = caf::get<table_slice>(x);
+      VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+      auto&& layout = slice.layout();
+      self->state.stats.layouts[layout.name()].count += slice.rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
         self->state.create_active_partition();
-      } else if (x.rows() > active.capacity) {
+      } else if (slice.rows() > active.capacity) {
         VAST_DEBUG("{} exceeds active capacity by {} rows", self,
-                   x.rows() - active.capacity);
+                   slice.rows() - active.capacity);
         self->state.decomission_active_partition();
         self->state.flush_to_disk();
         self->state.create_active_partition();
       }
       out.push(x);
       if (active.capacity == self->state.partition_capacity
-          && x.rows() > active.capacity) {
+          && slice.rows() > active.capacity) {
         VAST_WARN("{} got table slice with {} rows that exceeds the "
                   "default partition capacity of {} rows",
-                  self, x.rows(), self->state.partition_capacity);
+                  self, slice.rows(), self->state.partition_capacity);
         active.capacity = 0;
       } else {
-        VAST_ASSERT(active.capacity >= x.rows());
-        active.capacity -= x.rows();
+        VAST_ASSERT(active.capacity >= slice.rows());
+        active.capacity -= slice.rows();
       }
     },
     [self](caf::unit_t&, const caf::error& err) {
@@ -715,8 +718,8 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
     [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", self, partition_id);
     },
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+    [self](caf::stream<stream_controlled<table_slice>> in)
+      -> caf::inbound_stream_slot<stream_controlled<table_slice>> {
       VAST_DEBUG("{} got a new stream source", self);
       return self->state.stage->add_inbound_path(in);
     },

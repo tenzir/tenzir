@@ -28,11 +28,11 @@ namespace vast::system {
 /// the importer component.
 /// @param transforms The input transformations to apply.
 /// @returns a handle to the spawned actor on success, an error otherwise.
-caf::expected<caf::actor>
-make_source(caf::actor_system& sys, const std::string& format,
-            const invocation& inv, accountant_actor accountant,
-            type_registry_actor type_registry,
-            stream_sink_actor<table_slice, std::string> importer,
-            std::vector<transform>&& transforms, bool detached = false);
+caf::expected<caf::actor> make_source(
+  caf::actor_system& sys, const std::string& format, const invocation& inv,
+  accountant_actor accountant, type_registry_actor type_registry,
+  stream_sink_actor<stream_controlled<table_slice>, std::string> importer,
+  std::optional<flush_listener_actor> flush_listener,
+  std::vector<transform>&& transforms, bool detached = false);
 
 } // namespace vast::system

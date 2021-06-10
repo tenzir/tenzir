@@ -38,26 +38,29 @@ namespace {
 
 class driver
   : public caf::stream_stage_driver<
-      table_slice,
-      caf::broadcast_downstream_manager<detail::framed<table_slice>>> {
+      stream_controlled<table_slice>,
+      caf::broadcast_downstream_manager<stream_controlled<table_slice>>> {
 public:
-  driver(caf::broadcast_downstream_manager<detail::framed<table_slice>>& out,
+  driver(caf::broadcast_downstream_manager<stream_controlled<table_slice>>& out,
          importer_state& state)
     : stream_stage_driver(out), state{state} {
     // nop
   }
 
-  void process(caf::downstream<detail::framed<table_slice>>& out,
-               std::vector<table_slice>& slices) override {
-    VAST_TRACE_SCOPE("{}", VAST_ARG(slices));
+  void process(caf::downstream<stream_controlled<table_slice>>& out,
+               std::vector<stream_controlled<table_slice>>& xs) override {
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
-    for (auto&& slice : std::exchange(slices, {})) {
+    for (auto&& x : std::exchange(xs, {})) {
+      VAST_ASSERT(caf::holds_alternative<table_slice>(x));
+      auto& slice = caf::get<table_slice>(x);
+      VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
       VAST_ASSERT(slice.rows() <= static_cast<size_t>(state.available_ids()));
       auto rows = slice.rows();
       events += rows;
       slice.offset(state.next_id(rows));
-      out.push(std::move(slice));
+      x = std::move(slice);
+      out.push(std::move(x));
     }
     t.stop(events);
   }
@@ -252,7 +255,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
-    self->state.stage->out().push(detail::framed<table_slice>::make_eof());
+    self->state.stage->out().push(end_of_stream_marker);
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
@@ -267,32 +270,38 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   if (type_registry)
     self
       ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(type_registry))
-      .then([](const caf::outbound_stream_slot<table_slice>&) {},
-            [self](caf::error& error) {
-              VAST_ERROR("failed to connect type registry to the importer: {}",
-                         error);
-              self->quit(std::move(error));
-            });
+                static_cast<stream_sink_actor<stream_controlled<table_slice>>>(
+                  type_registry))
+      .then(
+        [](const caf::outbound_stream_slot<stream_controlled<table_slice>>&) {},
+        [self](caf::error& error) {
+          VAST_ERROR("failed to connect type registry to the importer: {}",
+                     error);
+          self->quit(std::move(error));
+        });
   if (store)
     self
-      ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(store))
-      .then([](const caf::outbound_stream_slot<table_slice>&) {},
-            [self](caf::error& error) {
-              VAST_ERROR("failed to connect store to the importer: {}", error);
-              self->quit(std::move(error));
-            });
+      ->request(
+        self->state.transformer, caf::infinite,
+        static_cast<stream_sink_actor<stream_controlled<table_slice>>>(store))
+      .then(
+        [](const caf::outbound_stream_slot<stream_controlled<table_slice>>&) {},
+        [self](caf::error& error) {
+          VAST_ERROR("failed to connect store to the importer: {}", error);
+          self->quit(std::move(error));
+        });
   if (index) {
     self->state.index = std::move(index);
     self
       ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(self->state.index))
-      .then([](const caf::outbound_stream_slot<table_slice>&) {},
-            [self](caf::error& error) {
-              VAST_ERROR("failed to connect store to the importer: {}", error);
-              self->quit(std::move(error));
-            });
+                static_cast<stream_sink_actor<stream_controlled<table_slice>>>(
+                  self->state.index))
+      .then(
+        [](const caf::outbound_stream_slot<stream_controlled<table_slice>>&) {},
+        [self](caf::error& error) {
+          VAST_ERROR("failed to connect store to the importer: {}", error);
+          self->quit(std::move(error));
+        });
   }
   return {
     // Register the ACCOUNTANT actor.
@@ -302,7 +311,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
     // Add a new sink.
-    [self](stream_sink_actor<table_slice> sink) {
+    [self](stream_sink_actor<stream_controlled<table_slice>> sink) {
       VAST_DEBUG("{} adds a new sink: {}", self, sink);
       return self->delegate(self->state.transformer, sink);
     },
@@ -318,8 +327,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->state.send_report();
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
-    // -- stream_sink_actor<table_slice> ---------------------------------------
-    [self](caf::stream<table_slice> in) {
+    // -- stream_sink_actor<stream_controlled<table_slice>> ---------------------
+    [self](caf::stream<stream_controlled<table_slice>> in) {
       // NOTE: Architecturally it would make more sense to put the transformer
       // stage *before* the import actor, but that is not possible: The message
       // sent is originally sent from the other side is a `caf::open_stream_msg`.
@@ -334,8 +343,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       VAST_DEBUG("{} adds a new source", self);
       return self->state.stage->add_inbound_path(in);
     },
-    // -- stream_sink_actor<table_slice, std::string> --------------------------
-    [self](caf::stream<table_slice> in, std::string desc) {
+    // -- stream_sink_actor<stream_controlled<table_slice>, std::string> --------
+    [self](caf::stream<stream_controlled<table_slice>> in, std::string desc) {
       self->state.inbound_description = std::move(desc);
       VAST_DEBUG("{} adds a new {} source", self, desc);
       return self->state.stage->add_inbound_path(in);

@@ -80,8 +80,10 @@ using stream_sink_actor = typename typed_actor_fwd<
 
 /// The FLUSH LISTENER actor interface.
 using flush_listener_actor = typed_actor_fwd<
-  // Reacts to the requested flush message.
-  caf::reacts_to<atom::flush>>::unwrap;
+  // React to the expected flush count being raised by one.
+  caf::reacts_to<atom::flush, atom::add>,
+  // React to the expected flush count being lowered by one.
+  caf::reacts_to<atom::flush, atom::sub>>::unwrap;
 
 /// The RECEIVER SINK actor interface.
 /// This can be used to avoid defining an opaque alias for a single-handler
@@ -111,7 +113,7 @@ using store_actor = typed_actor_fwd<
 /// The STORE BUILDER actor interface.
 using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
   // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -216,7 +218,7 @@ using index_actor = typed_actor_fwd<
   // Erases the given events from the INDEX, and returns their ids.
   caf::replies_to<atom::erase, uuid>::with<ids>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>>>
   // Conform to the protocol of the QUERY SUPERVISOR MASTER actor.
   ::extend_with<query_supervisor_master_actor>
   // Conform to the protocol of the STATUS CLIENT actor.
@@ -254,7 +256,7 @@ using type_registry_actor = typed_actor_fwd<
   // Registers the TYPE REGISTRY with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>>
   // Conform to the procotol of the STREAM SINK actor for table slices,
-  ::extend_with<stream_sink_actor<table_slice>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -294,7 +296,7 @@ using active_partition_actor = typed_actor_fwd<
   // INTERNAL: A repeatedly called continuation of the persist request.
   caf::reacts_to<atom::internal, atom::persist, atom::resume>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>>>
   // Conform to the protocol of the PARTITION actor.
   ::extend_with<partition_actor>::unwrap;
 
@@ -319,7 +321,7 @@ using exporter_actor = typed_actor_fwd<
   // Register a STATISTICS SUBSCRIBER actor.
   caf::reacts_to<atom::statistics, caf::actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -331,7 +333,7 @@ using component_plugin_actor = typed_actor_fwd<>
 /// The interface of an ANALYZER PLUGIN actor.
 using analyzer_plugin_actor = typed_actor_fwd<>
   // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>>>
   // Conform to the protocol of the COMPONENT PLUGIN actor.
   ::extend_with<component_plugin_actor>::unwrap;
 
@@ -340,22 +342,24 @@ using importer_actor = typed_actor_fwd<
   // Register the ACCOUNTANT actor.
   caf::reacts_to<accountant_actor>,
   // Add a new sink.
-  caf::replies_to<stream_sink_actor<table_slice>>::with< //
-    caf::outbound_stream_slot<table_slice>>,
+  caf::replies_to<stream_sink_actor<stream_controlled<table_slice>>>::with< //
+    caf::outbound_stream_slot<stream_controlled<table_slice>>>,
   // Register a FLUSH LISTENER actor.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // The internal telemetry loop of the IMPORTER.
   caf::reacts_to<atom::telemetry>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>>>
   // Conform to the protocol of the STREAM SINK actor for table slices with a
   // description.
-  ::extend_with<stream_sink_actor<table_slice, std::string>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>, std::string>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of a SOURCE actor.
 using source_actor = typed_actor_fwd<
+  // Subscribes a FLUSH LISTENER to the SOURCE.
+  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // Retrieve the currently used schema of the SOURCE.
   caf::replies_to<atom::get, atom::schema>::with<schema>,
   // Update the currently used schema of the SOURCE.
@@ -363,7 +367,7 @@ using source_actor = typed_actor_fwd<
   // Update the expression used for filtering data in the SOURCE.
   caf::reacts_to<expression>,
   // Set up a new stream sink for the generated data.
-  caf::reacts_to<stream_sink_actor<table_slice, std::string>>,
+  caf::reacts_to<stream_sink_actor<stream_controlled<table_slice>, std::string>>,
   // INTERNAL: Cause the source to wake up.
   caf::reacts_to<atom::wakeup>,
   // INTERNAL: Telemetry loop handler.
@@ -381,13 +385,14 @@ using datagram_source_actor
 /// The interface of an TRANSFORMER actor.
 using transformer_actor = typed_actor_fwd<
   // Send transformed slices to this sink.
-  caf::replies_to<stream_sink_actor<table_slice>>::with< //
-    caf::outbound_stream_slot<table_slice>>,
+  caf::replies_to<stream_sink_actor<stream_controlled<table_slice>>>::with< //
+    caf::outbound_stream_slot<stream_controlled<table_slice>>>,
   // Send transformed slices to this sink; pass the string through along with
   // the stream handshake.
-  caf::reacts_to<stream_sink_actor<table_slice, std::string>, std::string>>
+  caf::reacts_to<stream_sink_actor<stream_controlled<table_slice>, std::string>,
+                 std::string>>
   // Conform to the protocol of the STREAM SINK actor for framed table slices
-  ::extend_with<stream_sink_actor<detail::framed<table_slice>>>
+  ::extend_with<stream_sink_actor<stream_controlled<table_slice>>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -447,9 +452,11 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_master_actor))
   VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>))
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
-  VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))
+  VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<
+                    vast::system::stream_controlled<vast::table_slice>>))
   VAST_ADD_TYPE_ID(
-    (vast::system::stream_sink_actor<vast::table_slice, std::string>))
+    (vast::system::stream_sink_actor<
+      vast::system::stream_controlled<vast::table_slice>, std::string>))
   VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)

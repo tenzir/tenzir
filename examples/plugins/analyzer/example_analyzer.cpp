@@ -81,8 +81,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
         }
       }
     },
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+    [self](caf::stream<stream_controlled<table_slice>> in)
+      -> caf::inbound_stream_slot<stream_controlled<table_slice>> {
       VAST_TRACE_SCOPE("{} hooks into stream {}", self, in);
       return caf::attach_stream_sink(
                self, in,
@@ -92,19 +92,27 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
                  counter = 0;
                },
                // Process one stream element at a time.
-               [=](uint64_t& counter, table_slice slice) {
+               [=](uint64_t& counter,
+                   system::stream_controlled<table_slice> x) {
                  // If we're already done, discard the remaining table slices in
                  // the stream.
                  if (self->state.done)
                    return;
                  // Accumulate the rows in our table slices.
-                 counter += slice.rows();
-                 if (counter >= self->state.max_events) {
-                   VAST_INFO("{} terminates stream after {} events", self,
-                             counter);
-                   self->state.done = true;
-                   self->quit();
-                 }
+                 caf::visit(
+                   detail::overload {
+                     [&](system::end_of_stream_marker_t) {
+                       self->quit();
+                     },
+                       [&](table_slice & slice) counter += slice.rows();
+                     if (counter >= self->state.max_events) {
+                       VAST_INFO("{} terminates stream after {} events", self,
+                                 counter);
+                       self->state.done = true;
+                       self->quit();
+                     }
+                   },
+                   x);
                },
                // Teardown hook for CAF stream.
                [=](uint64_t&, const caf::error& err) {

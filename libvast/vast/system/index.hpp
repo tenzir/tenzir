@@ -113,9 +113,9 @@ struct query_state {
 struct index_state {
   // -- type aliases -----------------------------------------------------------
 
-  using index_stream_stage_ptr
-    = caf::stream_stage_ptr<table_slice,
-                            caf::broadcast_downstream_manager<table_slice>>;
+  using index_stream_stage_ptr = caf::stream_stage_ptr<
+    stream_controlled<table_slice>,
+    caf::broadcast_downstream_manager<stream_controlled<table_slice>>>;
 
   // -- constructor ------------------------------------------------------------
 

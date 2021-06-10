@@ -48,7 +48,8 @@ constexpr std::chrono::seconds overview_delay(3);
 struct accountant_state_impl {
   // -- member types -----------------------------------------------------------
 
-  using downstream_manager = caf::broadcast_downstream_manager<table_slice>;
+  using downstream_manager
+    = caf::broadcast_downstream_manager<stream_controlled<table_slice>>;
 
   // -- constructor, destructors, and assignment operators ---------------------
 
@@ -273,7 +274,8 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     // init
     [](bool&) {},
     // get next element
-    [self](bool&, caf::downstream<table_slice>& out, size_t num) {
+    [self](bool&, caf::downstream<stream_controlled<table_slice>>& out,
+           size_t num) {
       auto& st = *self->state;
       size_t produced = 0;
       while (num-- > 0 && !st.slice_buffer.empty()) {
@@ -287,7 +289,9 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
                        self, num, produced, st.slice_buffer.size());
     },
     // done?
-    [](const bool&) { return false; });
+    [](const bool&) {
+      return false;
+    });
   VAST_DEBUG("{} animates heartbeat loop", self);
   self->delayed_send(self, overview_delay, atom::telemetry_v);
   return {

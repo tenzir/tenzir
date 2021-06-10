@@ -151,12 +151,12 @@ class span;
 template <class>
 class scope_linked;
 
-namespace detail {
+namespace system {
 
 template <class>
-class framed;
+class stream_controlled;
 
-}
+} // namespace system
 
 void intrusive_ptr_add_ref(const table_slice_builder*);
 void intrusive_ptr_release(const table_slice_builder*);
@@ -326,9 +326,11 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>))
   VAST_ADD_TYPE_ID((std::vector<vast::uuid>))
 
-  VAST_ADD_TYPE_ID((vast::detail::framed<vast::table_slice>))
-  VAST_ADD_TYPE_ID((std::vector<vast::detail::framed<vast::table_slice>>))
-  VAST_ADD_TYPE_ID((caf::stream<vast::detail::framed<vast::table_slice>>))
+  VAST_ADD_TYPE_ID((vast::system::stream_controlled<vast::table_slice>))
+  VAST_ADD_TYPE_ID(
+    (std::vector<vast::system::stream_controlled<vast::table_slice>>))
+  VAST_ADD_TYPE_ID(
+    (caf::stream<vast::system::stream_controlled<vast::table_slice>>))
 
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>))
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>))

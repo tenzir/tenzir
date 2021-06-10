@@ -68,7 +68,7 @@ void active_partition_state::notify_flush_listeners() {
   VAST_DEBUG("{} sends 'flush' messages to {} listeners", self,
              flush_listeners.size());
   for (auto& listener : flush_listeners)
-    self->send(listener, atom::flush_v);
+    self->send(listener, atom::flush_v, atom::sub_v);
   flush_listeners.clear();
 }
 
@@ -387,24 +387,27 @@ active_partition_actor::behavior_type active_partition(
     [=](caf::unit_t&) {
       // nop
     },
-    [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
+    [=](caf::unit_t&, caf::downstream<table_slice_column>& out,
+        stream_controlled<table_slice> x) {
+      VAST_ASSERT(caf::holds_alternative<table_slice>(x));
+      auto& slice = caf::get<table_slice>(x);
       VAST_TRACE_SCOPE("partition {} got table slice {} {}", self->state.id,
                        VAST_ARG(out), VAST_ARG(x));
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
-      auto first = x.offset();
-      auto last = x.offset() + x.rows();
-      auto layout = flatten(x.layout());
+      auto first = slice.offset();
+      auto last = slice.offset() + slice.rows();
+      auto layout = flatten(slice.layout());
       auto it = self->state.type_ids.emplace(layout.name(), ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());
       // Mark the ids of this table slice for the current type.
       ids.append_bits(false, first - ids.size());
       ids.append_bits(true, last - first);
-      self->state.offset = std::min(x.offset(), self->state.offset);
-      self->state.events += x.rows();
-      self->state.synopsis->add(x, self->state.synopsis_opts);
+      self->state.offset = std::min(slice.offset(), self->state.offset);
+      self->state.events += slice.rows();
+      self->state.synopsis->add(slice, self->state.synopsis_opts);
       size_t col = 0;
       VAST_ASSERT(!layout.fields.empty());
       for (auto& field : layout.fields) {
@@ -418,7 +421,7 @@ active_partition_actor::behavior_type active_partition(
           VAST_DEBUG("{} spawned new indexer for field {} at slot {}", self,
                      field.name, slot);
         }
-        out.push(table_slice_column{x, col++, qf});
+        out.push(table_slice_column{slice, col++, qf});
       }
     },
     [=](caf::unit_t&, const caf::error& err) {
@@ -483,7 +486,7 @@ active_partition_actor::behavior_type active_partition(
     shutdown<policy::parallel>(self, std::move(indexers));
   });
   return {
-    [self](caf::stream<table_slice> in) {
+    [self](caf::stream<stream_controlled<table_slice>> in) {
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },

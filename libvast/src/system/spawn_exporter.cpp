@@ -61,10 +61,11 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     self->send(handle, accountant);
   if (importer && has_continuous_option(query_opts))
     self
-      ->request(importer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(handle))
+      ->request(
+        importer, caf::infinite,
+        static_cast<stream_sink_actor<stream_controlled<table_slice>>>(handle))
       .then(
-        [=](caf::outbound_stream_slot<table_slice>) {
+        [=](caf::outbound_stream_slot<stream_controlled<table_slice>>) {
           // nop
         },
         [=, importer = importer](caf::error err) {

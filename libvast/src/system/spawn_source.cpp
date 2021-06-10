@@ -48,7 +48,7 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
     = make_source(self->system(), format, args.inv,
                   caf::actor_cast<accountant_actor>(accountant),
                   caf::actor_cast<type_registry_actor>(type_registry),
-                  caf::actor_cast<importer_actor>(importer),
+                  caf::actor_cast<importer_actor>(importer), std::nullopt,
                   std::move(*transforms), true);
   if (!src_result)
     return src_result.error();
