@@ -58,7 +58,6 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
     for (auto&& path : detail::split(*vast_plugin_directories, ":"))
       result.insert({path});
   if (!bare_mode) {
-    result.insert(detail::install_plugindir());
     if (auto home = detail::locked_getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
                     / "plugins");
@@ -66,6 +65,7 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
           &cfg, "vast.plugin-dirs"))
       result.insert(dirs->begin(), dirs->end());
   }
+  result.insert(detail::install_plugindir());
   return result;
 }
 
