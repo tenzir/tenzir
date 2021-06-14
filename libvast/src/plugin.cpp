@@ -54,9 +54,6 @@ detail::stable_set<std::filesystem::path>
 get_plugin_dirs(const caf::actor_system_config& cfg) {
   detail::stable_set<std::filesystem::path> result;
   const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
-  if (auto vast_plugin_directories = detail::locked_getenv("VAST_PLUGIN_DIRS"))
-    for (auto&& path : detail::split(*vast_plugin_directories, ":"))
-      result.insert({path});
   if (!bare_mode) {
     if (auto home = detail::locked_getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
