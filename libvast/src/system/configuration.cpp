@@ -90,12 +90,17 @@ caf::error configuration::parse(int argc, char** argv) {
   VAST_ASSERT(ec == caf::pec::success);
   VAST_ASSERT(it == plugin_args.end());
   // Support specifying VAST_PLUGIN_DIRS on the environment.
-  if (!caf::holds_alternative<std::vector<std::string>>( //
-        content, "vast.plugin-dirs"))
+  {
+    auto cli_plugin_dirs
+      = caf::get_or(content, "vast.plugin-dirs", std::vector<std::string>{});
     if (auto vast_plugin_directories = detail::locked_getenv( //
-          "VAST_PLUGIN_DIRS"))
-      caf::put(content, "vast.plugin-dirs",
-               detail::split(*vast_plugin_directories, ":"));
+          "VAST_PLUGIN_DIRS")) {
+      const auto env_plugin_dirs = detail::split(*vast_plugin_directories, ":");
+      for (const auto& dir : env_plugin_dirs)
+        cli_plugin_dirs.emplace_back(dir);
+      caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
+    }
+  }
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) {
