@@ -74,7 +74,8 @@ caf::behavior datagram_source(
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
     self->state.done = true;
-    self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
+    if (self->state.mgr)
+      self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
