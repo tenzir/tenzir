@@ -22,6 +22,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/segment_builder.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
@@ -118,8 +119,48 @@ segment::lookup(const vast::ids& xs) const {
   return result;
 }
 
+caf::expected<std::vector<table_slice>>
+segment::erase(const vast::ids& xs) const {
+  const auto* segment = fbs::GetSegment(chunk_->data())->segment_as_v0();
+  auto intervals = std::vector(segment->ids()->begin(), segment->ids()->end());
+  auto flat_slices
+    = std::vector(segment->slices()->begin(), segment->slices()->end());
+  VAST_ASSERT(segment->ids()->size() == segment->slices()->size(),
+              "inconsistent number of ids and slices");
+  // We have IDs we wish to delete in `xs`, but we need a bitmap of what to
+  // keep for `select` in order to fill `new_slices` with the table slices
+  // that remain after dropping all deleted IDs from the segment.
+  auto keep_mask = ~xs;
+  std::vector<table_slice> result;
+  for (unsigned int i = 0; i < segment->slices()->size(); ++i) {
+    const auto& flat_slice = segment->slices()->Get(i);
+    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::yes};
+    // Expand keep_mask on-the-fly if needed.
+    auto max_id = slice.offset() + slice.rows();
+    if (keep_mask.size() < max_id)
+      keep_mask.append_bits(true, max_id - keep_mask.size());
+    select(result, slice, keep_mask);
+  }
+  return result;
+}
+
 segment::segment(chunk_ptr chk) : chunk_{std::move(chk)} {
   // nop
+}
+
+caf::expected<segment>
+segment::copy_without(const vast::segment& segment, const vast::ids& xs) {
+  // TODO: Add a `segment::size` field so we can get a better upper bound on
+  // the segment size from the old segment.
+  segment_builder builder(defaults::system::max_segment_size, segment.id());
+  if (is_subset(segment.ids(), xs))
+    return builder.finish();
+  auto slices = segment.erase(xs);
+  if (!slices)
+    return slices.error();
+  for (auto&& slice : std::exchange(*slices, {}))
+    builder.add(std::move(slice));
+  return builder.finish();
 }
 
 } // namespace vast
