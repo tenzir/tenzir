@@ -52,6 +52,10 @@ chunk_ptr chunk::make(view_type view, deleter_type&& deleter) noexcept {
   return chunk_ptr{new chunk{view, std::move(deleter)}, false};
 }
 
+chunk_ptr chunk::empty() noexcept {
+  return chunk_ptr{new chunk{view_type{}, deleter_type{}}, false};
+}
+
 caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
                                      size_type size, size_type offset) {
   // Figure out the file size if not provided.

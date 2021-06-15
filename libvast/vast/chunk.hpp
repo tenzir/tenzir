@@ -66,6 +66,9 @@ public:
   /// @returns A chunk pointer or `nullptr` on failure.
   static chunk_ptr make(view_type view, deleter_type&& deleter) noexcept;
 
+  /// Constructs an empty chunk
+  static chunk_ptr empty() noexcept;
+
   /// Construct a chunk from a byte buffer, and bind the lifetime of the chunk
   /// to the buffer.
   /// @param buffer The byte buffer.
