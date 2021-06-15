@@ -98,7 +98,8 @@ caf::error configuration::parse(int argc, char** argv) {
       const auto env_plugin_dirs = detail::split(*vast_plugin_directories, ":");
       for (const auto& dir : env_plugin_dirs)
         cli_plugin_dirs.emplace_back(dir);
-      caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
+      if (!cli_plugin_dirs.empty())
+        caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
     }
   }
   // Move CAF options to the end of the command line, parse them, and then
