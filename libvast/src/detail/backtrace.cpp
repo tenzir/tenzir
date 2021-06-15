@@ -12,8 +12,12 @@
 
 #if !VAST_ENABLE_BACKTRACE
 
+namespace vast::detail {
+
 void backtrace() {
 }
+
+} // namespace vast::detail
 
 #else // VAST_ENABLE_BACKTRACE
 
