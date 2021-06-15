@@ -1,5 +1,122 @@
 include_guard(GLOBAL)
 
+macro (make_absolute vars)
+  foreach (var IN LISTS "${vars}")
+    get_filename_component(var_abs "${var}" ABSOLUTE)
+    list(APPEND vars_abs "${var_abs}")
+  endforeach ()
+  set("${vars}" "${vars_abs}")
+  unset(vars)
+  unset(vars_abs)
+endmacro ()
+
+function (VASTCompileFlatBuffers)
+  cmake_parse_arguments(
+    # <prefix>
+    FBS
+    # <options>
+    ""
+    # <one_value_keywords>
+    "TARGET;INCLUDE_DIRECTORY"
+    # <multi_value_keywords>
+    "SCHEMAS"
+    # <args>...
+    ${ARGN})
+
+  if (NOT FBS_TARGET)
+    message(
+      FATAL_ERROR "TARGET must be specified in call to VASTCompileFlatBuffers")
+  elseif (TARGET ${FBS_TARGET})
+    message(
+      FATAL_ERROR
+        "TARGET provided in call to VASTCompileFlatBuffers already exists")
+  endif ()
+
+  if (NOT FBS_INCLUDE_DIRECTORY)
+    message(
+      FATAL_ERROR
+        "INCLUDE_DIRECTORY must be specified in call to VASTCompileFlatBuffers")
+  elseif (IS_ABSOLUTE FBS_INCLUDE_DIRECTORY)
+    message(
+      FATAL_ERROR
+        "INCLUDE_DIRECTORY provided in a call to VASTCompileFlatBuffers must be relative"
+    )
+  endif ()
+
+  if (NOT FBS_SCHEMAS)
+    message(
+      FATAL_ERROR "SCHEMAS must be specified in call to VASTCompileFlatBuffers")
+  endif ()
+  make_absolute(FBS_SCHEMAS)
+
+  # An internal target for modeling inter-schema dependency.
+  add_library(${FBS_TARGET} INTERFACE)
+
+  # Link our target against FlatBuffers.
+  find_package(Flatbuffers REQUIRED CONFIG)
+  if (TARGET flatbuffers::flatbuffers)
+    set(flatbuffers_target flatbuffers::flatbuffers)
+  elseif (NOT VAST_ENABLE_STATIC_EXECUTABLE AND TARGET
+                                                flatbuffers::flatbuffers_shared)
+    set(flatbuffers_target flatbuffers::flatbuffers_shared)
+  else ()
+    message(
+      FATAL_ERROR
+        "Found FlatBuffers, but neither shared nor static library target exist")
+  endif ()
+
+  if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    set(VAST_FIND_DEPENDENCY_LIST
+        "${VAST_FIND_DEPENDENCY_LIST}\nfind_package(Flatbuffers REQUIRED)"
+        PARENT_SCOPE)
+    dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
+  endif ()
+
+  set(output_prefix "${CMAKE_CURRENT_BINARY_DIR}/${FBS_TARGET}/include")
+  target_link_libraries(${FBS_TARGET} INTERFACE "${flatbuffers_target}")
+  target_include_directories(
+    ${FBS_TARGET} INTERFACE $<BUILD_INTERFACE:${output_prefix}>
+                            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+  foreach (schema IN LISTS FBS_SCHEMAS)
+    get_filename_component(basename ${schema} NAME_WE)
+    # The hardcoded path that flatc generates.
+    set(output_file
+        "${output_prefix}/${FBS_INCLUDE_DIRECTORY}/${basename}_generated.h")
+    # The path that we want.
+    set(desired_file
+        "${output_prefix}/${FBS_INCLUDE_DIRECTORY}/${basename}.hpp")
+    # Hackish way to patch generated FlatBuffers schemas to support our naming.
+    set("rename_${basename}"
+        "${CMAKE_CURRENT_BINARY_DIR}/flatbuffers_strip_suffix_${basename}.cmake"
+    )
+    file(
+      WRITE "${CMAKE_CURRENT_BINARY_DIR}/fbs-strip-suffix-${basename}.cmake"
+      "file(READ \"${desired_file}\" include)\n"
+      "string(REGEX REPLACE\n"
+      "      \"([^\\n]+)_generated.h\\\"\"\n"
+      "      \"\\\\1.hpp\\\"\"\n"
+      "      new_include \"\${include}\")\n"
+      "file(WRITE \"${desired_file}\" \"\${new_include}\")\n")
+    # Compile and rename schema.
+    add_custom_target(
+      "compile-flatbuffers-schema-${basename}"
+      BYPRODUCTS ${desired_file}
+      COMMAND flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings -o
+              "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
+      COMMAND ${CMAKE_COMMAND} -E rename "${output_file}" "${desired_file}"
+      COMMAND ${CMAKE_COMMAND} -P
+              "${CMAKE_CURRENT_BINARY_DIR}/fbs-strip-suffix-${basename}.cmake"
+      # We need to depend on all schemas here instead of just the one we're
+      # compiling currently because schemas may include other schema files.
+      DEPENDS ${FBS_SCHEMAS}
+      COMMENT "Compiling FlatBuffers schema ${schema}")
+    add_dependencies(${FBS_TARGET} "compile-flatbuffers-schema-${basename}")
+    install(FILES "${desired_file}"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FBS_INCLUDE_DIRECTORY}")
+  endforeach ()
+endfunction ()
+
 # Support tools like clang-tidy by creating a compilation database and copying
 # it to the project root.
 function (VASTExportCompileCommands)
@@ -115,16 +232,6 @@ function (VASTRegisterPlugin)
       )
     endif ()
     target_link_libraries(${target} ${visibility} ${library})
-  endmacro ()
-
-  macro (make_absolute vars)
-    foreach (var IN LISTS "${vars}")
-      get_filename_component(var_abs "${var}" ABSOLUTE)
-      list(APPEND vars_abs "${var_abs}")
-    endforeach ()
-    set("${vars}" "${vars_abs}")
-    unset(vars)
-    unset(vars_abs)
   endmacro ()
 
   if (NOT PLUGIN_TARGET)
