@@ -18,6 +18,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
+#include "vast/policy/merge_lists.hpp"
 #include "vast/subnet.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
@@ -291,7 +292,9 @@ std::optional<data> flatten(const data& x, const type& t);
 /// keys in the destination.
 /// @param src The record to merge into *dst*.
 /// @param dst The result record containing the merged result.
-void merge(const record& src, record& dst);
+/// @param merge_lists Whether to merge or overwrite lists.
+void merge(const record& src, record& dst,
+           enum policy::merge_lists merge_lists);
 
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.

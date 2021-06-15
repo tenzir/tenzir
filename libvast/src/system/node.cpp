@@ -163,7 +163,8 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   if (v >= status_verbosity::info) {
     put(system, "in-memory-table-slices", table_slice::instances());
     put(system, "database-path", self->state.dir.string());
-    detail::merge_settings(detail::get_status(), system);
+    detail::merge_settings(detail::get_status(), system,
+                           policy::merge_lists::no);
   }
   if (v >= status_verbosity::debug) {
     put(system, "running-actors", sys.registry().running());
@@ -190,7 +191,8 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
                                              atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
-          detail::merge_settings(xs, req_state->content, policy::merge_lists);
+          detail::merge_settings(xs, req_state->content,
+                                 policy::merge_lists::yes);
           // Both handlers have a copy of req_state.
           if (req_state.use_count() == 2)
             deliver(std::move(req_state));
@@ -532,7 +534,7 @@ node_state::spawn_command(const invocation& inv,
     auto source_opt = caf::get_or(spawn_opt, "source", caf::settings{});
     auto import_opt
       = caf::get_or(spawn_inv.options, "vast.import", caf::settings{});
-    detail::merge_settings(source_opt, import_opt);
+    detail::merge_settings(source_opt, import_opt, policy::merge_lists::no);
     spawn_inv.options["import"] = import_opt;
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }

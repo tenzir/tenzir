@@ -85,7 +85,7 @@ TEST(flatten) {
 
 TEST(merge) {
   // clang-format off
-  auto xs = record{
+  const auto xs = record{
     {"a", "foo"},
     {"b", record{
       {"c", integer{-42}},
@@ -95,28 +95,48 @@ TEST(merge) {
       {"a", "bar"}
     }}
   };
-  auto ys = record{
+  const auto ys = record{
     {"a", "bar"},
     {"b", record{
       {"a", integer{42}},
-      {"d", list{integer{1}, integer{2}, integer{3}}}
+      {"d", list{integer{4}, integer{5}, integer{6}}}
     }},
     {"c", "not a record yet"}
   };
-  auto expected = record{
-    {"a", "foo"},
-    {"b", record{
-      {"a", integer{42}},
-      {"d", list{integer{1}, integer{2}, integer{3}}},
-      {"c", integer{-42}}
-    }},
-    {"c", record{
-      {"a", "bar"}
-    }}
-  };
+  {
+    auto expected = record{
+      {"a", "foo"},
+      {"b", record{
+        {"a", integer{42}},
+        {"d", list{integer{1}, integer{2}, integer{3}}},
+        {"c", integer{-42}}
+      }},
+      {"c", record{
+        {"a", "bar"}
+      }}
+    };
+    auto copy = ys;
+    merge(xs, copy, policy::merge_lists::no);
+    CHECK_EQUAL(copy, expected);
+  }
+  {
+    auto expected = record{
+      {"a", "foo"},
+      {"b", record{
+        {"a", integer{42}},
+        {"d", list{integer{4}, integer{5}, integer{6},
+                   integer{1}, integer{2}, integer{3}}},
+        {"c", integer{-42}}
+      }},
+      {"c", record{
+        {"a", "bar"}
+      }}
+    };
+    auto copy = ys;
+    merge(xs, copy, policy::merge_lists::yes);
+    CHECK_EQUAL(copy, expected);
+  }
   // clang-format on
-  merge(xs, ys);
-  CHECK_EQUAL(ys, expected);
 }
 
 TEST(construction) {

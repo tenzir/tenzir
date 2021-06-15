@@ -75,7 +75,8 @@ int main(int argc, char** argv) {
   }
   // Merge the options from the CLI into the options from the configuration.
   // From here on, options from the command line can be used.
-  detail::merge_settings(invocation->options, cfg.content);
+  detail::merge_settings(invocation->options, cfg.content,
+                         policy::merge_lists::yes);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(*invocation, cfg.content);
   if (!log_context)
