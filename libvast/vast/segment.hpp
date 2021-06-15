@@ -35,6 +35,12 @@ public:
   /// @param chunk The chunk holding the segment data.
   static caf::expected<segment> make(chunk_ptr chunk);
 
+  /// Create a new segment that is a copy of the given segment excluding
+  /// the given ids. The returned segment will have the same segment id
+  /// as the original.
+  static caf::expected<segment>
+  copy_without(const vast::segment&, const vast::ids&);
+
   /// @returns The unique ID of this segment.
   [[nodiscard]] uuid id() const;
 
@@ -52,6 +58,12 @@ public:
   /// @returns The table slices according to *xs*.
   [[nodiscard]] caf::expected<std::vector<table_slice>>
   lookup(const vast::ids& xs) const;
+
+  /// Creates new table slices that contain all events *not*
+  /// included in `xs`.
+  /// @param xs The IDs to exclude.
+  [[nodiscard]] caf::expected<std::vector<table_slice>>
+  erase(const vast::ids& xs) const;
 
 private:
   explicit segment(chunk_ptr chk);
