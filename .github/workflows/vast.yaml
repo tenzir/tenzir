@@ -655,13 +655,16 @@ jobs:
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           ctest --parallel
+      - name: Run Integration Tests
+        id: integration_tests
+        # We intentionally run the integration tests before installing
+        # them, because that is a use-case we want to explicitly support
+        # for easier plugin development.
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"
-      - name: Run Integration Tests
-        id: integration_tests
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
       - name: Upload Integration Test Logs on Failure
         if: failure()
         uses: actions/upload-artifact@v2.2.3

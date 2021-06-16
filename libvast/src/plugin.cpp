@@ -54,14 +54,13 @@ detail::stable_set<std::filesystem::path>
 get_plugin_dirs(const caf::actor_system_config& cfg) {
   detail::stable_set<std::filesystem::path> result;
   const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
-  if (!bare_mode) {
+  if (auto dirs = caf::get_if<std::vector<std::string>>( //
+        &cfg, "vast.plugin-dirs"))
+    result.insert(dirs->begin(), dirs->end());
+  if (!bare_mode)
     if (auto home = detail::locked_getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
                     / "plugins");
-    if (auto dirs = caf::get_if<std::vector<std::string>>( //
-          &cfg, "vast.plugin-dirs"))
-      result.insert(dirs->begin(), dirs->end());
-  }
   result.insert(detail::install_plugindir());
   return result;
 }
