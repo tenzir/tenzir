@@ -81,7 +81,7 @@ void backtrace() {
 
 } // namespace vast::detail
 
-#  elif __has_include(<execinfo.h>)
+#  elif VAST_ENABLE_LIBEXECINFO && __has_include(<execinfo.h>)
 
 #    include <execinfo.h>
 #    include <unistd.h>
@@ -99,7 +99,7 @@ void backtrace() {
 #  else
 
 #    error                                                                     \
-      "backtrace enabled but neither libunwind, libbacktrace, nor execinfo.h are available"
+      "backtrace enabled but neither libunwind, libbacktrace, nor libexecinfo are available"
 
 #  endif
 

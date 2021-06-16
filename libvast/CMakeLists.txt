@@ -434,11 +434,19 @@ if (VAST_ENABLE_BACKTRACE)
       target_include_directories(libvast
                                  PRIVATE ${Backtrace_INCLUDE_DIRECTORIES})
       target_link_libraries(libvast PRIVATE ${Backtrace_LIBRARIES})
-      dependency_summary("backtrace" ${Backtrace_INCLUDE_DIR} "Dependencies")
-      set(VAST_ENABLE_LIBBACKTRACE ON)
+      if ("${Backtrace_HEADER}" STREQUAL "backtrace.h")
+        dependency_summary("libbacktrace" "${Backtrace_INCLUDE_DIR}"
+                           "Dependencies")
+        set(VAST_ENABLE_LIBBACKTRACE ON)
+      elseif ("${Backtrace_HEADER}" STREQUAL "execinfo.h")
+        dependency_summary("libexecinfo" "${Backtrace_INCLUDE_DIR}"
+                           "Dependencies")
+        set(VAST_ENABLE_LIBEXECINFO ON)
+      else ()
+        message(
+          FATAL_ERROR "Found unexpected backtrace header ${Backtrace_HEADER}")
+      endif ()
     endif ()
-    # NOTE: Availabiltiy of execinfo.h is checked using __has_include; The build
-    # will fail if none of these options are available.
   endif ()
 endif ()
 
