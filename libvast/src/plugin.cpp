@@ -54,6 +54,9 @@ detail::stable_set<std::filesystem::path>
 get_plugin_dirs(const caf::actor_system_config& cfg) {
   detail::stable_set<std::filesystem::path> result;
   const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
+  // Since we do not read configuration files that were not explicitly
+  // specified when in bare-mode, it is safe to just read the option
+  // `vast.plugin-dirs` even with bare-mode enabled.
   if (auto dirs = caf::get_if<std::vector<std::string>>( //
         &cfg, "vast.plugin-dirs"))
     result.insert(dirs->begin(), dirs->end());
