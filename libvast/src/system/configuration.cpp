@@ -21,6 +21,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/value_index_factory.hpp"
@@ -36,6 +37,20 @@
 #include <unordered_set>
 
 namespace vast::system {
+
+std::vector<std::filesystem::path>
+config_dirs(const caf::actor_system_config& config) {
+  const auto bare_mode = caf::get_or(config.content, "vast.bare-mode", false);
+  if (bare_mode)
+    return {};
+  auto result = std::vector<std::filesystem::path>{};
+  if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
+    result.push_back(std::filesystem::path{*xdg_config_home} / "vast");
+  else if (auto home = detail::locked_getenv("HOME"))
+    result.push_back(std::filesystem::path{*home} / ".config" / "vast");
+  result.push_back(detail::install_configdir());
+  return result;
+}
 
 configuration::configuration() {
   detail::add_message_types(*this);
@@ -135,20 +150,9 @@ caf::error configuration::parse(int argc, char** argv) {
       config_files.emplace_back(std::move(conf_yml));
     return caf::none;
   };
-  const auto bare_mode = caf::get_or(content, "vast.bare-mode", false);
-  if (!bare_mode) {
-    if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME")) {
-      if (auto err
-          = add_configs(std::filesystem::path{*xdg_config_home} / "vast"))
-        return err;
-    } else if (auto home = detail::locked_getenv("HOME")) {
-      if (auto err
-          = add_configs(std::filesystem::path{*home} / ".config" / "vast"))
-        return err;
-    }
-    if (auto err = add_configs(detail::install_configdir()))
+  for (auto&& config_dir : config_dirs(*this))
+    if (auto err = add_configs(std::move(config_dir)))
       return err;
-  }
   // If the user provided a config file on the command line, we attempt to
   // parse it last.
   for (auto& arg : command_line) {

@@ -18,6 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
+#include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -213,30 +214,61 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
 
 /// Initialize loaded plugins.
 caf::error initialize(caf::actor_system_config& cfg) {
-  using namespace std::string_literals;
   for (auto& plugin : get_mutable()) {
-    auto key = "plugins."s + plugin->name();
-    auto init_err = caf::error{};
-    if (auto opts = caf::get_if<caf::settings>(&cfg, key)) {
-      if (auto config = to<data>(*opts)) {
-        VAST_DEBUG("initializing plugin with options: {}", *config);
-        if (auto err = plugin->initialize(std::move(*config)))
-          return caf::make_error(
-            ec::unspecified, fmt::format("failed to initialize plugin {}: {}",
-                                         plugin->name(), err));
-      } else {
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("invalid plugin configuration for "
-                                           "plugin {}: {}",
-                                           plugin->name(), config.error()));
-      }
-    } else {
-      VAST_DEBUG("no configuration found for plugin {}", plugin->name());
-      if (auto err = plugin->initialize(data{}))
-        return caf::make_error(ec::unspecified,
-                               fmt::format("failed to initialize plugin {}: {}",
-                                           plugin->name(), err));
+    auto merged_config = record{};
+    // First, try to read the configuration from the merged VAST configuration.
+    if (auto opts = caf::get_if<caf::settings>(
+          &cfg, fmt::format("plugins.{}", plugin->name()))) {
+      if (auto opts_data = to<record>(*opts))
+        merged_config = std::move(*opts_data);
+      else
+        VAST_DEBUG("unable to read plugin options from VAST configuration at "
+                   "plugins.{}: {}",
+                   opts_data.error(), plugin->name());
     }
+    // Second, try to read the configuration from the plugin-specific
+    // configuration files at <config-dir>/plugin/<plugin-name>.yaml.
+    for (auto&& config_dir : system::config_dirs(cfg)) {
+      const auto yaml_path
+        = config_dir / "plugin" / fmt::format("{}.yaml", plugin->name());
+      const auto yml_path
+        = config_dir / "plugin" / fmt::format("{}.yml", plugin->name());
+      auto err = std::error_code{};
+      const auto yaml_path_exists = std::filesystem::exists(yaml_path, err);
+      err.clear();
+      const auto yml_path_exists = std::filesystem::exists(yml_path, err);
+      if (!yaml_path_exists && !yml_path_exists)
+        continue;
+      if (yaml_path_exists && yml_path_exists)
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("detected configuration files for "
+                                           "plugin {} at conflicting paths {} "
+                                           "and {}",
+                                           plugin->name(), yaml_path,
+                                           yml_path));
+      const auto& path = yaml_path_exists ? yaml_path : yml_path;
+      if (auto opts = load_yaml(path)) {
+        if (auto opts_data = caf::get_if<record>(&*opts)) {
+          merge(*opts_data, merged_config, policy::merge_lists::yes);
+          VAST_INFO("loaded plugin configuration file: {}", path);
+        } else {
+          return caf::make_error(ec::invalid_configuration,
+                                 fmt::format("detected invalid plugin "
+                                             "configuration file for plugin {} "
+                                             "at {}",
+                                             plugin->name(), path));
+        }
+      } else {
+        return std::move(opts.error());
+      }
+    }
+    // Third, initialize the plugin with the merged configuration.
+    VAST_VERBOSE("initializing plugin {} with options: {}", plugin->name(),
+                 merged_config);
+    if (auto err = plugin->initialize(std::move(merged_config)))
+      return caf::make_error(ec::unspecified,
+                             fmt::format("failed to initialize plugin {}: {} ",
+                                         plugin->name(), err));
   }
   return caf::none;
 }
