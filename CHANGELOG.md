@@ -10,21 +10,21 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :zap: Breaking Changes
 
-- Apache Arrow is now a required dependency of VAST. The previously deprecated  build option `-DVAST_ENABLE_ARROW=OFF` no longer exists.
+- Apache Arrow is now a required dependency. The previously deprecated build  option `-DVAST_ENABLE_ARROW=OFF` no longer exists.
   [#1683](https://github.com/tenzir/vast/pull/1683)
 
-- VAST no longer loads static plugins by default. This makes it possible for users to use static binaries with plugins enabled on all their systems, enabling only the plugins they need for the respective machine. Static plugins and bundled dynamic plugins are now treated equally.
+- VAST no longer loads static plugins by default. Generally, VAST now treats static plugins and bundled dynamic plugins equally, allowing users to enable or disable static plugins as needed for their deployments.
   [#1703](https://github.com/tenzir/vast/pull/1703)
 
 ### :warning: Changes
 
-- The VAST community chat moved from Gitter to Slack. [Join us](http://slack.tenzir.com) in the `#vast` channel for interactive discussions.
+- The VAST community chat moved from Gitter to Slack. [Join us](http://slack.tenzir.com) in the `#vast` channel for vibrant discussions.
   [#1696](https://github.com/tenzir/vast/pull/1696)
 
 - The [tenzir/vast](https://hub.docker.com/r/tenzir/vast) Docker image bundles the PCAP plugin.
   [#1705](https://github.com/tenzir/vast/pull/1705)
 
-- VAST merges lists from configuration files. E.g., running VAST with `--plugins=some-plugin` and `vast.plugins: [other-plugin]` in the configuration now results in `some-plugin` and `other-plugin` being loaded (sorted by the usual precedence).
+- VAST merges lists from configuration files. E.g., running VAST with `--plugins=some-plugin` and `vast.plugins: [other-plugin]` in the configuration now results in both `some-plugin` and `other-plugin` being loaded (sorted by the usual precedence), instead of just `some-plugin`.
   [#1721](https://github.com/tenzir/vast/pull/1721)
 
 ### :gift: Features
@@ -46,7 +46,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :beetle: Bug Fixes
 
-- VAST no longer crashes when querying for string fields with non-string values.
+- VAST no longer crashes when querying for string fields with non-string values. Instead, an error message warns the user about an invalid query.
   [#1685](https://github.com/tenzir/vast/pull/1685)
 
 - Building plugins against an installed VAST no longer requires manually specifying `-DBUILD_SHARED_LIBS=ON`. The option is now correctly enabled by default for external plugins.
@@ -61,10 +61,10 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Additional tags for the [tenzir/vast](https://hub.docker.com/r/tenzir/vast) Docker image for the release versions exist, e.g., `tenzir/vast:2021.05.27`.
   [#1711](https://github.com/tenzir/vast/pull/1711)
 
-- The `import csv` command handles quoted fields correctly, and no longer fails at field separators in them.
+- The `import csv` command handles quoted fields correctly. Previously, the quotes were part of the parsed value, and field separators in quoted strings caused the parser to fail.
   [#1712](https://github.com/tenzir/vast/pull/1712)
 
-- Import processes no longer hang on receiving SIGINT or SIGKILL. Instead, they shut down properly after flushing all yet to be processed data.
+- Import processes no longer hang on receiving SIGINT or SIGKILL. Instead, they shut down properly after flushing yet to be processed data.
   [#1718](https://github.com/tenzir/vast/pull/1718)
 
 ## [2021.05.27]
