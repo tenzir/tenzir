@@ -162,7 +162,7 @@ caf::settings get_status() {
   return get_status_proc();
 #elif VAST_MACOS
   auto result = get_status_rusage();
-  merge_settings(get_settings_mach(), result);
+  merge_settings(get_settings_mach(), result, policy::merge_lists::no);
   return result;
 #elif VAST_POSIX
   return get_status_rusage();

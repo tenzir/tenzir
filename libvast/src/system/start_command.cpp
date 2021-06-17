@@ -127,7 +127,8 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         auto hook_invocation = parse(*root, cli.begin(), cli.end());
         if (!hook_invocation)
           return caf::make_message(hook_invocation.error());
-        detail::merge_settings(inv.options, hook_invocation->options);
+        detail::merge_settings(inv.options, hook_invocation->options,
+                               policy::merge_lists::yes);
         auto result = run(*hook_invocation, sys, root_factory);
         if (!result)
           return caf::make_message(result.error());

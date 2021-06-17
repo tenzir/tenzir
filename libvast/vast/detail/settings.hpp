@@ -8,30 +8,16 @@
 
 #pragma once
 
+#include "vast/policy/merge_lists.hpp"
+
 #include <caf/settings.hpp>
-
-namespace vast::policy {
-
-struct merge_lists_tag {};
-struct overwrite_lists_tag {};
-
-inline static constexpr merge_lists_tag merge_lists{};
-inline static constexpr overwrite_lists_tag overwrite_lists{};
-
-} // namespace vast::policy
 
 namespace vast::detail {
 
 /// Merge settings of `src` into `dst`, overwriting existing values from `dst`
-/// if necessary. Passing `policy::merge_lists` enables merging of nested lists.
+/// if necessary.
 void merge_settings(const caf::settings& src, caf::settings& dst,
-                    policy::overwrite_lists_tag policy
-                    = policy::overwrite_lists);
-
-/// Merge settings of `src` into `dst`, overwriting existing values from `dst`
-/// if necessary. Passing `policy::merge_lists` enables merging of nested lists.
-void merge_settings(const caf::settings& src, caf::settings& dst,
-                    policy::merge_lists_tag policy);
+                    enum policy::merge_lists merge_lists);
 
 /// Remove empty settings objects from the tree.
 /// Example:

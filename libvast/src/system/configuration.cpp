@@ -179,7 +179,7 @@ caf::error configuration::parse(int argc, char** argv) {
       if (!rec)
         return caf::make_error(ec::parse_error, "config file not a map of "
                                                 "key-value pairs");
-      merge(*rec, merged_config);
+      merge(*rec, merged_config, policy::merge_lists::yes);
     }
   }
   // Flatten everything for simplicity.

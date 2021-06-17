@@ -294,7 +294,8 @@ record flatten(const record& r) {
 
 namespace {
 
-void merge(const record& src, record& dst, size_t max_recursion) {
+void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
+           size_t max_recursion) {
   if (max_recursion == 0) {
     VAST_WARN("partially discarding record: recursion limit of {} exceeded",
               defaults::max_recursion);
@@ -308,7 +309,25 @@ void merge(const record& src, record& dst, size_t max_recursion) {
         dst[k] = record{};
         dst_rec = caf::get_if<record>(&dst[k]);
       }
-      merge(*src_rec, *dst_rec, --max_recursion);
+      merge(*src_rec, *dst_rec, merge_lists, --max_recursion);
+    } else if (merge_lists == policy::merge_lists::yes
+               && caf::holds_alternative<list>(v)) {
+      const auto& src_list = caf::get<list>(v);
+      if (auto* dst_list = caf::get_if<list>(&dst[k])) {
+        dst_list->insert(dst_list->end(), src_list.begin(), src_list.end());
+      } else if (auto it = dst.find(k); it != dst.end()) {
+        auto dst_list = list{};
+        if (!caf::holds_alternative<caf::none_t>(it->second)) {
+          dst_list.reserve(src_list.size() + 1);
+          dst_list.push_back(std::move(it->second));
+        } else {
+          dst_list.reserve(src_list.size());
+        }
+        dst_list.insert(dst_list.end(), src_list.begin(), src_list.end());
+        it->second = std::move(dst_list);
+      } else {
+        dst[k] = src_list;
+      }
     } else {
       dst[k] = v;
     }
@@ -317,8 +336,9 @@ void merge(const record& src, record& dst, size_t max_recursion) {
 
 } // namespace
 
-void merge(const record& src, record& dst) {
-  merge(src, dst, defaults::max_recursion);
+void merge(const record& src, record& dst,
+           enum policy::merge_lists merge_lists) {
+  merge(src, dst, merge_lists, defaults::max_recursion);
 }
 
 caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {

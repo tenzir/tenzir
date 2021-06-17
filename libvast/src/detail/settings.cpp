@@ -16,9 +16,8 @@ namespace vast::detail {
 
 namespace {
 
-template <class Policy>
 void merge_settings_impl(const caf::settings& src, caf::settings& dst,
-                         Policy policy, size_t depth = 0) {
+                         enum policy::merge_lists merge_lists, size_t depth) {
   if (depth > 100) {
     VAST_ERROR("Exceeded maximum nesting depth in settings.");
     return;
@@ -26,9 +25,9 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
   for (auto& [key, value] : src) {
     if (caf::holds_alternative<caf::settings>(value)) {
       merge_settings_impl(caf::get<caf::settings>(value),
-                          dst[key].as_dictionary(), policy, depth + 1);
+                          dst[key].as_dictionary(), merge_lists, depth + 1);
     } else {
-      if constexpr (std::is_same_v<Policy, policy::merge_lists_tag>) {
+      if (merge_lists == policy::merge_lists::yes) {
         if (caf::holds_alternative<caf::config_value::list>(value)
             && caf::holds_alternative<caf::config_value::list>(dst[key])) {
           const auto& src_list = caf::get<caf::config_value::list>(value);
@@ -37,11 +36,10 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
         } else {
           dst.insert_or_assign(key, value);
         }
-      } else if constexpr (std::is_same_v<Policy, policy::overwrite_lists_tag>) {
+      } else if (merge_lists == policy::merge_lists::no) {
+        VAST_ASSERT(merge_lists == policy::merge_lists::no, //
+                    "unsupported merge policy");
         dst.insert_or_assign(key, value);
-      } else {
-        static_assert(detail::always_false_v<Policy>, "unsupported merge "
-                                                      "policy");
       }
     }
   }
@@ -50,13 +48,8 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
 } // namespace
 
 void merge_settings(const caf::settings& src, caf::settings& dst,
-                    policy::overwrite_lists_tag policy) {
-  return merge_settings_impl(src, dst, policy);
-}
-
-void merge_settings(const caf::settings& src, caf::settings& dst,
-                    policy::merge_lists_tag policy) {
-  return merge_settings_impl(src, dst, policy);
+                    enum policy::merge_lists merge_lists) {
+  merge_settings_impl(src, dst, merge_lists, 0);
 }
 
 bool strip_settings(caf::settings& xs) {

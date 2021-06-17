@@ -391,7 +391,8 @@ caf::expected<caf::message> run(const invocation& inv, caf::actor_system& sys,
     // from a remote_command we still need to do it here.
     auto merged_invocation = inv;
     merged_invocation.options = content(sys.config());
-    detail::merge_settings(inv.options, merged_invocation.options);
+    detail::merge_settings(inv.options, merged_invocation.options,
+                           policy::merge_lists::yes);
     return std::invoke(search_result->second, merged_invocation, sys);
   }
   // No callback was registered for this command

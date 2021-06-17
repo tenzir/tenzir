@@ -433,7 +433,7 @@ index_state::status(status_verbosity v) const {
                   &part_status, "memory-usage"))
               req_state->memory_usage += *s;
             if (v >= status_verbosity::debug)
-              detail::merge_settings(part_status, ps);
+              detail::merge_settings(part_status, ps, policy::merge_lists::no);
             // Both handlers have a copy of req_state.
             if (req_state.use_count() == 2)
               deliver(std::move(*req_state));

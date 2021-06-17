@@ -680,7 +680,8 @@ active_partition_actor::behavior_type active_partition(
                     &indexer_status, "memory-usage"))
                 req_state->memory_usage += *s;
               if (v >= status_verbosity::debug)
-                detail::merge_settings(indexer_status, ps);
+                detail::merge_settings(indexer_status, ps,
+                                       policy::merge_lists::no);
               // Both handlers have a copy of req_state.
               if (req_state.use_count() == 2)
                 deliver(std::move(*req_state));
