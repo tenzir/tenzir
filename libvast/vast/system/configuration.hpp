@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include <caf/actor_system_config.hpp>
 
 #include <filesystem>
@@ -16,7 +18,9 @@
 
 namespace vast::system {
 
-class application;
+/// @returns The config dirs of the application.
+std::vector<std::filesystem::path>
+config_dirs(const caf::actor_system_config& config);
 
 /// Bundles all configuration parameters of a VAST system.
 class configuration : public caf::actor_system_config {
