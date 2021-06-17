@@ -21,10 +21,10 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The VAST community chat moved from Gitter to Slack. [Join us](http://slack.tenzir.com) in the `#vast` channel for interactive discussions.
   [#1696](https://github.com/tenzir/vast/pull/1696)
 
-- The [tenzir/vast](https://hub.docker.com/r/tenzir/vast) Docker image now bundles the PCAP plugin.
+- The [tenzir/vast](https://hub.docker.com/r/tenzir/vast) Docker image bundles the PCAP plugin.
   [#1705](https://github.com/tenzir/vast/pull/1705)
 
-- VAST now merges lists from configuration files. E.g., running VAST with `--plugins=some-plugin` and `vast.plugins: [other-plugin]` in the configuration now results in `some-plugin` and `other-plugin` being loaded (sorted by the usual precedence).
+- VAST merges lists from configuration files. E.g., running VAST with `--plugins=some-plugin` and `vast.plugins: [other-plugin]` in the configuration now results in `some-plugin` and `other-plugin` being loaded (sorted by the usual precedence).
   [#1721](https://github.com/tenzir/vast/pull/1721)
 
 ### :gift: Features
@@ -41,30 +41,30 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - It's now possible to configure the VAST endpoint as an environment variable by setting `VAST_ENDPOINT`. This has higher precedence than setting `vast.endpoint` in configuration files, but lower precedence than passing `--endpoint=` on the command-line.
   [#1714](https://github.com/tenzir/vast/pull/1714)
 
-- Plugins now load their respective configuration from `<configdir>/vast/plugin/<plugin-name>.yaml` in addition to the regular configuration file at `<configdir>/vast/vast.yaml`. The new plugin-specific file does not require putting configuration under the key `plugins.<plugin-name>`. This allows for deploying plugins without needing to touch the `<configdir>/vast/vast.yaml` configuration file.
+- Plugins load their respective configuration from `<configdir>/vast/plugin/<plugin-name>.yaml` in addition to the regular configuration file at `<configdir>/vast/vast.yaml`. The new plugin-specific file does not require putting configuration under the key `plugins.<plugin-name>`. This allows for deploying plugins without needing to touch the `<configdir>/vast/vast.yaml` configuration file.
   [#1724](https://github.com/tenzir/vast/pull/1724)
 
 ### :beetle: Bug Fixes
 
-- Fixed a bug that would crash VAST when querying for non-strings in a string field with a partition synopsis.
+- VAST no longer crashes when querying for string fields with non-string values.
   [#1685](https://github.com/tenzir/vast/pull/1685)
 
 - Building plugins against an installed VAST no longer requires manually specifying `-DBUILD_SHARED_LIBS=ON`. The option is now correctly enabled by default for external plugins.
   [#1697](https://github.com/tenzir/vast/pull/1697)
 
-- The UDS metrics sink now continues to send data when the receiving socket is recreated.
+- The UDS metrics sink continues to send data when the receiving socket is recreated.
   [#1702](https://github.com/tenzir/vast/pull/1702)
 
-- The `vast.log-rotation-threshold` option now works as expected and is no longer being silently ignored.
+- The `vast.log-rotation-threshold` option was silently ignored, causing VAST to always use the default log rotation threshold of 10 MiB. The option works as expected now.
   [#1709](https://github.com/tenzir/vast/pull/1709)
 
-- VAST Docker release builds are now correctly tagged with the human-readable release version string, i.e., `tenzir/vast:2021.05.27` instead of the hash.
+- Additional tags for the [tenzir/vast](https://hub.docker.com/r/tenzir/vast) Docker image for the release versions exist, e.g., `tenzir/vast:2021.05.27`.
   [#1711](https://github.com/tenzir/vast/pull/1711)
 
-- The `import csv` command now handles quoted fields correctly, and no longer fails at field separators in them.
+- The `import csv` command handles quoted fields correctly, and no longer fails at field separators in them.
   [#1712](https://github.com/tenzir/vast/pull/1712)
 
-- Import processes now shut down gracefully on SIGINT/SIGKILL again.
+- Import processes no longer hang on receiving SIGINT or SIGKILL. Instead, they shut down properly after flushing all yet to be processed data.
   [#1718](https://github.com/tenzir/vast/pull/1718)
 
 ## [2021.05.27]
