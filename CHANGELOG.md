@@ -6,6 +6,67 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [2021.06.24-rc1]
+
+### :zap: Breaking Changes
+
+- Apache Arrow is now a required dependency. The previously deprecated build  option `-DVAST_ENABLE_ARROW=OFF` no longer exists.
+  [#1683](https://github.com/tenzir/vast/pull/1683)
+
+- VAST no longer loads static plugins by default. Generally, VAST now treats static plugins and bundled dynamic plugins equally, allowing users to enable or disable static plugins as needed for their deployments.
+  [#1703](https://github.com/tenzir/vast/pull/1703)
+
+### :warning: Changes
+
+- The VAST community chat moved from Gitter to Slack. [Join us](http://slack.tenzir.com) in the `#vast` channel for vibrant discussions.
+  [#1696](https://github.com/tenzir/vast/pull/1696)
+
+- The [tenzir/vast](https://hub.docker.com/r/tenzir/vast) Docker image bundles the PCAP plugin.
+  [#1705](https://github.com/tenzir/vast/pull/1705)
+
+- VAST merges lists from configuration files. E.g., running VAST with `--plugins=some-plugin` and `vast.plugins: [other-plugin]` in the configuration now results in both `some-plugin` and `other-plugin` being loaded (sorted by the usual precedence), instead of just `some-plugin`.
+  [#1721](https://github.com/tenzir/vast/pull/1721)
+
+### :gift: Features
+
+- The new option `vast.start.commands` allows for specifying an ordered list of VAST commands that run after successful startup. The effect is the same as first starting a node, and then using another VAST client to issue commands.  This is useful for commands that have side effects that cannot be expressed through the config file, e.g., starting a source inside the VAST server that listens on a socket or reads packets from a network interface.
+  [#1699](https://github.com/tenzir/vast/pull/1699)
+
+- The options `vast.plugins` and `vast.plugin-dirs` may now be specified on the command line as well as the configuration. Use the options `--plugins` and `--plugin-dirs` respectively.
+  [#1703](https://github.com/tenzir/vast/pull/1703)
+
+- Add the reserved plugin name `bundled` to `vast.plugins` to enable load all bundled plugins, i.e., static or dynamic plugins built alongside VAST, or use `--plugins=bundled` on the command line. The reserved plugin name `all` causes all bundled and external plugins to be loaded, i.e., all shared libraries matching `libvast-plugin-*` from the configured `vast.plugin-dirs`.
+  [#1703](https://github.com/tenzir/vast/pull/1703)
+
+- It's now possible to configure the VAST endpoint as an environment variable by setting `VAST_ENDPOINT`. This has higher precedence than setting `vast.endpoint` in configuration files, but lower precedence than passing `--endpoint=` on the command-line.
+  [#1714](https://github.com/tenzir/vast/pull/1714)
+
+- Plugins load their respective configuration from `<configdir>/vast/plugin/<plugin-name>.yaml` in addition to the regular configuration file at `<configdir>/vast/vast.yaml`. The new plugin-specific file does not require putting configuration under the key `plugins.<plugin-name>`. This allows for deploying plugins without needing to touch the `<configdir>/vast/vast.yaml` configuration file.
+  [#1724](https://github.com/tenzir/vast/pull/1724)
+
+### :beetle: Bug Fixes
+
+- VAST no longer crashes when querying for string fields with non-string values. Instead, an error message warns the user about an invalid query.
+  [#1685](https://github.com/tenzir/vast/pull/1685)
+
+- Building plugins against an installed VAST no longer requires manually specifying `-DBUILD_SHARED_LIBS=ON`. The option is now correctly enabled by default for external plugins.
+  [#1697](https://github.com/tenzir/vast/pull/1697)
+
+- The UDS metrics sink continues to send data when the receiving socket is recreated.
+  [#1702](https://github.com/tenzir/vast/pull/1702)
+
+- The `vast.log-rotation-threshold` option was silently ignored, causing VAST to always use the default log rotation threshold of 10 MiB. The option works as expected now.
+  [#1709](https://github.com/tenzir/vast/pull/1709)
+
+- Additional tags for the [tenzir/vast](https://hub.docker.com/r/tenzir/vast) Docker image for the release versions exist, e.g., `tenzir/vast:2021.05.27`.
+  [#1711](https://github.com/tenzir/vast/pull/1711)
+
+- The `import csv` command handles quoted fields correctly. Previously, the quotes were part of the parsed value, and field separators in quoted strings caused the parser to fail.
+  [#1712](https://github.com/tenzir/vast/pull/1712)
+
+- Import processes no longer hang on receiving SIGINT or SIGKILL. Instead, they shut down properly after flushing yet to be processed data.
+  [#1718](https://github.com/tenzir/vast/pull/1718)
+
 ## [2021.05.27]
 
 ### :zap: Breaking Changes
@@ -1143,6 +1204,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[2021.06.24-rc1]: https://github.com/tenzir/vast/releases/tag/2021.06.24-rc1
 [2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
 [2021.04.29]: https://github.com/tenzir/vast/releases/tag/2021.04.29
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
