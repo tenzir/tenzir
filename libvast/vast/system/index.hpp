@@ -251,7 +251,7 @@ struct index_state {
   std::vector<flush_listener_actor> flush_listeners = {};
 
   /// Actor handle of the store actor.
-  // store_actor global_store = {};
+  store_builder_actor global_store = {};
 
   /// Plugin responsible for spawning new partition-local stores.
   const store_plugin* store_plugin_ = {};

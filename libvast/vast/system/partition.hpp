@@ -163,6 +163,9 @@ struct passive_partition_state {
   /// Pointer to the parent actor.
   partition_actor::pointer self = nullptr;
 
+  /// Legacy archive
+  store_actor archive;
+
   /// Uniquely identifies this partition.
   uuid id;
 
@@ -246,6 +249,7 @@ active_partition_actor::behavior_type active_partition(
 /// @param store The store to retrieve the events from.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, const std::filesystem::path& path);
+  archive_actor archive, filesystem_actor filesystem,
+  const std::filesystem::path& path);
 
 } // namespace vast::system
