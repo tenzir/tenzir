@@ -62,7 +62,8 @@ function (VASTCompileFlatBuffers)
   else ()
     message(
       FATAL_ERROR
-        "Found FlatBuffers, but neither shared nor static library target exist")
+        "Found FlatBuffers, but neither shared nor static library targets exist"
+    )
   endif ()
 
   if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
@@ -99,22 +100,36 @@ function (VASTCompileFlatBuffers)
       "      new_include \"\${include}\")\n"
       "file(WRITE \"${desired_file}\" \"\${new_include}\")\n")
     # Compile and rename schema.
-    add_custom_target(
-      "compile-flatbuffers-schema-${basename}"
-      BYPRODUCTS ${desired_file}
+    add_custom_command(
+      OUTPUT "${desired_file}"
       COMMAND flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings -o
               "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
       COMMAND ${CMAKE_COMMAND} -E rename "${output_file}" "${desired_file}"
-      COMMAND ${CMAKE_COMMAND} -P
-              "${CMAKE_CURRENT_BINARY_DIR}/fbs-strip-suffix-${basename}.cmake"
-      # We need to depend on all schemas here instead of just the one we're
-      # compiling currently because schemas may include other schema files.
-      DEPENDS ${FBS_SCHEMAS}
+      COMMAND
+        ${CMAKE_COMMAND} -P
+        "${CMAKE_CURRENT_BINARY_DIR}/fbs-strip-suffix-${basename}.cmake"
+        # We need to depend on all schemas here instead of just the one we're
+        # compiling currently because schemas may include other schema files.
+        SOURCES ${FBS_SCHEMAS}
       COMMENT "Compiling FlatBuffers schema ${schema}")
+    # We need an additional indirection via add_custom_target here, because
+    # FBS_TARGET cannot depend on the OUTPUT of a add_custom_command directly,
+    # and depending on a BYPRODUCT of a add_custom_command causes the Unix
+    # Makefiles generator to constantly rebuild targets in the same export set.
+    add_custom_target("compile-flatbuffers-schema-${basename}"
+                      DEPENDS "${desired_file}")
     add_dependencies(${FBS_TARGET} "compile-flatbuffers-schema-${basename}")
-    install(FILES "${desired_file}"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FBS_INCLUDE_DIRECTORY}")
+    set_property(
+      TARGET ${FBS_TARGET}
+      APPEND
+      PROPERTY PUBLIC_HEADER "${desired_file}")
   endforeach ()
+
+  install(
+    TARGETS ${FBS_TARGET}
+    EXPORT VASTTargets
+    PUBLIC_HEADER
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FBS_INCLUDE_DIRECTORY}")
 endfunction ()
 
 # Support tools like clang-tidy by creating a compilation database and copying
