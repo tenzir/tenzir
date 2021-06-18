@@ -61,10 +61,6 @@ public:
     notify_listeners_if_clean(state(), *this);
   }
 
-  // void inject() {
-  //   super::handle(framed<table_slice>::eof());
-  // }
-
   void finalize(const caf::error& reason) override {
     super::finalize(reason);
     // During shutdown of a stateful actor, CAF first destroys the state
