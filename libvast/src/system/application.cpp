@@ -169,60 +169,6 @@ auto make_infer_command() {
       .add<std::string>("read,r", "path to the input data"));
 }
 
-auto make_import_command() {
-  auto import_ = std::make_unique<command>(
-    "import", "imports data from STDIN or file", documentation::vast_import,
-    opts("?vast.import")
-      .add<std::string>("batch-encoding", "encoding type of table slices "
-                                          "(arrow or msgpack)")
-      .add<size_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timeout after which batched "
-                                         "table slices are forwarded")
-      .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
-      .add<std::string>("listen,l", "the endpoint to listen on "
-                                    "([host]:port/type)")
-      .add<size_t>("max-events,n", "the maximum number of events to import")
-      .add<std::string>("read,r", "path to input where to read events from")
-      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
-      .add<std::string>("schema,S", "alternate schema as string")
-      .add<std::string>("schema-file,s", "path to alternate schema")
-      .add<std::string>("type,t", "filter event type based on prefix matching")
-      .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
-  import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
-                          documentation::vast_import_zeek,
-                          opts("?vast.import.zeek"));
-  import_->add_subcommand("zeek-json",
-                          "imports Zeek JSON logs from STDIN or file",
-                          documentation::vast_import_zeek,
-                          opts("?vast.import.zeek-json"));
-  import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
-                          documentation::vast_import_csv,
-                          opts("?vast.import.csv"));
-  import_->add_subcommand("json", "imports JSON with schema",
-                          documentation::vast_import_json,
-                          opts("?vast.import.json"));
-  import_->add_subcommand("suricata", "imports suricata eve json",
-                          documentation::vast_import_suricata,
-                          opts("?vast.import.suricata"));
-  import_->add_subcommand("syslog", "imports syslog messages",
-                          documentation::vast_import_syslog,
-                          opts("?vast.import.syslog"));
-  import_->add_subcommand(
-    "test", "imports random data for testing or benchmarking",
-    documentation::vast_import_test,
-    opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<reader_plugin>()) {
-      auto opts_category
-        = fmt::format("?vast.import.{}", reader->reader_format());
-      import_->add_subcommand(reader->reader_format(), reader->reader_help(),
-                              reader->reader_documentation(),
-                              reader->reader_options(opts(opts_category)));
-    }
-  }
-  return import_;
-}
-
 auto make_kill_command() {
   return std::make_unique<command>("kill", "terminates a component", "",
                                    opts("?vast.kill"), false);
@@ -543,6 +489,60 @@ auto make_root_command(std::string_view path) {
 }
 
 } // namespace
+
+std::unique_ptr<command> make_import_command() {
+  auto import_ = std::make_unique<command>(
+    "import", "imports data from STDIN or file", documentation::vast_import,
+    opts("?vast.import")
+      .add<std::string>("batch-encoding", "encoding type of table slices "
+                                          "(arrow or msgpack)")
+      .add<size_t>("batch-size", "upper bound for the size of a table slice")
+      .add<std::string>("batch-timeout", "timeout after which batched "
+                                         "table slices are forwarded")
+      .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
+      .add<std::string>("listen,l", "the endpoint to listen on "
+                                    "([host]:port/type)")
+      .add<size_t>("max-events,n", "the maximum number of events to import")
+      .add<std::string>("read,r", "path to input where to read events from")
+      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
+      .add<std::string>("schema,S", "alternate schema as string")
+      .add<std::string>("schema-file,s", "path to alternate schema")
+      .add<std::string>("type,t", "filter event type based on prefix matching")
+      .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
+  import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
+                          documentation::vast_import_zeek,
+                          opts("?vast.import.zeek"));
+  import_->add_subcommand("zeek-json",
+                          "imports Zeek JSON logs from STDIN or file",
+                          documentation::vast_import_zeek,
+                          opts("?vast.import.zeek-json"));
+  import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
+                          documentation::vast_import_csv,
+                          opts("?vast.import.csv"));
+  import_->add_subcommand("json", "imports JSON with schema",
+                          documentation::vast_import_json,
+                          opts("?vast.import.json"));
+  import_->add_subcommand("suricata", "imports suricata eve json",
+                          documentation::vast_import_suricata,
+                          opts("?vast.import.suricata"));
+  import_->add_subcommand("syslog", "imports syslog messages",
+                          documentation::vast_import_syslog,
+                          opts("?vast.import.syslog"));
+  import_->add_subcommand(
+    "test", "imports random data for testing or benchmarking",
+    documentation::vast_import_test,
+    opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* reader = plugin.as<reader_plugin>()) {
+      auto opts_category
+        = fmt::format("?vast.import.{}", reader->reader_format());
+      import_->add_subcommand(reader->reader_format(), reader->reader_help(),
+                              reader->reader_documentation(),
+                              reader->reader_options(opts(opts_category)));
+    }
+  }
+  return import_;
+}
 
 std::pair<std::unique_ptr<command>, command::factory>
 make_application(std::string_view path) {
