@@ -169,7 +169,8 @@ partition_actor partition_factory::operator()(const uuid& id) const {
               != state_.persisted_partitions.end());
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", state_.self, id, path);
-  return state_.self->spawn(passive_partition, id, filesystem_, path);
+  return state_.self->spawn(passive_partition, id, global_store, filesystem_,
+                            path);
 }
 
 filesystem_actor& partition_factory::filesystem() {
@@ -340,23 +341,29 @@ void index_state::create_active_partition() {
   put(synopsis_options, "max-partition-size", partition_capacity);
   put(synopsis_options, "address-synopsis-fp-rate", meta_index_fp_rate);
   put(synopsis_options, "string-synopsis-fp-rate", meta_index_fp_rate);
-  const auto* store_name = store_plugin_->name();
-  auto builder_and_header = store_plugin_->make_store_builder(id);
-  VAST_ASSERT(builder_and_header); // FIXME
-  auto& [builder, header] = *builder_and_header;
   // If we're using the global store, the importer already sends the table
-  // slices. (in the long run, this should probably be streamlined so that all
-  // data moves through the index)
-  active_partition.store = builder;
+  // slices. (In the long run, this should probably be streamlined so that all
+  // data moves through the index. However, that requires some refactoring of
+  // the archive itself so it can handle multiple input streams.)
+  std::string store_name = "legacy_archive";
+  chunk_ptr store_header = chunk::empty();
   if (partition_local_stores) {
+    store_name = store_plugin_->name();
+    auto builder_and_header = store_plugin_->make_store_builder(filesystem, id);
+    VAST_ASSERT(builder_and_header); // FIXME
+    auto& [builder, header] = *builder_and_header;
+    store_header = header;
     active_partition.store_slot
       = stage->add_outbound_path(active_partition.store);
+    active_partition.store = builder;
+  } else {
+    active_partition.store = global_store;
   }
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, filesystem, index_opts,
                   synopsis_options,
                   static_cast<store_actor>(active_partition.store), store_name,
-                  header);
+                  store_header);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
   active_partition.capacity = partition_capacity;
@@ -641,6 +648,7 @@ index(index_actor::stateful_pointer<index_state> self,
     VAST_VERBOSE("{} uses {} for meta index data", self, meta_index_dir);
   // Set members.
   self->state.self = self;
+  self->state.global_store = /* global_store */ nullptr;
   self->state.accept_queries = true;
   self->state.store_plugin_
     = partition_local_stores
