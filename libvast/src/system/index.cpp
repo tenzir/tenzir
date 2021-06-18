@@ -169,8 +169,9 @@ partition_actor partition_factory::operator()(const uuid& id) const {
               != state_.persisted_partitions.end());
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", state_.self, id, path);
-  return state_.self->spawn(passive_partition, id, global_store, filesystem_,
-                            path);
+  return state_.self->spawn(passive_partition, id,
+                            static_cast<store_actor>(state_.global_store),
+                            filesystem_, path);
 }
 
 filesystem_actor& partition_factory::filesystem() {
@@ -345,18 +346,25 @@ void index_state::create_active_partition() {
   // slices. (In the long run, this should probably be streamlined so that all
   // data moves through the index. However, that requires some refactoring of
   // the archive itself so it can handle multiple input streams.)
-  std::string store_name = "legacy_archive";
+  std::string store_name = {};
   chunk_ptr store_header = chunk::empty();
   if (partition_local_stores) {
-    store_name = store_plugin_->name();
-    auto builder_and_header = store_plugin_->make_store_builder(filesystem, id);
+    store_name = store_plugin->name();
+    auto builder_and_header = store_plugin->make_store_builder(filesystem, id);
+    if (!builder_and_header) {
+      VAST_ERROR("could not create new active partition: {}",
+                 render(builder_and_header.error()));
+      self->quit(builder_and_header.error());
+      return;
+    }
     VAST_ASSERT(builder_and_header); // FIXME
     auto& [builder, header] = *builder_and_header;
     store_header = header;
+    active_partition.store = builder;
     active_partition.store_slot
       = stage->add_outbound_path(active_partition.store);
-    active_partition.store = builder;
   } else {
+    store_name = "legacy_archive";
     active_partition.store = global_store;
   }
   active_partition.actor
@@ -378,12 +386,12 @@ void index_state::decomission_active_partition() {
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
   stage->out().close(active_partition.stream_slot);
+  if (partition_local_stores)
+    stage->out().close(active_partition.store_slot);
   stage->out().force_emit_batches();
   // Persist active partition asynchronously.
   auto part_dir = partition_path(id);
   auto synopsis_dir = partition_synopsis_path(id);
-  if (partition_local_stores)
-    self->send_exit(active_partition.store, caf::exit_reason::normal);
   VAST_DEBUG("{} persists active partition to {}", self, part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
@@ -630,9 +638,10 @@ void index_state::flush_to_disk() {
 
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, const std::filesystem::path& dir,
-      bool partition_local_stores, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
+      filesystem_actor filesystem, archive_actor archive,
+      const std::filesystem::path& dir, bool partition_local_stores,
+      size_t partition_capacity, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
   VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
@@ -642,22 +651,23 @@ index(index_actor::stateful_pointer<index_state> self,
                "size of {} events and {} resident partitions",
                self, dir, partition_capacity, max_inmem_partitions);
   if (partition_local_stores)
-    VAST_VERBOSE("{} uses partition-local stores instead of the global archive",
-                 self);
+    VAST_VERBOSE("{} uses partition-local stores instead of the archive", self);
   if (dir != meta_index_dir)
     VAST_VERBOSE("{} uses {} for meta index data", self, meta_index_dir);
   // Set members.
   self->state.self = self;
-  self->state.global_store = /* global_store */ nullptr;
+  self->state.global_store = archive;
   self->state.accept_queries = true;
-  self->state.store_plugin_
-    = partition_local_stores
-        ? plugins::find<store_plugin>("local_segment_store")
-        : plugins::find<store_plugin>("global_segment_store");
-  if (!self->state.store_plugin_) {
-    VAST_ERROR("{} could not create store", self);
-    self->quit();
-    return index_actor::behavior_type::make_empty_behavior();
+  if (partition_local_stores) {
+    self->state.store_plugin
+      = plugins::find<store_plugin>("local_segment_store");
+    if (!self->state.store_plugin) {
+      auto error = caf::make_error(ec::invalid_configuration, "could not find "
+                                                              "store plugin");
+      VAST_ERROR("{}", render(error));
+      self->quit(error);
+      return index_actor::behavior_type::make_empty_behavior();
+    }
   }
   self->state.filesystem = std::move(filesystem);
   self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
@@ -981,7 +991,9 @@ index(index_actor::stateful_pointer<index_state> self,
             });
             rp.deliver(std::move(all_ids));
           },
-          [=](caf::error& err) mutable { rp.deliver(std::move(err)); });
+          [=](caf::error& err) mutable {
+            rp.deliver(std::move(err));
+          });
       return rp;
     },
     // -- query_supervisor_master_actor ----------------------------------------

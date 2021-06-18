@@ -254,7 +254,7 @@ struct index_state {
   store_builder_actor global_store = {};
 
   /// Plugin responsible for spawning new partition-local stores.
-  const store_plugin* store_plugin_ = {};
+  const vast::store_plugin* store_plugin = {};
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
@@ -285,9 +285,10 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 //  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, const std::filesystem::path& dir,
-      bool partition_local_stores, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
+      filesystem_actor filesystem, archive_actor archive,
+      const std::filesystem::path& dir, bool partition_local_stores,
+      size_t partition_capacity, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate);
 
 } // namespace vast::system
