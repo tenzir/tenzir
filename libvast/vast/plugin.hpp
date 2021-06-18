@@ -269,22 +269,14 @@ class store_plugin : public virtual plugin {
 public:
   using builder_and_header = std::pair<system::store_builder_actor, chunk_ptr>;
 
-  /// Give the plugin a chance to retrieve necessary components from the node.
-  // TODO: Re-discuss trade-offs between having a separate `setup` steps that
-  // needs to be performed by the node vs. passing this every time we call
-  // `make_store()`.
-  virtual caf::error setup(const system::node_actor&) {
-    return caf::none;
-  }
-
   /// Create a store builder actor that accepts incoming table slices.
   [[nodiscard]] virtual caf::expected<builder_and_header>
-  make_store_builder(const vast::uuid&) const = 0;
+  make_store_builder(system::filesystem_actor, const vast::uuid&) const = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
   /// partition that uses this partition as a store backend.
   [[nodiscard]] virtual caf::expected<system::store_actor>
-  make_store(span<const std::byte> header) const = 0;
+  make_store(system::filesystem_actor, span<const std::byte> header) const = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

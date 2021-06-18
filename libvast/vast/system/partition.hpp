@@ -107,7 +107,7 @@ struct active_partition_state {
   /// Whether VAST is configured to use partition-local stores.
   bool partition_local_stores;
 
-  std::string store_backend;
+  std::string store_id;
 
   chunk_ptr store_header;
 
@@ -185,7 +185,7 @@ struct passive_partition_state {
   size_t events;
 
   /// The store type as found in the flatbuffer.
-  std::string store_backend;
+  std::string store_id;
 
   /// The store header as found in the flatbuffer.
   span<const std::byte> store_header;
@@ -230,15 +230,15 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 /// @param index_opts Settings that are forwarded when creating indexers.
 /// @param synopsis_opts Settings that are forwarded when creating synopses.
 /// @param store The store to retrieve the events from.
-/// @param store_backend The name of the store backend that should be stored
+/// @param store_id The name of the store backend that should be stored
 ///                      on disk.
 /// @param store_header A binary blob that allows reconstructing the store
 ///                     plugin when reading this partition from disk.
-// TODO: Bundle store, store_backend and store_header in a single struct
+// TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts, store_actor store, std::string store_backend,
+  caf::settings synopsis_opts, store_actor store, std::string store_id,
   chunk_ptr store_header);
 
 /// Spawns a read-only partition.
@@ -249,7 +249,7 @@ active_partition_actor::behavior_type active_partition(
 /// @param store The store to retrieve the events from.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  archive_actor archive, filesystem_actor filesystem,
+  store_actor archive, filesystem_actor filesystem,
   const std::filesystem::path& path);
 
 } // namespace vast::system

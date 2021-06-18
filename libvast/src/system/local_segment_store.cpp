@@ -47,44 +47,45 @@ handle_lookup(Actor& self, const vast::query& query, const vast::ids& ids,
       checkers.emplace_back(prune_meta_predicates(std::move(*c)));
     }
   }
-  auto zipped = detail::zip(slices, checkers);
-  caf::visit(detail::overload{
-               [&](const query::count& count) {
-                 if (count.mode == query::count::estimate)
-                   die("logic error detected");
-                 for (size_t i = 0; i < slices.size(); ++i) {
-                   const auto& slice = slices.at(i);
-                   const auto& checker = checkers.at(i);
-                   auto result = count_matching(slice, checker, ids);
-                   self->send(count.sink, result);
-                 }
-               },
-               [&](const query::extract& extract) {
-                 for (const auto& [slice, checker] : zipped) {
-                   if (extract.policy == query::extract::preserve_ids) {
-                     for (auto& sub_slice : select(slice, ids)) {
-                       if (query.expr == expression{}) {
-                         self->send(extract.sink, sub_slice);
-                       } else {
-                         auto hits = evaluate(checker, sub_slice);
-                         for (auto& final_slice : select(sub_slice, hits))
-                           self->send(extract.sink, final_slice);
-                       }
-                     }
-                   } else {
-                     // TODO: Make something like foreach_
-                     auto final_slice = filter(slice, checker, ids);
-                     if (final_slice)
-                       self->send(extract.sink, *final_slice);
-                   }
-                 }
-               },
-               [&](query::erase) {
-                 // The caller should have special-cased this before calling.
-                 VAST_ASSERT(false, "cant lookup an 'erase' query");
-               },
-             },
-             query.cmd);
+  auto handle_query = detail::overload{
+    [&](const query::count& count) {
+      if (count.mode == query::count::estimate)
+        die("logic error detected");
+      for (size_t i = 0; i < slices.size(); ++i) {
+        const auto& slice = slices.at(i);
+        const auto& checker = checkers.at(i);
+        auto result = count_matching(slice, checker, ids);
+        self->send(count.sink, result);
+      }
+    },
+    [&](const query::extract& extract) {
+      VAST_ASSERT(slices.size() == checkers.size());
+      for (size_t i = 0; i < slices.size(); ++i) {
+        const auto& slice = slices[i];
+        const auto& checker = checkers[i];
+        if (extract.policy == query::extract::preserve_ids) {
+          for (auto& sub_slice : select(slice, ids)) {
+            if (query.expr == expression{}) {
+              self->send(extract.sink, sub_slice);
+            } else {
+              auto hits = evaluate(checker, sub_slice);
+              for (auto& final_slice : select(sub_slice, hits))
+                self->send(extract.sink, final_slice);
+            }
+          }
+        } else {
+          auto final_slice = filter(slice, checker, ids);
+          if (final_slice)
+            self->send(extract.sink, *final_slice);
+        }
+      }
+    },
+    [&](query::erase) {
+      // The caller should have special-cased this before calling.
+      VAST_ASSERT(false, "cant lookup an 'erase' query");
+    },
+  };
+  caf::visit(handle_query, query.cmd);
   return atom::done_v;
 }
 
@@ -106,6 +107,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       rp.deliver(caf::make_error(ec::lookup_error, "partition store shutting "
                                                    "down"));
   });
+  VAST_WARN("loading passive store from path {}", path);
   self->request(fs, caf::infinite, atom::mmap_v, path)
     .then([self](chunk_ptr chunk) {
       // self->state.data = std::move(chunk);
@@ -127,7 +129,6 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
   return {
     // store
     [self](query query, ids ids) -> caf::result<atom::done> {
-      VAST_WARN("got a query for some ids");
       if (!self->state.segment) {
         auto rp = caf::typed_response_promise<atom::done>();
         self->state.deferred_requests.emplace_back(query, ids, rp);
@@ -143,6 +144,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       auto slices = self->state.segment->lookup(ids);
       if (!slices)
         return slices.error();
+      VAST_WARN("lookup resulted in {} slices", slices->size());
       return handle_lookup(self, query, ids, *slices);
     },
     [self](atom::erase, ids xs) -> caf::result<atom::done> {
@@ -163,14 +165,15 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       VAST_ASSERT(self->state.path.has_filename());
       auto old_path = self->state.path;
       auto new_path = self->state.path.replace_extension("next");
+      auto rp = caf::typed_response_promise<atom::done>{};
       // TODO: If the new segment is empty, we should probably just erase the
       // file without replacement here.
       self
         ->request(self->state.fs, caf::infinite, atom::write_v, new_path,
                   new_segment->chunk())
         .then(
-          [seg = std::move(*new_segment), self, old_path,
-           new_path](atom::ok) mutable {
+          [seg = std::move(*new_segment), self, old_path, new_path,
+           rp](atom::ok) mutable {
             std::error_code ec;
             // Re-use the old filename so that we don't have to write a new
             // partition flatbuffer with the changed store header as well.
@@ -178,11 +181,13 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
             if (ec)
               VAST_ERROR("failed to erase old data {}", seg.id());
             self->state.segment = std::move(seg);
+            rp.deliver(atom::done_v);
           },
-          [](caf::error& err) {
+          [rp](caf::error& err) mutable {
             VAST_ERROR("failed to flush archive {}", to_string(err));
+            rp.deliver(err);
           });
-      return atom::done_v;
+      return rp;
     },
   };
 }
@@ -190,25 +195,21 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
 store_builder_actor::behavior_type active_local_store(
   store_builder_actor::stateful_pointer<active_store_state> self,
   filesystem_actor fs, const std::filesystem::path& path) {
-  VAST_INFO("spawning active local store active"); // FIXME: INFO -> DEBUG
-  // TODO: The shutdown path is copied from the archive; align it
-  // with the fs actor.
+  VAST_DEBUG("spawning active local store");
   self->state.builder
     = std::make_unique<segment_builder>(defaults::system::max_segment_size);
   self->set_exit_handler([self, path, fs](const caf::exit_msg&) {
-    VAST_INFO("exiting active store");
+    VAST_DEBUG("exiting active local store");
     auto seg = self->state.builder->finish();
     self->request(fs, caf::infinite, atom::write_v, path, seg.chunk())
       .then([](atom::ok) { /* nop */ },
-            [self](caf::error& err) {
+            [](caf::error& err) {
               VAST_ERROR("failed to flush archive {}", to_string(err));
             });
     self->quit();
   });
-
   return {
-    // store
-    [self](vast::query query, const ids& ids) -> caf::result<atom::done> {
+    [self](const query& query, const ids& ids) -> caf::result<atom::done> {
       auto slices = self->state.builder->lookup(ids);
       if (!slices)
         return slices.error();
@@ -218,7 +219,7 @@ store_builder_actor::behavior_type active_local_store(
       }
       return handle_lookup(self, query, ids, *slices);
     },
-    [self](atom::erase, const ids& ids) -> caf::result<atom::done> {
+    [self](const atom::erase&, const ids& ids) -> caf::result<atom::done> {
       auto seg = self->state.builder->finish();
       auto id = seg.id();
       auto slices = seg.erase(ids);
@@ -237,19 +238,20 @@ store_builder_actor::behavior_type active_local_store(
           in, [=](caf::unit_t&) {},
           [=](caf::unit_t&, std::vector<table_slice>& batch) {
             VAST_TRACE("{} gets batch of {} table slices", self, batch.size());
-            for (auto& slice : batch)
+            for (auto& slice : batch) {
               if (auto error = self->state.builder->add(slice))
                 VAST_ERROR("{} failed to add table slice to store {}", self,
                            render(error));
+              self->state.events += slice.rows();
+            }
           },
           [=](caf::unit_t&, const caf::error&) {
-
+            self->send_exit(self, caf::exit_reason::normal);
           })
         .inbound_slot();
     },
     // Conform to the protocol of the STATUS CLIENT actor.
-    [self](atom::status,
-           status_verbosity) -> caf::dictionary<caf::config_value> {
+    [](atom::status, status_verbosity) -> caf::dictionary<caf::config_value> {
       return {};
     },
   };
@@ -269,36 +271,23 @@ public:
   };
 
   // store plugin API
-  caf::error setup(const node_actor& node) override {
-    caf::scoped_actor self{node.home_system()};
-    auto maybe_components = get_node_components<filesystem_actor>(self, node);
-    if (!maybe_components)
-      return maybe_components.error();
-    fs_ = std::get<0>(*maybe_components);
-    return caf::none;
-  }
-
   [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(const vast::uuid& id) const override {
+  make_store_builder(filesystem_actor fs, const vast::uuid& id) const override {
     auto path = store_path_for_partition(id);
     std::string path_str = path.string();
     auto header = chunk::make(std::move(path_str));
-    // TODO: Would it make sense to pass an actor_system& as first arg?
-    auto builder = fs_->home_system().spawn(active_local_store, fs_, path);
+    auto builder = fs->home_system().spawn(active_local_store, fs, path);
     return builder_and_header{std::move(builder), std::move(header)};
   }
 
   [[nodiscard]] virtual caf::expected<system::store_actor>
-  make_store(span<const std::byte> header) const override {
+  make_store(filesystem_actor fs, span<const std::byte> header) const override {
     std::string_view sv{reinterpret_cast<const char*>(header.data()),
                         header.size()};
     std::filesystem::path path{sv};
-    // TODO: Would it make sense to pass an actor_system& as first arg?
-    return fs_->home_system().spawn(passive_local_store, fs_, path);
+    return fs->home_system().spawn<caf::lazy_init>(passive_local_store, fs,
+                                                   path);
   }
-
-private:
-  filesystem_actor fs_;
 };
 
 VAST_REGISTER_PLUGIN(vast::system::local_store_plugin)

@@ -19,8 +19,19 @@
 namespace vast::system {
 
 struct active_store_state {
+  /// The path to where the store will be written.
   std::filesystem::path path;
+
+  /// The builder preparing the store.
+  //  TODO: Just store a vector<table_slice> here and implement
+  //  store/lookup/.. on that.
   std::unique_ptr<vast::segment_builder> builder;
+
+  /// Number of events in this store.
+  size_t events = {};
+
+  /// Expected total size.
+  std::optional<size_t> total = {};
 };
 
 struct passive_store_state {
@@ -47,12 +58,10 @@ std::filesystem::path store_path_for_partition(const vast::uuid&);
 
 store_builder_actor::behavior_type
 active_local_store(store_builder_actor::stateful_pointer<active_store_state>,
-                   filesystem_actor filesystem,
-                   const std::filesystem::path& dir);
+                   filesystem_actor fs, const std::filesystem::path& path);
 
 store_actor::behavior_type
 passive_local_store(store_actor::stateful_pointer<passive_store_state>,
-                    filesystem_actor filesystem,
-                    const std::filesystem::path& path);
+                    filesystem_actor fs, const std::filesystem::path& path);
 
 } // namespace vast::system
