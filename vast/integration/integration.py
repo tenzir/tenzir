@@ -340,7 +340,7 @@ class Server:
 
     def stop(self):
         """Stops the server"""
-        command = [self.app]
+        command = [self.app, "--bare-mode"]
         if self.config_arg:
             command.append(self.config_arg)
         command = command + ["-e", f":{self.port}", "stop"]
@@ -419,7 +419,7 @@ class Tester:
         # Locate fixture.
         dummy_fixture = Fixture("pass", "pass")
         fixture = dummy_fixture if not test.fixture else self.fixtures.get(test.fixture)
-        cmd = [self.cmd]
+        cmd = [self.cmd, "--bare-mode"]
         if test.config_file:
             cmd.append(f"--config={test.config_file}")
         elif self.config_file:
