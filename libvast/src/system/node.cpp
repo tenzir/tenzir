@@ -85,7 +85,7 @@ auto make_error_msg(ec code, std::string msg) {
 /// A list of components that are essential for importing and exporting data
 /// from the node.
 std::set<const char*> core_components
-  = {"archive", "filesystem", "importer", "index"};
+  = {/*"archive",*/ "filesystem", "importer", "index"};
 
 bool is_core_component(std::string_view type) {
   auto pred = [&](const char* x) { return x == type; };
@@ -638,7 +638,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     // buffered data. The index uses the archive for querying. The filesystem
     // is needed by all others for the persisting logic.
     auto shutdown_sequence = std::initializer_list<const char*>{
-      "importer", "index", "archive", "filesystem"};
+      "importer", "index", /*"archive",*/ "filesystem"};
     // Make sure that these remain in sync.
     VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
     for (const char* name : shutdown_sequence) {
@@ -691,8 +691,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     },
     [self](atom::internal, atom::spawn, atom::plugin) -> caf::result<void> {
       // Add all plugins to the component registry.
-      for (const auto& plugin : plugins::get()) {
-        if (const auto* component = plugin.as<component_plugin>()) {
+      for (auto& plugin : plugins::get_mutable()) {
+        if (auto* component = plugin.as<component_plugin>()) {
           if (auto handle = component->make_component(self); !handle)
             return caf::make_error( //
               ec::unspecified, fmt::format("{} failed to spawn component "

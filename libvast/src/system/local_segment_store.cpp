@@ -269,36 +269,36 @@ public:
   };
 
   // store plugin API
-  caf::error setup(const node_actor& node) override {
-    caf::scoped_actor self{node.home_system()};
-    auto maybe_components = get_node_components<filesystem_actor>(self, node);
-    if (!maybe_components)
-      return maybe_components.error();
-    fs_ = std::get<0>(*maybe_components);
-    return caf::none;
-  }
+  // caf::error setup(const node_actor& node) override {
+  //   caf::scoped_actor self{node.home_system()};
+  //   auto maybe_components = get_node_components<filesystem_actor>(self,
+  //   node); if (!maybe_components)
+  //     return maybe_components.error();
+  //   fs_ = std::get<0>(*maybe_components);
+  //   return caf::none;
+  // }
 
   [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(const vast::uuid& id) const override {
+  make_store_builder(filesystem_actor fs, const vast::uuid& id) const override {
     auto path = store_path_for_partition(id);
     std::string path_str = path.string();
     auto header = chunk::make(std::move(path_str));
     // TODO: Would it make sense to pass an actor_system& as first arg?
-    auto builder = fs_->home_system().spawn(active_local_store, fs_, path);
+    auto builder = fs->home_system().spawn(active_local_store, fs, path);
     return builder_and_header{std::move(builder), std::move(header)};
   }
 
-  [[nodiscard]] virtual caf::expected<system::store_actor>
-  make_store(span<const std::byte> header) const override {
+  [[nodiscard]] caf::expected<system::store_actor>
+  make_store(filesystem_actor fs, span<const std::byte> header) const override {
     std::string_view sv{reinterpret_cast<const char*>(header.data()),
                         header.size()};
     std::filesystem::path path{sv};
     // TODO: Would it make sense to pass an actor_system& as first arg?
-    return fs_->home_system().spawn(passive_local_store, fs_, path);
+    return fs->home_system().spawn(passive_local_store, fs, path);
   }
 
-private:
-  filesystem_actor fs_;
+  // private:
+  // filesystem_actor fs_;
 };
 
 VAST_REGISTER_PLUGIN(vast::system::local_store_plugin)

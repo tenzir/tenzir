@@ -134,11 +134,11 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     return error;
   // Setup the store backends.
   // TODO: Figure out the correct place to do this.
-  for (auto& plugin : plugins::get_mutable())
-    if (auto store = plugin.as<store_plugin>())
-      if (auto error = store->setup(node.get()))
-        VAST_ERROR("error setting up '{}' store backend: {}", plugin->name(),
-                   render(error));
+  // for (auto& plugin : plugins::get_mutable())
+  //   if (auto store = plugin.as<store_plugin>())
+  //     if (auto error = store->setup(node.get()))
+  //       VAST_ERROR("error setting up '{}' store backend: {}", plugin->name(),
+  //                  render(error));
   return node;
 }
 

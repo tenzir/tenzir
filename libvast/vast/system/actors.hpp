@@ -115,6 +115,10 @@ using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
+using shutdownable_store_builder_actor
+  = typed_actor_fwd<caf::reacts_to<atom::shutdown>>::extend_with<store_actor>::
+    extend_with<stream_sink_actor<detail::framed<table_slice>>>::unwrap;
+
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
@@ -271,6 +275,8 @@ using disk_monitor_actor = typed_actor_fwd<
 /// must interpret all operations that contain paths *relative* to its own
 /// root directory.
 using filesystem_actor = typed_actor_fwd<
+  // Get the root directory of the filesystem actor.
+  caf::replies_to<atom::root>::with<std::filesystem::path>,
   // Writes a chunk of data to a given path. Creates intermediate directories
   // if needed.
   caf::replies_to<atom::write, std::filesystem::path, chunk_ptr>::with< //

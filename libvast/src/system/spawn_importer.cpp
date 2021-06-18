@@ -30,9 +30,9 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   if (!args.empty())
     return unexpected_arguments(args);
   // FIXME: Notify exporters with a continuous query.
-  auto [archive, index, type_registry, accountant]
-    = self->state.registry.find<archive_actor, index_actor, type_registry_actor,
-                                accountant_actor>();
+  auto [/*archive,*/ index, type_registry, accountant]
+    = self->state.registry.find</*archive_actor,*/ index_actor,
+                                type_registry_actor, accountant_actor>();
   auto partition_local_stores
     = caf::get_or(args.inv.options, "vast.partition-local-stores",
                   defaults::system::partition_local_stores);
@@ -42,8 +42,11 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
     return transforms.error();
   // Don't send incoming data to the global archive if we use partition-local
   // stores.
-  if (partition_local_stores)
+  archive_actor archive;
+  if (partition_local_stores) {
     archive = nullptr;
+  } else {
+  }
   if (!archive && !partition_local_stores)
     return caf::make_error(ec::missing_component, "archive");
   if (!index)
