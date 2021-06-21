@@ -1,0 +1,3 @@
+vast:
+  partition-local-stores: true
+  plugins: []

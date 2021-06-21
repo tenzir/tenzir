@@ -505,3 +505,11 @@ tests:
       - command: --config=@./vast-transforms.yaml import suricata
         input: data/suricata/eve.json
       - command: --config=@./vast-transforms.yaml export json '#type == "suricata.fileinfo"'
+  Partition-local Stores:
+    tags: [server, import-export, suricata]
+    steps:
+      - command: -N --config=@./vast-local-stores.yaml import suricata
+        input: data/suricata/eve.json
+      - command: -N export json '#type ni ""'
+
+

@@ -36,6 +36,11 @@ TEST(construction and querying) {
   REQUIRE_EQUAL(slices.size(), 2u); // [0,8), [16,24)
   CHECK_EQUAL(slices[0], zeek_conn_log[0]);
   CHECK_EQUAL(slices[1], zeek_conn_log[2]);
+  auto y = segment::copy_without(x, make_ids({19, 21}));
+  REQUIRE_NOERROR(y);
+  auto slices2 = unbox(y->lookup(make_ids({0, 6, 19, 21})));
+  REQUIRE_EQUAL(slices2.size(), 1u); // [0,8)
+  CHECK_EQUAL(slices2[0], zeek_conn_log[0]);
 }
 
 TEST(serialization) {

@@ -89,6 +89,12 @@ handle_lookup(Actor& self, const vast::query& query, const vast::ids& ids,
   return atom::done_v;
 }
 
+std::filesystem::path store_path_from_header(span<const std::byte> header) {
+  std::string_view sv{reinterpret_cast<const char*>(header.data()),
+                      header.size()};
+  return std::filesystem::path{sv};
+}
+
 } // namespace
 
 std::filesystem::path store_path_for_partition(const uuid& partition_id) {
@@ -109,26 +115,31 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
   });
   VAST_WARN("loading passive store from path {}", path);
   self->request(fs, caf::infinite, atom::mmap_v, path)
-    .then([self](chunk_ptr chunk) {
-      // self->state.data = std::move(chunk);
-      auto seg = segment::make(std::move(chunk));
-      if (!seg) {
-        VAST_ERROR("couldnt create segment from chunk: {}", seg.error());
-        self->send_exit(self, caf::exit_reason::unhandled_exception);
-        return;
-      }
-      self->state.segment = std::move(*seg);
-      // Delegate all deferred evaluations now that we have the partition chunk.
-      VAST_DEBUG("{} delegates {} deferred evaluations", self,
-                 self->state.deferred_requests.size());
-      for (auto&& [expr, ids, rp] :
-           std::exchange(self->state.deferred_requests, {}))
-        rp.delegate(static_cast<store_actor>(self), std::move(expr),
-                    std::move(ids));
-    });
+    .then(
+      [self](chunk_ptr chunk) {
+        auto seg = segment::make(std::move(chunk));
+        if (!seg) {
+          VAST_ERROR("couldnt create segment from chunk: {}", seg.error());
+          self->send_exit(self, caf::exit_reason::unhandled_exception);
+          return;
+        }
+        self->state.segment = std::move(*seg);
+        // Delegate all deferred evaluations now that we have the partition chunk.
+        VAST_DEBUG("{} delegates {} deferred evaluations", self,
+                   self->state.deferred_requests.size());
+        for (auto&& [expr, ids, rp] :
+             std::exchange(self->state.deferred_requests, {}))
+          rp.delegate(static_cast<store_actor>(self), std::move(expr),
+                      std::move(ids));
+      },
+      [self](caf::error& err) {
+        VAST_ERROR("{} could not map passive store segment into memory: {}",
+                   self, render(err));
+        self->quit(std::move(err));
+      });
   return {
-    // store
     [self](query query, ids ids) -> caf::result<atom::done> {
+      VAST_DEBUG("{} handles new query", self);
       if (!self->state.segment) {
         auto rp = caf::typed_response_promise<atom::done>();
         self->state.deferred_requests.emplace_back(query, ids, rp);
@@ -144,7 +155,6 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       auto slices = self->state.segment->lookup(ids);
       if (!slices)
         return slices.error();
-      VAST_WARN("lookup resulted in {} slices", slices->size());
       return handle_lookup(self, query, ids, *slices);
     },
     [self](atom::erase, ids xs) -> caf::result<atom::done> {
@@ -199,7 +209,9 @@ store_builder_actor::behavior_type active_local_store(
   self->state.builder
     = std::make_unique<segment_builder>(defaults::system::max_segment_size);
   self->set_exit_handler([self, path, fs](const caf::exit_msg&) {
-    VAST_DEBUG("exiting active local store");
+    VAST_DEBUG("active local store exits");
+    // TODO: We should save the finished segment in the state, so we can
+    //       answer queries that arrive after the stream has ended.
     auto seg = self->state.builder->finish();
     self->request(fs, caf::infinite, atom::write_v, path, seg.chunk())
       .then([](atom::ok) { /* nop */ },
@@ -251,8 +263,13 @@ store_builder_actor::behavior_type active_local_store(
         .inbound_slot();
     },
     // Conform to the protocol of the STATUS CLIENT actor.
-    [](atom::status, status_verbosity) -> caf::dictionary<caf::config_value> {
-      return {};
+    [self](atom::status,
+           status_verbosity) -> caf::dictionary<caf::config_value> {
+      auto result = caf::settings{};
+      auto& store = put_dictionary(result, "local-segment-store");
+      put(store, "events", self->state.events);
+      put(store, "path", self->state.path.string());
+      return result;
     },
   };
 }
@@ -282,11 +299,10 @@ public:
 
   [[nodiscard]] virtual caf::expected<system::store_actor>
   make_store(filesystem_actor fs, span<const std::byte> header) const override {
-    std::string_view sv{reinterpret_cast<const char*>(header.data()),
-                        header.size()};
-    std::filesystem::path path{sv};
-    return fs->home_system().spawn<caf::lazy_init>(passive_local_store, fs,
-                                                   path);
+    auto path = store_path_from_header(header);
+    // TODO: This should use `spawn<caf::lazy_init>`, but this leads to a
+    // deadlock in unit tests.
+    return fs->home_system().spawn(passive_local_store, fs, path);
   }
 };
 

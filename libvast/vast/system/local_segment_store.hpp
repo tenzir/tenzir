@@ -23,15 +23,12 @@ struct active_store_state {
   std::filesystem::path path;
 
   /// The builder preparing the store.
-  //  TODO: Just store a vector<table_slice> here and implement
+  //  TODO: Store a vector<table_slice> here and implement
   //  store/lookup/.. on that.
   std::unique_ptr<vast::segment_builder> builder;
 
   /// Number of events in this store.
   size_t events = {};
-
-  /// Expected total size.
-  std::optional<size_t> total = {};
 };
 
 struct passive_store_state {
