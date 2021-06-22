@@ -32,6 +32,7 @@ namespace vast::system {
 namespace {
 
 // Handler for `vast::query` that is shared between active and passive stores.
+// Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
 caf::result<atom::done>
 handle_lookup(Actor& self, const vast::query& query, const vast::ids& ids,
@@ -105,15 +106,13 @@ std::filesystem::path store_path_for_partition(const uuid& partition_id) {
 store_actor::behavior_type
 passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                     filesystem_actor fs, const std::filesystem::path& path) {
-  // TODO: We probably want 'read' rather than 'mmap' here for
-  // predictable performance.
   self->set_exit_handler([self](const caf::exit_msg&) {
     for (auto&& [expr, ids, rp] :
          std::exchange(self->state.deferred_requests, {}))
       rp.deliver(caf::make_error(ec::lookup_error, "partition store shutting "
                                                    "down"));
   });
-  VAST_WARN("loading passive store from path {}", path);
+  VAST_DEBUG("loading passive store from path {}", path);
   self->request(fs, caf::infinite, atom::mmap_v, path)
     .then(
       [self](chunk_ptr chunk) {
@@ -202,27 +201,31 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
   };
 }
 
-store_builder_actor::behavior_type active_local_store(
-  store_builder_actor::stateful_pointer<active_store_state> self,
-  filesystem_actor fs, const std::filesystem::path& path) {
+local_store_actor::behavior_type
+active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
+                   filesystem_actor fs, const std::filesystem::path& path) {
   VAST_DEBUG("spawning active local store");
+  self->state.self = self;
+  self->state.fs = fs;
+  self->state.path = path;
   self->state.builder
     = std::make_unique<segment_builder>(defaults::system::max_segment_size);
-  self->set_exit_handler([self, path, fs](const caf::exit_msg&) {
+  self->set_exit_handler([self /*, path, fs*/](const caf::exit_msg&) {
     VAST_DEBUG("active local store exits");
     // TODO: We should save the finished segment in the state, so we can
     //       answer queries that arrive after the stream has ended.
-    auto seg = self->state.builder->finish();
-    self->request(fs, caf::infinite, atom::write_v, path, seg.chunk())
-      .then([](atom::ok) { /* nop */ },
-            [](caf::error& err) {
-              VAST_ERROR("failed to flush archive {}", to_string(err));
-            });
     self->quit();
   });
-  return {
+  auto result = local_store_actor::behavior_type{
+    // store api
     [self](const query& query, const ids& ids) -> caf::result<atom::done> {
-      auto slices = self->state.builder->lookup(ids);
+      caf::expected<std::vector<table_slice>> slices = caf::error{};
+      if (self->state.builder) {
+        slices = self->state.builder->lookup(ids);
+      } else {
+        VAST_ASSERT(self->state.segment.has_value());
+        slices = self->state.segment->lookup(ids);
+      }
       if (!slices)
         return slices.error();
       if (caf::holds_alternative<query::erase>(query.cmd)) {
@@ -232,6 +235,8 @@ store_builder_actor::behavior_type active_local_store(
       return handle_lookup(self, query, ids, *slices);
     },
     [self](const atom::erase&, const ids& ids) -> caf::result<atom::done> {
+      // TODO: There is a race here when ids are erased while we're waiting
+      // for the filesystem actor to finish.
       auto seg = self->state.builder->finish();
       auto id = seg.id();
       auto slices = seg.erase(ids);
@@ -258,7 +263,8 @@ store_builder_actor::behavior_type active_local_store(
             }
           },
           [=](caf::unit_t&, const caf::error&) {
-            self->send_exit(self, caf::exit_reason::normal);
+            VAST_INFO("stream has ended");
+            self->send(self, atom::internal_v, atom::persist_v);
           })
         .inbound_slot();
     },
@@ -271,7 +277,25 @@ store_builder_actor::behavior_type active_local_store(
       put(store, "path", self->state.path.string());
       return result;
     },
+    // internal handlers
+    [self](atom::internal, atom::persist) {
+      self->state.segment = self->state.builder->finish();
+      VAST_DEBUG("persisting segment {}", self->state.segment->id());
+      self
+        ->request(self->state.fs, caf::infinite, atom::write_v,
+                  self->state.path, self->state.segment->chunk())
+        .then(
+          [self](atom::ok) {
+            self->state.self = nullptr;
+          },
+          [self](caf::error& err) {
+            VAST_ERROR("failed to flush archive {}", to_string(err));
+            self->state.self = nullptr;
+          });
+      self->state.fs = nullptr;
+    },
   };
+  return result;
 }
 
 class local_store_plugin final : public virtual store_plugin {
@@ -294,7 +318,8 @@ public:
     std::string path_str = path.string();
     auto header = chunk::make(std::move(path_str));
     auto builder = fs->home_system().spawn(active_local_store, fs, path);
-    return builder_and_header{std::move(builder), std::move(header)};
+    return builder_and_header{static_cast<store_builder_actor&&>(builder),
+                              std::move(header)};
   }
 
   [[nodiscard]] virtual caf::expected<system::store_actor>

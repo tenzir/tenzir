@@ -18,7 +18,23 @@
 
 namespace vast::system {
 
+/// The STORE BUILDER actor interface.
+using local_store_actor
+  = typed_actor_fwd<caf::reacts_to<atom::internal, atom::persist>>::extend_with<
+    store_builder_actor>::unwrap;
+
 struct active_store_state {
+  filesystem_actor fs;
+
+  /// A pointer to the hosting actor.
+  //  We intentionally store a strong pointer here: The store lifetime is
+  //  ref-counted, it should exit after all currently active queries for this
+  //  store have finished, its partition has dropped out of the cache, and it
+  //  received all data from the incoming stream. This pointer serves to keep
+  //  the ref-count alive for the last part, and is reset after the data has
+  //  been written to disk.
+  local_store_actor self;
+
   /// The path to where the store will be written.
   std::filesystem::path path;
 
@@ -26,6 +42,8 @@ struct active_store_state {
   //  TODO: Store a vector<table_slice> here and implement
   //  store/lookup/.. on that.
   std::unique_ptr<vast::segment_builder> builder;
+
+  std::optional<vast::segment> segment;
 
   /// Number of events in this store.
   size_t events = {};
@@ -53,8 +71,8 @@ private:
 
 std::filesystem::path store_path_for_partition(const vast::uuid&);
 
-store_builder_actor::behavior_type
-active_local_store(store_builder_actor::stateful_pointer<active_store_state>,
+local_store_actor::behavior_type
+active_local_store(local_store_actor::stateful_pointer<active_store_state>,
                    filesystem_actor fs, const std::filesystem::path& path);
 
 store_actor::behavior_type
