@@ -750,30 +750,23 @@ jobs:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
 
-      - name: Upload Artifact to GCS
+      - name: Upload Artifact to GCS (push)
         if: github.event_name == 'push'
         env:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}"
-
-      - name: Update 'vast-latest' symlink on GCS
-        if: github.event_name == 'push'
-        env:
-          PUBLIC_GCS_BUCKET: tenzir-public-data
-          STATIC_BINARY_FOLDER: vast-static-builds
-        run: |
           gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.args }}-static-latest.tar.gz"
 
-      - name: Add 'vast-release' symlink on GCS
+      - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
         env:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           RELEASE_MONTH=$(echo "${{ steps.create_paths.outputs.artifact_name }}" | cut -d"-" -f2)
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.args }}-${RELEASE_MONTH}-static-latest.tar.gz"
+          gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.args }}-${RELEASE_MONTH}-static-latest.tar.gz"
 
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
