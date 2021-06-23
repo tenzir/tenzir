@@ -363,7 +363,7 @@ function (VASTRegisterPlugin)
                            relative_plugin_schema_file ${plugin_schema_file})
       string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
       add_custom_target(
-        vast-schema-${plugin_schema_file_hash} ALL
+        vast-schema-${plugin_schema_file_hash}
         BYPRODUCTS
           "${CMAKE_BINARY_DIR}/share/vast/plugin/${PLUGIN_TARGET}/schema/${relative_plugin_schema_file}"
         COMMAND
@@ -372,9 +372,7 @@ function (VASTRegisterPlugin)
         COMMENT
           "Copying schema file ${relative_plugin_schema_file} for plugin ${PLUGIN_TARGET}"
       )
-      if (TARGET vast-schema)
-        add_dependencies(vast-schema vast-schema-${plugin_schema_file_hash})
-      endif ()
+      add_dependencies(${PLUGIN_TARGET} vast-schema-${plugin_schema_file_hash})
     endforeach ()
   endif ()
 
