@@ -202,11 +202,6 @@ jobs:
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            echo "DOCKER_RELEASE_VERSION=$(git describe)" >> $GITHUB_ENV
-          else
-            echo "DOCKER_RELEASE_VERSION=$(echo ${GITHUB_SHA})" >> $GITHUB_ENV
-          fi
 
       - name: Fetch ccache Cache
         uses: pat-s/always-upload-cache@v2
@@ -287,21 +282,25 @@ jobs:
         if: matrix.build.compiler == 'GCC' && matrix.configure.tag == 'Release'
         run: |
           docker build -t tenzir/vast:latest . --build-arg DOCKER_BUILD=prebuilt
-          docker tag tenzir/vast:latest tenzir/vast:${{ env.DOCKER_RELEASE_VERSION }}
           docker run tenzir/vast:latest -N status
 
       - name: Login to Docker Hub
-        if: github.ref == 'refs/heads/master' && matrix.build.compiler == 'GCC' && matrix.configure.tag == 'Release'
+        if: ${{ (github.ref == 'push' || github.ref == 'release') && matrix.build.compiler == 'GCC' && matrix.configure.tag == 'Release' }}
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
       - name: Publish Docker Image
-        if: github.ref == 'refs/heads/master' && matrix.build.compiler == 'GCC' && matrix.configure.tag == 'Release'
+        if: ${{ (github.ref == 'push' || github.ref == 'release') && matrix.build.compiler == 'GCC' && matrix.configure.tag == 'Release' }}
         run: |
           docker push tenzir/vast:latest
-          docker push tenzir/vast:${{ env.DOCKER_RELEASE_VERSION }}
+          docker tag tenzir/vast:latest "tenzir/vast:${GITHUB_SHA}"
+          docker push "tenzir/vast:${GITHUB_SHA}"
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            docker tag tenzir/vast:latest "tenzir/vast:$(git describe)"
+            docker push "tenzir/vast:$(git describe)"
+          fi
 
       - name: Upload Artifact to GitHub
         uses: actions/upload-artifact@v2.2.4
@@ -310,14 +309,14 @@ jobs:
           path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
 
       - name: Configure GCS Credentials
-        if: github.ref == 'refs/heads/master'
+        if: github.event_name == 'push'
         uses: google-github-actions/setup-gcloud@master
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
 
       - name: Upload Artifact to GCS
-        if: github.ref == 'refs/heads/master'
+        if: github.event_name == 'push'
         run: |
           gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
 
@@ -745,14 +744,14 @@ jobs:
           python-version: '3.7'
 
       - name: Configure GCS Credentials
-        if: github.ref == 'refs/heads/master'
+        if: github.event_name == 'push'
         uses: google-github-actions/setup-gcloud@master
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
 
       - name: Upload Artifact to GCS
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         env:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
