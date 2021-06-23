@@ -273,7 +273,17 @@ caf::error configuration::parse(int argc, char** argv) {
   // We clear the config_file_path first so it does not use
   // caf-application.ini as fallback during actor_system_config::parse().
   config_file_path.clear();
-  return actor_system_config::parse(std::move(caf_args));
+  auto result = actor_system_config::parse(std::move(caf_args));
+  // Load OpenSSL module if configured to do so.
+#if VAST_ENABLE_OPENSSL
+  const auto use_encryption
+    = !openssl_certificate.empty() || !openssl_key.empty()
+      || !openssl_passphrase.empty() || !openssl_capath.empty()
+      || !openssl_cafile.empty();
+  if (use_encryption)
+    load<caf::openssl::manager>();
+#endif // VAST_ENABLE_OPENSSL
+  return result;
 }
 
 } // namespace vast::system

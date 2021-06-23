@@ -53,17 +53,12 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     return caf::make_error(ec::invalid_configuration, "invalid protocol",
                            *node_endpoint.port);
   VAST_DEBUG("client connects to remote node with id {}", id);
-  auto& sys_cfg = self->system().config();
-  auto use_encryption
-    = !sys_cfg.openssl_certificate.empty() || !sys_cfg.openssl_key.empty()
-      || !sys_cfg.openssl_passphrase.empty() || !sys_cfg.openssl_capath.empty()
-      || !sys_cfg.openssl_cafile.empty();
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
     node_endpoint.host = "localhost";
   VAST_INFO("client connects to VAST node at {}", endpoint_str);
   auto result = [&]() -> caf::expected<node_actor> {
-    if (use_encryption) {
+    if (self->system().has_openssl_manager()) {
 #if VAST_ENABLE_OPENSSL
       return openssl::remote_actor<node_actor>(
         self->system(), node_endpoint.host, node_endpoint.port->number());
