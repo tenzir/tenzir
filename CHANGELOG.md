@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.06.24-rc2]
+## [2021.06.24-rc3]
 
 ### :zap: Breaking Changes
 
@@ -26,6 +26,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST merges lists from configuration files. E.g., running VAST with `--plugins=some-plugin` and `vast.plugins: [other-plugin]` in the configuration now results in both `some-plugin` and `other-plugin` being loaded (sorted by the usual precedence), instead of just `some-plugin`.
   [#1721](https://github.com/tenzir/vast/pull/1721)
+  [#1734](https://github.com/tenzir/vast/pull/1734)
 
 ### :gift: Features
 
@@ -1204,7 +1205,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.06.24-rc2]: https://github.com/tenzir/vast/releases/tag/2021.06.24-rc2
+[2021.06.24-rc3]: https://github.com/tenzir/vast/releases/tag/2021.06.24-rc3
 [2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
 [2021.04.29]: https://github.com/tenzir/vast/releases/tag/2021.04.29
 [2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
