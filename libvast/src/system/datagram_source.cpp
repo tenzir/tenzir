@@ -89,7 +89,9 @@ caf::behavior datagram_source(
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
-    [self](const caf::unit_t&) { return self->state.done; });
+    [self](const caf::unit_t&) {
+      return self->state.done;
+    });
   auto result = datagram_source_actor::behavior_type{
     [self](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
@@ -105,8 +107,23 @@ caf::behavior datagram_source(
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
-        VAST_DEBUG("{} produced a slice with {} rows", self, slice.rows());
-        self->state.mgr->out().push(detail::framed{std::move(slice)});
+        const auto unfiltered_rows = slice.rows();
+        if (self->state.filter) {
+          if (auto filtered_slice
+              = filter(std::move(slice), *self->state.filter)) {
+            VAST_VERBOSE("{} forwards {}/{} produced {} events after filtering",
+                         self, filtered_slice->rows(), unfiltered_rows,
+                         slice.layout().name());
+            self->state.mgr->out().push(std::move(*filtered_slice));
+          } else {
+            VAST_VERBOSE("{} forwards 0/{} produced {} events after filtering",
+                         self, unfiltered_rows, slice.layout().name());
+          }
+        } else {
+          VAST_VERBOSE("{} forwards {} produced {} events", self,
+                       unfiltered_rows, slice.layout().name());
+          self->state.mgr->out().push(std::move(slice));
+        }
       };
       auto events = capacity * self->state.table_slice_size;
       if (self->state.requested)
@@ -154,10 +171,8 @@ caf::behavior datagram_source(
         return err;
       return caf::unit;
     },
-    [self]([[maybe_unused]] expression& expr) {
-      // FIXME: Allow for filtering import data.
-      // self->state.filter = std::move(expr);
-      VAST_WARN("{} does not currently implement filter expressions", self);
+    [self](expression& expr) {
+      self->state.filter = std::move(expr);
     },
     [self](atom::status, status_verbosity v) {
       caf::settings result;

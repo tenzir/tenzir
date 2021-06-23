@@ -43,7 +43,7 @@ struct source_state {
   caf::scheduled_actor* self;
 
   /// Filters events, i.e., causes the source to drop all matching events.
-  expression filter;
+  caf::optional<expression> filter;
 
   /// Maps types to the tailored filter.
   std::unordered_map<type, expression> checkers;

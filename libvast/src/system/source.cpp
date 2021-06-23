@@ -150,7 +150,25 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       VAST_DEBUG("{} tries to generate {} messages", self, num);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto push_slice = [&](table_slice slice) { out.push(std::move(slice)); };
+      auto push_slice = [&](table_slice slice) {
+        const auto unfiltered_rows = slice.rows();
+        if (self->state.filter) {
+          if (auto filtered_slice
+              = filter(std::move(slice), *self->state.filter)) {
+            VAST_VERBOSE("{} forwards {}/{} produced {} events after filtering",
+                         self, filtered_slice->rows(), unfiltered_rows,
+                         slice.layout().name());
+            out.push(std::move(*filtered_slice));
+          } else {
+            VAST_VERBOSE("{} forwards 0/{} produced {} events after filtering",
+                         self, unfiltered_rows, slice.layout().name());
+          }
+        } else {
+          VAST_VERBOSE("{} forwards {} produced {} events", self,
+                       unfiltered_rows, slice.layout().name());
+          out.push(std::move(slice));
+        }
+      };
       // We can produce up to num * table_slice_size events per run.
       auto events = num * self->state.table_slice_size;
       if (self->state.requested)
@@ -208,7 +226,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       VAST_DEBUG("{} ended a generation round regularly", self);
     },
     // done?
-    [self](const caf::unit_t&) { return self->state.done; });
+    [self](const caf::unit_t&) {
+      return self->state.done;
+    });
   auto result = source_actor::behavior_type{
     [self](atom::get, atom::schema) { //
       return self->state.reader->schema();
@@ -220,10 +240,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         return err;
       return caf::unit;
     },
-    [self]([[maybe_unused]] expression& expr) {
-      // FIXME: Allow for filtering import data.
-      // self->state.filter = std::move(expr);
-      VAST_WARN("{} does not currently implement filter expressions", self);
+    [self](expression& expr) {
+      self->state.filter = std::move(expr);
     },
     [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
