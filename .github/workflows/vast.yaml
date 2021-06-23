@@ -744,7 +744,7 @@ jobs:
           python-version: '3.7'
 
       - name: Configure GCS Credentials
-        if: github.event_name == 'push'
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         uses: google-github-actions/setup-gcloud@master
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
