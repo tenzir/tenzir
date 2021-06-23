@@ -140,7 +140,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
     [self](query query, ids ids) -> caf::result<atom::done> {
       VAST_DEBUG("{} handles new query", self);
       if (!self->state.segment) {
-        auto rp = caf::typed_response_promise<atom::done>();
+        auto rp = self->make_response_promise<atom::done>();
         self->state.deferred_requests.emplace_back(query, ids, rp);
         return rp;
       }

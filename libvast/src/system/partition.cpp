@@ -817,8 +817,6 @@ partition_actor::behavior_type passive_partition(
         if (self->state.store_id == "legacy_archive") {
           self->state.store = self->state.archive;
         } else {
-          // TODO: Decide if we want to implement the lazy spawning here or
-          // inside the store.
           auto plugin = plugins::find<store_plugin>(self->state.store_id);
           if (!plugin) {
             auto error = caf::make_error(ec::format_error,
