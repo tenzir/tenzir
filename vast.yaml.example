@@ -93,8 +93,10 @@ vast:
   # The false positive rate for lossy structures in the meta index.
   meta-index-fp-rate: 0.01
 
-  # Opt-in to the experimental partition-local stores.
-  partition-local-stores: false
+  # The store backend to use. Can be either 'archive', 'local-segment-store', or
+  # the name of a user-provided store plugin. Note that the 'local-segment-store'
+  # backend is still experimental.
+  store-backend: archive
   # The maximum number of segments cached by the archive.
   segments: 10
   # The maximum size per segment, in MiB.

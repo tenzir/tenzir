@@ -65,7 +65,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     archive = self->spawn(system::archive, directory / "archive",
                           defaults::system::segments,
                           defaults::system::max_segment_size);
-    index = self->spawn(system::index, fs, archive, indexdir, false,
+    index = self->spawn(system::index, fs, archive, indexdir,
+                        defaults::system::store_backend,
                         defaults::import::table_slice_size, 100, 3, 1, indexdir,
                         0.01);
     client = sys.spawn(mock_client);

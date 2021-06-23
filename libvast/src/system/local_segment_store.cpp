@@ -308,7 +308,7 @@ public:
   }
 
   [[nodiscard]] const char* name() const override {
-    return "local_segment_store";
+    return "local-segment-store";
   };
 
   // store plugin API

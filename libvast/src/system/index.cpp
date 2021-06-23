@@ -335,7 +335,6 @@ void index_state::create_active_partition() {
   auto id = uuid::random();
   caf::settings index_opts;
   index_opts["cardinality"] = partition_capacity;
-  index_opts["partition-local-stores"] = partition_local_stores;
   // These options must be kept in sync with vast/address_synopsis.hpp and
   // vast/string_synopsis.hpp respectively.
   auto synopsis_options = caf::settings{};
@@ -639,7 +638,7 @@ void index_state::flush_to_disk() {
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, archive_actor archive,
-      const std::filesystem::path& dir, bool partition_local_stores,
+      const std::filesystem::path& dir, std::string store_backend,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
@@ -650,7 +649,10 @@ index(index_actor::stateful_pointer<index_state> self,
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                self, dir, partition_capacity, max_inmem_partitions);
-  if (partition_local_stores)
+  // The global archive gets hard-coded special treatment for backwards
+  // compatibility.
+  self->state.partition_local_stores = store_backend != "archive";
+  if (self->state.partition_local_stores)
     VAST_VERBOSE("{} uses partition-local stores instead of the archive", self);
   if (dir != meta_index_dir)
     VAST_VERBOSE("{} uses {} for meta index data", self, meta_index_dir);
@@ -658,12 +660,13 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.self = self;
   self->state.global_store = archive;
   self->state.accept_queries = true;
-  if (partition_local_stores) {
-    self->state.store_plugin
-      = plugins::find<store_plugin>("local_segment_store");
+  if (self->state.partition_local_stores) {
+    self->state.store_plugin = plugins::find<store_plugin>(store_backend);
     if (!self->state.store_plugin) {
-      auto error = caf::make_error(ec::invalid_configuration, "could not find "
-                                                              "store plugin");
+      auto error = caf::make_error(ec::invalid_configuration,
+                                   fmt::format("could not find "
+                                               "store plugin '{}'",
+                                               store_backend));
       VAST_ERROR("{}", render(error));
       self->quit(error);
       return index_actor::behavior_type::make_empty_behavior();
@@ -675,7 +678,6 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.synopsisdir = meta_index_dir;
   self->state.partition_capacity = partition_capacity;
   self->state.taste_partitions = taste_partitions;
-  self->state.partition_local_stores = partition_local_stores;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
   self->state.meta_index_fp_rate = meta_index_fp_rate;

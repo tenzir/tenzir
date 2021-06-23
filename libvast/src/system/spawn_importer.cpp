@@ -33,9 +33,10 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   auto [archive, index, type_registry, accountant]
     = self->state.registry.find<archive_actor, index_actor, type_registry_actor,
                                 accountant_actor>();
-  auto partition_local_stores
-    = caf::get_or(args.inv.options, "vast.partition-local-stores",
-                  defaults::system::partition_local_stores);
+  auto store_backend
+    = caf::get_or(args.inv.options, "vast.store-backend",
+                  std::string{defaults::system::store_backend});
+  auto partition_local_stores = store_backend != "archive";
   auto transforms
     = make_transforms(transforms_location::server_import, args.inv.options);
   if (!transforms)

@@ -408,9 +408,7 @@ active_partition_actor::behavior_type active_partition(
   self->state.store_id = store_id;
   self->state.store_header = std::move(header);
   put(self->state.synopsis_opts, "buffer-input-data", true);
-  self->state.partition_local_stores
-    = get_or(index_opts, "partition-local-stores",
-             defaults::system::partition_local_stores);
+  self->state.partition_local_stores = store_id != "archive";
   self->state.store = std::move(store);
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several

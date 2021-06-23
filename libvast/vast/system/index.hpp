@@ -251,7 +251,7 @@ struct index_state {
   std::vector<flush_listener_actor> flush_listeners = {};
 
   /// Actor handle of the store actor.
-  store_builder_actor global_store = {};
+  archive_actor global_store = {};
 
   /// Plugin responsible for spawning new partition-local stores.
   const vast::store_plugin* store_plugin = {};
@@ -276,7 +276,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
 /// @param dir The directory of the index.
-/// @param partition_local_stores Whether to use a global store for segments.
+/// @param store_backend The store backend to use for new partitions.
 /// @param partition_capacity The maximum number of events per partition.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param num_workers The maximum amount of concurrent lookups.
@@ -286,7 +286,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, archive_actor archive,
-      const std::filesystem::path& dir, bool partition_local_stores,
+      const std::filesystem::path& dir, std::string store_backend,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate);

@@ -216,8 +216,8 @@ constexpr size_t taste_partitions = 5;
 /// Maximum number of concurrent INDEX queries.
 constexpr size_t num_query_supervisors = 10;
 
-/// Whether to use partition-local stores.
-constexpr bool partition_local_stores = false;
+/// The store backend to use.
+constexpr const char* store_backend = "archive";
 
 /// Number of cached ARCHIVE segments.
 constexpr size_t segments = 10;
