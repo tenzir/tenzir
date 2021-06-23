@@ -388,11 +388,13 @@ caf::expected<caf::message> run(const invocation& inv, caf::actor_system& sys,
       search_result != fact.end()) {
     // When coming from `main`, the original `sys.config()` was already merged
     // with the invocation options and this is a no-op, but when coming e.g.
-    // from a remote_command we still need to do it here.
+    // from a remote_command we still need to do it here. It is important that
+    // we do not merge lists here to avoid accidental duplication of entries
+    // from configuration shared between client and server.
     auto merged_invocation = inv;
     merged_invocation.options = content(sys.config());
     detail::merge_settings(inv.options, merged_invocation.options,
-                           policy::merge_lists::yes);
+                           policy::merge_lists::no);
     return std::invoke(search_result->second, merged_invocation, sys);
   }
   // No callback was registered for this command
