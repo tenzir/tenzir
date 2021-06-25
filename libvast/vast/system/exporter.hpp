@@ -66,7 +66,7 @@ struct exporter_state {
   std::chrono::system_clock::time_point start = {};
 
   /// Stores various meta information about the progress we made on the query.
-  query_status query = {};
+  struct query_status query_status = {};
 
   /// Stores flags for the query for distinguishing historic and continuous
   /// queries.
