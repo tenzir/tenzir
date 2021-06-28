@@ -108,9 +108,10 @@ add_custom_target(
           ${changelog_dependencies}
   COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake")
 
+# NOTE: This does intentionally not specify <source-dir>/CHANGELOG.md as a
+# byproduct, because that causes the generated 'clean' target to remove it.
 add_custom_target(
   update-changelog
-  BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md"
   DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
   COMMAND
     ${CMAKE_COMMAND} -E copy_if_different
