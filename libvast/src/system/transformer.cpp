@@ -8,11 +8,13 @@
 
 #include "vast/system/transformer.hpp"
 
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/framed.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>
@@ -52,9 +54,7 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
             std::string name, std::vector<transform>&& transforms) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(name));
   self->state.transformer_name = std::move(name);
-  auto& status
-    = put_dictionary(self->state.status, self->state.transformer_name);
-  auto& transform_names = put_list(status, "transforms");
+  auto& transform_names = put_list(self->state.status, "transforms");
   for (const auto& t : transforms)
     transform_names.emplace_back(t.name());
   self->state.transforms = transformation_engine{std::move(transforms)};
@@ -77,7 +77,13 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
       VAST_DEBUG("{} got a new stream source", self->state.transformer_name);
       return self->state.stage->add_inbound_path(in);
     },
-    [self](atom::status, status_verbosity) { return self->state.status; }};
+    [self](atom::status, status_verbosity v) {
+      auto result = self->state.status;
+      // General state such as open streams.
+      if (v >= status_verbosity::debug)
+        detail::fill_status_map(result, self);
+      return result;
+    }};
 }
 
 } // namespace vast::system

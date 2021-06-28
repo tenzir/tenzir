@@ -187,10 +187,11 @@ id importer_state::available_ids() const noexcept {
   return max_id - current.next;
 }
 
-caf::settings importer_state::status(status_verbosity v) const {
-  auto result = caf::settings{};
+caf::typed_response_promise<caf::settings>
+importer_state::status(status_verbosity v) const {
+  auto rs = make_status_request_state(self);
   // Gather general importer status.
-  auto& importer_status = put_dictionary(result, "importer");
+  auto& importer_status = put_dictionary(rs->content, "importer");
   // TODO: caf::config_value can only represent signed 64 bit integers, which
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
@@ -205,7 +206,10 @@ caf::settings importer_state::status(status_verbosity v) const {
   // General state such as open streams.
   if (v >= status_verbosity::debug)
     detail::fill_status_map(importer_status, self);
-  return result;
+  // Retrieve an additional subsection from the transformer.
+  const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
+  collect_status(rs, timeout, v, transformer, importer_status, "transformer");
+  return rs->promise;
 }
 
 void importer_state::send_report() {
