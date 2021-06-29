@@ -272,7 +272,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
     [self](atom::status,
            status_verbosity) -> caf::dictionary<caf::config_value> {
       auto result = caf::settings{};
-      auto& store = put_dictionary(result, "local-segment-store");
+      auto& store = put_dictionary(result, "segment-store");
       put(store, "events", self->state.events);
       put(store, "path", self->state.path.string());
       return result;
@@ -308,7 +308,7 @@ public:
   }
 
   [[nodiscard]] const char* name() const override {
-    return "local-segment-store";
+    return "segment-store";
   };
 
   // store plugin API

@@ -102,7 +102,7 @@ TEST(local store roundtrip) {
   auto xs = std::vector<vast::table_slice>{zeek_conn_log[0]};
   xs[0].offset(23u);
   auto uuid = vast::uuid::random();
-  auto plugin = vast::plugins::find<vast::store_plugin>("local-segment-store");
+  auto plugin = vast::plugins::find<vast::store_plugin>("segment-store");
   REQUIRE(plugin);
   auto builder_and_header = plugin->make_store_builder(filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);

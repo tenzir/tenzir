@@ -33,6 +33,8 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   auto [archive, filesystem, accountant]
     = self->state.registry
         .find<archive_actor, filesystem_actor, accountant_actor>();
+  if (!archive)
+    return caf::make_error(ec::lookup_error, "failed to find archive actor");
   if (!filesystem)
     return caf::make_error(ec::lookup_error, "failed to find filesystem actor");
   const auto indexdir = args.dir / args.label;
