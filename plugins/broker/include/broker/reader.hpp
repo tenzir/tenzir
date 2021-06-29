@@ -13,9 +13,11 @@
 #include <vast/schema.hpp>
 #include <vast/type.hpp>
 
+#include <broker/data.hh>
 #include <broker/endpoint.hh>
 #include <broker/status_subscriber.hh>
 #include <broker/subscriber.hh>
+#include <broker/topic.hh>
 #include <caf/error.hpp>
 
 #include <iosfwd>
@@ -47,6 +49,9 @@ protected:
   read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
+  void
+  dispatch_message(const ::broker::topic& topic, const ::broker::data& msg);
+
   class schema schema_ = {};
   std::unique_ptr<::broker::endpoint> endpoint_;
   std::unique_ptr<::broker::status_subscriber> status_subscriber_;
