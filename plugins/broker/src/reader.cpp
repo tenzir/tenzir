@@ -17,6 +17,7 @@
 #include <vast/logger.hpp>
 
 #include <broker/topic.hh>
+#include <broker/zeek.hh>
 #include <caf/none.hpp>
 #include <caf/settings.hpp>
 #include <caf/sum_type.hpp>
@@ -92,19 +93,75 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       caf::visit(f, x);
     }
     // Then check the data plane: process available events.
-    for (auto x : subscriber_->poll()) {
-      auto& topic = get_topic(x);
-      auto& data = get_data(x);
-      VAST_DEBUG("{} got message: {} -> {}", name(), to_string(topic),
-                 to_string(data));
-      // Package data up in table slices.
-      auto f = detail::overload{
-        [&](auto&&) {
-          // TODO
-        },
-      };
-      caf::visit(f, data);
+    if (zeek_) {
+      for (auto x : subscriber_->poll()) {
+        auto& topic = get_topic(x);
+        auto& data = get_data(x);
+        switch (::broker::zeek::Message::type(data)) {
+          default:
+            VAST_WARN("{} received unknown Zeek message [{}]", topic);
+            break;
+          case ::broker::zeek::Message::Type::Invalid: {
+            VAST_WARN("{} received invalid Zeek message [{}]: {}", name(),
+                      topic, to_string(data));
+            break;
+          }
+          case ::broker::zeek::Message::Type::Event: {
+            auto event = ::broker::zeek::Event{data};
+            VAST_DEBUG("{} received Zeek event [{}]: {}", name(), topic,
+                       event.name());
+            // TODO: process event
+            break;
+          }
+          case ::broker::zeek::Message::Type::LogCreate: {
+            auto log_create = ::broker::zeek::LogCreate{data};
+            VAST_DEBUG("{} received Zeek log create message [{}]: {}", name(),
+                       topic, log_create.stream_id());
+            // TODO: process message
+            break;
+          }
+          case ::broker::zeek::Message::Type::LogWrite: {
+            auto log_write = ::broker::zeek::LogWrite{data};
+            VAST_DEBUG("{} received Zeek log write message [{}]: {}", name(),
+                       topic, log_write.stream_id());
+            // TODO: process message
+            break;
+          }
+          case ::broker::zeek::Message::Type::IdentifierUpdate: {
+            auto id_update = ::broker::zeek::IdentifierUpdate{data};
+            VAST_DEBUG("{} received Zeek identifier update [{}]: {} -> {}",
+                       name(), topic, id_update.id_name(),
+                       id_update.id_value());
+            // TODO: process message
+            break;
+          }
+          case ::broker::zeek::Message::Type::Batch: {
+            auto batch = ::broker::zeek::Batch{data};
+            VAST_DEBUG("{} received Zeek message batch [{}]", name(), topic);
+            for (auto& msg : batch.batch()) {
+              // TODO: process message
+            }
+            break;
+          }
+        }
+      }
+    } else {
+      for (auto x : subscriber_->poll()) {
+        auto& topic = get_topic(x);
+        auto& data = get_data(x);
+        // Not in Zeek mode; do our regular thing.
+        VAST_DEBUG("{} got message: {} -> {}", name(), to_string(topic),
+                   to_string(data));
+        // Package data up in table slices.
+        auto f = detail::overload{
+          [&](auto&&) {
+            // TODO
+          },
+        };
+        caf::visit(f, data);
+      }
     }
+    // FIXME: remove silly loop.
     std::this_thread::sleep_for(std::chrono::seconds(1));
     VAST_DEBUG("{} loops", name());
   }

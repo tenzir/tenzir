@@ -51,6 +51,9 @@ private:
   std::unique_ptr<::broker::endpoint> endpoint_;
   std::unique_ptr<::broker::status_subscriber> status_subscriber_;
   std::unique_ptr<::broker::subscriber> subscriber_;
+
+  /// Flag that indicates whether we are processing Zeek events.
+  bool zeek_ = true; // TODO: expose via CLI
 };
 
 } // namespace vast::plugins::broker
