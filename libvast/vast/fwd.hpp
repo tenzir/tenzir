@@ -261,7 +261,9 @@ using report = std::vector<data_point>;
 
 // -- type announcements -------------------------------------------------------
 
-CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
+constexpr inline caf::type_id_t first_vast_type_id = 800;
+
+CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((vast::address))
   VAST_ADD_TYPE_ID((vast::meta_extractor))
