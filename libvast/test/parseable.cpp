@@ -497,7 +497,7 @@ TEST(unsigned integral) {
 TEST(unsigned hexadecimal integral) {
   using namespace parsers;
   auto p = ignore(-hex_prefix) >> hex64;
-  unsigned x;
+  unsigned x = 0u;
   CHECK(p("1234", x));
   CHECK_EQUAL(x, 0x1234u);
   CHECK(p("13BFC3d1", x));
