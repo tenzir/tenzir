@@ -56,7 +56,7 @@ let
 
   src = vast-source;
 
-  version = if (versionOverride != null) then versionOverride else stdenv.lib.fileContents (nix-gitDescribe src);
+  version = if (versionOverride != null) then versionOverride else lib.fileContents (nix-gitDescribe src);
 
 in
 
