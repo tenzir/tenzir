@@ -37,6 +37,10 @@ in {
     # at the optimization stage.
     # TODO: Remove when updating to CAF 0.18.
     + lib.optionalString isStatic " -std=c++17";
+    preCheck = ''
+      export LD_LIBRARY_PATH=$PWD/lib
+      export DYLD_LIBRARY_PATH=$PWD/lib
+    '';
   } // lib.optionalAttrs isStatic {
     cmakeFlags = old.cmakeFlags ++ [
       "-DCAF_BUILD_STATIC=ON"
