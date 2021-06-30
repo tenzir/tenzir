@@ -2,7 +2,7 @@ final: prev:
 let
   inherit (final) lib;
   inherit (final.stdenv.hostPlatform) isStatic;
-  stdenv = if prev.stdenv.isDarwin then final.llvmPackages_10.stdenv else final.stdenv;
+  stdenv = if prev.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
 in {
   musl = prev.musl.overrideAttrs (old: {
     CFLAGS = old.CFLAGS ++ [ "-fno-omit-frame-pointer" ];
