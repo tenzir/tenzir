@@ -104,6 +104,13 @@ struct active_partition_state {
   /// The number of events in the partition.
   size_t events;
 
+  /// Whether VAST is configured to use partition-local stores.
+  bool partition_local_stores;
+
+  std::string store_id;
+
+  chunk_ptr store_header;
+
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem;
 
@@ -156,6 +163,9 @@ struct passive_partition_state {
   /// Pointer to the parent actor.
   partition_actor::pointer self = nullptr;
 
+  /// Legacy archive
+  store_actor archive;
+
   /// Uniquely identifies this partition.
   uuid id;
 
@@ -174,6 +184,12 @@ struct passive_partition_state {
   /// The number of events in the partition.
   size_t events;
 
+  /// The store type as found in the flatbuffer.
+  std::string store_id;
+
+  /// The store header as found in the flatbuffer.
+  span<const std::byte> store_header;
+
   /// The raw memory of the partition, used to spawn indexers on demand.
   chunk_ptr partition_chunk;
 
@@ -184,6 +200,9 @@ struct passive_partition_state {
   /// The store to retrieve the data from. Either the legacy global archive or a
   /// local component that holds the data for this partition.
   store_actor store;
+
+  /// Actor handle of the node
+  node_actor::pointer node;
 
   /// A typed view into the `partition_chunk`.
   const fbs::partition::v0* flatbuffer;
@@ -211,10 +230,16 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 /// @param index_opts Settings that are forwarded when creating indexers.
 /// @param synopsis_opts Settings that are forwarded when creating synopses.
 /// @param store The store to retrieve the events from.
+/// @param store_id The name of the store backend that should be stored
+///                      on disk.
+/// @param store_header A binary blob that allows reconstructing the store
+///                     plugin when reading this partition from disk.
+// TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts, store_actor store);
+  caf::settings synopsis_opts, store_actor store, std::string store_id,
+  chunk_ptr store_header);
 
 /// Spawns a read-only partition.
 /// @param self The partition actor.
@@ -224,7 +249,7 @@ active_partition_actor::behavior_type active_partition(
 /// @param store The store to retrieve the events from.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, const std::filesystem::path& path,
-  store_actor store);
+  store_actor archive, filesystem_actor filesystem,
+  const std::filesystem::path& path);
 
 } // namespace vast::system

@@ -256,21 +256,16 @@ jobs:
           cmake --install "$BUILD_DIR"
 
       - name: Run Integration Tests
-        id: integration_test_step
         run: |
-          echo "::set-output name=status::true"
-          if ! cmake --build "$BUILD_DIR" --target integration; then
-            echo "::set-output name=status::false"
-            tar -czf "$PACKAGE_NAME.tar.gz" -C build/vast vast-integration-test
-            exit 1
-          fi
-
+          cmake --build "$BUILD_DIR" --target integration
+          
       - name: Upload Integration Test Logs on Failure
-        if: failure() && steps.integration_test_step.outputs.status == 'false'
+        if: failure()
         uses: actions/upload-artifact@v2.2.4
         with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
+          name: 'vast-integration-test-debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}'
+          path: '${{ env.BUILD_DIR }}/vast-integration-test'
+          if-no-files-found: ignore
 
       - name: Package
         env:
@@ -472,21 +467,16 @@ jobs:
           cmake --install "$BUILD_DIR"
 
       - name: Run Integration Tests
-        id: integration_test_step
         run: |
-          echo "::set-output name=status::true"
-          if ! cmake --build "$BUILD_DIR" --target integration; then
-            echo "::set-output name=status::false"
-            tar -czf "$PACKAGE_NAME.tar.gz" -C build/vast vast-integration-test
-            exit 1
-          fi
-
+          cmake --build "$BUILD_DIR" --target integration
+          
       - name: Upload Integration Test Logs on Failure
-        if: failure() && steps.integration_test_step.outputs.status == 'false'
+        if: failure()
         uses: actions/upload-artifact@v2.2.4
         with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
+          name: 'vast-integration-test-macos-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}'
+          path: '${{ env.BUILD_DIR }}/vast-integration-test'
+          if-no-files-found: ignore
 
       - name: Package
         env:

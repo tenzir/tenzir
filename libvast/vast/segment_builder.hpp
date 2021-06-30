@@ -27,7 +27,10 @@ namespace vast {
 class segment_builder {
 public:
   /// Constructs a segment builder.
-  explicit segment_builder(size_t initial_buffer_size);
+  /// @param id The id of the new segment. If not provided, a random
+  ///           uuid will be generated.
+  explicit segment_builder(size_t initial_buffer_size,
+                           const std::optional<uuid>& id = std::nullopt);
 
   /// Adds a table slice to the segment.
   /// @returns An error if adding the table slice failed.
@@ -59,7 +62,9 @@ public:
   [[nodiscard]] const std::vector<table_slice>& table_slices() const;
 
   /// Resets the builder state to start with a new segment.
-  void reset();
+  /// @param id The id of the new segment. If not provided, a random
+  ///           uuid will be generated.
+  void reset(const std::optional<uuid>& id = std::nullopt);
 
 private:
   uuid id_;

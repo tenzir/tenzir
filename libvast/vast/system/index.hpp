@@ -13,6 +13,7 @@
 #include "vast/detail/lru_cache.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/fbs/index.hpp"
+#include "vast/plugin.hpp"
 #include "vast/query.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/actors.hpp"
@@ -36,16 +37,26 @@ namespace vast::system {
 /// The state of the active partition.
 struct active_partition_info {
   /// The partition actor.
-  active_partition_actor actor;
+  active_partition_actor actor = {};
 
   /// The slot ID that identifies the partition in the stream.
-  caf::stream_slot stream_slot;
+  caf::stream_slot stream_slot = {};
+
+  /// The store actor that holds the segments for this partition.
+  // NOTE: Logically this should belong inside the active partition, but the way
+  // the CAF streaming api works makes it really annoying to have the partition
+  // stream both whole table_slices to the store and table_slice_columns to
+  // the indexers. So barring a major refactoring, we just have the partition
+  // do the streaming.
+  store_builder_actor store = {};
+
+  caf::stream_slot store_slot = {};
 
   /// The remaining free capacity of the partition.
-  size_t capacity;
+  size_t capacity = {};
 
   /// The UUID of the partition.
-  uuid id;
+  uuid id = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, active_partition_info& x) {
@@ -199,6 +210,9 @@ struct index_state {
   /// from disk.
   bool accept_queries = {};
 
+  /// Whether we should use a partition-local store for the active partition.
+  bool partition_local_stores = {};
+
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
@@ -237,7 +251,10 @@ struct index_state {
   std::vector<flush_listener_actor> flush_listeners = {};
 
   /// Actor handle of the store actor.
-  store_actor store = {};
+  archive_actor global_store = {};
+
+  /// Plugin responsible for spawning new partition-local stores.
+  const vast::store_plugin* store_plugin = {};
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
@@ -256,19 +273,20 @@ caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// Indexes events in horizontal partitions.
-/// @param store The global store actor. Not used by the index itself but
-/// forwarded to partitions.
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
 /// @param dir The directory of the index.
+/// @param store_backend The store backend to use for new partitions.
 /// @param partition_capacity The maximum number of events per partition.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param num_workers The maximum amount of concurrent lookups.
 /// @param meta_index_fp_rate The false positive rate for the meta index.
 /// @pre `partition_capacity > 0
+//  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
-index(index_actor::stateful_pointer<index_state> self, store_actor store,
-      filesystem_actor filesystem, const std::filesystem::path& dir,
+index(index_actor::stateful_pointer<index_state> self,
+      filesystem_actor filesystem, archive_actor archive,
+      const std::filesystem::path& dir, std::string store_backend,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate);

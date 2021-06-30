@@ -24,9 +24,10 @@
 
 namespace vast {
 
-segment_builder::segment_builder(size_t initial_buffer_size)
+segment_builder::segment_builder(size_t initial_buffer_size,
+                                 const std::optional<uuid>& id)
   : builder_{initial_buffer_size} {
-  reset();
+  reset(id);
 }
 
 caf::error segment_builder::add(table_slice x) {
@@ -97,8 +98,11 @@ const std::vector<table_slice>& segment_builder::table_slices() const {
   return slices_;
 }
 
-void segment_builder::reset() {
-  id_ = uuid::random();
+void segment_builder::reset(const std::optional<uuid>& id) {
+  if (id)
+    id_ = *id;
+  else
+    id_ = uuid::random();
   min_table_slice_offset_ = 0;
   num_events_ = 0;
   builder_.Clear();

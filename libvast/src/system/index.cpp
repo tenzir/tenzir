@@ -38,6 +38,7 @@
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/evaluator.hpp"
+#include "vast/system/local_segment_store.hpp"
 #include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
@@ -64,6 +65,8 @@ using namespace std::chrono;
 
 // clang-format off
 //
+// # Import
+//
 // The index is implemented as a stream stage that hooks into the table slice
 // stream coming from the importer, and forwards them to the current active
 // partition
@@ -72,6 +75,8 @@ using namespace std::chrono;
 //   importer ----------------> index ---------------> active partition ------------------------> indexer
 //                                                                      ------------------------> indexer
 //                                                                                ...
+//
+// # Lookup
 //
 // At the same time, the index is also involved in the lookup path, where it
 // receives an expression and loads the partitions that might contain relevant
@@ -100,6 +105,16 @@ using namespace std::chrono;
 //
 //                                                      atom::done            |
 //   <------------------------------------------------------------------------/
+//
+//
+// # Erase
+//
+// We currently have two distinct erasure code paths: One externally driven by
+// the disk monitor, who looks at the file system and identifies those partitions
+// that shall be removed. This is done by the `atom::erase` handler.
+//
+// The other is data-driven and comes from the `eraser`, who sends us a `vast::query`
+// whose results shall be deleted from disk.
 //
 // clang-format on
 
@@ -154,8 +169,9 @@ partition_actor partition_factory::operator()(const uuid& id) const {
               != state_.persisted_partitions.end());
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", state_.self, id, path);
-  return state_.self->spawn(passive_partition, id, filesystem_, path,
-                            state_.store);
+  return state_.self->spawn(passive_partition, id,
+                            static_cast<store_actor>(state_.global_store),
+                            filesystem_, path);
 }
 
 filesystem_actor& partition_factory::filesystem() {
@@ -325,9 +341,36 @@ void index_state::create_active_partition() {
   put(synopsis_options, "max-partition-size", partition_capacity);
   put(synopsis_options, "address-synopsis-fp-rate", meta_index_fp_rate);
   put(synopsis_options, "string-synopsis-fp-rate", meta_index_fp_rate);
+  // If we're using the global store, the importer already sends the table
+  // slices. (In the long run, this should probably be streamlined so that all
+  // data moves through the index. However, that requires some refactoring of
+  // the archive itself so it can handle multiple input streams.)
+  std::string store_name = {};
+  chunk_ptr store_header = chunk::empty();
+  if (partition_local_stores) {
+    store_name = store_plugin->name();
+    auto builder_and_header = store_plugin->make_store_builder(filesystem, id);
+    if (!builder_and_header) {
+      VAST_ERROR("could not create new active partition: {}",
+                 render(builder_and_header.error()));
+      self->quit(builder_and_header.error());
+      return;
+    }
+    VAST_ASSERT(builder_and_header); // FIXME
+    auto& [builder, header] = *builder_and_header;
+    store_header = header;
+    active_partition.store = builder;
+    active_partition.store_slot
+      = stage->add_outbound_path(active_partition.store);
+  } else {
+    store_name = "legacy_archive";
+    active_partition.store = global_store;
+  }
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, filesystem, index_opts,
-                  synopsis_options, store);
+                  synopsis_options,
+                  static_cast<store_actor>(active_partition.store), store_name,
+                  store_header);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
   active_partition.capacity = partition_capacity;
@@ -342,6 +385,8 @@ void index_state::decomission_active_partition() {
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
   stage->out().close(active_partition.stream_slot);
+  if (partition_local_stores)
+    stage->out().close(active_partition.store_slot);
   stage->out().force_emit_batches();
   // Persist active partition asynchronously.
   auto part_dir = partition_path(id);
@@ -591,8 +636,9 @@ void index_state::flush_to_disk() {
 }
 
 index_actor::behavior_type
-index(index_actor::stateful_pointer<index_state> self, store_actor store,
-      filesystem_actor filesystem, const std::filesystem::path& dir,
+index(index_actor::stateful_pointer<index_state> self,
+      filesystem_actor filesystem, archive_actor archive,
+      const std::filesystem::path& dir, std::string store_backend,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
@@ -603,12 +649,29 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                self, dir, partition_capacity, max_inmem_partitions);
+  // The global archive gets hard-coded special treatment for backwards
+  // compatibility.
+  self->state.partition_local_stores = store_backend != "archive";
+  if (self->state.partition_local_stores)
+    VAST_VERBOSE("{} uses partition-local stores instead of the archive", self);
   if (dir != meta_index_dir)
     VAST_VERBOSE("{} uses {} for meta index data", self, meta_index_dir);
   // Set members.
   self->state.self = self;
+  self->state.global_store = archive;
   self->state.accept_queries = true;
-  self->state.store = std::move(store);
+  if (self->state.partition_local_stores) {
+    self->state.store_plugin = plugins::find<store_plugin>(store_backend);
+    if (!self->state.store_plugin) {
+      auto error = caf::make_error(ec::invalid_configuration,
+                                   fmt::format("could not find "
+                                               "store plugin '{}'",
+                                               store_backend));
+      VAST_ERROR("{}", render(error));
+      self->quit(error);
+      return index_actor::behavior_type::make_empty_behavior();
+    }
+  }
   self->state.filesystem = std::move(filesystem);
   self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
   self->state.dir = dir;
@@ -930,7 +993,9 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
             });
             rp.deliver(std::move(all_ids));
           },
-          [=](caf::error& err) mutable { rp.deliver(std::move(err)); });
+          [=](caf::error& err) mutable {
+            rp.deliver(std::move(err));
+          });
       return rp;
     },
     // -- query_supervisor_master_actor ----------------------------------------

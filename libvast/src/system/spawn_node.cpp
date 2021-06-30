@@ -14,6 +14,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/pid_file.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/node.hpp"
 

@@ -76,6 +76,11 @@ std::vector<plugin_ptr>& get_mutable() noexcept;
 /// Retrieves the system-wide plugin singleton.
 const std::vector<plugin_ptr>& get() noexcept;
 
+/// Retrieves the plugin of type `Plugin` with the given name, or nullptr
+/// if it doesn't exist.
+template <typename Plugin>
+const Plugin* find(const std::string& name);
+
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
 std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
 get_static_type_id_blocks() noexcept;
@@ -258,6 +263,35 @@ public:
   make_transform_step(const caf::settings& options) const = 0;
 };
 
+// -- store plugin ------------------------------------------------------------
+
+/// A base class for plugins that add new store backends.
+//  NOTE: This plugin type is currently considered experimental.
+class store_plugin : public virtual plugin {
+public:
+  using builder_and_header = std::pair<system::store_builder_actor, chunk_ptr>;
+
+  /// Create a store builder actor that accepts incoming table slices.
+  /// @param fs The actor handle of a filesystem actor.
+  /// @param id The partition id for which we want to create a store. Can
+  ///           be used as a unique key by the implementation.
+  /// @returns A store_builder actor and a chunk called the "header". The
+  ///          contents of the header will be persisted on disk, and should
+  ///          allow the plugin to retrieve the correct store actor when
+  ///          `make_store()` below is called.
+  [[nodiscard]] virtual caf::expected<builder_and_header>
+  make_store_builder(system::filesystem_actor fs,
+                     const vast::uuid& id) const = 0;
+
+  /// Create a store actor from the given header. Called when deserializing a
+  /// partition that uses this partition as a store backend.
+  /// @param fs The actor handle a filesystem actor.
+  /// @param header The store header as found in the partition flatbuffer.
+  /// @returns A new store actor.
+  [[nodiscard]] virtual caf::expected<system::store_actor>
+  make_store(system::filesystem_actor, span<const std::byte> header) const = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
@@ -352,6 +386,24 @@ private:
 };
 
 } // namespace vast
+
+// -- template function definitions -------------------------------------------
+
+namespace vast::plugins {
+
+template <typename Plugin>
+const Plugin* find(const std::string& name) {
+  const auto& plugins = get();
+  auto it
+    = std::find_if(plugins.begin(), plugins.end(), [&](const plugin_ptr& p) {
+        return name == p->name();
+      });
+  if (it == plugins.end())
+    return nullptr;
+  return it->template as<Plugin>();
+}
+
+} // namespace vast::plugins
 
 // -- helper macros ------------------------------------------------------------
 

@@ -40,8 +40,9 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   const auto indexdir = args.dir / args.label;
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
-    index, static_cast<store_actor>(archive), filesystem, indexdir,
+    index, filesystem, archive, indexdir,
     // TODO: Pass these options as a vast::data object instead.
+    opt("vast.store-backend", std::string{sd::store_backend}),
     opt("vast.max-partition-size", sd::max_partition_size),
     opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
     opt("vast.max-taste-partitions", sd::taste_partitions),
