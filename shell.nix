@@ -21,5 +21,5 @@ mkShell ({
 } // lib.optionalAttrs isStatic {
   VAST_STATIC_EXECUTABLE = "ON";
 } // lib.optionalAttrs (stdenv.isLinux && !isStatic) {
-  nativeBuildInputs = [ llvmPkgs.lldClang.bintools ];
+  nativeBuildInputs = [ llvmPkgs.bintools ];
 })
