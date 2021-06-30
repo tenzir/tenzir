@@ -6,3 +6,4 @@ nix/
 pyvast/
 .clangd/
 build/
+compile_commands.json
