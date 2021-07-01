@@ -49,7 +49,7 @@ protected:
   read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
-  void
+  caf::error
   dispatch_message(const ::broker::topic& topic, const ::broker::data& msg);
 
   class schema schema_ = {};

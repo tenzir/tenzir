@@ -8,6 +8,8 @@
 
 #include "broker/reader.hpp"
 
+#include "broker/zeek.hpp"
+
 #include <vast/community_id.hpp>
 #include <vast/detail/assert.hpp>
 #include <vast/detail/narrow.hpp>
@@ -94,7 +96,8 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     // Then check the data plane: process available events.
     if (zeek_) {
       for (auto x : subscriber_->poll())
-        dispatch_message(get_topic(x), get_data(x));
+        if (auto err = dispatch_message(get_topic(x), get_data(x)))
+          VAST_ERROR("{} failed to dispatch Zeek message: {}", err);
     } else {
       for (auto x : subscriber_->poll()) {
         auto& topic = get_topic(x);
@@ -133,46 +136,42 @@ const char* reader::name() const {
   return "broker-reader";
 }
 
-void reader::dispatch_message(const ::broker::topic& topic,
-                              const ::broker::data& msg) {
+caf::error reader::dispatch_message(const ::broker::topic& topic,
+                                    const ::broker::data& msg) {
   switch (::broker::zeek::Message::type(msg)) {
     default:
-      VAST_WARN("{} received unknown Zeek message [{}]", topic);
+      VAST_WARN("{} skips unknown message [{}]", topic);
       break;
     case ::broker::zeek::Message::Type::Invalid: {
-      VAST_WARN("{} received invalid Zeek message [{}]: {}", name(), topic,
+      VAST_WARN("{} skips invalid message [{}]: {}", name(), topic,
                 to_string(msg));
       break;
     }
     case ::broker::zeek::Message::Type::Event: {
       auto event = ::broker::zeek::Event{msg};
-      VAST_DEBUG("{} received Zeek event [{}]: {}", name(), topic,
-                 event.name());
-      // TODO: process event
+      VAST_WARN("{} skips indigestible event [{}]: {}", name(), topic,
+                event.name());
       break;
     }
     case ::broker::zeek::Message::Type::LogCreate: {
       auto log_create = ::broker::zeek::LogCreate{msg};
-      VAST_DEBUG("{} received Zeek log create message [{}]: {}", name(), topic,
+      VAST_DEBUG("{} received log create message [{}]: {}", name(), topic,
                  log_create.stream_id());
-      // TODO: process message
+      // TODO: create a table slice builder out of the data in here.
       break;
     }
     case ::broker::zeek::Message::Type::LogWrite: {
       auto log_write = ::broker::zeek::LogWrite{msg};
-      VAST_DEBUG("{} received Zeek log write message [{}]: {}", name(), topic,
+      VAST_DEBUG("{} received log write message [{}]: {}", name(), topic,
                  log_write.stream_id());
-      // TODO: process message. Unfortunately this message contains serialized
-      // binary data, which we currently cannot read through a library. Either
-      // we give up or we manually roll our own decoder for Zeek's binary
-      // format.
-      break;
+      // TODO: write the contained event into the table slice builder. Thus
+      // far, we print all fields on log level INFO.
+      return process(log_write);
     }
     case ::broker::zeek::Message::Type::IdentifierUpdate: {
       auto id_update = ::broker::zeek::IdentifierUpdate{msg};
-      VAST_DEBUG("{} received Zeek identifier update [{}]: {} -> {}", name(),
-                 topic, id_update.id_name(), id_update.id_value());
-      // TODO: process message
+      VAST_DEBUG("{} skips indigestible identifier update [{}]: {} -> {}",
+                 name(), topic, id_update.id_name(), id_update.id_value());
       break;
     }
     case ::broker::zeek::Message::Type::Batch: {
@@ -183,6 +182,7 @@ void reader::dispatch_message(const ::broker::topic& topic,
       break;
     }
   }
+  return {};
 }
 
 } // namespace vast::plugins::broker
