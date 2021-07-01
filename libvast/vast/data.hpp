@@ -109,7 +109,7 @@ public:
   >;
   // clang-format on
 
-  /// The sum type of all possible JSON types.
+  /// The sum type of all possible builtin types.
   using variant = caf::detail::tl_apply_t<types, caf::variant>;
 
   /// Default-constructs empty data.
