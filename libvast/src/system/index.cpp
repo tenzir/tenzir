@@ -508,8 +508,9 @@ index_state::status(status_verbosity v) const {
     for (const auto& [id, actor] : this->unpersisted)
       partition_status(id, actor, unpersisted);
     // General state such as open streams.
-    detail::fill_status_map(index_status, self);
   }
+  if (v >= status_verbosity::debug)
+    detail::fill_status_map(index_status, self);
   if (!deferred)
     deliver(std::move(*req_state));
   return req_state->rp;
