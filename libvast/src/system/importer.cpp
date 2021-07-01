@@ -22,7 +22,7 @@
 #include "vast/plugin.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 

@@ -17,7 +17,7 @@
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/transform.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>

@@ -24,7 +24,7 @@
 #include "vast/query.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/settings.hpp>

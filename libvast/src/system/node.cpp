@@ -53,7 +53,7 @@
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
 #include "vast/system/spawn_type_registry.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/system/version_command.hpp"
 #include "vast/table_slice.hpp"

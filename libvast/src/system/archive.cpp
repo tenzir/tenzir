@@ -18,7 +18,7 @@
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/config_value.hpp>

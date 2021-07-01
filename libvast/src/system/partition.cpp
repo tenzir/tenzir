@@ -34,7 +34,7 @@
 #include "vast/system/indexer.hpp"
 #include "vast/system/local_segment_store.hpp"
 #include "vast/system/shutdown.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"

@@ -43,7 +43,7 @@
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/system/shutdown.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"

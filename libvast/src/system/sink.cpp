@@ -17,7 +17,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/event_based_actor.hpp>

@@ -12,7 +12,7 @@
 #include "vast/io/read.hpp"
 #include "vast/io/write.hpp"
 #include "vast/system/posix_filesystem.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 

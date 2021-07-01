@@ -22,7 +22,7 @@
 #include "vast/schema.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type_set.hpp"
