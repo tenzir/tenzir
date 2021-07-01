@@ -1,8 +1,8 @@
 {
-  "owner": "actor-framework",
+  "owner": "tenzir",
   "repo": "actor-framework",
-  "rev": "347917fee3420d5fa02220af861869d1728b7fc0",
-  "sha256": "0hlalghjjfr3mj8if1bbd5r8prn9skhwxzsf6rjv5hxsrq6g532r",
+  "rev": "af97f57e8baa9d2a65d6da90bd154073f1e0c238",
+  "sha256": "0h72z0nvddy5kgqlpg2rqa1819zr1wm0hzlm897xs5g0h8xs2fxd",
   "fetchSubmodules": false,
-  "version": "0.17.6-1-g347917fe"
+  "version": "0.17.6-12-gaf97f57e8"
 }

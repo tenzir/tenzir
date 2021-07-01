@@ -2,7 +2,7 @@ final: prev:
 let
   inherit (final) lib;
   inherit (final.stdenv.hostPlatform) isStatic;
-  stdenv = if prev.stdenv.isDarwin then final.llvmPackages_10.stdenv else final.stdenv;
+  stdenv = if prev.stdenv.isDarwin then final.llvmPackages_12.stdenv else prev.gcc11Stdenv;
 in {
   musl = prev.musl.overrideAttrs (old: {
     CFLAGS = old.CFLAGS ++ [ "-fno-omit-frame-pointer" ];
@@ -37,6 +37,10 @@ in {
     # at the optimization stage.
     # TODO: Remove when updating to CAF 0.18.
     + lib.optionalString isStatic " -std=c++17";
+    preCheck = ''
+      export LD_LIBRARY_PATH=$PWD/lib
+      export DYLD_LIBRARY_PATH=$PWD/lib
+    '';
   } // lib.optionalAttrs isStatic {
     cmakeFlags = old.cmakeFlags ++ [
       "-DCAF_BUILD_STATIC=ON"

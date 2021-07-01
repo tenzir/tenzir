@@ -14,6 +14,7 @@
 
 #include <caf/test/unit_test.hpp>
 
+#include <optional>
 #include <set>
 #include <string>
 
