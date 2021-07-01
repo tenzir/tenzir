@@ -60,12 +60,9 @@ class address;
 class arrow_table_slice_builder;
 class bitmap;
 class chunk;
-class column_index;
 class command;
 class data;
-class ewah_bitstream;
 class expression;
-class json;
 class msgpack_table_slice_builder;
 class pattern;
 class plugin;
@@ -162,7 +159,6 @@ void intrusive_ptr_add_ref(const table_slice_builder*);
 void intrusive_ptr_release(const table_slice_builder*);
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
-using column_index_ptr = std::unique_ptr<column_index>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
@@ -234,15 +230,7 @@ using writer_ptr = std::unique_ptr<writer>;
 
 namespace system {
 
-class application;
 class configuration;
-class default_application;
-class export_command;
-class meta_index;
-class node_command;
-class remote_command;
-class sink_command;
-class start_command;
 
 struct accountant_config;
 struct active_partition_state;
