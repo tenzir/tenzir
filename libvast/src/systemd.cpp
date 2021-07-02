@@ -24,16 +24,23 @@ bool connected_to_journal() {
   size_t device_number = 0;
   size_t inode_number = 0;
   auto parser = parsers::u64 >> ':' >> parsers::u64;
-  if (parser(*journal_env, device_number, inode_number)) {
-    VAST_WARN("could not parse systemd environment variable "
-              "$JOURNAL_STREAM='{}'",
-              *journal_env);
+  if (!parser(*journal_env, device_number, inode_number)) {
+    // Can't use VAST_WARN() here, because this is called as part
+    // of the logger setup.
+    std::cerr << "could not parse systemd environment variable "
+                 "$JOURNAL_STREAM="
+              << *journal_env << std::endl;
     return false;
   }
-  struct stat buf = {};
-  // TODO: errno-ify this
+  // Most linux processes have bogus 'JOURNAL_STREAM' values in their
+  // environment because some parent was writing to the journal at some
+  // point, so we don't print errors in this case.
   auto stderrfd = ::fileno(stderr);
-  ::fstat(stderrfd, &buf);
+  if (stderrfd < 0)
+    return false;
+  struct stat buf = {};
+  if (::fstat(stderrfd, &buf) == -1)
+    return false;
   return buf.st_dev == device_number && buf.st_ino == inode_number;
 }
 
