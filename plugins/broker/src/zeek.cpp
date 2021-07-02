@@ -11,12 +11,13 @@
 #include <vast/address.hpp>
 #include <vast/as_bytes.hpp>
 #include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/address.hpp>
+#include <vast/concept/printable/vast/data.hpp>
 #include <vast/detail/byte_swap.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/type_traits.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
+#include <vast/type.hpp>
 
 namespace vast::plugins::broker {
 
@@ -258,6 +259,55 @@ caf::error extract_value(span<const std::byte>& bytes) {
 }
 
 } // namespace zeek
+
+caf::error process(const ::broker::zeek::LogCreate& msg) {
+  // Parse Zeek's WriterBackend::WriterInfo.
+  if (!msg.valid())
+    return caf::make_error(ec::parse_error, "invalid log create message");
+  const auto writer_info = caf::get_if<::broker::vector>(&msg.writer_info());
+  if (!writer_info)
+    return caf::make_error(ec::parse_error, "writer_info not a vector");
+  if (writer_info->size() != 6)
+    return caf::make_error(ec::parse_error, "invalid writer_info");
+  const auto type_name = caf::get_if<std::string>(&writer_info->front());
+  if (!type_name)
+    return caf::make_error(ec::parse_error, "type name not a string");
+  const auto rotation_base_dbl = caf::get_if<double>(&(*writer_info)[1]);
+  if (!rotation_base_dbl)
+    return caf::make_error(ec::parse_error, "rotation_base not a double");
+  const auto rotation_interval_dbl = caf::get_if<double>(&(*writer_info)[2]);
+  if (!rotation_interval_dbl)
+    return caf::make_error(ec::parse_error, "rotation_interval not a double");
+  const auto network_time_dbl = caf::get_if<double>(&(*writer_info)[3]);
+  if (!network_time_dbl)
+    return caf::make_error(ec::parse_error, "network_time not a double");
+  const auto& fields_data = caf::get_if<::broker::vector>(&msg.fields_data());
+  if (!fields_data)
+    return caf::make_error(ec::parse_error, "fields_data not a vector");
+  const auto config = caf::get_if<::broker::table>(&(*writer_info)[4]);
+  if (!config)
+    return caf::make_error(ec::parse_error, "config not a table");
+  // Log filters are Zeek functions, which VAST cannot handle.
+  for (const auto& [key, value] : *config)
+    VAST_WARN("ignoring Zeek log filter: {} = {}", key, value);
+  // Parse timestamps.
+  static auto double_to_duration = [](double x) {
+    return std::chrono::duration_cast<duration>(double_seconds{x});
+  };
+  auto rotation_base = time{double_to_duration(*rotation_base_dbl)};
+  auto rotation_interval = double_to_duration(*rotation_interval_dbl);
+  auto network_time = time{double_to_duration(*network_time_dbl)};
+  VAST_DEBUG("creating Zeek log: type={} "
+             "rotation_base={} rotation_interval={} created={}",
+             msg.stream_id(), *type_name, to_string(rotation_base),
+             to_string(rotation_interval), to_string(network_time));
+  // Create a VAST type from here.
+  std::vector<record_field> fields(fields_data->size());
+  // TODO: decode fields here.
+  auto rec = record_type{std::move(fields)}.name("zeek." + *type_name);
+  VAST_INFO("got new log type: {}", rec);
+  return {};
+}
 
 caf::error process(const ::broker::zeek::LogWrite& msg) {
   auto serial_data = caf::get_if<std::string>(&msg.serial_data());

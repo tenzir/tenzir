@@ -17,7 +17,23 @@
 
 namespace vast::plugins::broker {
 
-/// Decodes binary data created by Zeek's internal serialization framework.
+/// Handles a Zeek *log create* message. This message opens a log stream and
+/// conveys the type information needed to correctly interpret subsequent log
+/// writes.
+/// @param msg The log create message to process.
+/// @returns An error on failure.
+caf::error process(const ::broker::zeek::LogCreate& msg);
+
+/// Handle a Zeek *log write* message. This message contains the data portion
+/// corresponding to a previous log create message. The message data is
+/// serialized using Zeek's custom binary wire format. This is a rather
+/// complex format, but fortunately log writes include only *threading vals*,
+/// which represent a manageable subset of all possible Zeek types.
+/// @param msg The log write message to process.
+/// @returns An error on failure.
+/// @note This function implements the binary deserialization as result of
+/// reverse engineering the Zeek source code (`SerializationFormat::Read` and
+/// `threading::Value::Read`)
 // TODO: This function will get another "consumer" sink argument in the future
 // after the printf decoding implementation is complete.
 caf::error process(const ::broker::zeek::LogWrite& msg);

@@ -158,6 +158,8 @@ caf::error reader::dispatch_message(const ::broker::topic& topic,
       VAST_DEBUG("{} received log create message [{}]: {}", name(), topic,
                  log_create.stream_id());
       // TODO: create a table slice builder out of the data in here.
+      if (auto err = process(log_create))
+        return err;
       break;
     }
     case ::broker::zeek::Message::Type::LogWrite: {
