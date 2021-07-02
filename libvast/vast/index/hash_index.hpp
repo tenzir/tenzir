@@ -13,6 +13,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/logger.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
 
@@ -97,6 +98,10 @@ public:
   caf::error deserialize(caf::deserializer& source) override {
     return caf::error::eval([&] { return value_index::deserialize(source); },
                             [&] { return source(digests_, seeds_); });
+  }
+
+  const std::vector<digest_type>& digests() const {
+    return digests_;
   }
 
 private:
