@@ -21,6 +21,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
@@ -741,6 +742,8 @@ partition_actor::behavior_type passive_partition(
   const std::filesystem::path& path) {
   self->state.self = self;
   self->state.archive = legacy_archive;
+  auto id_string = to_string(id);
+  VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
@@ -779,6 +782,7 @@ partition_actor::behavior_type passive_partition(
     .then(
       [=](chunk_ptr chunk) {
         VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(chunk));
+        VAST_TRACEPOINT(passive_partition_loaded, id_string.c_str());
         if (self->state.partition_chunk) {
           VAST_WARN("{} ignores duplicate chunk", self);
           return;
