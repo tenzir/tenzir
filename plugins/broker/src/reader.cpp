@@ -10,6 +10,7 @@
 
 #include "broker/zeek.hpp"
 
+#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/community_id.hpp>
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/data.hpp>
@@ -74,6 +75,9 @@ void reader::reset(std::unique_ptr<std::istream>) {
 
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
+  // Sanity checks.
+  VAST_ASSERT(max_events > 0);
+  VAST_ASSERT(max_slice_size > 0);
   // FIXME: remove this endless loop and make this event-driven. This is a
   // pathetic hack to keep the control in this function to synchronize with the
   // remote Broker peer.
@@ -96,25 +100,33 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       caf::visit(f, x);
     }
     // Then check the data plane: process available events.
-    if (zeek_) {
+    if (zeek_mode_) {
+      // When imitating a Zeek logger node, we have a well-defined inter-event
+      // and format: log create messages precede log write messages. The former
+      // contain the type information and the latter the event data.
       for (auto x : subscriber_->poll())
-        if (auto err = dispatch_message(get_topic(x), get_data(x)))
+        // TODO: respect max_events.
+        if (auto err = dispatch(get_data(x), max_events, max_slice_size, f))
           VAST_ERROR("{} failed to dispatch Zeek message: {}", name(), err);
     } else {
+      // TODO: We don't have a well-defined Broker wire format yet that allows
+      // us to map payload data to event types. Most naturally, the topic
+      // suffix, e.g., x in /foo/bar/x, will be the event name and then the
+      // Broker data must be a vector containing the record fields.
       for (auto x : subscriber_->poll()) {
         auto& topic = get_topic(x);
         auto& data = get_data(x);
-        // Not in Zeek mode; do our regular thing.
         VAST_DEBUG("{} got message: {} -> {}", name(), to_string(topic),
                    to_string(data));
-        // Package data up in table slices.
         auto f = detail::overload{
-          [&](auto&&) {
-            // TODO
+          [&](auto&&) -> caf::error {
+            return ec::unimplemented;
           },
         };
-        caf::visit(f, data);
+        if (auto err = caf::visit(f, data))
+          return err;
       }
+      return ec::unimplemented;
     }
     // FIXME: remove silly loop.
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -138,58 +150,93 @@ const char* reader::name() const {
   return "broker-reader";
 }
 
-caf::error reader::dispatch_message(const ::broker::topic& topic,
-                                    const ::broker::data& msg) {
+caf::error reader::dispatch(const ::broker::data& msg, size_t max_events,
+                            size_t max_slice_size, consumer& f) {
   switch (::broker::zeek::Message::type(msg)) {
     default:
-      VAST_WARN("{} skips unknown message [{}]", name(), topic);
+      VAST_WARN("{} skips unknown message", name());
       break;
     case ::broker::zeek::Message::Type::Invalid: {
-      VAST_WARN("{} skips invalid message [{}]: {}", name(), topic, msg);
+      VAST_WARN("{} skips invalid message: {}", name(), msg);
       break;
     }
     case ::broker::zeek::Message::Type::Event: {
       auto event = ::broker::zeek::Event{msg};
-      VAST_WARN("{} skips indigestible event [{}]: {}", name(), topic,
-                event.name());
+      VAST_WARN("{} skips indigestible event: {}", name(), event.name());
       break;
     }
     case ::broker::zeek::Message::Type::LogCreate: {
       auto log_create = ::broker::zeek::LogCreate{msg};
-      VAST_DEBUG("{} received log create message [{}]: {}", name(), topic,
+      VAST_DEBUG("{} received log create message: {}", name(),
                  log_create.stream_id());
-      if (auto layout = process(log_create)) {
-        // TODO: create a table slice builder out of the data in here.
-        for (auto& field : layout->fields)
-          VAST_DEBUG("- {}: {}", field.name, field.type);
-      } else {
+      const auto& stream_id = log_create.stream_id().name;
+      auto layout = process(log_create);
+      if (!layout)
         return layout.error();
+      auto i = log_layouts_.find(stream_id);
+      if (i != log_layouts_.end()) {
+        VAST_ASSERT(i->second != nullptr);
+        if (*layout != i->second->layout()) {
+          VAST_WARN("{} received updated layout for stream ID {}: {}", name(),
+                    stream_id, *layout);
+          auto builder = arrow_table_slice_builder::make(*layout);
+          if (!builder)
+            return caf::make_error(ec::parse_error, "failed to create table "
+                                                    "slice builder");
+          i->second = builder;
+        } else {
+          VAST_DEBUG("{} ignores identical layout for stream ID {}: {}", name(),
+                     stream_id);
+        }
+      } else {
+        VAST_INFO("{} registers new layout for log stream {}", name(),
+                  stream_id);
+        auto builder = arrow_table_slice_builder::make(*layout);
+        if (!builder)
+          return caf::make_error(ec::parse_error, "failed to create table "
+                                                  "slice builder");
+        log_layouts_.emplace(stream_id, builder);
       }
       break;
     }
     case ::broker::zeek::Message::Type::LogWrite: {
       auto log_write = ::broker::zeek::LogWrite{msg};
-      VAST_DEBUG("{} received log write message [{}]: {}", name(), topic,
+      VAST_DEBUG("{} received log write message: {}", name(),
                  log_write.stream_id());
-      if (auto xs = process(log_write)) {
-        VAST_INFO(data{*xs});
-        // TODO: write the data into the table slice builder.
-      } else {
+      const auto& stream_id = log_write.stream_id().name;
+      auto xs = process(log_write);
+      if (!xs)
         return xs.error();
+      auto i = log_layouts_.find(stream_id);
+      if (i == log_layouts_.end()) {
+        VAST_WARN("{} has no layout for stream {}, stream out of sync?", name(),
+                  stream_id);
+        break;
       }
+      auto builder = i->second;
+      auto& arrow_builder = static_cast<arrow_table_slice_builder&>(*builder);
+      VAST_ASSERT(xs->size() == arrow_builder.columns());
+      for (const auto& x : *xs)
+        if (!arrow_builder.add(x))
+          return finish(f, builder, ec::parse_error);
+      if (arrow_builder.rows() < max_slice_size)
+        break;
+      if (auto err = finish(f, builder, caf::none))
+        return err;
       break;
     }
     case ::broker::zeek::Message::Type::IdentifierUpdate: {
       auto id_update = ::broker::zeek::IdentifierUpdate{msg};
-      VAST_DEBUG("{} skips indigestible identifier update [{}]: {} -> {}",
-                 name(), topic, id_update.id_name(), id_update.id_value());
+      VAST_DEBUG("{} skips indigestible identifier update: {} -> {}", name(),
+                 id_update.id_name(), id_update.id_value());
       break;
     }
     case ::broker::zeek::Message::Type::Batch: {
       auto batch = ::broker::zeek::Batch{msg};
-      VAST_DEBUG("{} received Zeek message batch [{}]", name(), topic);
-      for (auto& msg : batch.batch())
-        if (auto err = dispatch_message(topic, msg)) // recurse
+      VAST_DEBUG("{} received batch of {} messages", name(),
+                 batch.batch().size());
+      for (auto& x : batch.batch())
+        if (auto err = dispatch(x, max_events, max_slice_size, f)) // recurse
           return err;
       break;
     }

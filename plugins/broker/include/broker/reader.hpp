@@ -49,16 +49,21 @@ protected:
   read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
-  caf::error
-  dispatch_message(const ::broker::topic& topic, const ::broker::data& msg);
+  caf::error dispatch(const ::broker::data& msg, size_t max_events,
+                      size_t max_slice_size, consumer& f);
 
+  // TODO: do not ignore.
   class schema schema_ = {};
+
   std::unique_ptr<::broker::endpoint> endpoint_;
   std::unique_ptr<::broker::status_subscriber> status_subscriber_;
   std::unique_ptr<::broker::subscriber> subscriber_;
 
   /// Flag that indicates whether we are processing Zeek events.
-  bool zeek_ = true; // TODO: expose via CLI
+  bool zeek_mode_ = true; // TODO: expose via CLI
+
+  /// Maps stream IDs from Zeek messages to (builder) layouts.
+  std::unordered_map<std::string, table_slice_builder_ptr> log_layouts_;
 };
 
 } // namespace vast::plugins::broker
