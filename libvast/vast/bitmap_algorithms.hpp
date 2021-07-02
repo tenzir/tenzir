@@ -411,13 +411,12 @@ public:
          !rng_.done();
          n_ += bits().size(), rng_.next()) {
       VAST_ASSERT(k > 0);
-      if (k > bits().size()) {
-        k -= rank<Bit>(bits());
-      } else {
+      if (k <= bits().size()) {
         i_ = select<Bit>(bits(), k);
         if (i_ != npos)
           break;
       }
+      k -= rank<Bit>(bits());
     }
   }
 
