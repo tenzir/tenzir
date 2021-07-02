@@ -202,7 +202,7 @@ caf::error extract_value(span<const std::byte>& bytes) {
       address addr;
       if (auto err = extract(addr, bytes))
         return err;
-      VAST_INFO("addr = {}", to_string(addr));
+      VAST_INFO("addr = {}", addr);
       break;
     }
     case zeek::tag::type_subnet: {
@@ -258,9 +258,105 @@ caf::error extract_value(span<const std::byte>& bytes) {
   return {};
 }
 
+/// The equivalent of threading::Field from the perspective of Broker.
+/// @note We don't need all fields, e.g., only the input framework uses the
+/// "secondary name", and "optional" is everyting in VAST.
+struct field {
+  std::string_view name;
+  tag type;
+  tag sub_type;
+};
+
+/// Parses a Zeek field from a Broker data instance.
+caf::error extract(field& x, const ::broker::data& data) {
+  const auto xs = caf::get_if<::broker::vector>(&data);
+  if (!xs)
+    return caf::make_error(ec::parse_error, "field not a vector");
+  if (xs->size() != 5)
+    return caf::make_error(ec::parse_error, "invalid field info");
+  const auto& fields = *xs;
+  const auto& name = caf::get_if<std::string>(&fields[0]);
+  const auto& type = caf::get_if<uint64_t>(&fields[2]);
+  const auto& sub_type = caf::get_if<uint64_t>(&fields[3]);
+  if (!name)
+    return caf::make_error(ec::parse_error, "name not a string");
+  if (!type)
+    return caf::make_error(ec::parse_error, "type not a uint64_t");
+  if (!sub_type)
+    return caf::make_error(ec::parse_error, "sub_type not a uint64_t");
+  x.name = *name;
+  x.type = detail::narrow_cast<tag>(*type);
+  x.sub_type = detail::narrow_cast<tag>(*sub_type);
+  return {};
+}
+
+/// Creates a VAST type from two Zeek type tags. Indeed, this is a partial
+/// function but the subset of Zeek's threading values that can show up in logs
+/// is quite limited, so it does cover all cases we encounter in practice.
+caf::error convert(tag type, tag sub_type, vast::type& result) {
+  switch (type) {
+    default:
+      return caf::make_error(ec::parse_error, "unsupported value type",
+                             static_cast<int>(type));
+    case tag::type_bool:
+      result = bool_type{};
+      break;
+    case tag::type_int:
+      result = integer_type{};
+      break;
+    case tag::type_count:
+    case tag::type_counter:
+      result = count_type{};
+      break;
+    case tag::type_port:
+      // TODO: is there a pre-defined type alias called port in libvast?
+      result = count_type{}.name("port");
+      break;
+    case tag::type_addr:
+      result = address_type{};
+      break;
+    case tag::type_subnet:
+      result = subnet_type{};
+      break;
+    case tag::type_double:
+      result = real_type{};
+      break;
+    case tag::type_time:
+      result = time_type{};
+      break;
+    case tag::type_interval:
+      result = duration_type{};
+      break;
+    case tag::type_enum:
+      // FIXME: unless we know all possible values a priori, we cannot use
+      // enmuration_type here. Not sure how to go after this. Right now we
+      // treat enums as strings. --MV
+      result = string_type{}.attributes({{"index", "hash"}});
+      break;
+    case tag::type_string:
+      result = string_type{};
+      break;
+    case tag::type_table:
+    case tag::type_vector: {
+      // Zeek's threading values do not support tables/maps. We can treat them
+      // as vectors. To avoid losing the set semantics, we can either have a
+      // type alias or add a type attribute.
+      vast::type element_type;
+      if (auto err = convert(sub_type, tag::type_error, element_type))
+        return err;
+      // Retain set semantics for tables.
+      if (sub_type == tag::type_table)
+        element_type.name("set");
+      result = list_type{std::move(element_type)};
+      break;
+    }
+  }
+  return {};
+}
+
 } // namespace zeek
 
-caf::error process(const ::broker::zeek::LogCreate& msg) {
+caf::expected<type> process(const ::broker::zeek::LogCreate& msg) {
   // Parse Zeek's WriterBackend::WriterInfo.
   if (!msg.valid())
     return caf::make_error(ec::parse_error, "invalid log create message");
@@ -297,16 +393,23 @@ caf::error process(const ::broker::zeek::LogCreate& msg) {
   auto rotation_base = time{double_to_duration(*rotation_base_dbl)};
   auto rotation_interval = double_to_duration(*rotation_interval_dbl);
   auto network_time = time{double_to_duration(*network_time_dbl)};
-  VAST_DEBUG("creating Zeek log: type={} "
+  VAST_DEBUG("creating Zeek log: stream={}, type={} "
              "rotation_base={} rotation_interval={} created={}",
-             msg.stream_id(), *type_name, to_string(rotation_base),
-             to_string(rotation_interval), to_string(network_time));
+             msg.stream_id(), *type_name, rotation_base, rotation_interval,
+             network_time);
   // Create a VAST type from here.
-  std::vector<record_field> fields(fields_data->size());
-  // TODO: decode fields here.
-  auto rec = record_type{std::move(fields)}.name("zeek." + *type_name);
-  VAST_INFO("got new log type: {}", rec);
-  return {};
+  std::vector<record_field> fields;
+  fields.reserve(fields_data->size());
+  for (const auto& x : *fields_data) {
+    zeek::field field;
+    if (auto err = extract(field, x))
+      return err;
+    type field_type;
+    if (auto err = convert(field.type, field.sub_type, field_type))
+      return err;
+    fields.emplace_back(std::string{field.name}, std::move(field_type));
+  }
+  return record_type{std::move(fields)}.name("zeek." + *type_name);
 }
 
 caf::error process(const ::broker::zeek::LogWrite& msg) {
@@ -326,7 +429,7 @@ caf::error process(const ::broker::zeek::LogWrite& msg) {
       return err;
   }
   if (bytes.size() > 0)
-    VAST_ERROR("incomplete write, {} remaining bytes", bytes.size());
+    VAST_ERROR("incomplete read, {} bytes remaining", bytes.size());
   return {};
 }
 

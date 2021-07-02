@@ -21,8 +21,8 @@ namespace vast::plugins::broker {
 /// conveys the type information needed to correctly interpret subsequent log
 /// writes.
 /// @param msg The log create message to process.
-/// @returns An error on failure.
-caf::error process(const ::broker::zeek::LogCreate& msg);
+/// @returns The VAST type corresponding to the meta data in the message.
+caf::expected<type> process(const ::broker::zeek::LogCreate& msg);
 
 /// Handle a Zeek *log write* message. This message contains the data portion
 /// corresponding to a previous log create message. The message data is

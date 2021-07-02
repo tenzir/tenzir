@@ -11,6 +11,8 @@
 #include "broker/zeek.hpp"
 
 #include <vast/community_id.hpp>
+#include <vast/concept/printable/to_string.hpp>
+#include <vast/concept/printable/vast/type.hpp>
 #include <vast/detail/assert.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/overload.hpp>
@@ -80,7 +82,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     for (auto x : status_subscriber_->poll()) {
       auto f = detail::overload{
         [&](::broker::none) {
-          VAST_WARN("{} ignores invalid Broker status: {}", name());
+          VAST_WARN("{} ignores invalid Broker status", name());
         },
         [&](const ::broker::error& error) {
           VAST_WARN("{} got Broker error: {}", name(), to_string(error));
@@ -97,7 +99,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     if (zeek_) {
       for (auto x : subscriber_->poll())
         if (auto err = dispatch_message(get_topic(x), get_data(x)))
-          VAST_ERROR("{} failed to dispatch Zeek message: {}", err);
+          VAST_ERROR("{} failed to dispatch Zeek message: {}", name(), err);
     } else {
       for (auto x : subscriber_->poll()) {
         auto& topic = get_topic(x);
@@ -140,11 +142,10 @@ caf::error reader::dispatch_message(const ::broker::topic& topic,
                                     const ::broker::data& msg) {
   switch (::broker::zeek::Message::type(msg)) {
     default:
-      VAST_WARN("{} skips unknown message [{}]", topic);
+      VAST_WARN("{} skips unknown message [{}]", name(), topic);
       break;
     case ::broker::zeek::Message::Type::Invalid: {
-      VAST_WARN("{} skips invalid message [{}]: {}", name(), topic,
-                to_string(msg));
+      VAST_WARN("{} skips invalid message [{}]: {}", name(), topic, msg);
       break;
     }
     case ::broker::zeek::Message::Type::Event: {
@@ -158,8 +159,10 @@ caf::error reader::dispatch_message(const ::broker::topic& topic,
       VAST_DEBUG("{} received log create message [{}]: {}", name(), topic,
                  log_create.stream_id());
       // TODO: create a table slice builder out of the data in here.
-      if (auto err = process(log_create))
-        return err;
+      if (auto layout = process(log_create))
+        VAST_DEBUG("{} extracted type: {}", name(), *layout);
+      else
+        return layout.error();
       break;
     }
     case ::broker::zeek::Message::Type::LogWrite: {
