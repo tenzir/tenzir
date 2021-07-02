@@ -17,7 +17,6 @@
 #include <vast/detail/type_traits.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
-#include <vast/type.hpp>
 
 namespace vast::plugins::broker {
 
@@ -356,7 +355,7 @@ caf::error convert(tag type, tag sub_type, vast::type& result) {
 
 } // namespace zeek
 
-caf::expected<type> process(const ::broker::zeek::LogCreate& msg) {
+caf::expected<record_type> process(const ::broker::zeek::LogCreate& msg) {
   // Parse Zeek's WriterBackend::WriterInfo.
   if (!msg.valid())
     return caf::make_error(ec::parse_error, "invalid log create message");

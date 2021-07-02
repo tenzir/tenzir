@@ -158,11 +158,13 @@ caf::error reader::dispatch_message(const ::broker::topic& topic,
       auto log_create = ::broker::zeek::LogCreate{msg};
       VAST_DEBUG("{} received log create message [{}]: {}", name(), topic,
                  log_create.stream_id());
-      // TODO: create a table slice builder out of the data in here.
-      if (auto layout = process(log_create))
-        VAST_DEBUG("{} extracted type: {}", name(), *layout);
-      else
+      if (auto layout = process(log_create)) {
+        // TODO: create a table slice builder out of the data in here.
+        for (auto& field : layout->fields)
+          VAST_DEBUG("- {}: {}", field.name, field.type);
+      } else {
         return layout.error();
+      }
       break;
     }
     case ::broker::zeek::Message::Type::LogWrite: {

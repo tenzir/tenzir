@@ -243,19 +243,6 @@ struct fmt::formatter<caf::intrusive_cow_ptr<T>> {
 };
 
 template <>
-struct fmt::formatter<vast::type> {
-  template <typename ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <typename FormatContext>
-  auto format(const vast::type& item, FormatContext& ctx) {
-    return format_to(ctx.out(), "{}", caf::deep_to_string(item));
-  }
-};
-
-template <>
 struct fmt::formatter<vast::schema> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
