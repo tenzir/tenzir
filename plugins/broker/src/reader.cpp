@@ -12,7 +12,7 @@
 
 #include <vast/community_id.hpp>
 #include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/type.hpp>
+#include <vast/concept/printable/vast/data.hpp>
 #include <vast/detail/assert.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/overload.hpp>
@@ -171,9 +171,13 @@ caf::error reader::dispatch_message(const ::broker::topic& topic,
       auto log_write = ::broker::zeek::LogWrite{msg};
       VAST_DEBUG("{} received log write message [{}]: {}", name(), topic,
                  log_write.stream_id());
-      // TODO: write the contained event into the table slice builder. Thus
-      // far, we print all fields on log level INFO.
-      return process(log_write);
+      if (auto xs = process(log_write)) {
+        VAST_INFO(data{*xs});
+        // TODO: write the data into the table slice builder.
+      } else {
+        return xs.error();
+      }
+      break;
     }
     case ::broker::zeek::Message::Type::IdentifierUpdate: {
       auto id_update = ::broker::zeek::IdentifierUpdate{msg};
@@ -185,7 +189,8 @@ caf::error reader::dispatch_message(const ::broker::topic& topic,
       auto batch = ::broker::zeek::Batch{msg};
       VAST_DEBUG("{} received Zeek message batch [{}]", name(), topic);
       for (auto& msg : batch.batch())
-        dispatch_message(topic, msg); // recurse
+        if (auto err = dispatch_message(topic, msg)) // recurse
+          return err;
       break;
     }
   }

@@ -104,15 +104,15 @@ caf::error extract(T& x, span<const std::byte>& bytes) {
     std::memcpy(&u, bytes.data(), sizeof(T));
     x = detail::narrow_cast<T>(detail::to_host_order(u));
     bytes = bytes.subspan(sizeof(T));
-  } else if constexpr (std::is_same_v<T, std::string>) {
+  } else if constexpr (std::is_same_v<T, std::string_view>) {
     uint32_t length = 0;
     if (auto err = extract(length, bytes))
       return err;
     if (length > bytes.size())
       return caf::make_error(ec::parse_error, "input exhausted");
-    x.resize(length);
-    std::memcpy(x.data(), bytes.data(), x.size());
-    bytes = bytes.subspan(x.size());
+    auto ptr = reinterpret_cast<const char*>(bytes.data());
+    x = std::string_view{ptr, length};
+    bytes = bytes.subspan(length);
   } else if constexpr (std::is_same_v<T, address>) {
     char family;
     if (auto err = extract(family, bytes))
@@ -139,8 +139,7 @@ caf::error extract(T& x, span<const std::byte>& bytes) {
 }
 
 /// Parses a binary Zeek value.
-/// TODO: add an output parameter or function similar to extract above.
-caf::error extract_value(span<const std::byte>& bytes) {
+caf::error extract_value(data& result, span<const std::byte>& bytes) {
   // Every value begins with type information.
   int type, sub_type;
   bool present;
@@ -158,7 +157,7 @@ caf::error extract_value(span<const std::byte>& bytes) {
     return err;
   // Skip null values.
   if (!present) {
-    VAST_INFO("nil");
+    result = {};
     return {};
   }
   // Dispatch on the Zeek tag type.
@@ -169,14 +168,14 @@ caf::error extract_value(span<const std::byte>& bytes) {
       int64_t x;
       if (auto err = extract(x, bytes))
         return err;
-      VAST_INFO("bool = {}", !!x);
+      result = bool{!!x};
       break;
     }
     case zeek::tag::type_int: {
       int64_t x;
       if (auto err = extract(x, bytes))
         return err;
-      VAST_INFO("int = {}", x);
+      result = integer{x};
       break;
     }
     case zeek::tag::type_count:
@@ -184,7 +183,7 @@ caf::error extract_value(span<const std::byte>& bytes) {
       uint64_t x;
       if (auto err = extract(x, bytes))
         return err;
-      VAST_INFO("count = {}", x);
+      result = count{x};
       break;
     }
     case zeek::tag::type_port: {
@@ -194,14 +193,15 @@ caf::error extract_value(span<const std::byte>& bytes) {
         return err;
       if (auto err = extract(proto, bytes))
         return err;
-      VAST_INFO("port = {}/{}", number, proto);
+      // We discard the protocol for now.
+      result = count{number};
       break;
     }
     case zeek::tag::type_addr: {
       address addr;
       if (auto err = extract(addr, bytes))
         return err;
-      VAST_INFO("addr = {}", addr);
+      result = addr;
       break;
     }
     case zeek::tag::type_subnet: {
@@ -211,46 +211,58 @@ caf::error extract_value(span<const std::byte>& bytes) {
       address addr;
       if (auto err = extract(addr, bytes))
         return err;
-      VAST_INFO("subnet = {}/{}", addr, length);
+      result = subnet{addr, length};
       break;
     }
-    case zeek::tag::type_double:
-    case zeek::tag::type_time:
+    case zeek::tag::type_double: {
+      double x;
+      if (auto err = extract(x, bytes))
+        return err;
+      result = real{x};
+      break;
+    }
+    case zeek::tag::type_time: {
+      double x;
+      if (auto err = extract(x, bytes))
+        return err;
+      auto secs = double_seconds{x};
+      result = time{std::chrono::duration_cast<duration>(secs)};
+      break;
+    }
     case zeek::tag::type_interval: {
       double x;
       if (auto err = extract(x, bytes))
         return err;
-      VAST_INFO("double = {}", x);
+      auto secs = double_seconds{x};
+      result = std::chrono::duration_cast<duration>(secs);
       break;
     }
     case zeek::tag::type_enum:
     case zeek::tag::type_string:
     case zeek::tag::type_file:
     case zeek::tag::type_func: {
-      std::string x;
+      std::string_view x;
       if (auto err = extract(x, bytes))
         return err;
-      VAST_INFO("string = {}", x);
+      result = std::string{x};
       break;
     }
-    case zeek::tag::type_table: {
-      int64_t size;
-      if (auto err = extract(size, bytes))
-        return err;
-      VAST_INFO("table of size {}", size);
-      for (auto i = 0; i < size; ++i)
-        if (auto err = extract_value(bytes))
-          return err;
-      break;
-    }
+    // Only sets are valid log vals, and sets come as type table ¯\_(ツ)_/¯.
+    case zeek::tag::type_table:
     case zeek::tag::type_vector: {
       int64_t size;
       if (auto err = extract(size, bytes))
         return err;
-      VAST_INFO("vector of size {}", size);
-      for (auto i = 0; i < size; ++i)
-        if (auto err = extract_value(bytes))
+      list xs;
+      xs.reserve(size);
+      for (auto i = 0; i < size; ++i) {
+        data x;
+        if (auto err = extract_value(x, bytes))
           return err;
+        else
+          xs.push_back(std::move(x));
+      }
+      result = std::move(xs);
       break;
     }
   }
@@ -411,25 +423,28 @@ caf::expected<record_type> process(const ::broker::zeek::LogCreate& msg) {
   return record_type{std::move(fields)}.name("zeek." + *type_name);
 }
 
-caf::error process(const ::broker::zeek::LogWrite& msg) {
+caf::expected<std::vector<data>> process(const ::broker::zeek::LogWrite& msg) {
   auto serial_data = caf::get_if<std::string>(&msg.serial_data());
-  if (!serial_data) {
-    VAST_WARN("got invalid LogWrite serial data");
-    return ec::parse_error;
-  }
+  if (!serial_data)
+    return caf::make_error(ec::parse_error, "serial_data not a string");
   auto bytes = as_bytes(*serial_data);
   // Read the number of fields.
   uint32_t num_fields;
   if (auto err = zeek::extract(num_fields, bytes))
     return err;
   // Read as many "threading values" as there are fields.
+  std::vector<data> result;
+  result.reserve(num_fields);
   for (size_t i = 0; i < num_fields; ++i) {
-    if (auto err = zeek::extract_value(bytes))
+    data x;
+    if (auto err = zeek::extract_value(x, bytes))
       return err;
+    else
+      result.push_back(std::move(x));
   }
   if (bytes.size() > 0)
-    VAST_ERROR("incomplete read, {} bytes remaining", bytes.size());
-  return {};
+    VAST_WARN("incomplete read, {} bytes remaining", bytes.size());
+  return result;
 }
 
 } // namespace vast::plugins::broker

@@ -10,6 +10,7 @@
 
 #include <vast/span.hpp>
 #include <vast/type.hpp>
+#include <vast/view.hpp>
 
 #include <broker/zeek.hh>
 #include <caf/error.hpp>
@@ -35,8 +36,6 @@ caf::expected<record_type> process(const ::broker::zeek::LogCreate& msg);
 /// @note This function implements the binary deserialization as result of
 /// reverse engineering the Zeek source code (`SerializationFormat::Read` and
 /// `threading::Value::Read`)
-// TODO: This function will get another "consumer" sink argument in the future
-// after the printf decoding implementation is complete.
-caf::error process(const ::broker::zeek::LogWrite& msg);
+caf::expected<std::vector<data>> process(const ::broker::zeek::LogWrite& msg);
 
 } // namespace vast::plugins::broker
