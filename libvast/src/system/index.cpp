@@ -906,7 +906,7 @@ index(index_actor::stateful_pointer<index_state> self,
         = self->state.collect_query_actors(query_state, num_partitions);
       // Delegate to query supervisor (uses up this worker) and report
       // query ID + some stats to the client.
-      VAST_DEBUG("{} schedules {} more partition(s) for query id {}"
+      VAST_DEBUG("{} scheduled {} more partition(s) for query id {}"
                  "with {} partitions remaining",
                  self, actors.size(), query_id, query_state.partitions.size());
       self->send(*worker, query_state.query, std::move(actors), client);
