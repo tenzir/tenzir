@@ -29,6 +29,8 @@
 
 #pragma once
 
+// clang-format off
+
 // # Overview
 //
 // A USDT (userspace statically-defined tracepoint) is a code instrumentation
@@ -42,8 +44,18 @@
 // records some context, and asynchronously forwards these events to tracing
 // programs like `perf` or `bpftrace`.
 //
+// A simple example of using a tracepoint with bpftrace [1] looks like this,
+// which prints the number of candidates returned by the meta index every time
+// the `meta_index_lookup` tracepoint is triggered:
+//
+//     sudo bpftrace -e 'usdt:/opt/tenzir/bin/vast:vast:meta_index_lookup { printf("%d candidates\n", arg1); }'
+//
 // The main entry point for users is the `VAST_TRACEPOINT()` macro defined
 // at the bottom of this file.
+//
+// [1]: Note that for bpftrace versions <= 0.8, the tracepoint name in this
+//      example would need to be specified as `meta_index_lookup` instead
+//      of `vast:meta_index_lookup`.
 //
 //
 // # Inner Workings
@@ -79,7 +91,6 @@
 // https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt
 // https://leezhenghui.github.io/linux/2019/03/05/exploring-usdt-on-linux.html
 
-// clang-format off
 #include <cstddef>
 
 #ifdef __clang__
