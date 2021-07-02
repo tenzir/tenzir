@@ -635,6 +635,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     // Core components are terminated in a second stage, we remove them from the
     // registry upfront and deal with them later.
     std::vector<caf::actor> core_shutdown_handles;
+    caf::actor filesystem_handle;
     // The components listed here need to be terminated in sequential order.
     // The importer needs to shut down first because it might still have
     // buffered data. The index uses the archive for querying. The filesystem
@@ -644,8 +645,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     // Make sure that these remain in sync.
     VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
     for (const char* name : shutdown_sequence) {
-      if (auto comp = registry.remove(name))
-        core_shutdown_handles.push_back(comp->actor);
+      if (auto comp = registry.remove(name)) {
+        if (comp->type == "filesystem")
+          filesystem_handle = comp->actor;
+        else
+          core_shutdown_handles.push_back(comp->actor);
+      }
     }
     std::vector<caf::actor> aux_components;
     for (const auto& [_, comp] : registry.components()) {
@@ -659,12 +664,19 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     registry.clear();
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
     auto core_shutdown_sequence =
-      [=, core_shutdown_handles = std::move(core_shutdown_handles)]() mutable {
+      [=, core_shutdown_handles = std::move(core_shutdown_handles),
+       filesystem_handle = std::move(filesystem_handle)]() mutable {
         for (const auto& comp : core_shutdown_handles)
           self->demonitor(comp);
         shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
                                      shutdown_grace_period,
                                      shutdown_kill_timeout);
+        // We deliberately do not send an exit message to the filesystem actor,
+        // as that would mean that actors not tracked by the component registry
+        // which hold a strong handle to the filesystem actor cannot use it for
+        // persistence on shutdown.
+        self->demonitor(filesystem_handle);
+        filesystem_handle = {};
       };
     terminate<policy::parallel>(self, std::move(aux_components),
                                 shutdown_grace_period, shutdown_kill_timeout)
