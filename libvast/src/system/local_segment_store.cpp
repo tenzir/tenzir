@@ -263,7 +263,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
             }
           },
           [=](caf::unit_t&, const caf::error&) {
-            VAST_INFO("stream has ended");
+            VAST_DEBUG("{} stream shuts down", self);
             self->send(self, atom::internal_v, atom::persist_v);
           })
         .inbound_slot();
