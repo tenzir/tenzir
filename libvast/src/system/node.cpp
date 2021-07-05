@@ -88,7 +88,9 @@ std::set<const char*> core_components
   = {"archive", "filesystem", "importer", "index"};
 
 bool is_core_component(std::string_view type) {
-  auto pred = [&](const char* x) { return x == type; };
+  auto pred = [&](const char* x) {
+    return x == type;
+  };
   return std::any_of(std::begin(core_components), std::end(core_components),
                      pred);
 }
@@ -107,7 +109,9 @@ bool is_singleton(std::string_view type) {
   const char* singletons[]
     = {"accountant", "archive",  "disk-monitor", "eraser",
        "filesystem", "importer", "index",        "type-registry"};
-  auto pred = [&](const char* x) { return x == type; };
+  auto pred = [&](const char* x) {
+    return x == type;
+  };
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
 }
 
@@ -133,17 +137,17 @@ caf::message send_command(const invocation& inv, caf::actor_system&) {
 }
 
 void collect_component_status(node_actor::stateful_pointer<node_state> self,
-                              caf::response_promise status_promise,
                               status_verbosity v) {
-  // Shared state between our response handlers.
-  struct req_state_t {
-    // Promise to the original client request.
-    caf::response_promise rp;
-    // Maps nodes to a map associating components with status information.
-    caf::settings content;
+  struct extra_state {
+    size_t memory_usage = 0;
+    static void deliver(caf::typed_response_promise<std::string>&& promise,
+                        caf::settings&& content) {
+      detail::strip_settings(content);
+      if (auto json = to_json(to_data(content)))
+        promise.deliver(std::move(*json));
+    }
   };
-  auto req_state = std::make_shared<req_state_t>();
-  req_state->rp = std::move(status_promise);
+  auto rs = make_status_request_state<extra_state, std::string>(self);
   // Pre-fill the version information. Note that we must remove all nil values
   // first, as the conversion to a caf::settings object fails otherwise. We can
   // remove the cleansing step once we use record instead of caf::settings for
@@ -153,13 +157,13 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     if (value == caf::none)
       value = record{};
   if (auto version = to<caf::settings>(version_data))
-    put(req_state->content, "version", *version);
+    put(rs->content, "version", *version);
   else
     VAST_WARN("{} failed to add remote version to status: {}", self,
               version.error());
   // Pre-fill our result with system stats.
   auto& sys = self->system();
-  auto& system = put_dictionary(req_state->content, "system");
+  auto& system = put_dictionary(rs->content, "system");
   if (v >= status_verbosity::info) {
     put(system, "in-memory-table-slices", table_slice::instances());
     put(system, "database-path", self->state.dir.string());
@@ -171,41 +175,15 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     put(system, "detached-actors", sys.detached_actors());
     put(system, "worker-threads", sys.scheduler().num_workers());
   }
-  auto deliver = [](auto&& req_state) {
-    detail::strip_settings(req_state->content);
-    if (auto json = to_json(to_data(req_state->content)))
-      req_state->rp.deliver(to_string(std::move(*json)));
-  };
-  // The overload for 'request(...)' taking a 'std::chrono::duration' does not
-  // respect the specified message priority, so we convert to 'caf::duration' by
-  // hand.
-  const auto timeout = caf::duration{defaults::system::initial_request_timeout};
+  const auto timeout = defaults::system::initial_request_timeout;
   // Send out requests and collects answers.
-  for (auto& [label, component] : self->state.registry.components()) {
+  for (const auto& [label, component] : self->state.registry.components()) {
     // Requests to busy sources and sinks can easily delay the combined response
     // because the status requests don't get scheduled soon enough.
     if (component.type == "source" || component.type == "sink")
       continue;
-    self
-      ->request<caf::message_priority::high>(component.actor, timeout,
-                                             atom::status_v, v)
-      .then(
-        [=, lab = label](caf::config_value::dictionary& xs) mutable {
-          detail::merge_settings(xs, req_state->content,
-                                 policy::merge_lists::yes);
-          // Both handlers have a copy of req_state.
-          if (req_state.use_count() == 2)
-            deliver(std::move(req_state));
-        },
-        [=, lab = label](caf::error& err) mutable {
-          VAST_WARN("{} failed to retrieve {} status: {}", self, lab,
-                    to_string(err));
-          auto& dict = req_state->content[self->state.name].as_dictionary();
-          dict.emplace(std::move(lab), to_string(err));
-          // Both handlers have a copy of req_state.
-          if (req_state.use_count() == 2)
-            deliver(std::move(req_state));
-        });
+    collect_status(rs, timeout, v, component.actor, rs->content,
+                   component.type.c_str());
   }
 }
 
@@ -312,7 +290,9 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
             request_error = std::move(json.error());
         }
       },
-      [=](caf::error& err) mutable { request_error = std::move(err); });
+      [=](caf::error& err) mutable {
+        request_error = std::move(err);
+      });
   if (request_error)
     return caf::make_message(std::move(request_error));
   return caf::none;
@@ -325,7 +305,7 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
     verbosity = status_verbosity::detailed;
   if (caf::get_or(inv.options, "vast.status.debug", false))
     verbosity = status_verbosity::debug;
-  collect_component_status(self, self->make_response_promise(), verbosity);
+  collect_component_status(self, verbosity);
   return caf::none;
 }
 
@@ -738,8 +718,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
         VAST_VERBOSE("{} encountered empty invocation response", self);
       } else {
         msg->apply({
-          [&](caf::error& x) { result = std::move(x); },
-          [&](caf::actor& x) { result = std::move(x); },
+          [&](caf::error& x) {
+            result = std::move(x);
+          },
+          [&](caf::actor& x) {
+            result = std::move(x);
+          },
           [&](caf::message& x) {
             VAST_ERROR("{} encountered invalid invocation response: {}", self,
                        deep_to_string(x));
