@@ -207,7 +207,7 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
   // Step 8: Sort loaded plugins by name.
   std::sort(get_mutable().begin(), get_mutable().end(),
             [](const auto& lhs, const auto& rhs) {
-              return lhs->name() < rhs->name();
+              return std::strcmp(lhs->name(), rhs->name()) < 0;
             });
   return loaded_plugin_paths;
 }
