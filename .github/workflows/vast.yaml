@@ -523,6 +523,9 @@ jobs:
           - name: Example Transform
             target: example-transform
             path: examples/plugins/transform
+          - name: Broker
+            target: broker
+            path: plugins/broker
     env:
       INSTALL_DIR: '${{ github.workspace }}/_install'
       BUILD_DIR: '${{ github.workspace }}/_build'
@@ -543,6 +546,7 @@ jobs:
             build-essential \
             ca-certificates \
             curl \
+            libbroker-dev \
             flatbuffers-compiler-dev \
             g++-10 \
             gcc-10 \

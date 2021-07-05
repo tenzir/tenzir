@@ -22,6 +22,7 @@ RUN apt-get update && \
       gnupg2 \
       jq \
       libcaf-dev \
+      libbroker-dev \
       libflatbuffers-dev \
       libfmt-dev \
       libpcap-dev tcpdump \
@@ -77,7 +78,7 @@ RUN cmake -B build -G Ninja \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
-      -D VAST_PLUGINS:STRING="plugins/pcap" && \
+      -D VAST_PLUGINS:STRING="plugins/pcap;plugins/broker" && \
     cmake --build build --parallel && \
     cmake --install build && \
     rm -rf build
@@ -110,6 +111,7 @@ RUN apt-get update && \
       libcaf-core0.17 \
       libcaf-io0.17 \
       libcaf-openssl0.17 \
+      libbroker2 \
       libc++1 \
       libc++abi1 \
       libflatbuffers1 \
