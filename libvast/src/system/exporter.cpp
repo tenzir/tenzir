@@ -309,20 +309,19 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) {
       auto result = caf::settings{};
-      auto& exporter_status = put_dictionary(result, "exporter");
       if (v >= status_verbosity::info) {
         caf::settings exp;
         put(exp, "expression", to_string(self->state.expr));
+        if (v >= status_verbosity::detailed) {
+          put(exp, "start", caf::deep_to_string(self->state.start));
+          auto& transform_names = put_list(exp, "transforms");
+          for (const auto& t : self->state.transformer.transforms())
+            transform_names.emplace_back(t.name());
+          if (v >= status_verbosity::debug)
+            detail::fill_status_map(exp, self);
+        }
         auto& xs = put_list(result, "queries");
         xs.emplace_back(std::move(exp));
-      }
-      if (v >= status_verbosity::detailed) {
-        caf::settings exp;
-        put(exp, "expression", to_string(self->state.expr));
-        put(exp, "start", caf::deep_to_string(self->state.start));
-        auto& xs = put_list(result, "queries");
-        xs.emplace_back(std::move(exp));
-        detail::fill_status_map(exporter_status, self);
       }
       return result;
     },
