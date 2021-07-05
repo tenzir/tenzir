@@ -237,7 +237,7 @@ constexpr std::chrono::milliseconds signal_monitoring_interval
   = std::chrono::milliseconds{750};
 
 /// Timeout for initial connections to the node.
-constexpr std::chrono::seconds initial_request_timeout
+constexpr std::chrono::milliseconds initial_request_timeout
   = std::chrono::seconds{10};
 
 /// The period to wait until a shutdown sequence finishes cleanly. After the
