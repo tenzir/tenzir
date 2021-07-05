@@ -49,8 +49,8 @@ protected:
   read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
-  caf::error dispatch(const ::broker::data& msg, size_t max_events,
-                      size_t max_slice_size, consumer& f);
+  caf::error
+  dispatch(const ::broker::data& msg, size_t max_slice_size, consumer& f);
 
   // TODO: do not ignore.
   class schema schema_ = {};
@@ -59,8 +59,10 @@ private:
   std::unique_ptr<::broker::status_subscriber> status_subscriber_;
   std::unique_ptr<::broker::subscriber> subscriber_;
 
-  /// Flag that indicates whether we are processing Zeek events.
-  bool zeek_mode_ = true; // TODO: expose via CLI
+  /// Flag that indicates whether we are processing Zeek events. This is the
+  /// only "mode" we currently support, because it gives us a predictable
+  /// framing of messages on top of the Broker data model.
+  bool zeek_mode_ = true;
 
   /// Maps stream IDs from Zeek messages to (builder) layouts.
   std::unordered_map<std::string, table_slice_builder_ptr> log_layouts_;

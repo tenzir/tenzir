@@ -10,7 +10,6 @@
 
 #include "broker/zeek.hpp"
 
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/community_id.hpp>
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/data.hpp>
@@ -78,61 +77,59 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   // Sanity checks.
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
-  // FIXME: remove this endless loop and make this event-driven. This is a
-  // pathetic hack to keep the control in this function to synchronize with the
-  // remote Broker peer.
-  while (true) {
-    // First check the control plane: did something change with our peering?
-    for (auto x : status_subscriber_->poll()) {
-      auto f = detail::overload{
-        [&](::broker::none) {
-          VAST_WARN("{} ignores invalid Broker status", name());
-        },
-        [&](const ::broker::error& error) {
-          VAST_WARN("{} got Broker error: {}", name(), to_string(error));
-          // TODO: decide what to do based on error type.
-        },
-        [&](const ::broker::status& status) {
-          VAST_WARN("{} got Broker status: {}", name(), to_string(status));
-          // TODO: decide what to do based on status type.
-        },
-      };
-      caf::visit(f, x);
-    }
-    // Then check the data plane: process available events.
-    if (zeek_mode_) {
-      // When imitating a Zeek logger node, we have a well-defined inter-event
-      // and format: log create messages precede log write messages. The former
-      // contain the type information and the latter the event data.
-      for (auto x : subscriber_->poll())
-        // TODO: respect max_events.
-        if (auto err = dispatch(get_data(x), max_events, max_slice_size, f))
-          VAST_ERROR("{} failed to dispatch Zeek message: {}", name(), err);
-    } else {
-      // TODO: We don't have a well-defined Broker wire format yet that allows
-      // us to map payload data to event types. Most naturally, the topic
-      // suffix, e.g., x in /foo/bar/x, will be the event name and then the
-      // Broker data must be a vector containing the record fields.
-      for (auto x : subscriber_->poll()) {
-        auto& topic = get_topic(x);
-        auto& data = get_data(x);
-        VAST_DEBUG("{} got message: {} -> {}", name(), to_string(topic),
-                   to_string(data));
-        auto f = detail::overload{
-          [&](auto&&) -> caf::error {
-            return ec::unimplemented;
-          },
-        };
-        if (auto err = caf::visit(f, data))
-          return err;
-      }
-      return ec::unimplemented;
-    }
-    // FIXME: remove silly loop.
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    VAST_DEBUG("{} loops", name());
+  // First check the control plane: did something change with our peering?
+  for (const auto& x : status_subscriber_->poll()) {
+    auto f = detail::overload{
+      [&](::broker::none) {
+        VAST_WARN("{} ignores invalid Broker status", name());
+      },
+      [&](const ::broker::error& error) {
+        VAST_WARN("{} got Broker error: {}", name(), to_string(error));
+        // TODO: decide what to do based on error type.
+      },
+      [&](const ::broker::status& status) {
+        VAST_INFO("{} got Broker status: {}", name(), to_string(status));
+        // TODO: decide what to do based on status type.
+      },
+    };
+    caf::visit(f, x);
   }
-  return {};
+  // Then check the data plane: process available events.
+  if (zeek_mode_) {
+    // When imitating a Zeek logger node, we have a well-defined message order:
+    // log create messages precede log write messages. The former
+    // contain the type information and the latter the event data.
+    auto xs = subscriber_->get(max_events, batch_timeout_);
+    for (const auto& x : xs)
+      if (auto err = dispatch(get_data(x), max_slice_size, f)) {
+        VAST_ERROR("{} failed to dispatch Zeek message: {}", name(), err);
+        return finish(f, err);
+      }
+    if (xs.empty())
+      return finish(f, ec::stalled);
+    if (xs.size() < max_events)
+      return finish(f, ec::timeout);
+  } else {
+    return ec::unimplemented;
+    // TODO: We don't have a well-defined Broker wire format yet that allows
+    // us to map payload data to event types. Most naturally, the topic
+    // suffix, e.g., x in /foo/bar/x, will be the event name and then the
+    // Broker data must be a vector containing the record fields.
+    // for (auto x : subscriber_->poll()) {
+    //  auto& topic = get_topic(x);
+    //  auto& data = get_data(x);
+    //  VAST_DEBUG("{} got message: {} -> {}", name(), to_string(topic),
+    //             to_string(data));
+    //  auto f = detail::overload{
+    //    [&](auto&&) -> caf::error {
+    //      return ec::unimplemented;
+    //    },
+    //  };
+    //  if (auto err = caf::visit(f, data))
+    //    return err;
+    //}
+  }
+  return finish(f);
 }
 
 caf::error reader::schema([[maybe_unused]] class schema schema) {
@@ -150,8 +147,8 @@ const char* reader::name() const {
   return "broker-reader";
 }
 
-caf::error reader::dispatch(const ::broker::data& msg, size_t max_events,
-                            size_t max_slice_size, consumer& f) {
+caf::error reader::dispatch(const ::broker::data& msg, size_t max_slice_size,
+                            consumer& f) {
   switch (::broker::zeek::Message::type(msg)) {
     default:
       VAST_WARN("{} skips unknown message", name());
@@ -173,29 +170,30 @@ caf::error reader::dispatch(const ::broker::data& msg, size_t max_events,
       auto layout = process(log_create);
       if (!layout)
         return layout.error();
-      auto i = log_layouts_.find(stream_id);
-      if (i != log_layouts_.end()) {
-        VAST_ASSERT(i->second != nullptr);
-        if (*layout != i->second->layout()) {
-          VAST_WARN("{} received updated layout for stream ID {}: {}", name(),
-                    stream_id, *layout);
-          auto builder = arrow_table_slice_builder::make(*layout);
+      auto make_builder = [&] {
+        return;
+      };
+      auto& builder = log_layouts_[stream_id];
+      if (builder) {
+        if (*layout != builder->layout()) {
+          VAST_INFO("{} received schema change for stream ID {}", name(),
+                    stream_id);
+          if (auto err = finish(f, builder, caf::none))
+            return err;
+          builder = this->builder(*layout); // use new layout from now on
           if (!builder)
             return caf::make_error(ec::parse_error, "failed to create table "
                                                     "slice builder");
-          i->second = builder;
         } else {
           VAST_DEBUG("{} ignores identical layout for stream ID {}: {}", name(),
                      stream_id);
         }
       } else {
-        VAST_INFO("{} registers new layout for log stream {}", name(),
-                  stream_id);
-        auto builder = arrow_table_slice_builder::make(*layout);
+        VAST_INFO("{} got schema for new stream {}", name(), stream_id);
+        builder = this->builder(*layout);
         if (!builder)
           return caf::make_error(ec::parse_error, "failed to create table "
                                                   "slice builder");
-        log_layouts_.emplace(stream_id, builder);
       }
       break;
     }
@@ -214,15 +212,18 @@ caf::error reader::dispatch(const ::broker::data& msg, size_t max_events,
         break;
       }
       auto builder = i->second;
-      auto& arrow_builder = static_cast<arrow_table_slice_builder&>(*builder);
-      VAST_ASSERT(xs->size() == arrow_builder.columns());
+      VAST_ASSERT(xs->size() == builder->columns());
       for (const auto& x : *xs)
-        if (!arrow_builder.add(x))
-          return finish(f, builder, ec::parse_error);
-      if (arrow_builder.rows() < max_slice_size)
-        break;
-      if (auto err = finish(f, builder, caf::none))
-        return err;
+        if (!builder->add(x))
+          return finish(f, builder,
+                        caf::make_error(ec::parse_error,
+                                        fmt::format("failed to add value {} to "
+                                                    "event stream {}",
+                                                    x, stream_id)));
+      ++batch_events_;
+      if (builder->rows() >= max_slice_size)
+        if (auto err = finish(f, builder, caf::none))
+          return err;
       break;
     }
     case ::broker::zeek::Message::Type::IdentifierUpdate: {
@@ -236,7 +237,7 @@ caf::error reader::dispatch(const ::broker::data& msg, size_t max_events,
       VAST_DEBUG("{} received batch of {} messages", name(),
                  batch.batch().size());
       for (auto& x : batch.batch())
-        if (auto err = dispatch(x, max_events, max_slice_size, f)) // recurse
+        if (auto err = dispatch(x, max_slice_size, f)) // recurse
           return err;
       break;
     }
