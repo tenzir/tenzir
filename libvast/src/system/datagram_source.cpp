@@ -16,6 +16,7 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -161,16 +162,22 @@ caf::behavior datagram_source(
       self->state.filter = std::move(expr);
     },
     [self](atom::status, status_verbosity v) {
-      caf::settings result;
+      auto rs = make_status_request_state(self);
       if (v >= status_verbosity::detailed) {
         caf::settings src;
         if (self->state.reader)
           put(src, "format", self->state.reader->name());
         put(src, "produced", self->state.count);
-        auto& xs = put_list(result, "sources");
+        // General state such as open streams.
+        if (v >= status_verbosity::debug)
+          detail::fill_status_map(src, self);
+        const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
+        collect_status(rs, timeout, v, self->state.transformer, src,
+                       "transformer");
+        auto& xs = put_list(rs->content, "sources");
         xs.emplace_back(std::move(src));
       }
-      return result;
+      return rs->promise;
     },
     [](atom::wakeup) {
       // nop
