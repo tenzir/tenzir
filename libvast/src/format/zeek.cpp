@@ -19,6 +19,7 @@
 #include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/detail/zeekify.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/flatten_layout.hpp"
@@ -174,42 +175,6 @@ void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
   for (auto& e : record_type::each{r})
     out << separator << to_zeek_string(e.trace.back()->type);
   out << '\n';
-}
-
-// TODO: Find a better place for this function, ideally we want to modify type
-// attributes in place.
-bool insert_attribute(type& t, attribute a, bool overwrite = false) {
-  std::vector<attribute> attrs = t.attributes();
-  auto guard
-    = caf::detail::make_scope_guard([&]() { t.attributes(std::move(attrs)); });
-  auto i = std::find_if(attrs.begin(), attrs.end(),
-                        [&](const auto& x) { return x.key == a.key; });
-  if (i == attrs.end()) {
-    attrs.push_back(std::move(a));
-    return true;
-  }
-  if (!overwrite)
-    return false;
-  i->value = std::move(a.value);
-  return true;
-}
-
-void add_hash_index_attribute(record_type& layout) {
-  // TODO: do more than this simple heuristic. For example, also consider
-  // zeek.files.conn_uids, which is a set of strings. The inner index needs to
-  // have the #index=hash tag. There are a lot more cases that we need to
-  // consider, such as zeek.x509.id (instead of uid).
-  auto pred = [&](auto& field) {
-    return caf::holds_alternative<string_type>(field.type)
-           && (field.name == "uid" || field.name == "fuid"
-               || field.name == "community_id");
-  };
-  auto& fields = layout.fields;
-  auto find = [&](auto i) { return std::find_if(i, fields.end(), pred); };
-  for (auto i = find(fields.begin()); i != fields.end(); i = find(i + 1)) {
-    VAST_DEBUG("using hash index for field {}", i->name);
-    insert_attribute(i->type, {"index", "hash"}, false);
-  }
 }
 
 } // namespace
@@ -454,7 +419,9 @@ caf::error reader::parse_header() {
                              "the top level types in the schema");
     for (const auto& field : record_type::each(*r)) {
       auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
-                            [&](auto& hf) { return hf.name == field.key(); });
+                            [&](auto& hf) {
+                              return hf.name == field.key();
+                            });
       if (i != layout_.fields.end()) {
         if (!congruent(i->type, field.type()))
           VAST_WARN("{} encountered a type mismatch between the schema "
@@ -465,27 +432,9 @@ caf::error reader::parse_header() {
           i->type.attributes(field.type().attributes());
       }
     }
-  } // We still do attribute inference for the user provided layouts.
-  // Determine the timestamp field.
-  auto ts_pred = [&](auto& field) {
-    if (field.name != "ts")
-      return false;
-    if (!caf::holds_alternative<time_type>(field.type)) {
-      VAST_WARN("{} encountered ts fields not of type timestamp",
-                detail::pretty_type_name(this));
-      return false;
-    }
-    return true;
-  };
-  auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(), ts_pred);
-  if (i != layout_.fields.end()) {
-    VAST_DEBUG("{} auto-detected field {} as event timestamp",
-               detail::pretty_type_name(this),
-               std::distance(layout_.fields.begin(), i));
-    i->type.name("timestamp");
   }
-  // Add #index=hash attribute for fields where it makes sense.
-  add_hash_index_attribute(layout_);
+  // Determine the timestamp field.
+  layout_ = detail::zeekify(layout_);
   for (auto i = 0u; i < layout_.fields.size(); ++i)
     VAST_DEBUG("{}       {} ) {} : {}", detail::pretty_type_name(this), i,
                layout_.fields[i].name, layout_.fields[i].type);
@@ -581,7 +530,9 @@ public:
   }
 
   bool print(Iterator& out, const attribute& d) const {
-    auto f = [&](const auto& x) { return (*this)(out, x); };
+    auto f = [&](const auto& x) {
+      return (*this)(out, x);
+    };
     return caf::visit(f, d);
   }
 

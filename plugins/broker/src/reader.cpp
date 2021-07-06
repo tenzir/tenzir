@@ -16,6 +16,7 @@
 #include <vast/detail/assert.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/overload.hpp>
+#include <vast/detail/zeekify.hpp>
 #include <vast/error.hpp>
 #include <vast/flow.hpp>
 #include <vast/logger.hpp>
@@ -170,9 +171,7 @@ caf::error reader::dispatch(const ::broker::data& msg, size_t max_slice_size,
       auto layout = process(log_create);
       if (!layout)
         return layout.error();
-      auto make_builder = [&] {
-        return;
-      };
+      *layout = detail::zeekify(*layout);
       auto& builder = log_layouts_[stream_id];
       if (builder) {
         if (*layout != builder->layout()) {
