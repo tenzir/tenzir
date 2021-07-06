@@ -192,8 +192,13 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       continue;
     }
     auto get_object_result = parse_result.get_object();
-    if (get_object_result.error() != ::simdjson::error_code::SUCCESS)
-      return caf::make_error(ec::type_clash, "not a json object");
+    if (get_object_result.error() != ::simdjson::error_code::SUCCESS) {
+      if (num_invalid_lines_ == 0)
+        VAST_WARN("{} failed to parse line as JSON object {}: {}",
+                  detail::pretty_type_name(this), lines_->line_number(), line);
+      ++num_invalid_lines_;
+      continue;
+    }
     auto&& layout = selector_(get_object_result.value());
     if (!layout) {
       if (num_unknown_layouts_ == 0)
