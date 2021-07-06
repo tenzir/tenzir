@@ -183,7 +183,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     if (component.type == "source" || component.type == "sink")
       continue;
     collect_status(rs, timeout, v, component.actor, rs->content,
-                   component.type.c_str());
+                   component.type);
   }
 }
 

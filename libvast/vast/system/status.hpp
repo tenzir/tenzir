@@ -77,9 +77,8 @@ make_status_request_state(Ptr self) {
 /// @param responder The actor to retrieve additional status from.
 /// @param f The callback for a successful response.
 /// @param fe The callback for a failed request.
-template <class F, class Fe, class Ptr, class Result, class Extra, class Resp>
-// TODO: Restrict this to Fs that are callable with caf::settings to make it
-// possible to use `std::string_view` for the other overload.
+template <class F, class Fe, class Ptr, class Result, class Extra, class Resp,
+          class = std::enable_if_t<std::is_invocable_v<F, caf::settings&>>>
 void collect_status(
   const std::shared_ptr<status_request_state<Ptr, Result, Extra>>& rs,
   std::chrono::milliseconds timeout, status_verbosity verbosity, Resp responder,
@@ -115,7 +114,7 @@ template <class Ptr, class Result, class Extra, class Resp>
 void collect_status(
   const std::shared_ptr<status_request_state<Ptr, Result, Extra>>& rs,
   std::chrono::milliseconds timeout, status_verbosity verbosity, Resp responder,
-  caf::settings& s, const char* key) {
+  caf::settings& s, std::string_view key) {
   collect_status(
     rs, timeout, verbosity, responder,
     [key, &s](caf::settings& response) {
