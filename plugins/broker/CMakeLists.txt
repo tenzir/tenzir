@@ -23,6 +23,10 @@ VASTRegisterPlugin(
   TEST_SOURCES ${broker_tests}
   INCLUDE_DIRECTORIES include)
 
+if (VAST_ENABLE_BUNDLED_CAF)
+  message(FATAL_ERROR "Cannot use bundled CAF with Broker plugin")
+endif ()
+
 # Link against libbroker.
 find_package(Broker REQUIRED)
 target_link_libraries(broker PUBLIC zeek::broker)
