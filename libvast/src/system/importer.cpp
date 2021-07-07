@@ -252,7 +252,17 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
-    self->state.stage->out().push(detail::framed<table_slice>::make_eof());
+    if (self->state.transformer) {
+      // Forward the exit message to the TRANSFORMER. In theory it'd be nice if
+      // we could just send an EOF to the stream like we do in the SOURCE, but
+      // that cannot work because the NODE controls the shutdown of all core
+      // components, which happen to exclude this TRANSFORMER. If the
+      // TRANSFORMER has many messages stuck in its queue, it may be unable to
+      // receive an EOF in its stream because its buffers filled up to capacity,
+      // which leads to a shutdown hang. As such, we simply forward the exit
+      // message here.
+      self->send_exit(self->state.transformer, msg.reason);
+    }
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
