@@ -10,7 +10,9 @@
 
 #include "vast/fwd.hpp"
 
-#include <string>
+#include "vast/die.hpp"
+
+#include <fmt/format.h>
 
 namespace vast {
 
@@ -24,7 +26,25 @@ enum class table_slice_encoding : uint8_t {
   msgpack, ///< The table slice is encoded using the MessagePack format.
 };
 
-/// @relates table_slice_encoding
-std::string to_string(table_slice_encoding encoding) noexcept;
-
 } // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::table_slice_encoding> : formatter<std::string_view> {
+  template <typename FormatContext>
+  auto format(const vast::table_slice_encoding& x, FormatContext& ctx) {
+    using super = formatter<std::string_view>;
+    switch (x) {
+      case vast::table_slice_encoding::none:
+        return super::format("none", ctx);
+      case vast::table_slice_encoding::arrow:
+        return super::format("arrow", ctx);
+      case vast::table_slice_encoding::msgpack:
+        return super::format("msgpack", ctx);
+    }
+    vast::die("unreachable");
+  }
+};
+
+} // namespace fmt
