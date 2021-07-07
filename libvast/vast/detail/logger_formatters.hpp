@@ -21,7 +21,6 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/detail/logger.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/error.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/uuid.hpp"
 
@@ -336,7 +335,7 @@ struct fmt::formatter<caf::error> {
 
   template <typename FormatContext>
   auto format(const caf::error& item, FormatContext& ctx) {
-    return format_to(ctx.out(), "{}", vast::render(item));
+    return format_to(ctx.out(), "{}", caf::to_string(item));
   }
 };
 
