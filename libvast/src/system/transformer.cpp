@@ -59,6 +59,13 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
     transform_names.emplace_back(t.name());
   self->state.transforms = transformation_engine{std::move(transforms)};
   self->state.stage = attach_transform_stage(self);
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
+    self->state.stage->shutdown(); // close inbound paths
+    self->state.stage->out().fan_out_flush();
+    self->state.stage->out().close(); // close outbound paths
+    self->state.stage->out().force_emit_batches();
+    self->quit(msg.reason);
+  });
   return {
     [self](const stream_sink_actor<table_slice>& out)
       -> caf::outbound_stream_slot<table_slice> {
