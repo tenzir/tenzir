@@ -241,7 +241,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
          std::vector<transform>&& input_transformations) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(dir));
   for (const auto& x : input_transformations)
-    VAST_VERBOSE("Loaded import transformation {}", x.name());
+    VAST_VERBOSE("{} loaded input transformation {}", self, x.name());
   self->state.dir = dir;
   auto err = self->state.read_state();
   if (err) {
@@ -256,7 +256,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
-  self->state.transformer = self->spawn(transformer, "input_transformer",
+  self->state.transformer = self->spawn(transformer, "importer-transformer",
                                         std::move(input_transformations));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", self);
