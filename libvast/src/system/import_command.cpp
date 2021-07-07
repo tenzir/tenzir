@@ -91,7 +91,9 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
         if (msg.source == importer) {
           VAST_DEBUG("{} received DOWN from node importer",
                      __PRETTY_FUNCTION__);
-          self->send_exit(src, caf::exit_reason::user_shutdown);
+          // No point in letting the source continue doing anything if the
+          // IMPORTER is dead, so we issue a hard kill here.
+          self->send_exit(src, caf::exit_reason::kill);
           err = ec::remote_node_down;
           stop = true;
         } else if (msg.source == src) {
