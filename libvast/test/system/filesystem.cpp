@@ -108,11 +108,12 @@ TEST(status) {
               status_verbosity::debug)
     .receive(
       [&](const caf::dictionary<caf::config_value>& status) {
-        auto failed
-          = caf::get<uint64_t>(status, "filesystem.operations.reads.failed");
+        auto failed = caf::get<uint64_t>(status, "operations.reads.failed");
         CHECK_EQUAL(failed, 1u);
       },
-      [&](const caf::error& err) { FAIL(err); });
+      [&](const caf::error& err) {
+        FAIL(err);
+      });
 }
 
 FIXTURE_SCOPE_END()

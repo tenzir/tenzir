@@ -36,11 +36,10 @@ report type_registry_state::telemetry() const {
 caf::dictionary<caf::config_value>
 type_registry_state::status(status_verbosity v) const {
   auto result = caf::settings{};
-  auto& tr_status = put_dictionary(result, "type-registry");
   if (v >= status_verbosity::detailed) {
     // The list of defined concepts
     if (v >= status_verbosity::debug) {
-      auto& concepts_status = put_list(tr_status, "concepts");
+      auto& concepts_status = put_list(result, "concepts");
       for (const auto& [name, definition] : taxonomies.concepts) {
         auto& concept_status = concepts_status.emplace_back().as_dictionary();
         concept_status["name"] = name;
@@ -48,7 +47,7 @@ type_registry_state::status(status_verbosity v) const {
         concept_status["fields"] = definition.fields;
         concept_status["concepts"] = definition.concepts;
       }
-      auto& models_status = put_list(tr_status, "models");
+      auto& models_status = put_list(result, "models");
       for (const auto& [name, definition] : taxonomies.models) {
         auto& model_status = models_status.emplace_back().as_dictionary();
         model_status["name"] = name;
@@ -60,9 +59,9 @@ type_registry_state::status(status_verbosity v) const {
       std::transform(data.begin(), data.end(), keys.begin(),
                      [](const auto& x) { return x.first; });
       std::sort(keys.begin(), keys.end());
-      caf::put(tr_status, "types", keys);
+      put(result, "types", keys);
       // The usual per-component status.
-      detail::fill_status_map(tr_status, self);
+      detail::fill_status_map(result, self);
     }
   }
   return result;

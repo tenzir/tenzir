@@ -435,9 +435,8 @@ index_state::status(status_verbosity v) const {
     }
   };
   auto rs = make_status_request_state<extra_state>(self);
-  auto& index_status = caf::put_dictionary(rs->content, "index");
   if (v >= status_verbosity::detailed) {
-    auto& stats_object = put_dictionary(index_status, "statistics");
+    auto& stats_object = put_dictionary(rs->content, "statistics");
     auto& layout_object = put_dictionary(stats_object, "layouts");
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = caf::dictionary<caf::config_value>{};
@@ -447,13 +446,13 @@ index_state::status(status_verbosity v) const {
       // Hence the fallback to low-level primitives.
       layout_object.insert_or_assign(name, std::move(xs));
     }
-    put(index_status, "meta-index-bytes", meta_index_bytes);
-    put(index_status, "num-active-partitions",
+    put(rs->content, "meta-index-bytes", meta_index_bytes);
+    put(rs->content, "num-active-partitions",
         active_partition.actor == nullptr ? 0 : 1);
-    put(index_status, "num-cached-partitions", inmem_partitions.size());
-    put(index_status, "num-unpersisted-partitions", unpersisted.size());
+    put(rs->content, "num-cached-partitions", inmem_partitions.size());
+    put(rs->content, "num-unpersisted-partitions", unpersisted.size());
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
-    auto& partitions = put_dictionary(index_status, "partitions");
+    auto& partitions = put_dictionary(rs->content, "partitions");
     auto partition_status = [&](const uuid& id, const partition_actor& pa,
                                 caf::config_value::list& xs) {
       collect_status(
@@ -491,7 +490,7 @@ index_state::status(status_verbosity v) const {
     // General state such as open streams.
   }
   if (v >= status_verbosity::debug)
-    detail::fill_status_map(index_status, self);
+    detail::fill_status_map(rs->content, self);
   return rs->promise;
 }
 
