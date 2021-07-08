@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
 project(
   example-analyzer
   DESCRIPTION "Example analyzer plugin for VAST"
+  VERSION 0.1
   LANGUAGES CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the

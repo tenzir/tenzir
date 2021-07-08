@@ -80,4 +80,4 @@ public:
 } // namespace vast::plugins
 
 // Finally, register our plugin.
-VAST_REGISTER_PLUGIN(vast::plugins::example_transform_plugin, 0, 1)
+VAST_REGISTER_PLUGIN(vast::plugins::example_transform_plugin)
