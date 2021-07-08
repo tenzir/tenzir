@@ -940,7 +940,7 @@ index(index_actor::stateful_pointer<index_state> self,
                   partition_id)
         .then(
           [self, partition_id, path, synopsis_path, rp,
-           adjust_stats](atom::ok) {
+           adjust_stats](atom::ok) mutable {
             auto partition_actor
               = self->state.inmem_partitions.eject(partition_id);
             self->state.persisted_partitions.erase(partition_id);
@@ -996,9 +996,6 @@ index(index_actor::stateful_pointer<index_state> self,
                 });
           },
           [partition_id](const caf::error& err) {
-            // We don't go through the LRU cache to spawn these partitions,
-            // since they are literally the wor auto partition_actor =
-            // self->spawn() self->send(partition_actor, atom::erase_v);
             VAST_WARN("index encountered an error trying to erase "
                       "partition {} from the meta index: {}",
                       partition_id, err);

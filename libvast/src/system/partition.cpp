@@ -520,7 +520,8 @@ active_partition_actor::behavior_type active_partition(
       // from disk, but an active partition does not have any files
       // on disk, so it should never get selected for deletion.
       VAST_WARN("{} got erase atom as an active partition", self);
-      return atom::done_v;
+      return caf::make_error(ec::logic_error, "can not erase the active "
+                                              "partition");
     },
     [self](caf::stream<table_slice> in) {
       self->state.streaming_initiated = true;
@@ -921,8 +922,8 @@ partition_actor::behavior_type passive_partition(
       }
       query q;
       q.cmd = query::erase{};
-      auto rp = self->make_response_promise<atom::done>();
-      return rp.delegate(self->state.store, q, all_ids);
+      return self->delegate(self->state.store, atom::erase_v,
+                            std::move(all_ids));
     },
     [self](atom::status,
            status_verbosity /*v*/) -> caf::config_value::dictionary {

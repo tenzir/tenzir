@@ -173,9 +173,11 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         std::filesystem::remove_all(self->state.path, err);
         if (err)
           return caf::make_error(ec::system_error, err.message());
-        // We don't explicitly `quit()` here just in case a query is still in
-        // progress - the mmap will still be valid until unmapped, even if the
-        // underlying file is erased.
+        // There is a (small) chance one or more lookups are currently still in
+        // progress, so we dont call `self->quit()` here but instead rely on
+        // ref-counting. The lookups can still finish normally because the
+        // `mmap()` is still valid even after the underlying segment file was
+        // removed.
         return atom::done_v;
       }
       auto new_segment = segment::copy_without(*self->state.segment, xs);
