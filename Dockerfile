@@ -1,11 +1,9 @@
-# -- development ---------------------------------------------------------------
+# -- dependencies --------------------------------------------------------------
 
-FROM debian:bullseye-slim AS development
+FROM debian:bullseye-slim AS dependencies
 LABEL maintainer="engineering@tenzir.com"
 
-ENV PREFIX="/opt/tenzir/vast" \
-    PATH="/opt/tenzir/vast/bin:${PATH}" \
-    CC="gcc-10" \
+ENV CC="gcc-10" \
     CXX="g++-10"
 
 WORKDIR /tmp/vast
@@ -71,6 +69,15 @@ RUN ln -sf ../../pyvast/pyvast examples/jupyter/pyvast && \
 
 RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
 COPY systemd/vast.yaml $PREFIX/etc/vast/vast.yaml
+
+# -- development ---------------------------------------------------------------
+
+FROM dependencies AS development
+
+ENV PREFIX="/opt/tenzir/vast" \
+    PATH="/opt/tenzir/vast/bin:${PATH}" \
+    CC="gcc-10" \
+    CXX="g++-10"
 
 RUN cmake -B build -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \

@@ -647,6 +647,9 @@ jobs:
         with:
           fetch-depth: 0
           submodules: 'recursive'
+      - name: Build Dependencies Docker Image
+        run: |
+          docker build . -t tenzir/vast-deps:latest --target dependencies
       - name: Build Development Docker Image
         run: |
           docker build . -t tenzir/vast-dev:latest --target development
@@ -659,6 +662,16 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Publish Dependencies Docker Image
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        run: |
+          docker push tenzir/vast-deps:latest
+          docker tag tenzir/vast-deps:latest "tenzir/vast-deps:${GITHUB_SHA}"
+          docker push "tenzir/vast-deps:${GITHUB_SHA}"
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            docker tag tenzir/vast-deps:latest "tenzir/vast-deps:$(git describe)"
+            docker push "tenzir/vast-deps:$(git describe)"
+          fi
       - name: Publish Development Docker Image
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
