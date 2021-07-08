@@ -21,14 +21,16 @@ record_type zeekify(record_type layout) {
   // The first field is almost exclusively the event timestamp for standard
   // Zeek logs. Its has the field name `ts`. For streaming JSON, some other
   // fields, e.g., `_path`, precede it.
-  for (auto& field : layout.fields)
-    if (field.name == "ts")
+  for (auto& field : layout.fields) {
+    if (field.name == "ts") {
       if (caf::holds_alternative<time_type>(field.type)) {
         VAST_DEBUG("using timestamp type for field {}", field.name);
         // field.type = alias_type{field.type}.name("timestamp");
         field.type.name("timestamp");
         break;
       }
+    }
+  }
   // For fields that do not require substring search, use an optimized index.
   auto is_opaque_id = [](const auto& field) {
     if (!caf::holds_alternative<string_type>(field.type))
@@ -43,11 +45,12 @@ record_type zeekify(record_type layout) {
     static auto ids = std::array{"uid", "fuid", "community_id"};
     return std::find_if(ids.begin(), ids.end(), has_name) != ids.end();
   };
-  for (auto& field : layout.fields)
+  for (auto& field : layout.fields) {
     if (is_opaque_id(field)) {
       VAST_DEBUG("using hash index for field {}", field.name);
       field.type.update_attributes({{"index", "hash"}});
     }
+  }
   return layout;
 }
 
