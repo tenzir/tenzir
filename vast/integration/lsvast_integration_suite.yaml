@@ -7,5 +7,5 @@ tests:
   BasicCommand:
     tags: [tooling]
     steps:
-      - command: ../vast.db
+      - command: -v ../vast.db
         transformation: wc -l | tr -d ' '

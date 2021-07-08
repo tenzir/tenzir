@@ -7,7 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/chunk.hpp>
+#include <vast/command.hpp>
 #include <vast/concept/printable/to_string.hpp>
+#include <vast/concept/printable/vast/bitmap.hpp>
 #include <vast/concept/printable/vast/type.hpp>
 #include <vast/concept/printable/vast/uuid.hpp>
 #include <vast/error.hpp>
@@ -16,14 +18,19 @@
 #include <vast/fbs/segment.hpp>
 #include <vast/fbs/utils.hpp>
 #include <vast/ids.hpp>
+#include <vast/index/hash_index.hpp>
 #include <vast/io/read.hpp>
+#include <vast/logger.hpp>
 #include <vast/qualified_record_field.hpp>
 #include <vast/table_slice.hpp>
 #include <vast/type.hpp>
 #include <vast/uuid.hpp>
+#include <vast/value_index.hpp>
+#include <vast/value_index_factory.hpp>
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/error.hpp>
+#include <caf/settings.hpp>
 #include <flatbuffers/flatbuffers.h>
 
 #include <cstddef>
@@ -107,21 +114,28 @@ struct formatting_options {
   bool human_readable_numbers = false;
 };
 
+// Options specific to printing partitions.
+struct partition_options {
+  std::vector<std::string> expand_indexes = {};
+};
+
+// Global options.
+struct options {
+  formatting_options format = {};
+  partition_options partition = {};
+};
+
 struct indentation;
 
 typedef void (*printer)(const std::filesystem::path&, indentation&,
-                        const formatting_options&);
+                        const options&);
 
-void print_unknown(const std::filesystem::path&, indentation&,
-                   const formatting_options&);
-void print_vast_db(const std::filesystem::path&, indentation&,
-                   const formatting_options&);
+void print_unknown(const std::filesystem::path&, indentation&, const options&);
+void print_vast_db(const std::filesystem::path&, indentation&, const options&);
 void print_partition(const std::filesystem::path&, indentation&,
-                     const formatting_options&);
-void print_index(const std::filesystem::path&, indentation&,
-                 const formatting_options&);
-void print_segment(const std::filesystem::path&, indentation&,
-                   const formatting_options&);
+                     const options&);
+void print_index(const std::filesystem::path&, indentation&, const options&);
+void print_segment(const std::filesystem::path&, indentation&, const options&);
 
 static const std::map<Kind, printer> printers = {
   {Kind::Unknown, print_unknown}, {Kind::DatabaseDir, print_vast_db},
@@ -208,8 +222,9 @@ read_flatbuffer_file(const std::filesystem::path& path) {
 struct indentation {
 public:
   static constexpr const int TAB_WIDTH = 2;
-  indentation() {
-  }
+
+  indentation() = default;
+
   void increase(int level = TAB_WIDTH) {
     levels_.push_back(level);
   }
@@ -253,8 +268,20 @@ std::ostream& operator<<(std::ostream& out, const vast::fbs::uuid::v0* uuid) {
   return out;
 }
 
+template <size_t N>
+std::ostream&
+operator<<(std::ostream& str, const std::array<std::byte, N>& arr) {
+  auto old_flags = str.flags();
+  for (size_t i = 0; i < N; ++i) {
+    str << std::hex << std::setw(2) << std::setfill('0')
+        << std::to_integer<unsigned int>(arr[i]);
+  }
+  str.flags(old_flags); // `std::hex` is sticky.
+  return str;
+}
+
 void print_unknown(const std::filesystem::path& path, indentation& indent,
-                   const formatting_options&) {
+                   const options&) {
   std::cout << indent << "(unknown " << path.string() << ")\n";
 }
 
@@ -283,7 +310,7 @@ std::string print_bytesize(size_t bytes, const formatting_options& formatting) {
 }
 
 void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
-                   const formatting_options& formatting) {
+                   const options& options) {
   // TODO: We should have some versioning for the layout
   // of the vast.db directory itself, so we can still read
   // older versions.
@@ -292,7 +319,7 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
   {
     indented_scope _(indent);
     std::cout << indent << "index.bin - ";
-    print_index(index_dir / "index.bin", indent, formatting);
+    print_index(index_dir / "index.bin", indent, options);
     std::error_code err{};
     auto dir = std::filesystem::directory_iterator{index_dir, err};
     if (err) {
@@ -308,7 +335,7 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
         if (extension == ".mdx")
           continue;
         std::cout << indent << stem << " - ";
-        print_partition(entry.path(), indent, formatting);
+        print_partition(entry.path(), indent, options);
       }
     }
   }
@@ -325,15 +352,60 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
       for (const auto& entry : dir) {
         const auto stem = entry.path().stem();
         std::cout << indent << stem << " - ";
-        print_segment(entry.path(), indent, formatting);
+        print_segment(entry.path(), indent, options);
       }
     }
   }
 }
 
+template <size_t N>
+void print_hash_index_(const vast::hash_index<N>& idx, indentation& indent,
+                       const options& options) {
+  std::cout << indent << " - hash index bytes " << N << "\n";
+  std::cout << indent << " - " << idx.digests().size() << " digests:"
+            << "\n";
+  indented_scope _(indent);
+  if (options.format.verbosity == output_verbosity::normal) {
+    const size_t bound = std::min<size_t>(idx.digests().size(), 3);
+    for (size_t i = 0; i < bound; ++i) {
+      std::cout << indent << idx.digests().at(i) << "\n";
+    }
+    std::cout << indent << "... (use -v to display remaining entries)\n";
+  } else {
+    for (const auto& digest : idx.digests()) {
+      std::cout << indent << digest << "\n";
+    }
+  }
+}
+
+void print_hash_index(const vast::value_index_ptr& ptr, indentation& indent,
+                      const options& options) {
+  // TODO: This is probably a good use case for a macro.
+  if (auto idx = dynamic_cast<const vast::hash_index<1>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else if (auto idx = dynamic_cast<const vast::hash_index<1>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else if (auto idx = dynamic_cast<const vast::hash_index<2>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else if (auto idx = dynamic_cast<const vast::hash_index<3>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else if (auto idx = dynamic_cast<const vast::hash_index<4>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else if (auto idx = dynamic_cast<const vast::hash_index<5>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else if (auto idx = dynamic_cast<const vast::hash_index<6>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else if (auto idx = dynamic_cast<const vast::hash_index<7>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else if (auto idx = dynamic_cast<const vast::hash_index<8>*>(ptr.get())) {
+    print_hash_index_(*idx, indent, options);
+  } else {
+    std::cout << "more than 8 bytes digest :(\n";
+  }
+}
+
 void print_partition_v0(const vast::fbs::partition::v0* partition,
-                        indentation& indent,
-                        const formatting_options& formatting) {
+                        indentation& indent, const options& options) {
   if (!partition) {
     std::cout << "(null)\n";
     return;
@@ -362,8 +434,8 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
         std::cout << " (error: " << caf::to_string(error) << ")";
       else
         std::cout << rank(restored_ids);
-      if (formatting.print_bytesizes)
-        std::cout << " (" << print_bytesize(ids_bytes->size(), formatting)
+      if (options.format.print_bytesizes)
+        std::cout << " (" << print_bytesize(ids_bytes->size(), options.format)
                   << ")";
       std::cout << "\n";
     }
@@ -379,9 +451,9 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
       std::cout << indent << fqf.fqn() << ": ";
       if (auto opaque = column_synopsis->opaque_synopsis()) {
         std::cout << "opaque_synopsis";
-        if (formatting.print_bytesizes)
+        if (options.format.print_bytesizes)
           std::cout << " ("
-                    << print_bytesize(opaque->data()->size(), formatting)
+                    << print_bytesize(opaque->data()->size(), options.format)
                     << ")";
       } else if (auto bs = column_synopsis->bool_synopsis()) {
         std::cout << "bool_synopis " << bs->any_true() << " "
@@ -400,26 +472,50 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
   vast::fbs::deserialize_bytes(partition->combined_layout(), combined_layout);
   if (auto indexes = partition->indexes()) {
     if (indexes->size() != combined_layout.fields.size()) {
-      std::cout << indent << "weird :/\n";
+      std::cout << indent << "!! wrong number of fields\n";
       return;
     }
+    const auto& expand_indexes = options.partition.expand_indexes;
     indented_scope _(indent);
     for (size_t i = 0; i < indexes->size(); ++i) {
       auto field = combined_layout.fields.at(i);
-      auto index = indexes->Get(i);
+      const auto* index = indexes->Get(i);
       auto name = field.name;
-      // auto name = index->qualified_field_name();
       auto sz = index->index()->data()->size();
       std::cout << indent << name << ": " << vast::to_string(field.type);
-      if (formatting.print_bytesizes)
-        std::cout << " (" << print_bytesize(sz, formatting) << ")";
+      if (options.format.print_bytesizes)
+        std::cout << " (" << print_bytesize(sz, options.format) << ")";
       std::cout << "\n";
+      bool expand
+        = std::find(expand_indexes.begin(), expand_indexes.end(), name)
+          != expand_indexes.end();
+      if (expand) {
+        vast::factory_traits<vast::value_index>::initialize();
+        vast::value_index_ptr state_ptr;
+        if (auto error
+            = vast::fbs::deserialize_bytes(index->index()->data(), state_ptr)) {
+          std::cout << "!! failed to deserialize index" << to_string(error)
+                    << std::endl;
+          continue;
+        }
+        const auto& type = state_ptr->type();
+        std::cout << indent << "- type: " << to_string(type) << std::endl;
+        std::cout << indent << "- options: " << to_string(state_ptr->options())
+                  << std::endl;
+        // Print even more detailed information for hash indices.
+        if (std::any_of(type.attributes().begin(), type.attributes().end(),
+                        [](const vast::attribute& x) {
+                          return x.key == "index" && x.value == "hash"s;
+                        })) {
+          print_hash_index(state_ptr, indent, options);
+        }
+      }
     }
   }
 }
 
 void print_partition(const std::filesystem::path& path, indentation& indent,
-                     const formatting_options& formatting) {
+                     const options& formatting) {
   auto partition = read_flatbuffer_file<vast::fbs::Partition>(path);
   if (!partition) {
     std::cout << "(error reading partition file " << path.string() << ")\n";
@@ -435,7 +531,7 @@ void print_partition(const std::filesystem::path& path, indentation& indent,
 }
 
 void print_index_v0(const vast::fbs::index::v0* index, indentation& indent,
-                    const formatting_options&) {
+                    const options&) {
   if (!index) {
     std::cout << "(null)\n";
     return;
@@ -466,7 +562,7 @@ void print_index_v0(const vast::fbs::index::v0* index, indentation& indent,
 }
 
 void print_index(const std::filesystem::path& path, indentation& indent,
-                 const formatting_options& formatting) {
+                 const options& formatting) {
   auto index = read_flatbuffer_file<vast::fbs::Index>(path);
   if (!index) {
     std::cout << indent << "(error reading index file " << path.string()
@@ -482,8 +578,7 @@ void print_index(const std::filesystem::path& path, indentation& indent,
 }
 
 void print_segment_v0(const vast::fbs::segment::v0* segment,
-                      indentation& indent,
-                      const formatting_options& formatting) {
+                      indentation& indent, const options& options) {
   vast::uuid id;
   if (segment->uuid())
     unpack(*segment->uuid(), id);
@@ -491,7 +586,7 @@ void print_segment_v0(const vast::fbs::segment::v0* segment,
   indented_scope _(indent);
   std::cout << indent << "uuid: " << to_string(id) << "\n";
   std::cout << indent << "events: " << segment->events() << "\n";
-  if (formatting.verbosity >= output_verbosity::verbose) {
+  if (options.format.verbosity >= output_verbosity::verbose) {
     std::cout << indent << "table_slices:\n";
     indented_scope _(indent);
     size_t total_size = 0;
@@ -507,21 +602,22 @@ void print_segment_v0(const vast::fbs::segment::v0* segment,
         = vast::table_slice(std::move(chunk), vast::table_slice::verify::no);
       std::cout << indent << slice.layout().name() << ": " << slice.rows()
                 << " rows";
-      if (formatting.print_bytesizes) {
+      if (options.format.print_bytesizes) {
         auto size = flat_slice->data()->size();
-        std::cout << " (" << print_bytesize(size, formatting) << ")";
+        std::cout << " (" << print_bytesize(size, options.format) << ")";
         total_size += size;
       }
       std::cout << '\n';
     }
-    if (formatting.print_bytesizes)
-      std::cout << indent << "total: " << print_bytesize(total_size, formatting)
+    if (options.format.print_bytesizes)
+      std::cout << indent
+                << "total: " << print_bytesize(total_size, options.format)
                 << "\n";
   }
 }
 
 void print_segment(const std::filesystem::path& path, indentation& indent,
-                   const formatting_options& formatting) {
+                   const options& formatting) {
   auto segment = read_flatbuffer_file<vast::fbs::Segment>(path);
   if (!segment) {
     std::cout << "(error reading segment file " << path.string() << ")\n";
@@ -537,9 +633,10 @@ void print_segment(const std::filesystem::path& path, indentation& indent,
 
 int main(int argc, char** argv) {
   std::string raw_path;
-  struct formatting_options format;
+  struct options options;
+  auto& format = options.format;
   format.print_bytesizes = true;
-  format.verbosity = output_verbosity::verbose;
+  format.verbosity = output_verbosity::normal;
   for (int i = 1; i < argc; ++i) {
     auto arg = std::string_view{argv[i]};
     if (arg == "-h" || arg == "--human-readable") {
@@ -549,6 +646,12 @@ int main(int argc, char** argv) {
       format.print_bytesizes = true;
     } else if (arg == "-v" || arg == "--verbose") {
       format.verbosity = output_verbosity::verbose;
+    } else if (arg == "--expand-index") {
+      if (i + 1 >= argc) {
+        std::cerr << "Missing argument for --expand-index\n";
+        return 1;
+      }
+      options.partition.expand_indexes.emplace_back(argv[++i]);
     } else { // positional arg
       raw_path = arg;
     }
@@ -574,8 +677,10 @@ int main(int argc, char** argv) {
     std::cerr << "Could not determine type of " << argv[1] << std::endl;
     return 1;
   }
+  auto log_context
+    = vast::create_log_context(vast::invocation{}, caf::settings{});
   struct indentation indent;
   auto printer = printers.at(*kind);
-  printer(path, indent, format);
+  printer(path, indent, options);
   return 0;
 }
