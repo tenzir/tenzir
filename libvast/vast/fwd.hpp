@@ -109,7 +109,6 @@ struct none_type;
 struct offset;
 struct partition_synopsis;
 struct pattern_type;
-struct plugin_version;
 struct predicate;
 struct qualified_record_field;
 struct query;
@@ -281,7 +280,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::pattern))
-  VAST_ADD_TYPE_ID((vast::plugin_version))
   VAST_ADD_TYPE_ID((vast::port))
   VAST_ADD_TYPE_ID((vast::port_type))
   VAST_ADD_TYPE_ID((vast::predicate))

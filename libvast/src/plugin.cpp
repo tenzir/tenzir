@@ -30,21 +30,6 @@
 
 namespace vast {
 
-// -- plugin version -----------------------------------------------------------
-
-std::string to_string(plugin_version x) {
-  using std::to_string;
-  std::string result;
-  result += to_string(x.major);
-  result += '.';
-  result += to_string(x.minor);
-  result += '.';
-  result += to_string(x.patch);
-  result += '-';
-  result += to_string(x.tweak);
-  return result;
-}
-
 // -- plugin singleton ---------------------------------------------------------
 
 namespace plugins {
@@ -333,7 +318,7 @@ plugin_ptr::make_dynamic(const char* filename,
     return caf::make_error(ec::version_error,
                            "libvast build tree hash mismatch in", filename,
                            libvast_build_tree_hash(), version::build_tree_hash);
-  auto plugin_version = reinterpret_cast<::vast::plugin_version (*)()>(
+  auto plugin_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "vast_plugin_version"));
   if (!plugin_version)
     return caf::make_error(ec::system_error,
@@ -390,12 +375,12 @@ plugin_ptr::make_dynamic(const char* filename,
 }
 
 plugin_ptr plugin_ptr::make_static(plugin* instance, void (*deleter)(plugin*),
-                                   plugin_version version) noexcept {
+                                   const char* version) noexcept {
   return plugin_ptr{nullptr, instance, deleter, version, type::static_};
 }
 
 plugin_ptr plugin_ptr::make_native(plugin* instance, void (*deleter)(plugin*),
-                                   plugin_version version) noexcept {
+                                   const char* version) noexcept {
   return plugin_ptr{nullptr, instance, deleter, version, type::native};
 }
 
@@ -455,7 +440,7 @@ plugin& plugin_ptr::operator&() noexcept {
 }
 
 plugin_ptr::plugin_ptr(void* library, plugin* instance,
-                       void (*deleter)(plugin*), plugin_version version,
+                       void (*deleter)(plugin*), const char* version,
                        enum type type) noexcept
   : library_{library},
     instance_{instance},
@@ -465,7 +450,7 @@ plugin_ptr::plugin_ptr(void* library, plugin* instance,
   // nop
 }
 
-const plugin_version& plugin_ptr::version() const noexcept {
+const char* plugin_ptr::version() const noexcept {
   return version_;
 }
 
