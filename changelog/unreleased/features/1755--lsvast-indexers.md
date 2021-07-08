@@ -1,1 +1,2 @@
-The 'lsvast' tool can now print extended information for hash indices.
+The 'lsvast' tool now prints extended information for hash indices
+upon request.
