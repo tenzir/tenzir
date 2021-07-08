@@ -27,12 +27,9 @@ caf::expected<caf::actor>
 spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
                    spawn_arguments& args) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
-  auto [index, archive]
-    = self->state.registry.find<index_actor, archive_actor>();
+  auto [index] = self->state.registry.find<index_actor>();
   if (!index)
     return caf::make_error(ec::missing_component, "index");
-  if (!archive)
-    return caf::make_error(ec::missing_component, "archive");
   auto opts = args.inv.options;
   std::optional<std::string> command;
   if (auto cmd = caf::get_if<std::string>( //
@@ -78,7 +75,7 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
   if (!std::filesystem::exists(db_dir_abs))
     return caf::make_error(ec::filesystem_error, "could not find database "
                                                  "directory");
-  auto handle = self->spawn(disk_monitor, config, db_dir_abs, archive, index);
+  auto handle = self->spawn(disk_monitor, config, db_dir_abs, index);
   VAST_VERBOSE("{} spawned a disk monitor", self);
   return caf::actor_cast<caf::actor>(handle);
 }

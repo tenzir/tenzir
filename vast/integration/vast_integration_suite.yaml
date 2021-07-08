@@ -78,7 +78,7 @@ fixtures:
                      '--disk-budget-high=1',
                      '--disk-budget-low=0'],
                     work_dir, name='node', port=VAST_PORT,
-                    config_file=self.config_file)
+                    config_file='vast-local-stores.yaml')
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
