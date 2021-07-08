@@ -409,6 +409,7 @@ caf::error reader::parse_header() {
              unset_field_);
   VAST_DEBUG("{}     #path {}", detail::pretty_type_name(this), path);
   VAST_DEBUG("{}     #fields:", detail::pretty_type_name(this));
+  layout_ = detail::zeekify(layout_);
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
   if (auto t = schema_.find(layout_.name())) {
@@ -433,8 +434,6 @@ caf::error reader::parse_header() {
       }
     }
   }
-  // Determine the timestamp field.
-  layout_ = detail::zeekify(layout_);
   for (auto i = 0u; i < layout_.fields.size(); ++i)
     VAST_DEBUG("{}       {} ) {} : {}", detail::pretty_type_name(this), i,
                layout_.fields[i].name, layout_.fields[i].type);
