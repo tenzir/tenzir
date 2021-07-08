@@ -104,8 +104,8 @@ public:
     auto labels = std::array<std::string, sizeof...(Handles)>{
       normalize(caf::type_name_by_id<caf::type_id<Handles>::value>::value)...};
     auto components = std::apply(
-      [=](auto&&... labels) -> std::array<caf::actor, sizeof...(Handles)> {
-        auto find_component = [=](auto&& label) -> caf::actor {
+      [this](auto&&... labels) -> std::array<caf::actor, sizeof...(Handles)> {
+        auto find_component = [this](auto&& label) -> caf::actor {
           if (auto i = components_.find(std::forward<decltype(label)>(label));
               i != components_.end())
             return i->second.actor;

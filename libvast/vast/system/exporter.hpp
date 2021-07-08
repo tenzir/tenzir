@@ -33,6 +33,9 @@ struct exporter_state {
 
   // -- member variables -------------------------------------------------------
 
+  /// Stores the user-defined export query.
+  expression expr;
+
   /// Stores a handle to the INDEX for querying results.
   index_actor index;
 
@@ -67,9 +70,6 @@ struct exporter_state {
 
   /// Stores the query ID we receive from the INDEX.
   uuid id;
-
-  /// Stores the user-defined export query.
-  expression expr;
 };
 
 /// The EXPORTER gradually requests more results from the index until no more

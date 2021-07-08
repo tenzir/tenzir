@@ -45,7 +45,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
     auto blocking = caf::scoped_actor{self->system()};
     blocking->request(type_registry, caf::infinite, atom::get_v)
       .receive(
-        [=](type_set types) {
+        [=, this](type_set types) {
           auto is_valid = [&](const auto& layout) {
             return detail::starts_with(layout.name(), type_filter);
           };
@@ -67,7 +67,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
             VAST_ERROR("{} source failed to set schema: {}", reader->name(),
                        err);
         },
-        [=](const caf::error& err) {
+        [this](const caf::error& err) {
           VAST_ERROR("{} source failed to receive schema: {}", reader->name(),
                      err);
         });

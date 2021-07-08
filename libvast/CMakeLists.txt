@@ -196,7 +196,7 @@ else ()
     set_target_properties(
       libcaf_core_${_linkage_suffix}
       PROPERTIES EXPORT_NAME core
-                 CXX_STANDARD 17
+                 CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  CXX_EXTENSIONS OFF)
     add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
@@ -314,7 +314,7 @@ endif ()
 set_target_properties(
   libvast
   PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
-             CXX_STANDARD 17
+             CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
              CXX_EXTENSIONS OFF)
 

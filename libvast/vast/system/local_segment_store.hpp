@@ -24,7 +24,6 @@ using local_store_actor
     store_builder_actor>::unwrap;
 
 struct active_store_state {
-  filesystem_actor fs;
 
   /// A pointer to the hosting actor.
   //  We intentionally store a strong pointer here: The store lifetime is
@@ -35,6 +34,7 @@ struct active_store_state {
   //  been written to disk.
   local_store_actor self;
 
+  filesystem_actor fs;
   /// The path to where the store will be written.
   std::filesystem::path path;
 

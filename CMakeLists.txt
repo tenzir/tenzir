@@ -599,9 +599,9 @@ endif ()
 
 # -- compiler setup ------------------------------------------------------------
 
-set(CLANG_MINIMUM_VERSION 8.0)
-set(APPLE_CLANG_MINIMUM_VERSION 9.1)
-set(GCC_MINIMUM_VERSION 8.0)
+set(CLANG_MINIMUM_VERSION 11.0)
+set(APPLE_CLANG_MINIMUM_VERSION 12.0.5)
+set(GCC_MINIMUM_VERSION 10.0)
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   check_compiler_version(${GCC_MINIMUM_VERSION})

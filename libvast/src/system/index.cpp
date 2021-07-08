@@ -259,13 +259,13 @@ caf::error index_state::load_from_disk() {
       ->request(meta_index, caf::infinite, atom::merge_v,
                 std::exchange(synopses, {}))
       .then(
-        [=](atom::ok) {
+        [this](atom::ok) {
           VAST_VERBOSE("{} successfully loaded meta index from disk and will "
                        "start processing queries",
                        self);
           this->accept_queries = true;
         },
-        [=](caf::error& err) {
+        [this](caf::error& err) {
           VAST_ERROR("{} could not load meta index state from disk, shutting "
                      "down with error {}",
                      self, err);
@@ -394,7 +394,7 @@ void index_state::decomission_active_partition() {
   VAST_DEBUG("{} persists active partition to {}", self, part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
-      [=](std::shared_ptr<partition_synopsis>& ps) {
+      [=, this](std::shared_ptr<partition_synopsis>& ps) {
         VAST_DEBUG("{} successfully persisted partition {}", self, id);
         // Semantically ps is a unique_ptr, and the partition releases its
         // copy before sending. We use shared_ptr for the transport because
@@ -405,19 +405,19 @@ void index_state::decomission_active_partition() {
         self
           ->request(meta_index, caf::infinite, atom::merge_v, id, std::move(ps))
           .then(
-            [=](atom::ok) {
+            [=, this](atom::ok) {
               VAST_DEBUG("{} received ok for request to persist partition {}",
                          self, id);
               unpersisted.erase(id);
               persisted_partitions.insert(id);
             },
-            [=](const caf::error& err) {
+            [=, this](const caf::error& err) {
               VAST_DEBUG("{} received error for request to persist partition "
                          "{}: {}",
                          self, id, err);
             });
       },
-      [=](caf::error& err) {
+      [=, this](caf::error& err) {
         VAST_ERROR("{} failed to persist partition {} with error: {}", self, id,
                    err);
         self->quit(std::move(err));
@@ -466,7 +466,7 @@ index_state::status(status_verbosity v) const {
           if (v >= status_verbosity::debug)
             detail::merge_settings(part_status, ps, policy::merge_lists::no);
         },
-        [=, &xs](const caf::error& err) {
+        [=, this, &xs](const caf::error& err) {
           VAST_WARN("{} failed to retrieve status from {} : {}", self, id,
                     render(err));
           auto& ps = xs.emplace_back().as_dictionary();
@@ -606,10 +606,10 @@ void index_state::flush_to_disk() {
   self
     ->request(filesystem, caf::infinite, atom::write_v, index_filename(), chunk)
     .then(
-      [=](atom::ok) {
+      [this](atom::ok) {
         VAST_DEBUG("{} successfully persisted index state", self);
       },
-      [=](const caf::error& err) {
+      [this](const caf::error& err) {
         VAST_WARN("{} failed to persist index state: {}", self, render(err));
       });
 }
