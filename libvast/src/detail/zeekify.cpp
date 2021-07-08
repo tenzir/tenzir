@@ -23,7 +23,7 @@ record_type zeekify(record_type layout) {
   // fields, e.g., `_path`, precede it.
   for (auto& field : layout.fields)
     if (field.name == "ts")
-      if (auto ts = caf::get_if<time_type>(&field.type)) {
+      if (caf::holds_alternative<time_type>(field.type)) {
         VAST_DEBUG("using timestamp type for field {}", field.name);
         // field.type = alias_type{field.type}.name("timestamp");
         field.type.name("timestamp");
