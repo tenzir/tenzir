@@ -8,9 +8,9 @@
 
 #include "vast/detail/zeekify.hpp"
 
-#include "vast/detail/array.hpp"
 #include "vast/logger.hpp"
 
+#include <array>
 #include <string>
 
 namespace vast::detail {
@@ -40,7 +40,7 @@ record_type zeekify(record_type layout) {
     // consider zeek.files.conn_uids, which is a set of strings. The inner
     // index needs to have the #index=hash tag. Moreover, we need to consider
     // other fields, such as zeek.x509.id instead of uid.
-    static auto ids = make_array("uid", "fuid", "community_id");
+    static auto ids = std::array{"uid", "fuid", "community_id"};
     return std::find_if(ids.begin(), ids.end(), has_name) != ids.end();
   };
   for (auto& field : layout.fields)
