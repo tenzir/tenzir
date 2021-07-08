@@ -50,12 +50,6 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(caf::make_error(ec::parse_error, "cannot start a "
                                                               "local "
                                                               "node"));
-  // Fetch SSL settings from config.
-  auto& sys_cfg = sys.config();
-  auto use_encryption
-    = !sys_cfg.openssl_certificate.empty() || !sys_cfg.openssl_key.empty()
-      || !sys_cfg.openssl_passphrase.empty() || !sys_cfg.openssl_capath.empty()
-      || !sys_cfg.openssl_cafile.empty();
   // Construct an endpoint.
   endpoint node_endpoint;
   auto str = get_or(inv.options, "vast.endpoint", defaults::system::endpoint);
@@ -76,15 +70,17 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   auto host
     = node_endpoint.host.empty() ? "localhost" : node_endpoint.host.c_str();
   auto publish = [&]() -> caf::expected<uint16_t> {
-    if (use_encryption)
+    const auto reuse_address = true;
+    if (sys.has_openssl_manager()) {
 #if VAST_ENABLE_OPENSSL
-      return caf::openssl::publish(node, node_endpoint.port->number(), host);
+      return caf::openssl::publish(node, node_endpoint.port->number(), host,
+                                   reuse_address);
 #else
       return caf::make_error(ec::unspecified, "not compiled with OpenSSL "
                                               "support");
 #endif
+    }
     auto& mm = sys.middleman();
-    auto reuse_address = true;
     return mm.publish(node, node_endpoint.port->number(), host, reuse_address);
   };
   auto bound_port = publish();
