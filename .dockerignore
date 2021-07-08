@@ -7,3 +7,4 @@ pyvast/
 .clangd/
 build/
 compile_commands.json
+**/aux/

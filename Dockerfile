@@ -1,12 +1,12 @@
 # -- development ---------------------------------------------------------------
 
-FROM debian:buster-backports AS development
+FROM debian:bullseye-slim AS development
 LABEL maintainer="engineering@tenzir.com"
 
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}" \
-    CC="gcc-8" \
-    CXX="g++-8"
+    CC="gcc-10" \
+    CXX="g++-10"
 
 WORKDIR /tmp/vast
 
@@ -14,15 +14,19 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       build-essential \
       ca-certificates \
+      cmake \
       flatbuffers-compiler-dev \
-      g++-8 \
-      gcc-8 \
+      g++-10 \
+      gcc-10 \
       git-core \
       gnupg2 \
       jq \
+      libcaf-dev \
       libflatbuffers-dev \
+      libfmt-dev \
       libpcap-dev tcpdump \
       libsimdjson-dev \
+      libspdlog-dev \
       libssl-dev \
       libunwind-dev \
       libyaml-cpp-dev \
@@ -32,11 +36,8 @@ RUN apt-get update && \
       python3-dev \
       python3-pip \
       python3-venv \
+      robin-map-dev \
       wget && \
-    apt-get -y --no-install-recommends -t buster-backports install \
-      cmake \
-      libfmt-dev \
-      libspdlog-dev && \
     wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
@@ -91,7 +92,7 @@ CMD ["--help"]
 
 # -- production ----------------------------------------------------------------
 
-FROM debian:buster-backports AS production
+FROM debian:bullseye-slim AS production
 
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}"
@@ -106,24 +107,27 @@ RUN apt-get update && \
       ca-certificates \
       gnupg2 \
       libasan5 \
+      libcaf-core0.17 \
+      libcaf-io0.17 \
+      libcaf-openssl0.17 \
       libc++1 \
       libc++abi1 \
       libflatbuffers1 \
+      libfmt7 \
       libpcap0.8 \
-      libsimdjson4 \
+      libsimdjson5 \
+      libspdlog1 \
       libunwind8 \
       libyaml-cpp0.6 \
       lsb-release \
       openssl \
+      robin-map-dev \
       wget && \
-    apt-get -y --no-install-recommends -t buster-backports install \
-      libfmt-dev \
-      libspdlog1 && \
     wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow-dev && \
+    apt-get -y --no-install-recommends install libarrow400 && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast
