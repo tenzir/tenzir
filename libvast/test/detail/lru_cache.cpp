@@ -61,3 +61,15 @@ TEST(resizing) {
   cache.resize(0);
   CHECK_EQUAL(cache.size(), 0u);
 }
+
+TEST(eject) {
+  vast::detail::lru_cache<int, int, int_factory> cache(3, int_factory{});
+  cache.put(1, 42);
+  CHECK_EQUAL(cache.size(), size_t{1});
+  auto x0 = cache.eject(0);
+  CHECK_EQUAL(x0, 0);
+  CHECK_EQUAL(cache.size(), size_t{1});
+  auto x1 = cache.eject(1);
+  CHECK_EQUAL(x1, 42);
+  CHECK_EQUAL(cache.size(), size_t{0});
+}
