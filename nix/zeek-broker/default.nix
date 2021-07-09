@@ -45,6 +45,7 @@ stdenv.mkDerivation rec {
 
   cmakeFlags = [
     "-DCAF_ROOT_DIR=${caf}"
+    "-DENABLE_STATIC_ONLY:BOOL=${if isStatic then "ON" else "OFF"}"
   ];
 
   hardeningDisable = lib.optional isStatic "pic";
