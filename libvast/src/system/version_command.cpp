@@ -58,12 +58,7 @@ record retrieve_versions() {
   for (auto& plugin : plugins::get()) {
     if (plugin.type() == plugin_ptr::type::native)
       continue;
-    const auto& version = plugin.version();
-    if (version.major == version::major && version.minor == version::minor
-        && version.patch == version::patch && version.tweak == version::tweak)
-      plugin_versions[plugin->name()] = version::version;
-    else
-      plugin_versions[plugin->name()] = to_string(version);
+    plugin_versions[plugin->name()] = plugin.version();
   }
   result["plugins"] = std::move(plugin_versions);
   return result;

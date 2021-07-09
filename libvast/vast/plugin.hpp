@@ -27,27 +27,6 @@
 
 namespace vast {
 
-// -- plugin version -----------------------------------------------------------
-
-/// The version of a plugin in format major.minor.patch.tweak.
-extern "C" struct plugin_version {
-  uint16_t major;
-  uint16_t minor;
-  uint16_t patch;
-  uint16_t tweak;
-};
-
-/// @relates plugin_version
-std::string to_string(plugin_version x);
-
-/// Support CAF type-inspection.
-/// @relates plugin_version
-template <class Inspector>
-auto inspect(Inspector& f, plugin_version& x) ->
-  typename Inspector::result_type {
-  return f(x.major, x.minor, x.patch, x.tweak);
-}
-
 // -- plugin type ID blocks ----------------------------------------------------
 
 /// The type ID block used by a plugin as [begin, end).
@@ -316,14 +295,14 @@ public:
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
   static plugin_ptr make_static(plugin* instance, void (*deleter)(plugin*),
-                                plugin_version version) noexcept;
+                                const char* version) noexcept;
 
   /// Take ownership of a native plugin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
   static plugin_ptr make_native(plugin* instance, void (*deleter)(plugin*),
-                                plugin_version version) noexcept;
+                                const char* version) noexcept;
 
   /// Default-construct an invalid plugin.
   plugin_ptr() noexcept;
@@ -367,7 +346,7 @@ public:
   }
 
   /// Returns the plugin version.
-  [[nodiscard]] const plugin_version& version() const noexcept;
+  [[nodiscard]] const char* version() const noexcept;
 
   /// Returns the plugins type.
   [[nodiscard]] enum type type() const noexcept;
@@ -375,13 +354,13 @@ public:
 private:
   /// Create a plugin_ptr.
   plugin_ptr(void* library, plugin* instance, void (*deleter)(plugin*),
-             plugin_version version, enum type type) noexcept;
+             const char* version, enum type type) noexcept;
 
   /// Implementation details.
   void* library_ = {};
   plugin* instance_ = {};
   void (*deleter_)(plugin*) = {};
-  plugin_version version_ = {};
+  const char* version_ = {};
   enum type type_ = {};
 };
 
@@ -407,6 +386,12 @@ const Plugin* find(const std::string& name) {
 
 // -- helper macros ------------------------------------------------------------
 
+#if defined(VAST_ENABLE_NATIVE_PLUGINS)
+#  define VAST_PLUGIN_VERSION "native"
+#else
+extern const char* VAST_PLUGIN_VERSION;
+#endif
+
 #if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_NATIVE_PLUGINS)
 
 #  error "Plugins cannot be both static and native"
@@ -419,7 +404,7 @@ const Plugin* find(const std::string& name) {
 #    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_native
 #  endif
 
-#  define VAST_REGISTER_PLUGIN_5(name, major, minor, patch, tweak)             \
+#  define VAST_REGISTER_PLUGIN(name)                                           \
     template <class>                                                           \
     struct auto_register_plugin;                                               \
     template <>                                                                \
@@ -433,7 +418,7 @@ const Plugin* find(const std::string& name) {
           +[](::vast::plugin* plugin) noexcept {                               \
             delete plugin;                                                     \
           },                                                                   \
-          ::vast::plugin_version{major, minor, patch, tweak}));                \
+          VAST_PLUGIN_VERSION));                                               \
         return true;                                                           \
       }                                                                        \
       inline static auto flag = init();                                        \
@@ -462,7 +447,7 @@ const Plugin* find(const std::string& name) {
 
 #else
 
-#  define VAST_REGISTER_PLUGIN_5(name, major, minor, patch, tweak)             \
+#  define VAST_REGISTER_PLUGIN(name)                                           \
     extern "C" ::vast::plugin* vast_plugin_create() {                          \
       return new (name);                                                       \
     }                                                                          \
@@ -470,8 +455,8 @@ const Plugin* find(const std::string& name) {
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       delete plugin;                                                           \
     }                                                                          \
-    extern "C" struct ::vast::plugin_version vast_plugin_version() {           \
-      return {major, minor, patch, tweak};                                     \
+    extern "C" const char* vast_plugin_version() {                             \
+      return VAST_PLUGIN_VERSION;                                              \
     }                                                                          \
     extern "C" const char* vast_libvast_version() {                            \
       return ::vast::version::version;                                         \
@@ -505,22 +490,6 @@ const Plugin* find(const std::string& name) {
     }
 
 #endif
-
-#define VAST_REGISTER_PLUGIN_1(name)                                           \
-  VAST_REGISTER_PLUGIN_5(name, ::vast::version::major, ::vast::version::minor, \
-                         ::vast::version::patch, ::vast::version::tweak)
-
-#define VAST_REGISTER_PLUGIN_2(name, major)                                    \
-  VAST_REGISTER_PLUGIN_5(name, major, 0, 0, 0)
-
-#define VAST_REGISTER_PLUGIN_3(name, major, minor)                             \
-  VAST_REGISTER_PLUGIN_5(name, major, minor, 0, 0)
-
-#define VAST_REGISTER_PLUGIN_4(name, major, minor, patch)                      \
-  VAST_REGISTER_PLUGIN_5(name, major, minor, patch, 0)
-
-#define VAST_REGISTER_PLUGIN(...)                                              \
-  VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_, __VA_ARGS__)(__VA_ARGS__)
 
 #define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                                \
   VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_, __VA_ARGS__)           \

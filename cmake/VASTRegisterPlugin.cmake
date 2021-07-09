@@ -296,6 +296,56 @@ function (VASTRegisterPlugin)
                                PUBLIC $<BUILD_INTERFACE:${include_directories}>)
   endif ()
 
+  # Determine the plugin version. We use the CMake project version if it is set,
+  # and then optionally append the Git revision that last touched the project.
+  string(MAKE_C_IDENTIFIER "vast_plugin_${PLUGIN_TARGET}_version"
+                           PLUGIN_TARGET_IDENTIFIER)
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
+       "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@VAST_PLUGIN_VERSION@\";\n")
+  file(
+    WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
+    "\
+    find_package(Git QUIET)
+    if (Git_FOUND)
+      execute_process(
+        COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" rev-list
+                --abbrev-commit -1 HEAD -- \"${PROJECT_SOURCE_DIR}\"
+        OUTPUT_VARIABLE PLUGIN_REVISION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE PLUGIN_REVISION_RESULT)
+      if (PLUGIN_REVISION_RESULT EQUAL 0)
+        execute_process(
+          COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" diff-index
+                  --quiet HEAD -- \"${PROJECT_SOURCE_DIR}\"
+          RESULT_VARIABLE PLUGIN_DIRTY_RESULT)
+        if (NOT PLUGIN_DIRTY_RESULT EQUAL 0)
+          string(APPEND PLUGIN_REVISION \"-dirty\")
+        endif ()
+      endif ()
+    endif ()
+    set(PROJECT_VERSION \"${PROJECT_VERSION}\")
+    if (PROJECT_VERSION AND PLUGIN_REVISION)
+      set(VAST_PLUGIN_VERSION \"\${PROJECT_VERSION}-\${PLUGIN_REVISION}\")
+    elseif (PROJECT_VERSION)
+      set(VAST_PLUGIN_VERSION \"\${PROJECT_VERSION}\")
+    elseif (PLUGIN_REVISION)
+      set(VAST_PLUGIN_VERSION \"\${PLUGIN_REVISION}\")
+    else ()
+      set(VAST_PLUGIN_VERSION \"unspecified\")
+    endif ()
+    configure_file(\"${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in\"
+                  \"${CMAKE_CURRENT_BINARY_DIR}/config.cpp\" @ONLY)")
+  set_source_files_properties(
+    ${PLUGIN_ENTRYPOINT}
+    PROPERTIES COMPILE_DEFINITIONS
+               "VAST_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}")
+  add_custom_target(
+    ${PLUGIN_TARGET}-update-config
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/config.cpp"
+    COMMAND ${CMAKE_COMMAND} -P
+            "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
+  list(APPEND PLUGIN_ENTRYPOINT "${CMAKE_CURRENT_BINARY_DIR}/config.cpp")
+
   # Create a static library target for our plugin with the entrypoint, and use
   # static versions of VAST_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
