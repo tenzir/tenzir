@@ -71,10 +71,11 @@ struct importer_state {
   id next_id(uint64_t advance);
 
   /// @returns the number of currently available IDs.
-  id available_ids() const noexcept;
+  [[nodiscard]] id available_ids() const noexcept;
 
   /// @returns various status metrics.
-  caf::settings status(status_verbosity v) const;
+  [[nodiscard]] caf::typed_response_promise<caf::settings>
+  status(status_verbosity v) const;
 
   /// The active id block.
   id_block current;

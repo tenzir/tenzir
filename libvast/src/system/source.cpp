@@ -14,6 +14,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -22,7 +23,7 @@
 #include "vast/schema.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type_set.hpp"
@@ -275,16 +276,22 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       self->delegate(self->state.transformer, sink, name);
     },
     [self](atom::status, status_verbosity v) {
-      caf::settings result;
+      auto rs = make_status_request_state(self);
       if (v >= status_verbosity::detailed) {
         caf::settings src;
         if (self->state.reader)
           put(src, "format", self->state.reader->name());
         put(src, "produced", self->state.count);
-        auto& xs = put_list(result, "sources");
+        // General state such as open streams.
+        if (v >= status_verbosity::debug)
+          detail::fill_status_map(src, self);
+        const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
+        collect_status(rs, timeout, v, self->state.transformer, src,
+                       "transformer");
+        auto& xs = put_list(rs->content, "sources");
         xs.emplace_back(std::move(src));
       }
-      return result;
+      return rs->promise;
     },
     [self](atom::wakeup) {
       VAST_VERBOSE("{} wakes up to check for new input", self);

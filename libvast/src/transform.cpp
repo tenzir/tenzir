@@ -151,4 +151,8 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
   return std::move(x);
 }
 
+const std::vector<transform>& transformation_engine::transforms() {
+  return transforms_;
+}
+
 } // namespace vast

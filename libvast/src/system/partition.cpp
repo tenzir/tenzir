@@ -34,7 +34,7 @@
 #include "vast/system/indexer.hpp"
 #include "vast/system/local_segment_store.hpp"
 #include "vast/system/shutdown.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
@@ -162,9 +162,11 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       }
     }
     if (neg) {
-      auto partition_ids = std::accumulate(
-        state.type_ids.begin(), state.type_ids.end(), ids{},
-        [](ids acc, const auto& x) { return acc | x.second; });
+      auto partition_ids
+        = std::accumulate(state.type_ids.begin(), state.type_ids.end(), ids{},
+                          [](ids acc, const auto& x) {
+                            return acc | x.second;
+                          });
       row_ids = partition_ids ^ row_ids;
     }
   } else {
@@ -175,7 +177,9 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
   //       partition could instead maintain this actor lazily.
   return state.self->spawn([row_ids]() -> indexer_actor::behavior_type {
     return {
-      [=](const curried_predicate&) { return row_ids; },
+      [=](const curried_predicate&) {
+        return row_ids;
+      },
       [](atom::shutdown) {
         VAST_DEBUG("one-shot indexer received shutdown request");
       },
@@ -679,59 +683,47 @@ active_partition_actor::behavior_type active_partition(
               rp.delegate(self->state.store, std::move(query), hits);
             }
           },
-          [rp](caf::error& err) mutable { rp.deliver(std::move(err)); });
+          [rp](caf::error& err) mutable {
+            rp.deliver(std::move(err));
+          });
       return rp;
     },
     [self](atom::status,
            status_verbosity v) -> caf::typed_response_promise<caf::settings> {
-      struct req_state_t {
-        // Promise to the original client request.
-        caf::typed_response_promise<caf::settings> rp;
-        // Maps nodes to a map associating components with status information.
-        caf::settings content;
+      struct extra_state {
         size_t memory_usage = 0;
+        void deliver(caf::typed_response_promise<caf::settings>&& promise,
+                     caf::settings&& content) {
+          put(content, "memory-usage", memory_usage);
+          promise.deliver(std::move(content));
+        }
       };
-      auto req_state = std::make_shared<req_state_t>();
-      req_state->rp = self->make_response_promise<caf::settings>();
-      auto deliver = [](auto&& req_state) {
-        put(req_state.content, "memory-usage", req_state.memory_usage);
-        req_state.rp.deliver(req_state.content);
-      };
-      bool deferred = false;
-      auto& indexer_states = put_list(req_state->content, "indexers");
+      auto rs = make_status_request_state<extra_state>(self);
+      auto& indexer_states = put_list(rs->content, "indexers");
+      // Reservation is necessary to make sure the entries don't get relocated
+      // as the underlying vector grows - `ps` would refer to the wrong memory
+      // otherwise.
+      const auto timeout = defaults::system::initial_request_timeout / 5 / 3;
+      indexer_states.reserve(self->state.indexers.size());
       for (auto& i : self->state.indexers) {
-        deferred = true;
-        self
-          ->request<caf::message_priority::high>(i.second, caf::infinite,
-                                                 atom::status_v, v)
-          .then(
-            [=, &indexer_states](const caf::settings& indexer_status) {
-              auto& ps = indexer_states.emplace_back().as_dictionary();
-              put(ps, "field", i.first.fqn());
-              if (auto s = caf::get_if<caf::config_value::integer>(
-                    &indexer_status, "memory-usage"))
-                req_state->memory_usage += *s;
-              if (v >= status_verbosity::debug)
-                detail::merge_settings(indexer_status, ps,
-                                       policy::merge_lists::no);
-              // Both handlers have a copy of req_state.
-              if (req_state.use_count() == 2)
-                deliver(std::move(*req_state));
-            },
-            [=, &indexer_states](const caf::error& err) {
-              VAST_WARN("{} failed to retrieve status from {} : {}", self,
-                        i.first.fqn(), render(err));
-              auto& ps = indexer_states.emplace_back().as_dictionary();
-              put(ps, "id", to_string(self->state.id));
-              put(ps, "error", render(err));
-              // Both handlers have a copy of req_state.
-              if (req_state.use_count() == 2)
-                deliver(std::move(*req_state));
-            });
+        auto& ps = indexer_states.emplace_back().as_dictionary();
+        collect_status(
+          rs, timeout, v, i.second,
+          [rs, v, &ps, &field = i.first](caf::settings& response) {
+            put(ps, "field", field.fqn());
+            if (auto s = caf::get_if<caf::config_value::integer>( //
+                  &response, "memory-usage"))
+              rs->memory_usage += *s;
+            if (v >= status_verbosity::debug)
+              detail::merge_settings(response, ps, policy::merge_lists::no);
+          },
+          [rs, &ps, &field = i.first](caf::error& err) {
+            VAST_WARN("{} failed to retrieve status from {} : {}", rs->self,
+                      field.fqn(), fmt::to_string(err));
+            put(ps, "error", fmt::to_string(err));
+          });
       }
-      if (!deferred)
-        deliver(std::move(*req_state));
-      return req_state->rp;
+      return rs->promise;
     },
   };
 }
@@ -897,7 +889,9 @@ partition_actor::behavior_type passive_partition(
               rp.delegate(self->state.store, std::move(query), hits);
             }
           },
-          [rp](caf::error& err) mutable { rp.deliver(std::move(err)); });
+          [rp](caf::error& err) mutable {
+            rp.deliver(std::move(err));
+          });
       return rp;
     },
     [self](atom::status,

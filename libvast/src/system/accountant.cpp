@@ -20,7 +20,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/time.hpp"
@@ -362,14 +362,13 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     [self](atom::status, status_verbosity v) {
       using caf::put_dictionary;
       auto result = caf::settings{};
-      auto& accountant_status = put_dictionary(result, "accountant");
       if (v >= status_verbosity::detailed) {
-        auto& components = put_dictionary(accountant_status, "components");
+        auto& components = put_dictionary(result, "components");
         for (const auto& [aid, name] : self->state->actor_map)
           components.emplace(name, aid);
       }
       if (v >= status_verbosity::debug)
-        detail::fill_status_map(accountant_status, self);
+        detail::fill_status_map(result, self);
       return result;
     },
     [self](atom::telemetry) {

@@ -67,6 +67,9 @@ public:
   /// Apply relevant transformations to the table slice.
   caf::expected<table_slice> apply(table_slice&&) const;
 
+  /// Get a list of the transformations.
+  const std::vector<transform>& transforms();
+
 private:
   /// The set of transforms
   std::vector<transform> transforms_;

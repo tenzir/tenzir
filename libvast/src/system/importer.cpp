@@ -22,7 +22,7 @@
 #include "vast/plugin.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
@@ -187,25 +187,28 @@ id importer_state::available_ids() const noexcept {
   return max_id - current.next;
 }
 
-caf::settings importer_state::status(status_verbosity v) const {
-  auto result = caf::settings{};
+caf::typed_response_promise<caf::settings>
+importer_state::status(status_verbosity v) const {
+  auto rs = make_status_request_state(self);
   // Gather general importer status.
-  auto& importer_status = put_dictionary(result, "importer");
   // TODO: caf::config_value can only represent signed 64 bit integers, which
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
   if (v >= status_verbosity::detailed) {
-    caf::put(importer_status, "ids.available", to_string(available_ids()));
-    caf::put(importer_status, "ids.block.next", to_string(current.next));
-    caf::put(importer_status, "ids.block.end", to_string(current.end));
-    auto& sources_status = put_list(importer_status, "sources");
+    put(rs->content, "ids.available", to_string(available_ids()));
+    put(rs->content, "ids.block.next", to_string(current.next));
+    put(rs->content, "ids.block.end", to_string(current.end));
+    auto& sources_status = put_list(rs->content, "sources");
     for (const auto& kv : inbound_descriptions)
       sources_status.emplace_back(kv.second);
   }
   // General state such as open streams.
   if (v >= status_verbosity::debug)
-    detail::fill_status_map(importer_status, self);
-  return result;
+    detail::fill_status_map(rs->content, self);
+  // Retrieve an additional subsection from the transformer.
+  const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
+  collect_status(rs, timeout, v, transformer, rs->content, "transformer");
+  return rs->promise;
 }
 
 void importer_state::send_report() {

@@ -12,7 +12,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
-#include "vast/system/status_verbosity.hpp"
+#include "vast/system/status.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
@@ -71,14 +71,14 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
     [self](atom::status, status_verbosity v) {
       auto result = caf::settings{};
       if (v >= status_verbosity::info)
-        caf::put(result, "filesystem.type", "POSIX");
+        put(result, "type", "POSIX");
       if (v >= status_verbosity::debug) {
-        auto& ops = put_dictionary(result, "filesystem.operations");
+        auto& ops = put_dictionary(result, "operations");
         auto add_stats = [&](auto& name, auto& stats) {
           auto& dict = put_dictionary(ops, name);
-          caf::put(dict, "successful", stats.successful);
-          caf::put(dict, "failed", stats.failed);
-          caf::put(dict, "bytes", stats.bytes);
+          put(dict, "successful", stats.successful);
+          put(dict, "failed", stats.failed);
+          put(dict, "bytes", stats.bytes);
         };
         add_stats("writes", self->state.stats.writes);
         add_stats("reads", self->state.stats.reads);
