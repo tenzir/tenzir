@@ -18,6 +18,7 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>
+#include <caf/attach_stream_sink.hpp>
 #include <caf/attach_stream_stage.hpp>
 #include <caf/settings.hpp>
 
@@ -33,6 +34,8 @@ transformer_stream_stage_ptr attach_transform_stage(
     [self](caf::unit_t&, caf::downstream<table_slice>& out,
            detail::framed<table_slice> x) {
       if (x.header == detail::stream_control_header::eof) {
+        VAST_DEBUG("{} quits after receiving EOF control message in stream",
+                   self);
         self->send_exit(self, caf::make_error(ec::end_of_input));
         return;
       }
@@ -84,6 +87,35 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
         detail::fill_status_map(result, self);
       return result;
     }};
+}
+
+stream_sink_actor<table_slice>::behavior_type
+dummy_transformer_sink(stream_sink_actor<table_slice>::pointer self) {
+  return {
+    [self](
+      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+      auto result = caf::attach_stream_sink(
+        self, in,
+        [=](size_t& num_discarded) {
+          num_discarded = 0;
+        },
+        [=](size_t& num_discarded, const std::vector<table_slice>& slices) {
+          const auto num_rows
+            = std::transform_reduce(slices.begin(), slices.end(), size_t{},
+                                    std::plus<>{}, [](const auto& slice) {
+                                      return slice.rows();
+                                    });
+          num_discarded += num_rows;
+        },
+        [=](size_t& num_discarded, const caf::error& err) {
+          if (num_discarded > 0)
+            VAST_WARN("transformer discarded {} undeliverable events",
+                      num_discarded);
+          self->quit(err);
+        });
+      return result.inbound_slot();
+    },
+  };
 }
 
 } // namespace vast::system

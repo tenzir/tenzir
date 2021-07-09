@@ -156,6 +156,22 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     self->state.done = true;
     if (self->state.mgr)
       self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
+    // Spawn a dummy transformer sink.
+    auto dummy = self->spawn(dummy_transformer_sink);
+    self
+      ->request(self->state.transformer, caf::infinite,
+                static_cast<stream_sink_actor<table_slice>>(dummy))
+      .then(
+        [=](caf::outbound_stream_slot<table_slice>) {
+          if (self->state.mgr) {
+            VAST_WARN("{} flushes", self);
+            self->state.mgr->shutdown();
+            self->state.mgr->out().force_emit_batches();
+            self->state.mgr->out().close();
+            self->state.mgr->out().fan_out_flush();
+          }
+        },
+        [](const caf::error&) {});
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
@@ -166,18 +182,42 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [self](caf::unit_t&, caf::downstream<detail::framed<table_slice>>& out,
+    [self](caf::unit_t&, caf::downstream<detail::framed<table_slice>>&,
            size_t num) {
-      VAST_DEBUG("{} tries to generate {} messages", self, num);
+      if (self->state.has_sink && self->state.mgr->out().num_paths() == 0) {
+        VAST_WARN("{} discards request for {} messages because all its "
+                  "outbound paths were removed",
+                  self, num);
+        return;
+      }
+      VAST_DEBUG("{} schedules generation of {} messages", self, num);
+      self
+        ->request(caf::actor_cast<source_actor>(self), caf::infinite,
+                  atom::internal_v, atom::run_v, static_cast<uint64_t>(num))
+        .then(
+          [=]() {
+            VAST_DEBUG("{} finished generation of {} messages", self, num);
+          },
+          [=](const caf::error& err) {
+            VAST_WARN("{} failed generation of {} messages: {}", self, num,
+                      err);
+          });
+    },
+    // done?
+    [self](const caf::unit_t&) {
+      return self->state.done;
+    });
+  auto result = source_actor::behavior_type{
+    [self](atom::internal, atom::run, uint64_t num) {
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
         self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
-          out.push(std::move(slice));
+          self->state.mgr->out().push(std::move(slice));
         });
       };
       // We can produce up to num * table_slice_size events per run.
-      auto events = num * self->state.table_slice_size;
+      auto events = static_cast<size_t>(num) * self->state.table_slice_size;
       if (self->state.requested)
         events = std::min(events, *self->state.requested - self->state.count);
       auto t = timer::start(self->state.metrics);
@@ -189,7 +229,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto finish = [&] {
         self->state.done = true;
         self->state.send_report();
-        out.push(detail::framed<vast::table_slice>::make_eof());
+        self->state.mgr->out().push(
+          detail::framed<vast::table_slice>::make_eof());
         self->quit();
       };
       if (self->state.requested
@@ -232,11 +273,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       }
       VAST_DEBUG("{} ended a generation round regularly", self);
     },
-    // done?
-    [self](const caf::unit_t&) {
-      return self->state.done;
-    });
-  auto result = source_actor::behavior_type{
     [self](atom::get, atom::schema) { //
       return self->state.reader->schema();
     },
@@ -265,9 +301,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       }
       // Start streaming.
       self->state.has_sink = true;
-      if (self->state.accountant)
-        self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry_v);
+      self->delayed_send<caf::message_priority::high>(
+        self, defaults::system::telemetry_rate, atom::telemetry_v);
       // Start streaming. Note that we add the outbound path only now,
       // otherwise for small imports the source might already shut down
       // before we receive a sink.
@@ -305,8 +340,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       VAST_DEBUG("{} got a telemetry atom", self);
       self->state.send_report();
       if (!self->state.mgr->done())
-        self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry_v);
+        self->delayed_send<caf::message_priority::high>(
+          self, defaults::system::telemetry_rate, atom::telemetry_v);
     },
   };
   // We cannot return the behavior directly and make the SOURCE a typed actor

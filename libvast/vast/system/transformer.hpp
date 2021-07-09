@@ -51,4 +51,16 @@ transformer_actor::behavior_type
 transformer(transformer_actor::stateful_pointer<transformer_state> self,
             std::string name, std::vector<transform>&&);
 
+/// An actor that hosts a no-op stream sink for table slices, that the SOURCE
+/// and IMPORTER attach to their respective TRANASFORMER actors on shutdown.
+/// @param self The parent actor handle.
+/// @note This serves to fix a possible deadlock in high-load situations during
+/// shutdown: Given three actors A, B, and C that host a stream A -> B -> C,
+/// shutting down A and C before B is done streaming may cause B to stall. This
+/// is problematic for the TRANSFORMER, which is shut down via a EOF on the
+/// stream instead of a regular message. As a workaround, we let the SOURCE and
+/// IMPORTER attach a dummy sink to the TRANSFORMER on shutdown.
+stream_sink_actor<table_slice>::behavior_type
+dummy_transformer_sink(stream_sink_actor<table_slice>::pointer self);
+
 } // namespace vast::system
