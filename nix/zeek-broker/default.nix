@@ -53,7 +53,7 @@ stdenv.mkDerivation rec {
   checkTarget = "test";
 
   meta = with lib; {
-    description = "Zeek's Messaging Library ";
+    description = "Zeek's Messaging Library";
     homepage = "https://github.com/zeek/broker";
     license = licenses.bsd3;
     platforms = platforms.unix;
