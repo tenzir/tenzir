@@ -18,6 +18,7 @@
 , robin-map
 , jemalloc
 , libunwind
+, zeek-broker
 , python3
 , jq
 , tcpdump
@@ -72,7 +73,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ 
+  buildInputs = [
     libpcap
     jemalloc
     libyamlcpp
@@ -80,6 +81,7 @@ stdenv.mkDerivation rec {
     spdlog
     robin-map
     libunwind
+    zeek-broker
   ];
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
 
