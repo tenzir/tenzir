@@ -145,36 +145,27 @@ option(VAST_ENABLE_OPENSSL "Encrypt network communication" ON)
 add_feature_info("VAST_ENABLE_OPENSSL" VAST_ENABLE_OPENSSL
                  "encrypt network communication.")
 
-option(VAST_ENABLE_BUNDLED_CAF "Always use the CAF submodule" OFF)
+option(VAST_ENABLE_BUNDLED_CAF "Use the CAF submodule" OFF)
 add_feature_info("VAST_ENABLE_BUNDLED_CAF" VAST_ENABLE_BUNDLED_CAF
-                 "always use the CAF submodule.")
+                 "use the CAF submodule.")
 if (NOT VAST_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
+  provide_find_module(CAF)
   find_package(
     CAF 0.17.6 EXACT
     COMPONENTS core io test
-    QUIET)
-endif ()
-if (CAF_FOUND)
-  message(STATUS "Found CAF")
+    REQUIRED)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+         "\nfind_package(CAF 0.17.6 EXACT COMPONENTS core io test REQUIRED)")
   if (VAST_ENABLE_OPENSSL)
-    find_package(CAF COMPONENTS openssl)
-    if (NOT CAF_LIBRARY_OPENSSL)
-      message(
-        WARNING
-          "Could not locate CAF's OpenSSL module, falling back to bundled CAF")
-    else ()
-      string(APPEND VAST_FIND_DEPENDENCY_LIST
-             "\nfind_package(CAF COMPONENTS openssl REQUIRED)")
-    endif ()
-  endif ()
-  if (CAF_FOUND)
-    provide_find_module(CAF)
+    find_package(
+      CAF 0.17.6 EXACT
+      COMPONENTS openssl
+      REQUIRED)
     string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(CAF COMPONENTS core io test REQUIRED)")
+           "\nfind_package(CAF 0.17.6 EXACT COMPONENTS openssl REQUIRED)")
   endif ()
-endif ()
-if (NOT CAF_FOUND)
+else ()
   # Use bundled CAF.
   if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt")
     message(
@@ -350,13 +341,15 @@ if (VAST_ENABLE_OPENSSL)
   target_link_libraries(libvast PUBLIC CAF::openssl)
 endif ()
 if (VAST_ENABLE_BUNDLED_CAF)
+  # Figure out whether we point to a build directory or a prefix.
+  if (NOT caf_dir)
+    set(caf_dir ${CAF_INCLUDE_DIRS})
+  endif ()
   add_dependencies(libvast caf-targets-link)
+  dependency_summary("CAF" "${caf_dir}" "Dependencies")
+else ()
+  dependency_summary("CAF" CAF::core "Dependencies")
 endif ()
-# Figure out whether we point to a build directory or a prefix.
-if (NOT caf_dir)
-  set(caf_dir ${CAF_INCLUDE_DIRS})
-endif ()
-dependency_summary("CAF" "${caf_dir}" "Dependencies")
 
 # Link against libvast-fbs.
 target_link_libraries(libvast PUBLIC libvast-fbs)

@@ -150,6 +150,7 @@ jobs:
             git \
             gnupg2 gnupg-agent \
             jq \
+            libcaf-dev \
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \
@@ -221,7 +222,6 @@ jobs:
             -DVAST_PLUGINS:STRING="plugins/pcap" \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_DSCAT:BOOL=ON \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 
@@ -520,12 +520,16 @@ jobs:
           - name: Example Analyzer
             target: example-analyzer
             path: examples/plugins/analyzer
+            dependencies:
           - name: Example Transform
             target: example-transform
             path: examples/plugins/transform
+            dependencies:
           - name: Broker
             target: broker
             path: plugins/broker
+            dependencies:
+              - libbroker-dev
     env:
       INSTALL_DIR: '${{ github.workspace }}/_install'
       BUILD_DIR: '${{ github.workspace }}/_build'
@@ -542,17 +546,18 @@ jobs:
         run: |
           apt-get update
           apt-get -y install \
+            ${{ join(matrix.plugin.dependencies, ' ') }} \
             apt-transport-https \
             build-essential \
             ca-certificates \
             curl \
-            libbroker-dev \
             flatbuffers-compiler-dev \
             g++-10 \
             gcc-10 \
             git \
             gnupg2 gnupg-agent \
             jq \
+            libcaf-dev \
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \

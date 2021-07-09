@@ -141,8 +141,9 @@ caf::error extract(T& x, span<const std::byte>& bytes) {
 /// Parses a binary Zeek value.
 caf::error extract_value(data& result, span<const std::byte>& bytes) {
   // Every value begins with type information.
-  int type, sub_type;
-  bool present;
+  int type = 0;
+  int sub_type = 0;
+  bool present = false;
   auto err = caf::error::eval(
     [&] {
       return extract(type, bytes);
@@ -205,7 +206,7 @@ caf::error extract_value(data& result, span<const std::byte>& bytes) {
       break;
     }
     case zeek::tag::type_subnet: {
-      uint8_t length;
+      uint8_t length = 0;
       if (auto err = extract(length, bytes))
         return err;
       address addr;

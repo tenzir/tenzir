@@ -69,6 +69,7 @@ in {
       "-DSPDLOG_BUILD_SHARED=OFF"
     ];
   });
+  zeek-broker = final.callPackage ./zeek-broker {inherit stdenv;};
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
   vast = final.callPackage ./vast {inherit stdenv;};
   vast-ci = final.vast.override {
