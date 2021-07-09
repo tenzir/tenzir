@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
-list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 project(
   broker
@@ -28,5 +27,8 @@ if (VAST_ENABLE_BUNDLED_CAF)
 endif ()
 
 # Link against libbroker.
+set(_CMAKE_MODULE_PATH_OLD "${CMAKE_MODULE_PATH}")
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(Broker REQUIRED)
+set(CMAKE_MODULE_PATH "${_CMAKE_MODULE_PATH_OLD}")
 target_link_libraries(broker PUBLIC zeek::broker)
