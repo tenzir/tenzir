@@ -5,4 +5,4 @@ tests:
     tags: [plugin]
     steps:
       - command: -N status
-         transformation: jq -ec '."example-analyzer"'
+        transformation: jq -ec '."example-analyzer"'
