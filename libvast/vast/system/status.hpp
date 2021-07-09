@@ -25,14 +25,22 @@ enum class status_verbosity { info, detailed, debug };
 
 template <class Ptr, class Result>
 struct status_request_state_base {
+  // The regular constructor to be used with the `shared_ptr` from
+  // `make_status_request_state`.
+  status_request_state_base(Ptr self,
+                            caf::typed_response_promise<Result> promise)
+    : self{self}, promise{std::move(promise)}, content{} {
+  }
+
   // The copy constructor is intentionally deleted.
   status_request_state_base(const status_request_state_base&) = delete;
   status_request_state_base& operator=(const status_request_state_base&)
     = delete;
 
   // Moving is still allowed.
-  status_request_state_base(status_request_state_base&&) = default;
-  status_request_state_base& operator=(status_request_state_base&&) = default;
+  status_request_state_base(status_request_state_base&&) noexcept = default;
+  status_request_state_base&
+  operator=(status_request_state_base&&) noexcept = default;
 
   ~status_request_state_base() = default;
 
@@ -60,7 +68,7 @@ auto make_status_request_state(Ptr self) {
   // We need a custom deleter to deliver the promise, so we can't use
   // make_shared here.
   auto rs = std::shared_ptr<state_type>{
-    new state_type{{self, self->template make_response_promise<Result>(), {}},
+    new state_type{{self, self->template make_response_promise<Result>()},
                    Extra{}},
     [](state_type* x) {
       x->Extra::deliver(std::move(x->promise), std::move(x->content));
