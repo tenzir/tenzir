@@ -103,6 +103,26 @@ void source_state::send_report() {
   caf::unsafe_send_as(self, accountant, std::move(r));
 }
 
+void source_state::filter_and_push(
+  table_slice slice, const std::function<void(table_slice)>& push_to_out) {
+  const auto unfiltered_rows = slice.rows();
+  if (filter) {
+    if (auto filtered_slice = vast::filter(std::move(slice), *filter)) {
+      VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
+                 reader->name(), filtered_slice->rows(), unfiltered_rows,
+                 slice.layout().name());
+      push_to_out(std::move(*filtered_slice));
+    } else {
+      VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
+                 reader->name(), unfiltered_rows, slice.layout().name());
+    }
+  } else {
+    VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
+               unfiltered_rows, slice.layout().name());
+    push_to_out(std::move(slice));
+  }
+}
+
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
@@ -150,7 +170,11 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       VAST_DEBUG("{} tries to generate {} messages", self, num);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto push_slice = [&](table_slice slice) { out.push(std::move(slice)); };
+      auto push_slice = [&](table_slice slice) {
+        self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
+          out.push(std::move(slice));
+        });
+      };
       // We can produce up to num * table_slice_size events per run.
       auto events = num * self->state.table_slice_size;
       if (self->state.requested)
@@ -208,7 +232,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       VAST_DEBUG("{} ended a generation round regularly", self);
     },
     // done?
-    [self](const caf::unit_t&) { return self->state.done; });
+    [self](const caf::unit_t&) {
+      return self->state.done;
+    });
   auto result = source_actor::behavior_type{
     [self](atom::get, atom::schema) { //
       return self->state.reader->schema();
@@ -220,10 +246,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         return err;
       return caf::unit;
     },
-    [self]([[maybe_unused]] expression& expr) {
-      // FIXME: Allow for filtering import data.
-      // self->state.filter = std::move(expr);
-      VAST_WARN("{} does not currently implement filter expressions", self);
+    [self](expression& expr) {
+      self->state.filter = std::move(expr);
     },
     [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);

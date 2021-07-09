@@ -276,9 +276,10 @@ tests:
       - command: -N export ascii ':timestamp >= 2011-08-15T03:48'
       - command: -N export ascii ':time >= 2011-08-15T03:48'
   Node suricata alert:
-    tags: [node, import-export, suricata, eve]
+    tags: [node, import-export, suricata, eve, import-filter]
     steps:
-      - command: -N import -r @./data/suricata/eve.json suricata
+      - command: -N import suricata '#type != "suricata.stats"'
+        input: data/suricata/eve.json
       - command: -N export ascii 'src_ip == 147.32.84.165'
       - command: -N export csv '#type ~ /suricata.*/'
       - command: -N export zeek '#type ~ /suricata.alert/'

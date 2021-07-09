@@ -89,7 +89,9 @@ caf::behavior datagram_source(
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
-    [self](const caf::unit_t&) { return self->state.done; });
+    [self](const caf::unit_t&) {
+      return self->state.done;
+    });
   auto result = datagram_source_actor::behavior_type{
     [self](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
@@ -105,8 +107,9 @@ caf::behavior datagram_source(
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
-        VAST_DEBUG("{} produced a slice with {} rows", self, slice.rows());
-        self->state.mgr->out().push(detail::framed{std::move(slice)});
+        self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
+          self->state.mgr->out().push(std::move(slice));
+        });
       };
       auto events = capacity * self->state.table_slice_size;
       if (self->state.requested)
@@ -154,10 +157,8 @@ caf::behavior datagram_source(
         return err;
       return caf::unit;
     },
-    [self]([[maybe_unused]] expression& expr) {
-      // FIXME: Allow for filtering import data.
-      // self->state.filter = std::move(expr);
-      VAST_WARN("{} does not currently implement filter expressions", self);
+    [self](expression& expr) {
+      self->state.filter = std::move(expr);
     },
     [self](atom::status, status_verbosity v) {
       caf::settings result;
