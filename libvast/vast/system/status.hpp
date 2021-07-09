@@ -25,6 +25,17 @@ enum class status_verbosity { info, detailed, debug };
 
 template <class Ptr, class Result>
 struct status_request_state_base {
+  // The copy constructor is intentionally deleted.
+  status_request_state_base(const status_request_state_base&) = delete;
+  status_request_state_base& operator=(const status_request_state_base&)
+    = delete;
+
+  // Moving is still allowed.
+  status_request_state_base(status_request_state_base&&) = default;
+  status_request_state_base& operator=(status_request_state_base&&) = default;
+
+  ~status_request_state_base() = default;
+
   // The actor handling the original request.
   Ptr self;
   // Promise to the original request.
@@ -120,9 +131,9 @@ void collect_status(
     [key, &s](caf::settings& response) {
       put(s, std::string_view{key}, std::move(response));
     },
-    [self = rs->self, key, &s](caf::error& err) {
+    [self = rs->self, key, &s](const caf::error& err) {
       VAST_WARN("{} failed to retrieve status for the key {}: {}", self, key,
-                fmt::to_string(err));
+                err);
       put(s, std::string_view{key}, fmt::to_string(err));
     });
 }
