@@ -107,23 +107,9 @@ caf::behavior datagram_source(
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
-        const auto unfiltered_rows = slice.rows();
-        if (self->state.filter) {
-          if (auto filtered_slice
-              = filter(std::move(slice), *self->state.filter)) {
-            VAST_VERBOSE("{} forwards {}/{} produced {} events after filtering",
-                         self, filtered_slice->rows(), unfiltered_rows,
-                         slice.layout().name());
-            self->state.mgr->out().push(std::move(*filtered_slice));
-          } else {
-            VAST_VERBOSE("{} forwards 0/{} produced {} events after filtering",
-                         self, unfiltered_rows, slice.layout().name());
-          }
-        } else {
-          VAST_VERBOSE("{} forwards {} produced {} events", self,
-                       unfiltered_rows, slice.layout().name());
+        self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
           self->state.mgr->out().push(std::move(slice));
-        }
+        });
       };
       auto events = capacity * self->state.table_slice_size;
       if (self->state.requested)

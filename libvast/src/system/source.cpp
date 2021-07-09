@@ -103,6 +103,26 @@ void source_state::send_report() {
   caf::unsafe_send_as(self, accountant, std::move(r));
 }
 
+void source_state::filter_and_push(
+  table_slice slice, const std::function<void(table_slice)>& push_to_out) {
+  const auto unfiltered_rows = slice.rows();
+  if (filter) {
+    if (auto filtered_slice = vast::filter(std::move(slice), *filter)) {
+      VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
+                 reader->name(), filtered_slice->rows(), unfiltered_rows,
+                 slice.layout().name());
+      push_to_out(std::move(*filtered_slice));
+    } else {
+      VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
+                 reader->name(), unfiltered_rows, slice.layout().name());
+    }
+  } else {
+    VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
+               unfiltered_rows, slice.layout().name());
+    push_to_out(std::move(slice));
+  }
+}
+
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
@@ -151,23 +171,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
-        const auto unfiltered_rows = slice.rows();
-        if (self->state.filter) {
-          if (auto filtered_slice
-              = filter(std::move(slice), *self->state.filter)) {
-            VAST_VERBOSE("{} forwards {}/{} produced {} events after filtering",
-                         self, filtered_slice->rows(), unfiltered_rows,
-                         slice.layout().name());
-            out.push(std::move(*filtered_slice));
-          } else {
-            VAST_VERBOSE("{} forwards 0/{} produced {} events after filtering",
-                         self, unfiltered_rows, slice.layout().name());
-          }
-        } else {
-          VAST_VERBOSE("{} forwards {} produced {} events", self,
-                       unfiltered_rows, slice.layout().name());
+        self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
           out.push(std::move(slice));
-        }
+        });
       };
       // We can produce up to num * table_slice_size events per run.
       auto events = num * self->state.table_slice_size;

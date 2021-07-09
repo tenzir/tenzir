@@ -98,6 +98,9 @@ struct source_state {
   initialize(const type_registry_actor& type_registry, std::string type_filter);
 
   void send_report();
+
+  void filter_and_push(table_slice slice,
+                       const std::function<void(table_slice)>& push_to_out);
 };
 
 /// An event producer.
