@@ -124,7 +124,7 @@ TEST(ymdshms time parser) {
   vast::time ts;
   MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss+HH");
   CHECK(parsers::time("2012-08-12+23:55:04.001234-01", ts));
-  auto sd = floor<days>(ts);
+  auto sd = floor<vast::days>(ts);
   auto t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 13));
   CHECK(to_hours(t) == hours{0});
@@ -133,7 +133,7 @@ TEST(ymdshms time parser) {
   CHECK(to_microseconds(t) == microseconds{1234});
   MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss");
   CHECK(parsers::time("2012-08-12+23:55:04.001234", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
@@ -142,7 +142,7 @@ TEST(ymdshms time parser) {
   CHECK(to_microseconds(t) == microseconds{1234});
   MESSAGE("YYYY-MM-DD+HH:MM:SS-HH:MM");
   CHECK(parsers::time("2012-08-12+23:55:04+00:30", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
   CHECK_EQUAL(to_hours(t), hours{23});
@@ -150,7 +150,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{4});
   MESSAGE("YYYY-MM-DD+HH:MM:SS");
   CHECK(parsers::time("2012-08-12+23:55:04", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
@@ -158,7 +158,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{4});
   MESSAGE("YYYY-MM-DD HH:MM:SS"); // space as delimiter; needed for Sysmon
   CHECK(parsers::time("2012-08-12 23:55:04", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
@@ -167,7 +167,7 @@ TEST(ymdshms time parser) {
   // TODO: Fix timezone offset without divider
   MESSAGE("YYYY-MM-DD+HH:MM+HHMM");
   CHECK(parsers::time("2012-08-12+23:55-0130", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 13));
   CHECK_EQUAL(to_hours(t), hours{1});
@@ -175,7 +175,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM-DD+HH:MM");
   CHECK(parsers::time("2012-08-12+23:55", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
@@ -183,7 +183,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM-DD+HH");
   CHECK(parsers::time("2012-08-12+23", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
@@ -191,7 +191,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM-DD");
   CHECK(parsers::time("2012-08-12", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{0});
@@ -199,7 +199,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM");
   CHECK(parsers::time("2012-08", ts));
-  sd = floor<days>(ts);
+  sd = floor<vast::days>(ts);
   t = ts - sd;
   CHECK(verify_date(sd, 2012, 8, 1));
   CHECK(to_hours(t) == hours{0});
