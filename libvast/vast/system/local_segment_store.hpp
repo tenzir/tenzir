@@ -24,6 +24,8 @@ using local_store_actor
     store_builder_actor>::unwrap;
 
 struct active_store_state {
+  /// Defaulted constructor to make this a non-aggregate.
+  active_store_state() = default;
 
   /// A pointer to the hosting actor.
   //  We intentionally store a strong pointer here: The store lifetime is
@@ -32,35 +34,41 @@ struct active_store_state {
   //  received all data from the incoming stream. This pointer serves to keep
   //  the ref-count alive for the last part, and is reset after the data has
   //  been written to disk.
-  local_store_actor self;
+  local_store_actor self = {};
 
-  filesystem_actor fs;
+  /// Actor handle of the filesystem actor.
+  filesystem_actor fs = {};
+
   /// The path to where the store will be written.
-  std::filesystem::path path;
+  std::filesystem::path path = {};
 
   /// The builder preparing the store.
   //  TODO: Store a vector<table_slice> here and implement
   //  store/lookup/.. on that.
-  std::unique_ptr<vast::segment_builder> builder;
+  std::unique_ptr<vast::segment_builder> builder = {};
 
-  std::optional<vast::segment> segment;
+  /// The serialized segment.
+  std::optional<vast::segment> segment = {};
 
   /// Number of events in this store.
   size_t events = {};
 };
 
 struct passive_store_state {
+  /// Defaulted constructor to make this a non-aggregate.
+  passive_store_state() = default;
+
   /// Holds requests that did arrive while the segment data
   /// was still being loaded from disk.
   using request = std::tuple<vast::query, vast::ids,
                              caf::typed_response_promise<atom::done>>;
-  std::vector<request> deferred_requests;
+  std::vector<request> deferred_requests = {};
 
   /// The actor handle of the filesystem actor.
-  filesystem_actor fs;
+  filesystem_actor fs = {};
 
   /// The path where the segment is stored.
-  std::filesystem::path path;
+  std::filesystem::path path = {};
 
   /// The segment corresponding to this local store.
   caf::optional<vast::segment> segment = {};

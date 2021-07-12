@@ -27,6 +27,10 @@
 namespace vast::system {
 
 struct exporter_state {
+  /// -- constructor -----------------------------------------------------------
+
+  exporter_state() = default;
+
   /// -- constants -------------------------------------------------------------
 
   static inline const char* name = "exporter";
@@ -34,42 +38,42 @@ struct exporter_state {
   // -- member variables -------------------------------------------------------
 
   /// Stores the user-defined export query.
-  expression expr;
+  expression expr = {};
 
   /// Stores a handle to the INDEX for querying results.
-  index_actor index;
+  index_actor index = {};
 
   /// Stores a transformation_engine for transforming the results.
-  transformation_engine transformer;
+  transformation_engine transformer = {};
 
   /// Stores a handle to the SINK that processes results.
-  caf::actor sink;
+  caf::actor sink = {};
 
   /// Stores a handle to the STATISTICS_SUBSCRIBER that periodically prints
   /// statistics.
-  caf::actor statistics_subscriber;
+  caf::actor statistics_subscriber = {};
 
   /// Stores a handle to the ACCOUNTANT that collects various statistics.
-  accountant_actor accountant;
+  accountant_actor accountant = {};
 
   /// Caches tailored candidate checkers.
-  std::unordered_map<type, expression> checkers;
+  std::unordered_map<type, expression> checkers = {};
 
   /// Caches results for the SINK.
-  std::vector<table_slice> results;
+  std::vector<table_slice> results = {};
 
   /// Stores the time point for when this actor got started via 'run'.
-  std::chrono::system_clock::time_point start;
+  std::chrono::system_clock::time_point start = {};
 
   /// Stores various meta information about the progress we made on the query.
-  query_status query;
+  query_status query = {};
 
   /// Stores flags for the query for distinguishing historic and continuous
   /// queries.
-  query_options options;
+  query_options options = {};
 
   /// Stores the query ID we receive from the INDEX.
-  uuid id;
+  uuid id = {};
 };
 
 /// The EXPORTER gradually requests more results from the index until no more
