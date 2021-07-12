@@ -176,6 +176,11 @@ caf::error configuration::parse(int argc, char** argv) {
       auto contents = detail::load_contents(config);
       if (!contents)
         return contents.error();
+      // Skip empty config files.
+      if (std::all_of(contents->begin(), contents->end(), [](char ch) {
+            return std::isspace(ch);
+          }))
+        continue;
       auto yaml = from_yaml(*contents);
       if (!yaml)
         return yaml.error();
