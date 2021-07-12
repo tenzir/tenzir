@@ -29,7 +29,9 @@ target_sources(
 )
 set_target_properties(
   libvast_test
-  PROPERTIES SOVERSION "${VAST_VERSION_MAJOR}"
+  PROPERTIES CXX_STANDARD 20
+             CXX_STANDARD_REQUIRED ON
+             SOVERSION "${VAST_VERSION_MAJOR}"
              VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}"
              OUTPUT_NAME vast_test
              EXPORT_NAME test)

@@ -12,6 +12,7 @@ list(SORT test_headers)
 
 # Add vast-test executable.
 add_executable(vast-test ${test_sources} ${test_headers})
+set_target_properties(vast-test PROPERTIES CXX_STANDARD 20)
 
 target_link_libraries(vast-test PRIVATE libvast_test libvast libvast_internal
                                         ${CMAKE_THREAD_LIBS_INIT})
