@@ -16,12 +16,16 @@
 // - Created:    June 20, 2013, 5:09 PM
 // - License:    BSD 3-Clause
 //
-// In addition to the cosmetic changes, the use of exceptions has been removed
-// from the original code and a `factory` member was added to create new entries
-// if a key is missing from the cache.
-// Additionally, iteration support and `resize()` and `clear()` function were
-// added; and `exists()` was renamed to `contains()` for closer alignment with
-// the standard library containers.
+// The following extensive changes have been applied to the original source:
+//  * Cosmetic refactoring to fit the VAST code style
+//  * Use of exceptions has been removed
+//  * A `factory` member was added to create new entries if a key is
+//    missing from the cache.
+//  * Iteration support
+//  * Member function `exists()` was renamed to `contains()`
+//  * Added member function `resize()`
+//  * Added member function `clear()`
+//  * Added member function `eject()`
 
 #pragma once
 
@@ -106,7 +110,6 @@ public:
       return it->second->second;
     }
     return put(key, factory_(key));
-    ;
   }
 
   void drop(const Key& key) {
@@ -114,6 +117,20 @@ public:
     if (it != cache_items_map_.end()) {
       cache_items_list_.erase(it->second);
       cache_items_map_.erase(it);
+    }
+  }
+
+  // Remove an item from the cache and return it; constructing
+  // it if it didn't exist before.
+  Value eject(const Key& key) {
+    auto it = cache_items_map_.find(key);
+    if (it != cache_items_map_.end()) {
+      std::list<key_value_pair> tmp;
+      tmp.splice(tmp.end(), cache_items_list_, it->second);
+      cache_items_map_.erase(it);
+      return std::move(tmp.front().second);
+    } else {
+      return factory_(key);
     }
   }
 

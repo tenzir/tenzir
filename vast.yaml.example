@@ -95,8 +95,8 @@ vast:
 
   # The store backend to use. Can be either 'archive', 'segment-store', or
   # the name of a user-provided store plugin. Note that the 'segment-store'
-  # backend is still experimental. Also note that the disk-monitor currently
-  # only erases data from the 'archive' backend.
+  # backend is still experimental. Also note that 'vast get' and 'vast explore'
+  # currently work correctly with the 'archive' backend.
   store-backend: archive
   # The maximum number of segments cached by the archive.
   segments: 10

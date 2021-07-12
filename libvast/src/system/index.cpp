@@ -894,9 +894,9 @@ index(index_actor::stateful_pointer<index_state> self,
         self->state.pending.erase(iter);
       return {};
     },
-    [self](atom::erase, uuid partition_id) -> caf::result<ids> {
+    [self](atom::erase, uuid partition_id) -> caf::result<atom::done> {
       VAST_VERBOSE("{} erases partition {}", self, partition_id);
-      auto rp = self->make_response_promise<ids>();
+      auto rp = self->make_response_promise<atom::done>();
       auto path = self->state.partition_path(partition_id);
       auto synopsis_path = self->state.partition_synopsis_path(partition_id);
       bool adjust_stats = true;
@@ -914,66 +914,70 @@ index(index_actor::stateful_pointer<index_state> self,
         // through cleanly.
         adjust_stats = false;
       }
-      self->state.inmem_partitions.drop(partition_id);
-      self->state.persisted_partitions.erase(partition_id);
       self
         ->request(self->state.meta_index, caf::infinite, atom::erase_v,
                   partition_id)
-        .then([](atom::ok) { /* nop */ },
-              [partition_id](const caf::error& err) {
-                VAST_WARN("index encountered an error trying to erase "
-                          "partition {} from the meta index: {}",
-                          partition_id, err);
-              });
-      self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
         .then(
-          [=](const chunk_ptr& chunk) mutable {
-            // Adjust layout stats by subtracting the events of the removed
-            // partition.
-            const auto* partition = fbs::GetPartition(chunk->data());
-            if (partition->partition_type() != fbs::partition::Partition::v0) {
-              rp.deliver(caf::make_error(ec::format_error, "unexpected "
-                                                           "format "
-                                                           "version"));
-              return;
-            }
-            vast::ids all_ids;
-            const auto* partition_v0 = partition->partition_as_v0();
-            for (const auto* partition_stats : *partition_v0->type_ids()) {
-              const auto* name = partition_stats->name();
-              vast::ids ids;
-              if (auto error
-                  = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
-                rp.deliver(
-                  caf::make_error(ec::format_error, "could not deserialize "
-                                                    "ids: "
-                                                      + render(error)));
-                return;
-              }
-              all_ids |= ids;
-              if (adjust_stats)
-                self->state.stats.layouts[name->str()].count -= rank(ids);
-            }
-            // Note that mmap's will increase the reference count of a file,
-            // so unlinking should not affect indexers that are currently
-            // loaded and answering a query.
-            auto try_remove_all = [](const auto& p, const auto& error_fn) {
-              std::error_code err{};
-              std::filesystem::remove_all(p, err);
-              if (err)
-                error_fn();
-            };
-            try_remove_all(path, [&] {
-              VAST_WARN("{} could not unlink partition at {}", self, path);
-            });
-            try_remove_all(synopsis_path, [&] {
-              VAST_WARN("{} could not unlink partition synopsis at", self,
-                        synopsis_path);
-            });
-            rp.deliver(std::move(all_ids));
+          [self, partition_id, path, synopsis_path, rp,
+           adjust_stats](atom::ok) mutable {
+            auto partition_actor
+              = self->state.inmem_partitions.eject(partition_id);
+            self->state.persisted_partitions.erase(partition_id);
+            self
+              ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
+                        path)
+              .then(
+                [=](const chunk_ptr& chunk) mutable {
+                  // Adjust layout stats by subtracting the events of the
+                  // removed partition.
+                  const auto* partition = fbs::GetPartition(chunk->data());
+                  if (partition->partition_type()
+                      != fbs::partition::Partition::v0) {
+                    rp.deliver(caf::make_error(ec::format_error, "unexpected "
+                                                                 "format "
+                                                                 "version"));
+                    return;
+                  }
+                  vast::ids all_ids;
+                  const auto* partition_v0 = partition->partition_as_v0();
+                  for (const auto* partition_stats :
+                       *partition_v0->type_ids()) {
+                    const auto* name = partition_stats->name();
+                    vast::ids ids;
+                    if (auto error
+                        = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
+                      rp.deliver(caf::make_error(ec::format_error,
+                                                 "could not deserialize "
+                                                 "ids: "
+                                                   + render(error)));
+                      return;
+                    }
+                    all_ids |= ids;
+                    if (adjust_stats)
+                      self->state.stats.layouts[name->str()].count -= rank(ids);
+                  }
+                  // Note that mmap's will increase the reference count of a
+                  // file, so unlinking should not affect indexers that are
+                  // currently loaded and answering a query.
+                  std::error_code err{};
+                  std::filesystem::remove_all(synopsis_path, err);
+                  if (err)
+                    VAST_WARN("{} could not unlink partition synopsis at", self,
+                              synopsis_path);
+                  // TODO: We could send `all_ids` as the second argument here,
+                  // which doesn't really make sense from an interface
+                  // perspective but would save the partition from recomputing
+                  // the same bitmap.
+                  rp.delegate(partition_actor, atom::erase_v);
+                },
+                [=](caf::error& err) mutable {
+                  rp.deliver(std::move(err));
+                });
           },
-          [=](caf::error& err) mutable {
-            rp.deliver(std::move(err));
+          [partition_id](const caf::error& err) {
+            VAST_WARN("index encountered an error trying to erase "
+                      "partition {} from the meta index: {}",
+                      partition_id, err);
           });
       return rp;
     },

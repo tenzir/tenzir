@@ -163,6 +163,9 @@ struct passive_partition_state {
   /// Pointer to the parent actor.
   partition_actor::pointer self = nullptr;
 
+  /// Path of the underlying file for this partition.
+  std::filesystem::path path;
+
   /// Legacy archive
   store_actor archive;
 

@@ -34,7 +34,12 @@ dummy_partition(system::partition_actor::pointer self, ids x) {
       self->send(sink, rank(x));
       return atom::done_v;
     },
-    [=](atom::status, system::status_verbosity) { return caf::settings{}; },
+    [=](atom::erase) -> atom::done {
+      FAIL("dummy implementation not available");
+    },
+    [=](atom::status, system::status_verbosity) {
+      return caf::settings{};
+    },
   };
 }
 

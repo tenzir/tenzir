@@ -105,7 +105,7 @@ using store_actor = typed_actor_fwd<
   // Handles an extraction for the given expression, optionally optimized by a
   // set of ids to pre-select the events to evaluate.
   caf::replies_to<query, ids>::with<atom::done>,
-  // Erase the events with the given ids.
+  // TODO: Replace usage of `atom::erase` with `query::erase` in call sites.
   caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
 
 /// The STORE BUILDER actor interface.
@@ -118,7 +118,9 @@ using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
-  caf::replies_to<query>::with<atom::done>>
+  caf::replies_to<query>::with<atom::done>,
+  // Delete the whole partition from disk and from the archive
+  caf::replies_to<atom::erase>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -214,7 +216,7 @@ using index_actor = typed_actor_fwd<
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
   // Erases the given events from the INDEX, and returns their ids.
-  caf::replies_to<atom::erase, uuid>::with<ids>>
+  caf::replies_to<atom::erase, uuid>::with<atom::done>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the QUERY SUPERVISOR MASTER actor.

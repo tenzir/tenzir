@@ -519,6 +519,14 @@ active_partition_actor::behavior_type active_partition(
     shutdown<policy::parallel>(self, std::move(indexers));
   });
   return {
+    [self](atom::erase) -> caf::result<atom::done> {
+      // Erase is sent by the disk monitor to erase this partition
+      // from disk, but an active partition does not have any files
+      // on disk, so it should never get selected for deletion.
+      VAST_WARN("{} got erase atom as an active partition", self);
+      return caf::make_error(ec::logic_error, "can not erase the active "
+                                              "partition");
+    },
     [self](caf::stream<table_slice> in) {
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
@@ -733,6 +741,7 @@ partition_actor::behavior_type passive_partition(
   store_actor legacy_archive, filesystem_actor filesystem,
   const std::filesystem::path& path) {
   self->state.self = self;
+  self->state.path = path;
   self->state.archive = legacy_archive;
   auto id_string = to_string(id);
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
@@ -893,6 +902,22 @@ partition_actor::behavior_type passive_partition(
             rp.deliver(std::move(err));
           });
       return rp;
+    },
+    [self](atom::erase) -> caf::result<atom::done> {
+      VAST_WARN("erasing partition {} from path", self->state.id,
+                self->state.path);
+      std::error_code err{};
+      std::filesystem::remove_all(self->state.path, err);
+      if (err)
+        VAST_WARN("{} could not erase partition at", self, self->state.path);
+      vast::ids all_ids;
+      for (const auto& kv : self->state.type_ids) {
+        all_ids |= kv.second;
+      }
+      query q;
+      q.cmd = query::erase{};
+      return self->delegate(self->state.store, atom::erase_v,
+                            std::move(all_ids));
     },
     [self](atom::status,
            status_verbosity /*v*/) -> caf::config_value::dictionary {

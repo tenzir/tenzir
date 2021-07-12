@@ -49,9 +49,6 @@ struct disk_monitor_state {
   /// Whether an erasing run is currently in progress.
   bool purging;
 
-  /// Node handle of the ARCHIVE.
-  archive_actor archive;
-
   /// Node handle of the INDEX.
   index_actor index;
 
@@ -70,12 +67,10 @@ struct disk_monitor_state {
 /// @param low_water Erase until this limit is no longer exceeded.
 /// @param scan_interval The timespan between scans.
 /// @param db_dir The path to the database directory.
-/// @param archive The actor handle of the ARCHIVE.
 /// @param index The actor handle of the INDEX.
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
-             const std::filesystem::path& db_dir, archive_actor archive,
-             index_actor index);
+             const std::filesystem::path& db_dir, index_actor index);
 
 } // namespace vast::system

@@ -106,6 +106,7 @@ std::filesystem::path store_path_for_partition(const uuid& partition_id) {
 store_actor::behavior_type
 passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                     filesystem_actor fs, const std::filesystem::path& path) {
+  self->state.path = path;
   self->set_exit_handler([self](const caf::exit_msg&) {
     for (auto&& [expr, ids, rp] :
          std::exchange(self->state.deferred_requests, {}))
@@ -165,6 +166,20 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                                                    rp);
         return rp;
       }
+      VAST_DEBUG("{} erases some ids");
+      if (is_subset(self->state.segment->ids(), xs)) {
+        VAST_VERBOSE("{} gets wholly erased from {}", self, self->state.path);
+        std::error_code err;
+        std::filesystem::remove_all(self->state.path, err);
+        if (err)
+          return caf::make_error(ec::system_error, err.message());
+        // There is a (small) chance one or more lookups are currently still in
+        // progress, so we dont call `self->quit()` here but instead rely on
+        // ref-counting. The lookups can still finish normally because the
+        // `mmap()` is still valid even after the underlying segment file was
+        // removed.
+        return atom::done_v;
+      }
       auto new_segment = segment::copy_without(*self->state.segment, xs);
       if (!new_segment) {
         VAST_ERROR("could not remove ids from segment {}: {}",
@@ -175,8 +190,6 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       auto old_path = self->state.path;
       auto new_path = self->state.path.replace_extension("next");
       auto rp = caf::typed_response_promise<atom::done>{};
-      // TODO: If the new segment is empty, we should probably just erase the
-      // file without replacement here.
       self
         ->request(self->state.fs, caf::infinite, atom::write_v, new_path,
                   new_segment->chunk())

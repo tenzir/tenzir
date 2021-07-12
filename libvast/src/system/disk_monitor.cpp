@@ -16,7 +16,6 @@
 #include "vast/detail/recursive_size.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/archive.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/detail/scope_guard.hpp>
@@ -94,8 +93,7 @@ caf::expected<size_t> disk_monitor_state::compute_dbdir_size() const {
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
-             const std::filesystem::path& dbdir, archive_actor archive,
-             index_actor index) {
+             const std::filesystem::path& dbdir, index_actor index) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(config.high_water_mark),
                    VAST_ARG(config.low_water_mark), VAST_ARG(dbdir));
   using namespace std::string_literals;
@@ -105,7 +103,6 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
   }
   self->state.config = config;
   self->state.dbdir = dbdir;
-  self->state.archive = archive;
   self->state.index = index;
   self->send(self, atom::ping_v);
   return {
@@ -200,37 +197,19 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           ->request(self->state.index, caf::infinite, atom::erase_v,
                     partition.id)
           .then(
-            [=, sg = shared_guard](ids erased_ids) {
-              // TODO: This currently only erases data from the global archive.
-              // We should remove this continuation from the disk monitor and
-              // let the partition do this instead, to support partition-local
-              // stores.
-              VAST_VERBOSE("{} erases removed ids from archive", self);
-              self
-                ->request(self->state.archive, caf::infinite, atom::erase_v,
-                          erased_ids)
-                .then(
-                  [=, sg = shared_guard](atom::done) {
-                    // TODO: There's a race condition here: We calculate the
-                    // size of the database directory while we might be deleting
-                    // files from it.
-                    if (const auto size = self->state.compute_dbdir_size();
-                        !size) {
-                      VAST_WARN("{} failed to calculate size of {}: {}", self,
-                                self->state.dbdir, size.error());
-                    } else {
-                      VAST_VERBOSE("{} erased ids from index; leftover size is "
-                                   "{}",
-                                   self, *size);
-                      if (*size > self->state.config.low_water_mark) {
-                        // Repeat until we're below the low water mark
-                        self->send(self, atom::erase_v);
-                      }
-                    }
-                  },
-                  [=, sg = shared_guard](caf::error err) {
-                    VAST_WARN("{} failed to erase from archive: {}", self, err);
-                  });
+            [=, sg = shared_guard](atom::done) {
+              if (const auto size = self->state.compute_dbdir_size(); !size) {
+                VAST_WARN("{} failed to calculate size of {}: {}", self,
+                          self->state.dbdir, size.error());
+              } else {
+                VAST_VERBOSE("{} erased ids from index; leftover size is "
+                             "{}",
+                             self, *size);
+                if (*size > self->state.config.low_water_mark) {
+                  // Repeat until we're below the low water mark
+                  self->send(self, atom::erase_v);
+                }
+              }
             },
             [=, sg = shared_guard](caf::error e) {
               VAST_WARN("{} failed to erase from index: {}", self, render(e));
