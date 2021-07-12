@@ -17,6 +17,10 @@ namespace vast {
 
 /// A wrapper for an expression related command.
 struct query {
+  query() = default;
+  query(query&&) = default;
+  query(const query&) = default;
+
   struct count {
     enum mode { estimate, exact };
     system::receiver_actor<uint64_t> sink;
@@ -62,6 +66,13 @@ struct query {
 
   command cmd;
   expression expr = {};
+
+  query(const command& cmd, const expression& expr) : cmd(cmd), expr(expr) {
+  }
+
+  query(command&& cmd, expression&& expr)
+    : cmd(std::move(cmd)), expr(std::move(expr)) {
+  }
 
   // -- Helper functions to make query creation less boiler-platey.
 
