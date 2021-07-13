@@ -33,7 +33,7 @@ namespace fmt {
 template <>
 struct formatter<vast::table_slice_encoding> : formatter<std::string_view> {
   template <typename FormatContext>
-  auto format(const vast::table_slice_encoding& x, FormatContext& ctx) {
+  auto format(vast::table_slice_encoding x, FormatContext& ctx) {
     using super = formatter<std::string_view>;
     switch (x) {
       case vast::table_slice_encoding::none:
