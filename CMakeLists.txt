@@ -263,12 +263,18 @@ endif ()
 
 # TODO add option to disable SSE
 
+find_package(SSE QUIET)
 target_compile_options(
   libvast_internal
-  INTERFACE $<$<CONFIG:Release>:-msse3
-            -mssse3
-            -msse4.1
-            -msse4.2
+  INTERFACE $<$<CONFIG:Release>:
+            $<$<BOOL:${SSE_FOUND}>:-msse>
+            $<$<BOOL:${SSE2_FOUND}>:-msse2>
+            $<$<BOOL:${SSE3_FOUND}>:-msse3>
+            $<$<BOOL:${SSSE3_FOUND}>:-mssse3>
+            $<$<BOOL:${SSE4_1_FOUND}>:-msse4.1>
+            $<$<BOOL:${SSE4_2_FOUND}>:-msse4.2>
+            $<$<BOOL:${AVX_FOUND}>:-mavx>
+            $<$<BOOL:${AVX2_FOUND}>:-mavx2>
             -fno-omit-frame-pointer>
             $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>
             $<$<CONFIG:Debug>:-O0>
@@ -736,6 +742,8 @@ if (NOT VAST_IS_SUBPROJECT)
   endif ()
   message(" * Source Directory: ${CMAKE_SOURCE_DIR}")
   message(" * Binary Directory: ${CMAKE_BINARY_DIR}\n")
+  message(" * System Name: ${CMAKE_SYSTEM_NAME}")
+  message(" * CPU: ${CMAKE_SYSTEM_PROCESSOR}")
   foreach (lang IN ITEMS C CXX)
     set(_lang_compiler "${CMAKE_${lang}_COMPILER}")
     set(_lang_compiler_info

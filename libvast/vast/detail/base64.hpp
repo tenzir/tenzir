@@ -14,12 +14,12 @@
 /// [Base64](https://en.wikipedia.org/wiki/Base64) coding.
 namespace vast::detail::base64 {
 
-constexpr char alphabet[] = "ABCDEFGHIJKLMNOP"
-                            "QRSTUVWXYZabcdef"
-                            "ghijklmnopqrstuv"
-                            "wxyz0123456789+/";
+constexpr signed char alphabet[] = "ABCDEFGHIJKLMNOP"
+                                   "QRSTUVWXYZabcdef"
+                                   "ghijklmnopqrstuv"
+                                   "wxyz0123456789+/";
 
-constexpr char inverse[] = {
+constexpr signed char inverse[] = {
   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //   0-15
   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //  16-31
   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63, //  32-47

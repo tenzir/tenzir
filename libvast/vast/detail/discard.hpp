@@ -14,9 +14,7 @@
 
 // Ensures all args are used and syntactically valid, without evaluating them.
 
-#if __GNUC__ == 8
-// GCC-8 does weird things here, so we actually evaluate the arguments (when
-// compiling without optimizations).
+#if __GNUC__
 #  define VAST_DISCARD_1(msg) static_cast<void>((msg))
 #else
 #  define VAST_DISCARD_1(msg) static_cast<std::void_t<decltype((msg))>>(0)
