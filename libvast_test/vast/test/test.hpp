@@ -125,7 +125,7 @@ struct less_equal_compare {
     if (!(x)) {                                                                \
       CAF_CHECK_FAILED((x).error());                                           \
     } else {                                                                   \
-      CAF_CHECK_PASSED(#x)                                                     \
+      CAF_CHECK_PASSED(#x);                                                    \
     }                                                                          \
   } while (false)
 #define CHECK_FAIL CAF_CHECK_FAIL
