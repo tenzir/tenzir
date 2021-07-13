@@ -46,6 +46,8 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
   auto result = partition_synopsis{};
   auto synopsis_opts = caf::settings{};
   result.add(ts, synopsis_opts);
+  result.offset = 0;
+  result.events = ts.rows();
   return result;
 }
 
@@ -159,7 +161,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     q += hhmmss;
     q += ".0";
     std::vector<uuid> result;
-    auto rp = self->request(meta_idx, caf::infinite, unbox(to<expression>(q)));
+    auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
+                            unbox(to<expression>(q)), vast::ids{});
     run();
     rp.receive(
       [&](std::vector<uuid> candidates) { result = std::move(candidates); },
@@ -173,8 +176,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   auto lookup(meta_index_actor& meta_idx, std::string_view expr) {
     std::vector<uuid> result;
-    auto rp
-      = self->request(meta_idx, caf::infinite, unbox(to<expression>(expr)));
+    auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
+                            unbox(to<expression>(expr)), vast::ids{});
     run();
     rp.receive(
       [&](std::vector<uuid> candidates) { result = std::move(candidates); },

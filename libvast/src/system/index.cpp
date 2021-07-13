@@ -217,9 +217,9 @@ caf::error index_state::load_from_disk() {
       VAST_ASSERT(uuid_fb);
       vast::uuid partition_uuid{};
       unpack(*uuid_fb, partition_uuid);
-      auto part_dir = partition_path(partition_uuid);
-      auto synopsis_dir = partition_synopsis_path(partition_uuid);
-      if (!exists(part_dir)) {
+      auto part_path = partition_path(partition_uuid);
+      auto synopsis_path = partition_synopsis_path(partition_uuid);
+      if (!exists(part_path)) {
         VAST_WARN("{} found partition {}"
                   "in the index state but not on disk; this may have been "
                   "caused by an unclean shutdown",
@@ -227,13 +227,14 @@ caf::error index_state::load_from_disk() {
         continue;
       }
       // Generate external partition synopsis file if it doesn't exist.
-      if (!exists(synopsis_dir)) {
-        if (auto error = extract_partition_synopsis(part_dir, synopsis_dir))
+      if (!exists(synopsis_path)) {
+        if (auto error = extract_partition_synopsis(part_path, synopsis_path))
           return error;
       }
-      auto chunk = chunk::mmap(synopsis_dir);
+    retry:
+      auto chunk = chunk::mmap(synopsis_path);
       if (!chunk) {
-        VAST_WARN("{} could not mmap partition at {}", *self, part_dir);
+        VAST_WARN("{} could not mmap partition at {}", *self, part_path);
         continue;
       }
       const auto* ps_flatbuffer
@@ -243,7 +244,20 @@ caf::error index_state::load_from_disk() {
           != fbs::partition_synopsis::PartitionSynopsis::v0)
         return caf::make_error(ec::format_error, "invalid partition synopsis "
                                                  "version");
-      if (auto error = unpack(*ps_flatbuffer->partition_synopsis_as_v0(), ps))
+      const auto& synopsis_v0 = *ps_flatbuffer->partition_synopsis_as_v0();
+      // Re-write old partition synopses that were created before the offset and
+      // id were saved.
+      if (!synopsis_v0.id_range()) {
+        VAST_VERBOSE("{} rewrites old meta-index data for partition {}", *self,
+                     partition_uuid);
+        if (auto error = extract_partition_synopsis(part_path, synopsis_path))
+          return error;
+        // TODO: There is probably a good way to rewrite this without the jump,
+        // but in the meantime I defer to Knuth:
+        //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
+        goto retry;
+      }
+      if (auto error = unpack(synopsis_v0, ps))
         return error;
       meta_index_bytes += ps.memusage();
       persisted_partitions.insert(partition_uuid);
@@ -812,7 +826,9 @@ index(index_actor::stateful_pointer<index_state> self,
         candidates.push_back(id);
       auto rp = self->make_response_promise<void>();
       // Get all potentially matching partitions.
-      self->request(self->state.meta_index, caf::infinite, query.expr)
+      self
+        ->request(self->state.meta_index, caf::infinite, atom::candidates_v,
+                  query.expr, query.ids)
         .then(
           [=, candidates = std::move(candidates)](
             std::vector<uuid> midx_candidates) mutable {

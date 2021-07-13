@@ -1,16 +1,6 @@
+include "interval.fbs";
 include "table_slice.fbs";
 include "uuid.fbs";
-
-namespace vast.fbs.interval;
-
-/// A half-open interval *[a,b)* in the ID Space.
-struct v0 {
-  /// The left side of the interval (inclusive).
-  begin: ulong = 0;
-
-  /// The right side of the interval (exclusive).
-  end: ulong = 0;
-}
 
 namespace vast.fbs.segment;
 
@@ -23,7 +13,7 @@ table v0 {
   uuid: uuid.v0;
 
   /// The ID intervals this segment covers.
-  ids: [interval.v0];
+  ids: [uinterval];
 
   /// The number of events in the store.
   events: ulong;

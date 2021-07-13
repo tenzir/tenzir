@@ -17,6 +17,7 @@
 #include "vast/expression.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
+#include "vast/query.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice.hpp"
@@ -38,15 +39,18 @@ size_t meta_index_state::memusage() const {
 
 void meta_index_state::erase(const uuid& partition) {
   synopses.erase(partition);
+  offset_map.erase_value(partition);
 }
 
 void meta_index_state::merge(const uuid& partition, partition_synopsis&& ps) {
   synopses.emplace(partition, std::move(ps));
+  offset_map.inject(ps.offset, ps.offset + ps.events, partition);
 }
 
 void meta_index_state::create_from(std::map<uuid, partition_synopsis>&& ps) {
   std::vector<std::pair<uuid, partition_synopsis>> flat_data;
   for (auto&& [uuid, synopsis] : std::move(ps)) {
+    offset_map.inject(synopsis.offset, synopsis.offset + synopsis.events, uuid);
     flat_data.emplace_back(uuid, std::move(synopsis));
   }
   std::sort(flat_data.begin(), flat_data.end(),
@@ -360,18 +364,49 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
     [=](atom::merge, uuid partition,
         std::shared_ptr<partition_synopsis>& synopsis) -> atom::ok {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(partition));
-      self->state.merge(std::move(partition), std::move(*synopsis));
+      self->state.merge(partition, std::move(*synopsis));
       return atom::ok_v;
     },
     [=](atom::erase, uuid partition) {
       self->state.erase(partition);
       return atom::ok_v;
     },
-    [=](const expression& expr) -> std::vector<uuid> {
-      VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(expr));
-      return self->state.lookup(expr);
-    },
-  };
+    [=](atom::candidates, const vast::expression& expression,
+        const vast::ids& ids) -> caf::result<std::vector<vast::uuid>> {
+      VAST_TRACE_SCOPE("{} {} {}", *self, VAST_ARG(expression), VAST_ARG(ids));
+      std::vector<vast::uuid> expression_candidates;
+      std::vector<vast::uuid> ids_candidates;
+      bool has_expression = expression != vast::expression{};
+      bool has_ids = !ids.empty();
+      if (!has_expression && !has_ids)
+        return caf::make_error(ec::invalid_argument, "query had neither an "
+                                                     "expression nor ids");
+      if (has_expression) {
+        expression_candidates = self->state.lookup(expression);
+      }
+      if (has_ids) {
+        for (auto id : select(ids)) {
+          const auto* x = self->state.offset_map.lookup(id);
+          if (x)
+            ids_candidates.push_back(*x);
+        }
+        std::sort(ids_candidates.begin(), ids_candidates.end());
+        auto new_end
+          = std::unique(ids_candidates.begin(), ids_candidates.end());
+        ids_candidates.erase(new_end, ids_candidates.end());
+      }
+      std::vector<vast::uuid> result;
+      if (has_expression && has_ids)
+        std::set_intersection(expression_candidates.begin(),
+                              expression_candidates.end(),
+                              ids_candidates.begin(), ids_candidates.end(),
+                              std::back_inserter(result));
+      else if (has_expression)
+        result = std::move(expression_candidates);
+      else
+        result = std::move(ids_candidates);
+      return result;
+    }};
 }
 
 } // namespace vast::system

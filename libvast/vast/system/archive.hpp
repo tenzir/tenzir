@@ -61,9 +61,7 @@ struct archive_state {
   /// Updates an existing request with additional ids or inserts a new request
   /// if the query client hasn't been seen before.
   /// @param query The type of request.
-  /// @param xs A preselection of ids to narrow down the search space.
-  caf::typed_response_promise<atom::done>
-  file_request(vast::query query, const ids& xs);
+  caf::typed_response_promise<atom::done> file_request(vast::query query);
 
   vast::system::measurement measurement;
   accountant_actor accountant;

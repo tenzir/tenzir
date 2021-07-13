@@ -39,6 +39,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_atoms, caf::id_block::vast_types::end)
 
   // Generic atoms.
   VAST_ADD_ATOM(announce, "announce")
+  VAST_ADD_ATOM(candidates, "candidates")
   VAST_ADD_ATOM(config, "config")
   VAST_ADD_ATOM(done, "done")
   VAST_ADD_ATOM(erase, "erase")
