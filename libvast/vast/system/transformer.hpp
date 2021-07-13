@@ -52,7 +52,7 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
             std::string name, std::vector<transform>&&);
 
 /// An actor that hosts a no-op stream sink for table slices, that the SOURCE
-/// and IMPORTER attach to their respective TRANASFORMER actors on shutdown.
+/// and IMPORTER attach to their respective TRANSFORMER actors on shutdown.
 /// @param self The parent actor handle.
 /// @note This serves to fix a possible deadlock in high-load situations during
 /// shutdown: Given three actors A, B, and C that host a stream A -> B -> C,
