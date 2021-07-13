@@ -193,12 +193,8 @@ else ()
       set(CAF_BUILD_STATIC_ONLY ON)
     endif ()
     add_subdirectory(aux/caf)
-    set_target_properties(
-      libcaf_core_${_linkage_suffix}
-      PROPERTIES EXPORT_NAME core
-                 CXX_STANDARD 20
-                 CXX_STANDARD_REQUIRED ON
-                 CXX_EXTENSIONS OFF)
+    set_target_properties(libcaf_core_${_linkage_suffix} PROPERTIES EXPORT_NAME
+                                                                    core)
     add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
     target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
     target_compile_options(
@@ -311,12 +307,8 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION
   target_link_libraries(libvast PUBLIC stdc++fs)
 endif ()
 
-set_target_properties(
-  libvast
-  PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
-             CXX_STANDARD 20
-             CXX_STANDARD_REQUIRED ON
-             CXX_EXTENSIONS OFF)
+set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
+                                         ON)
 
 set_target_properties(
   libvast

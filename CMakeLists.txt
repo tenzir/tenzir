@@ -242,8 +242,8 @@ set_target_properties(libvast_internal PROPERTIES EXPORT_NAME internal)
 add_library(vast::internal ALIAS libvast_internal)
 install(TARGETS libvast_internal EXPORT VASTTargets)
 
-# Require standard C++17
-target_compile_features(libvast_internal INTERFACE cxx_std_17)
+# Require standard C++20.
+target_compile_features(libvast_internal INTERFACE cxx_std_20)
 
 # Increase maximum number of template instantiations.
 target_compile_options(libvast_internal INTERFACE -ftemplate-backtrace-limit=0)
