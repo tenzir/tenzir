@@ -176,14 +176,12 @@ caf::error configuration::parse(int argc, char** argv) {
       auto contents = detail::load_contents(config);
       if (!contents)
         return contents.error();
-      // Skip empty config files.
-      if (std::all_of(contents->begin(), contents->end(), [](char ch) {
-            return std::isspace(ch);
-          }))
-        continue;
       auto yaml = from_yaml(*contents);
       if (!yaml)
         return yaml.error();
+      // Skip empty config files.
+      if (caf::holds_alternative<caf::none_t>(*yaml))
+        continue;
       auto* rec = caf::get_if<record>(&*yaml);
       if (!rec)
         return caf::make_error(ec::parse_error, "config file not a map of "
