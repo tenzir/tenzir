@@ -29,6 +29,12 @@ with section("parse"):
                 "INCLUDE_DIRECTORIES": "*",
             },
         },
+        "vastenableclangtidy": {
+            "spelling": "VASTEnableClangTidy",
+            "pargs": {
+                "nargs": 1,
+            },
+        },
     }
 
     # Override configurations per-command where available

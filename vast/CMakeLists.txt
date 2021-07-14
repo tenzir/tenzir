@@ -8,6 +8,7 @@ if (NOT VAST_ENABLE_VAST)
 endif ()
 
 add_executable(vast vast.cpp)
+VASTEnableClangTidy(vast)
 target_link_libraries(vast PRIVATE vast::internal vast::libvast)
 install(TARGETS vast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 add_executable(vast::vast ALIAS vast)
