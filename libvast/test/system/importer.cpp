@@ -220,7 +220,6 @@ TEST(deterministic importer with one sink and failing zeek source) {
     sched.run_once();
   MESSAGE("kill the source");
   self->send_exit(src, caf::exit_reason::kill);
-  expect((caf::exit_msg), from(self).to(src));
   MESSAGE("loop until we see the forced_close");
   if (!allow((caf::downstream_msg::forced_close), from(src).to(importer)))
     sched.run_once();
