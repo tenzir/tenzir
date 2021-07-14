@@ -262,7 +262,7 @@ function (VASTRegisterPlugin)
     list(LENGTH PLUGIN_SOURCES num_sources)
     if (num_sources EQUAL 1)
       list(GET PLUGIN_SOURCES 0 PLUGIN_ENTRYPOINT)
-      set(PLUGIN_SOURCEs "")
+      set(PLUGIN_SOURCES "")
     else ()
       message(
         FATAL_ERROR "ENTRYPOINT must be specified in call to VASTRegisterPlugin"
