@@ -154,24 +154,21 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
     self->state.done = true;
-    if (self->state.mgr)
+    if (self->state.mgr) {
+      self->state.mgr->shutdown();
       self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
-    // Spawn a dummy transformer sink.
-    auto dummy = self->spawn(dummy_transformer_sink);
-    self
-      ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(dummy))
-      .then(
-        [=](caf::outbound_stream_slot<table_slice>) {
-          if (self->state.mgr) {
-            VAST_WARN("{} flushes", self);
-            self->state.mgr->shutdown();
-            self->state.mgr->out().force_emit_batches();
-            self->state.mgr->out().close();
-            self->state.mgr->out().fan_out_flush();
-          }
-        },
-        [](const caf::error&) {});
+      self->state.mgr->out().force_emit_batches();
+      self->state.mgr->out().close();
+      self->state.mgr->out().fan_out_flush();
+      // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
+      // for reasoning.
+      auto dummy = self->spawn(dummy_transformer_sink);
+      self
+        ->request(self->state.transformer, caf::infinite,
+                  static_cast<stream_sink_actor<table_slice>>(dummy))
+        .then([](caf::outbound_stream_slot<table_slice>) {},
+              [](const caf::error&) {});
+    }
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.

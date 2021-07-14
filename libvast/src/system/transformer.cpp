@@ -100,12 +100,8 @@ dummy_transformer_sink(stream_sink_actor<table_slice>::pointer self) {
           num_discarded = 0;
         },
         [=](size_t& num_discarded, const std::vector<table_slice>& slices) {
-          const auto num_rows
-            = std::transform_reduce(slices.begin(), slices.end(), size_t{},
-                                    std::plus<>{}, [](const auto& slice) {
-                                      return slice.rows();
-                                    });
-          num_discarded += num_rows;
+          for (const auto& slice : slices)
+            num_discarded += slice.rows();
         },
         [=](size_t& num_discarded, const caf::error& err) {
           if (num_discarded > 0)

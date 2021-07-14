@@ -255,23 +255,21 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
-    self->state.stage->out().push(detail::framed<table_slice>::make_eof());
-    // Spawn a dummy transformer sink.
-    auto dummy = self->spawn(dummy_transformer_sink);
-    self
-      ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(dummy))
-      .then(
-        [=](caf::outbound_stream_slot<table_slice>) {
-          if (self->state.stage) {
-            VAST_WARN("{} flushes", self);
-            self->state.stage->shutdown();
-            self->state.stage->out().force_emit_batches();
-            self->state.stage->out().close();
-            self->state.stage->out().fan_out_flush();
-          }
-        },
-        [](const caf::error&) {});
+    if (self->state.stage) {
+      self->state.stage->shutdown();
+      self->state.stage->out().push(detail::framed<table_slice>::make_eof());
+      self->state.stage->out().force_emit_batches();
+      self->state.stage->out().close();
+      self->state.stage->out().fan_out_flush();
+      // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
+      // for reasoning.
+      auto dummy = self->spawn(dummy_transformer_sink);
+      self
+        ->request(self->state.transformer, caf::infinite,
+                  static_cast<stream_sink_actor<table_slice>>(dummy))
+        .then([](caf::outbound_stream_slot<table_slice>) {},
+              [](const caf::error&) {});
+    }
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
