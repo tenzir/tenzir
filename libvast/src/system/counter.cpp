@@ -27,7 +27,8 @@ void counter_state::init(expression expr, index_actor index,
     self_, skip_candidate_check ? query::count::estimate : query::count::exact,
     std::move(expr));
   // Transition from idle state when receiving 'run' and client handle.
-  behaviors_[idle].assign([=, q = std::move(q)](atom::run, caf::actor client) {
+  behaviors_[idle].assign([=, this, q = std::move(q)](atom::run,
+                                                      caf::actor client) {
     client_ = std::move(client);
     start(q, index);
     // Stop immediately when losing the client.

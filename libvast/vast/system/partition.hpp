@@ -44,6 +44,10 @@ struct partition_selector {
 
 /// The state of the ACTIVE PARTITION actor.
 struct active_partition_state {
+  // -- constructor ------------------------------------------------------------
+
+  active_partition_state() = default;
+
   // -- member types -----------------------------------------------------------
 
   using partition_stream_stage_ptr = caf::stream_stage_ptr<
@@ -65,23 +69,24 @@ struct active_partition_state {
   active_partition_actor::pointer self = nullptr;
 
   /// Uniquely identifies this partition.
-  uuid id;
+  uuid id = {};
 
   /// The streaming stage.
-  partition_stream_stage_ptr stage;
+  partition_stream_stage_ptr stage = {};
 
   /// Tracks whether we already received at least one table slice.
-  bool streaming_initiated;
+  bool streaming_initiated = {};
 
   /// The combined type of all columns of this partition
-  record_type combined_layout;
+  record_type combined_layout = {};
 
   /// Maps qualified fields to indexer actors.
   //  TODO: Should we use the tsl map here for heterogenous key lookup?
-  detail::stable_map<qualified_record_field, active_indexer_actor> indexers;
+  detail::stable_map<qualified_record_field, active_indexer_actor> indexers
+    = {};
 
   /// Maps type names to IDs. Used the answer #type queries.
-  std::unordered_map<std::string, ids> type_ids;
+  std::unordered_map<std::string, ids> type_ids = {};
 
   /// Partition synopsis for this partition. This is built up in parallel
   /// to the one in the index, so it can be shrinked and serialized into
@@ -90,58 +95,58 @@ struct active_partition_state {
   /// of the meta index.
   /// Semantically this should be a unique_ptr, but caf requires message
   /// types to be copy-constructible.
-  std::shared_ptr<partition_synopsis> synopsis;
+  std::shared_ptr<partition_synopsis> synopsis = {};
 
   /// Options to be used when adding events to the partition_synopsis.
-  caf::settings synopsis_opts;
+  caf::settings synopsis_opts = {};
 
   /// A readable name for this partition
-  std::string name;
+  std::string name = {};
 
   /// The first ID in the partition.
-  vast::id offset;
+  vast::id offset = {};
 
   /// The number of events in the partition.
-  size_t events;
+  size_t events = {};
 
   /// Whether VAST is configured to use partition-local stores.
-  bool partition_local_stores;
+  bool partition_local_stores = {};
 
-  std::string store_id;
+  std::string store_id = {};
 
-  chunk_ptr store_header;
+  chunk_ptr store_header = {};
 
   /// Actor handle of the filesystem actor.
-  filesystem_actor filesystem;
+  filesystem_actor filesystem = {};
 
   /// Promise that gets satisfied after the partition state was serialized
   /// and written to disk.
   caf::typed_response_promise<std::shared_ptr<partition_synopsis>>
-    persistence_promise;
+    persistence_promise = {};
 
   /// Path where the index state is written.
-  std::optional<std::filesystem::path> persist_path;
+  std::optional<std::filesystem::path> persist_path = {};
 
   /// Path where the partition synopsis is written.
-  std::optional<std::filesystem::path> synopsis_path;
+  std::optional<std::filesystem::path> synopsis_path = {};
 
   /// Counts how many indexers have already responded to the `snapshot` atom
   /// with a serialized chunk.
-  size_t persisted_indexers;
+  size_t persisted_indexers = {};
 
   /// The store to retrieve the data from. Either the legacy global archive or a
   /// local component that holds the data for this partition.
-  store_actor store;
+  store_actor store = {};
 
   /// Temporary storage for the serialized indexers of this partition, before
   /// they get written into the flatbuffer.
-  std::map<caf::actor_id, vast::chunk_ptr> chunks;
+  std::map<caf::actor_id, vast::chunk_ptr> chunks = {};
 
   /// A once_flag for things that need to be done only once at shutdown.
-  std::once_flag shutdown_once;
+  std::once_flag shutdown_once = {};
 
   // Vector of flush listeners.
-  std::vector<flush_listener_actor> flush_listeners;
+  std::vector<flush_listener_actor> flush_listeners = {};
 };
 
 // TODO: Split this into a `static data` part that can be mmaped
@@ -150,6 +155,10 @@ struct active_partition_state {
 // state without any intermediate deserialization step,
 // like yandex::mms or cap'n proto.
 struct passive_partition_state {
+  // -- constructor ------------------------------------------------------------
+
+  passive_partition_state() = default;
+
   // -- member types -----------------------------------------------------------
 
   using recovered_indexer = std::pair<qualified_record_field, value_index_ptr>;
@@ -167,52 +176,52 @@ struct passive_partition_state {
   std::filesystem::path path;
 
   /// Legacy archive
-  store_actor archive;
+  store_actor archive = {};
 
   /// Uniquely identifies this partition.
-  uuid id;
+  uuid id = {};
 
   /// The combined type of all columns of this partition
-  record_type combined_layout;
+  record_type combined_layout = {};
 
   /// Maps type names to ids. Used the answer #type queries.
-  std::unordered_map<std::string, ids> type_ids;
+  std::unordered_map<std::string, ids> type_ids = {};
 
   /// A readable name for this partition
-  std::string name;
+  std::string name = {};
 
   /// The first ID in the partition.
-  size_t offset;
+  size_t offset = {};
 
   /// The number of events in the partition.
-  size_t events;
+  size_t events = {};
 
   /// The store type as found in the flatbuffer.
-  std::string store_id;
+  std::string store_id = {};
 
   /// The store header as found in the flatbuffer.
-  span<const std::byte> store_header;
+  span<const std::byte> store_header = {};
 
   /// The raw memory of the partition, used to spawn indexers on demand.
-  chunk_ptr partition_chunk;
+  chunk_ptr partition_chunk = {};
 
   /// Stores a list of expressions that could not be answered immediately.
   std::vector<std::tuple<query, caf::typed_response_promise<atom::done>>>
-    deferred_evaluations;
+    deferred_evaluations = {};
 
   /// The store to retrieve the data from. Either the legacy global archive or a
   /// local component that holds the data for this partition.
-  store_actor store;
+  store_actor store = {};
 
   /// Actor handle of the node
-  node_actor::pointer node;
+  node_actor::pointer node = {};
 
   /// A typed view into the `partition_chunk`.
-  const fbs::partition::v0* flatbuffer;
+  const fbs::partition::v0* flatbuffer = {};
 
   /// Maps qualified fields to indexer actors. This is mutable since
   /// indexers are spawned lazily on first access.
-  mutable std::vector<indexer_actor> indexers;
+  mutable std::vector<indexer_actor> indexers = {};
 };
 
 // -- flatbuffers --------------------------------------------------------------

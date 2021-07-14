@@ -242,8 +242,8 @@ set_target_properties(libvast_internal PROPERTIES EXPORT_NAME internal)
 add_library(vast::internal ALIAS libvast_internal)
 install(TARGETS libvast_internal EXPORT VASTTargets)
 
-# Require standard C++17
-target_compile_features(libvast_internal INTERFACE cxx_std_17)
+# Require standard C++20.
+target_compile_features(libvast_internal INTERFACE cxx_std_20)
 
 # Increase maximum number of template instantiations.
 target_compile_options(libvast_internal INTERFACE -ftemplate-backtrace-limit=0)
@@ -599,9 +599,9 @@ endif ()
 
 # -- compiler setup ------------------------------------------------------------
 
-set(CLANG_MINIMUM_VERSION 8.0)
-set(APPLE_CLANG_MINIMUM_VERSION 9.1)
-set(GCC_MINIMUM_VERSION 8.0)
+set(CLANG_MINIMUM_VERSION 11.0)
+set(APPLE_CLANG_MINIMUM_VERSION 12.0.5)
+set(GCC_MINIMUM_VERSION 10.0)
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   check_compiler_version(${GCC_MINIMUM_VERSION})

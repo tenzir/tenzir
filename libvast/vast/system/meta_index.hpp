@@ -34,6 +34,10 @@ namespace vast::system {
 /// The state of the META INDEX actor.
 struct meta_index_state {
 public:
+  // -- constructor ------------------------------------------------------------
+
+  meta_index_state() = default;
+
   // -- concepts ---------------------------------------------------------------
 
   constexpr static auto name = "meta-index";
@@ -69,13 +73,13 @@ public:
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.
-  meta_index_actor::pointer self;
+  meta_index_actor::pointer self = {};
 
   /// Maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
   // See also ae9dbed.
-  detail::flat_map<uuid, partition_synopsis> synopses;
+  detail::flat_map<uuid, partition_synopsis> synopses = {};
 };
 
 /// The META INDEX is the first index actor that queries hit. The result

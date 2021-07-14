@@ -130,7 +130,9 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
   if (length > size() - start)
     length = size() - start;
   this->ref();
-  return make(view_.subspan(start, length), [=]() noexcept { this->deref(); });
+  return make(view_.subspan(start, length), [this]() noexcept {
+    this->deref();
+  });
 }
 
 // -- concepts -----------------------------------------------------------------

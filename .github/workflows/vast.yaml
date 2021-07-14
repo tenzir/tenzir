@@ -321,10 +321,6 @@ jobs:
       matrix:
         build:
           - extra-flags:
-            compiler: AppleClang
-            cc: clang
-            cxx: clang++
-          - extra-flags:
             compiler: Clang
             cc: clang
             cxx: clang++

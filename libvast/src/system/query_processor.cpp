@@ -25,12 +25,12 @@ query_processor::query_processor(caf::event_based_actor* self)
   : state_(idle), self_(self), block_end_of_hits_(false) {
   behaviors_[idle].assign(
     // Our default init state simply waits for a query to execute.
-    [=](vast::query& query, const index_actor& index) {
+    [this](vast::query& query, const index_actor& index) {
       start(std::move(query), index);
     });
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
-    [=](const uuid& query_id, uint32_t total, uint32_t scheduled) {
+    [this](const uuid& query_id, uint32_t total, uint32_t scheduled) {
       VAST_ASSERT(scheduled <= total);
       query_id_ = query_id;
       partitions_.received = 0;
@@ -39,7 +39,7 @@ query_processor::query_processor(caf::event_based_actor* self)
       transition_to(await_results_until_done);
     });
   behaviors_[await_results_until_done].assign(
-    [=](atom::done) -> caf::result<void> {
+    [this](atom::done) -> caf::result<void> {
       if (block_end_of_hits_)
         return caf::skip;
       partitions_.received += partitions_.scheduled;

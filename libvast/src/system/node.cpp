@@ -240,20 +240,20 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
         auto result = list{};
         result.reserve(taxonomies.concepts.size());
         if (inv.full_name == "dump" || inv.full_name == "dump concepts") {
-          for (auto& [name, concept] : taxonomies.concepts) {
+          for (auto& [name, concept_] : taxonomies.concepts) {
             auto fields = list{};
-            fields.reserve(concept.fields.size());
-            for (auto& field : concept.fields)
+            fields.reserve(concept_.fields.size());
+            for (auto& field : concept_.fields)
               fields.push_back(std::move(field));
             auto concepts = list{};
-            concepts.reserve(concept.concepts.size());
-            for (auto& concept : concept.concepts)
-              concepts.push_back(std::move(concept));
+            concepts.reserve(concept_.concepts.size());
+            for (auto& concept_ : concept_.concepts)
+              concepts.push_back(std::move(concept_));
             auto entry = record{
               {"concept",
                record{
                  {"name", std::move(name)},
-                 {"description", std::move(concept.description)},
+                 {"description", std::move(concept_.description)},
                  {"fields", std::move(fields)},
                  {"concepts", std::move(concepts)},
                }},

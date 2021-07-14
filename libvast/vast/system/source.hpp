@@ -32,6 +32,10 @@ namespace vast::system {
 /// The source state.
 /// @tparam Reader The reader type, which must model the *Reader* concept.
 struct source_state {
+  // -- constructor ------------------------------------------------------------
+
+  source_state() = default;
+
   // -- member types -----------------------------------------------------------
 
   using downstream_manager
@@ -40,47 +44,47 @@ struct source_state {
   // -- member variables -------------------------------------------------------
 
   /// A pointer to the parent actor handle.
-  caf::scheduled_actor* self;
+  caf::scheduled_actor* self = {};
 
   /// Filters events, i.e., causes the source to drop all matching events.
-  caf::optional<expression> filter;
+  caf::optional<expression> filter = {};
 
   /// Maps types to the tailored filter.
-  std::unordered_map<type, expression> checkers;
+  std::unordered_map<type, expression> checkers = {};
 
   /// Actor for collecting statistics.
-  accountant_actor accountant;
+  accountant_actor accountant = {};
 
   /// Actor that receives events.
-  transformer_actor transformer;
+  transformer_actor transformer = {};
 
   /// The `source` only supports a single sink, so we track here if we
   /// already got it.
-  bool has_sink;
+  bool has_sink = {};
 
   /// Wraps the format-specific parser.
-  format::reader_ptr reader;
+  format::reader_ptr reader = {};
 
   /// Pretty name for log files.
   const char* name = "source";
 
   /// Takes care of transmitting batches.
-  caf::stream_source_ptr<downstream_manager> mgr;
+  caf::stream_source_ptr<downstream_manager> mgr = {};
 
   /// An accumulator for the amount of produced events.
   size_t count = 0;
 
   /// The maximum number of events to ingest.
-  std::optional<size_t> requested;
+  std::optional<size_t> requested = {};
 
   /// The import-local schema.
-  vast::schema local_schema;
+  vast::schema local_schema = {};
 
   /// The maximum size for a table slice.
-  size_t table_slice_size;
+  size_t table_slice_size = {};
 
   /// Current metrics for the accountant.
-  measurement metrics;
+  measurement metrics = {};
 
   /// The amount of time to wait until the next wakeup.
   std::chrono::milliseconds wakeup_delay = std::chrono::milliseconds::zero();

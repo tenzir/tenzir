@@ -34,7 +34,7 @@ void eraser_state::init(caf::timespan interval, std::string query,
   query_ = std::move(query);
   index_ = std::move(index);
   // Override the behavior for the idle state.
-  behaviors_[idle].assign([=](atom::run) {
+  behaviors_[idle].assign([this](atom::run) {
     if (self_->current_sender() != self_->ctrl())
       promise_ = self_->make_response_promise();
     auto expr = to<expression>(query_);
