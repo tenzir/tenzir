@@ -80,7 +80,11 @@ ENV PREFIX="/opt/tenzir/vast" \
     CC="gcc-10" \
     CXX="g++-10"
 
+# Additional arguments to be passed to CMake.
+ARG VAST_BUILD_OPTIONS
+
 RUN cmake -B build -G Ninja \
+      ${VAST_BUILD_OPTIONS} \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
