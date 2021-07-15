@@ -106,10 +106,6 @@ private:
 
 // -- template machinery -------------------------------------------------------
 
-/// Explicit deduction guide (not needed as of C++20).
-template <class FlatBuffer>
-msgpack_table_slice(const FlatBuffer&) -> msgpack_table_slice<FlatBuffer>;
-
 /// Extern template declarations for all MessagePack encoding versions.
 extern template class msgpack_table_slice<fbs::table_slice::msgpack::v0>;
 

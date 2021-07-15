@@ -113,10 +113,6 @@ private:
 
 // -- template machinery -------------------------------------------------------
 
-/// Explicit deduction guide (not needed as of C++20).
-template <class FlatBuffer>
-arrow_table_slice(const FlatBuffer&) -> arrow_table_slice<FlatBuffer>;
-
 /// Extern template declarations for all Arrow encoding versions.
 extern template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 

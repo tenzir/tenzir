@@ -19,8 +19,4 @@ struct overload : Ts... {
   using Ts::operator()...;
 };
 
-/// Explicit deduction guide for overload (not needed as of C++20).
-template <class... Ts>
-overload(Ts...) -> overload<Ts...>;
-
 } // namespace vast::detail
