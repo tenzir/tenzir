@@ -9,7 +9,8 @@
 #pragma once
 
 #include "vast/as_bytes.hpp"
-#include "vast/detail/type_traits.hpp"
+#include "vast/detail/concepts.hpp"
+#include "vast/span.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/error.hpp>
@@ -23,8 +24,7 @@ namespace vast::detail {
 /// @param xs The object to deserialize.
 /// @returns The status of the operation.
 /// @relates detail::serialize
-template <class Buffer, class... Ts,
-          class = std::enable_if_t<detail::is_byte_container_v<Buffer>>>
+template <detail::byte_container Buffer, class... Ts>
 caf::error deserialize(const Buffer& buffer, Ts&&... xs) {
   auto bytes = as_bytes(buffer);
   auto data = reinterpret_cast<const char*>(bytes.data());
