@@ -26,6 +26,22 @@ install(
 # VAST.
 target_compile_definitions(vast PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 
+# -- example configuration file -----------------------------------------------
+
+add_custom_command(
+  OUTPUT "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml"
+  MAIN_DEPENDENCY "${PROJECT_SOURCE_DIR}/vast.yaml.example"
+  COMMENT "Copying example configuration file"
+  COMMAND
+    awk "{print \\\"#\\\" \\$$0}" \< "${PROJECT_SOURCE_DIR}/vast.yaml.example"
+    \> "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml")
+add_custom_target(
+  copy-example-configuration-file
+  DEPENDS "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml")
+add_dependencies(vast copy-example-configuration-file)
+install(FILES "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml"
+        DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
+
 # -- init system integration ---------------------------------------------------
 
 # TODO: This should be behind an option, and work for macOS and Linux as well.
