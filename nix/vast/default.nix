@@ -87,7 +87,6 @@ stdenv.mkDerivation rec {
 
   cmakeFlags = [
     "-DCMAKE_BUILD_TYPE:STRING=${buildType}"
-    "-DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DVAST_VERSION_TAG=${version}"
     "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"

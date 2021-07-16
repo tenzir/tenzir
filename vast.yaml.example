@@ -1,34 +1,35 @@
 # This is an example configuration file for VAST that shows all available
-# options.
-#
-# Options in angle brackets have their default value determined at runtime.
+# options. Options in angle brackets have their default value determined at
+# runtime.
 
-# Options that apply to VAST.
+# Options that concern VAST.
 vast:
+
   # The host and port to listen at and connect to.
   endpoint: "localhost:42000"
+
   # The file system path used for persistent state.
   db-directory: "vast.db"
 
   # The file system path used for log files.
-  #log-file: "<db-directory>/server.log"
+  log-file: "<db-directory>/server.log"
 
   # The file system path used for client log files relative to the current
-  # working directory of the client. Note that this is disabled by default. If
-  # not specified no log files are written for clients at all.
-  #client-log-file: "client.log"
+  # working directory of the client. Note that this is disabled by default.
+  # If not specified no log files are written for clients at all.
+  client-log-file: "client.log"
 
   # Format for printing individual log entries to the log-file.
   # For a list of valid format specifiers, see spdlog format specification
-  # at https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
-  # file-format: "[%Y-%m-%dT%T.%e%z] [%n] [%l] [%s:%#] %v"
+  # at https://github.com/gabime/spdlog/wiki/3.-Custom-formatting.
+  file-format: "[%Y-%m-%dT%T.%e%z] [%n] [%l] [%s:%#] %v"
 
   # Configures the minimum severity of messages written to the log file.
   # Possible values: quiet, error, warning, info, verbose, debug, trace.
-  # File logging is only available for commands that start a node (e.g.,
-  # vast start). The levels above 'verbose' are usually not available in
-  # release builds.
-  # file-verbosity: debug
+  # File logging is only available for commands that start a node (e.g., vast
+  # start). The levels above 'verbose' are usually not available in release
+  # builds.
+  file-verbosity: debug
 
   # Whether to enable automatic log rotation. If set to false, a new log file
   # will be created when the size of the current log file exceeds 10 MiB.
@@ -40,56 +41,63 @@ vast:
   # Maximum number of log messages in the logger queue.
   log-queue-size: 1000000
 
-  # The sink type to use for console logging.
-  # Possible values: stderr, syslog, journald.
-  # Note that 'journald' can only be selected on linux systems, and only if
-  # VAST was built with journald support.
+  # The sink type to use for console logging. Possible values: stderr,
+  # syslog, journald. Note that 'journald' can only be selected on linux
+  # systems, and only if VAST was built with journald support.
   console-sink: stderr
 
   # Mode for console log output generation. Automatic renders color only when
   # writing to a tty.
   # Possible values: always, automatic, never. (default automatic)
-  # console: automatic
+  console: automatic
 
-  # Format for printing individual log entries to the console.
-  # For a list of valid format specifiers, see spdlog format specification
-  # at https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
-  # console-format: "%^[%T.%e] %v%$"
+  # Format for printing individual log entries to the console. For a list
+  # of valid format specifiers, see spdlog format specification at
+  # https://github.com/gabime/spdlog/wiki/3.-Custom-formatting.
+  console-format: "%^[%T.%e] %v%$"
 
   # Configures the minimum severity of messages written to the console.
   # For a list of valid log levels, see file-verbosity.
-  #console-verbosity: info
+  console-verbosity: info
 
-  # List of directories to look for schema files in ascending order of priority.
-  # Note: Automatically prepended with
-  #  ["<binary_directory>/../share/vast/schema", "/etc/vast/schema"].
+  # List of directories to look for schema files in ascending order of
+  # priority.
+  schema-dirs: []
 
-  #schema-dirs: []
-  # Additional directories to load plugins specified using `vast.plugins` from.
+  # Additional directories to load plugins specified using `vast.plugins`
+  # from.
   plugin-dirs: []
-  # The plugins to load at startup. For relative paths, VAST tries to find the
-  # files in the specified `vast.plugin-dirs`. The special values 'bundled' and
-  # 'all' enable autoloading of bundled and all plugins respectively.
-  # Note: Add `example` or `/path/to/libvast-plugin-example.so` to load the
-  # example plugin.
+
+  # The plugins to load at startup. For relative paths, VAST tries to find
+  # the files in the specified `vast.plugin-dirs`. The special values
+  # 'bundled' and 'all' enable autoloading of bundled and all plugins
+  # respectively. Note: Add `example` or `/path/to/libvast-plugin-example.so`
+  # to load the example plugin.
   plugins: []
+
   # The unique ID of this node.
   node-id: "node"
+
   # Spawn a node instead of connecting to one.
   node: false
 
-  # The size of an index shard, expressed in number of events.
-  # This should be a power of 2.
+  # The size of an index shard, expressed in number of events. This should
+  # be a power of 2.
   max-partition-size: 1048576
+
   # The number of index shards that can be cached in memory.
   max-resident-partitions: 10
+
   # The number of index shards that are considered for the first evaluation
   # round of a query.
   max-taste-partitions: 5
+
   # The amount of queries that can be executed in parallel.
   max-queries: 10
+
   # The directory to use for the partition synopses of the meta index.
   #meta-index-dir: <dbdir>/index
+
   # The false positive rate for lossy structures in the meta index.
   meta-index-fp-rate: 0.01
 
@@ -98,74 +106,86 @@ vast:
   # backend is still experimental. Also note that 'vast get' and 'vast explore'
   # currently work correctly with the 'archive' backend.
   store-backend: archive
+
   # The maximum number of segments cached by the archive.
   segments: 10
+
   # The maximum size per segment, in MiB.
   max-segment-size: 1024
 
   # Interval between two aging cycles.
   aging-frequency: 24h
+
   # Query for aging out obsolete data.
   aging-query:
 
   # Keep track of performance metrics.
   enable-metrics: false
+
   # The configuration of the metrics reporting component.
   metrics:
     # Configures if and how metrics should be ingested back into VAST.
     self-sink:
       enable: true
       slice-size: 128
-      #slice-type: arrow
+      slice-type: arrow
     # Configures if and where metrics should be written to a file.
     file-sink:
       enable: false
       real-time: false
-      path: "/tmp/vast-metrics.log"
+      path: /tmp/vast-metrics.log
     # Configures if and where metrics should be written to a socket.
     uds-sink:
       enable: false
       real-time: false
-      path: "/tmp/vast-metrics.sock"
-      type: "datagram"
+      path: /tmp/vast-metrics.sock
+      type: datagram
 
   # The period to wait until a shutdown sequence finishes cleanly. After the
-  # period elapses, the shutdown procedure escalates into a "hard kill".
-  # A value of "0x", where "x" is any duration unit, means an infinite grace
+  # period elapses, the shutdown procedure escalates into a "hard kill". A
+  # value of "0x", where "x" is any duration unit, means an infinite grace
   # period without escalation into a hard kill.
-  shutdown-grace-period: "3m"
+  shutdown-grace-period: 3m
 
   # The `vast start` command starts a new VAST server process.
   start:
+
     # Prints the endpoint for clients when the server is ready to accept
-    # connections. This comes in handy when letting the OS choose an available
-    # random port, i.e., when specifying 0 as port value.
+    # connections. This comes in handy when letting the OS choose an
+    # available random port, i.e., when specifying 0 as port value.
     print-endpoint: false
+
     # An ordered list of commands to run inside the node after starting.
-    # As an example, this is how to configure an auto-starting PCAP source that
-    # listens on the interface 'en0' and lives inside the VAST node.
-    #commands:
-    #  - spawn source pcap -i en0
+    # As an example, to configure an auto-starting PCAP source that listens
+    # on the interface 'en0' and lives inside the VAST node, add `spawn
+    # source pcap -i en0`.
+    commands: []
+
     # Triggers removal of old data when the disk budget is exceeded.
     disk-budget-high: 0GiB
-    # When the budget was exceeded, data is erased until the disk space
-    # is below this value.
+
+    # When the budget was exceeded, data is erased until the disk space is
+    # below this value.
     disk-budget-low: 0GiB
+
     # Seconds between successive disk space checks.
     disk-budget-check-interval: 90
+
     # When erasing, how many partitions to erase in one go before rechecking
     # the size of the database directory.
     disk-budget-step-size: 1
+
     # Binary to use for checking the size of the database directory. If left
     # unset, VAST will recursively add up the size of all files in the
-    # database directory to compute the size. Mainly useful for e.g. compressed
-    # filesystem where raw file size is not the correct metric.
+    # database directory to compute the size. Mainly useful for e.g.
+    # compressed filesystem where raw file size is not the correct metric.
     # Must be the absolute path to an executable file, which will get passed
     # the database directory as its first and only argument.
     #disk-budget-check-binary:
 
   # The `vast count` command counts hits for a query without exporting data.
   count:
+
     # Estimate an upper bound by skipping candidate checks.
     estimate: false
 
@@ -178,29 +198,38 @@ vast:
   export:
     # Mark a query as continuous.
     continuous: false
+
     # Mark a query as unified.
     unified: false
+
     # Dont substitute taxonomy identifiers.
     disable-taxonomies: false
+
     # Timeout to stop the export after.
     #timeout: <infinite>
+
     # The maximum number of events to export.
     #max-events: <infinity>
+
     # Path for reading the query or "-" for reading from stdin.
     # Note: Setting this option in the config file creates a conflict with
     # `vast export` with a positional query argument. This option is only
     # listed here for completeness.
-    #read: "-"
+    #read: '-'
+
     # Path to write events to or "-" for writing to stdout.
-    write: "-"
+    write: '-'
+
     # Treat the write option as a UNIX domain socket to connect to.
     uds: false
 
     # The `vast export json` command exports events formatted as JSONL (line-
     # delimited JSON).
     json:
+
       # Flatten nested objects into the top-level object.
       flatten: false
+
       # Render durations as numbers as opposed to human-readable strings.
       numeric-durations: false
 
@@ -211,73 +240,102 @@ vast:
 
   # The `vast infer` command tries to infer the schema from data.
   infer:
+
     # Path to read events from or "-" for reading from stdin.
-    read: "-"
+    read: '-'
+
     # Maximum number of bytes to buffer.
     buffer: 8192
 
   # The `vast explore` command explore context around query results.
   explore:
+
     # The output format.
     format: json
+
     # Include all records up to this much time after each result.
     after:
+
     # Include all records up to this much time before each result.
     before:
+
     # Perform an equijoin on the given field.
     by:
+
     # Maximum number of results.
-    # max-events: <infinity>
+    #max-events: <infinity>
+
     # Maximum number of results for initial query.
     max-events-query: 100
+
     # Maximum number of results per exploration.
     max-events-context: 100
 
   # The `vast import` command imports data from stdin, files or over the
   # network.
   import:
+
     # The maximum number of events to import.
     #max-events: <infinity>
+
     # Timeout after which buffered table slices are forwarded to the node.
     batch-timeout: 10s
+
     # Upper bound for the size of a table slice. A value of 0 causes the
     # batch-size to be unbounded, leaving control of batching to the
     # vast.import.read-timeout option only.
     batch-size: 1024
+
     # Encoding type of table slices (arrow or msgpack).
-    # batch-encoding: arrow
+    batch-encoding: arrow
+
     # Block until the importer forwarded all data.
     blocking: false
+
     # The amount of time that each read iteration waits for new input.
     read-timeout: 20ms
+
     # The endpoint to listen on ("[host]:port/type").
     #listen: <none>
+
     # Path to file to read events from or "-" for stdin.
-    read: "-"
+    read: '-'
+
     # Treat the read option as a UNIX domain socket to connect to.
     uds: false
+
     # Path to an alternate schema.
     #schema-file: <none>
+
     # An alternate schema as a string.
     #schema: <none>
 
     # The `vast import pcap` command imports PCAP logs.
     pcap:
+
       # Network interface to read packets from.
       #interface: <none>
+
       # Skip flow packets after this many bytes.
       #cutoff: <infinity>
+
       # Number of concurrent flows to track.
       max-flows: 1048576
+
       # Maximum flow lifetime before eviction.
       max-flow-age: 60
+
       # Flow table expiration interval.
       flow-expiry: 10
-      # Inverse factor by which to delay packets. For example, if 5, then for two
-      # packets spaced *t* seconds apart, the source will sleep for *t/5* seconds.
+
+      # Inverse factor by which to delay packets. For example, if 5, then for
+      # two packets spaced *t* seconds apart, the source will sleep for *t/5*
+      # seconds.
       pseudo-realtime-factor: 0
+
       # Snapshot length in bytes.
       snaplen: 65535
+
       # Disable computation of community id for every packet.
       disable-community-id: false
 
@@ -289,6 +347,7 @@ vast:
 
     # The `vast import zeek` command imports Zeek logs.
     zeek:
+
       # Flag to indicate whether the output should contain #open/#close tags.
       # Zeek writes these tags in its logs such that users can gain insight
       # when Zeek processed the corresponding data. By default, VAST
@@ -299,69 +358,82 @@ vast:
   # The `vast pivot` command extracts related events of a given type.
   # For additionally available options, see export.pcap.
   pivot:
+
     # The output format.
     format: json
 
-  # The `vast status` command prints a JSON-formatted status summary of the node.
+  # The `vast status` command prints a JSON-formatted status summary of the
+  # node.
   status:
+
     # Add more information to the output
     detailed: false
+
     # Include extra debug information
     debug: false
 
   # The `vast get` retrives events by their id.
   get:
+
     # The output format.
     format: json
-
-# The below plugins section contains configuration options for dynamically
-# loaded VAST plugins. A plugin has a unique name and the sub-section must
-# match the exact name for the options to be passed correctly to the plugin
-# initialization logic.
-plugins:
-  example:
-    max-events: 42
 
 # The below settings are internal to CAF, and are not checked by VAST directly.
 # Please be careful when changing these options. Note that some CAF options may
 # be in conflict with VAST options, and are only listed here for completeness.
-
 caf:
+
+  # Options affecting the internal scheduler.
   scheduler:
+
     # Accepted alternative: "sharing".
     policy: stealing
+
     # Configures whether the scheduler generates profiling output.
     enable-profiling: false
+
     # Output file for profiler data (only if profiling is enabled).
     #profiling-output-file: </dev/null>
+
     # Measurement resolution in milliseconds (only if profiling is enabled).
     profiling-resolution: 100ms
+
     # Forces a fixed number of threads if set.
     #max-threads: <number of cores>
+
     # Maximum number of messages actors can consume in one run.
     max-throughput: 500
 
   # When using "stealing" as scheduler policy.
   work-stealing:
+
     # Number of zero-sleep-interval polling attempts.
     aggressive-poll-attempts: 100
+
     # Frequency of steal attempts during aggressive polling.
     aggressive-steal-interval: 10
+
     # Number of moderately aggressive polling attempts.
     moderate-poll-attempts: 500
+
     # Frequency of steal attempts during moderate polling.
     moderate-steal-interval: 5
+
     # Sleep interval between poll attempts.
     moderate-sleep-duration: 50us
+
     # Frequency of steal attempts during relaxed polling.
     relaxed-steal-interval: 1
+
     # Sleep interval between poll attempts.
     relaxed-sleep-duration: 10ms
 
   stream:
     # Processing time per batch.
     desired-batch-complexity: 50us
+
     # Maximum delay for partial batches.
     max-batch-delay: 15ms
+
     # Time between emitting credit.
     credit-round-interval: 10ms

@@ -669,9 +669,6 @@ if (VAST_ENABLE_BUNDLED_SCHEMAS)
           DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
 endif ()
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/")
-
 # -- documentation headers -----------------------------------------------------
 
 # TODO: Move this to libvast/CMakeLists.txt, somehow.

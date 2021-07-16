@@ -35,6 +35,6 @@ jobs:
         pip install --upgrade pip black
         # Note: black fails when it doesn't have to do anything.
         git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
-          grep -v '\(\.json\|\.ipynb\|\.hpp\.in\|\.ref\)$' |
+          grep -v '\(\.json\|\.ipynb\|\.hpp\.in\|\.ref\|.example\)$' |
           2>/dev/null xargs black || true
         git diff --exit-code

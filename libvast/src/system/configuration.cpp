@@ -175,17 +175,23 @@ caf::error configuration::parse(int argc, char** argv) {
     if (std::filesystem::exists(config, err)) {
       auto contents = detail::load_contents(config);
       if (!contents)
-        return contents.error();
+        return caf::make_error(ec::parse_error,
+                               fmt::format("failed to read config file {}: {}",
+                                           config, contents.error()));
       auto yaml = from_yaml(*contents);
       if (!yaml)
-        return yaml.error();
+        return caf::make_error(ec::parse_error,
+                               fmt::format("failed to read config file {}: {}",
+                                           config, yaml.error()));
       // Skip empty config files.
       if (caf::holds_alternative<caf::none_t>(*yaml))
         continue;
       auto* rec = caf::get_if<record>(&*yaml);
       if (!rec)
-        return caf::make_error(ec::parse_error, "config file not a map of "
-                                                "key-value pairs");
+        return caf::make_error(ec::parse_error,
+                               fmt::format("failed to read config file {}: not "
+                                           "a map of key-value pairs",
+                                           config));
       merge(*rec, merged_config, policy::merge_lists::yes);
     }
   }
