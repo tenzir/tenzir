@@ -27,7 +27,7 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/syslog_sink.h>
 
-#ifdef VAST_ENABLE_JOURNALD_LOGGING
+#if VAST_ENABLE_JOURNALD_LOGGING
 #  include <spdlog/sinks/systemd_sink.h>
 #endif
 
@@ -229,7 +229,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
         = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
       return stderr_sink;
     } else if (sink_type == "journald") {
-#ifndef VAST_ENABLE_JOURNALD_LOGGING
+#if !VAST_ENABLE_JOURNALD_LOGGING
       fmt::print(stderr, "failed to start logger; vast.console-sink 'journald' "
                          "required VAST built with systemd support\n");
       return nullptr;
