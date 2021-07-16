@@ -650,7 +650,9 @@ jobs:
       # We explicitly disable SSE instructions here: The CI runners support it,
       # but we want to support our prebuilt Docker images on older machines as
       # well.
-      VAST_BUILD_OPTIONS: -D VAST_ENABLE_AUTO_VECTORIZATION:BOOL=OFF
+      VAST_BUILD_OPTIONS: >
+        -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
+        -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
     steps:
       - uses: actions/checkout@v2
         with:

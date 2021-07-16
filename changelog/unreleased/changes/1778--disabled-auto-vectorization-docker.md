@@ -1,6 +1,6 @@
 [VAST's prebuilt Docker images](http://hub.docker.com/r/tenzir/vast) no longer
-contain SSE/AVX instructions for increased portability. Building the image
-locally continues to add supported auto-vectorization flags automatically.
+contain AVX instructions for increased portability. Building the image locally
+continues to add supported auto-vectorization flags automatically.
 
 The following new build options exist: `VAST_ENABLE_AUTO_VECTORIZATION`
 enables/disables all auto-vectorization flags, and
