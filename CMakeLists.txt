@@ -261,24 +261,61 @@ endif ()
 
 # -- optimizations -------------------------------------------------------------
 
-# TODO add option to disable SSE
+option(VAST_ENABLE_AUTO_VECTORIZATION "Enable SSE instructions" ON)
+add_feature_info(
+  "VAST_ENABLE_AUTO_VECTORIZATION" VAST_ENABLE_AUTO_VECTORIZATION
+  "enable auto-vectorization via supported SSE/AVX instructions.")
+if (VAST_ENABLE_AUTO_VECTORIZATION)
+  find_package(SSE QUIET)
+  option(VAST_ENABLE_SSE_INSTRUCTIONS "Enable SSE instructions" "${SSE_FOUND}")
+  add_feature_info("VAST_ENABLE_SSE_INSTRUCTIONS" VAST_ENABLE_SSE_INSTRUCTIONS
+                   "enable SSE instructions.")
+  option(VAST_ENABLE_SSE2_INSTRUCTIONS "Enable SSE2 instructions"
+         "${SSE2_FOUND}")
+  add_feature_info("VAST_ENABLE_SSE2_INSTRUCTIONS"
+                   VAST_ENABLE_SSE2_INSTRUCTIONS "enable SSE2 instructions.")
+  option(VAST_ENABLE_SSE3_INSTRUCTIONS "Enable SSE3 instructions"
+         "${SSE3_FOUND}")
+  add_feature_info("VAST_ENABLE_SSE3_INSTRUCTIONS"
+                   VAST_ENABLE_SSE3_INSTRUCTIONS "enable SSE3 instructions.")
+  option(VAST_ENABLE_SSSE3_INSTRUCTIONS "Enable SSSE3 instructions"
+         "${SSSE3_FOUND}")
+  add_feature_info("VAST_ENABLE_SSSE3_INSTRUCTIONS"
+                   VAST_ENABLE_SSSE3_INSTRUCTIONS "enable SSSE3 instructions.")
+  option(VAST_ENABLE_SSE4_1_INSTRUCTIONS "Enable SSE4.1 instructions"
+         "${SSE4_1_FOUND}")
+  add_feature_info(
+    "VAST_ENABLE_SSE4_1_INSTRUCTIONS" VAST_ENABLE_SSE4_1_INSTRUCTIONS
+    "enable SSE4.1 instructions.")
+  option(VAST_ENABLE_SSE4_2_INSTRUCTIONS "Enable SSE4.2 instructions"
+         "${SSE4_2_FOUND}")
+  add_feature_info(
+    "VAST_ENABLE_SSE4_2_INSTRUCTIONS" VAST_ENABLE_SSE4_2_INSTRUCTIONS
+    "enable SSE4.2 instructions.")
+  option(VAST_ENABLE_AVX_INSTRUCTIONS "Enable AVX instructions" "${AVX_FOUND}")
+  add_feature_info("VAST_ENABLE_AVX_INSTRUCTIONS" VAST_ENABLE_AVX_INSTRUCTIONS
+                   "enable AVX instructions.")
+  option(VAST_ENABLE_AVX2_INSTRUCTIONS "Enable AVX2 instructions"
+         "${AVX2_FOUND}")
+  add_feature_info("VAST_ENABLE_AVX2_INSTRUCTIONS"
+                   VAST_ENABLE_AVX2_INSTRUCTIONS "enable AVX2 instructions.")
+endif ()
 
-find_package(SSE QUIET)
 target_compile_options(
   libvast_internal
   INTERFACE $<$<CONFIG:Release>:
-            $<$<BOOL:${SSE_FOUND}>:-msse>
-            $<$<BOOL:${SSE2_FOUND}>:-msse2>
-            $<$<BOOL:${SSE3_FOUND}>:-msse3>
-            $<$<BOOL:${SSSE3_FOUND}>:-mssse3>
-            $<$<BOOL:${SSE4_1_FOUND}>:-msse4.1>
-            $<$<BOOL:${SSE4_2_FOUND}>:-msse4.2>
-            $<$<BOOL:${AVX_FOUND}>:-mavx>
-            $<$<BOOL:${AVX2_FOUND}>:-mavx2>
             -fno-omit-frame-pointer>
             $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>
             $<$<CONFIG:Debug>:-O0>
             $<$<CONFIG:CI>:-O2
+            $<$<BOOL:${VAST_ENABLE_SSE_INSTRUCTIONS}>:-msse>
+            $<$<BOOL:${VAST_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
+            $<$<BOOL:${VAST_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
+            $<$<BOOL:${VAST_ENABLE_SSSE3_INSTRUCTIONS}>:-mssse3>
+            $<$<BOOL:${VAST_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
+            $<$<BOOL:${VAST_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
+            $<$<BOOL:${VAST_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
+            $<$<BOOL:${VAST_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>
             -g1>)
 
 # -- warnings ------------------------------------------------------------------
