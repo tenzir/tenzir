@@ -28,17 +28,35 @@ target_compile_definitions(vast PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 
 # -- example configuration file -----------------------------------------------
 
+file(
+  WRITE "${CMAKE_CURRENT_BINARY_DIR}/example-config.cmake"
+  "\
+  cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
+  file(READ \"${PROJECT_SOURCE_DIR}/vast.yaml.example\" content)
+  # Randomly generated string that temporarily replaces semicolons.
+  set(dummy \"J.3t26kvfjEoi9BXbf2j.qMY\")
+  string(REPLACE \";\" \"\${dummy}\" content \"\${content}\")
+  string(REPLACE \"\\n\" \";\" content \"\${content}\")
+  list(TRANSFORM content PREPEND \"#\")
+  string(REPLACE \";\" \"\\n\" content \"\${content}\")
+  string(REPLACE \"\${dummy}\" \";\" content \"\${content}\")
+  file(WRITE
+    \"${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml\"
+    \"\${content}\")")
+
 add_custom_command(
   OUTPUT "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml"
   MAIN_DEPENDENCY "${PROJECT_SOURCE_DIR}/vast.yaml.example"
   COMMENT "Copying example configuration file"
-  COMMAND
-    awk "{print \\\"#\\\" \\$$0}" \< "${PROJECT_SOURCE_DIR}/vast.yaml.example"
-    \> "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml")
+  COMMAND ${CMAKE_COMMAND} -P
+          "${CMAKE_CURRENT_BINARY_DIR}/example-config.cmake")
+
 add_custom_target(
   copy-example-configuration-file
   DEPENDS "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml")
+
 add_dependencies(vast copy-example-configuration-file)
+
 install(FILES "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/vast.yaml"
         DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
 

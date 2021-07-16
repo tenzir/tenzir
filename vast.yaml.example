@@ -215,7 +215,7 @@ vast:
     # Note: Setting this option in the config file creates a conflict with
     # `vast export` with a positional query argument. This option is only
     # listed here for completeness.
-    read: '-'
+    #read: '-'
 
     # Path to write events to or "-" for writing to stdout.
     write: '-'
@@ -393,7 +393,7 @@ caf:
     enable-profiling: false
 
     # Output file for profiler data (only if profiling is enabled).
-    profiling-output-file: /dev/null
+    #profiling-output-file: </dev/null>
 
     # Measurement resolution in milliseconds (only if profiling is enabled).
     profiling-resolution: 100ms
