@@ -102,6 +102,11 @@ void source_state::send_report() {
 #endif
   metrics = measurement{};
   caf::unsafe_send_as(self, accountant, std::move(r));
+  // Send the per-event counters to the accountant.
+  for (auto&& [name, count] : std::exchange(event_counters, {}))
+    caf::unsafe_send_as(self, accountant,
+                        fmt::format("{}.events.{}", reader->name(), name),
+                        count);
 }
 
 void source_state::filter_and_push(
@@ -210,6 +215,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
         self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
+          self->state.event_counters[slice.layout().name()] += slice.rows();
           self->state.mgr->out().push(std::move(slice));
         });
       };
