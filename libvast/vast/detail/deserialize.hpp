@@ -10,10 +10,11 @@
 
 #include "vast/as_bytes.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/span.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/error.hpp>
+
+#include <span>
 
 namespace vast::detail {
 

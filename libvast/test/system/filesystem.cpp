@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <span>
 
 using namespace vast;
 using namespace vast::system;
@@ -42,7 +43,7 @@ TEST(read) {
   MESSAGE("create file");
   auto foo = "foo"s;
   auto filename = directory / foo;
-  auto bytes = span<const char>{foo.data(), foo.size()};
+  auto bytes = std::span<const char>{foo.data(), foo.size()};
   auto err = io::write(filename, as_bytes(bytes));
   REQUIRE(err == caf::none);
   MESSAGE("read file via actor");
@@ -73,14 +74,14 @@ TEST(write) {
       [&](const caf::error& err) { FAIL(err); });
   MESSAGE("verify file contents");
   auto bytes = unbox(io::read(filename));
-  CHECK_EQUAL(span<const std::byte>{bytes}, as_bytes(chk));
+  CHECK_EQUAL(std::span<const std::byte>{bytes}, as_bytes(chk));
 }
 
 TEST(mmap) {
   MESSAGE("create file");
   auto foo = "foo"s;
   auto filename = directory / foo;
-  auto bytes = span<const char>{foo.data(), foo.size()};
+  auto bytes = std::span<const char>{foo.data(), foo.size()};
   auto err = io::write(filename, as_bytes(bytes));
   MESSAGE("mmap file via actor");
   self

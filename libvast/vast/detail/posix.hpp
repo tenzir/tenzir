@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include "vast/span.hpp"
-
 #include <caf/fwd.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include <span>
 #include <string>
 
 /// Various POSIX-compliant helper tools.
@@ -39,7 +38,7 @@ struct uds_datagram_sender {
   static caf::expected<uds_datagram_sender> make(const std::string& path);
 
   /// Send the content of `data to `dst`.
-  caf::error send(span<char> data);
+  caf::error send(std::span<char> data);
 
   /// The file descriptor for the "client" socket.
   int src_fd = -1;

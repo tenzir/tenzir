@@ -19,6 +19,7 @@
 
 #include <array>
 #include <cstddef>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -36,7 +37,7 @@ struct fixture {
 
   auto data(size_t at = 0) const {
     REQUIRE(at < buf.size());
-    return as_bytes(span{buf.data() + at, buf.size() - at});
+    return as_bytes(std::span{buf.data() + at, buf.size() - at});
   }
 
   std::vector<std::byte> buf;
@@ -254,10 +255,10 @@ TEST(fixext) {
   auto a2 = std::array<int8_t, 2>{{1, 2}};
   auto a4 = std::array<int8_t, 4>{{1, 2, 3, 4}};
   auto a8 = std::array<int8_t, 8>{{1, 2, 3, 4, 5, 6, 7, 8}};
-  auto s1 = as_bytes(span<int8_t>{a1});
-  auto s2 = as_bytes(span<int8_t>{a2});
-  auto s4 = as_bytes(span<int8_t>{a4});
-  auto s8 = as_bytes(span<int8_t>{a8});
+  auto s1 = as_bytes(std::span<int8_t>{a1});
+  auto s2 = as_bytes(std::span<int8_t>{a2});
+  auto s4 = as_bytes(std::span<int8_t>{a4});
+  auto s8 = as_bytes(std::span<int8_t>{a8});
   CHECK_EQUAL(builder.add<fixext1>(42, s1), 1u + 1 + 1);
   CHECK_EQUAL(builder.add<fixext2>(42, s2), 1u + 1 + 2);
   CHECK_EQUAL(builder.add<fixext4>(42, s4), 1u + 1 + 4);
@@ -280,10 +281,10 @@ TEST(ext8 via proxy) {
   auto size = header_size<ext8>() + header_size<fixstr>() + foobar.size() + 2;
   auto result = builder.add(std::move(proxy), 42);
   CHECK_EQUAL(result, size);
-  auto inner = as_bytes(
-    span{buf.data() + header_size<ext8>(), buf.size() - header_size<ext8>()});
+  auto inner = as_bytes(std::span{buf.data() + header_size<ext8>(),
+                                  buf.size() - header_size<ext8>()});
   auto view
-    = vast::test::unbox(get<ext_view>(object{span<const std::byte>{buf}}));
+    = vast::test::unbox(get<ext_view>(object{std::span<const std::byte>{buf}}));
   auto expected = ext_view{ext8, 42, inner};
   CHECK_EQUAL(view, expected);
   MESSAGE("verify inner data");
@@ -297,7 +298,7 @@ TEST(ext8 via proxy) {
 
 TEST(ext16) {
   auto foobar = "foobar"s;
-  auto xs = as_bytes(span{foobar.data(), foobar.size()});
+  auto xs = as_bytes(std::span{foobar.data(), foobar.size()});
   CHECK_EQUAL(builder.add<ext16>(42, xs), 1u + 2 + 1 + foobar.size());
 }
 

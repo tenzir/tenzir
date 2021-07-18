@@ -17,7 +17,6 @@
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
 #include "vast/segment_store.hpp"
-#include "vast/span.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/table_slice.hpp"
 
@@ -25,6 +24,7 @@
 #include <flatbuffers/flatbuffers.h>
 #include <fmt/format.h>
 
+#include <span>
 #include <vector>
 
 namespace vast::system {
@@ -90,7 +90,8 @@ handle_lookup(Actor& self, const vast::query& query, const vast::ids& ids,
   return atom::done_v;
 }
 
-std::filesystem::path store_path_from_header(span<const std::byte> header) {
+std::filesystem::path
+store_path_from_header(std::span<const std::byte> header) {
   std::string_view sv{reinterpret_cast<const char*>(header.data()),
                       header.size()};
   return std::filesystem::path{sv};
@@ -336,7 +337,8 @@ public:
   }
 
   [[nodiscard]] virtual caf::expected<system::store_actor>
-  make_store(filesystem_actor fs, span<const std::byte> header) const override {
+  make_store(filesystem_actor fs,
+             std::span<const std::byte> header) const override {
     auto path = store_path_from_header(header);
     // TODO: This should use `spawn<caf::lazy_init>`, but this leads to a
     // deadlock in unit tests.

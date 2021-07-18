@@ -9,10 +9,10 @@
 #pragma once
 
 #include "vast/detail/type_traits.hpp"
-#include "vast/span.hpp"
 
 #include <cstddef>
 #include <limits>
+#include <span>
 #include <string>
 #include <type_traits>
 
@@ -68,7 +68,7 @@ constexpr std::pair<char, char> byte_to_hex(T x) {
 /// @param result The string to append to.
 /// @see byte_to_hex
 template <class Policy = policy::lowercase>
-void hexify(span<const std::byte> xs, std::string& result) {
+void hexify(std::span<const std::byte> xs, std::string& result) {
   for (auto x : xs) {
     auto [hi, lo] = byte_to_hex<Policy>(x);
     result += hi;
@@ -81,7 +81,7 @@ void hexify(span<const std::byte> xs, std::string& result) {
 /// @returns The hex string of *xs*.
 /// @see byte_to_hex
 template <class Policy = policy::lowercase>
-std::string hexify(span<const std::byte> xs) {
+std::string hexify(std::span<const std::byte> xs) {
   std::string result;
   hexify<Policy>(xs, result);
   return result;
