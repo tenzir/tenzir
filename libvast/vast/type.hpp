@@ -836,6 +836,7 @@ VAST_TYPE_TRAIT(subnet);
 VAST_TYPE_TRAIT(enumeration);
 VAST_TYPE_TRAIT(list);
 VAST_TYPE_TRAIT(map);
+VAST_TYPE_TRAIT(record);
 
 #undef VAST_TYPE_TRAIT
 
