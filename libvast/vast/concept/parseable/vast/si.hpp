@@ -13,16 +13,15 @@
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
+#include "vast/detail/concepts.hpp"
 #include "vast/si_literals.hpp"
 
 #include <type_traits>
 
 namespace vast {
 
-template <class T>
+template <detail::integral T>
 struct si_parser : parser<si_parser<T>> {
-  static_assert(std::is_integral_v<T>);
-
   using attribute = T;
 
   template <class Iterator, class Attribute>

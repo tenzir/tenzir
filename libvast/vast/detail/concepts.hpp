@@ -32,4 +32,13 @@ concept byte_container = requires(T t) {
   sizeof(decltype(*std::data(t))) == 1;
 };
 
+template <class T>
+concept integral = std::is_integral_v<T>;
+
+template <class T>
+concept unsigned_integral = integral<T> && std::is_unsigned_v<T>;
+
+template <class T>
+concept signed_integral = integral<T> && std::is_signed_v<T>;
+
 } // namespace vast::detail

@@ -31,6 +31,8 @@
 
 #pragma once
 
+#include "vast/detail/concepts.hpp"
+
 #include <cstdint>
 #include <limits>
 #include <type_traits>
@@ -90,11 +92,10 @@ constexpr T pow(T base) {
 /// @tparam base The base of the logarithm.
 /// @tparam T The argument type.
 /// @returns The integer logarithm of *x*.
-template <int base, class T>
+template <int base, detail::integral T>
 constexpr int ilog(T x) {
   static_assert(!(base <= 0), "ilog is not useful for base <= 0");
   static_assert(base != 1, "ilog is not useful for base == 1");
-  static_assert(std::is_integral<T>{}, "ilog only works on integral types");
   return x > 0 ? ilog_helper<base>(x) : -1;
 }
 

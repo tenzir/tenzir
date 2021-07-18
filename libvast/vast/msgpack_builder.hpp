@@ -10,6 +10,7 @@
 
 #include "vast/data/integer.hpp"
 #include "vast/detail/byte_swap.hpp"
+#include "vast/detail/concepts.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/logger.hpp"
@@ -377,9 +378,8 @@ private:
     return write_data(xs.data(), xs.size() * sizeof(T));
   }
 
-  template <class T>
+  template <detail::unsigned_integral T>
   size_t write_count(T x) {
-    static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
     auto y = vast::detail::to_network_order(x);
     return write_data(&y, sizeof(y));
   }
@@ -390,9 +390,8 @@ private:
     return write_byte(x);
   }
 
-  template <format Format, class T>
+  template <format Format, detail::integral T>
   [[nodiscard]] size_t add_int(T x) {
-    static_assert(std::is_integral_v<T>);
     auto y = native_cast<Format>(x);
     auto u = static_cast<std::make_unsigned_t<decltype(y)>>(y);
     auto z = vast::detail::to_network_order(u);
@@ -464,9 +463,8 @@ size_t put(Builder& builder, bool x) {
 
 // -- int ---------------------------------------------------------------------
 
-template <class Builder, class T>
-auto put(Builder& builder, T x)
-  -> std::enable_if_t<std::is_integral_v<T> && std::is_signed_v<T>, size_t> {
+template <class Builder, detail::signed_integral T>
+auto put(Builder& builder, T x) {
   using std::numeric_limits;
   if constexpr (sizeof(T) == 8)
     if (x < numeric_limits<int32_t>::min())
@@ -507,9 +505,8 @@ size_t put(Builder& builder, integer x) {
   return builder.template add<int64>(x.value);
 }
 
-template <class Builder, class T>
-auto put(Builder& builder, T x)
-  -> std::enable_if_t<std::is_integral_v<T> && std::is_unsigned_v<T>, size_t> {
+template <class Builder, detail::unsigned_integral T>
+auto put(Builder& builder, T x) {
   using std::numeric_limits;
   if (x < 32)
     return builder.template add<positive_fixint>(x);

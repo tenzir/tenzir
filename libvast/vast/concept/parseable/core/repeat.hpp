@@ -11,6 +11,7 @@
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/detail/container.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/concepts.hpp"
 
 #include <vector>
 
@@ -58,12 +59,9 @@ private:
   Parser parser_;
 };
 
-template <class Parser, class T, class U = T>
+template <class Parser, detail::integral T, detail::integral U = T>
 class dynamic_repeat_parser
   : public parser<dynamic_repeat_parser<Parser, T, U>> {
-  static_assert(std::is_integral_v<T>, "T must be an an integral type");
-  static_assert(std::is_integral_v<U>, "U must be an an integral type");
-
 public:
   using container = detail::container_t<typename Parser::attribute>;
   using attribute = typename container::attribute;

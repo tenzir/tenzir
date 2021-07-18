@@ -125,8 +125,8 @@ struct integral_parser
   }
 };
 
-template <class T>
-struct parser_registry<T, std::enable_if_t<std::is_integral_v<T>>> {
+template <detail::integral T>
+struct parser_registry<T> {
   using type = integral_parser<T>;
 };
 
