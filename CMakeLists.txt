@@ -469,7 +469,7 @@ option(VAST_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
 add_feature_info("VAST_ENABLE_CLANG_TIDY" VAST_ENABLE_CLANG_TIDY
                  "run clang-tidy during build.")
 if (VAST_ENABLE_CLANG_TIDY)
-  macro (VASTEnableClangTidy _target)
+  macro (VASTTargetEnableTooling _target)
     set(_clang_tidy_args
         "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
     set_target_properties(
@@ -477,7 +477,7 @@ if (VAST_ENABLE_CLANG_TIDY)
                             C_CLANG_TIDY "${_clang_tidy_args}")
   endmacro ()
 else ()
-  macro (VASTEnableClangTidy _target)
+  macro (VASTTargetEnableTooling _target)
 
   endmacro ()
 endif ()

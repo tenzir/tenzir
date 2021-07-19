@@ -8,7 +8,7 @@ endif ()
 
 add_executable(lsvast src/lsvast.cpp src/print_index.cpp
                       src/print_partition.cpp src/print_segment.cpp)
-VASTEnableClangTidy(lsvast)
+VASTTargetEnableTooling(lsvast)
 target_link_libraries(lsvast PRIVATE vast::libvast vast::internal)
 install(TARGETS lsvast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 

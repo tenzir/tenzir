@@ -29,8 +29,8 @@ with section("parse"):
                 "INCLUDE_DIRECTORIES": "*",
             },
         },
-        "vastenableclangtidy": {
-            "spelling": "VASTEnableClangTidy",
+        "vasttargetenabletooling": {
+            "spelling": "VASTTargetEnableTooling",
             "pargs": {
                 "nargs": 1,
             },
