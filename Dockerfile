@@ -91,7 +91,7 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_PLUGINS:STRING="plugins/pcap;plugins/broker" && \
     cmake --build build --parallel && \
-    cmake --install build && \
+    cmake --install build --strip && \
     rm -rf build
 
 EXPOSE 42000/tcp
