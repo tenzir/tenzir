@@ -8,10 +8,24 @@
 
 #pragma once
 
+#include "vast/detail/type_traits.hpp"
+
 #include <iterator>
 #include <type_traits>
 
 namespace vast::concepts {
+
+template <class T, class U>
+concept SameHelper = std::is_same_v<T, U>;
+
+template <class T, class U>
+concept same_as = SameHelper<T, U> && SameHelper<U, T>;
+
+template <typename From, typename To>
+concept convertible_to = std::is_convertible_v<From, To> && requires(
+  std::add_rvalue_reference_t<From> (&f)()) {
+  static_cast<To>(f());
+};
 
 template <class T>
 concept transparent = requires {
@@ -44,5 +58,27 @@ concept signed_integral = integral<T> && std::is_signed_v<T>;
 
 template <class T>
 concept floating_point = std::is_floating_point_v<T>;
+
+struct any_callable {
+  template <class... Ts>
+  void operator()(Ts&&...);
+};
+
+/// Inspectables
+template <class T>
+concept is_inspectable = requires(any_callable& i, T& x) {
+  {inspect(i, x)};
+};
+
+/// push_back
+template <class C>
+concept has_push_back = requires(C xs, typename C::value_type x) {
+  xs.push_back(x);
+};
+
+template <class T>
+concept monoid = requires(T x, T y) {
+  { mappend(x, y) } -> same_as<T>;
+};
 
 } // namespace vast::concepts
