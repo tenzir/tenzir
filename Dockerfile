@@ -68,9 +68,6 @@ RUN ln -sf ../../pyvast/pyvast examples/jupyter/pyvast && \
     ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
     ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py
 
-RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
-COPY systemd/vast.yaml $PREFIX/etc/vast/vast.yaml
-
 # -- development ---------------------------------------------------------------
 
 FROM dependencies AS development
@@ -93,6 +90,9 @@ RUN cmake -B build -G Ninja \
     cmake --build build --parallel && \
     cmake --install build --strip && \
     rm -rf build
+
+RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
+COPY systemd/vast.yaml $PREFIX/etc/vast/vast.yaml
 
 EXPOSE 42000/tcp
 
