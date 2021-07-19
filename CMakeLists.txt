@@ -614,16 +614,18 @@ endif ()
 
 # -- schemas -------------------------------------------------------------------
 
-add_custom_target(
-  vast-schema
-  COMMAND
-    ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-    "${CMAKE_BINARY_DIR}/share/vast/schema/"
-  COMMENT "Copying schema directory")
-
 option(VAST_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with VAST" ON)
 add_feature_info("VAST_ENABLE_BUNDLED_SCHEMAS" VAST_ENABLE_BUNDLED_SCHEMAS
                  "install bundled schemas with VAST.")
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+  add_custom_target(
+    vast-schema
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/vast/schema/"
+    COMMENT "Copying schema directory")
+endif ()
+
 if (VAST_ENABLE_BUNDLED_SCHEMAS)
   install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
           DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
