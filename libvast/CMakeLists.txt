@@ -145,7 +145,14 @@ option(VAST_ENABLE_OPENSSL "Encrypt network communication" ON)
 add_feature_info("VAST_ENABLE_OPENSSL" VAST_ENABLE_OPENSSL
                  "encrypt network communication.")
 
-option(VAST_ENABLE_BUNDLED_CAF "Use the CAF submodule" OFF)
+if (VAST_ENABLE_DEVELOPER_MODE
+    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt")
+  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT ON)
+else ()
+  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT OFF)
+endif ()
+option(VAST_ENABLE_BUNDLED_CAF "Use the CAF submodule"
+       "${VAST_ENABLE_BUNDLED_CAF_DEFAULT}")
 add_feature_info("VAST_ENABLE_BUNDLED_CAF" VAST_ENABLE_BUNDLED_CAF
                  "use the CAF submodule.")
 if (NOT VAST_ENABLE_BUNDLED_CAF)
