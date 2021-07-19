@@ -20,11 +20,11 @@
 #include "vast/flow.hpp"
 #include "vast/icmp.hpp"
 #include "vast/port.hpp"
-#include "vast/span.hpp"
 
 #include <caf/optional.hpp>
 
 #include <cstddef>
+#include <span>
 #include <string>
 #include <type_traits>
 
@@ -144,7 +144,7 @@ std::string compute(const flow& x, uint16_t seed = 0) {
     auto n = detail::base64::encode(result.data() + offset, ptr, num_bytes);
     result.resize(offset + n);
   } else if constexpr (std::is_same_v<Policy, policy::ascii>) {
-    auto bytes = as_bytes(span{digest.data(), digest.size()});
+    auto bytes = as_bytes(std::span{digest.data(), digest.size()});
     detail::hexify<policy::lowercase>(bytes, result);
   } else {
     static_assert(detail::always_false_v<Policy>, "unsupported plicy");

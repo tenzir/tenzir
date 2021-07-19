@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"

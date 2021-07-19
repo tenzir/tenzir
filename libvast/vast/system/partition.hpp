@@ -30,6 +30,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -200,7 +201,7 @@ struct passive_partition_state {
   std::string store_id = {};
 
   /// The store header as found in the flatbuffer.
-  span<const std::byte> store_header = {};
+  std::span<const std::byte> store_header = {};
 
   /// The raw memory of the partition, used to spawn indexers on demand.
   chunk_ptr partition_chunk = {};

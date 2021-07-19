@@ -12,11 +12,11 @@
 
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
-#include "vast/span.hpp"
 #include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
 
 #include <cstddef>
+#include <span>
 
 using namespace vast;
 
@@ -64,7 +64,7 @@ TEST(serialization) {
 TEST(as_bytes) {
   std::string str = "foobarbaz";
   auto bytes
-    = span{reinterpret_cast<const std::byte*>(str.data()), str.size()};
+    = std::span{reinterpret_cast<const std::byte*>(str.data()), str.size()};
   auto x = chunk::make(std::move(str));
   CHECK_EQUAL(bytes, as_bytes(x));
 }

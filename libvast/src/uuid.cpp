@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstring>
 #include <random>
+#include <span>
 
 namespace vast {
 namespace {
@@ -67,7 +68,7 @@ uuid uuid::nil() {
   return u;
 }
 
-uuid::uuid(span<const std::byte, num_bytes> bytes) {
+uuid::uuid(std::span<const std::byte, num_bytes> bytes) {
   std::memcpy(id_.data(), bytes.data(), bytes.size());
 }
 
@@ -119,7 +120,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x) {
 caf::error unpack(const fbs::uuid::v0& x, uuid& y) {
   if (x.data()->size() != uuid::num_bytes)
     return caf::make_error(ec::format_error, "wrong uuid format");
-  span<const std::byte, uuid::num_bytes> bytes{
+  std::span<const std::byte, uuid::num_bytes> bytes{
     reinterpret_cast<const std::byte*>(x.data()->data()), x.data()->size()};
   y = uuid{bytes};
   return caf::none;

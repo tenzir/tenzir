@@ -14,7 +14,6 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/logger.hpp"
 #include "vast/msgpack.hpp"
-#include "vast/span.hpp"
 
 #include <array>
 #include <chrono>
@@ -22,6 +21,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <span>
 #include <type_traits>
 #include <vector>
 
@@ -290,11 +290,11 @@ public:
       if ((data64 & 0xffffffff00000000ull) == 0) {
         // Use timestamp32 if we don't have nanoseconds.
         auto data32 = to_network_order(narrow_cast<uint32_t>(data64));
-        return add<fixext4>(-1, as_bytes(span{&data32, 1}));
+        return add<fixext4>(-1, as_bytes(std::span{&data32, 1}));
       }
       // Use timestamp64 if we have nanoseconds.
       data64 = to_network_order(data64);
-      return add<fixext8>(-1, as_bytes(span{&data64, 1}));
+      return add<fixext8>(-1, as_bytes(std::span{&data64, 1}));
     }
     // Use timestamp96 if seconds are larger than 2^34.
     std::array<uint32_t, 3> data96;
@@ -302,7 +302,7 @@ public:
     auto ptr_secs = reinterpret_cast<uint64_t*>(ptr_ns + 1);
     *ptr_ns = to_network_order(narrow_cast<uint32_t>(ns.count()));
     *ptr_secs = to_network_order(narrow_cast<uint64_t>(secs.count()));
-    return add<ext8>(-1, as_bytes(span{data96.data(), data96.size()}));
+    return add<ext8>(-1, as_bytes(std::span{data96.data(), data96.size()}));
   }
 
   /// Adds a timestmap.
@@ -373,7 +373,7 @@ private:
   }
 
   template <class T>
-  size_t write_data(vast::span<const T> xs) {
+  size_t write_data(std::span<const T> xs) {
     return write_data(xs.data(), xs.size() * sizeof(T));
   }
 
@@ -414,14 +414,14 @@ private:
 
   template <format Format>
   [[nodiscard]] size_t add_str(std::string_view x) {
-    auto xs = as_bytes(vast::span{x.data(), x.size()});
+    auto xs = as_bytes(std::span{x.data(), x.size()});
     if (!xs.empty())
       return add_binary<Format>(xs);
     return write_byte(Format) + write_count(make_size<Format>(0));
   }
 
   template <format Format>
-  [[nodiscard]] size_t add_binary(vast::span<const std::byte> xs) {
+  [[nodiscard]] size_t add_binary(std::span<const std::byte> xs) {
     using namespace vast::detail;
     auto n = make_size<Format>(xs.size());
     return write_byte(Format) + write_count(n) + write_data(xs);
@@ -429,14 +429,14 @@ private:
 
   template <format Format>
   [[nodiscard]] size_t
-  add_fix_ext(extension_type type, vast::span<const std::byte> xs) {
+  add_fix_ext(extension_type type, std::span<const std::byte> xs) {
     return write_byte(Format) + write_byte(type)
            + write_data(xs.data(), xs.size());
   }
 
   template <format Format>
   [[nodiscard]] size_t
-  add_ext(extension_type type, vast::span<const std::byte> xs) {
+  add_ext(extension_type type, std::span<const std::byte> xs) {
     auto n = make_size<Format>(xs.size());
     return write_byte(Format) + write_count(n) + write_byte(type)
            + write_data(xs.data(), xs.size());
@@ -560,7 +560,7 @@ size_t put(Builder& builder, std::string_view x) {
 // -- bin ---------------------------------------------------------------------
 
 template <class Builder>
-size_t put(Builder& builder, vast::span<const std::byte> xs) {
+size_t put(Builder& builder, std::span<const std::byte> xs) {
   auto size = static_cast<size_t>(xs.size());
   if (size <= capacity<bin8>())
     return builder.template add<bin8>(xs);

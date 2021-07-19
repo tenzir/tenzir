@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <tuple>
 #include <unistd.h>
 
@@ -137,7 +138,7 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
 
 // -- concepts -----------------------------------------------------------------
 
-span<const std::byte> as_bytes(const chunk_ptr& x) noexcept {
+std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept {
   if (!x)
     return {};
   return as_bytes(*x);
@@ -158,7 +159,7 @@ caf::error read(const std::filesystem::path& filename, chunk_ptr& x) {
                                        filename, err.message()));
   }
   auto buffer = std::make_unique<chunk::value_type[]>(size);
-  auto view = span{buffer.get(), size};
+  auto view = std::span{buffer.get(), size};
   if (auto err = io::read(filename, view)) {
     x = nullptr;
     return err;

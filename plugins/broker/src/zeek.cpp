@@ -18,6 +18,8 @@
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
 
+#include <span>
+
 namespace vast::plugins::broker {
 
 // Things we take directly from zeek.
@@ -58,7 +60,7 @@ enum class tag : int {
 /// @returns An error on failure.
 /// @post *bytes* is advanced by the number of bytes of the extract value.
 template <class T>
-caf::error extract(T& x, span<const std::byte>& bytes) {
+caf::error extract(T& x, std::span<const std::byte>& bytes) {
   if constexpr (std::is_same_v<T, char>) {
     if (bytes.empty())
       return caf::make_error(ec::parse_error, "input exhausted");
@@ -71,7 +73,7 @@ caf::error extract(T& x, span<const std::byte>& bytes) {
     x = (c == '\1');
   } else if constexpr (std::is_same_v<T, int>) {
     // In Zeek, an int has always 32 bits on the wire.
-    uint32_t result;
+    uint32_t result{};
     if (auto err = extract(result, bytes))
       return err;
     x = static_cast<int>(result);
@@ -139,7 +141,7 @@ caf::error extract(T& x, span<const std::byte>& bytes) {
 }
 
 /// Parses a binary Zeek value.
-caf::error extract_value(data& result, span<const std::byte>& bytes) {
+caf::error extract_value(data& result, std::span<const std::byte>& bytes) {
   // Every value begins with type information.
   int type = 0;
   int sub_type = 0;
@@ -430,7 +432,7 @@ caf::expected<std::vector<data>> process(const ::broker::zeek::LogWrite& msg) {
     return caf::make_error(ec::parse_error, "serial_data not a string");
   auto bytes = as_bytes(*serial_data);
   // Read the number of fields.
-  uint32_t num_fields;
+  uint32_t num_fields{};
   if (auto err = zeek::extract(num_fields, bytes))
     return err;
   // Read as many "threading values" as there are fields.

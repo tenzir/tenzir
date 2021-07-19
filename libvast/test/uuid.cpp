@@ -16,6 +16,8 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/test/test.hpp"
 
+#include <span>
+
 using namespace vast;
 
 TEST(pod size) {
@@ -31,6 +33,6 @@ TEST(parseable and printable) {
 TEST(construction from span) {
   std::array<char, 16> bytes{0, 1, 2,  3,  4,  5,  6,  7,
                              8, 9, 10, 12, 12, 13, 14, 15};
-  auto bytes_view = as_bytes(span<char, 16>{bytes});
+  auto bytes_view = as_bytes(std::span<char, 16>{bytes});
   CHECK(bytes_view == as_bytes(uuid{bytes_view}));
 }

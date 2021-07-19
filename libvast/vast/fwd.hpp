@@ -141,9 +141,6 @@ inline constexpr size_t dynamic_extent = std::numeric_limits<size_t>::max();
 template <class... Types>
 class projection;
 
-template <class, size_t Extent = dynamic_extent>
-class span;
-
 template <class>
 class scope_linked;
 

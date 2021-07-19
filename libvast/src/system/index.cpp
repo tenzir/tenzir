@@ -59,6 +59,7 @@
 #include <ctime>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <unistd.h>
 
 using namespace std::chrono;
@@ -148,7 +149,7 @@ caf::error extract_partition_synopsis(
   fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
   auto chunk_out = fbs::release(builder);
   return io::save(partition_synopsis_path,
-                  span{chunk_out->data(), chunk_out->size()});
+                  std::span{chunk_out->data(), chunk_out->size()});
 }
 
 } // namespace

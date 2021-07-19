@@ -15,6 +15,7 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include <cstddef>
+#include <span>
 #include <vector>
 
 namespace vast {
@@ -51,7 +52,7 @@ public:
   /// be FlatBuffers-based.
   /// @returns A table slice from the accumulated calls to add.
   [[nodiscard]] table_slice
-  finish(span<const std::byte> serialized_layout = {}) override;
+  finish(std::span<const std::byte> serialized_layout = {}) override;
 
   /// @returns The number of columns in the table slice.
   size_t columns() const noexcept;

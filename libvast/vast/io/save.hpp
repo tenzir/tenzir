@@ -8,10 +8,9 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/span.hpp"
-
 #include <cstddef>
 #include <filesystem>
+#include <span>
 
 namespace vast::io {
 
@@ -21,6 +20,6 @@ namespace vast::io {
 /// @param xs The buffer to read from.
 /// @returns An error if the operation failed.
 [[nodiscard]] caf::error
-save(const std::filesystem::path& filename, span<const std::byte> xs);
+save(const std::filesystem::path& filename, std::span<const std::byte> xs);
 
 } // namespace vast::io

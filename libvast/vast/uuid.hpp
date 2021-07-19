@@ -10,7 +10,6 @@
 
 #include "vast/detail/operators.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/span.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
@@ -18,6 +17,7 @@
 
 #include <array>
 #include <cstddef>
+#include <span>
 
 namespace vast {
 
@@ -42,7 +42,7 @@ public:
 
   /// Constructs a UUID from 16 bytes.
   /// @param bytes The data to interpret as UUID.
-  explicit uuid(span<const std::byte, num_bytes> bytes);
+  explicit uuid(std::span<const std::byte, num_bytes> bytes);
 
   /// Accesses a specific byte.
   reference operator[](size_t i);
@@ -59,8 +59,8 @@ public:
   friend bool operator<(const uuid& x, const uuid& y);
 
   /// @returns the binary data.
-  friend span<const std::byte, num_bytes> as_bytes(const uuid& x) {
-    return span<const std::byte, num_bytes>{x.id_};
+  friend std::span<const std::byte, num_bytes> as_bytes(const uuid& x) {
+    return std::span<const std::byte, num_bytes>{x.id_};
   }
 
   template <class Inspector>

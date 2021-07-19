@@ -131,7 +131,7 @@ uds_datagram_sender::make(const std::string& path) {
   return std::move(result);
 }
 
-caf::error uds_datagram_sender::send(span<char> data) {
+caf::error uds_datagram_sender::send(std::span<char> data) {
   if (::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
       < 0)

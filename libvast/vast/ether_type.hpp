@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "vast/span.hpp"
-
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace vast {
 
@@ -80,6 +79,6 @@ enum class ether_type : uint16_t {
 /// @param octets The two octets representing the EtherType.
 /// @returns The `ether_type` instance for *octects*.
 /// @relates ether_type
-ether_type as_ether_type(span<const std::byte, 2> octets);
+ether_type as_ether_type(std::span<const std::byte, 2> octets);
 
 } // namespace vast

@@ -147,7 +147,7 @@ struct fmt::formatter<vast::uuid> {
     static_assert(sizeof(vast::uuid) == 16, "id format changed, please update "
                                             "formatter");
     const auto args
-      = vast::span{reinterpret_cast<const unsigned char*>(x.begin()), x.size()};
+      = std::span{reinterpret_cast<const unsigned char*>(x.begin()), x.size()};
     return format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
                      fmt::join(args.subspan(0, 4), ""),
                      fmt::join(args.subspan(4, 2), ""),
@@ -328,7 +328,7 @@ struct fmt::formatter<caf::error> {
 };
 
 template <typename T>
-struct fmt::formatter<vast::span<T>, fmt::format_context::char_type,
+struct fmt::formatter<std::span<T>, fmt::format_context::char_type,
                       std::enable_if_t<!std::is_same_v<T, std::byte>>> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
@@ -336,21 +336,21 @@ struct fmt::formatter<vast::span<T>, fmt::format_context::char_type,
   }
 
   template <typename FormatContext>
-  auto format(const vast::span<T>& item, FormatContext& ctx) {
+  auto format(const std::span<T>& item, FormatContext& ctx) {
     return format_to(ctx.out(), "vast.span({})",
                      fmt::join(item.begin(), item.end(), ", "));
   }
 };
 
 template <>
-struct fmt::formatter<vast::span<std::byte>> {
+struct fmt::formatter<std::span<std::byte>> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <typename FormatContext>
-  auto format(const vast::span<std::byte>&, FormatContext& ctx) {
+  auto format(const std::span<std::byte>&, FormatContext& ctx) {
     // Inentioanlly unprintable.
     return format_to(ctx.out(), "vast.span(<bytes>)");
   }

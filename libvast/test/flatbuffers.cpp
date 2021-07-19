@@ -18,7 +18,6 @@
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/query.hpp"
-#include "vast/span.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
@@ -29,6 +28,8 @@
 #include "vast/uuid.hpp"
 
 #include <flatbuffers/flatbuffers.h>
+
+#include <span>
 
 #define SUITE flatbuffers
 #include "vast/test/fixtures/actor_system_and_events.hpp"
@@ -46,7 +47,7 @@ vast::system::store_actor::behavior_type dummy_store() {
           }};
 }
 
-using vast::span;
+using std::span;
 
 TEST(uuid roundtrip) {
   vast::uuid uuid = vast::uuid::random();
@@ -55,8 +56,8 @@ TEST(uuid roundtrip) {
   auto fb = *expected_fb;
   vast::uuid uuid2 = vast::uuid::random();
   CHECK_NOT_EQUAL(uuid, uuid2);
-  span<const std::byte> span{reinterpret_cast<const std::byte*>(fb->data()),
-                             fb->size()};
+  std::span<const std::byte> span{
+    reinterpret_cast<const std::byte*>(fb->data()), fb->size()};
   vast::fbs::unwrap<vast::fbs::uuid::v0>(span, uuid2);
   CHECK_EQUAL(uuid, uuid2);
 }
@@ -86,7 +87,7 @@ TEST(index roundtrip) {
   vast::fbs::FinishIndexBuffer(builder, *index);
   auto fb = builder.GetBufferPointer();
   auto sz = builder.GetSize();
-  auto span = vast::span(fb, sz);
+  auto span = std::span(fb, sz);
   // Deserialize the index.
   auto idx = vast::fbs::GetIndex(span.data());
   CHECK_EQUAL(idx->index_type(), vast::fbs::index::Index::v0);
@@ -150,7 +151,7 @@ TEST(empty partition roundtrip) {
   }
   auto ptr = builder.GetBufferPointer();
   auto sz = builder.GetSize();
-  vast::span span(ptr, sz);
+  std::span span(ptr, sz);
   // Deserialize partition.
   vast::system::passive_partition_state recovered_state = {};
   auto partition = vast::fbs::GetPartition(span.data());

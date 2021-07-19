@@ -16,6 +16,7 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace vast {
@@ -66,7 +67,7 @@ public:
   // -- properties -------------------------------------------------------------
 
   [[nodiscard]] table_slice
-  finish(span<const std::byte> serialized_layout = {}) override;
+  finish(std::span<const std::byte> serialized_layout = {}) override;
 
   /// @pre `record_batch->schema()->Equals(make_arrow_schema(layout))``
   [[nodiscard]] table_slice static create(

@@ -52,6 +52,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <span>
 
 namespace vast::system {
 
@@ -330,9 +331,9 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   state.store_id
     = store_header ? store_header->id()->str() : std::string{"legacy_archive"};
   if (store_header && store_header->data())
-    state.store_header
-      = span{reinterpret_cast<const std::byte*>(store_header->data()->data()),
-             store_header->data()->size()};
+    state.store_header = std::span{
+      reinterpret_cast<const std::byte*>(store_header->data()->data()),
+      store_header->data()->size()};
   auto indexes = partition.indexes();
   if (!indexes)
     return caf::make_error(ec::format_error,
