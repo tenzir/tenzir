@@ -334,12 +334,6 @@ target_link_libraries(libvast PRIVATE libvast_internal)
 # with libvast.
 target_compile_definitions(libvast PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 
-# GNU prior to 9.1 requires linking with stdc++fs when using std::filesystem library
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION
-                                            VERSION_LESS 9.1.0)
-  target_link_libraries(libvast PUBLIC stdc++fs)
-endif ()
-
 set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
                                          ON)
 
