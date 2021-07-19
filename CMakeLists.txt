@@ -148,49 +148,11 @@ add_feature_info(
   "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   "enable relocatable installations.")
 
-# For relocatable builds we need the configured install directories to be
-# relative so we can interpret them relative to the object path of the running
-# binary instead of a fixed install prefix.
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-  foreach (
-    _install IN
-    ITEMS "BIN"
-          "SBIN"
-          "LIBEXEC"
-          "SYSCONF"
-          "SHAREDSTATE"
-          "LOCALSTATE"
-          "RUNSTATE"
-          "LIB"
-          "INCLUDE"
-          "OLDINCLUDE"
-          "DATAROOT"
-          "DATA"
-          "INFO"
-          "LOCALE"
-          "MAN"
-          "DOC")
-    # Try removing CMAKE_INSTALL_PREFIX with a trailing slash from the full path
-    # to get the correct relative path because some package managers do this
-    # stupid thing where they put absolute paths into variables that are
-    # supposed to be interpreted as relative to the install preifx.
-    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
-      string(
-        REGEX
-        REPLACE "^${CMAKE_INSTALL_PREFIX}/" "" "CMAKE_INSTALL_${_install}DIR"
-                "${CMAKE_INSTALL_FULL_${install}DIR}")
-    endif ()
-    # If the path is still absolute, e.g., because the full install dirs did
-    # were not subdirectories if the install prefix, give up and error. Nothing
-    # we can do here.
-    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
-      message(
-        FATAL_ERROR
-          "CMAKE_INSTALL_${_install}DIR must not be an absolute path for relocatable installations."
-      )
-    endif ()
-  endforeach ()
-  unset(_install)
+  # For relocatable builds we need the configured install directories to be
+  # relative so we can interpret them relative to the object path of the running
+  # binary instead of a fixed install prefix.
+  VASTNormalizeInstallDirs()
 
   # Single output directory.
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY

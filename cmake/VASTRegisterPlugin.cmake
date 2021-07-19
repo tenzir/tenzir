@@ -1,5 +1,48 @@
 include_guard(GLOBAL)
 
+# Normalize the GNUInstallDirs to be relative paths, if possible.
+macro (VASTNormalizeInstallDirs)
+  foreach (
+    _install IN
+    ITEMS "BIN"
+          "SBIN"
+          "LIBEXEC"
+          "SYSCONF"
+          "SHAREDSTATE"
+          "LOCALSTATE"
+          "RUNSTATE"
+          "LIB"
+          "INCLUDE"
+          "OLDINCLUDE"
+          "DATAROOT"
+          "DATA"
+          "INFO"
+          "LOCALE"
+          "MAN"
+          "DOC")
+    # Try removing CMAKE_INSTALL_PREFIX with a trailing slash from the full path
+    # to get the correct relative path because some package managers do this
+    # stupid thing where they put absolute paths into variables that are
+    # supposed to be interpreted as relative to the install preifx.
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
+      string(
+        REGEX
+        REPLACE "^${CMAKE_INSTALL_PREFIX}/" "" "CMAKE_INSTALL_${_install}DIR"
+                "${CMAKE_INSTALL_FULL_${install}DIR}")
+    endif ()
+    # If the path is still absolute, e.g., because the full install dirs did
+    # were not subdirectories if the install prefix, give up and error. Nothing
+    # we can do here.
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
+      message(
+        FATAL_ERROR
+          "CMAKE_INSTALL_${_install}DIR must not be an absolute path for relocatable installations."
+      )
+    endif ()
+  endforeach ()
+  unset(_install)
+endmacro ()
+
 macro (make_absolute vars)
   foreach (var IN LISTS "${vars}")
     get_filename_component(var_abs "${var}" ABSOLUTE)
@@ -221,6 +264,9 @@ function (VASTRegisterPlugin)
   # Provides install directory variables as defined for GNU software:
   # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
+  if (NOT VAST_ENABLE_STATIC_PLUGINS)
+    VASTNormalizeInstallDirs()
+  endif ()
 
   # A replacement for target_link_libraries that links static libraries using
   # the platform-specific whole-archive options. Please test any changes to this
