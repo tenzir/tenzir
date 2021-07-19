@@ -166,16 +166,4 @@ using contains_type_t = decltype(contains_type_impl<T>(std::declval<TList>()));
 template <class TList, class T>
 inline constexpr bool contains_type_v = contains_type_t<TList, T>::value;
 
-// -- is_transparent ----------------------------------------------------------
-
-template <class T, class = void>
-struct has_is_transparent : std::false_type {};
-
-template <class T>
-struct has_is_transparent<T, std::void_t<typename T::is_transparent>>
-  : std::true_type {};
-
-template <class T>
-inline constexpr bool has_is_transparent_v = has_is_transparent<T>::value;
-
 } // namespace vast::detail
