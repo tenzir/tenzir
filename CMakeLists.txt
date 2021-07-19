@@ -322,16 +322,6 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning-option)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning)
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
-    target_compile_options(
-      libvast_internal
-      INTERFACE
-        -Wno-unused-parameter
-        -Wno-unused-variable
-        # Work around false positives in LTO mode.
-        $<$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>:-Wno-maybe-uninitialized>
-    )
-  endif ()
 endif ()
 
 target_compile_options(
