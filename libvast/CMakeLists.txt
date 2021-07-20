@@ -234,6 +234,14 @@ else ()
       LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     if (VAST_ENABLE_OPENSSL)
+      if (NOT TARGET libcaf_openssl_${_linkage_suffix})
+        string(
+          CONCAT err_message
+                 "VAST_ENABLE_OPENSSL is active but the CAF OpenSSL module is"
+                 " disabled. This is probably because the OpenSSL development"
+                 " dependencies weren't found")
+        message(FATAL_ERROR "${err_message}")
+      endif ()
       target_include_directories(
         libcaf_openssl_${_linkage_suffix}
         PUBLIC
