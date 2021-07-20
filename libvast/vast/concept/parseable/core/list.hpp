@@ -20,7 +20,7 @@ class list_parser : public parser<list_parser<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;
-  using container = detail::container<lhs_attribute>;
+  using container = detail::container_t<lhs_attribute>;
   using attribute = typename container::attribute;
 
   list_parser(Lhs lhs, Rhs rhs) : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {

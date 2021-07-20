@@ -18,7 +18,7 @@ namespace vast {
 namespace detail {
 
 template <class Elem>
-struct container {
+struct container_t {
   using vector_type = std::vector<Elem>;
   using attribute = attr_fold_t<vector_type>;
 

@@ -145,7 +145,14 @@ option(VAST_ENABLE_OPENSSL "Encrypt network communication" ON)
 add_feature_info("VAST_ENABLE_OPENSSL" VAST_ENABLE_OPENSSL
                  "encrypt network communication.")
 
-option(VAST_ENABLE_BUNDLED_CAF "Use the CAF submodule" OFF)
+if (VAST_ENABLE_DEVELOPER_MODE
+    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt")
+  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT ON)
+else ()
+  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT OFF)
+endif ()
+option(VAST_ENABLE_BUNDLED_CAF "Use the CAF submodule"
+       "${VAST_ENABLE_BUNDLED_CAF_DEFAULT}")
 add_feature_info("VAST_ENABLE_BUNDLED_CAF" VAST_ENABLE_BUNDLED_CAF
                  "use the CAF submodule.")
 if (NOT VAST_ENABLE_BUNDLED_CAF)
@@ -320,6 +327,7 @@ file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
 list(SORT libvast_sources)
 
 add_library(libvast ${libvast_sources})
+VASTTargetEnableTooling(libvast)
 add_library(vast::libvast ALIAS libvast)
 
 if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.16")
@@ -333,12 +341,6 @@ target_link_libraries(libvast PRIVATE libvast_internal)
 # the vast::libvast target, or to write built-in plugins that are always loaded
 # with libvast.
 target_compile_definitions(libvast PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
-
-# GNU prior to 9.1 requires linking with stdc++fs when using std::filesystem library
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION
-                                            VERSION_LESS 9.1.0)
-  target_link_libraries(libvast PUBLIC stdc++fs)
-endif ()
 
 set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
                                          ON)

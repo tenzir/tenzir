@@ -15,6 +15,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/concept/printable/vast/view.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"

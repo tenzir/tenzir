@@ -13,7 +13,6 @@
 #include "vast/as_bytes.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/function.hpp"
-#include "vast/span.hpp"
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
@@ -21,6 +20,7 @@
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
+#include <span>
 #include <utility>
 
 namespace vast {
@@ -32,7 +32,7 @@ public:
   // -- member types -----------------------------------------------------------
 
   using value_type = std::byte;
-  using view_type = span<const value_type>;
+  using view_type = std::span<const value_type>;
   using pointer = typename view_type::pointer;
   using size_type = typename view_type::size_type;
   using iterator = typename view_type::iterator;
@@ -90,7 +90,7 @@ public:
 
   /// Avoid the common mistake of binding ownership to a span.
   template <class Byte, size_t Extent>
-  static auto make(span<Byte, Extent>&&) = delete;
+  static auto make(std::span<Byte, Extent>&&) = delete;
 
   /// Avoid the common mistake of binding ownership to a string view.
   static auto make(std::string_view&&) = delete;
@@ -171,7 +171,7 @@ public:
 
   // -- concepts --------------------------------------------------------------
 
-  friend span<const std::byte> as_bytes(const chunk_ptr& x) noexcept;
+  friend std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept;
   friend caf::error
   write(const std::filesystem::path& filename, const chunk_ptr& x);
   friend caf::error read(const std::filesystem::path& filename, chunk_ptr& x);

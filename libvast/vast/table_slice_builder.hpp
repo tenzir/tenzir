@@ -10,12 +10,12 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/span.hpp"
 #include "vast/view.hpp"
 
 #include <caf/meta/type_name.hpp>
 #include <caf/ref_counted.hpp>
 
+#include <span>
 #include <type_traits>
 
 namespace vast {
@@ -81,7 +81,7 @@ public:
   /// @returns A table slice from the accumulated calls to add.
   /// @note Returns an invalid table slice on failure.
   [[nodiscard]] virtual table_slice
-  finish(span<const std::byte> serialized_layout = {})
+  finish(std::span<const std::byte> serialized_layout = {})
     = 0;
 
   /// @returns The current number of rows in the table slice.

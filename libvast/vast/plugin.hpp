@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace vast {
@@ -268,7 +269,8 @@ public:
   /// @param header The store header as found in the partition flatbuffer.
   /// @returns A new store actor.
   [[nodiscard]] virtual caf::expected<system::store_actor>
-  make_store(system::filesystem_actor, span<const std::byte> header) const = 0;
+  make_store(system::filesystem_actor,
+             std::span<const std::byte> header) const = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

@@ -119,9 +119,13 @@ function (VASTCompileFlatBuffers)
 
   set(output_prefix "${CMAKE_CURRENT_BINARY_DIR}/${FBS_TARGET}/include")
   target_link_libraries(${FBS_TARGET} INTERFACE "${flatbuffers_target}")
+  # We include the generated files uisng -isystem because there's
+  # nothing we can realistically do about the warnings in them, which
+  # are especially annoying with clang-tidy enabled.
   target_include_directories(
-    ${FBS_TARGET} INTERFACE $<BUILD_INTERFACE:${output_prefix}>
-                            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    ${FBS_TARGET} SYSTEM
+    INTERFACE $<BUILD_INTERFACE:${output_prefix}>
+              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
   foreach (schema IN LISTS FBS_SCHEMAS)
     get_filename_component(basename ${schema} NAME_WE)
@@ -305,7 +309,7 @@ function (VASTRegisterPlugin)
     list(LENGTH PLUGIN_SOURCES num_sources)
     if (num_sources EQUAL 1)
       list(GET PLUGIN_SOURCES 0 PLUGIN_ENTRYPOINT)
-      set(PLUGIN_SOURCEs "")
+      set(PLUGIN_SOURCES "")
     else ()
       message(
         FATAL_ERROR "ENTRYPOINT must be specified in call to VASTRegisterPlugin"

@@ -517,7 +517,7 @@ size_t arrow_table_slice_builder::columns() const noexcept {
 }
 
 table_slice arrow_table_slice_builder::finish(
-  [[maybe_unused]] span<const std::byte> serialized_layout) {
+  [[maybe_unused]] std::span<const std::byte> serialized_layout) {
   // Sanity check: If this triggers, the calls to add() did not match the number
   // of fields in the layout.
   VAST_ASSERT(column_ == 0);

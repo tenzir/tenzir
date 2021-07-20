@@ -23,6 +23,7 @@
 #include <optional>
 #include <pcap.h>
 #include <random>
+#include <span>
 
 namespace vast::defaults {
 
@@ -132,8 +133,8 @@ enum class frame_type : char {
 
 // Strips all data from a frame until the IP layer is reached. The frame type
 // distinguisher exists for future recursive stripping.
-span<const std::byte>
-decapsulate(span<const std::byte> frame, frame_type type) {
+std::span<const std::byte>
+decapsulate(std::span<const std::byte> frame, frame_type type) {
   switch (type) {
     default:
       return {};
@@ -339,14 +340,14 @@ protected:
                                          "failed to get next packet: ", err));
       }
       // Parse frame.
-      span<const std::byte> frame{reinterpret_cast<const std::byte*>(data),
-                                  header->len};
+      std::span<const std::byte> frame{reinterpret_cast<const std::byte*>(data),
+                                       header->len};
       frame = decapsulate(frame, frame_type::ethernet);
       if (frame.empty())
         return caf::make_error(ec::format_error, "failed to decapsulate frame");
       constexpr size_t ethernet_header_size = 14;
       auto layer3 = frame.subspan<ethernet_header_size>();
-      span<const std::byte> layer4;
+      std::span<const std::byte> layer4;
       uint8_t layer4_proto = 0;
       flow conn;
       // Parse layer 3.

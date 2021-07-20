@@ -15,13 +15,14 @@
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
+#include <span>
 #include <string>
 #include <system_error>
 
 namespace vast::io {
 
 caf::error
-save(const std::filesystem::path& filename, span<const std::byte> xs) {
+save(const std::filesystem::path& filename, std::span<const std::byte> xs) {
   auto tmp = filename;
   tmp += ".tmp";
   if (auto err = write(tmp, xs)) {

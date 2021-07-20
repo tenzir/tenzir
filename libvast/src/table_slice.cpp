@@ -27,6 +27,7 @@
 #include "vast/value_index.hpp"
 
 #include <cstddef>
+#include <span>
 
 namespace vast {
 
@@ -386,7 +387,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
 
 // -- concepts -----------------------------------------------------------------
 
-span<const std::byte> as_bytes(const table_slice& slice) noexcept {
+std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
   return as_bytes(slice.chunk_);
 }
 
@@ -437,18 +438,19 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
-    []() noexcept -> std::pair<table_slice_encoding, span<const std::byte>> {
+    []() noexcept
+    -> std::pair<table_slice_encoding, std::span<const std::byte>> {
       die("cannot select from an invalid table slice");
     },
     [&](const auto& encoded) noexcept {
       return std::pair{
         builder_id(state(encoded, slice.state_)->encoding),
-        span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
-             encoded.layout()->size()}};
+        std::span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
+                  encoded.layout()->size()}};
     },
   };
   table_slice_encoding implementation_id;
-  span<const std::byte> serialized_layout = {};
+  std::span<const std::byte> serialized_layout = {};
   std::tie(implementation_id, serialized_layout)
     = visit(f, as_flatbuffer(slice.chunk_));
   // Start slicing and dicing.
@@ -682,18 +684,19 @@ filter(const table_slice& slice, const expression& expr, const ids& hints) {
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
-    []() noexcept -> std::pair<table_slice_encoding, span<const std::byte>> {
+    []() noexcept
+    -> std::pair<table_slice_encoding, std::span<const std::byte>> {
       die("cannot filter an invalid table slice");
     },
     [&](const auto& encoded) noexcept {
       return std::pair{
         builder_id(state(encoded, slice.state_)->encoding),
-        span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
-             encoded.layout()->size()}};
+        std::span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
+                  encoded.layout()->size()}};
     },
   };
   table_slice_encoding implementation_id;
-  span<const std::byte> serialized_layout = {};
+  std::span<const std::byte> serialized_layout = {};
   std::tie(implementation_id, serialized_layout)
     = visit(f, as_flatbuffer(slice.chunk_));
   // Start slicing and dicing.
@@ -756,18 +759,19 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
-    []() noexcept -> std::pair<table_slice_encoding, span<const std::byte>> {
+    []() noexcept
+    -> std::pair<table_slice_encoding, std::span<const std::byte>> {
       die("cannot filter an invalid table slice");
     },
     [&](const auto& encoded) noexcept {
       return std::pair{
         builder_id(state(encoded, slice.state_)->encoding),
-        span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
-             encoded.layout()->size()}};
+        std::span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
+                  encoded.layout()->size()}};
     },
   };
   table_slice_encoding implementation_id;
-  span<const std::byte> serialized_layout = {};
+  std::span<const std::byte> serialized_layout = {};
   std::tie(implementation_id, serialized_layout)
     = visit(f, as_flatbuffer(slice.chunk_));
   auto check = [&](row_evaluator eval) -> uint64_t {

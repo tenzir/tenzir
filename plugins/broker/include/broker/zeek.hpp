@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <vast/span.hpp>
 #include <vast/type.hpp>
 #include <vast/view.hpp>
 
@@ -16,6 +15,7 @@
 #include <caf/error.hpp>
 
 #include <cstddef>
+#include <span>
 
 namespace vast::plugins::broker {
 

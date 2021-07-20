@@ -15,6 +15,7 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"

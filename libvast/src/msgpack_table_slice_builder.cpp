@@ -107,8 +107,8 @@ size_t msgpack_table_slice_builder::columns() const noexcept {
   return flat_layout_.fields.size();
 }
 
-table_slice
-msgpack_table_slice_builder::finish(span<const std::byte> serialized_layout) {
+table_slice msgpack_table_slice_builder::finish(
+  std::span<const std::byte> serialized_layout) {
   // Sanity check: If this triggers, the calls to add() did not match the number
   // of fields in the layout.
   VAST_ASSERT(column_ == 0);

@@ -32,6 +32,12 @@ with section("parse"):
         "vastnormalizeinstalldirs": {
             "spelling": "VASTNormalizeInstallDirs",
         },
+        "vasttargetenabletooling": {
+            "spelling": "VASTTargetEnableTooling",
+            "pargs": {
+                "nargs": 1,
+            },
+        },
     }
 
     # Override configurations per-command where available

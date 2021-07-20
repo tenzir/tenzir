@@ -10,7 +10,7 @@ Files: libvast/src/concept/hashable/crc.cpp
 Copyright: (C) 1995-2013 Jean-loup Gailly and Mark Adler
 License: Zlib
 
-Files: libvast/vast/detail/narrow.hpp libvast/vast/span.hpp
+Files: libvast/vast/detail/narrow.hpp
 Copyright: (c) 2015 Microsoft Corporation
 License: MIT
 Comment: From the GSL library.

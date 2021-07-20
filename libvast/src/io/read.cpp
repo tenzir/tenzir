@@ -14,10 +14,12 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <span>
 
 namespace vast::io {
 
-caf::error read(const std::filesystem::path& filename, span<std::byte> xs) {
+caf::error
+read(const std::filesystem::path& filename, std::span<std::byte> xs) {
   file f{filename};
   if (!f.open(file::read_only))
     return caf::make_error(ec::filesystem_error, "failed open file");
@@ -40,7 +42,7 @@ read(const std::filesystem::path& filename) {
                                        "{}: {}",
                                        filename, err.message()));
   std::vector<std::byte> buffer(size);
-  if (auto err = read(filename, span<std::byte>{buffer}))
+  if (auto err = read(filename, std::span<std::byte>{buffer}))
     return err;
   return buffer;
 }

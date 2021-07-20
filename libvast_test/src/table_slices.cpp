@@ -13,9 +13,10 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/detail/append.hpp"
 #include "vast/format/test.hpp"
-#include "vast/span.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
+
+#include <span>
 
 using namespace std::string_literals;
 using namespace vast;

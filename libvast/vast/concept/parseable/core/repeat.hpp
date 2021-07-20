@@ -25,7 +25,7 @@ bool parse_repeat(Parser& p, Iterator& f, const Iterator& l, Attribute& a,
   auto save = f;
   auto i = 0;
   while (i < max) {
-    if (!container<typename Parser::attribute>::parse(p, f, l, a))
+    if (!container_t<typename Parser::attribute>::parse(p, f, l, a))
       break;
     ++i;
   }
@@ -43,7 +43,7 @@ class static_repeat_parser
   static_assert(Min <= Max, "minimum must be smaller than maximum");
 
 public:
-  using container = detail::container<typename Parser::attribute>;
+  using container = detail::container_t<typename Parser::attribute>;
   using attribute = typename container::attribute;
 
   explicit static_repeat_parser(Parser p) : parser_{std::move(p)} {
@@ -65,7 +65,7 @@ class dynamic_repeat_parser
   static_assert(std::is_integral_v<U>, "U must be an an integral type");
 
 public:
-  using container = detail::container<typename Parser::attribute>;
+  using container = detail::container_t<typename Parser::attribute>;
   using attribute = typename container::attribute;
 
   dynamic_repeat_parser(Parser p, T min, U max)

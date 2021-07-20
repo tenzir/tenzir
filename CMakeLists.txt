@@ -284,16 +284,6 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning-option)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning)
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
-    target_compile_options(
-      libvast_internal
-      INTERFACE
-        -Wno-unused-parameter
-        -Wno-unused-variable
-        # Work around false positives in LTO mode.
-        $<$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>:-Wno-maybe-uninitialized>
-    )
-  endif ()
 endif ()
 
 target_compile_options(
@@ -461,6 +451,23 @@ if (VAST_ENABLE_JEMALLOC)
 endif ()
 
 # -- developer mode ------------------------------------------------------------
+
+option(VAST_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
+add_feature_info("VAST_ENABLE_CLANG_TIDY" VAST_ENABLE_CLANG_TIDY
+                 "run clang-tidy during build.")
+if (VAST_ENABLE_CLANG_TIDY)
+  macro (VASTTargetEnableTooling _target)
+    set(_clang_tidy_args
+        "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
+    set_target_properties(
+      ${_target} PROPERTIES CXX_CLANG_TIDY "${_clang_tidy_args}"
+                            C_CLANG_TIDY "${_clang_tidy_args}")
+  endmacro ()
+else ()
+  macro (VASTTargetEnableTooling _target)
+
+  endmacro ()
+endif ()
 
 # Build VAST in developer mode. This is enabled by default when not building
 # VAST as a subproject. The developer mode contains CCache support and many

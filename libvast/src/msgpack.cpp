@@ -9,6 +9,7 @@
 #include "vast/msgpack.hpp"
 
 #include <cstddef>
+#include <span>
 
 namespace vast::msgpack {
 
@@ -16,7 +17,8 @@ overlay array_view::data() const {
   return overlay{data_};
 }
 
-overlay::overlay(span<const std::byte> buffer) : buffer_{buffer}, position_{0} {
+overlay::overlay(std::span<const std::byte> buffer)
+  : buffer_{buffer}, position_{0} {
   // nop
 }
 

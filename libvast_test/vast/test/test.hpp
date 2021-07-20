@@ -12,6 +12,8 @@
 #  define CAF_SUITE SUITE
 #endif
 
+#include "vast/span.hpp"
+
 #include <caf/test/unit_test.hpp>
 
 #include <optional>
@@ -26,6 +28,7 @@ namespace vast::test::detail {
 struct equality_compare {
   template <class T1, class T2>
   bool operator()(const T1& t1, const T2& t2) {
+    using vast::operator==;
     return t1 == t2;
   }
 };
@@ -33,6 +36,7 @@ struct equality_compare {
 struct inequality_compare {
   template <class T1, class T2>
   bool operator()(const T1& t1, const T2& t2) {
+    using vast::operator!=;
     return t1 != t2;
   }
 };
