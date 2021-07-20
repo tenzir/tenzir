@@ -18,7 +18,7 @@ namespace vast {
 template <class Parser>
 class plus_parser : public parser<plus_parser<Parser>> {
 public:
-  using container = detail::container<typename Parser::attribute>;
+  using container = detail::container_t<typename Parser::attribute>;
   using attribute = typename container::attribute;
 
   constexpr explicit plus_parser(Parser p) : parser_{std::move(p)} {
