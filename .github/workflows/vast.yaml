@@ -710,14 +710,19 @@ jobs:
 
   build-nix:
     needs: cancel-previous-runs
-    name: Nix Static (${{ matrix.args }})
+    name: Nix Static (${{ matrix.nix.target }})
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
-        args:
-          - 'vast'
-          - 'vast-ci'
+        nix:
+          - target: 'vast'
+            build-options: >
+              -DVAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
+              -DVAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
+          - target: 'vast-ci'
+            build-options: >
+              -DVAST_ENABLE_AUTO_VECTORIZATION:BOOL=OFF
     env:
       BUILD_DIR: build
     steps:
@@ -739,14 +744,15 @@ jobs:
 
       - name: Build Static Binary
         env:
-          STATIC_BINARY_TARGET: ${{ matrix.args }}
+          STATIC_BINARY_TARGET: ${{ matrix.nix.target }}
         run: |
-          nix/static-binary.sh ${{ github.event.inputs.arguments }}
+          nix/static-binary.sh ${{ github.event.inputs.arguments }} \
+            ${{ matrix.nix.build-options }}
 
       - name: Create Paths
         id: create_paths
         run: |
-          ARTIFACT_NAME=$(ls "${BUILD_DIR}" | grep "${{ matrix.args }}.*.tar.gz")
+          ARTIFACT_NAME=$(ls "${BUILD_DIR}" | grep "${{ matrix.nix.target }}.*.tar.gz")
           echo "::set-output name=artifact_name::${ARTIFACT_NAME}"
 
       - name: Upload Artifact to Github
@@ -774,7 +780,7 @@ jobs:
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.args }}-static-latest.tar.gz"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
 
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
@@ -783,7 +789,7 @@ jobs:
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           RELEASE_MONTH=$(echo "${{ steps.create_paths.outputs.artifact_name }}" | cut -d"-" -f2)
-          gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.args }}-${RELEASE_MONTH}-static-latest.tar.gz"
+          gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${RELEASE_MONTH}-static-latest.tar.gz"
 
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
@@ -795,7 +801,7 @@ jobs:
           tag: ${{ github.ref }}
           fail-if-no-assets: false # don't fail if no previous assets exist
           fail-if-no-release: true # only delete assets when `tag` refers to a release
-          assets: "${{ matrix.args }}-linux-static.tar.gz"
+          assets: "${{ matrix.nix.target }}-linux-static.tar.gz"
 
       - name: Upload Release Assets
         if: github.event_name == 'release'
@@ -808,5 +814,5 @@ jobs:
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
           # for a build of the latest release.
-          asset_name: "${{ matrix.args }}-linux-static.tar.gz"
+          asset_name: "${{ matrix.nix.target }}-linux-static.tar.gz"
           asset_content_type: application/gzip
