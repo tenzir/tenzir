@@ -15,10 +15,7 @@ target="${STATIC_BINARY_TARGET:-vast}"
 USE_HEAD="off"
 cmakeFlags=""
 # Enable the bundled plugins by default.
-plugins=(
-  "${toplevel}/plugins/broker"
-  "${toplevel}/plugins/pcap"
-)
+plugins=( '"plugins/pcap" "plugins/broker"' )
 
 while [ $# -ne 0 ]; do
   case "$1" in
