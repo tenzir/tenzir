@@ -327,6 +327,7 @@ file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
 list(SORT libvast_sources)
 
 add_library(libvast ${libvast_sources})
+VASTTargetEnableTooling(libvast)
 add_library(vast::libvast ALIAS libvast)
 
 if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.16")

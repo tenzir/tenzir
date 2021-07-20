@@ -5,6 +5,7 @@ endif ()
 add_library(
   libvast_test STATIC src/actor_system.cpp src/events.cpp src/node.cpp
                       src/symbols.cpp src/table_slices.cpp)
+VASTTargetEnableTooling(libvast_test)
 target_compile_definitions(
   libvast_test
   PUBLIC

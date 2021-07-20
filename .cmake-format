@@ -29,6 +29,12 @@ with section("parse"):
                 "INCLUDE_DIRECTORIES": "*",
             },
         },
+        "vasttargetenabletooling": {
+            "spelling": "VASTTargetEnableTooling",
+            "pargs": {
+                "nargs": 1,
+            },
+        },
     }
 
     # Override configurations per-command where available
