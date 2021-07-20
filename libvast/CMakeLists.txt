@@ -155,7 +155,8 @@ add_feature_info("VAST_ENABLE_OPENSSL" VAST_ENABLE_OPENSSL
                  "encrypt network communication.")
 
 if (VAST_ENABLE_DEVELOPER_MODE
-    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt")
+    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt"
+    AND NOT CAF_ROOT_DIR)
   set(VAST_ENABLE_BUNDLED_CAF_DEFAULT ON)
 else ()
   set(VAST_ENABLE_BUNDLED_CAF_DEFAULT OFF)
