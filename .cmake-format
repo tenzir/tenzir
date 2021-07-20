@@ -29,6 +29,9 @@ with section("parse"):
                 "INCLUDE_DIRECTORIES": "*",
             },
         },
+        "vastnormalizeinstalldirs": {
+            "spelling": "VASTNormalizeInstallDirs",
+        },
         "vasttargetenabletooling": {
             "spelling": "VASTTargetEnableTooling",
             "pargs": {

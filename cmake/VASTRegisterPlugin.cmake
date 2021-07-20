@@ -1,5 +1,49 @@
 include_guard(GLOBAL)
 
+# Normalize the GNUInstallDirs to be relative paths, if possible.
+macro (VASTNormalizeInstallDirs)
+  foreach (
+    _install IN
+    ITEMS "BIN"
+          "SBIN"
+          "LIBEXEC"
+          "SYSCONF"
+          "SHAREDSTATE"
+          "LOCALSTATE"
+          "RUNSTATE"
+          "LIB"
+          "INCLUDE"
+          "OLDINCLUDE"
+          "DATAROOT"
+          "DATA"
+          "INFO"
+          "LOCALE"
+          "MAN"
+          "DOC")
+    # Try removing CMAKE_INSTALL_PREFIX with a trailing slash from the full
+    # path to get the correct relative path because some package managers do
+    # this stupid but *technically allowed* thing where they put absolute paths
+    # into variables that are supposed to be interpreted as relative to the
+    # install prefix.
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
+      string(
+        REGEX
+        REPLACE "^${CMAKE_INSTALL_PREFIX}/" "" "CMAKE_INSTALL_${_install}DIR"
+                "${CMAKE_INSTALL_FULL_${install}DIR}")
+    endif ()
+    # If the path is still absolute, e.g., because the full install dirs did
+    # were not subdirectories if the install prefix, give up and error. Nothing
+    # we can do here.
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
+      message(
+        FATAL_ERROR
+          "CMAKE_INSTALL_${_install}DIR must not be an absolute path for relocatable installations."
+      )
+    endif ()
+  endforeach ()
+  unset(_install)
+endmacro ()
+
 macro (make_absolute vars)
   foreach (var IN LISTS "${vars}")
     get_filename_component(var_abs "${var}" ABSOLUTE)
@@ -225,6 +269,9 @@ function (VASTRegisterPlugin)
   # Provides install directory variables as defined for GNU software:
   # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
+  if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+    VASTNormalizeInstallDirs()
+  endif ()
 
   # A replacement for target_link_libraries that links static libraries using
   # the platform-specific whole-archive options. Please test any changes to this
@@ -381,14 +428,13 @@ function (VASTRegisterPlugin)
 
     # Install the plugin library to <libdir>/vast/plugins, and also configure
     # the library output directory accordingly.
-    if (IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
-      message(FATAL_ERROR "CMAKE_INSTALL_LIBDIR must be a relative path")
+    if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+      set_target_properties(
+        ${PLUGIN_TARGET}-shared
+        PROPERTIES LIBRARY_OUTPUT_DIRECTORY
+                   "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
+                   OUTPUT_NAME "vast-plugin-${PLUGIN_TARGET}")
     endif ()
-    set_target_properties(
-      ${PLUGIN_TARGET}-shared
-      PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-                 "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
-                 OUTPUT_NAME "vast-plugin-${PLUGIN_TARGET}")
     install(TARGETS ${PLUGIN_TARGET}-shared
             DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins")
 
@@ -402,32 +448,36 @@ function (VASTRegisterPlugin)
     # Install the bundled schema files to <datadir>/vast.
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
             DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}")
-    # Copy schemas from bundled plugins to the build directory so they can be
-    # used from a VAST in a build directory (instead if just an installed VAST).
-    file(
-      GLOB_RECURSE
-      plugin_schema_files
-      CONFIGURE_DEPENDS
-      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.schema"
-      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yml"
-      "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yaml")
-    list(SORT plugin_schema_files)
-    foreach (plugin_schema_file IN LISTS plugin_schema_files)
-      string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}/schema/" ""
-                           relative_plugin_schema_file ${plugin_schema_file})
-      string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
-      add_custom_target(
-        vast-schema-${plugin_schema_file_hash}
-        BYPRODUCTS
-          "${CMAKE_BINARY_DIR}/share/vast/plugin/${PLUGIN_TARGET}/schema/${relative_plugin_schema_file}"
-        COMMAND
-          "${CMAKE_COMMAND}" -E copy "${plugin_schema_file}"
-          "${CMAKE_BINARY_DIR}/share/vast/plugin/${PLUGIN_TARGET}/schema/${relative_plugin_schema_file}"
-        COMMENT
-          "Copying schema file ${relative_plugin_schema_file} for plugin ${PLUGIN_TARGET}"
-      )
-      add_dependencies(${PLUGIN_TARGET} vast-schema-${plugin_schema_file_hash})
-    endforeach ()
+    if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+      # Copy schemas from bundled plugins to the build directory so they can be
+      # used from a VAST in a build directory (instead if just an installed VAST).
+      file(
+        GLOB_RECURSE
+        plugin_schema_files
+        CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.schema"
+        "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yml"
+        "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yaml")
+      list(SORT plugin_schema_files)
+      foreach (plugin_schema_file IN LISTS plugin_schema_files)
+        string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}/schema/" ""
+                             relative_plugin_schema_file ${plugin_schema_file})
+        string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
+        set(plugin_schema_dir
+            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}/schema"
+        )
+        add_custom_target(
+          vast-schema-${plugin_schema_file_hash}
+          BYPRODUCTS "${plugin_schema_dir}/${relative_plugin_schema_file}"
+          COMMAND "${CMAKE_COMMAND}" -E copy "${plugin_schema_file}"
+                  "${plugin_schema_dir}/${relative_plugin_schema_file}"
+          COMMENT
+            "Copying schema file ${relative_plugin_schema_file} for plugin ${PLUGIN_TARGET}"
+        )
+        add_dependencies(${PLUGIN_TARGET}
+                         vast-schema-${plugin_schema_file_hash})
+      endforeach ()
+    endif ()
   endif ()
 
   # Setup unit tests.
