@@ -38,6 +38,12 @@ with section("parse"):
                 "nargs": 1,
             },
         },
+        "vastsystemizetarget": {
+            "spelling": "VASTSystemizeTarget",
+            "pargs": {
+                "nargs": 1,
+            },
+        },
     }
 
     # Override configurations per-command where available
