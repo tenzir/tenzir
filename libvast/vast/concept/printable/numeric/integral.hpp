@@ -10,6 +10,7 @@
 
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/detail/print_numeric.hpp"
+#include "vast/detail/concepts.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -27,14 +28,8 @@ struct force_sign;
 
 } // namespace policy
 
-template <
-  class T,
-  class Policy = policy::plain,
-  int MinDigits = 0
->
+template <detail::integral T, class Policy = policy::plain, int MinDigits = 0>
 struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
-  static_assert(std::is_integral<T>{}, "T must be an integral type");
-
   using attribute = T;
 
   template <class Iterator, class U>
@@ -62,8 +57,8 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
   }
 };
 
-template <class T>
-struct printer_registry<T, std::enable_if_t<std::is_integral_v<T>>> {
+template <detail::integral T>
+struct printer_registry<T> {
   using type = integral_printer<T>;
 };
 

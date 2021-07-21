@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/detail/coding.hpp"
+#include "vast/detail/concepts.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -16,9 +17,8 @@
 
 namespace vast::detail {
 
-template <class Iterator, class T>
+template <class Iterator, detail::integral T>
 size_t print_numeric(Iterator& out, T x) {
-  static_assert(std::is_integral<T>{}, "T must be an integral type");
   if (x == 0) {
     *out++ = '0';
     return 1;
