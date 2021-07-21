@@ -139,7 +139,7 @@ endif ()
 
 # -- caf -----------------------------------------------------------------------
 
-function (systemize_target tgt)
+function (VASTSystemizeTarget tgt)
   message(STATUS "Treating ${tgt} as a system dependency")
   get_target_property(_includes ${tgt} INTERFACE_INCLUDE_DIRECTORIES)
   set_property(
@@ -210,7 +210,7 @@ else ()
       set(CAF_BUILD_STATIC_ONLY ON)
     endif ()
     add_subdirectory(aux/caf)
-    systemize_target(libcaf_core_${_linkage_suffix})
+    VASTSystemizeTarget(libcaf_core_${_linkage_suffix})
     set_target_properties(libcaf_core_${_linkage_suffix} PROPERTIES EXPORT_NAME
                                                                     core)
     add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
@@ -218,7 +218,7 @@ else ()
     target_compile_options(
       libcaf_core_${_linkage_suffix} PRIVATE -Wno-maybe-uninitialized
                                              -Wno-unknown-warning-option)
-    systemize_target(libcaf_io_${_linkage_suffix})
+    VASTSystemizeTarget(libcaf_io_${_linkage_suffix})
     set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME
                                                                   io)
     target_compile_options(
@@ -236,10 +236,12 @@ else ()
     if (VAST_ENABLE_OPENSSL)
       if (NOT TARGET libcaf_openssl_${_linkage_suffix})
         string(
-          CONCAT err_message
-                 "VAST_ENABLE_OPENSSL is active but the CAF OpenSSL module is"
-                 " disabled. This is probably because the OpenSSL development"
-                 " dependencies weren't found")
+          JOIN
+          " "
+          err_message
+          "Unable to find the bundled CAF's OpenSSL module; consider"
+          "disabling VAST_ENABLE_OPENSSL or set OPENSSL_ROOT_DIR to the"
+          "install prefix of your OpenSSL installation.")
         message(FATAL_ERROR "${err_message}")
       endif ()
       target_include_directories(
@@ -247,7 +249,7 @@ else ()
         PUBLIC
           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-      systemize_target(libcaf_openssl_${_linkage_suffix})
+      VASTSystemizeTarget(libcaf_openssl_${_linkage_suffix})
       set_target_properties(libcaf_openssl_${_linkage_suffix}
                             PROPERTIES EXPORT_NAME openssl)
       add_library(CAF::openssl ALIAS libcaf_openssl_${_linkage_suffix})
@@ -265,7 +267,7 @@ else ()
       INTERFACE
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_test>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
-    systemize_target(libcaf_test)
+    VASTSystemizeTarget(libcaf_test)
     set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
     add_library(CAF::test ALIAS libcaf_test)
     install(
