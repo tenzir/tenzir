@@ -5,7 +5,7 @@ env:
 jobs:
   style:
     name: Style Check
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
 
     - uses: actions/checkout@v2
@@ -18,8 +18,8 @@ jobs:
 
     - name: Clang Format
       run: |
-        sudo apt-get -qq update
-        sudo apt-get -qqy install clang-format
+        brew install llvm
+        export PATH="$(brew --prefix llvm)/bin:${PATH}"
         git diff -U0 --no-color $(git merge-base origin/master HEAD) |
           scripts/clang-format-diff.py -p1
 
