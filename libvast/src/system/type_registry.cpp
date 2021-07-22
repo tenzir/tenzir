@@ -9,6 +9,7 @@
 #include "vast/system/type_registry.hpp"
 
 #include "vast/as_bytes.hpp"
+#include "vast/concept/convertible/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/error.hpp"
@@ -19,6 +20,7 @@
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/taxonomies.hpp"
 
 #include <caf/attach_stream_sink.hpp>
 #include <caf/binary_deserializer.hpp>
@@ -216,7 +218,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
           return yamls.error();
         for (auto& [file, yaml] : *yamls) {
           VAST_DEBUG("{} extracts taxonomies from {}", self, file.string());
-          if (auto err = extract_concepts(yaml, concepts))
+          if (auto err = convert(yaml, concepts, concepts_data_layout))
             return caf::make_error(ec::parse_error,
                                    "failed to extract concepts from file",
                                    file.string(), err.context());
@@ -226,7 +228,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
             for (auto& field : definition.fields)
               VAST_TRACE("{} uses concept mapping {} -> {}", self, name, field);
           }
-          if (auto err = extract_models(yaml, models))
+          if (auto err = convert(yaml, models, models_data_layout))
             return caf::make_error(ec::parse_error,
                                    "failed to extract models from file",
                                    file.string(), err.context());

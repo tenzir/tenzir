@@ -35,23 +35,22 @@ struct concept_ {
 
   friend bool operator==(const concept_& lhs, const concept_& rhs);
 
+  /// A concept is a Monoid.
+  friend concept_ mappend(concept_ lhs, concept_ rhs);
+
   template <class Inspector>
   friend auto inspect(Inspector& f, concept_& c) {
-    return f(caf::meta::type_name("concept"), c.fields, c.concepts);
+    return f(caf::meta::type_name("concept"), c.description, c.fields,
+             c.concepts);
   }
 };
 
 /// Maps concept names to their definitions.
 using concepts_map = detail::stable_map<std::string, concept_>;
 
-/// Converts a data record to a concept.
-caf::error convert(const data& d, concepts_map& out);
-
-/// Extracts a concept definition from a data object.
-caf::error extract_concepts(const data& d, concepts_map& out);
-
-/// Extracts a concept definition from a data object.
-caf::expected<concepts_map> extract_concepts(const data& d);
+/// Describes the layout of a vast::list of concepts for automatic conversion to
+/// a `concepts_map`.
+extern const list_type concepts_data_layout;
 
 /// The definition of a model.
 struct model {
@@ -74,14 +73,9 @@ struct model {
 /// Maps model names to their definitions.
 using models_map = detail::stable_map<std::string, model>;
 
-/// Converts a data record to a model.
-caf::error convert(const data& d, models_map& out);
-
-/// Extracts a model definition from a data object.
-caf::error extract_models(const data& d, models_map& out);
-
-/// Extracts a model definition from a data object.
-caf::expected<models_map> extract_models(const data& d);
+/// Describes the layout of a vast::list of models for automatic conversion to
+/// a `models_map`.
+extern const list_type models_data_layout;
 
 /// A taxonomy is a combination of concepts and models. VAST stores all
 /// configured taxonomies in memory together, hence the plural naming.
