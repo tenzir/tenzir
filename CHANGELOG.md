@@ -6,6 +6,87 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [2021.07.29-rc1]
+
+### :warning: Changes
+
+- VAST no longer officially supports Debian Buster with GCC-8 and is instead now being tested on Debian Bullseye with GCC-10. The provided Docker images now use `debian:buster-slim` as base image. Users that require Debian Buster support should use the provided static Nix builds instead.
+  [#1765](https://github.com/tenzir/vast/pull/1765)
+
+- From now on VAST is compiled with the C++20 language standard. The minimum compiler versions have increased to GCC 10, Clang 11, and AppleClang 12.0.5.
+  [#1768](https://github.com/tenzir/vast/pull/1768)
+
+- The `vast` binaries in our [prebuilt Docker images](http://hub.docker.com/r/tenzir/vast) no longer contain AVX instructions for increased portability. Building the image locally continues to add supported auto-vectorization flags automatically.
+  [#1778](https://github.com/tenzir/vast/pull/1778)
+
+- The following new build options exist: `VAST_ENABLE_AUTO_VECTORIZATION` enables/disables all auto-vectorization flags, and `VAST_ENABLE_SSE_INSTRUCTIONS` enables `-msse`; similar options exist for SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AVX, and AVX2.
+  [#1778](https://github.com/tenzir/vast/pull/1778)
+
+### :gift: Features
+
+- The new setting `vast.store-backend` and a new plugin type `store_plugin` allow users to implement custom store backends that hold the data indexed by a partition.
+  [#1720](https://github.com/tenzir/vast/pull/1720)
+  [#1762](https://github.com/tenzir/vast/pull/1762)
+
+- VAST now supports import filter expressions. They act as the dual to export query expressions:  `vast import suricata '#type == "suricata.alert"' < eve.json` will import only `suricata.alert` events, discarding all other events.
+  [#1742](https://github.com/tenzir/vast/pull/1742)
+
+- We now offer a [`tenzir/vast-dev`](https://hub.docker.com/r/tenzir/vast-dev) Docker image in addition to the regular [`tenzir/vast`](https://hub.docker.com/r/tenzir/vast). The `vast-dev` image targets development contexts, e.g., when building additional plugins. The image contains all build-time dependencies of VAST and runs as the `root` rather than the `vast` user.
+  [#1749](https://github.com/tenzir/vast/pull/1749)
+
+- `lsvast` now prints extended information for hash indexes upon request.
+  [#1755](https://github.com/tenzir/vast/pull/1755)
+
+- The new [Broker](https://github.com/zeek/broker) plugin enables seamless log ingestion from [Zeek](https://github.com/zeek/zeek) to VAST via a TCP socket. Broker is Zeek's messaging library and the plugin turns VAST into a Zeek [logger node](https://docs.zeek.org/en/master/frameworks/cluster.html#logger). Use `vast import broker` to establish a connection to Zeek node and acquire logs.
+  [#1758](https://github.com/tenzir/vast/pull/1758)
+
+- Plugin versions are now unique to facilitate debugging. They consist of three optional parts: The CMake project version of the plugin, the Git revision of the last commit that touched the plugin, and a `dirty` suffix for uncommited changes to the plugin. Plugin developers no longer need to specify the version manually in the plugin entrypoint.
+  [#1764](https://github.com/tenzir/vast/pull/1764)
+
+- VAST now supports the arm64 architecture.
+  [#1773](https://github.com/tenzir/vast/pull/1773)
+
+- VAST installations now bundle an example configuration file listing all options.
+  [#1777](https://github.com/tenzir/vast/pull/1777)
+
+- VAST now exports per-layout import metrics under `<reader>.events.<layout-name>` in addition to the regular `<reader>.events`, making it easier to understand the event type distribution.
+  [#1781](https://github.com/tenzir/vast/pull/1781)
+
+- The static binary now bundles the Broker plugin.
+  [#1789](https://github.com/tenzir/vast/pull/1789)
+
+### :beetle: Bug Fixes
+
+- Configuring VAST to use CAF's built-in OpenSSL module via the `caf.openssl.*` options now works as expected.
+  [#1740](https://github.com/tenzir/vast/pull/1740)
+
+- The `[*** LOG ERROR #0001 ***]` error message on startup under Linux no longer exists.
+  [#1754](https://github.com/tenzir/vast/pull/1754)
+
+- Queries against fields using a `#index=hash` attribute will no longer miss some results, due to fixing a bug in the offset computation in bitmap processing.
+  [#1755](https://github.com/tenzir/vast/pull/1755)
+
+- A regression caused VAST's plugins to be loaded in a random order, which caused a warning about mismatching plugins between client and server to be emitted randomly when connecting to a VAST server. This is now fixed.
+  [#1756](https://github.com/tenzir/vast/pull/1756)
+
+- VAST does not abort JSON imports anymore when encountering something other than a JSON object, e.g., a number or a string. Instead, VAST skips the offending line.
+  [#1759](https://github.com/tenzir/vast/pull/1759)
+
+- Import processes now respond quicker. Requests to shutdown when the server process exits are no longer delayed for busy imports, and metrics and telemetry reports are now written in a timely manner.
+  [#1771](https://github.com/tenzir/vast/pull/1771)
+
+- Particularly busy imports caused the shutdown of the server process to hang, if the import processes were still running, or had not yet flushed all data. The server now shuts down correctly in these cases.
+  [#1771](https://github.com/tenzir/vast/pull/1771)
+
+- The static binary no longer behaves differently than the regular build with regards to its configuration directories: system-wide configuration files now reside in `<prefix>/etc/vast/vast.yaml` rather than `/etc/vast/vast.yaml`.
+  [#1777](https://github.com/tenzir/vast/pull/1777)
+
+- The `VAST_ENABLE_JOURNALD_LOGGING` CMake option is no longer ignored.
+  [#1780](https://github.com/tenzir/vast/pull/1780)
+
+- Plugins built against an external libvast no longer require the `CMAKE_INSTALL_LIBDIR` to be specified as a path relative to the configured `CMAKE_INSTALL_PREFIX`. This fixes an issue with plugins in separate packages for some package managers, e.g., Nix.
+  [#1786](https://github.com/tenzir/vast/pull/1786)
+
 ## [2021.06.24]
 
 ### :zap: Breaking Changes
@@ -1205,6 +1286,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[2021.07.29-rc1]: https://github.com/tenzir/vast/releases/tag/2021.07.29-rc1
 [2021.06.24]: https://github.com/tenzir/vast/releases/tag/2021.06.24
 [2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
 [2021.04.29]: https://github.com/tenzir/vast/releases/tag/2021.04.29
