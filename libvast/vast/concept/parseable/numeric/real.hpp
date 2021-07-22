@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/detail/concepts.hpp"
 #include "vast/detail/type_list.hpp"
 
 #include <cmath>
@@ -108,8 +109,8 @@ struct real_parser : parser<real_parser<T, Policies...>> {
   }
 };
 
-template <class T>
-struct parser_registry<T, std::enable_if_t<std::is_floating_point_v<T>>> {
+template <detail::floating_point T>
+struct parser_registry<T> {
   using type = real_parser<T, policy::require_dot>;
 };
 

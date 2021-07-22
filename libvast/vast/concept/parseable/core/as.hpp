@@ -34,10 +34,8 @@ private:
   Parser parser_;
 };
 
-template <class Attribute, class Parser>
-constexpr auto as(Parser&& p)
-  -> std::enable_if_t<is_parser_v<std::decay_t<Parser>>,
-                      as_parser<std::decay_t<Parser>, Attribute>> {
+template <class Attribute, is_parser_v Parser>
+constexpr auto as(Parser&& p) -> as_parser<std::decay_t<Parser>, Attribute> {
   return as_parser<std::decay_t<Parser>, Attribute>{std::forward<Parser>(p)};
 }
 

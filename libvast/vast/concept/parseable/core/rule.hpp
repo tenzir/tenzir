@@ -113,9 +113,9 @@ public:
     // nop
   }
 
-  template <class RHS, class = std::enable_if_t<!detail::is_same_or_derived_v<
-                         type_erased_parser, RHS>>>
-  type_erased_parser(RHS&& rhs)
+  template <class RHS>
+  requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
+    type_erased_parser(RHS&& rhs)
     : parser_{make_parser<RHS>(std::forward<RHS>(rhs))} {
     static_assert(is_parser_v<std::decay_t<RHS>>);
   }
@@ -125,9 +125,10 @@ public:
     return *this;
   }
 
-  template <class RHS, class = std::enable_if_t<!detail::is_same_or_derived_v<
-                         type_erased_parser, RHS>>>
-  type_erased_parser& operator=(RHS&& rhs) {
+  template <class RHS>
+  requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
+    type_erased_parser&
+    operator=(RHS&& rhs) {
     static_assert(is_parser_v<std::decay_t<RHS>>);
     parser_ = make_parser<RHS>(std::forward<RHS>(rhs));
     return *this;
@@ -162,17 +163,13 @@ public:
   rule() : parser_{std::make_shared<rule_pointer>()} {
   }
 
-  template <class RHS, class = std::enable_if_t<
-                         is_parser_v<std::decay_t<
-                           RHS>> && !detail::is_same_or_derived_v<rule, RHS>>>
-  rule(RHS&& rhs) : rule{} {
+  template <is_parser_v RHS>
+  requires(!detail::is_same_or_derived_v<rule, RHS>) rule(RHS&& rhs) : rule{} {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
-  template <class RHS>
-  auto operator=(RHS&& rhs) -> std::enable_if_t<
-    std::conjunction_v<is_parser<std::decay_t<RHS>>,
-                       std::negation<detail::is_same_or_derived<rule, RHS>>>> {
+  template <is_parser_v RHS>
+  requires(!detail::is_same_or_derived_v<rule, RHS>) auto operator=(RHS&& rhs) {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 

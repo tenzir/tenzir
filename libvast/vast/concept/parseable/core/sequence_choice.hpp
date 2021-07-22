@@ -56,55 +56,39 @@ public:
   }
 
 private:
-  template <
-    class Attribute,
-    class L = lhs_attribute,
-    class R = rhs_attribute
-  >
-  static auto left_attr(Attribute&)
-    -> std::enable_if_t<std::is_same<L, unused_type>{}, unused_type&> {
+  template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
+  requires(std::is_same_v<L, unused_type>) static auto left_attr(Attribute&)
+    -> unused_type& {
     return unused;
   }
 
   template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
-  static auto left_attr(Attribute& a) -> std::enable_if_t<
-    std::conjunction_v<std::negation<std::is_same<L, unused_type>>,
-                       std::is_same<R, unused_type>>,
-    std::optional<L>&> {
+  static auto left_attr(Attribute& a) -> std::optional<L>& requires(
+    !std::is_same_v<L, unused_type> && std::is_same_v<R, unused_type>) {
     return a;
   }
 
   template <class... Ts, class L = lhs_attribute, class R = rhs_attribute>
-  static auto left_attr(std::tuple<Ts...>& t) -> std::enable_if_t<
-    std::negation_v<std::disjunction<std::is_same<L, unused_type>,
-                                     std::is_same<R, unused_type>>>,
-    std::optional<L>&> {
+  static auto left_attr(std::tuple<Ts...>& t) -> std::optional<L>& requires(
+    !(std::is_same_v<L, unused_type> || std::is_same_v<R, unused_type>)) {
     return std::get<0>(t);
   }
 
-  template <
-    class Attribute,
-    class L = lhs_attribute,
-    class R = rhs_attribute
-  >
-  static auto right_attr(Attribute&)
-    -> std::enable_if_t<std::is_same<R, unused_type>{}, unused_type&> {
+  template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
+  requires(std::is_same_v<R, unused_type>) static auto right_attr(Attribute&)
+    -> unused_type& {
     return unused;
   }
 
   template <class Attribute, class L = lhs_attribute, class R = rhs_attribute>
-  static auto right_attr(Attribute& a) -> std::enable_if_t<
-    std::conjunction_v<std::is_same<L, unused_type>,
-                       std::negation<std::is_same<R, unused_type>>>,
-    std::optional<R>&> {
+  static auto right_attr(Attribute& a) -> std::optional<R>& requires(
+    std::is_same_v<L, unused_type> && !std::is_same_v<R, unused_type>) {
     return a;
   }
 
   template <class... Ts, class L = lhs_attribute, class R = rhs_attribute>
-  static auto right_attr(std::tuple<Ts...>& t) -> std::enable_if_t<
-    std::negation_v<std::disjunction<std::is_same<L, unused_type>,
-                                     std::is_same<R, unused_type>>>,
-    std::optional<R>&> {
+  static auto right_attr(std::tuple<Ts...>& t) -> std::optional<R>& requires(
+    !(std::is_same_v<L, unused_type> || std::is_same_v<R, unused_type>)) {
     return std::get<1>(t);
   }
 

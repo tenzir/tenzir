@@ -48,45 +48,33 @@ class choice_parser;
 // Unary
 //
 
-template <class T>
-constexpr auto operator&(T&& x)
-  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
-                      and_parser<std::decay_t<T>>> {
+template <is_parser_v T>
+constexpr auto operator&(T&& x) -> and_parser<std::decay_t<T>> {
   return and_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator!(T&& x)
-  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
-                      not_parser<std::decay_t<T>>> {
+template <is_parser_v T>
+constexpr auto operator!(T&& x) -> not_parser<std::decay_t<T>> {
   return not_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator-(T&& x)
-  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
-                      optional_parser<std::decay_t<T>>> {
+template <is_parser_v T>
+constexpr auto operator-(T&& x) -> optional_parser<std::decay_t<T>> {
   return optional_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator*(T&& x)
-  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
-                      kleene_parser<std::decay_t<T>>> {
+template <is_parser_v T>
+constexpr auto operator*(T&& x) -> kleene_parser<std::decay_t<T>> {
   return kleene_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator+(T&& x)
-  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
-                      plus_parser<std::decay_t<T>>> {
+template <is_parser_v T>
+constexpr auto operator+(T&& x) -> plus_parser<std::decay_t<T>> {
   return plus_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator~(T&& x)
-  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
-                      maybe_parser<std::decay_t<T>>> {
+template <is_parser_v T>
+constexpr auto operator~(T&& x) -> maybe_parser<std::decay_t<T>> {
   return maybe_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 

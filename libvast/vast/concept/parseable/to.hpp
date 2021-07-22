@@ -19,8 +19,8 @@
 namespace vast {
 
 template <class To, class Iterator>
-auto to(Iterator& f, const Iterator& l)
-  -> std::enable_if_t<is_parseable_v<Iterator, To>, caf::expected<To>> {
+requires(parseable<Iterator, To>) auto to(Iterator& f, const Iterator& l)
+  -> caf::expected<To> {
   caf::expected<To> t{To{}};
   if (!parse(f, l, *t))
     return caf::make_error(ec::parse_error);
@@ -28,9 +28,8 @@ auto to(Iterator& f, const Iterator& l)
 }
 
 template <class To, class Range>
-auto to(Range&& rng)
-  -> std::enable_if_t<is_parseable_v<decltype(std::begin(rng)), To>,
-                      caf::expected<To>> {
+auto to(Range&& rng) -> caf::expected<To>
+requires(parseable<decltype(std::begin(rng)), To>) {
   using std::begin;
   using std::end;
   auto f = begin(rng);
@@ -42,7 +41,7 @@ auto to(Range&& rng)
 }
 
 template <class To, size_t N>
-auto to(char const(&str)[N]) {
+auto to(char const (&str)[N]) {
   auto first = str;
   auto last = str + N - 1; // No NUL byte.
   return to<To>(first, last);

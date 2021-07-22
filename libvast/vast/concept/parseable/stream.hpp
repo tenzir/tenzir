@@ -17,8 +17,7 @@ namespace vast {
 
 template <class CharT, class Traits, class T>
 auto operator>>(std::basic_istream<CharT, Traits>& in, T& x)
-  -> std::enable_if_t<is_parseable_v<std::istreambuf_iterator<CharT>, T>,
-                      decltype(in)> {
+  -> decltype(in) requires(parseable<std::istreambuf_iterator<CharT>, T>) {
   using vast::parse; // enable ADL
   std::istreambuf_iterator<CharT> begin{in}, end;
   if (!parse(begin, end, x))
