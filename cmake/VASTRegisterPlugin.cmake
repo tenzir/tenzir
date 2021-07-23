@@ -352,6 +352,11 @@ function (VASTRegisterPlugin)
                            PLUGIN_TARGET_IDENTIFIER)
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
        "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@VAST_PLUGIN_VERSION@\";\n")
+  string(TOUPPER "VAST_PLUGIN_${PLUGIN_TARGET}_REVISION"
+                 VAST_PLUGIN_REVISION_VAR)
+  if (DEFINED "${VAST_PLUGIN_REVISION_VAR}")
+    set(VAST_PLUGIN_REVISION_FALLBACK "${${VAST_PLUGIN_REVISION_VAR}}")
+  endif ()
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
     "\
@@ -362,7 +367,8 @@ function (VASTRegisterPlugin)
                 --abbrev-commit -1 HEAD -- \"${PROJECT_SOURCE_DIR}\"
         OUTPUT_VARIABLE PLUGIN_REVISION
         OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE PLUGIN_REVISION_RESULT)
+        RESULT_VARIABLE PLUGIN_REVISION_RESULT
+	ERROR_QUIET)
       if (PLUGIN_REVISION_RESULT EQUAL 0)
         execute_process(
           COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" diff-index
@@ -374,6 +380,9 @@ function (VASTRegisterPlugin)
       endif ()
     endif ()
     set(PROJECT_VERSION \"${PROJECT_VERSION}\")
+    if (NOT PLUGIN_REVISION)
+      set(PLUGIN_REVISION \"${VAST_PLUGIN_REVISION_FALLBACK}\")
+    endif ()
     if (PROJECT_VERSION AND PLUGIN_REVISION)
       set(VAST_PLUGIN_VERSION \"\${PROJECT_VERSION}-\${PLUGIN_REVISION}\")
     elseif (PROJECT_VERSION)
