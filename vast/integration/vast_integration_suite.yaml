@@ -350,6 +350,7 @@ tests:
     fixture: ServerTester
     steps:
       - command: dump concepts
+        transformation: jq '.[] | select(.concept.name == "net.app") | .concept.fields | map(split(".")[0]) | unique'
       - command: dump --yaml models
   Arrow:
     condition: version | jq -e '."Apache Arrow"'
