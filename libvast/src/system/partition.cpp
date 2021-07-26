@@ -910,9 +910,8 @@ partition_actor::behavior_type passive_partition(
       std::error_code err{};
       std::filesystem::remove_all(self->state.path, err);
       if (err)
-        VAST_WARN("{} failed to delete {}: {}; You can try to delete it "
-                  "manually",
-                  self, self->state.path, err.message());
+        VAST_WARN("{} failed to delete {}: {}; try deleting manually", self,
+                  self->state.path, err.message());
       vast::ids all_ids;
       for (const auto& kv : self->state.type_ids) {
         all_ids |= kv.second;
