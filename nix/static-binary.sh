@@ -4,6 +4,19 @@
 nix --version
 nix-prefetch-github --version
 
+usage() {
+  printf "usage: %s [options]\n" $(basename $0)
+  echo
+  echo 'options:'
+  echo "    -h,--help               print this message"
+  echo "       --use-head           build from the latest commit instead of your current"
+  echo "                            working copy"
+  echo "       --with-plugin=<path> add <path> to the list of bundled plugins (pcap and"
+  echo "                            broker are enabled automatically)"
+  echo "    -D<CMake option>        options starting with "-D" are passed to CMake"
+  echo
+}
+
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
 desc="$(git -C ${dir} describe --tags --long --abbrev=10 --dirty)"
@@ -36,7 +49,7 @@ while [ $# -ne 0 ]; do
   esac
   case "$1" in
     --help|-h)
-      echo "${usage}" 1>&2
+      usage
       exit 1
       ;;
     --use-head)
