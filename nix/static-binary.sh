@@ -43,10 +43,23 @@ while [ $# -ne 0 ]; do
       USE_HEAD="on"
       ;;
     --with-plugin=*)
-      plugins+=("${optarg}")
+      plugins+=("${optarg%/}")
       ;;
   esac
   shift
+done
+
+plugin_version() {
+  local plugin="$1"
+  local name="${plugin##*/}"
+  local key="VAST_PLUGIN_${name^^}_REVISION"
+  local value="$(git -C "${plugin}" rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "${plugin}")"
+  echo "-D${key}=${value}"
+}
+
+# Get Plugin versions
+for plugin in "${plugins[@]}"; do
+  cmakeFlags="${cmakeFlags} \"$(plugin_version ${plugin})\""
 done
 
 if [ "${USE_HEAD}" == "on" ]; then
