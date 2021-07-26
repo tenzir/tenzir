@@ -56,7 +56,7 @@ while [ $# -ne 0 ]; do
       USE_HEAD="on"
       ;;
     --with-plugin=*)
-      plugins+=("${optarg%/}")
+      plugins+=("$(realpath "${optarg}")")
       ;;
   esac
   shift
