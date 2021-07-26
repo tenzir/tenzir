@@ -905,12 +905,13 @@ partition_actor::behavior_type passive_partition(
       return rp;
     },
     [self](atom::erase) -> caf::result<atom::done> {
-      VAST_WARN("erasing partition {} from path", self->state.id,
-                self->state.path);
+      VAST_DEBUG("{} received an erase message and deletes {}", self,
+                 self->state.path);
       std::error_code err{};
       std::filesystem::remove_all(self->state.path, err);
       if (err)
-        VAST_WARN("{} could not erase partition at", self, self->state.path);
+        VAST_WARN("{} failed to delete {}: {}; try deleting manually", self,
+                  self->state.path, err.message());
       vast::ids all_ids;
       for (const auto& kv : self->state.type_ids) {
         all_ids |= kv.second;
