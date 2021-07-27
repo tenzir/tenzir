@@ -928,6 +928,10 @@ partition_actor::behavior_type passive_partition(
     [self](atom::status,
            status_verbosity /*v*/) -> caf::config_value::dictionary {
       caf::settings result;
+      if (!self->state.partition_chunk) {
+        caf::put(result, "state", "waiting for chunk");
+        return result;
+      }
       caf::put(result, "size", self->state.partition_chunk->size());
       size_t mem_indexers = 0;
       for (size_t i = 0; i < self->state.indexers.size(); ++i) {
