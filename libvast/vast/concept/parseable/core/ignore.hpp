@@ -32,7 +32,7 @@ private:
   Parser parser_;
 };
 
-template <is_parser_v Parser>
+template <parser Parser>
 constexpr auto ignore(Parser&& p) -> ignore_parser<std::decay_t<Parser>> {
   return ignore_parser<std::decay_t<Parser>>{std::move(p)};
 }

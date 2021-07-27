@@ -119,7 +119,7 @@ template <class T>
 using is_parser_t = typename is_parser<T>::type;
 
 template <class T>
-concept is_parser_v = is_parser<std::decay_t<T>>::value;
+concept parser = is_parser<std::decay_t<T>>::value;
 
 } // namespace vast
 

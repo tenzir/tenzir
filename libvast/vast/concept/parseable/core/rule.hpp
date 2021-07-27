@@ -117,7 +117,7 @@ public:
   requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
     type_erased_parser(RHS&& rhs)
     : parser_{make_parser<RHS>(std::forward<RHS>(rhs))} {
-    static_assert(is_parser_v<std::decay_t<RHS>>);
+    static_assert(parser<std::decay_t<RHS>>);
   }
 
   type_erased_parser& operator=(const type_erased_parser& rhs) {
@@ -129,7 +129,7 @@ public:
   requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
     type_erased_parser&
     operator=(RHS&& rhs) {
-    static_assert(is_parser_v<std::decay_t<RHS>>);
+    static_assert(parser<std::decay_t<RHS>>);
     parser_ = make_parser<RHS>(std::forward<RHS>(rhs));
     return *this;
   }
@@ -163,12 +163,12 @@ public:
   rule() : parser_{std::make_shared<rule_pointer>()} {
   }
 
-  template <is_parser_v RHS>
+  template <parser RHS>
   requires(!detail::is_same_or_derived_v<rule, RHS>) rule(RHS&& rhs) : rule{} {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
-  template <is_parser_v RHS>
+  template <parser RHS>
   requires(!detail::is_same_or_derived_v<rule, RHS>) auto operator=(RHS&& rhs) {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
