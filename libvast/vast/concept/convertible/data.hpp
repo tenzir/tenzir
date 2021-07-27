@@ -89,7 +89,7 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
 // NOTE: You might wonder why this is defined as a macro instead of a concept.
 // The issue here is that we're looking for overloads of a non-member function,
 // and the rules for name lookup for free functions mandate that regular
-// qualified or unqualified lookup is done when the definitoin of the template
+// qualified or unqualified lookup is done when the definition of the template
 // is parsed, and only dependent lookup is done in the instantiation phase in
 // case the call is unqualified. That means a concept would only be able to
 // detect overloads that are declard later iff they happen to be in the same
