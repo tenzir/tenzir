@@ -72,12 +72,12 @@ concept inspectable = requires(any_callable& i, T& x) {
 
 /// push_back
 template <class C>
-concept has_insert = requires(C xs, typename C::value_type x) {
+concept insertable = requires(C xs, typename C::value_type x) {
   xs.insert(x);
 };
 
 template <class C>
-concept has_push_back = requires(C xs, typename C::value_type x) {
+concept appendable = requires(C xs, typename C::value_type x) {
   xs.push_back(x);
 };
 

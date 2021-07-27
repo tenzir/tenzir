@@ -45,7 +45,7 @@ namespace vast {
 namespace detail {
 
 // clang-format off
-template <concepts::has_insert To>
+template <concepts::insertable To>
   requires requires {
     typename To::key_type;
     typename To::mapped_type;
@@ -190,7 +190,7 @@ caf::error convert(const std::string& src, To& dst, const enumeration_type& t) {
 // clang-format on
 
 // Overload for lists.
-template <concepts::has_push_back To>
+template <concepts::appendable To>
 caf::error convert(const list& src, To& dst, const list_type& t) {
   size_t num = 0;
   for (const auto& element : src) {
@@ -205,7 +205,7 @@ caf::error convert(const list& src, To& dst, const list_type& t) {
 
 // Overload for maps.
 // clang-format off
-template <concepts::has_insert To>
+template <concepts::insertable To>
   requires requires {
     typename To::key_type;
     typename To::mapped_type;
@@ -233,7 +233,7 @@ caf::error convert(const map& src, To& dst, const map_type& t) {
 
 // Overload for record to map.
 // clang-format off
-template <concepts::has_insert To>
+template <concepts::insertable To>
   requires requires {
     typename To::key_type;
     typename To::mapped_type;
@@ -269,7 +269,7 @@ get(const record& rec,
 // record_type. The field with the "key" attribute is pulled out and used
 // as the key for the new entry in the destination map.
 // clang-format off
-template <concepts::has_insert To>
+template <concepts::insertable To>
   requires requires {
     typename To::key_type;
     typename To::mapped_type;
