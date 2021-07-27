@@ -346,8 +346,14 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
     if (!index->data())
       return caf::make_error(ec::format_error, "missing data in index");
   }
-  if (auto error = unpack(*partition.uuid(), state.id))
+  uuid persisted_id;
+  if (auto error = unpack(*partition.uuid(), persisted_id))
     return error;
+  if (state.id != persisted_id)
+    return caf::make_error(ec::format_error, //
+                           fmt::format("unexpected id for passive partition: "
+                                       "expected {}, got {}",
+                                       state.id, persisted_id));
   state.events = partition.events();
   state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
@@ -735,10 +741,12 @@ partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
   store_actor legacy_archive, filesystem_actor filesystem,
   const std::filesystem::path& path) {
+  auto id_string = to_string(id);
   self->state.self = self;
   self->state.path = path;
   self->state.archive = legacy_archive;
-  auto id_string = to_string(id);
+  self->state.id = id;
+  self->state.name = "partition-" + id_string;
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
