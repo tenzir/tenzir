@@ -311,23 +311,20 @@ caf::error
 unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // Check that all fields exist.
   if (!partition.uuid())
-    return caf::make_error(ec::format_error,
-                           "missing 'uuid' field in partition "
-                           "flatbuffer");
+    return caf::make_error(ec::format_error, //
+                           "missing 'uuid' field in partition flatbuffer");
   auto combined_layout = partition.combined_layout();
   if (!combined_layout)
-    return caf::make_error(ec::format_error,
-                           "missing 'layouts' field in partition "
-                           "flatbuffer");
+    return caf::make_error(ec::format_error, //
+                           "missing 'layouts' field in partition flatbuffer");
   auto store_header = partition.store();
   // If no store_id is set, use the global store for backwards compatibility.
   if (store_header && !store_header->id())
-    return caf::make_error(ec::format_error, "missing 'id' field in partition "
-                                             "store header");
+    return caf::make_error(ec::format_error, //
+                           "missing 'id' field in partition store header");
   if (store_header && !store_header->data())
-    return caf::make_error(ec::format_error,
-                           "missing 'data' field in partition "
-                           "store header");
+    return caf::make_error(ec::format_error, //
+                           "missing 'data' field in partition store header");
   state.store_id
     = store_header ? store_header->id()->str() : std::string{"legacy_archive"};
   if (store_header && store_header->data())
@@ -336,19 +333,16 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
       store_header->data()->size()};
   auto indexes = partition.indexes();
   if (!indexes)
-    return caf::make_error(ec::format_error,
-                           "missing 'indexes' field in partition "
-                           "flatbuffer");
+    return caf::make_error(ec::format_error, //
+                           "missing 'indexes' field in partition flatbuffer");
   for (auto qualified_index : *indexes) {
     if (!qualified_index->field_name())
-      return caf::make_error(ec::format_error,
-                             "missing field name in qualified "
-                             "index");
+      return caf::make_error(ec::format_error, //
+                             "missing field name in qualified index");
     auto index = qualified_index->index();
     if (!index)
-      return caf::make_error(ec::format_error,
-                             "missing index name in qualified "
-                             "index");
+      return caf::make_error(ec::format_error, //
+                             "missing index name in qualified index");
     if (!index->data())
       return caf::make_error(ec::format_error, "missing data in index");
   }
@@ -363,8 +357,8 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
   if (state.combined_layout.fields.size() < indexes->size()) {
-    VAST_ERROR("{} found incoherent number of indexers in deserialized "
-               "state; {} fields for {} indexes",
+    VAST_ERROR("{} found incoherent number of indexers in deserialized state; "
+               "{} fields for {} indexes",
                state.name, state.combined_layout.fields.size(),
                indexes->size());
     return caf::make_error(ec::format_error, "incoherent number of indexers");
