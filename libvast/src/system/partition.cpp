@@ -907,6 +907,8 @@ partition_actor::behavior_type passive_partition(
       return rp;
     },
     [self](atom::erase) -> caf::result<atom::done> {
+      if (!self->state.partition_chunk)
+        return caf::skip;
       VAST_DEBUG("{} received an erase message and deletes {}", self,
                  self->state.path);
       std::error_code err{};
