@@ -7,6 +7,7 @@ nix-prefetch-github --version
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
 desc="$(git -C ${dir} describe --tags --long --abbrev=10 --dirty)"
+artifact_name="$(git -C ${dir} describe --abbrev=10)"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 echo "rev is ${vast_rev}"
 
@@ -83,5 +84,5 @@ tar -C "${result}" \
   --exclude share/vast/test \
   --exclude share/vast/integration \
   --mode='u+w' \
-  -cvzf "$PWD/build/${target}-${desc}-static.tar.gz" \
+  -cvzf "$PWD/build/${target}-${artifact_name}-linux-static.tar.gz" \
   $(ls "${result}")
