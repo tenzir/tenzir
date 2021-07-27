@@ -659,6 +659,16 @@ jobs:
         with:
           fetch-depth: 0
           submodules: 'recursive'
+      - name: Set Plugin Versions
+        run: |
+          # Since the Docker build does not have the Git context, we set
+          # version fallbacks manually here.
+          for plugin in $(ls plugins); do
+            var="VAST_PLUGIN_${plugin^^}_REVISION"
+            value="$(git rev-list --abbrev-commit -1 HEAD -- "plugins/${plugin}")"
+            VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}=${value}"
+          done
+          echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
       - name: Build Dependencies Docker Image
         run: |
           docker build . -t tenzir/vast-deps:latest --target dependencies \
