@@ -335,8 +335,8 @@ public:
     if (*data_value == nullptr)
       return caf::none;
     auto err = caf::visit(
-      [&](const auto& t) -> caf::error {
-        using concrete_type = std::decay_t<decltype(t)>;
+      [&]<class Type>(const Type& t) -> caf::error {
+        using concrete_type = std::decay_t<Type>;
         using concrete_data
           = std::conditional_t<std::is_same_v<concrete_type, enumeration_type>,
                                std::string, type_to_data<concrete_type>>;
@@ -377,7 +377,7 @@ public:
     const auto& rng = record_type::each(layout);
     auto it = rng.begin();
     return caf::error::eval([&]() -> caf::error {
-      if constexpr (!caf::meta::is_annotation<decltype(xs)>::value)
+      if constexpr (!caf::meta::is_annotation<Ts>::value)
         return apply(*it++, xs);
       return caf::none;
     }...);
@@ -423,8 +423,8 @@ concept is_concrete_convertible
 template <class To>
 caf::error convert(const data& src, To& dst, const type& t) {
   return caf::visit(
-    [&](const auto& t, const auto& x) {
-      if constexpr (is_concrete_convertible<decltype(x), To, decltype(t)>)
+    [&]<class From, class Type>(const From& x, const Type& t) {
+      if constexpr (is_concrete_convertible<From, To, Type>)
         return convert(x, dst, t);
       else
         return caf::make_error(ec::convert_error,
@@ -433,7 +433,7 @@ caf::error convert(const data& src, To& dst, const type& t) {
                                            detail::pretty_type_name(x),
                                            detail::pretty_type_name(dst), t));
     },
-    t, src);
+    src, t);
 }
 
 } // namespace vast
