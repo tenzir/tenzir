@@ -112,7 +112,7 @@ concept has_layout = requires {
 };
 
 // Overload for records.
-template <concepts::is_inspectable T>
+template <concepts::inspectable T>
 caf::error convert(const record& src, T& dst, const record_type& layout);
 
 template <has_layout T>
@@ -388,7 +388,7 @@ public:
 };
 
 // Overload for records.
-template <concepts::is_inspectable To>
+template <concepts::inspectable To>
 caf::error convert(const record& src, To& dst, const record_type& layout) {
   if (layout.fields.empty()) {
     if constexpr (has_layout<To>)

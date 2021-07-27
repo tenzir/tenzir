@@ -66,7 +66,7 @@ struct any_callable {
 
 /// Inspectables
 template <class T>
-concept is_inspectable = requires(any_callable& i, T& x) {
+concept inspectable = requires(any_callable& i, T& x) {
   {inspect(i, x)};
 };
 
