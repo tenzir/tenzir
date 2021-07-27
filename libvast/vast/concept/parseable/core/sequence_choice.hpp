@@ -19,7 +19,8 @@ namespace vast {
 
 // (LHS >> ~RHS) | RHS
 template <class Lhs, class Rhs>
-class sequence_choice_parser : public parser<sequence_choice_parser<Lhs, Rhs>> {
+class sequence_choice_parser
+  : public parser_base<sequence_choice_parser<Lhs, Rhs>> {
 public:
   using lhs_type = Lhs;
   using rhs_type = Rhs;

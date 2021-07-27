@@ -16,7 +16,7 @@
 namespace vast {
 
 template <class Parser>
-class kleene_parser : public parser<kleene_parser<Parser>> {
+class kleene_parser : public parser_base<kleene_parser<Parser>> {
 public:
   using container = detail::container_t<typename Parser::attribute>;
   using attribute = typename container::attribute;

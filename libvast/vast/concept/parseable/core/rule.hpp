@@ -94,7 +94,7 @@ private:
 /// value semantics and can therefore not be used to construct recursive
 /// parsers.
 template <class Iterator>
-class type_erased_parser : public parser<type_erased_parser<Iterator>> {
+class type_erased_parser : public parser_base<type_erased_parser<Iterator>> {
 public:
   using abstract_rule_type = detail::abstract_rule<Iterator, unused_type>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
@@ -144,7 +144,7 @@ private:
 
 /// A type-erased parser which can store any other parser.
 template <class Iterator, class Attribute = unused_type>
-class rule : public parser<rule<Iterator, Attribute>> {
+class rule : public parser_base<rule<Iterator, Attribute>> {
   using abstract_rule_type = detail::abstract_rule<Iterator, Attribute>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
 
@@ -189,7 +189,7 @@ private:
 
 /// A type-erased, non-owning reference to a parser.
 template <class Iterator, class Attribute = unused_type>
-class rule_ref : public parser<rule_ref<Iterator, Attribute>> {
+class rule_ref : public parser_base<rule_ref<Iterator, Attribute>> {
   using abstract_rule_type = detail::abstract_rule<Iterator, Attribute>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
 

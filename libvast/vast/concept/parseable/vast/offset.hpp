@@ -16,7 +16,7 @@
 
 namespace vast {
 
-struct offset_parser : parser<offset_parser> {
+struct offset_parser : parser_base<offset_parser> {
   using attribute = offset;
 
   template <class Iterator, class Attribute>

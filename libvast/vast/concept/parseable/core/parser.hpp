@@ -27,7 +27,7 @@ template <class, class>
 class guard_parser;
 
 template <class Derived>
-struct parser {
+struct parser_base {
   template <class Condition>
   auto when(Condition fun) const {
     return when_parser<Derived, Condition>{derived(), fun};
@@ -113,7 +113,7 @@ concept has_parser_v = requires {
 
 /// Checks whether a given type is-a parser, i.e., derived from ::vast::parser.
 template <class T>
-using is_parser = std::is_base_of<parser<T>, T>;
+using is_parser = std::is_base_of<parser_base<T>, T>;
 
 template <class T>
 using is_parser_t = typename is_parser<T>::type;

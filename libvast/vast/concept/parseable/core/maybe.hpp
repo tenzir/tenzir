@@ -15,7 +15,7 @@ namespace vast {
 /// Like ::optional_parser, but exposes `T` instead of `optional<T>` as
 /// attribute.
 template <class Parser>
-class maybe_parser : public parser<maybe_parser<Parser>> {
+class maybe_parser : public parser_base<maybe_parser<Parser>> {
 public:
   using attribute = typename Parser::attribute;
 

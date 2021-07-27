@@ -16,7 +16,7 @@ namespace vast {
 
 /// Wraps a parser and ignores its attribute.
 template <class Parser>
-class ignore_parser : public parser<ignore_parser<Parser>> {
+class ignore_parser : public parser_base<ignore_parser<Parser>> {
 public:
   using attribute = unused_type;
 

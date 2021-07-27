@@ -19,7 +19,7 @@ namespace vast {
 /// @tparam Guard A function that takes the synthesized attribute by
 ///               const-reference and returns `bool`.
 template <class Parser, class Guard>
-class guard_parser : public parser<guard_parser<Parser, Guard>> {
+class guard_parser : public parser_base<guard_parser<Parser, Guard>> {
 public:
   using inner_attribute = typename Parser::attribute;
   using return_type = std::invoke_result_t<Guard, inner_attribute>;

@@ -36,7 +36,8 @@ namespace vast {
 ///    "\\""       denotes the string ['\', '\'], with a final " left unparsed
 ///    "\\\"       is an invalid string (unterminated)
 template <char Quote, char Esc>
-class quoted_string_parser : public parser<quoted_string_parser<Quote, Esc>> {
+class quoted_string_parser
+  : public parser_base<quoted_string_parser<Quote, Esc>> {
 public:
   using attribute = std::string;
 

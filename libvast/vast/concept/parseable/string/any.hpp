@@ -13,7 +13,7 @@
 
 namespace vast {
 
-struct any_parser : public parser<any_parser> {
+struct any_parser : public parser_base<any_parser> {
   using attribute = char;
 
   template <class Iterator, class Attribute>

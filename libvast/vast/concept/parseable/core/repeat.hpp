@@ -40,7 +40,7 @@ bool parse_repeat(Parser& p, Iterator& f, const Iterator& l, Attribute& a,
 
 template <class Parser, int Min, int Max = Min>
 class static_repeat_parser
-  : public parser<static_repeat_parser<Parser, Min, Max>> {
+  : public parser_base<static_repeat_parser<Parser, Min, Max>> {
   static_assert(Min <= Max, "minimum must be smaller than maximum");
 
 public:
@@ -61,7 +61,7 @@ private:
 
 template <class Parser, detail::integral T, detail::integral U = T>
 class dynamic_repeat_parser
-  : public parser<dynamic_repeat_parser<Parser, T, U>> {
+  : public parser_base<dynamic_repeat_parser<Parser, T, U>> {
 public:
   using container = detail::container_t<typename Parser::attribute>;
   using attribute = typename container::attribute;

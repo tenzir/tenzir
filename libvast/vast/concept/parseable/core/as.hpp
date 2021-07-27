@@ -14,7 +14,7 @@ namespace vast {
 
 /// Casts a parser's attribute to a specific type.
 template <class Parser, class Attribute>
-class as_parser : public parser<as_parser<Parser, Attribute>> {
+class as_parser : public parser_base<as_parser<Parser, Attribute>> {
 public:
   using attribute = Attribute;
 

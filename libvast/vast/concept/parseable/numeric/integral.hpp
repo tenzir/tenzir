@@ -34,7 +34,7 @@ template <class T,
           int MaxDigits = std::numeric_limits<T>::digits10 + 1,
           int MinDigits = 1, int Radix = 10>
 struct integral_parser
-  : parser<integral_parser<T, MaxDigits, MinDigits, Radix>> {
+  : parser_base<integral_parser<T, MaxDigits, MinDigits, Radix>> {
   static_assert(Radix == 10 || Radix == 16, "unsupported radix");
   static_assert(MinDigits > 0, "need at least one minimum digit");
   static_assert(MaxDigits > 0, "need at least one maximum digit");

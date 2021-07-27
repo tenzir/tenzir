@@ -26,7 +26,7 @@
 
 namespace vast {
 
-struct data_parser : parser<data_parser> {
+struct data_parser : parser_base<data_parser> {
   using attribute = data;
 
   template <class Iterator, class Attribute>

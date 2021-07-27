@@ -23,7 +23,7 @@ auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args) -> bool {
 template <class Iterator, access_parser T, class... Args>
 requires(!has_parser_v<T>) auto parse(Iterator& f, const Iterator& l, T& x,
                                       Args&&... args) -> bool {
-  return access::parser<T>{std::forward<Args>(args)...}(f, l, x);
+  return access::parser_base<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
 namespace detail {

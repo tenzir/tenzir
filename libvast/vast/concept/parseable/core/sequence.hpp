@@ -31,7 +31,7 @@ template <class T>
 constexpr bool is_sequence_parser_v = is_sequence_parser<T>::value;
 
 template <class Lhs, class Rhs>
-class sequence_parser : public parser<sequence_parser<Lhs, Rhs>> {
+class sequence_parser : public parser_base<sequence_parser<Lhs, Rhs>> {
 public:
   using lhs_type = Lhs;
   using rhs_type = Rhs;

@@ -17,7 +17,7 @@ struct access {
   struct state;
 
   template <class>
-  struct parser;
+  struct parser_base;
 
   template <class>
   struct printer;
@@ -30,7 +30,7 @@ concept access_state = requires {
 
 template <class T>
 concept access_parser = requires {
-  access::parser<T>{};
+  access::parser_base<T>{};
 };
 
 template <class T>

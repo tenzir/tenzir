@@ -16,7 +16,7 @@
 namespace vast {
 
 template <class Parser>
-class optional_parser : public parser<optional_parser<Parser>> {
+class optional_parser : public parser_base<optional_parser<Parser>> {
 public:
   using inner_attribute = detail::attr_fold_t<typename Parser::attribute>;
 

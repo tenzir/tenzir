@@ -363,7 +363,7 @@ TEST(polymorphic) {
 namespace {
 
 template <class Parser>
-class parser_wrapper : public parser<parser_wrapper<Parser>> {
+class parser_wrapper : public parser_base<parser_wrapper<Parser>> {
 public:
   parser_wrapper(int& counter, Parser x) : counter_(counter), parser_(x) {
     ++counter_;

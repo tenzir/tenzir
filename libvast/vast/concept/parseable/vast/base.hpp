@@ -15,7 +15,7 @@
 
 namespace vast {
 
-struct base_parser : parser<base_parser> {
+struct base_parser : parser_base<base_parser> {
   using attribute = base;
 
   template <size_t Bits>

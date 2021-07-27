@@ -21,7 +21,7 @@
 namespace vast {
 
 // A URI parser based on RFC 3986.
-struct uri_parser : parser<uri_parser> {
+struct uri_parser : parser_base<uri_parser> {
   using attribute = uri;
 
   static auto make() {

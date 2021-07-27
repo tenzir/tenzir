@@ -24,7 +24,7 @@ namespace vast {
 // vast/concept/parseable/std/chrono.
 
 template <class Rep, class Period>
-struct duration_parser : parser<duration_parser<Rep, Period>> {
+struct duration_parser : parser_base<duration_parser<Rep, Period>> {
   using attribute = std::chrono::duration<Rep, Period>;
 
   template <class T>
@@ -89,7 +89,8 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
 };
 
 template <class Rep, class Period>
-struct compound_duration_parser : parser<compound_duration_parser<Rep, Period>> {
+struct compound_duration_parser
+  : parser_base<compound_duration_parser<Rep, Period>> {
   using attribute = std::chrono::duration<Rep, Period>;
 
   template <class Iterator, class Attribute>
@@ -120,7 +121,7 @@ auto const duration = stl_duration<vast::duration::rep, vast::duration::period>;
 } // namespace parsers
 
 // TODO: Support more of ISO8601.
-struct ymdhms_parser : vast::parser<ymdhms_parser> {
+struct ymdhms_parser : vast::parser_base<ymdhms_parser> {
   using attribute = time;
 
   // Logic extracted from
@@ -215,7 +216,7 @@ auto const unix_ts = real_opt_dot
 
 } // namespace parsers
 
-struct time_parser : parser<time_parser> {
+struct time_parser : parser_base<time_parser> {
   using attribute = time;
 
   template <class Iterator, class Attribute>

@@ -12,7 +12,7 @@
 
 namespace vast {
 
-class epsilon_parser : public parser<epsilon_parser> {
+class epsilon_parser : public parser_base<epsilon_parser> {
 public:
   using attribute = unused_type;
 

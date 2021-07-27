@@ -187,7 +187,7 @@ struct symbol_resolver {
   schema sch = {};
 };
 
-struct symbol_map_parser : parser<symbol_map_parser> {
+struct symbol_map_parser : parser_base<symbol_map_parser> {
   using attribute = symbol_map;
 
   static constexpr auto skp = type_parser::skp;
@@ -236,7 +236,7 @@ constexpr auto symbol_map = symbol_map_parser{};
 
 } // namespace parsers
 
-struct schema_parser : parser<schema_parser> {
+struct schema_parser : parser_base<schema_parser> {
   using attribute = schema;
 
   template <class Iterator, class Attribute>

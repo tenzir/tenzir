@@ -14,7 +14,7 @@ namespace vast {
 
 // The AND parser does not consume its input and serves as basic look-ahead.
 template <class Parser>
-class and_parser : public parser<and_parser<Parser>> {
+class and_parser : public parser_base<and_parser<Parser>> {
 public:
   using attribute = unused_type;
 

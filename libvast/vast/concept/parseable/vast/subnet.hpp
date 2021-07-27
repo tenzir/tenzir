@@ -16,7 +16,8 @@
 namespace vast {
 
 template <>
-struct access::parser<subnet> : vast::parser<access::parser<subnet>> {
+struct access::parser_base<subnet>
+  : vast::parser_base<access::parser_base<subnet>> {
   using attribute = subnet;
 
   static auto make() {
@@ -44,7 +45,7 @@ struct access::parser<subnet> : vast::parser<access::parser<subnet>> {
 
 template <>
 struct parser_registry<subnet> {
-  using type = access::parser<subnet>;
+  using type = access::parser_base<subnet>;
 };
 
 namespace parsers {

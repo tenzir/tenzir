@@ -16,7 +16,7 @@
 
 namespace vast {
 
-struct table_slice_encoding_parser : parser<table_slice_encoding_parser> {
+struct table_slice_encoding_parser : parser_base<table_slice_encoding_parser> {
   using attribute = table_slice_encoding;
 
   template <class Iterator, class Attribute>

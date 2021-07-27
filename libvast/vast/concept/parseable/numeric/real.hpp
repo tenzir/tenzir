@@ -25,7 +25,7 @@ struct optional_dot {};
 } // namespace policy
 
 template <class T, class... Policies>
-struct real_parser : parser<real_parser<T, Policies...>> {
+struct real_parser : parser_base<real_parser<T, Policies...>> {
   using attribute = T;
   using policies =
     std::conditional_t<(sizeof...(Policies) > 0),
