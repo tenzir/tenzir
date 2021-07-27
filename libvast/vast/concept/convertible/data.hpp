@@ -210,6 +210,7 @@ template <concepts::has_insert To>
     typename To::key_type;
     typename To::mapped_type;
   }
+// clang-format on
 caf::error convert(const map& src, To& dst, const map_type& t) {
   // TODO: Use structured bindings outside of the lambda once clang supports
   // that.
@@ -229,7 +230,6 @@ caf::error convert(const map& src, To& dst, const map_type& t) {
   }
   return caf::none;
 }
-// clang-format on
 
 // Overload for record to map.
 // clang-format off
@@ -238,6 +238,7 @@ template <concepts::has_insert To>
     typename To::key_type;
     typename To::mapped_type;
   }
+// clang-format on
 caf::error convert(const record& src, To& dst, const map_type& t) {
   // TODO: Use structured bindings outside of the lambda once clang supports
   // that.
@@ -257,7 +258,6 @@ caf::error convert(const record& src, To& dst, const map_type& t) {
   }
   return caf::none;
 }
-// clang-format on
 
 // TODO: Consider moving this to data.hpp
 caf::expected<const data*>
@@ -292,7 +292,7 @@ caf::error convert(const list& src, To& dst, const list_type& t) {
     }
   }
   if (key_field.offset.empty())
-    return caf::make_error( //
+    return caf::make_error(
       ec::convert_error,
       fmt::format(": record type in list is missing a key field: {}", *r));
   std::vector<std::string_view> path;
