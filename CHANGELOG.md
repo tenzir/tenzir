@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.07.29-rc1]
+## [2021.07.29-rc2]
 
 ### :warning: Changes
 
@@ -27,6 +27,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The new setting `vast.store-backend` and a new plugin type `store_plugin` allow users to implement custom store backends that hold the data indexed by a partition.
   [#1720](https://github.com/tenzir/vast/pull/1720)
   [#1762](https://github.com/tenzir/vast/pull/1762)
+  [#1802](https://github.com/tenzir/vast/pull/1802)
 
 - VAST now supports import filter expressions. They act as the dual to export query expressions:  `vast import suricata '#type == "suricata.alert"' < eve.json` will import only `suricata.alert` events, discarding all other events.
   [#1742](https://github.com/tenzir/vast/pull/1742)
@@ -86,6 +87,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Plugins built against an external libvast no longer require the `CMAKE_INSTALL_LIBDIR` to be specified as a path relative to the configured `CMAKE_INSTALL_PREFIX`. This fixes an issue with plugins in separate packages for some package managers, e.g., Nix.
   [#1786](https://github.com/tenzir/vast/pull/1786)
+
+- The official Docker image and static binary distribution of VAST now produce the correct version output for plugins from the `vast version` command.
+  [#1799](https://github.com/tenzir/vast/pull/1799)
+
+- The disk budget feature no longer triggers a rare segfault while deleting partitions.
+  [#1804](https://github.com/tenzir/vast/pull/1804)
 
 ## [2021.06.24]
 
@@ -1286,7 +1293,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.07.29-rc1]: https://github.com/tenzir/vast/releases/tag/2021.07.29-rc1
+[2021.07.29-rc2]: https://github.com/tenzir/vast/releases/tag/2021.07.29-rc2
 [2021.06.24]: https://github.com/tenzir/vast/releases/tag/2021.06.24
 [2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
 [2021.04.29]: https://github.com/tenzir/vast/releases/tag/2021.04.29
