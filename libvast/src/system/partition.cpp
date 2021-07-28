@@ -311,23 +311,20 @@ caf::error
 unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // Check that all fields exist.
   if (!partition.uuid())
-    return caf::make_error(ec::format_error,
-                           "missing 'uuid' field in partition "
-                           "flatbuffer");
+    return caf::make_error(ec::format_error, //
+                           "missing 'uuid' field in partition flatbuffer");
   auto combined_layout = partition.combined_layout();
   if (!combined_layout)
-    return caf::make_error(ec::format_error,
-                           "missing 'layouts' field in partition "
-                           "flatbuffer");
+    return caf::make_error(ec::format_error, //
+                           "missing 'layouts' field in partition flatbuffer");
   auto store_header = partition.store();
   // If no store_id is set, use the global store for backwards compatibility.
   if (store_header && !store_header->id())
-    return caf::make_error(ec::format_error, "missing 'id' field in partition "
-                                             "store header");
+    return caf::make_error(ec::format_error, //
+                           "missing 'id' field in partition store header");
   if (store_header && !store_header->data())
-    return caf::make_error(ec::format_error,
-                           "missing 'data' field in partition "
-                           "store header");
+    return caf::make_error(ec::format_error, //
+                           "missing 'data' field in partition store header");
   state.store_id
     = store_header ? store_header->id()->str() : std::string{"legacy_archive"};
   if (store_header && store_header->data())
@@ -336,19 +333,16 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
       store_header->data()->size()};
   auto indexes = partition.indexes();
   if (!indexes)
-    return caf::make_error(ec::format_error,
-                           "missing 'indexes' field in partition "
-                           "flatbuffer");
+    return caf::make_error(ec::format_error, //
+                           "missing 'indexes' field in partition flatbuffer");
   for (auto qualified_index : *indexes) {
     if (!qualified_index->field_name())
-      return caf::make_error(ec::format_error,
-                             "missing field name in qualified "
-                             "index");
+      return caf::make_error(ec::format_error, //
+                             "missing field name in qualified index");
     auto index = qualified_index->index();
     if (!index)
-      return caf::make_error(ec::format_error,
-                             "missing index name in qualified "
-                             "index");
+      return caf::make_error(ec::format_error, //
+                             "missing index name in qualified index");
     if (!index->data())
       return caf::make_error(ec::format_error, "missing data in index");
   }
@@ -363,8 +357,8 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
   if (state.combined_layout.fields.size() < indexes->size()) {
-    VAST_ERROR("{} found incoherent number of indexers in deserialized "
-               "state; {} fields for {} indexes",
+    VAST_ERROR("{} found incoherent number of indexers in deserialized state; "
+               "{} fields for {} indexes",
                state.name, state.combined_layout.fields.size(),
                indexes->size());
     return caf::make_error(ec::format_error, "incoherent number of indexers");
@@ -741,10 +735,11 @@ partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
   store_actor legacy_archive, filesystem_actor filesystem,
   const std::filesystem::path& path) {
+  auto id_string = to_string(id);
   self->state.self = self;
   self->state.path = path;
   self->state.archive = legacy_archive;
-  auto id_string = to_string(id);
+  self->state.name = "partition-" + id_string;
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
@@ -820,10 +815,17 @@ partition_actor::behavior_type passive_partition(
           self->quit(std::move(error));
           return;
         }
+        if (self->state.id != id) {
+          VAST_ERROR("unexpected ID for passive partition: expected {}, got {}",
+                     id, self->state.id);
+          self->quit();
+          return;
+        }
         if (self->state.store_id == "legacy_archive") {
           self->state.store = self->state.archive;
         } else {
-          auto plugin = plugins::find<store_plugin>(self->state.store_id);
+          const auto* plugin
+            = plugins::find<store_plugin>(self->state.store_id);
           if (!plugin) {
             auto error = caf::make_error(ec::format_error,
                                          "encountered unhandled store backend");
@@ -843,7 +845,7 @@ partition_actor::behavior_type passive_partition(
           self->state.store = *store;
         }
         if (id != self->state.id)
-          VAST_WARN("{} encountered partition id mismatch: restored {}"
+          VAST_WARN("{} encountered partition ID mismatch: restored {}"
                     "from disk, expected {}",
                     self, self->state.id, id);
         // Delegate all deferred evaluations now that we have the partition chunk.
@@ -905,6 +907,10 @@ partition_actor::behavior_type passive_partition(
       return rp;
     },
     [self](atom::erase) -> caf::result<atom::done> {
+      if (!self->state.partition_chunk) {
+        VAST_DEBUG("{} skips an erase request", self);
+        return caf::skip;
+      }
       VAST_DEBUG("{} received an erase message and deletes {}", self,
                  self->state.path);
       std::error_code err{};
@@ -924,6 +930,10 @@ partition_actor::behavior_type passive_partition(
     [self](atom::status,
            status_verbosity /*v*/) -> caf::config_value::dictionary {
       caf::settings result;
+      if (!self->state.partition_chunk) {
+        caf::put(result, "state", "waiting for chunk");
+        return result;
+      }
       caf::put(result, "size", self->state.partition_chunk->size());
       size_t mem_indexers = 0;
       for (size_t i = 0; i < self->state.indexers.size(); ++i) {
