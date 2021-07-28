@@ -346,14 +346,8 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
     if (!index->data())
       return caf::make_error(ec::format_error, "missing data in index");
   }
-  uuid persisted_id;
-  if (auto error = unpack(*partition.uuid(), persisted_id))
+  if (auto error = unpack(*partition.uuid(), state.id))
     return error;
-  if (state.id != persisted_id)
-    return caf::make_error(ec::format_error, //
-                           fmt::format("unexpected id for passive partition: "
-                                       "expected {}, got {}",
-                                       state.id, persisted_id));
   state.events = partition.events();
   state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
@@ -745,7 +739,6 @@ partition_actor::behavior_type passive_partition(
   self->state.self = self;
   self->state.path = path;
   self->state.archive = legacy_archive;
-  self->state.id = id;
   self->state.name = "partition-" + id_string;
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -822,10 +815,17 @@ partition_actor::behavior_type passive_partition(
           self->quit(std::move(error));
           return;
         }
+        if (self->state.id != id) {
+          VAST_ERROR("unexpected ID for passive partition: expected {}, got {}",
+                     id, self->state.id);
+          self->quit();
+          return;
+        }
         if (self->state.store_id == "legacy_archive") {
           self->state.store = self->state.archive;
         } else {
-          auto plugin = plugins::find<store_plugin>(self->state.store_id);
+          const auto* plugin
+            = plugins::find<store_plugin>(self->state.store_id);
           if (!plugin) {
             auto error = caf::make_error(ec::format_error,
                                          "encountered unhandled store backend");
@@ -845,7 +845,7 @@ partition_actor::behavior_type passive_partition(
           self->state.store = *store;
         }
         if (id != self->state.id)
-          VAST_WARN("{} encountered partition id mismatch: restored {}"
+          VAST_WARN("{} encountered partition ID mismatch: restored {}"
                     "from disk, expected {}",
                     self, self->state.id, id);
         // Delegate all deferred evaluations now that we have the partition chunk.
@@ -907,8 +907,10 @@ partition_actor::behavior_type passive_partition(
       return rp;
     },
     [self](atom::erase) -> caf::result<atom::done> {
-      if (!self->state.partition_chunk)
+      if (!self->state.partition_chunk) {
+        VAST_DEBUG("{} skips an erase request", self);
         return caf::skip;
+      }
       VAST_DEBUG("{} received an erase message and deletes {}", self,
                  self->state.path);
       std::error_code err{};
