@@ -1,2 +1,2 @@
-The output of the status command now includes information about input
-and output transformations.
+The the `status` command now prints information about input and output
+transformations.
