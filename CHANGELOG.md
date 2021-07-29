@@ -10,7 +10,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :warning: Changes
 
-- VAST no longer officially supports Debian Buster with GCC-8. In CI, VAST now runs on Debian Bullseye with GCC-10. The provided Docker images now use `debian:buster-slim` as base image. Users that require Debian Buster support should use the provided static builds instead.
+- VAST no longer officially supports Debian Buster with GCC-8. In CI, VAST now runs on Debian Bullseye with GCC-10. The provided Docker images now use `debian:bullseye-slim` as base image. Users that require Debian Buster support should use the provided static builds instead.
   [#1765](https://github.com/tenzir/vast/pull/1765)
 
 - From now on VAST is compiled with the C++20 language standard. Minimum compiler versions have increased to GCC 10, Clang 11, and AppleClang 12.0.5.
@@ -24,7 +24,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :gift: Features
 
-- VAST has new `store_plugin` type for custom store backends that hold the raw data in a partition. The new setting `vast.store-backend` controls the selection of the store implementation, which has a default value is `segment-store`. This is still an opt-in feature: unless the configuration value is set, VAST defaults to the old implementation.
+- VAST has new a `store_plugin` type for custom store backends that hold the raw data of a partition. The new setting `vast.store-backend` controls the selection of the store implementation, which has a default value is `segment-store`. This is still an opt-in feature: unless the configuration value is set, VAST defaults to the old implementation.
   [#1720](https://github.com/tenzir/vast/pull/1720)
   [#1762](https://github.com/tenzir/vast/pull/1762)
   [#1802](https://github.com/tenzir/vast/pull/1802)
@@ -67,7 +67,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - A `[*** LOG ERROR #0001 ***]` error message on startup under Linux no longer occurs.
   [#1754](https://github.com/tenzir/vast/pull/1754)
 
-- Queries against fields using a `#index=hash` attribute could have miss some results. Fixing a bug in the offset calculation during bitmap processing resolved the issue.
+- Queries against fields using a `#index=hash` attribute could have missed some results. Fixing a bug in the offset calculation during bitmap processing resolved the issue.
   [#1755](https://github.com/tenzir/vast/pull/1755)
 
 - A regression caused VAST's plugins to be loaded in random order, which printed a warning about mismatching plugins between client and server. The order is now deterministic.
