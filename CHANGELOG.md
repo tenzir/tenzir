@@ -6,14 +6,14 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.07.29-rc2]
+## [2021.07.29-rc3]
 
 ### :warning: Changes
 
-- VAST no longer officially supports Debian Buster with GCC-8 and is instead now being tested on Debian Bullseye with GCC-10. The provided Docker images now use `debian:buster-slim` as base image. Users that require Debian Buster support should use the provided static Nix builds instead.
+- VAST no longer officially supports Debian Buster with GCC-8. In CI, VAST now runs on Debian Bullseye with GCC-10. The provided Docker images now use `debian:bullseye-slim` as base image. Users that require Debian Buster support should use the provided static builds instead.
   [#1765](https://github.com/tenzir/vast/pull/1765)
 
-- From now on VAST is compiled with the C++20 language standard. The minimum compiler versions have increased to GCC 10, Clang 11, and AppleClang 12.0.5.
+- From now on VAST is compiled with the C++20 language standard. Minimum compiler versions have increased to GCC 10, Clang 11, and AppleClang 12.0.5.
   [#1768](https://github.com/tenzir/vast/pull/1768)
 
 - The `vast` binaries in our [prebuilt Docker images](http://hub.docker.com/r/tenzir/vast) no longer contain AVX instructions for increased portability. Building the image locally continues to add supported auto-vectorization flags automatically.
@@ -24,7 +24,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :gift: Features
 
-- The new setting `vast.store-backend` and a new plugin type `store_plugin` allow users to implement custom store backends that hold the data indexed by a partition.
+- VAST has new a `store_plugin` type for custom store backends that hold the raw data of a partition. The new setting `vast.store-backend` controls the selection of the store implementation, which has a default value is `segment-store`. This is still an opt-in feature: unless the configuration value is set, VAST defaults to the old implementation.
   [#1720](https://github.com/tenzir/vast/pull/1720)
   [#1762](https://github.com/tenzir/vast/pull/1762)
   [#1802](https://github.com/tenzir/vast/pull/1802)
@@ -32,25 +32,25 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now supports import filter expressions. They act as the dual to export query expressions:  `vast import suricata '#type == "suricata.alert"' < eve.json` will import only `suricata.alert` events, discarding all other events.
   [#1742](https://github.com/tenzir/vast/pull/1742)
 
-- We now offer a [`tenzir/vast-dev`](https://hub.docker.com/r/tenzir/vast-dev) Docker image in addition to the regular [`tenzir/vast`](https://hub.docker.com/r/tenzir/vast). The `vast-dev` image targets development contexts, e.g., when building additional plugins. The image contains all build-time dependencies of VAST and runs as the `root` rather than the `vast` user.
+- VAST now comes with a [`tenzir/vast-dev`](https://hub.docker.com/r/tenzir/vast-dev) Docker image in addition to the regular [`tenzir/vast`](https://hub.docker.com/r/tenzir/vast). The `vast-dev` image targets development contexts, e.g., when building additional plugins. The image contains all build-time dependencies of VAST and runs as `root` rather than the `vast` user.
   [#1749](https://github.com/tenzir/vast/pull/1749)
 
-- `lsvast` now prints extended information for hash indexes upon request.
+- `lsvast` now prints extended information for hash indexes.
   [#1755](https://github.com/tenzir/vast/pull/1755)
 
-- The new [Broker](https://github.com/zeek/broker) plugin enables seamless log ingestion from [Zeek](https://github.com/zeek/zeek) to VAST via a TCP socket. Broker is Zeek's messaging library and the plugin turns VAST into a Zeek [logger node](https://docs.zeek.org/en/master/frameworks/cluster.html#logger). Use `vast import broker` to establish a connection to Zeek node and acquire logs.
+- The new [Broker](https://github.com/zeek/broker) plugin enables seamless log ingestion from [Zeek](https://github.com/zeek/zeek) to VAST via a TCP socket. Broker is Zeek's messaging library and the plugin turns VAST into a Zeek [logger node](https://docs.zeek.org/en/master/frameworks/cluster.html#logger). Use `vast import broker` to establish a connection to a Zeek node and acquire logs.
   [#1758](https://github.com/tenzir/vast/pull/1758)
 
-- Plugin versions are now unique to facilitate debugging. They consist of three optional parts: The CMake project version of the plugin, the Git revision of the last commit that touched the plugin, and a `dirty` suffix for uncommited changes to the plugin. Plugin developers no longer need to specify the version manually in the plugin entrypoint.
+- Plugin versions are now unique to facilitate debugging. They consist of three optional parts: (1) the CMake project version of the plugin, (2) the Git revision of the last commit that touched the plugin, and (3) a `dirty` suffix for uncommited changes to the plugin. Plugin developers no longer need to specify the version manually in the plugin entrypoint.
   [#1764](https://github.com/tenzir/vast/pull/1764)
 
-- VAST now supports the arm64 architecture.
+- VAST now supports the *arm64* architecture.
   [#1773](https://github.com/tenzir/vast/pull/1773)
 
-- VAST installations now bundle an example configuration file listing all options.
+- Installing VAST now includes a `vast.yaml.example` configuration file listing all available options.
   [#1777](https://github.com/tenzir/vast/pull/1777)
 
-- VAST now exports per-layout import metrics under `<reader>.events.<layout-name>` in addition to the regular `<reader>.events`, making it easier to understand the event type distribution.
+- VAST now exports per-layout import metrics under the key `<reader>.events.<layout-name>` in addition to the regular `<reader>.events`. This makes it easier to understand the event type distribution.
   [#1781](https://github.com/tenzir/vast/pull/1781)
 
 - The static binary now bundles the Broker plugin.
@@ -58,25 +58,28 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :beetle: Bug Fixes
 
-- Configuring VAST to use CAF's built-in OpenSSL module via the `caf.openssl.*` options now works as expected.
+- Configuring VAST to use CAF's built-in OpenSSL module via the `caf.openssl.*` options now works again as expected.
   [#1740](https://github.com/tenzir/vast/pull/1740)
 
-- The `[*** LOG ERROR #0001 ***]` error message on startup under Linux no longer exists.
+- The the `status` command now prints information about input and output transformations.
+  [#1748](https://github.com/tenzir/vast/pull/1748)
+
+- A `[*** LOG ERROR #0001 ***]` error message on startup under Linux no longer occurs.
   [#1754](https://github.com/tenzir/vast/pull/1754)
 
-- Queries against fields using a `#index=hash` attribute will no longer miss some results, due to fixing a bug in the offset computation in bitmap processing.
+- Queries against fields using a `#index=hash` attribute could have missed some results. Fixing a bug in the offset calculation during bitmap processing resolved the issue.
   [#1755](https://github.com/tenzir/vast/pull/1755)
 
-- A regression caused VAST's plugins to be loaded in a random order, which caused a warning about mismatching plugins between client and server to be emitted randomly when connecting to a VAST server. This is now fixed.
+- A regression caused VAST's plugins to be loaded in random order, which printed a warning about mismatching plugins between client and server. The order is now deterministic.
   [#1756](https://github.com/tenzir/vast/pull/1756)
 
 - VAST does not abort JSON imports anymore when encountering something other than a JSON object, e.g., a number or a string. Instead, VAST skips the offending line.
   [#1759](https://github.com/tenzir/vast/pull/1759)
 
-- Import processes now respond quicker. Requests to shutdown when the server process exits are no longer delayed for busy imports, and metrics and telemetry reports are now written in a timely manner.
+- Import processes now respond quicker. Shutdown requests are no longer delayed when the server process has busy imports, and metrics reports are now written in a timely manner.
   [#1771](https://github.com/tenzir/vast/pull/1771)
 
-- Particularly busy imports caused the shutdown of the server process to hang, if the import processes were still running, or had not yet flushed all data. The server now shuts down correctly in these cases.
+- Particularly busy imports caused the shutdown of the server process to hang, if import processes were still running or had not yet flushed all data. The server now shuts down correctly in these cases.
   [#1771](https://github.com/tenzir/vast/pull/1771)
 
 - The static binary no longer behaves differently than the regular build with regards to its configuration directories: system-wide configuration files now reside in `<prefix>/etc/vast/vast.yaml` rather than `/etc/vast/vast.yaml`.
@@ -93,6 +96,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The disk budget feature no longer triggers a rare segfault while deleting partitions.
   [#1804](https://github.com/tenzir/vast/pull/1804)
+  [#1809](https://github.com/tenzir/vast/pull/1809)
 
 ## [2021.06.24]
 
@@ -1293,7 +1297,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.07.29-rc2]: https://github.com/tenzir/vast/releases/tag/2021.07.29-rc2
+[2021.07.29-rc3]: https://github.com/tenzir/vast/releases/tag/2021.07.29-rc3
 [2021.06.24]: https://github.com/tenzir/vast/releases/tag/2021.06.24
 [2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
 [2021.04.29]: https://github.com/tenzir/vast/releases/tag/2021.04.29
