@@ -80,7 +80,7 @@ caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
   if (map == MAP_FAILED)
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to mmap file {}: {}", filename,
-                                       strerror(mmap_errno)));
+                                       std::strerror(mmap_errno)));
   auto deleter = [=]() noexcept {
     ::munmap(map, size);
   };
