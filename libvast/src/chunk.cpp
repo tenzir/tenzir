@@ -75,11 +75,15 @@ caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to open file {}", filename));
   auto map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, offset);
+  auto mmap_errno = errno;
   ::close(fd);
   if (map == MAP_FAILED)
     return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to mmap file {}", filename));
-  auto deleter = [=]() noexcept { ::munmap(map, size); };
+                           fmt::format("failed to mmap file {}: {}", filename,
+                                       strerror(mmap_errno)));
+  auto deleter = [=]() noexcept {
+    ::munmap(map, size);
+  };
   return make(map, size, std::move(deleter));
 }
 
@@ -175,8 +179,12 @@ caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
   if (x == nullptr)
     return sink(uint32_t{0});
   return caf::error::eval(
-    [&] { return sink(narrow<uint32_t>(x->size())); },
-    [&] { return sink.apply_raw(x->size(), const_cast<std::byte*>(x->data())); });
+    [&] {
+      return sink(narrow<uint32_t>(x->size()));
+    },
+    [&] {
+      return sink.apply_raw(x->size(), const_cast<std::byte*>(x->data()));
+    });
 }
 
 caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
