@@ -41,7 +41,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow-dev && \
+    apt-get -y --no-install-recommends install libarrow-dev=4.0.1-1 && \
     rm -rf /var/lib/apt/lists/*
 
 # VAST
