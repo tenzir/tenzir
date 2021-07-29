@@ -65,7 +65,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         return chk;
       } else {
         ++self->state.stats.mmaps.failed;
-        return nullptr;
+        return chk.error();
       }
     },
     [self](atom::status, status_verbosity v) {
