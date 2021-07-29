@@ -929,6 +929,11 @@ index(index_actor::stateful_pointer<index_state> self,
                         path)
               .then(
                 [=](const chunk_ptr& chunk) mutable {
+                  if (!chunk)
+                    rp.deliver(caf::make_error( //
+                      ec::filesystem_error,
+                      fmt::format("failed to load the state for partition {}",
+                                  path)));
                   // Adjust layout stats by subtracting the events of the
                   // removed partition.
                   const auto* partition = fbs::GetPartition(chunk->data());
