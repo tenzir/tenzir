@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "vast/concepts.hpp"
 #include "vast/data/integer.hpp"
 #include "vast/detail/byte_swap.hpp"
-#include "vast/detail/concepts.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/logger.hpp"
@@ -378,7 +378,7 @@ private:
     return write_data(xs.data(), xs.size() * sizeof(T));
   }
 
-  template <detail::unsigned_integral T>
+  template <concepts::unsigned_integral T>
   size_t write_count(T x) {
     auto y = vast::detail::to_network_order(x);
     return write_data(&y, sizeof(y));
@@ -390,7 +390,7 @@ private:
     return write_byte(x);
   }
 
-  template <format Format, detail::integral T>
+  template <format Format, concepts::integral T>
   [[nodiscard]] size_t add_int(T x) {
     auto y = native_cast<Format>(x);
     auto u = static_cast<std::make_unsigned_t<decltype(y)>>(y);
@@ -463,7 +463,7 @@ size_t put(Builder& builder, bool x) {
 
 // -- int ---------------------------------------------------------------------
 
-template <class Builder, detail::signed_integral T>
+template <class Builder, concepts::signed_integral T>
 auto put(Builder& builder, T x) {
   using std::numeric_limits;
   if constexpr (sizeof(T) == 8)
@@ -505,7 +505,7 @@ size_t put(Builder& builder, integer x) {
   return builder.template add<int64>(x.value);
 }
 
-template <class Builder, detail::unsigned_integral T>
+template <class Builder, concepts::unsigned_integral T>
 auto put(Builder& builder, T x) {
   using std::numeric_limits;
   if (x < 32)

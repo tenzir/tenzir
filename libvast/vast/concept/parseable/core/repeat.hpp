@@ -10,8 +10,8 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/detail/container.hpp"
+#include "vast/concepts.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/concepts.hpp"
 
 #include <vector>
 
@@ -59,7 +59,7 @@ private:
   Parser parser_;
 };
 
-template <class Parser, detail::integral T, detail::integral U = T>
+template <class Parser, concepts::integral T, concepts::integral U = T>
 class dynamic_repeat_parser
   : public parser_base<dynamic_repeat_parser<Parser, T, U>> {
 public:

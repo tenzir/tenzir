@@ -16,8 +16,8 @@
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/concepts.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/concepts.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
@@ -40,7 +40,7 @@ namespace vast::format::syslog {
 template <class Parser>
 struct maybe_nil_parser : parser_base<maybe_nil_parser<Parser>> {
   using value_type = typename std::decay_t<Parser>::attribute;
-  using attribute = std::conditional_t<detail::container<value_type>,
+  using attribute = std::conditional_t<concepts::container<value_type>,
                                        value_type, std::optional<value_type>>;
 
   explicit maybe_nil_parser(Parser parser) : parser_{std::move(parser)} {

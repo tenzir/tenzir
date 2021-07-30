@@ -8,8 +8,8 @@
 
 #pragma once
 
+#include "vast/concepts.hpp"
 #include "vast/detail/coding.hpp"
-#include "vast/detail/concepts.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -17,7 +17,7 @@
 
 namespace vast::detail {
 
-template <class Iterator, detail::integral T>
+template <class Iterator, concepts::integral T>
 size_t print_numeric(Iterator& out, T x) {
   if (x == 0) {
     *out++ = '0';

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "vast/as_bytes.hpp"
-#include "vast/detail/concepts.hpp"
+#include "vast/concepts.hpp"
 #include "vast/span.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -24,7 +24,7 @@ namespace vast::detail {
 /// @param xs The object to deserialize.
 /// @returns The status of the operation.
 /// @relates detail::serialize
-template <detail::byte_container Buffer, class... Ts>
+template <concepts::byte_container Buffer, class... Ts>
 caf::error deserialize(const Buffer& buffer, Ts&&... xs) {
   auto bytes = as_bytes(buffer);
   auto data = reinterpret_cast<const char*>(bytes.data());

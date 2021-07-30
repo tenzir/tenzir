@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/concepts.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -263,7 +263,7 @@ private:
   // We use a robin_map here because it supports heterogenous lookup, which
   // has a major performance impact for `seeds_`, see ch13760.
   using seeds_map = tsl::robin_map<data, size_t>;
-  static_assert(detail::transparent<seeds_map::key_equal>);
+  static_assert(concepts::transparent<seeds_map::key_equal>);
   seeds_map seeds_;
 };
 
