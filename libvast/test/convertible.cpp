@@ -40,13 +40,18 @@ struct X {
 template <class From, class To>
 const record_type X<From, To>::layout = {{"value", data_to_type<From>{}}};
 
+template <class Type>
+auto test_basic = [](auto v) {
+  auto val = Type{v};
+  auto x = X<Type>{};
+  auto r = record{{"value", val}};
+  REQUIRE_EQUAL(convert(r, x), ec::no_error);
+  CHECK_EQUAL(x.value, val);
+};
+
 #define BASIC(type, v)                                                         \
-  TEST(basic - type) {    /* NOLINT */                                         \
-    auto val = type{(v)}; /* NOLINT */                                         \
-    auto x = X<type>{};                                                        \
-    auto r = record{{"value", val}};                                           \
-    REQUIRE_EQUAL(convert(r, x), ec::no_error);                                \
-    CHECK_EQUAL(x.value, val);                                                 \
+  TEST(basic - type) { /* NOLINT */                                            \
+    test_basic<type>(v);                                                       \
   }
 
 BASIC(bool, true)
@@ -61,12 +66,17 @@ BASIC(address, unbox(to<address>("44.0.0.1")))
 BASIC(subnet, unbox(to<subnet>("44.0.0.1/20")))
 #undef BASIC
 
+template <class From, class To>
+auto test_narrow = [](auto v) {
+  auto x = X<From, To>{};
+  auto r = record{{"value", From{v}}};
+  REQUIRE_EQUAL(convert(r, x), ec::no_error);
+  CHECK_EQUAL(x.value, To(v));
+};
+
 #define NARROW(from_, to_, v)                                                  \
   TEST(narrow - from_ to to_) { /* NOLINT */                                   \
-    auto x = X<from_, to_>{};                                                  \
-    auto r = record{{"value", from_{v}}}; /* NOLINT */                         \
-    REQUIRE_EQUAL(convert(r, x), ec::no_error);                                \
-    CHECK_EQUAL(x.value, to_(v));                                              \
+    test_narrow<from_, to_>(v);                                                \
   }
 
 NARROW(integer, int8_t, 42)
@@ -79,12 +89,17 @@ NARROW(count, uint32_t, 56u)
 NARROW(real, float, 0.42)
 #undef NARROW
 
+template <class From, class To>
+auto test_oob = [](auto v) {
+  auto val = v;
+  auto x = X<From, To>{};
+  auto r = record{{"value", From{val}}};
+  REQUIRE_EQUAL(convert(r, x), ec::convert_error);
+};
+
 #define OUT_OF_BOUNDS(from_, to_, v)                                           \
   TEST(oob - from_ to to_ `v`) { /* NOLINT */                                  \
-    auto val = v;                                                              \
-    auto x = X<from_, to_>{};                                                  \
-    auto r = record{{"value", from_{val}}}; /* NOLINT */                       \
-    REQUIRE_EQUAL(convert(r, x), ec::convert_error);                           \
+    test_oob<from_, to_>(v);                                                   \
   }
 
 OUT_OF_BOUNDS(integer, int8_t, 1 << 7)
