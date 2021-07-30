@@ -10,6 +10,7 @@
 
 #include "vast/concepts.hpp"
 
+#include "vast/concept/support/unused_type.hpp"
 #include "vast/test/test.hpp"
 
 #include <array>
@@ -44,4 +45,60 @@ TEST(byte_container) {
   static_assert(vast::concepts::byte_container<fake_byte_container_t>);
   struct not_byte_container {};
   static_assert(!vast::concepts::byte_container<not_byte_container>);
+}
+
+// -- inspectable --------------------------------------------------------------
+
+struct inspect_friend {
+  bool value;
+  template <class I>
+  friend auto inspect(I& i, inspect_friend& x) {
+    return i(x);
+  }
+};
+
+struct inspect_free {
+  bool value;
+};
+
+template <class I>
+auto inspect(I& i, inspect_free& x) {
+  return i(x);
+}
+
+TEST(inspectable) {
+  static_assert(vast::concepts::inspectable<inspect_friend>);
+  static_assert(vast::concepts::inspectable<inspect_free>);
+  static_assert(!vast::concepts::inspectable<std::array<bool, 2>>);
+}
+
+// -- monoid -------------------------------------------------------------------
+
+struct monoid_friend {
+  bool value;
+  friend monoid_friend
+  mappend(const monoid_friend& lhs, const monoid_friend& rhs) {
+    return {lhs.value || rhs.value};
+  }
+};
+
+struct monoid_free {
+  bool value;
+};
+
+monoid_free mappend(const monoid_free& lhs, const monoid_free& rhs) {
+  return {lhs.value || rhs.value};
+}
+
+struct monoid_bad {
+  bool value;
+  friend vast::unused_type mappend(const monoid_bad&, const monoid_bad&) {
+    return vast::unused;
+  }
+};
+
+TEST(monoid) {
+  static_assert(vast::concepts::monoid<monoid_friend>);
+  static_assert(vast::concepts::monoid<monoid_free>);
+  static_assert(!vast::concepts::monoid<monoid_bad>);
 }
