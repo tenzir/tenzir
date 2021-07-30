@@ -8,7 +8,7 @@
 
 #define SUITE concepts
 
-#include "vast/detail/concepts.hpp"
+#include "vast/concepts.hpp"
 
 #include "vast/test/test.hpp"
 
@@ -20,14 +20,14 @@ TEST(transparent) {
     using is_transparent = std::true_type;
   };
   struct without {};
-  static_assert(vast::detail::transparent<with>);
-  static_assert(!vast::detail::transparent<without>);
+  static_assert(vast::concepts::transparent<with>);
+  static_assert(!vast::concepts::transparent<without>);
 }
 
 TEST(container) {
-  static_assert(vast::detail::container<std::array<int, 1>>);
+  static_assert(vast::concepts::container<std::array<int, 1>>);
   struct empty {};
-  static_assert(!vast::detail::container<empty>);
+  static_assert(!vast::concepts::container<empty>);
   struct user_defined_type {
     auto data() const {
       return nullptr;
@@ -36,12 +36,12 @@ TEST(container) {
       return 0;
     }
   };
-  static_assert(vast::detail::container<user_defined_type>);
+  static_assert(vast::concepts::container<user_defined_type>);
 }
 
 TEST(byte_container) {
   using fake_byte_container_t = std::array<std::uint8_t, 2>;
-  static_assert(vast::detail::byte_container<fake_byte_container_t>);
+  static_assert(vast::concepts::byte_container<fake_byte_container_t>);
   struct not_byte_container {};
-  static_assert(!vast::detail::byte_container<not_byte_container>);
+  static_assert(!vast::concepts::byte_container<not_byte_container>);
 }

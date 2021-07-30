@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/concepts.hpp"
+#include "vast/concepts.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -58,7 +58,7 @@ constexpr size_t max_size() {
 /// @param x The value to encode.
 /// @param sink the output buffer to write into.
 /// @returns The number of bytes written into *sink*.
-template <detail::unsigned_integral T>
+template <concepts::unsigned_integral T>
 size_t encode(T x, void* sink) {
   auto out = reinterpret_cast<uint8_t*>(sink);
   while (x > 0x7f) {
@@ -74,7 +74,7 @@ size_t encode(T x, void* sink) {
 /// @param source The source buffer.
 /// @param x The result of the decoding.
 /// @returns The number of bytes read from *source*.
-template <detail::unsigned_integral T>
+template <concepts::unsigned_integral T>
 size_t decode(T& x, const void* source) {
   auto in = reinterpret_cast<const uint8_t*>(source);
   size_t i = 0;

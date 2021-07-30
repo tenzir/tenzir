@@ -13,14 +13,14 @@
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
-#include "vast/detail/concepts.hpp"
+#include "vast/concepts.hpp"
 #include "vast/si_literals.hpp"
 
 #include <type_traits>
 
 namespace vast {
 
-template <detail::integral T>
+template <concepts::integral T>
 struct si_parser : parser_base<si_parser<T>> {
   using attribute = T;
 

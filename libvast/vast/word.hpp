@@ -8,8 +8,8 @@
 
 #pragma once
 
+#include "vast/concepts.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/concepts.hpp"
 #include "vast/detail/type_traits.hpp"
 
 #include <cstdint>
@@ -26,7 +26,7 @@ namespace vast {
 
 /// A fixed-size piece unsigned piece of data that supports various bitwise
 /// operations.
-template <detail::unsigned_integral T>
+template <concepts::unsigned_integral T>
 struct word {
   // -- general ---------------------------------------------------------------
 
@@ -257,7 +257,7 @@ struct word {
 
 // -- counting --------------------------------------------------------------
 
-template <bool Bit = true, detail::unsigned_integral T>
+template <bool Bit = true, concepts::unsigned_integral T>
 static constexpr auto rank(T x) {
   if constexpr (Bit)
     return word<T>::popcount(x);
@@ -271,13 +271,13 @@ static constexpr auto rank(T x) {
 /// @param i The position up to where to count.
 /// @returns *rank_i(x)*.
 /// @pre `i < width`
-template <bool Bit = true, detail::unsigned_integral T>
+template <bool Bit = true, concepts::unsigned_integral T>
 requires(Bit) static constexpr auto rank(T x, detail::word_size_type i) {
   T masked = x & word<T>::lsb_fill(i + 1);
   return rank<1>(masked);
 }
 
-template <bool Bit, detail::unsigned_integral T>
+template <bool Bit, concepts::unsigned_integral T>
 static constexpr auto rank(T x, detail::word_size_type i) {
   return rank<1>(static_cast<T>(~x), i);
 }
@@ -287,24 +287,24 @@ static constexpr auto rank(T x, detail::word_size_type i) {
 /// Finds the next 1-bit starting at position relative to the LSB.
 /// @param x The block to search.
 /// @param i The position relative to the LSB to start searching.
-template <bool Bit = true, detail::unsigned_integral T>
+template <bool Bit = true, concepts::unsigned_integral T>
 requires(Bit) static constexpr auto find_first(T x) {
   auto tzs = word<T>::count_trailing_zeros(x);
   return tzs == word<T>::width ? word<T>::npos : tzs;
 }
 
-template <bool Bit, detail::unsigned_integral T>
+template <bool Bit, concepts::unsigned_integral T>
 requires(!Bit) static constexpr auto find_first(T x) {
   return find_first<1>(static_cast<T>(~x));
 }
 
-template <bool Bit = true, detail::unsigned_integral T>
+template <bool Bit = true, concepts::unsigned_integral T>
 requires(Bit) static constexpr auto find_last(T x) {
   auto lzs = word<T>::count_leading_zeros(x);
   return lzs == word<T>::width ? word<T>::npos : (word<T>::width - lzs - 1);
 }
 
-template <bool Bit, detail::unsigned_integral T>
+template <bool Bit, concepts::unsigned_integral T>
 requires(!Bit) static constexpr auto find_last(T x) {
   return find_last<1>(static_cast<T>(~x));
 }
@@ -312,7 +312,7 @@ requires(!Bit) static constexpr auto find_last(T x) {
 /// Finds the next 1-bit starting at position relative to the LSB.
 /// @param x The block to search.
 /// @param i The position relative to the LSB to start searching.
-template <detail::unsigned_integral T>
+template <concepts::unsigned_integral T>
 static constexpr auto find_next(T x, detail::word_size_type i) {
   if (i == word<T>::width - 1)
     return word<T>::npos;
@@ -324,7 +324,7 @@ static constexpr auto find_next(T x, detail::word_size_type i) {
 /// @param x The block to search.
 /// @param i The position relative to the LSB to start searching.
 /// @pre `i < width`
-template <detail::unsigned_integral T>
+template <concepts::unsigned_integral T>
 static constexpr auto find_prev(T x, detail::word_size_type i) {
   if (i == 0)
     return word<T>::npos;
@@ -339,7 +339,7 @@ static constexpr auto find_prev(T x, detail::word_size_type i) {
 /// @param x The block to search.
 /// @param i The position of the *i*-th occurrence of *Bit* in *b*.
 /// @pre `i > 0 && i <= width`
-template <bool Bit = true, detail::unsigned_integral T>
+template <bool Bit = true, concepts::unsigned_integral T>
 static constexpr detail::word_size_type select(T x, detail::word_size_type i) {
   // TODO: make this efficient and branch-free. There is one implementation
   // that counts from the right for 64-bit here:
