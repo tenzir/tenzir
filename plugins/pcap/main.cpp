@@ -340,9 +340,9 @@ protected:
                                          "failed to get next packet: ", err));
       }
       // Parse frame.
-      std::span<const std::byte> frame{reinterpret_cast<const std::byte*>(data),
-                                       header->len};
-      frame = decapsulate(frame, frame_type::ethernet);
+      auto raw_frame = std::span<const std::byte>{
+        reinterpret_cast<const std::byte*>(data), header->len};
+      auto frame = decapsulate(raw_frame, frame_type::ethernet);
       if (frame.empty())
         return caf::make_error(ec::format_error, "failed to decapsulate frame");
       constexpr size_t ethernet_header_size = 14;
@@ -446,15 +446,19 @@ protected:
       ts += microseconds(header->ts.tv_usec);
 #endif
       // Assemble packet.
-      const auto* layer3_ptr = reinterpret_cast<const char*>(layer3.data());
-      auto packet = std::string_view{std::launder(layer3_ptr), layer3.size()};
+      auto make_string_view = [](std::span<const std::byte> bytes) {
+        auto data = reinterpret_cast<const char*>(bytes.data());
+        auto size = bytes.size();
+        return std::string_view{data, size};
+      };
+      auto payload = make_string_view(raw_frame);
       auto& cid = state(conn).community_id;
       if (!(builder_->add(ts) && builder_->add(conn.src_addr)
             && builder_->add(conn.dst_addr)
             && builder_->add(conn.src_port.number())
             && builder_->add(conn.dst_port.number())
             && (!community_id_ || builder_->add(std::string_view{cid}))
-            && builder_->add(packet))) {
+            && builder_->add(payload))) {
         return caf::make_error(ec::parse_error, "unable to fill row");
       }
       ++produced;
@@ -588,9 +592,9 @@ public:
     if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_.reset(::pcap_open_dead_with_tstamp_precision(
-        DLT_RAW, snaplen_, PCAP_TSTAMP_PRECISION_NANO));
+        DLT_EN10MB, snaplen_, PCAP_TSTAMP_PRECISION_NANO));
 #else
-    pcap_.reset(::pcap_open_dead(DLT_RAW, snaplen_);
+    pcap_.reset(::pcap_open_dead(DLT_EN10MB, snaplen_);
 #endif
       if (!pcap_)
         return caf::make_error(ec::format_error, "failed to open pcap handle");
