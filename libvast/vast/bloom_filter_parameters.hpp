@@ -37,6 +37,12 @@ struct bloom_filter_parameters {
   std::optional<size_t> n; ///< Set cardinality.
   std::optional<size_t> k; ///< Number of hash functions.
   std::optional<double> p; ///< False-positive probability.
+
+  friend bool operator==(const bloom_filter_parameters& x,
+                         const bloom_filter_parameters& y);
+
+  friend bool operator!=(const bloom_filter_parameters& x,
+                         const bloom_filter_parameters& y);
 };
 
 /// Evaluates a set of Bloom filter parameters. Some parameters can derived

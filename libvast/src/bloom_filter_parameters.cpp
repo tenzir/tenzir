@@ -86,4 +86,14 @@ std::optional<bloom_filter_parameters> parse_parameters(std::string_view x) {
   return {};
 }
 
+bool operator==(const bloom_filter_parameters& x,
+                const bloom_filter_parameters& y) {
+  return x.m == y.m && x.n == y.n && x.k == y.k && x.p == y.p;
+}
+
+bool operator!=(const bloom_filter_parameters& x,
+                const bloom_filter_parameters& y) {
+  return !(x == y);
+}
+
 } // namespace vast
