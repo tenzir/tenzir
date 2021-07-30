@@ -70,7 +70,6 @@ concept inspectable = requires(any_callable& i, T& x) {
   {inspect(i, x)};
 };
 
-/// push_back
 template <class C>
 concept insertable = requires(C xs, typename C::value_type x) {
   xs.insert(x);
