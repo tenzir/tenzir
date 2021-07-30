@@ -3,6 +3,7 @@
     fields:
       - suricata.alert.src_ip
       - suricata.anomaly.src_ip
+      - suricata.dcerpc.src_ip
       - suricata.dhcp.src_ip
       - suricata.dns.src_ip
       - suricata.ftp.src_ip
@@ -10,18 +11,26 @@
       - suricata.http.src_ip
       - suricata.fileinfo.src_ip
       - suricata.flow.src_ip
+      - suricata.ikev2.src_ip
       - suricata.krb5.src_ip
       - suricata.mqtt.src_ip
       - suricata.netflow.src_ip
+      - suricata.nfs.src_ip
+      - suricata.rdp.src_ip
+      - suricata.rfb.src_ip
+      - suricata.sip.src_ip
       - suricata.smb.src_ip
       - suricata.ssh.src_ip
       - suricata.smtp.src_ip
+      - suricata.snmp.src_ip
+      - suricata.tftp.src_ip
       - suricata.tls.src_ip
 - concept:
     name: net.src.port
     fields:
       - suricata.alert.src_port
       - suricata.anomaly.src_port
+      - suricata.dcerpc.src_port
       - suricata.dhcp.src_port
       - suricata.dns.src_port
       - suricata.ftp.src_port
@@ -29,18 +38,26 @@
       - suricata.http.src_port
       - suricata.fileinfo.src_port
       - suricata.flow.src_port
+      - suricata.ikev2.src_port
       - suricata.krb5.src_port
       - suricata.mqtt.src_port
       - suricata.netflow.src_port
+      - suricata.nfs.src_port
+      - suricata.rdp.src_port
+      - suricata.rfb.src_port
+      - suricata.sip.src_port
       - suricata.smb.src_port
       - suricata.ssh.src_port
       - suricata.smtp.src_port
+      - suricata.snmp.src_port
+      - suricata.tftp.src_port
       - suricata.tls.src_port
 - concept:
     name: net.dst.ip
     fields:
       - suricata.alert.dest_ip
       - suricata.anomaly.dest_ip
+      - suricata.dcerpc.dest_ip
       - suricata.dhcp.dest_ip
       - suricata.dns.dest_ip
       - suricata.ftp.dest_ip
@@ -48,18 +65,26 @@
       - suricata.http.dest_ip
       - suricata.fileinfo.dest_ip
       - suricata.flow.dest_ip
+      - suricata.ikev2.dest_ip
       - suricata.krb5.dest_ip
       - suricata.mqtt.dest_ip
       - suricata.netflow.dest_ip
+      - suricata.nfs.dest_ip
+      - suricata.rdp.dest_ip
+      - suricata.rfb.dest_ip
+      - suricata.sip.dest_ip
       - suricata.smb.dest_ip
       - suricata.ssh.dest_ip
       - suricata.smtp.dest_ip
+      - suricata.snmp.dest_ip
+      - suricata.tftp.dest_ip
       - suricata.tls.dest_ip
 - concept:
     name: net.dst.port
     fields:
       - suricata.alert.dest_port
       - suricata.anomaly.dest_port
+      - suricata.dcerpc.dest_port
       - suricata.dhcp.dest_port
       - suricata.dns.dest_port
       - suricata.ftp.dest_port
@@ -67,17 +92,25 @@
       - suricata.http.dest_port
       - suricata.fileinfo.dest_port
       - suricata.flow.dest_port
+      - suricata.ikev2.dest_port
       - suricata.krb5.dest_port
       - suricata.mqtt.dest_port
       - suricata.netflow.dest_port
+      - suricata.nfs.dest_port
+      - suricata.rdp.dest_port
+      - suricata.rfb.dest_port
+      - suricata.sip.dest_port
       - suricata.smb.dest_port
       - suricata.ssh.dest_port
       - suricata.smtp.dest_port
+      - suricata.snmp.dest_port
+      - suricata.tftp.dest_port
       - suricata.tls.dest_port
 - concept:
     name: net.app
     fields:
       - suricata.alert.alert.app_proto
+      - suricata.dcerpc.event_type
       - suricata.dhcp.event_type
       - suricata.dns.event_type
       - suricata.ftp.event_type
@@ -85,18 +118,26 @@
       - suricata.http.event_type
       - suricata.fileinfo.app_proto
       - suricata.flow.app_proto
+      - suricata.ikev2.app_proto
       - suricata.krb5.event_type
       - suricata.mqtt.event_type
       - suricata.netflow.app_proto
+      - suricata.nfs.app_proto
+      - suricata.rdp.app_proto
+      - suricata.rfb.app_proto
+      - suricata.sip.app_proto
       - suricata.smb.event_type
       - suricata.ssh.event_type
       - suricata.smtp.event_type
+      - suricata.snmp.event_type
+      - suricata.tftp.event_type
       - suricata.tls.event_type
 - concept:
     name: net.proto
     fields:
       - suricata.alert.proto
       - suricata.anomaly.proto
+      - suricata.dcerpc.proto
       - suricata.dhcp.proto
       - suricata.dns.proto
       - suricata.ftp.proto
@@ -104,18 +145,26 @@
       - suricata.http.proto
       - suricata.fileinfo.proto
       - suricata.flow.proto
+      - suricata.ikev2.proto
       - suricata.krb5.proto
       - suricata.mqtt.proto
       - suricata.netflow.proto
+      - suricata.nfs.proto
+      - suricata.rdp.proto
+      - suricata.rfb.proto
+      - suricata.sip.proto
       - suricata.smb.proto
       - suricata.ssh.proto
       - suricata.smtp.proto
+      - suricata.snmp.proto
+      - suricata.tftp.proto
       - suricata.tls.proto
 - concept:
     name: net.community_id
     fields:
       - suricata.alert.community_id
       - suricata.anomaly.community_id
+      - suricata.dcerpc.community_id
       - suricata.dhcp.community_id
       - suricata.dns.community_id
       - suricata.ftp.community_id
@@ -123,12 +172,19 @@
       - suricata.http.community_id
       - suricata.fileinfo.community_id
       - suricata.flow.community_id
+      - suricata.ikev2.community_id
       - suricata.krb5.community_id
       - suricata.mqtt.community_id
       - suricata.netflow.community_id
+      - suricata.nfs.community_id
+      - suricata.rdp.community_id
+      - suricata.rfb.community_id
+      - suricata.sip.community_id
       - suricata.smb.community_id
       - suricata.ssh.community_id
       - suricata.smtp.community_id
+      - suricata.snmp.community_id
+      - suricata.tftp.community_id
       - suricata.tls.community_id
 - concept:
     name: net.src.mac
@@ -173,23 +229,56 @@
 - concept:
     name: net.vlan
     fields:
+      - suricata.alert.vlan
+      - suricata.anomaly.vlan
+      - suricata.dcerpc.vlan
+      - suricata.dhcp.vlan
+      - suricata.dns.vlan
+      - suricata.ftp.vlan
+      - suricata.ftp_data.vlan
+      - suricata.http.vlan
+      - suricata.fileinfo.vlan
+      - suricata.flow.vlan
+      - suricata.ikev2.vlan
+      - suricata.krb5.vlan
+      - suricata.mqtt.vlan
+      - suricata.netflow.vlan
+      - suricata.nfs.vlan
+      - suricata.rdp.vlan
+      - suricata.rfb.vlan
+      - suricata.sip.vlan
       - suricata.smb.vlan
       - suricata.ssh.vlan
-      - suricata.krb5.vlan
+      - suricata.smtp.vlan
+      - suricata.snmp.vlan
+      - suricata.tftp.vlan
+      - suricata.tls.vlan
 - concept:
     name: net.packets
     fields:
       - suricata.alert.pcap_cnt
+      - suricata.anomaly.pcap_cnt
+      - suricata.dcerpc.pcap_cnt
       - suricata.dhcp.pcap_cnt
       - suricata.dns.pcap_cnt
-      - suricata.fileinfo.pcap_cnt
-      - suricata.flow.pcap_cnt
       - suricata.ftp.pcap_cnt
       - suricata.ftp_data.pcap_cnt
       - suricata.http.pcap_cnt
+      - suricata.fileinfo.pcap_cnt
+      - suricata.flow.pcap_cnt
+      - suricata.ikev2.pcap_cnt
+      - suricata.krb5.pcap_cnt
+      - suricata.mqtt.pcap_cnt
       - suricata.netflow.pcap_cnt
+      - suricata.nfs.pcap_cnt
+      - suricata.rdp.pcap_cnt
+      - suricata.rfb.pcap_cnt
+      - suricata.sip.pcap_cnt
       - suricata.smb.pcap_cnt
+      - suricata.ssh.pcap_cnt
       - suricata.smtp.pcap_cnt
+      - suricata.snmp.pcap_cnt
+      - suricata.tftp.pcap_cnt
       - suricata.tls.pcap_cnt
 - concept:
     name: file.name
