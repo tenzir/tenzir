@@ -21,7 +21,7 @@
 
 namespace vast {
 
-struct http_header_parser : parser<http_header_parser> {
+struct http_header_parser : parser_base<http_header_parser> {
   using attribute = http::header;
 
   static auto make() {
@@ -57,7 +57,7 @@ struct parser_registry<http::header> {
   using type = http_header_parser;
 };
 
-struct http_request_parser : parser<http_request_parser> {
+struct http_request_parser : parser_base<http_request_parser> {
   using attribute = http::request;
 
   static auto make() {

@@ -44,7 +44,7 @@ namespace vast {
 ///                    / "1" 2DIGIT            ; 100-199
 ///                    / "2" %x30-34 DIGIT     ; 200-249
 ///                    / "25" %x30-35          ; 250-255
-struct address_parser : vast::parser<address_parser> {
+struct address_parser : vast::parser_base<address_parser> {
   using attribute = address;
 
   static auto make_v4() {
@@ -106,7 +106,8 @@ struct address_parser : vast::parser<address_parser> {
 };
 
 template <>
-struct access::parser<address> : vast::parser<access::parser<address>> {
+struct access::parser_base<address>
+  : vast::parser_base<access::parser_base<address>> {
   using attribute = address;
 
   template <class Iterator>
@@ -143,7 +144,7 @@ struct access::parser<address> : vast::parser<access::parser<address>> {
 
 template <>
 struct parser_registry<address> {
-  using type = access::parser<address>;
+  using type = access::parser_base<address>;
 };
 
 namespace parsers {

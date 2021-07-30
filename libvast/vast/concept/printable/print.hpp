@@ -23,8 +23,7 @@ auto print(Iterator&& out, const T& x, Args&&... args)
 
 template <class Iterator, class T, class... Args>
 auto print(Iterator&& out, const T& x, Args&&... args)
-  -> std::enable_if_t<!has_printer_v<T> && has_access_printer_v<T>,
-                      bool> {
+  -> std::enable_if_t<!has_printer_v<T> && access_printer<T>, bool> {
   return access::printer<T>{std::forward<Args>(args)...}.print(out, x);
 }
 

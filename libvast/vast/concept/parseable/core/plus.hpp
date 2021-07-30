@@ -16,7 +16,7 @@
 namespace vast {
 
 template <class Parser>
-class plus_parser : public parser<plus_parser<Parser>> {
+class plus_parser : public parser_base<plus_parser<Parser>> {
 public:
   using container = detail::container_t<typename Parser::attribute>;
   using attribute = typename container::attribute;

@@ -21,7 +21,7 @@ namespace vast {
 
 /// A dynamic parser which acts as an associative array.
 template <class T>
-struct symbol_table : parser<symbol_table<T>> {
+struct symbol_table : parser_base<symbol_table<T>> {
   using attribute = T;
 
   symbol_table() = default;

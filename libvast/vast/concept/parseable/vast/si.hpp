@@ -21,7 +21,7 @@
 namespace vast {
 
 template <detail::integral T>
-struct si_parser : parser<si_parser<T>> {
+struct si_parser : parser_base<si_parser<T>> {
   using attribute = T;
 
   template <class Iterator, class Attribute>

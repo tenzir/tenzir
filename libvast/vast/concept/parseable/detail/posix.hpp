@@ -17,7 +17,7 @@
 
 namespace vast {
 
-struct socket_type_parser : parser<socket_type_parser> {
+struct socket_type_parser : parser_base<socket_type_parser> {
   using attribute = detail::socket_type;
 
   template <class Iterator, class Attribute>

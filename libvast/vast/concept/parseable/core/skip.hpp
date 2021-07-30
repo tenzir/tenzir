@@ -13,7 +13,7 @@
 namespace vast {
 
 /// A parser that ingores the next *n* bytes.
-class skip_parser : public parser<skip_parser> {
+class skip_parser : public parser_base<skip_parser> {
 public:
   using attribute = unused_type;
 

@@ -75,7 +75,7 @@ struct little_endian {};
 } // namespace policy
 
 template <class T, class Policy = policy::big_endian, size_t Bytes = sizeof(T)>
-struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
+struct byte_parser : parser_base<byte_parser<T, Policy, Bytes>> {
   using attribute = T;
 
   template <class Iterator>
@@ -109,7 +109,7 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
 };
 
 template <size_t N, class T = uint8_t>
-struct static_bytes_parser : parser<static_bytes_parser<N>> {
+struct static_bytes_parser : parser_base<static_bytes_parser<N>> {
   static_assert(sizeof(T) == 1, "byte type T must have size 1");
 
   using attribute = std::array<T, N>;
@@ -128,7 +128,7 @@ struct static_bytes_parser : parser<static_bytes_parser<N>> {
 };
 
 template <class N = size_t, class T = uint8_t>
-struct dynamic_bytes_parser : parser<dynamic_bytes_parser<N, T>> {
+struct dynamic_bytes_parser : parser_base<dynamic_bytes_parser<N, T>> {
   static_assert(sizeof(T) == 1, "byte type T must have size 1");
 
   using attribute = std::vector<T>;

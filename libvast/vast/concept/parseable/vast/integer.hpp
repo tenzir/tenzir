@@ -17,7 +17,7 @@
 
 namespace vast {
 
-struct integer_parser : parser<integer_parser> {
+struct integer_parser : parser_base<integer_parser> {
   using attribute = integer;
 
   template <class Iterator>

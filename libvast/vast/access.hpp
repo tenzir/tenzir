@@ -8,76 +8,34 @@
 
 #pragma once
 
-#include <type_traits>
-
 namespace vast {
 
 /// Wrapper to encapsulate the implementation of concepts requiring access to
 /// private state.
 struct access {
-  template <class, class = void>
+  template <class>
   struct state;
 
-  template <class, class = void>
-  struct parser;
+  template <class>
+  struct parser_base;
 
-  template <class, class = void>
+  template <class>
   struct printer;
-
-  template <class, class = void>
-  struct converter;
 };
-
-namespace detail {
-
-struct has_access_state {
-  template <class T>
-  static auto test(T* x) -> decltype(access::state<T>{}, std::true_type());
-
-  template <class>
-  static auto test(...) -> std::false_type;
-};
-
-struct has_access_parser {
-  template <class T>
-  static auto test(T* x) -> decltype(access::parser<T>{}, std::true_type());
-
-  template <class>
-  static auto test(...) -> std::false_type;
-};
-
-struct has_access_printer {
-  template <class T>
-  static auto test(T* x) -> decltype(access::printer<T>{}, std::true_type());
-
-  template <class>
-  static auto test(...) -> std::false_type;
-};
-
-struct has_access_converter {
-  template <class T>
-  static auto test(T* x) -> decltype(access::converter<T>{}, std::true_type());
-
-  template <class>
-  static auto test(...) -> std::false_type;
-};
-
-} // namespace detail
 
 template <class T>
-constexpr bool has_access_state_v
-  = decltype(detail::has_access_state::test<T>(0))::value;
+concept access_state = requires {
+  access::state<T>{};
+};
 
 template <class T>
-constexpr bool has_access_parser_v
-  = decltype(detail::has_access_parser::test<T>(0))::value;
+concept access_parser = requires {
+  access::parser_base<T>{};
+};
 
 template <class T>
-constexpr bool has_access_printer_v
-  = decltype(detail::has_access_printer::test<T>(0))::value;
-
-template <class T>
-constexpr bool has_access_converter_v
-  = decltype(detail::has_access_converter::test<T>(0))::value;
+concept access_printer = requires {
+  access::printer<T>{};
+};
 
 } // namespace vast

@@ -16,7 +16,7 @@
 namespace vast {
 
 template <class Lhs, class Rhs>
-class list_parser : public parser<list_parser<Lhs, Rhs>> {
+class list_parser : public parser_base<list_parser<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;

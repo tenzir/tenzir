@@ -94,7 +94,7 @@ private:
 /// value semantics and can therefore not be used to construct recursive
 /// parsers.
 template <class Iterator>
-class type_erased_parser : public parser<type_erased_parser<Iterator>> {
+class type_erased_parser : public parser_base<type_erased_parser<Iterator>> {
 public:
   using abstract_rule_type = detail::abstract_rule<Iterator, unused_type>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
@@ -113,11 +113,11 @@ public:
     // nop
   }
 
-  template <class RHS, class = std::enable_if_t<!detail::is_same_or_derived_v<
-                         type_erased_parser, RHS>>>
-  type_erased_parser(RHS&& rhs)
+  template <class RHS>
+  requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
+    type_erased_parser(RHS&& rhs)
     : parser_{make_parser<RHS>(std::forward<RHS>(rhs))} {
-    static_assert(is_parser_v<std::decay_t<RHS>>);
+    static_assert(parser<std::decay_t<RHS>>);
   }
 
   type_erased_parser& operator=(const type_erased_parser& rhs) {
@@ -125,10 +125,11 @@ public:
     return *this;
   }
 
-  template <class RHS, class = std::enable_if_t<!detail::is_same_or_derived_v<
-                         type_erased_parser, RHS>>>
-  type_erased_parser& operator=(RHS&& rhs) {
-    static_assert(is_parser_v<std::decay_t<RHS>>);
+  template <class RHS>
+  requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
+    type_erased_parser&
+    operator=(RHS&& rhs) {
+    static_assert(parser<std::decay_t<RHS>>);
     parser_ = make_parser<RHS>(std::forward<RHS>(rhs));
     return *this;
   }
@@ -143,7 +144,7 @@ private:
 
 /// A type-erased parser which can store any other parser.
 template <class Iterator, class Attribute = unused_type>
-class rule : public parser<rule<Iterator, Attribute>> {
+class rule : public parser_base<rule<Iterator, Attribute>> {
   using abstract_rule_type = detail::abstract_rule<Iterator, Attribute>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
 
@@ -162,17 +163,13 @@ public:
   rule() : parser_{std::make_shared<rule_pointer>()} {
   }
 
-  template <class RHS, class = std::enable_if_t<
-                         is_parser_v<std::decay_t<
-                           RHS>> && !detail::is_same_or_derived_v<rule, RHS>>>
-  rule(RHS&& rhs) : rule{} {
+  template <parser RHS>
+  requires(!detail::is_same_or_derived_v<rule, RHS>) rule(RHS&& rhs) : rule{} {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
-  template <class RHS>
-  auto operator=(RHS&& rhs) -> std::enable_if_t<
-    std::conjunction_v<is_parser<std::decay_t<RHS>>,
-                       std::negation<detail::is_same_or_derived<rule, RHS>>>> {
+  template <parser RHS>
+  requires(!detail::is_same_or_derived_v<rule, RHS>) auto operator=(RHS&& rhs) {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
@@ -192,7 +189,7 @@ private:
 
 /// A type-erased, non-owning reference to a parser.
 template <class Iterator, class Attribute = unused_type>
-class rule_ref : public parser<rule_ref<Iterator, Attribute>> {
+class rule_ref : public parser_base<rule_ref<Iterator, Attribute>> {
   using abstract_rule_type = detail::abstract_rule<Iterator, Attribute>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
 

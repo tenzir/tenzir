@@ -27,7 +27,7 @@ template <class, class>
 class guard_parser;
 
 template <class Derived>
-struct parser {
+struct parser_base {
   template <class Condition>
   auto when(Condition fun) const {
     return when_parser<Derived, Condition>{derived(), fun};
@@ -105,32 +105,21 @@ struct parser_registry;
 template <class T>
 using make_parser = typename parser_registry<T>::type;
 
-namespace detail {
-
-struct has_parser {
-  template <class T>
-  static auto test(T*) -> std::is_class<typename parser_registry<T>::type>;
-
-  template <class>
-  static auto test(...) -> std::false_type;
-};
-
-} // namespace detail
-
 /// Checks whether the parser registry has a given type registered.
 template <class T>
-constexpr bool has_parser_v
-  = decltype(detail::has_parser::test<T>(0))::value;
+concept has_parser_v = requires {
+  typename parser_registry<T>::type;
+};
 
 /// Checks whether a given type is-a parser, i.e., derived from ::vast::parser.
 template <class T>
-using is_parser = std::is_base_of<parser<T>, T>;
+using is_parser = std::is_base_of<parser_base<T>, T>;
 
 template <class T>
 using is_parser_t = typename is_parser<T>::type;
 
 template <class T>
-constexpr bool is_parser_v = std::is_base_of<parser<T>, T>::value;
+concept parser = is_parser<std::decay_t<T>>::value;
 
 } // namespace vast
 

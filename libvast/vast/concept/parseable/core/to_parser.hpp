@@ -28,15 +28,13 @@ inline auto to_parser(std::string str) {
 }
 
 template <class T>
-constexpr auto to_parser(T x)
-  -> std::enable_if_t<std::conjunction_v<std::is_arithmetic<T>,
-                                         std::negation<std::is_same<T, bool>>>,
-                      decltype(ignore(string_parser{""}))> {
+constexpr auto
+to_parser(T x) requires(std::is_arithmetic_v<T> and !std::is_same_v<T, bool>) {
   return ignore(parsers::str{std::to_string(x)});
 }
 
-template <class T>
-constexpr auto to_parser(T x) -> std::enable_if_t<is_parser_v<T>, T> {
+template <parser T>
+constexpr auto to_parser(T x) -> T {
   return x; // A good compiler will elide the copy.
 }
 
@@ -49,9 +47,9 @@ constexpr bool is_convertible_to_unary_parser_v
 
 template <class T, class U>
 constexpr bool is_convertible_to_binary_parser_v
-  = (is_parser_v<T> && is_parser_v<U>)
-    || (is_parser_v<T> && is_convertible_to_unary_parser_v<U>)
-    || (is_convertible_to_unary_parser_v<T> && is_parser_v<U>);
+  = (parser<T> && parser<U>)
+    || (parser<T> && is_convertible_to_unary_parser_v<U>)
+    || (is_convertible_to_unary_parser_v<T> && parser<U>);
 
 // clang-format off
 template <
@@ -61,13 +59,13 @@ template <
 >
 using make_binary_parser =
   std::conditional_t<
-    is_parser_v<T> && is_parser_v<U>,
+    parser<T> && parser<U>,
     BinaryParser<T, U>,
     std::conditional_t<
-      is_parser_v<T> && is_convertible_to_unary_parser_v<U>,
+      parser<T> && is_convertible_to_unary_parser_v<U>,
       BinaryParser<T, decltype(to_parser(std::declval<U>()))>,
       std::conditional_t<
-        is_convertible_to_unary_parser_v<T> && is_parser_v<U>,
+        is_convertible_to_unary_parser_v<T> && parser<U>,
         BinaryParser<decltype(to_parser(std::declval<T>())), U>,
         std::false_type
       >
@@ -76,10 +74,10 @@ using make_binary_parser =
 // clang-format on
 
 template <template <class, class> class BinaryParser, class T, class U>
-constexpr auto to_parser(T&& x, U&& y) -> std::enable_if_t<
-  is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>,
-  make_binary_parser<BinaryParser, decltype(to_parser(std::forward<T>(x))),
-                     decltype(to_parser(std::forward<U>(y)))>> {
+constexpr auto to_parser(T&& x, U&& y)
+  -> make_binary_parser<BinaryParser, decltype(to_parser(std::forward<T>(x))),
+                        decltype(to_parser(std::forward<U>(y)))>
+requires(is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>) {
   return {to_parser(std::forward<T>(x)), to_parser(std::forward<U>(y))};
 }
 

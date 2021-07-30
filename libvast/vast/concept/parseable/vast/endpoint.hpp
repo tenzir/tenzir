@@ -19,7 +19,7 @@
 
 namespace vast {
 
-struct endpoint_parser : parser<endpoint_parser> {
+struct endpoint_parser : parser_base<endpoint_parser> {
   using attribute = endpoint;
 
   template <class Iterator>

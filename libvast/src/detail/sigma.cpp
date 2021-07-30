@@ -36,7 +36,7 @@ using expression_map = std::map<std::string, expression>;
 /// syntax "1/all of X" where X can be "them", a search identifier, or a
 /// wildcard pattern. This parsers is effective a predicate operand in the
 /// "condition" field of the "detection" attribute.
-struct search_id_symbol_table : parser<search_id_symbol_table> {
+struct search_id_symbol_table : parser_base<search_id_symbol_table> {
   using attribute = expression;
 
   enum class quantifier { all, any };
@@ -111,7 +111,7 @@ struct search_id_symbol_table : parser<search_id_symbol_table> {
 
 /// Parses the "detection" attribute from a Sigma rule. See the Sigma wiki for
 /// details: https://github.com/Neo23x0/sigma/wiki/Specification#detection
-struct detection_parser : parser<detection_parser> {
+struct detection_parser : parser_base<detection_parser> {
   using attribute = expression;
 
   explicit detection_parser(const expression_map& exprs) : search_id{exprs} {

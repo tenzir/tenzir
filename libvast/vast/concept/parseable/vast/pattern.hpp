@@ -18,7 +18,8 @@ namespace vast {
 using pattern_parser = quoted_string_parser<'/', '\\'>;
 
 template <>
-struct access::parser<pattern> : vast::parser<access::parser<pattern>> {
+struct access::parser_base<pattern>
+  : vast::parser_base<access::parser_base<pattern>> {
   using attribute = pattern;
 
   template <class Iterator>
@@ -34,7 +35,7 @@ struct access::parser<pattern> : vast::parser<access::parser<pattern>> {
 
 template <>
 struct parser_registry<pattern> {
-  using type = access::parser<pattern>;
+  using type = access::parser_base<pattern>;
 };
 
 namespace parsers {

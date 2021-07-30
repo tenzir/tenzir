@@ -32,7 +32,7 @@ struct upper_class {};
 struct xdigit_class {};
 
 template <class CharClass>
-class char_class_parser : public parser<char_class_parser<CharClass>> {
+class char_class_parser : public parser_base<char_class_parser<CharClass>> {
 public:
   using attribute = char;
 

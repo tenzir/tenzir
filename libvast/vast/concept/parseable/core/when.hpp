@@ -13,7 +13,7 @@
 namespace vast {
 
 template <class Parser, class Condition>
-class when_parser : public parser<when_parser<Parser, Condition>> {
+class when_parser : public parser_base<when_parser<Parser, Condition>> {
 public:
   using attribute = typename Parser::attribute;
 

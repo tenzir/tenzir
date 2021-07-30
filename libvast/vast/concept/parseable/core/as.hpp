@@ -14,7 +14,7 @@ namespace vast {
 
 /// Casts a parser's attribute to a specific type.
 template <class Parser, class Attribute>
-class as_parser : public parser<as_parser<Parser, Attribute>> {
+class as_parser : public parser_base<as_parser<Parser, Attribute>> {
 public:
   using attribute = Attribute;
 
@@ -34,10 +34,8 @@ private:
   Parser parser_;
 };
 
-template <class Attribute, class Parser>
-constexpr auto as(Parser&& p)
-  -> std::enable_if_t<is_parser_v<std::decay_t<Parser>>,
-                      as_parser<std::decay_t<Parser>, Attribute>> {
+template <class Attribute, parser Parser>
+constexpr auto as(Parser&& p) -> as_parser<std::decay_t<Parser>, Attribute> {
   return as_parser<std::decay_t<Parser>, Attribute>{std::forward<Parser>(p)};
 }
 

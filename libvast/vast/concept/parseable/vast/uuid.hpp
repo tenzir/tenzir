@@ -16,7 +16,7 @@
 
 namespace vast {
 
-struct uuid_parser : parser<uuid_parser> {
+struct uuid_parser : parser_base<uuid_parser> {
   using attribute = uuid;
 
   template <class Iterator, class Attribute>

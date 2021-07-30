@@ -30,7 +30,7 @@ constexpr bool is_choice_parser_v = is_choice_parser<T>::value;
 
 /// Attempts to parse either LHS or RHS.
 template <class Lhs, class Rhs>
-class choice_parser : public parser<choice_parser<Lhs, Rhs>> {
+class choice_parser : public parser_base<choice_parser<Lhs, Rhs>> {
 private:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;

@@ -38,7 +38,7 @@ namespace vast::format::syslog {
 
 /// A parser that parses an optional value whose nullopt is presented as a dash.
 template <class Parser>
-struct maybe_nil_parser : parser<maybe_nil_parser<Parser>> {
+struct maybe_nil_parser : parser_base<maybe_nil_parser<Parser>> {
   using value_type = typename std::decay_t<Parser>::attribute;
   using attribute = std::conditional_t<detail::container<value_type>,
                                        value_type, std::optional<value_type>>;
@@ -80,7 +80,7 @@ struct header {
 
 /// Parser for Syslog message headers.
 /// @relates header
-struct header_parser : parser<header_parser> {
+struct header_parser : parser_base<header_parser> {
   using attribute = header;
 
   template <class Iterator, class Attribute>
@@ -119,7 +119,7 @@ using parameter = std::tuple<std::string, std::string>;
 
 /// Parser for one structured data element parameter.
 /// @relates parameter
-struct parameter_parser : parser<parameter_parser> {
+struct parameter_parser : parser_base<parameter_parser> {
   using attribute = parameter;
 
   template <class Iterator, class Attribute>
@@ -144,7 +144,7 @@ struct parameter_parser : parser<parameter_parser> {
 using parameters = vast::map;
 
 /// Parser for all structured data element parameters.
-struct parameters_parser : parser<parameters_parser> {
+struct parameters_parser : parser_base<parameters_parser> {
   using attribute = parameters;
 
   template <class Iterator, class Attribute>
@@ -165,7 +165,8 @@ using structured_data_element = std::tuple<std::string, parameters>;
 
 /// Parser for structured data elements.
 /// @relates structured_data_element
-struct structured_data_element_parser : parser<structured_data_element_parser> {
+struct structured_data_element_parser
+  : parser_base<structured_data_element_parser> {
   using attribute = structured_data_element;
 
   template <class Iterator, class Attribute>
@@ -191,7 +192,7 @@ using structured_data = vast::map;
 
 /// Parser for structured data of a Syslog message.
 /// @relates structured_data
-struct structured_data_parser : parser<structured_data_parser> {
+struct structured_data_parser : parser_base<structured_data_parser> {
   using attribute = structured_data;
 
   template <class Iterator, class Attribute>
@@ -214,7 +215,7 @@ using message_content = std::string;
 
 /// Parser for Syslog message content.
 /// @relates message_content
-struct message_content_parser : parser<message_content_parser> {
+struct message_content_parser : parser_base<message_content_parser> {
   using attribute = message_content;
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
@@ -234,7 +235,7 @@ struct message {
 
 /// Parser for Syslog messages.
 /// @relates message
-struct message_parser : parser<message_parser> {
+struct message_parser : parser_base<message_parser> {
   using attribute = message;
 
   template <class Iterator, class Attribute>

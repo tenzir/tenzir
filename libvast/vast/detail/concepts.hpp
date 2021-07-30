@@ -41,4 +41,7 @@ concept unsigned_integral = integral<T> && std::is_unsigned_v<T>;
 template <class T>
 concept signed_integral = integral<T> && std::is_signed_v<T>;
 
+template <class T>
+concept floating_point = std::is_floating_point_v<T>;
+
 } // namespace vast::detail

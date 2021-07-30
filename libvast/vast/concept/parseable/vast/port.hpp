@@ -14,7 +14,7 @@
 
 namespace vast {
 
-struct port_type_parser : parser<port_type_parser> {
+struct port_type_parser : parser_base<port_type_parser> {
   using attribute = port_type;
 
   template <class Iterator>
@@ -63,7 +63,7 @@ auto const port_type = port_type_parser{};
 
 } // namespace parsers
 
-struct port_parser : parser<port_parser> {
+struct port_parser : parser_base<port_parser> {
   using attribute = port;
 
   template <class Iterator, class Attribute>

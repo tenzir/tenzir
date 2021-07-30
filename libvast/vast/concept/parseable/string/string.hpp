@@ -14,7 +14,7 @@
 
 namespace vast {
 
-class string_parser : public parser<string_parser> {
+class string_parser : public parser_base<string_parser> {
 public:
   using attribute = std::string;
 

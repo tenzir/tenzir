@@ -13,7 +13,7 @@
 namespace vast {
 
 template <class Parser>
-class not_parser : public parser<not_parser<Parser>> {
+class not_parser : public parser_base<not_parser<Parser>> {
 public:
   using attribute = unused_type;
 

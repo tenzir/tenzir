@@ -15,7 +15,7 @@ namespace vast {
 
 /// Parses a single ASCII character in a given continguous range.
 template <char From, char To, char... Ranges>
-class char_range_parser : public parser<char_range_parser<From, To>> {
+class char_range_parser : public parser_base<char_range_parser<From, To>> {
 public:
   using attribute = char;
 

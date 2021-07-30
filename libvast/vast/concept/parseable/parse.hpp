@@ -15,17 +15,15 @@
 
 namespace vast {
 
-template <class Iterator, class T, class... Args>
-auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args)
-  -> std::enable_if_t<has_parser_v<T>, bool> {
+template <class Iterator, has_parser_v T, class... Args>
+auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args) -> bool {
   return make_parser<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
-template <class Iterator, class T, class... Args>
-auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args)
-  -> std::enable_if_t<!has_parser_v<T> && has_access_parser_v<T>,
-                      bool> {
-  return access::parser<T>{std::forward<Args>(args)...}(f, l, x);
+template <class Iterator, access_parser T, class... Args>
+requires(!has_parser_v<T>) auto parse(Iterator& f, const Iterator& l, T& x,
+                                      Args&&... args) -> bool {
+  return access::parser_base<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
 namespace detail {
@@ -42,31 +40,21 @@ bool conjunctive_parse(Iterator& f, const Iterator& l, T& x, Ts&... xs) {
 
 } // namespace detail
 
-template <class Iterator, class T>
-auto parse(Iterator& f, const Iterator& l, T& x)
-  -> std::enable_if_t<!has_parser_v<T> && has_access_state_v<T>, bool> {
+template <class Iterator, access_state T>
+requires(!has_parser_v<T>) auto parse(Iterator& f, const Iterator& l, T& x)
+  -> bool {
   bool r;
-  auto fun = [&](auto&... xs) { r = detail::conjunctive_parse(f, l, xs...); };
+  auto fun = [&](auto&... xs) {
+    r = detail::conjunctive_parse(f, l, xs...);
+  };
   access::state<T>::call(x, fun);
   return r;
 }
 
-namespace detail {
-
-struct is_parseable {
-  template <class I, class T>
-  static auto test(I* f, const I* l, T* x)
-    -> decltype(parse(*f, *l, *x), std::true_type());
-
-  template <class, class>
-  static auto test(...) -> std::false_type;
-};
-
-} // namespace detail
-
 template <class I, class T>
-constexpr bool is_parseable_v
-  = decltype(detail::is_parseable::test<I, T>(0, 0, 0))::value;
+concept parseable = requires(I first, I last, T& t) {
+  parse(first, last, t);
+};
 
 } // namespace vast
 

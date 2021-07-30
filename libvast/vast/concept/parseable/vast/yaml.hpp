@@ -14,7 +14,7 @@
 
 namespace vast {
 
-struct yaml_parser : parser<yaml_parser> {
+struct yaml_parser : parser_base<yaml_parser> {
   using attribute = data;
 
   template <class Iterator, class Attribute>

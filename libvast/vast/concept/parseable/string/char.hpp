@@ -15,7 +15,7 @@ namespace vast {
 
 /// Parses a single character.
 /// @see static_char_parser
-class dynamic_char_parser : public parser<dynamic_char_parser> {
+class dynamic_char_parser : public parser_base<dynamic_char_parser> {
 public:
   using attribute = char;
 
@@ -43,7 +43,7 @@ private:
 /// Parses a single character.
 /// @see dynamic_char_parser
 template <char Char>
-class static_char_parser : public parser<static_char_parser<Char>> {
+class static_char_parser : public parser_base<static_char_parser<Char>> {
 public:
   using attribute = char;
 

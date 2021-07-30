@@ -55,7 +55,7 @@ struct literal_bool_policy {
 } // namespace policy
 
 template <class Policy>
-struct bool_parser : parser<bool_parser<Policy>> {
+struct bool_parser : parser_base<bool_parser<Policy>> {
   using attribute = bool;
 
   template <class Iterator, class Attribute>

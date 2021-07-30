@@ -13,7 +13,7 @@
 namespace vast {
 
 template <class Lhs, class Rhs>
-class difference_parser : public parser<difference_parser<Lhs, Rhs>> {
+class difference_parser : public parser_base<difference_parser<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;

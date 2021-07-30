@@ -14,7 +14,7 @@
 
 namespace vast {
 
-class literal_parser : public parser<literal_parser> {
+class literal_parser : public parser_base<literal_parser> {
 public:
   using attribute = std::string_view;
 

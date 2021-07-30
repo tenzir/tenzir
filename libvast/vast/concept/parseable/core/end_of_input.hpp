@@ -13,7 +13,7 @@
 namespace vast {
 
 /// Matches the input when the input is exhausted.
-class end_of_input_parser : public parser<end_of_input_parser> {
+class end_of_input_parser : public parser_base<end_of_input_parser> {
 public:
   using attribute = unused_type;
 

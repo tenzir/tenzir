@@ -13,7 +13,7 @@
 
 namespace vast {
 
-struct predicate_parser : parser<predicate_parser> {
+struct predicate_parser : parser_base<predicate_parser> {
   using attribute = predicate;
 
   template <class Iterator>
@@ -34,7 +34,7 @@ static auto const predicate = make_parser<vast::predicate>();
 
 } // namespace parsers
 
-struct expression_parser : parser<expression_parser> {
+struct expression_parser : parser_base<expression_parser> {
   using attribute = expression;
 
   template <class Iterator, class Attribute>
