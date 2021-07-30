@@ -1,2 +1,2 @@
-pandas>=1
-pyarrow>=0.17,<5.0
+pandas >= 1
+pyarrow >= 0.16
