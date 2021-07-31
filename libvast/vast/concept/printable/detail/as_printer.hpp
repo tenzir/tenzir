@@ -36,8 +36,8 @@ constexpr auto as_printer(T x)
   return literal_printer{x};
 }
 
-template <class T>
-constexpr auto as_printer(T x) -> std::enable_if_t<is_printer_v<T>, T> {
+template <printer T>
+constexpr auto as_printer(T x) {
   return x; // A good compiler will elide the copy.
 }
 
@@ -53,9 +53,9 @@ constexpr bool is_convertible_to_unary_printer_v =
 template <class T, class U>
 using is_convertible_to_binary_printer =
   std::bool_constant<
-    (is_printer_v<T> && is_printer_v<U>)
-    || (is_printer_v<T> && is_convertible_to_unary_printer_v<U>)
-    || (is_convertible_to_unary_printer_v<T> && is_printer_v<U>)
+    ( printer<T> && printer<U>)
+    || ( printer<T> && is_convertible_to_unary_printer_v<U>)
+    || (is_convertible_to_unary_printer_v<T> && printer<U>)
   >;
 
 template <class T, class U>
@@ -69,33 +69,30 @@ template <
 >
 using make_binary_printer =
   std::conditional_t<
-    is_printer_v<T> && is_printer_v<U>,
+    printer<T> && printer<U>,
     Binaryprinter<T, U>,
     std::conditional_t<
-      is_printer_v<T> && is_convertible_to_unary_printer_v<U>,
+       printer<T> && is_convertible_to_unary_printer_v<U>,
       Binaryprinter<T, decltype(as_printer(std::declval<U>()))>,
       std::conditional_t<
-        is_convertible_to_unary_printer_v<T> && is_printer_v<U>,
+        is_convertible_to_unary_printer_v<T> && printer<U>,
         Binaryprinter<decltype(as_printer(std::declval<T>())), U>,
         std::false_type
       >
     >
   >;
 
+// Require that at least one of the arguments already is a printer (as opposed
+// to merely being convertible to a printer). This prevent statements like `1 << 4`
+// being parseable as a sequence printer of two literal printers.
 template <template <class, class> class Binaryprinter, class T, class U>
-std::enable_if_t<
-  // Require that at least one of the arguments already is a printer (as opposed
-  // to merely being convertible to a printer). This prevent statements like `1 << 4`
-  // being parseable as a sequence printer of two literal printers.
-  std::disjunction_v<
-    is_printer<std::decay_t<T>>,
-    is_printer<std::decay_t<U>>>,
+constexpr auto as_printer(T&& x, U&& y) ->
   make_binary_printer<
     Binaryprinter,
     decltype(as_printer(std::declval<T&>())),
     decltype(as_printer(std::declval<U&>()))>
->
-constexpr as_printer(T&& x, U&& y) {
+requires(printer<T> ||  printer<U>)
+{
   return {as_printer(std::forward<T>(x)), as_printer(std::forward<U>(y))};
 }
 

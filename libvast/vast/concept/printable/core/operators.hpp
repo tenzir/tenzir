@@ -43,44 +43,33 @@ class choice_printer;
 
 // -- unary ------------------------------------------------------------------
 
-template <class T>
-auto operator&(T&& x) -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
-                                          and_printer<std::decay_t<T>>> {
+template <printer T>
+auto operator&(T&& x) {
   return and_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator!(T&& x)
-  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
-                      not_printer<std::decay_t<T>>> {
+template <printer T>
+constexpr auto operator!(T&& x) {
   return not_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator-(T&& x)
-  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
-                      optional_printer<std::decay_t<T>>> {
+template <printer T>
+constexpr auto operator-(T&& x) {
   return optional_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator*(T&& x)
-  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
-                      kleene_printer<std::decay_t<T>>> {
+template <printer T>
+constexpr auto operator*(T&& x) {
   return kleene_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator+(T&& x)
-  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
-                      plus_printer<std::decay_t<T>>> {
+template <printer T>
+constexpr auto operator+(T&& x) {
   return plus_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
-template <class T>
-constexpr auto operator~(T&& x)
-  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
-                      maybe_printer<std::decay_t<T>>> {
+template <printer T>
+constexpr auto operator~(T&& x) {
   return maybe_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 

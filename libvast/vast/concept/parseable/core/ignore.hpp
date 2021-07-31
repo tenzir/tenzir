@@ -33,8 +33,8 @@ private:
 };
 
 template <parser Parser>
-constexpr auto ignore(Parser&& p) -> ignore_parser<std::decay_t<Parser>> {
-  return ignore_parser<std::decay_t<Parser>>{std::move(p)};
+constexpr auto ignore(Parser&& p) {
+  return ignore_parser<std::decay_t<Parser>>{std::forward<Parser>(p)};
 }
 
 } // namespace vast

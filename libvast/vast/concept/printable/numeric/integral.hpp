@@ -35,7 +35,14 @@ struct integral_printer : printer_base<integral_printer<T, Policy, MinDigits>> {
   template <class Iterator, class U>
   static void pad(Iterator& out, U x) {
     if (MinDigits > 0) {
-      int magnitude = x == 0 ? 0 : std::log10(x < 0 ? -x : x);
+      auto magnitude = [x]() -> int {
+        if (x == 0) {
+          return 0;
+        } else {
+          const auto value = x < 0 ? -x : x;
+          return std::log10(value);
+        }
+      }();
       for (auto i = 1; i < MinDigits - magnitude; ++i)
         *out++ = '0';
     }

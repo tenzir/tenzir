@@ -35,16 +35,18 @@ struct uri_parser : parser_base<uri_parser> {
       return detail::percent_unescape(str);
     };
     auto scheme_ignore_char = ':'_p | '/';
-    auto scheme = *(printable - scheme_ignore_char);
-    auto host = *(printable - scheme_ignore_char);
+    auto scheme = *(parsers::printable - scheme_ignore_char);
+    auto host = *(parsers::printable - scheme_ignore_char);
     auto port = u16;
     auto path_ignore_char = '/'_p | '?' | '#' | ' ';
-    auto path_segment = *(printable - path_ignore_char) ->* percent_unescape;
-    auto query_key = +(printable - '=') ->* percent_unescape;
+    auto path_segment
+      = *(parsers::printable - path_ignore_char)->*percent_unescape;
+    auto query_key = +(parsers::printable - '=')->*percent_unescape;
     auto query_ignore_char = '&'_p | '#' | ' ';
-    auto query_value = +(printable - query_ignore_char) ->* query_unescape;
+    auto query_value
+      = +(parsers::printable - query_ignore_char)->*query_unescape;
     auto query = query_key >> '=' >> query_value;
-    auto fragment = *(printable - ' ');
+    auto fragment = *(parsers::printable - ' ');
     auto uri
       =  ~(scheme >> ':')
       >> ~("//" >> host)
