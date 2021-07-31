@@ -16,7 +16,7 @@ namespace vast {
 
 using namespace std::string_literals;
 
-struct attribute_printer : printer<attribute_printer> {
+struct attribute_printer : printer_base<attribute_printer> {
   using attribute = vast::attribute;
 
   template <class Iterator>

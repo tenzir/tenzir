@@ -18,7 +18,7 @@ namespace vast {
 /// @tparam Guard A function that either takes no arguments or the attribute by
 ///               const-reference and returns `bool`.
 template <class Printer, class Guard>
-class guard_printer : public printer<guard_printer<Printer, Guard>> {
+class guard_printer : public printer_base<guard_printer<Printer, Guard>> {
 public:
   using attribute = typename Printer::attribute;
 

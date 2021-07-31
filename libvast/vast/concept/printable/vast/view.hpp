@@ -32,7 +32,7 @@ namespace vast {
 
 // -- printer implementations --------------------------------------------------
 
-struct string_view_printer : printer<string_view_printer> {
+struct string_view_printer : printer_base<string_view_printer> {
   using attribute = view<std::string>;
 
   template <class Iterator>
@@ -43,7 +43,7 @@ struct string_view_printer : printer<string_view_printer> {
   }
 };
 
-struct data_view_printer : printer<data_view_printer> {
+struct data_view_printer : printer_base<data_view_printer> {
   using attribute = view<data>;
 
   template <class Iterator>
@@ -58,7 +58,7 @@ struct data_view_printer : printer<data_view_printer> {
   }
 };
 
-struct pattern_view_printer : printer<pattern_view_printer> {
+struct pattern_view_printer : printer_base<pattern_view_printer> {
   using attribute = view<pattern>;
 
   template <class Iterator>
@@ -68,7 +68,7 @@ struct pattern_view_printer : printer<pattern_view_printer> {
   }
 };
 
-struct list_view_printer : printer<list_view_printer> {
+struct list_view_printer : printer_base<list_view_printer> {
   using attribute = view<list>;
 
   template <class Iterator>
@@ -80,7 +80,7 @@ struct list_view_printer : printer<list_view_printer> {
   }
 };
 
-struct map_view_printer : printer<map_view_printer> {
+struct map_view_printer : printer_base<map_view_printer> {
   using attribute = view<map>;
 
   template <class Iterator>
@@ -93,7 +93,7 @@ struct map_view_printer : printer<map_view_printer> {
   }
 };
 
-struct record_view_printer : printer<record_view_printer> {
+struct record_view_printer : printer_base<record_view_printer> {
   using attribute = view<record>;
 
   template <class Iterator>

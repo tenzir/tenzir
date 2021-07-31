@@ -22,7 +22,7 @@ struct rle {};
 } // namespace policy
 
 template <class T, class Policy = policy::expanded>
-struct bits_printer : printer<bits_printer<T , Policy>> {
+struct bits_printer : printer_base<bits_printer<T, Policy>> {
   using attribute = bits<T>;
   using word_type = typename bits<T>::word_type;
 

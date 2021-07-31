@@ -12,7 +12,7 @@
 
 namespace vast {
 
-class epsilon_printer : public printer<epsilon_printer> {
+class epsilon_printer : public printer_base<epsilon_printer> {
 public:
   using attribute = unused_type;
 

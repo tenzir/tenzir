@@ -18,7 +18,7 @@ namespace vast {
 
 template <>
 struct access::printer<vast::pattern>
-  : vast::printer<access::printer<vast::pattern>> {
+  : printer_base<access::printer<vast::pattern>> {
   using attribute = pattern;
 
   template <class Iterator>

@@ -16,7 +16,7 @@
 
 namespace vast {
 
-struct port_printer : vast::printer<port_printer> {
+struct port_printer : printer_base<port_printer> {
   using attribute = port;
 
   template <class Iterator>

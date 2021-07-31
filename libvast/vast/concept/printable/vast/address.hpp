@@ -20,7 +20,7 @@
 
 namespace vast {
 
-struct address_printer : vast::printer<address_printer> {
+struct address_printer : printer_base<address_printer> {
   using attribute = address;
 
   template <class Iterator>

@@ -16,7 +16,7 @@ namespace vast {
 
 /// Wraps a printer and ignores its attribute.
 template <class Printer>
-class ignore_printer : public printer<ignore_printer<Printer>> {
+class ignore_printer : public printer_base<ignore_printer<Printer>> {
 public:
   using attribute = unused_type;
 

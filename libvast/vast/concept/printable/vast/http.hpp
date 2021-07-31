@@ -19,7 +19,7 @@
 
 namespace vast {
 
-struct http_header_printer : printer<http_header_printer> {
+struct http_header_printer : printer_base<http_header_printer> {
   using attribute = http::header;
 
   template <class Iterator>
@@ -35,7 +35,7 @@ struct printer_registry<http::header> {
   using type = http_header_printer;
 };
 
-struct http_response_printer : printer<http::response> {
+struct http_response_printer : printer_base<http::response> {
   using attribute = http::response;
 
   template <class Iterator>

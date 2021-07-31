@@ -25,7 +25,7 @@ struct fixed {};
 } // namespace policy
 
 template <class Rep, class Period, class Policy = policy::adaptive>
-struct duration_printer : printer<duration_printer<Rep, Period, Policy>> {
+struct duration_printer : printer_base<duration_printer<Rep, Period, Policy>> {
   using attribute = std::chrono::duration<Rep, Period>;
 
   template <class To, class R, class P>
@@ -131,7 +131,7 @@ constexpr year_month_day from_days(days dp) noexcept {
 } // namespace
 
 template <class Clock, class Duration>
-struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
+struct time_point_printer : printer_base<time_point_printer<Clock, Duration>> {
   using attribute = std::chrono::time_point<Clock, Duration>;
 
   template <class Iterator>

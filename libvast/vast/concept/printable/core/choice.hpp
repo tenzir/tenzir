@@ -29,7 +29,7 @@ constexpr bool is_choice_printer_v = is_choice_printer<T>::value;
 
 /// Attempts to print either LHS or RHS.
 template <class Lhs, class Rhs>
-class choice_printer : public printer<choice_printer<Lhs, Rhs>> {
+class choice_printer : public printer_base<choice_printer<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;

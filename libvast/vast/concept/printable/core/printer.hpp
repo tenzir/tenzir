@@ -23,7 +23,7 @@ template <class, class>
 class guard_printer;
 
 template <class Derived>
-struct printer {
+struct printer_base {
   template <class Action>
   [[nodiscard]] auto before(Action fun) const {
     return action_printer<Derived, Action>{derived(), fun};
@@ -104,7 +104,7 @@ constexpr bool has_printer_v
 /// Checks whether a given type is-a printer, i.e., derived from
 /// ::vast::printer.
 template <class T>
-using is_printer = std::is_base_of<printer<T>, T>;
+using is_printer = std::is_base_of<printer_base<T>, T>;
 
 template <class T>
 constexpr bool is_printer_v = is_printer<T>::value;

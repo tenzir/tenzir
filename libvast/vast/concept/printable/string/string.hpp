@@ -13,7 +13,7 @@
 
 namespace vast {
 
-struct string_printer : printer<string_printer> {
+struct string_printer : printer_base<string_printer> {
   using attribute = std::string_view;
 
   template <class Iterator>

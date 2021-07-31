@@ -16,7 +16,7 @@
 
 namespace vast {
 
-struct schema_printer : printer<schema_printer> {
+struct schema_printer : printer_base<schema_printer> {
   using attribute = schema;
 
   template <class Iterator>

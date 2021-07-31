@@ -15,7 +15,7 @@
 namespace vast {
 
 template <char... Chars>
-struct char_printer : printer<char_printer<Chars...>> {
+struct char_printer : printer_base<char_printer<Chars...>> {
   using attribute = unused_type;
 
   static constexpr std::array<char, sizeof...(Chars)> chars = {{Chars...}};

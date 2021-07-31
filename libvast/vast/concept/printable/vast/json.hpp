@@ -36,8 +36,7 @@ struct human_readable_durations {};
 template <class TreePolicy, class DurationPolicy, int Indent = 2,
           int Padding = 0>
 struct json_printer
-  : printer<json_printer<TreePolicy, DurationPolicy, Indent, Padding>> {
-
+  : printer_base<json_printer<TreePolicy, DurationPolicy, Indent, Padding>> {
   inline static constexpr bool tree = std::is_same_v<TreePolicy, policy::tree>;
   inline static constexpr bool human_readable_durations
     = std::is_same_v<DurationPolicy, policy::human_readable_durations>;

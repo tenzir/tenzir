@@ -17,7 +17,8 @@
 namespace vast {
 
 template <class Bitmap, class Policy = policy::expanded>
-struct vector_coder_printer : printer<vector_coder_printer<Bitmap, Policy>> {
+struct vector_coder_printer
+  : printer_base<vector_coder_printer<Bitmap, Policy>> {
   using attribute = vector_coder<Bitmap>;
 
   template <class Iterator, class Coder>

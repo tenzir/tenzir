@@ -26,7 +26,7 @@
 
 namespace vast {
 
-struct data_printer : printer<data_printer> {
+struct data_printer : printer_base<data_printer> {
   using attribute = data;
 
   template <class Iterator>
@@ -55,7 +55,7 @@ namespace printers {
   auto const data = data_printer{};
 } // namespace printers
 
-struct vast_list_printer : printer<vast_list_printer> {
+struct vast_list_printer : printer_base<vast_list_printer> {
   using attribute = list;
 
   template <class Iterator>
@@ -70,7 +70,7 @@ struct printer_registry<list> {
   using type = vast_list_printer;
 };
 
-struct map_printer : printer<map_printer> {
+struct map_printer : printer_base<map_printer> {
   using attribute = map;
 
   template <class Iterator>
@@ -88,7 +88,7 @@ struct printer_registry<map> {
   using type = map_printer;
 };
 
-struct record_printer : printer<record_printer> {
+struct record_printer : printer_base<record_printer> {
   using attribute = record;
 
   template <class Iterator>

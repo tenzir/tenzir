@@ -14,7 +14,7 @@
 
 namespace vast {
 
-struct error_printer : printer<error_printer> {
+struct error_printer : printer_base<error_printer> {
   using attribute = caf::error;
 
   template <class Iterator>

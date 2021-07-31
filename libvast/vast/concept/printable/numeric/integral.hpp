@@ -29,7 +29,7 @@ struct force_sign;
 } // namespace policy
 
 template <concepts::integral T, class Policy = policy::plain, int MinDigits = 0>
-struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
+struct integral_printer : printer_base<integral_printer<T, Policy, MinDigits>> {
   using attribute = T;
 
   template <class Iterator, class U>

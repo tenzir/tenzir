@@ -18,7 +18,7 @@
 
 namespace vast {
 
-struct uuid_printer : vast::printer<uuid_printer> {
+struct uuid_printer : printer_base<uuid_printer> {
   using attribute = uuid;
 
   static constexpr auto hexbyte = printers::any << printers::any;

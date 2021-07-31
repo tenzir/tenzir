@@ -15,7 +15,7 @@ namespace vast {
 /// Like ::optional_printer, but exposes `T` instead of `optional<T>` as
 /// attribute.
 template <class Printer>
-class maybe_printer : public printer<maybe_printer<Printer>> {
+class maybe_printer : public printer_base<maybe_printer<Printer>> {
 public:
   using attribute = typename Printer::attribute;
 

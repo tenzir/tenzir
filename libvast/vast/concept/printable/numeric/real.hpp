@@ -19,7 +19,7 @@
 namespace vast {
 
 template <class T, int MaxDigits = 10, int MinDigits = 0>
-struct real_printer : printer<real_printer<T, MaxDigits, MinDigits>> {
+struct real_printer : printer_base<real_printer<T, MaxDigits, MinDigits>> {
   static_assert(std::is_floating_point<T>{}, "T must be a floating point type");
 
   using attribute = T;
