@@ -426,6 +426,13 @@ type suricata.nfs = suricata.component.common + record {
   }
 }
 
+type suricata.packet = suricata.component.common + record {
+  packet: string,
+  packet_info: record {
+    linktype: count
+  }
+}
+
 type suricata.rdp = suricata.component.common + record {
   rdp: record {
     tx_id: count,
