@@ -3,6 +3,7 @@ let
   inherit (final) lib;
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if prev.stdenv.isDarwin then final.llvmPackages_12.stdenv else prev.gcc11Stdenv;
+  isCompatible = final.stdenv.hostPlatform.system == final.stdenv.buildPlatform.system;
 in {
   musl = prev.musl.overrideAttrs (old: {
     CFLAGS = old.CFLAGS ++ [ "-fno-omit-frame-pointer" ];
@@ -71,7 +72,23 @@ in {
   });
   zeek-broker = final.callPackage ./zeek-broker {inherit stdenv;};
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
-  vast = final.callPackage ./vast {inherit stdenv;};
+  vast = (final.callPackage ./vast {inherit stdenv; }).overrideDerivation (old: rec {
+    # `stdenv.mkDerivation` disables checks when buildPlatform and hostPlatform
+    # differ, but we can run ISA/SYSCALL compatible binaries no problem.
+    doCheck = isCompatible;
+    doInstallCheck = isCompatible;
+    nativeBuildInputs = let
+      py3 = final.buildPackages.python3.withPackages(ps: with ps; [
+        coloredlogs
+        jsondiff
+        pyarrow
+        pyyaml
+        schema
+      ]);
+    in old.nativeBuildInputs
+      ++ lib.optionals doCheck (old.checkInputs or [])
+      ++ lib.optionals doInstallCheck (with final.buildPackages; [ py3 jq tcpdump ]);
+  });
   vast-ci = final.vast.override {
     buildType = "CI";
     arrow-cpp = final.arrow-cpp-no-simd;

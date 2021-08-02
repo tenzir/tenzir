@@ -19,41 +19,15 @@
 , jemalloc
 , libunwind
 , zeek-broker
-, python3
-, jq
-, tcpdump
-, utillinux
 , versionOverride ? null
 , withPlugins ? []
 , extraCmakeFlags ? []
-, disableTests ? true
+, disableTests ? false
 , buildType ? "Release"
 }:
 let
   inherit (stdenv.hostPlatform) isStatic;
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
-
-  py3 = (let
-    python = let
-      packageOverrides = final: prev: {
-        # See https://github.com/NixOS/nixpkgs/pull/96037
-        coloredlogs = prev.coloredlogs.overridePythonAttrs (old: rec {
-          doCheck = !stdenv.isDarwin;
-          checkInputs = with prev; [ pytest mock utillinux verboselogs capturer ];
-          pythonImportsCheck = [ "coloredlogs" ];
-
-          propagatedBuildInputs = [ prev.humanfriendly ];
-        });
-      };
-    in python3.override {inherit packageOverrides; self = python;};
-
-  in python.withPackages(ps: with ps; [
-    coloredlogs
-    jsondiff
-    pyarrow
-    pyyaml
-    schema
-  ]));
 
   src = vast-source;
 
@@ -108,13 +82,21 @@ stdenv.mkDerivation rec {
 
   hardeningDisable = lib.optional isStatic "pic";
 
-  doCheck = false;
+  doCheck = true;
+  # Concurrent testing is not possible because multiple suites reuse the same
+  # file paths.
+  enableParallelChecking = false;
+  preCheck = ''
+    export LD_LIBRARY_PATH=$PWD/libvast
+    export DYLD_LIBRARY_PATH=$PWD/libvast
+  '';
   checkTarget = "test";
 
   dontStrip = true;
 
   doInstallCheck = true;
-  installCheckInputs = [ py3 jq tcpdump ];
+  # We add those with an `overrideDerivation` in `overlay.nix`.
+  # installCheckInputs = [ py3 jq tcpdump ];
   installCheckPhase = ''
     python ../vast/integration/integration.py --app ${placeholder "out"}/bin/vast
   '';
