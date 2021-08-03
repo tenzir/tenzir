@@ -31,8 +31,14 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
-    auto segments_dir = directory / "segments";
-    store = segment_store::make(segments_dir, 512_KiB, 2);
+    create_directories(segments_dir);
+    // Create an empty segment.
+    std::ofstream{this->empty};
+    // Create an invalid segment.
+    auto invalid = std::ofstream{this->invalid};
+    invalid << "invalid segment";
+    // Initialize the store.
+    store = segment_store::make(directory, 512_KiB, 2);
     if (store == nullptr)
       FAIL("segment_store::make failed to allocate a segment store");
     segment_path = store->segment_path();
@@ -49,29 +55,31 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   /// @returns all segment files of the segment stores.
-  auto segment_files() {
+  auto segment_files() const {
     std::vector<std::filesystem::path> result;
     std::error_code err{};
     auto dir = std::filesystem::directory_iterator{segment_path, err};
     if (!err) {
       std::copy_if(std::filesystem::begin(dir), std::filesystem::end(dir),
-                   std::back_inserter(result),
-                   [&](const auto& entry) { return entry.is_regular_file(); });
+                   std::back_inserter(result), [&](const auto& entry) {
+                     return entry.is_regular_file() && entry.path() != empty
+                            && entry.path() != invalid;
+                   });
     }
     return result;
   }
 
   /// Pushes all slices into the store. The slices will usually remain in the
   /// segment builder.
-  void put(const std::vector<table_slice>& slices) {
-    for (auto& slice : slices)
+  void put(const std::vector<table_slice>& slices) const {
+    for (const auto& slice : slices)
       if (auto err = store->put(slice))
         FAIL("store->put failed: " << err);
   }
 
   /// Pushes all slices into the store and makes sure the resulting segment
   /// gets flushed to disk but remains "hot", i.e., stays in the cache.
-  void put_hot(const std::vector<table_slice>& slices) {
+  void put_hot(const std::vector<table_slice>& slices) const {
     put(slices);
     auto segment_id = store->active_id();
     auto files_before = segment_files().size();
@@ -87,7 +95,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// Pushes all slices into the store and makes sure the resulting segment
   /// gets flushed to disk without remaining in the cache.
-  void put_cold(const std::vector<table_slice>& slices) {
+  void put_cold(const std::vector<table_slice>& slices) const {
     put(slices);
     auto segment_id = store->active_id();
     auto files_before = segment_files().size();
@@ -102,14 +110,20 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       FAIL("calling clear_cache() had no effect on store");
   }
 
-  auto get(ids selection) {
+  auto get(const ids& selection) const {
     return unbox(store->get(selection));
   }
 
-  auto erase(ids selection) {
+  auto erase(const ids& selection) const {
     if (auto err = store->erase(selection))
       FAIL("store->erase failed: " << err);
   }
+
+  std::filesystem::path segments_dir = directory / "segments";
+  std::filesystem::path empty
+    = segments_dir / "deadbeef-0000-0000-0000-000000000000";
+  std::filesystem::path invalid
+    = segments_dir / "deadbeef-0000-0000-0000-000000000001";
 
   segment_store_ptr store;
 
@@ -120,7 +134,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 template <class Container>
 bool deep_compare(const Container& xs, const Container& ys) {
-  auto cmp = [](auto& x, auto& y) { return x == y; };
+  auto cmp = [](auto& x, auto& y) {
+    return x == y;
+  };
   return xs.size() == ys.size()
          && std::equal(xs.begin(), xs.end(), ys.begin(), cmp);
 }
@@ -152,8 +168,7 @@ TEST(flushing filled store) {
   auto err = store->flush();
   CHECK_EQUAL(err, caf::none);
   CHECK_EQUAL(store->dirty(), false);
-  std::vector expected_files{directory / "segments" / "segments"
-                             / to_string(active)};
+  std::vector expected_files{segments_dir / to_string(active)};
   CHECK_EQUAL(segment_files(), expected_files);
 }
 
