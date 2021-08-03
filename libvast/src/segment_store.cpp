@@ -76,7 +76,7 @@ segment_store::lookup::handle_segment() {
 }
 
 // TODO: return expected<segment_store_ptr> for better error propagation.
-segment_store_ptr
+caf::expected<segment_store_ptr>
 segment_store::make(std::filesystem::path dir, size_t max_segment_size,
                     size_t in_memory_segments) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(dir), VAST_ARG(max_segment_size),
@@ -85,7 +85,7 @@ segment_store::make(std::filesystem::path dir, size_t max_segment_size,
   auto result = segment_store_ptr{
     new segment_store{std::move(dir), max_segment_size, in_memory_segments}};
   if (auto err = result->register_segments())
-    return nullptr;
+    return err;
   return result;
 }
 
@@ -142,7 +142,9 @@ caf::error segment_store::erase(const ids& xs) {
     return err;
   if (candidates.empty())
     return caf::none;
-  auto is_subset_of_xs = [&](const ids& ys) { return is_subset(ys, xs); };
+  auto is_subset_of_xs = [&](const ids& ys) {
+    return is_subset(ys, xs);
+  };
   // Counts number of total erased events for user-facing output.
   uint64_t erased_events = 0;
   // Implements the body of the for-loop below. This lambda must be generic,
@@ -372,7 +374,8 @@ caf::error segment_store::register_segments() {
   for (const auto& entry : dir)
     if (entry.exists())
       if (auto err = register_segment(entry.path()))
-        return err;
+        VAST_ERROR("{} failed to register segment at {}",
+                   detail::pretty_type_name(this), entry.path());
   return caf::none;
 }
 
@@ -427,7 +430,9 @@ caf::error segment_store::select_segments(const ids& selection,
                                           std::vector<uuid>& candidates) const {
   VAST_DEBUG("{} retrieves table slices with requested ids",
              detail::pretty_type_name(this));
-  auto f = [](auto x) { return std::pair{x.left, x.right}; };
+  auto f = [](auto x) {
+    return std::pair{x.left, x.right};
+  };
   auto g = [&](auto x) {
     auto id = x.value;
     if (candidates.empty() || candidates.back() != id)

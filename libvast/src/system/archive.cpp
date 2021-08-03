@@ -118,7 +118,14 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                "size of {} and {} segments in memory",
                self, dir, max_segment_size, capacity);
   self->state.self = self;
-  self->state.store = segment_store::make(dir, max_segment_size, capacity);
+  if (auto store = segment_store::make(dir, max_segment_size, capacity)) {
+    self->state.store = std::move(*store);
+  } else {
+    VAST_ERROR("{} failed to load index state from disk: {}", self,
+               render(store.error()));
+    self->quit(store.error());
+    return archive_actor::behavior_type::make_empty_behavior();
+  }
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);

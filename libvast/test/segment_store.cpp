@@ -38,8 +38,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto invalid = std::ofstream{this->invalid};
     invalid << "invalid segment";
     // Initialize the store.
-    store = segment_store::make(directory, 512_KiB, 2);
-    if (store == nullptr)
+    if (auto store = segment_store::make(directory, 513_KiB, 2))
+      this->store = std::move(*store);
+    else
       FAIL("segment_store::make failed to allocate a segment store");
     segment_path = store->segment_path();
     // Approximates an ID range for [0, max_id) with 100, because
