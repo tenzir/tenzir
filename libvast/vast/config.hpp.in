@@ -114,5 +114,3 @@ extern const char* build_tree_hash;
 #  define VAST_POSIX 0
 #endif
 
-// Convenience macros
-#define VAST_IGNORE_UNUSED(x) CAF_IGNORE_UNUSED(x)
