@@ -11,6 +11,7 @@
 #include "vast/concept/parseable/core.hpp"
 #include "vast/detail/coding.hpp"
 
+#include <cctype>
 #include <cstdint>
 
 namespace vast {
@@ -46,7 +47,7 @@ struct integral_parser
     if constexpr (Radix == 10)
       return c >= '0' && c <= '9';
     else if constexpr (Radix == 16)
-      return std::isxdigit(c);
+      return std::isxdigit(static_cast<unsigned char>(c)) != 0;
     else
       static_assert(detail::always_false_v<decltype(Radix)>, "unsupported "
                                                              "radix");
