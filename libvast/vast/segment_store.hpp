@@ -60,7 +60,7 @@ public:
   /// @param max_segment_size The maximum segment size in bytes.
   /// @param in_memory_segments The number of semgents to cache in memory.
   /// @pre `max_segment_size > 0`
-  static segment_store_ptr
+  static caf::expected<segment_store_ptr>
   make(std::filesystem::path dir, size_t max_segment_size,
        size_t in_memory_segments);
 
