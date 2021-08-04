@@ -105,9 +105,8 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
   decrement_pending();
 }
 
-void evaluator_state::handle_missing_result(const offset& position,
-                                            const caf::error& err) {
-  VAST_IGNORE_UNUSED(err);
+void evaluator_state::handle_missing_result(
+  const offset& position, [[maybe_unused]] const caf::error& err) {
   VAST_WARN("{} received {} instead of a result for predicate at "
             "position {}",
             self, render(err), position);
