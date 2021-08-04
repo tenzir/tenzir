@@ -75,7 +75,6 @@ segment_store::lookup::handle_segment() {
   return s->lookup(xs_);
 }
 
-// TODO: return expected<segment_store_ptr> for better error propagation.
 caf::expected<segment_store_ptr>
 segment_store::make(std::filesystem::path dir, size_t max_segment_size,
                     size_t in_memory_segments) {
