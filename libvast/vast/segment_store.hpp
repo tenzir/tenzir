@@ -16,11 +16,6 @@
 #include "vast/segment_builder.hpp"
 #include "vast/uuid.hpp"
 
-// std::vector<table_slice> needs the definition on older versions of libstdc++.
-#if VAST_GCC && __GNUC__ <= 8
-#  include "vast/table_slice.hpp"
-#endif
-
 #include <filesystem>
 
 namespace vast {
