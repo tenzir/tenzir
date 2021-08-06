@@ -12,6 +12,7 @@
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/string/any.hpp"
+#include "vast/concepts.hpp"
 
 namespace vast {
 namespace policy {
@@ -26,9 +27,8 @@ struct bits_printer : printer_base<bits_printer<T, Policy>> {
   using attribute = bits<T>;
   using word_type = typename bits<T>::word_type;
 
-  template <class Iterator, class P = Policy>
-  auto print(Iterator& out, const bits<T>& b) const
-  -> std::enable_if_t<std::is_same_v<P, policy::rle>, bool> {
+  template <class Iterator, concepts::same_as<policy::rle> P = Policy>
+  auto print(Iterator& out, const bits<T>& b) const -> bool {
     auto print_run = [&](auto bit, auto length) {
       using size_type = typename word_type::size_type;
       return printers::integral<size_type>(out, length) &&
@@ -57,9 +57,8 @@ struct bits_printer : printer_base<bits_printer<T, Policy>> {
     return true;
   }
 
-  template <class Iterator, class P = Policy>
-  auto print(Iterator& out, const bits<T>& b) const
-  -> std::enable_if_t<std::is_same_v<P, policy::expanded>, bool> {
+  template <class Iterator, concepts::same_as<policy::expanded> P = Policy>
+  auto print(Iterator& out, const bits<T>& b) const -> bool {
     if (b.size() > word_type::width) {
       auto c = b.data() ? '1' : '0';
       for (auto i = 0u; i < b.size(); ++i)

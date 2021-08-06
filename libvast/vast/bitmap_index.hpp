@@ -42,10 +42,8 @@ public:
 
   bitmap_index() = default;
 
-  template <
-    class... Ts,
-    class = std::enable_if_t<std::is_constructible<coder_type, Ts...>{}>
-  >
+  template <class... Ts>
+    requires(std::is_constructible_v<coder_type, Ts...>)
   explicit bitmap_index(Ts&&... xs) : coder_(std::forward<Ts>(xs)...) {
     // nop
   }
@@ -131,20 +129,16 @@ public:
 
 private:
   template <class U, class B>
-  using is_shiftable = std::bool_constant<(detail::is_precision_binner<B>{}
-                                           || detail::is_decimal_binner<B>{})
-                                          && std::is_floating_point<U>{}>;
+  static constexpr bool shiftable
+    = (detail::is_precision_binner<B>{} || detail::is_decimal_binner<B>{})
+      && std::is_floating_point_v<U>;
 
   template <class U, class B = binner_type>
-  static auto transform(U x)
-  -> std::enable_if_t<is_shiftable<U, B>{}, detail::ordered_type<U>> {
-    return detail::order(x) >> (52 - B::digits2);
-  }
-
-  template <class U, class B = binner_type>
-  static auto transform(U x)
-  -> std::enable_if_t<!is_shiftable<U, B>{}, detail::ordered_type<T>> {
-    return detail::order(x);
+  static auto transform(U x) -> detail::ordered_type<U> {
+    if constexpr (shiftable<U, B>)
+      return detail::order(x) >> (52 - B::digits2);
+    else
+      return detail::order(x);
   }
 
   coder_type coder_;

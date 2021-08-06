@@ -77,10 +77,9 @@ public:
   /// *as_bytes* exists for the buffer. This is intended to guard against
   /// accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
-  template <class Buffer,
-            class = std::enable_if_t<std::negation_v<
-              std::disjunction<std::is_lvalue_reference<Buffer>,
-                               std::is_trivially_move_assignable<Buffer>>>>>
+  template <class Buffer>
+    requires(!(std::is_lvalue_reference_v<
+                 Buffer> || std::is_trivially_move_assignable_v<Buffer>))
   static auto make(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
     const auto view = as_bytes(buffer);
     return make(view, [buffer = std::exchange(buffer, {})]() noexcept {

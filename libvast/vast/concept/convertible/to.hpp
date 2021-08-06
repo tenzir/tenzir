@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/concept/convertible/is_convertible.hpp"
+#include "vast/concepts.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 
@@ -24,9 +25,8 @@ namespace vast {
 /// @param from The instance to convert.
 /// @returns *from* converted to `T`.
 template <class To, class From, class... Opts>
-auto to(From&& from, Opts&&... opts)
-  -> std::enable_if_t<is_convertible<std::decay_t<From>, To>{},
-                      caf::expected<To>> {
+  requires(convertible<std::decay_t<From>, To>)
+auto to(From&& from, Opts&&... opts) -> caf::expected<To> {
   using return_type
     = decltype(convert(from, std::declval<To&>(), std::forward<Opts>(opts)...));
   if constexpr (std::is_same_v<return_type, bool>) {
@@ -45,10 +45,9 @@ auto to(From&& from, Opts&&... opts)
 }
 
 template <class To, class From, class... Opts>
-auto to_string(From&& from, Opts&&... opts)
-  -> std::enable_if_t<std::conjunction_v<std::is_same<To, std::string>,
-                                         is_convertible<std::decay_t<From>, To>>,
-                      To> {
+  requires(
+    concepts::same_as<To, std::string>&& convertible<std::decay_t<From>, To>)
+auto to_string(From&& from, Opts&&... opts) -> To {
   std::string str;
   if (convert(from, str, std::forward<Opts>(opts)...))
     return str;

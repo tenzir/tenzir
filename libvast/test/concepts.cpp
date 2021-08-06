@@ -102,3 +102,23 @@ TEST(monoid) {
   static_assert(vast::concepts::monoid<monoid_free>);
   static_assert(!vast::concepts::monoid<monoid_bad>);
 }
+
+TEST(sameish) {
+  static_assert(vast::concepts::sameish<int, int&>);
+  static_assert(vast::concepts::sameish<int&, int>);
+  static_assert(vast::concepts::sameish<const int, int>);
+  static_assert(vast::concepts::sameish<int, int&>);
+  static_assert(vast::concepts::sameish<int, const int&>);
+  static_assert(vast::concepts::sameish<const int&, int>);
+  static_assert(vast::concepts::sameish<const int&, int&>);
+  static_assert(!vast::concepts::sameish<int, bool>);
+}
+
+TEST(different) {
+  static_assert(vast::concepts::different<int, bool>);
+  static_assert(!vast::concepts::different<int, int>);
+  static_assert(vast::concepts::different<int&, int>);
+  static_assert(vast::concepts::different<int, int&>);
+  static_assert(vast::concepts::different<int, const int>);
+  static_assert(vast::concepts::different<const int, int>);
+}

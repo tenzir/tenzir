@@ -10,8 +10,10 @@
 
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/literal.hpp"
+#include "vast/concepts.hpp"
 
 #include <string>
+#include <type_traits>
 
 namespace vast {
 namespace detail {
@@ -29,10 +31,8 @@ inline auto as_printer(std::string str) {
 }
 
 template <class T>
-constexpr auto as_printer(T x)
-  -> std::enable_if_t<std::conjunction_v<std::is_arithmetic<T>,
-                                         std::negation<std::is_same<T, bool>>>,
-                      literal_printer> {
+  requires(std::is_arithmetic_v<T>&& concepts::different<T, bool>)
+auto as_printer(T x) -> literal_printer {
   return literal_printer{x};
 }
 

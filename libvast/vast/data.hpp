@@ -12,6 +12,7 @@
 #include "vast/aliases.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concepts.hpp"
 #include "vast/data/integer.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
@@ -137,8 +138,8 @@ public:
 
   /// Constructs data.
   /// @param x The instance to construct data from.
-  template <class T, class = std::enable_if_t<!std::is_same_v<
-                       to_data_type<T>, detail::invalid_data_type>>>
+  template <class T>
+    requires(concepts::different<to_data_type<T>, detail::invalid_data_type>)
   data(T&& x) : data_{to_data_type<T>(std::forward<T>(x))} {
     // nop
   }
