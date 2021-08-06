@@ -38,6 +38,11 @@
 ///
 /// If a member of `out` is missing in `in`, the value does not get overwritten,
 /// Similarly, data in `in` that does not match `out` is ignored.
+///
+/// A special overload that can turn a list of records into a key-value map
+/// requires that one of the fields in the accompanying record_type has the
+/// "key" attribute. This field will then be used as the key in the target
+/// map.
 /// NOTE: The overload for `data` is defined last for reasons explained there.
 
 namespace vast {
