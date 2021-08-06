@@ -139,13 +139,8 @@ caf::error uds_datagram_sender::send(std::span<char> data) {
   return caf::none;
 }
 
-VAST_DIAGNOSTIC_PUSH
-#if VAST_GCC
-#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-
 int uds_connect(const std::string& path, socket_type type) {
-  int fd;
+  int fd{};
   switch (type) {
     case socket_type::stream:
     case socket_type::fd:
@@ -179,8 +174,6 @@ int uds_connect(const std::string& path, socket_type type) {
   }
   return fd;
 }
-
-VAST_DIAGNOSTIC_POP
 
 // On Mac OS, CMSG_SPACE is for some reason not a constant expression.
 VAST_DIAGNOSTIC_PUSH
