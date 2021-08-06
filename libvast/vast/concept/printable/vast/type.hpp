@@ -25,7 +25,7 @@ auto make_attr_printer(const T& x) {
 
 } // namespace detail
 
-struct enumeration_type_printer : printer<enumeration_type_printer> {
+struct enumeration_type_printer : printer_base<enumeration_type_printer> {
   using attribute = enumeration_type;
 
   template <class Iterator>
@@ -44,7 +44,7 @@ struct printer_registry<enumeration_type> {
 };
 
 #define VAST_DEFINE_BASIC_TYPE_PRINTER(TYPE, DESC)                             \
-  struct TYPE##_printer : printer<TYPE##_printer> {                            \
+  struct TYPE##_printer : printer_base<TYPE##_printer> {                       \
     using attribute = TYPE;                                                    \
                                                                                \
     template <class Iterator>                                                  \
@@ -76,7 +76,7 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(subnet_type, "subnet")
 
 // For the implementation, see below. (Must come after type due to recursion.)
 #define VAST_DECLARE_TYPE_PRINTER(TYPE)                                        \
-  struct TYPE##_printer : printer<TYPE##_printer> {                            \
+  struct TYPE##_printer : printer_base<TYPE##_printer> {                       \
     using attribute = TYPE;                                                    \
                                                                                \
     template <class Iterator>                                                  \
@@ -103,7 +103,7 @@ struct type_only {};
 } // namespace policy
 
 template <class Policy>
-struct type_printer : printer<type_printer<Policy>> {
+struct type_printer : printer_base<type_printer<Policy>> {
   using attribute = type;
 
   constexpr static bool show_name
@@ -182,7 +182,7 @@ bool map_type_printer::print(Iterator& out, const map_type& t) const {
   return (p << a)(out, t.key_type, t.value_type, t.attributes());
 }
 
-struct record_field_printer : printer<record_field_printer> {
+struct record_field_printer : printer_base<record_field_printer> {
   using attribute = record_field;
 
   template <class Iterator>

@@ -15,7 +15,7 @@
 
 namespace vast {
 
-struct none_printer : printer<none_printer> {
+struct none_printer : printer_base<none_printer> {
   using attribute = caf::none_t;
 
   template <class Iterator>

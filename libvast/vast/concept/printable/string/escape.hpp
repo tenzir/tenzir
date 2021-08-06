@@ -15,7 +15,7 @@
 namespace vast {
 
 template <class Escaper>
-struct escape_printer : printer<escape_printer<Escaper>> {
+struct escape_printer : printer_base<escape_printer<Escaper>> {
   using attribute = std::string_view;
 
   explicit escape_printer(Escaper f) : escaper{f} {

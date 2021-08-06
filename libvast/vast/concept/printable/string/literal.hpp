@@ -15,7 +15,7 @@
 
 namespace vast {
 
-class literal_printer : public printer<literal_printer> {
+class literal_printer : public printer_base<literal_printer> {
   template <class T>
   using enable_if_non_fp_arithmetic = std::enable_if_t<std::conjunction_v<
     std::is_arithmetic<T>, std::negation<std::is_floating_point<T>>>>;

@@ -16,7 +16,7 @@
 
 namespace vast {
 
-struct offset_printer : printer<offset_printer> {
+struct offset_printer : printer_base<offset_printer> {
   using attribute = offset;
 
   template <class Iterator>

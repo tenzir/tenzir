@@ -16,7 +16,7 @@
 namespace vast {
 
 // TODO: Customize via policy and merge policies with Parseable concept.
-struct bool_printer : printer<bool_printer> {
+struct bool_printer : printer_base<bool_printer> {
   using attribute = bool;
 
   template <class Iterator>

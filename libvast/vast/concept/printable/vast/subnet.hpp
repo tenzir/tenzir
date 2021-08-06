@@ -16,7 +16,7 @@
 
 namespace vast {
 
-struct subnet_printer : printer<subnet_printer> {
+struct subnet_printer : printer_base<subnet_printer> {
   using attribute = subnet;
 
   template <class Iterator>

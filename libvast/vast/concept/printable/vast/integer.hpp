@@ -17,7 +17,7 @@
 
 namespace vast {
 
-struct integer_printer : printer<integer_printer> {
+struct integer_printer : printer_base<integer_printer> {
   using attribute = integer;
 
   template <class Iterator>

@@ -16,7 +16,7 @@
 namespace vast {
 
 template <class Printer>
-class plus_printer : public printer<plus_printer<Printer>> {
+class plus_printer : public printer_base<plus_printer<Printer>> {
 public:
   using inner_attribute = typename Printer::attribute;
   using attribute = detail::attr_fold_t<std::vector<inner_attribute>>;

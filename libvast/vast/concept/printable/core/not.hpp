@@ -13,7 +13,7 @@
 namespace vast {
 
 template <class Printer>
-class not_printer : public printer<not_printer<Printer>> {
+class not_printer : public printer_base<not_printer<Printer>> {
 public:
   using attribute = unused_type;
 

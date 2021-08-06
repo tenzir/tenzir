@@ -31,7 +31,7 @@ template <class T>
 constexpr bool is_sequence_printer_v = is_sequence_printer<T>::value;
 
 template <class Lhs, class Rhs>
-class sequence_printer : public printer<sequence_printer<Lhs, Rhs>> {
+class sequence_printer : public printer_base<sequence_printer<Lhs, Rhs>> {
 public:
   using lhs_type = Lhs;
   using rhs_type = Rhs;

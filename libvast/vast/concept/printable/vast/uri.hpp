@@ -20,7 +20,7 @@
 
 namespace vast {
 
-struct key_value_printer : printer<key_value_printer> {
+struct key_value_printer : printer_base<key_value_printer> {
   using attribute = std::pair<std::string,std::string>;
 
   template <class Iterator>
@@ -37,7 +37,7 @@ struct printer_registry<std::pair<std::string,std::string>> {
   using type = key_value_printer;
 };
 
-struct uri_printer : printer<uri_printer> {
+struct uri_printer : printer_base<uri_printer> {
   using attribute = uri;
   
   template <class Iterator>

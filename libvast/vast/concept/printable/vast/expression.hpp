@@ -23,7 +23,7 @@
 
 namespace vast {
 
-struct expression_printer : printer<expression_printer> {
+struct expression_printer : printer_base<expression_printer> {
   using attribute = expression;
 
   template <class Iterator>

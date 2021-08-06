@@ -18,7 +18,7 @@
 namespace vast {
 
 /// Prints a table slice as ID interval.
-struct table_slice_printer : printer<table_slice_printer> {
+struct table_slice_printer : printer_base<table_slice_printer> {
   using attribute = table_slice;
 
   template <class Iterator>

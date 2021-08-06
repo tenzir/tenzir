@@ -16,13 +16,8 @@
 namespace vast {
 
 template <class From, class... Opts>
-auto to_string(From&& from, Opts&&... opts)
-  -> std::enable_if_t<
-       is_printable_v<
-          std::back_insert_iterator<std::string>, std::decay_t<From>
-        >,
-       std::string
-     > {
+auto to_string(From&& from, Opts&&... opts) requires(
+  printable<std::back_insert_iterator<std::string>, std::decay_t<From>>) {
   std::string str;
   print(std::back_inserter(str), from, std::forward<Opts>(opts)...);
   return str;

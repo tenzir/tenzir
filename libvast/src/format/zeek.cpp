@@ -462,7 +462,7 @@ writer::writer(const caf::settings& options) {
 namespace {
 
 template <class Iterator>
-class zeek_printer : public printer<zeek_printer<Iterator>> {
+class zeek_printer : public printer_base<zeek_printer<Iterator>> {
 public:
   using attribute = view<data>;
 

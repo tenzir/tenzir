@@ -25,14 +25,13 @@ struct http_header_parser : parser_base<http_header_parser> {
   using attribute = http::header;
 
   static auto make() {
-    using namespace parsers;
     using namespace parser_literals;
     auto to_upper = [](std::string name) {
       std::transform(name.begin(), name.end(), name.begin(), ::toupper);
       return name;
     };
-    auto name = +(printable - ':') ->* to_upper;
-    auto value = +printable;
+    auto name = +(parsers::printable - ':')->*to_upper;
+    auto value = +parsers::printable;
     auto ws = *' '_p;
     return name >> ':' >> ws >> value;
   }
@@ -63,13 +62,13 @@ struct http_request_parser : parser_base<http_request_parser> {
   static auto make() {
     using namespace parsers;
     auto crlf = "\r\n";
-    auto word = +(printable - ' ');
+    auto word = +(parsers::printable - ' ');
     auto method = word;
     auto uri = make_parser<vast::uri>();
     auto proto = +alpha;
     auto version = parsers::real;
     auto header = make_parser<http::header>() >> crlf;
-    auto body = *printable;
+    auto body = *parsers::printable;
     auto request
       =   method >> ' ' >> uri >> ' ' >> proto >> '/' >> version >> crlf
       >>  *header >> crlf

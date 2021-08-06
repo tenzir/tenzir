@@ -16,7 +16,7 @@ namespace vast {
 
 /// Wraps a printer and ignores its attribute.
 template <class Printer>
-class ignore_printer : public printer<ignore_printer<Printer>> {
+class ignore_printer : public printer_base<ignore_printer<Printer>> {
 public:
   using attribute = unused_type;
 
@@ -32,12 +32,8 @@ private:
   Printer printer_;
 };
 
-template <class Printer>
-auto ignore(Printer&& p)
--> std::enable_if_t<
-     is_printer_v<std::decay_t<Printer>>,
-     ignore_printer<std::decay_t<Printer>>
-   > {
+template <printer Printer>
+auto ignore(Printer&& p) -> ignore_printer<std::decay_t<Printer>> {
   return ignore_printer<std::decay_t<Printer>>{std::forward<Printer>(p)};
 }
 

@@ -15,7 +15,7 @@ namespace vast {
 
 /// Executes a function before printing the inner attribute.
 template <class Printer, class Action>
-class action_printer : public printer<action_printer<Printer, Action>> {
+class action_printer : public printer_base<action_printer<Printer, Action>> {
 public:
   using inner_attribute = typename Printer::attribute;
   using action_traits = detail::action_traits<Action>;

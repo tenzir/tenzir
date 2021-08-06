@@ -15,35 +15,34 @@
 
 namespace vast {
 
-template <class Iterator, class T, class... Args>
-auto print(Iterator&& out, const T& x, Args&&... args)
-  -> std::enable_if_t<has_printer_v<T>, bool> {
+template <class Iterator, registered_printer T, class... Args>
+auto print(Iterator&& out, const T& x, Args&&... args) {
   return make_printer<T>{std::forward<Args>(args)...}.print(out, x);
 }
 
-template <class Iterator, class T, class... Args>
-auto print(Iterator&& out, const T& x, Args&&... args)
-  -> std::enable_if_t<!has_printer_v<T> && access_printer<T>, bool> {
+template <class Iterator, access_printer T, class... Args>
+requires(!registered_printer<T>) auto print(Iterator&& out, const T& x,
+                                            Args&&... args) {
   return access::printer<T>{std::forward<Args>(args)...}.print(out, x);
 }
 
-//namespace detail {
+// namespace detail {
 //
-//template <class Iterator, class T>
-//bool conjunctive_print(Iterator& out, const T& x) {
+// template <class Iterator, class T>
+// bool conjunctive_print(Iterator& out, const T& x) {
 //  return print(out, x);
 //}
 //
-//template <class Iterator, class T, class... Ts>
-//bool conjunctive_print(Iterator& out, const T& x, const Ts&... xs) {
+// template <class Iterator, class T, class... Ts>
+// bool conjunctive_print(Iterator& out, const T& x, const Ts&... xs) {
 //  return conjunctive_print(out, x) && conjunctive_print(out, xs...);
 //}
 //
 //} // namespace detail
 //
-//template <class Iterator, class T>
-//auto print(Iterator&& out, const T& x)
-//  -> std::enable_if_t<!has_printer<T>::value && has_access_state<T>::value,
+// template <class Iterator, class T>
+// auto print(Iterator&& out, const T& x)
+//  -> std::enable_if_t<!printer<T>&& has_access_state<T>::value,
 //                      bool> {
 //  bool r;
 //  auto fun = [&](auto&... xs) { r = detail::conjunctive_print(out, xs...); };
@@ -51,22 +50,12 @@ auto print(Iterator&& out, const T& x, Args&&... args)
 //  return r;
 //}
 
-namespace detail {
-
-struct is_printable {
-  template <class I, class T>
-  static auto test(I* out, const T* x) -> decltype(print(*out, *x), std::true_type());
-
-  template <class, class>
-  static auto test(...) -> std::false_type;
+template <class Iterator, class T>
+concept printable = requires(Iterator out, T x) {
+  print(out, x);
 };
 
-} // namespace detail
-
-template <class I, class T>
-struct is_printable : decltype(detail::is_printable::test<I, T>(0, 0)) {};
-
-template <class I, class T>
-constexpr bool is_printable_v = is_printable<I, T>::value;
+template <class Iterator, class T>
+using is_printable = std::bool_constant<printable<Iterator, T>>;
 
 } // namespace vast

@@ -16,7 +16,7 @@
 
 namespace vast {
 
-struct arithmetic_operator_printer : printer<arithmetic_operator_printer> {
+struct arithmetic_operator_printer : printer_base<arithmetic_operator_printer> {
   using attribute = arithmetic_operator;
 
   template <class Iterator>
@@ -48,7 +48,7 @@ struct arithmetic_operator_printer : printer<arithmetic_operator_printer> {
   }
 };
 
-struct relational_operator_printer : printer<relational_operator_printer> {
+struct relational_operator_printer : printer_base<relational_operator_printer> {
   using attribute = relational_operator;
 
   template <class Iterator>
@@ -84,7 +84,7 @@ struct relational_operator_printer : printer<relational_operator_printer> {
   }
 };
 
-struct bool_operator_printer : printer<bool_operator_printer> {
+struct bool_operator_printer : printer_base<bool_operator_printer> {
   using attribute = bool_operator;
 
   template <class Iterator>

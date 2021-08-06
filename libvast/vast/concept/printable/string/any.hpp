@@ -12,7 +12,7 @@
 
 namespace vast {
 
-struct any_printer : printer<any_printer> {
+struct any_printer : printer_base<any_printer> {
   using attribute = char;
 
   template <class Iterator>

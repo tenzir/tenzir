@@ -23,7 +23,7 @@ struct msb_to_lsb {};
 } // namespace policy
 
 template <class Bitvector, class Order>
-struct bitvector_printer : printer<bitvector_printer<Bitvector, Order>> {
+struct bitvector_printer : printer_base<bitvector_printer<Bitvector, Order>> {
   using attribute = Bitvector;
 
   static constexpr bool msb_to_lsb =

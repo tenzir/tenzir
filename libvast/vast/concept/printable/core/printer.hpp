@@ -23,7 +23,7 @@ template <class, class>
 class guard_printer;
 
 template <class Derived>
-struct printer {
+struct printer_base {
   template <class Action>
   [[nodiscard]] auto before(Action fun) const {
     return action_printer<Derived, Action>{derived(), fun};
@@ -83,31 +83,19 @@ struct printer_registry;
 template <class T>
 using make_printer = typename printer_registry<T>::type;
 
-namespace detail {
-
-struct has_printer {
-  template <class T>
-  static auto test(T* x)
-    -> decltype(typename printer_registry<T>::type(), std::true_type());
-
-  template <class>
-  static auto test(...) -> std::false_type;
-};
-
-} // namespace detail
-
 /// Checks whether the printer registry has a given type registered.
 template <class T>
-constexpr bool has_printer_v
-  = decltype(detail::has_printer::test<T>(0))::value;
+concept registered_printer = requires {
+  typename printer_registry<T>::type;
+};
 
 /// Checks whether a given type is-a printer, i.e., derived from
 /// ::vast::printer.
 template <class T>
-using is_printer = std::is_base_of<printer<T>, T>;
+using is_printer = std::is_base_of<printer_base<T>, T>;
 
 template <class T>
-constexpr bool is_printer_v = is_printer<T>::value;
+concept printer = is_printer<std::decay_t<T>>::value;
 
 } // namespace vast
 

@@ -17,7 +17,7 @@
 namespace vast {
 
 template <class Lhs, class Rhs>
-class list_printer : public printer<list_printer<Lhs, Rhs>> {
+class list_printer : public printer_base<list_printer<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;
