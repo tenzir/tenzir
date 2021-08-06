@@ -40,6 +40,7 @@ IncludeCategories:
     Priority:        5
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
+IndentRequires: true
 IndentWidth: 2
 IndentWrappedFunctionNames: false
 KeepEmptyLinesAtTheStartOfBlocks: false

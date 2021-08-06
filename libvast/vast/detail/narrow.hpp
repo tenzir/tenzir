@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include "vast/config.hpp"
 #include "vast/detail/raise_error.hpp"
 
 #include <type_traits>

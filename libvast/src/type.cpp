@@ -204,12 +204,13 @@ size_t record_type::each::range_state::depth() const {
 record_type::each::each(const record_type& r) {
   if (r.fields.empty())
     return;
-  auto rec = &r;
+  const auto* rec = &r;
   do {
     records_.push_back(rec);
     state_.trace.push_back(&rec->fields[0]);
     state_.offset.push_back(0);
-  } while ((rec = get_if<record_type>(&state_.trace.back()->type)));
+  } while ((rec = get_if<record_type>(&state_.trace.back()->type))
+           && !rec->fields.empty());
 }
 
 void record_type::each::next() {

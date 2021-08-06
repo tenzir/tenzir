@@ -4,6 +4,7 @@
 
 #include "vast/taxonomies.hpp"
 
+#include "vast/concept/convertible/data.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
@@ -21,7 +22,8 @@ TEST(concepts - convert from data) {
             record{{"name", "bar"}, {"fields", list{"a.bar", "b.baR"}}}}}}};
   auto ref = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
                            {"bar", {"", {"a.bar", "b.baR"}, {}}}}};
-  auto test = unbox(extract_concepts(x));
+  concepts_map test;
+  CHECK_EQUAL(convert(x, test, concepts_data_layout), caf::no_error);
   CHECK_EQUAL(test, ref);
 }
 
@@ -88,16 +90,16 @@ TEST(models - convert from data) {
                             {"definition", list{"a.bar", "b.baR", "foo"}}}}}}};
   auto ref = models_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}}},
                          {"bar", {"", {"a.bar", "b.baR", "foo"}}}}};
-  auto test = unbox(extract_models(x));
+  models_map test;
+  CHECK_EQUAL(convert(x, test, models_data_layout), caf::no_error);
   CHECK_EQUAL(test, ref);
   auto x2 = data{list{
     record{{"model", record{{"name", "foo"},
                             {"definition", list{"a.fo0", "b.foO", "x.foe"}}}}},
     record{{"model",
             record{{"name", "foo"}, {"definition", list{"a.bar", "b.baR"}}}}}}};
-  auto test2 = extract_models(x2);
-  REQUIRE(!test2);
-  CHECK_EQUAL(test2.error(), ec::convert_error);
+  models_map test2;
+  CHECK_EQUAL(convert(x2, test2, models_data_layout), ec::convert_error);
 }
 
 TEST(models - simple) {

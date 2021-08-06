@@ -25,162 +25,45 @@
 
 namespace vast {
 
-caf::error convert(const data& d, concepts_map& out) {
-  const auto& c = caf::get_if<record>(&d);
-  if (!c)
-    return caf::make_error(ec::convert_error, "concept is not a record:", d);
-  auto name_data = c->find("name");
-  if (name_data == c->end())
-    return caf::make_error(ec::convert_error, "concept has no name:", d);
-  auto name = caf::get_if<std::string>(&name_data->second);
-  if (!name)
-    return caf::make_error(ec::convert_error,
-                           "concept name is not a string:", *name_data);
-  auto& dest = out[*name];
-  auto fs = c->find("fields");
-  if (fs != c->end()) {
-    const auto& fields = caf::get_if<list>(&fs->second);
-    if (!fields)
-      return caf::make_error(ec::convert_error, "fields in", *name,
-                             "is not a list:", fs->second);
-    for (auto& f : *fields) {
-      auto field = caf::get_if<std::string>(&f);
-      if (!field)
-        return caf::make_error(ec::convert_error, "field in", *name,
-                               "is not a string:", f);
-      if (std::count(dest.fields.begin(), dest.fields.end(), *field) > 0)
-        VAST_WARN("ignoring duplicate field for {}",
-                  *name + ": \"" + *field + "\"");
-      else
-        dest.fields.push_back(*field);
-    }
+concept_ mappend(concept_ lhs, concept_ rhs) {
+  if (lhs.description.empty())
+    lhs.description = std::move(rhs.description);
+  else if (!rhs.description.empty() && lhs.description != rhs.description)
+    VAST_WARN("encountered conflicting descriptions: \"{}\" and \"{}\"",
+              lhs.description, rhs.description);
+  for (auto& field : rhs.fields) {
+    if (std::count(lhs.fields.begin(), lhs.fields.end(), field) > 0)
+      VAST_WARN("ignoring duplicate field {}", field);
+    else
+      lhs.fields.push_back(std::move(field));
   }
-  auto cs = c->find("concepts");
-  if (cs != c->end()) {
-    const auto& concepts = caf::get_if<list>(&cs->second);
-    if (!concepts)
-      return caf::make_error(ec::convert_error, "concepts in", *name,
-                             "is not a list:", cs->second);
-    for (auto& c : *concepts) {
-      auto concept_ = caf::get_if<std::string>(&c);
-      if (!concept_)
-        return caf::make_error(ec::convert_error, "concept in", *name,
-                               "is not a string:", c);
-      if (std::count(dest.fields.begin(), dest.fields.end(), *concept_) > 0)
-        VAST_WARN("ignoring duplicate concept for {}",
-                  *name + ": \"" + *concept_ + "\"");
-      else
-        dest.concepts.push_back(*concept_);
-    }
+  for (auto& c : rhs.concepts) {
+    if (std::count(lhs.concepts.begin(), lhs.concepts.end(), c) > 0)
+      VAST_WARN("ignoring duplicate field {}", c);
+    else
+      lhs.concepts.push_back(std::move(c));
   }
-  auto desc = c->find("description");
-  if (desc != c->end()) {
-    if (auto description = caf::get_if<std::string>(&desc->second)) {
-      if (dest.description.empty())
-        dest.description = *description;
-      else if (dest.description != *description)
-        VAST_WARN("encountered conflicting descriptions for {}",
-                  *name + ": \"" + dest.description + "\" and \"" + *description
-                    + "\"");
-    }
-  }
-  return caf::none;
-}
-
-caf::error extract_concepts(const data& d, concepts_map& out) {
-  if (const auto& xs = caf::get_if<list>(&d)) {
-    for (const auto& item : *xs) {
-      if (const auto& x = caf::get_if<record>(&item)) {
-        auto n = x->find("concept");
-        if (n == x->end())
-          continue;
-        if (auto err = convert(n->second, out))
-          return err;
-      }
-    }
-  }
-  return caf::none;
-}
-
-caf::expected<concepts_map> extract_concepts(const data& d) {
-  concepts_map result;
-  if (auto err = extract_concepts(d, result))
-    return err;
-  return result;
+  return lhs;
 }
 
 bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
 }
 
-caf::error convert(const data& d, models_map& out) {
-  const auto& c = caf::get_if<record>(&d);
-  if (!c)
-    return caf::make_error(ec::convert_error, "concept is not a record:", d);
-  auto name_data = c->find("name");
-  if (name_data == c->end())
-    return caf::make_error(ec::convert_error, "concept has no name:", d);
-  auto name = caf::get_if<std::string>(&name_data->second);
-  if (!name)
-    return caf::make_error(ec::convert_error,
-                           "concept name is not a string:", *name_data);
-  if (out.find(*name) != out.end())
-    return caf::make_error(ec::convert_error,
-                           "models cannot have multiple definitions", *name);
-  auto& dest = out[*name];
-  auto def = c->find("definition");
-  if (def != c->end()) {
-    const auto& def_list = caf::get_if<list>(&def->second);
-    if (!def_list)
-      return caf::make_error(ec::convert_error, "definition in", *name,
-                             "is not a list:", def->second);
-    for (auto& x : *def_list) {
-      auto component = caf::get_if<std::string>(&x);
-      if (!component)
-        return caf::make_error(ec::convert_error, "component in", *name,
-                               "is not a string:", x);
-      dest.definition.push_back(*component);
-    }
-  }
-  auto desc = c->find("description");
-  if (desc != c->end()) {
-    if (auto description = caf::get_if<std::string>(&desc->second)) {
-      if (dest.description.empty())
-        dest.description = *description;
-      else if (dest.description != *description)
-        VAST_WARN("encountered conflicting descriptions for {}",
-                  *name + ": \"" + dest.description + "\" and \"" + *description
-                    + "\"");
-    }
-  }
-  return caf::none;
-}
-
-caf::error extract_models(const data& d, models_map& out) {
-  if (const auto& xs = caf::get_if<list>(&d)) {
-    for (const auto& item : *xs) {
-      if (const auto& x = caf::get_if<record>(&item)) {
-        auto n = x->find("model");
-        if (n == x->end())
-          continue;
-        if (auto err = convert(n->second, out))
-          return err;
-      }
-    }
-  }
-  return caf::none;
-}
-
-caf::expected<models_map> extract_models(const data& d) {
-  models_map result;
-  if (auto err = extract_models(d, result))
-    return err;
-  return result;
-}
+const list_type concepts_data_layout = list_type{record_type{
+  {"concept", record_type{{"name", string_type{}.attributes({{"key"}})},
+                          {"description", string_type{}},
+                          {"fields", list_type{string_type{}}},
+                          {"concepts", list_type{string_type{}}}}}}};
 
 bool operator==(const model& lhs, const model& rhs) {
   return lhs.definition == rhs.definition;
 }
+
+const list_type models_data_layout = list_type{record_type{
+  {"model", record_type{{"name", string_type{}.attributes({{"key"}})},
+                        {"description", string_type{}},
+                        {"definition", list_type{string_type{}}}}}}};
 
 bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
   return lhs.concepts == rhs.concepts && lhs.models == rhs.models;

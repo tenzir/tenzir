@@ -8,10 +8,24 @@
 
 #pragma once
 
+#include "vast/detail/type_traits.hpp"
+
 #include <iterator>
 #include <type_traits>
 
 namespace vast::concepts {
+
+template <class T, class U>
+concept SameHelper = std::is_same_v<T, U>;
+
+template <class T, class U>
+concept same_as = SameHelper<T, U> && SameHelper<U, T>;
+
+template <typename From, typename To>
+concept convertible_to = std::is_convertible_v<From, To> && requires(
+  std::add_rvalue_reference_t<From> (&f)()) {
+  static_cast<To>(f());
+};
 
 template <class T>
 concept transparent = requires {
@@ -44,5 +58,46 @@ concept signed_integral = integral<T> && std::is_signed_v<T>;
 
 template <class T>
 concept floating_point = std::is_floating_point_v<T>;
+
+struct any_callable {
+  template <class... Ts>
+  void operator()(Ts&&...);
+};
+
+/// Inspectables
+template <class T>
+concept inspectable = requires(any_callable& i, T& x) {
+  {inspect(i, x)};
+};
+
+template <class C>
+concept insertable = requires(C xs, typename C::value_type x) {
+  xs.insert(x);
+};
+
+template <class C>
+concept appendable = requires(C xs, typename C::value_type x) {
+  xs.push_back(x);
+};
+
+/// A type `T` is a semigroup if an associative binary function from two values
+/// of `T` to another value of `T` exists. We name this function `mappend` in
+/// spirit of Haskell's Monoid typeclass because we can't define new operators
+/// in C++ and expect to constrain templates with `monoid` more often than with
+/// `semigroup`.
+/// For all members x, y, z of T:
+/// mappend(x, mappend(y, z)) == mappend(mappend(x, y), z)
+template <class T>
+concept semigroup = requires(const T& x, const T& y) {
+  { mappend(x, y) } -> same_as<T>;
+};
+
+/// A type `T` is a monoid if it is a `semigroup` and a neutral element for the
+/// `mappend` function exists. We require the default constructor to produce
+/// this neutral element.
+/// For all members x of T:
+/// mappend(x, T{}) == mappend(T{}, x) == x
+template <class T>
+concept monoid = semigroup<T> && std::is_default_constructible_v<T>;
 
 } // namespace vast::concepts
