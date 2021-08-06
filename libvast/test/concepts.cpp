@@ -51,9 +51,9 @@ TEST(byte_container) {
 
 struct inspect_friend {
   bool value;
-  template <class I>
-  friend auto inspect(I& i, inspect_friend& x) {
-    return i(x);
+  template <class Inspector>
+  friend auto inspect(Inspector& f, inspect_friend& x) {
+    return f(x);
   }
 };
 

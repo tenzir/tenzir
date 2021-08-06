@@ -56,9 +56,9 @@ caf::error insert_to_map(To& dst, typename To::key_type&& key,
   if (entry == dst.end()) {
     dst.insert({std::move(key), std::move(value)});
   } else {
-    // If the mapped type implements the Monoid concept the values get
+    // If the mapped type implements the Semigroup concept the values get
     // combined automatically.
-    if constexpr (concepts::monoid<typename To::mapped_type>)
+    if constexpr (concepts::semigroup<typename To::mapped_type>)
       entry->second = mappend(std::move(entry->second), std::move(value));
     else
       // TODO: Consider continuing if the old and new values are the same.

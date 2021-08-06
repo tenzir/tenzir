@@ -80,9 +80,24 @@ concept appendable = requires(C xs, typename C::value_type x) {
   xs.push_back(x);
 };
 
+/// A type `T` is a semigroup if an associative binary function from two values
+/// of `T` to another value of `T` exists. We name this function `mappend` in
+/// spirit of Haskell's Monoid typeclass because we can't define new operators
+/// in C++ and expect to constrain templates with `monoid` more often than with
+/// `semigroup`.
+/// For all members x, y, z of T:
+/// mappend(x, mappend(y, z)) == mappend(mappend(x, y), z)
 template <class T>
-concept monoid = requires(T x, T y) {
+concept semigroup = requires(const T& x, const T& y) {
   { mappend(x, y) } -> same_as<T>;
 };
+
+/// A type `T` is a monoid if it is a `semigroup` and a neutral element for the
+/// `mappend` function exists. We require the default constructor to produce
+/// this neutral element.
+/// For all members x of T:
+/// mappend(x, T{}) == mappend(T{}, x) == x
+template <class T>
+concept monoid = semigroup<T> && std::is_default_constructible_v<T>;
 
 } // namespace vast::concepts
