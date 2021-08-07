@@ -108,23 +108,21 @@ struct is_contiguously_hashable<T[N], Hasher>
                        && (sizeof(T) == 1 || Hasher::endian == host_endian)> {};
 
 template <class T, class Hasher>
-constexpr bool is_contiguously_hashable_v
-  = is_contiguously_hashable<T, Hasher>::value;
+concept contiguously_hashable = is_contiguously_hashable<T, Hasher>::value;
 
 } // namespace detail
 
 template <class Hasher, class T>
-std::enable_if_t<detail::is_contiguously_hashable<T, Hasher>{}>
-hash_append(Hasher& h, const T& x) noexcept {
+  requires(detail::contiguously_hashable<T, Hasher>)
+void hash_append(Hasher& h, const T& x) noexcept {
   h(std::addressof(x), sizeof(x));
 }
 
 // -- Scalars -----------------------------------------------------------------
 
 template <class Hasher, class T>
-std::enable_if_t<!detail::is_contiguously_hashable_v<T, Hasher>
-                 && std::is_scalar_v<T>>
-hash_append(Hasher& h, T x) noexcept {
+  requires(!detail::contiguously_hashable<T, Hasher> && std::is_scalar_v<T>)
+void hash_append(Hasher& h, T x) noexcept {
   if constexpr (std::is_integral_v<T> || std::is_pointer_v<T>
                 || std::is_enum_v<T>) {
     detail::reverse_bytes(x);
@@ -162,44 +160,44 @@ void hash_append(Hasher& h, std::chrono::time_point<Clock, Duration> t) {
 // -- empty types -------------------------------------------------------------
 
 template <class Hasher, class T>
-std::enable_if_t<std::is_empty_v<T>>
-hash_append(Hasher& h, T) noexcept {
+  requires(std::is_empty_v<T>)
+void hash_append(Hasher& h, T) noexcept {
   hash_append(h, 0);
 }
 
 // -- forward declarations to enable ADL --------------------------------------
 
 template <class Hasher, class T, size_t N>
-std::enable_if_t<!detail::is_contiguously_hashable<T, Hasher>{}>
-hash_append(Hasher& h, T (&a)[N]) noexcept;
+  requires(!detail::contiguously_hashable<T, Hasher>)
+void hash_append(Hasher& h, T (&a)[N]) noexcept;
 
 template <class Hasher, class CharT, class Traits>
-std::enable_if_t<!detail::is_contiguously_hashable<CharT, Hasher>{}>
-hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept;
+  requires(!detail::contiguously_hashable<CharT, Hasher>)
+void hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept;
 
 template <class Hasher, class CharT, class Traits>
-std::enable_if_t<detail::is_contiguously_hashable<CharT, Hasher>{}>
-hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept;
+  requires(detail::contiguously_hashable<CharT, Hasher>)
+void hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept;
 
 template <class Hasher, class CharT, class Traits, class Alloc>
 void hash_append(Hasher& h,
                  const std::basic_string<CharT, Traits, Alloc>& s) noexcept;
 
 template <class Hasher, class T, class U>
-std::enable_if_t<!detail::is_contiguously_hashable<std::pair<T, U>, Hasher>{}>
-hash_append(Hasher& h, const std::pair<T, U>& p) noexcept;
+  requires(!detail::contiguously_hashable<std::pair<T, U>, Hasher>)
+void hash_append(Hasher& h, const std::pair<T, U>& p) noexcept;
 
 template <class Hasher, class T, size_t N>
-std::enable_if_t<!detail::is_contiguously_hashable<std::array<T, N>, Hasher>{}>
-hash_append(Hasher& h, const std::array<T, N>& a) noexcept;
+  requires(!detail::contiguously_hashable<std::array<T, N>, Hasher>)
+void hash_append(Hasher& h, const std::array<T, N>& a) noexcept;
 
 template <class Hasher, class T, class Alloc>
-std::enable_if_t<!detail::is_contiguously_hashable<T, Hasher>{}>
-hash_append(Hasher& h, const std::vector<T, Alloc>& v) noexcept;
+  requires(!detail::contiguously_hashable<T, Hasher>)
+void hash_append(Hasher& h, const std::vector<T, Alloc>& v) noexcept;
 
 template <class Hasher, class T, class Alloc>
-std::enable_if_t<detail::is_contiguously_hashable<T, Hasher>{}>
-hash_append(Hasher& h, const std::vector<T, Alloc>& v) noexcept;
+  requires(detail::contiguously_hashable<T, Hasher>)
+void hash_append(Hasher& h, const std::vector<T, Alloc>& v) noexcept;
 
 template <class Hasher, class Key, class Comp, class Alloc>
 void hash_append(Hasher& h, const std::set<Key, Comp, Alloc>& s) noexcept;
@@ -216,8 +214,8 @@ void hash_append(Hasher& h,
                  const std::unordered_map<K, T, Hash, Eq, Alloc>& m) noexcept;
 
 template <class Hasher, class ...T>
-std::enable_if_t<!detail::is_contiguously_hashable<std::tuple<T...>, Hasher>{}>
-hash_append(Hasher& h, const std::tuple<T...>& t) noexcept;
+  requires(!detail::contiguously_hashable<std::tuple<T...>, Hasher>)
+void hash_append(Hasher& h, const std::tuple<T...>& t) noexcept;
 
 template <class Hasher, class T0, class T1, class ...T>
 void hash_append(Hasher& h, const T0& t0, const T1& t1, const T& ...t) noexcept;
@@ -225,8 +223,8 @@ void hash_append(Hasher& h, const T0& t0, const T1& t1, const T& ...t) noexcept;
 // -- C array -----------------------------------------------------------------
 
 template <class Hasher, class T, size_t N>
-std::enable_if_t<!detail::is_contiguously_hashable<T, Hasher>{}>
-hash_append(Hasher& h, T (&a)[N]) noexcept {
+  requires(!detail::contiguously_hashable<T, Hasher>)
+void hash_append(Hasher& h, T (&a)[N]) noexcept {
   for (const auto& x : a)
     hash_append(h, x);
 }
@@ -234,16 +232,16 @@ hash_append(Hasher& h, T (&a)[N]) noexcept {
 // -- string ------------------------------------------------------------------
 
 template <class Hasher, class CharT, class Traits>
-std::enable_if_t<!detail::is_contiguously_hashable<CharT, Hasher>{}>
-hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept {
+  requires(!detail::contiguously_hashable<CharT, Hasher>)
+void hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept {
   for (auto c : s)
     hash_append(h, c);
   hash_append(h, s.size());
 }
 
 template <class Hasher, class CharT, class Traits>
-std::enable_if_t<detail::is_contiguously_hashable<CharT, Hasher>{}>
-hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept {
+  requires(detail::contiguously_hashable<CharT, Hasher>)
+void hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept {
   h(s.data(), s.size() * sizeof(CharT));
   hash_append(h, s.size());
 }
@@ -257,16 +255,16 @@ void hash_append(Hasher& h,
 // -- pair --------------------------------------------------------------------
 
 template <class Hasher, class T, class U>
-std::enable_if_t<!detail::is_contiguously_hashable<std::pair<T, U>, Hasher>{}>
-hash_append(Hasher& h, const std::pair<T, U>& p) noexcept {
+  requires(!detail::contiguously_hashable<std::pair<T, U>, Hasher>)
+void hash_append(Hasher& h, const std::pair<T, U>& p) noexcept {
   hash_append(h, p.first, p.second);
 }
 
 // -- array -------------------------------------------------------------------
 
 template <class Hasher, class T, size_t N>
-std::enable_if_t<!detail::is_contiguously_hashable<std::array<T, N>, Hasher>{}>
-hash_append(Hasher& h, const std::array<T, N>& a) noexcept {
+  requires(!detail::contiguously_hashable<std::array<T, N>, Hasher>)
+void hash_append(Hasher& h, const std::array<T, N>& a) noexcept {
   for (const auto& t : a)
     hash_append(h, t);
 }
@@ -274,15 +272,15 @@ hash_append(Hasher& h, const std::array<T, N>& a) noexcept {
 // -- vector ------------------------------------------------------------------
 
 template <class Hasher, class T, class Alloc>
-std::enable_if_t<detail::is_contiguously_hashable<T, Hasher>{}>
-hash_append(Hasher& h, const std::vector<T, Alloc>& v) noexcept {
+  requires(detail::contiguously_hashable<T, Hasher>)
+void hash_append(Hasher& h, const std::vector<T, Alloc>& v) noexcept {
   h(v.data(), v.size() * sizeof(T));
   hash_append(h, v.size());
 }
 
 template <class Hasher, class T, class Alloc>
-std::enable_if_t<!detail::is_contiguously_hashable<T, Hasher>{}>
-hash_append(Hasher& h, const std::vector<T, Alloc>& v) noexcept {
+  requires(!detail::contiguously_hashable<T, Hasher>)
+void hash_append(Hasher& h, const std::vector<T, Alloc>& v) noexcept {
   for (const auto& t : v)
     hash_append(h, t);
   hash_append(h, v.size());
@@ -329,8 +327,8 @@ void hash_append(Hasher& h,
 // -- tuple -------------------------------------------------------------------
 
 template <class Hasher, class ...T>
-std::enable_if_t<!detail::is_contiguously_hashable<std::tuple<T...>, Hasher>{}>
-hash_append(Hasher& h, const std::tuple<T...>& t) noexcept {
+  requires(!detail::contiguously_hashable<std::tuple<T...>, Hasher>)
+void hash_append(Hasher& h, const std::tuple<T...>& t) noexcept {
   std::apply(
     [&h](auto&&... xs) { hash_append(h, std::forward<decltype(xs)>(xs)...); },
     t);
@@ -379,14 +377,14 @@ struct hash_inspector {
   }
 
   template <class T, class... Ts>
-  std::enable_if_t<caf::meta::is_annotation<T>::value, result_type>
-  operator()(T&&, Ts&&... xs) const noexcept {
+    requires(caf::meta::is_annotation<T>::value)
+  result_type operator()(T&&, Ts&&... xs) const noexcept {
     (*this)(std::forward<Ts>(xs)...); // Ignore annotation.
   }
 
   template <class T, class... Ts>
-  std::enable_if_t<!caf::meta::is_annotation<T>::value, result_type>
-  operator()(T&& x, Ts&&... xs) const noexcept {
+    requires(!caf::meta::is_annotation<T>::value)
+  result_type operator()(T&& x, Ts&&... xs) const noexcept {
     hash_append(h_, x);
     (*this)(std::forward<Ts>(xs)...);
   }
@@ -397,10 +395,8 @@ struct hash_inspector {
 } // namespace detail
 
 template <class Hasher, class T>
-std::enable_if_t<
-  caf::detail::is_inspectable<detail::hash_inspector<Hasher>, T>::value
->
-hash_append(Hasher& h, const T& x) noexcept {
+  requires(caf::detail::is_inspectable<detail::hash_inspector<Hasher>, T>::value)
+void hash_append(Hasher& h, const T& x) noexcept {
   detail::hash_inspector<Hasher> f{h};
   inspect(f, const_cast<T&>(x));
 }
