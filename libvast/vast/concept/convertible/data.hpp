@@ -111,6 +111,11 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
     { vast::convert(from, to, type) } -> concepts::same_as<caf::error>;        \
   }
 
+#define IS_UNTYPED_CONVERTIBLE(from, to)                                       \
+  requires {                                                                   \
+    { vast::convert(from, to) } -> concepts::same_as<caf::error>;              \
+  }
+
 template <class T>
 concept has_layout = requires {
   concepts::same_as<decltype(T::layout), record_type>;
@@ -364,6 +369,8 @@ public:
           }
           if constexpr (IS_TYPED_CONVERTIBLE(*d, dst, t))
             return convert(*d, dst, t);
+          if constexpr (IS_UNTYPED_CONVERTIBLE(*d, dst))
+            return convert(*d, dst);
           else
             return caf::make_error(
               ec::convert_error, fmt::format(": can't convert from {} to {} "
@@ -416,9 +423,16 @@ caf::error convert(const record& src, To& dst) {
 // A concept to detect whether any previously declared overloads of
 // `convert` can be used for a combination of `Type`, `From`, and `To`.
 template <class From, class To, class Type>
-concept is_concrete_convertible
+concept is_concrete_typed_convertible
   = requires(const From& src, To& dst, const Type& type) {
   { vast::convert(src, dst, type) } -> concepts::same_as<caf::error>;
+};
+
+// The same concept but this time to check for any untyped convert
+// overloads.
+template <class From, class To>
+concept is_concrete_untyped_convertible = requires(const From& src, To& dst) {
+  { vast::convert(src, dst) } -> concepts::same_as<caf::error>;
 };
 
 // NOTE: This overload has to be last because we need to be able to detect
@@ -429,8 +443,10 @@ template <class To>
 caf::error convert(const data& src, To& dst, const type& t) {
   return caf::visit(
     [&]<class From, class Type>(const From& x, const Type& t) {
-      if constexpr (is_concrete_convertible<From, To, Type>)
+      if constexpr (is_concrete_typed_convertible<From, To, Type>)
         return convert(x, dst, t);
+      else if constexpr (is_concrete_untyped_convertible<From, To>)
+        return convert(x, dst);
       else
         return caf::make_error(ec::convert_error,
                                fmt::format("can't convert from {} to {} with "
