@@ -241,16 +241,11 @@ class column_builder_impl final
 public:
   using arrow_builder_type = typename Trait::BuilderType;
 
-  template <class T = Trait>
-  column_builder_impl(
-    std::enable_if_t<T::is_parameter_free, arrow::MemoryPool*> pool) {
-    reset(pool);
-  }
-
-  template <class T = Trait>
-  column_builder_impl(
-    std::enable_if_t<!T::is_parameter_free, arrow::MemoryPool*> pool) {
-    reset(T::make_arrow_type(), pool);
+  explicit column_builder_impl(arrow::MemoryPool* pool) {
+    if constexpr (Trait::is_parameter_free)
+      reset(pool);
+    else
+      reset(Trait::make_arrow_type(), pool);
   }
 
   bool add(data_view x) override {
