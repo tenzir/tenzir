@@ -651,7 +651,7 @@ jobs:
       # We explicitly disable SSE instructions here: The CI runners support it,
       # but we want to support our prebuilt Docker images on older machines as
       # well.
-      VAST_BUILD_OPTIONS: >
+      VAST_BUILD_OPTIONS: >-
         -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
         -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
     steps:
@@ -665,8 +665,8 @@ jobs:
           # version fallbacks manually here.
           for plugin in $(ls plugins); do
             var="VAST_PLUGIN_${plugin^^}_REVISION"
-            value="$(git rev-list --abbrev-commit -1 HEAD -- "plugins/${plugin}")"
-            VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}=${value}"
+            value="$(git rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "plugins/${plugin}")"
+            VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
       - name: Build Dependencies Docker Image
@@ -727,11 +727,11 @@ jobs:
       matrix:
         nix:
           - target: 'vast'
-            build-options: >
+            build-options: >-
               -DVAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
               -DVAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
           - target: 'vast-ci'
-            build-options: >
+            build-options: >-
               -DVAST_ENABLE_AUTO_VECTORIZATION:BOOL=OFF
     env:
       BUILD_DIR: build
