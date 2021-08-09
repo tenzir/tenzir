@@ -364,7 +364,7 @@ function (VASTRegisterPlugin)
     if (Git_FOUND)
       execute_process(
         COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" rev-list
-                --abbrev-commit -1 HEAD -- \"${PROJECT_SOURCE_DIR}\"
+                --abbrev-commit --abbrev=10 -1 HEAD -- \"${PROJECT_SOURCE_DIR}\"
         OUTPUT_VARIABLE PLUGIN_REVISION
         OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE PLUGIN_REVISION_RESULT
