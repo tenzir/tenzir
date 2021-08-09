@@ -51,7 +51,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         ++self->state.stats.checks.successful;
       } else {
         ++self->state.stats.checks.failed;
-        return caf::make_error(ec::no_such_file);
+        return caf::make_error(ec::no_such_file, err.message());
       }
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
@@ -71,7 +71,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         ++self->state.stats.checks.successful;
       } else {
         ++self->state.stats.checks.failed;
-        return caf::make_error(ec::no_such_file);
+        return caf::make_error(ec::no_such_file, err.message());
       }
       if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
