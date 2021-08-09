@@ -46,6 +46,13 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
            const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
+      std::error_code err;
+      if (std::filesystem::exists(path, err)) {
+        ++self->state.stats.checks.successful;
+      } else {
+        ++self->state.stats.checks.failed;
+        return caf::make_error(ec::no_such_file);
+      }
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
         ++self->state.stats.reads.bytes += bytes->size();
@@ -59,6 +66,13 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
            const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
+      std::error_code err;
+      if (std::filesystem::exists(path, err)) {
+        ++self->state.stats.checks.successful;
+      } else {
+        ++self->state.stats.checks.failed;
+        return caf::make_error(ec::no_such_file);
+      }
       if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
         ++self->state.stats.mmaps.bytes += chk->get()->size();
@@ -80,6 +94,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
           put(dict, "failed", stats.failed);
           put(dict, "bytes", stats.bytes);
         };
+        add_stats("checks", self->state.stats.checks);
         add_stats("writes", self->state.stats.writes);
         add_stats("reads", self->state.stats.reads);
         add_stats("mmaps", self->state.stats.mmaps);

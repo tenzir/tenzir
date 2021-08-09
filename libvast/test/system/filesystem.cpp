@@ -55,6 +55,17 @@ TEST(read) {
         CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
       },
       [&](const caf::error& err) { FAIL(err); });
+  MESSAGE("attempt reading non-existant file");
+  self
+    ->request(filesystem, caf::infinite, atom::read_v,
+              std::filesystem::path{"bar"})
+    .receive(
+      [&](const chunk_ptr&) {
+        FAIL("fail should not exist");
+      },
+      [&](const caf::error& err) {
+        CHECK_EQUAL(err, ec::no_such_file);
+      });
 }
 
 TEST(write) {
@@ -100,17 +111,23 @@ TEST(status) {
     ->request(filesystem, caf::infinite, atom::read_v,
               std::filesystem::path{"not-there"})
     .receive(
-      [&](const chunk_ptr&) { FAIL("should not receive chunk on failure"); },
-      [&](const caf::error&) {
-        // expected
+      [&](const chunk_ptr&) {
+        FAIL("should not receive chunk on failure");
+      },
+      [&](const caf::error& err) {
+        CHECK_EQUAL(err, ec::no_such_file);
       });
   self
     ->request(filesystem, caf::infinite, atom::status_v,
               status_verbosity::debug)
     .receive(
       [&](const caf::dictionary<caf::config_value>& status) {
-        auto failed = caf::get<uint64_t>(status, "operations.reads.failed");
-        CHECK_EQUAL(failed, 1u);
+        auto failed_checks
+          = caf::get<uint64_t>(status, "operations.checks.failed");
+        CHECK_EQUAL(failed_checks, 1u);
+        auto failed_reads
+          = caf::get<uint64_t>(status, "operations.reads.failed");
+        CHECK_EQUAL(failed_reads, 0u);
       },
       [&](const caf::error& err) {
         FAIL(err);
