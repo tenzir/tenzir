@@ -56,10 +56,9 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
   VAST_INFO("{} spawned a {} source", self, format);
   src->attach_functor([=](const caf::error& reason) {
     if (!reason || reason == caf::exit_reason::user_shutdown)
-      VAST_INFO("{} source shut down", detail::pretty_type_name(format));
+      VAST_INFO("{} source shut down", format);
     else
-      VAST_WARN("{} source shut down with error: {}",
-                detail::pretty_type_name(format), reason);
+      VAST_WARN("{} source shut down with error: {}", format, reason);
   });
   return src;
 }
