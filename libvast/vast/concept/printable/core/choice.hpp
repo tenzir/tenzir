@@ -16,20 +16,20 @@
 namespace vast {
 
 template <class Lhs, class Rhs>
-class choice_printer;
+class choice_printer_t;
 
 template <class>
 struct is_choice_printer : std::false_type {};
 
 template <class Lhs, class Rhs>
-struct is_choice_printer<choice_printer<Lhs, Rhs>> : std::true_type {};
+struct is_choice_printer<choice_printer_t<Lhs, Rhs>> : std::true_type {};
 
 template <class T>
-constexpr bool is_choice_printer_v = is_choice_printer<T>::value;
+concept choice_printer = is_choice_printer<T>::value;
 
 /// Attempts to print either LHS or RHS.
 template <class Lhs, class Rhs>
-class choice_printer : public printer_base<choice_printer<Lhs, Rhs>> {
+class choice_printer_t : public printer_base<choice_printer_t<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;
@@ -59,7 +59,7 @@ public:
       >
     >;
 
-  constexpr choice_printer(Lhs lhs, Rhs rhs)
+  constexpr choice_printer_t(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
@@ -69,21 +69,19 @@ public:
   }
 
 private:
-  template <class Left, class Iterator, class Attribute>
-  auto print_left(Iterator& out, const Attribute& a) const
-  -> std::enable_if_t<is_choice_printer<Left>{}, bool> {
+  template <choice_printer Left, class Iterator, class Attribute>
+  auto print_left(Iterator& out, const Attribute& a) const {
     return lhs_.print(out, a); // recurse
   }
 
-  template <class Left, class Iterator>
-  auto print_left(Iterator& out, unused_type) const
-  -> std::enable_if_t<!is_choice_printer_v<Left>, bool> {
+  template <choice_printer Left, class Iterator>
+  auto print_left(Iterator& out, unused_type) const {
     return lhs_.print(out, unused);
   }
 
   template <class Left, class Iterator, class Attribute>
-  auto print_left(Iterator& out, const Attribute& a) const
-  -> std::enable_if_t<!is_choice_printer_v<Left>, bool> {
+    requires(!choice_printer<Left>)
+  auto print_left(Iterator& out, const Attribute& a) const {
     auto x = caf::get_if<lhs_attribute>(&a);
     return x && lhs_.print(out, *x);
   }

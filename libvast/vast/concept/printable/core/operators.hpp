@@ -39,7 +39,7 @@ template <class, class>
 class sequence_printer;
 
 template <class, class>
-class choice_printer;
+class choice_printer_t;
 
 // -- unary ------------------------------------------------------------------
 
@@ -91,7 +91,7 @@ constexpr auto operator<<(LHS&& lhs, RHS&& rhs)
 
 template <class LHS, class RHS>
 constexpr auto operator|(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_printer<choice_printer>(lhs, rhs)) {
+  -> decltype(detail::as_printer<choice_printer_t>(lhs, rhs)) {
   return {detail::as_printer(std::forward<LHS>(lhs)),
           detail::as_printer(std::forward<RHS>(rhs))};
 }
