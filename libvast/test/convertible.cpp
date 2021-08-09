@@ -237,6 +237,25 @@ TEST(complex - enum) {
   CHECK_EQUAL(x.value, Enum::baz);
 }
 
+TEST(parser - duration) {
+  using namespace std::chrono_literals;
+  auto x = duration{};
+  const auto* r = "10 minutes";
+  REQUIRE_EQUAL(convert(r, x), ec::no_error);
+  CHECK_EQUAL(x, duration{10min});
+}
+
+TEST(parser - list<subnet>) {
+  using namespace std::chrono_literals;
+  auto x = std::vector<subnet>{};
+  auto layout = list_type{subnet_type{}};
+  auto r = list{"10.0.0.0/8", "172.16.0.0/16"};
+  REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
+  auto ref = std::vector{unbox(to<subnet>("10.0.0.0/8")),
+                         unbox(to<subnet>("172.16.0.0/16"))};
+  CHECK_EQUAL(x, ref);
+}
+
 struct EC {
   enum class X { foo, bar, baz };
   X value;

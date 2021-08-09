@@ -10,6 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/parseable/parse.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
@@ -418,6 +420,18 @@ caf::error convert(const record& src, To& dst, const record_type& layout) {
 template <has_layout To>
 caf::error convert(const record& src, To& dst) {
   return convert(src, dst, dst.layout);
+}
+
+// TODO: Move to a dedicated header after conversion is refactored to use
+// specialization.
+template <has_parser_v To>
+caf::error convert(std::string_view src, To& dst) {
+  const auto* f = src.begin();
+  if (!parse(f, src.end(), dst))
+    return caf::make_error(ec::convert_error,
+                           fmt::format("unable to parse \"{}\" into a {}", src,
+                                       detail::pretty_type_name(dst)));
+  return caf::none;
 }
 
 // A concept to detect whether any previously declared overloads of
