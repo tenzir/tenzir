@@ -89,17 +89,21 @@ void source_state::send_report() {
     caf::unsafe_send_as(self, accountant, std::move(status));
   // Send the source-specific performance metrics to the accountant.
   auto r = performance_report{{{std::string{name}, metrics}}};
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
   for (const auto& [key, m] : r) {
-    if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-      VAST_INFO("{} source produced {} events at a rate of {} events/sec in {}",
-                reader->name(), m.events, static_cast<uint64_t>(rate),
-                to_string(m.duration));
-    else
-      VAST_INFO("{} source produced {} events in {}", reader->name(), m.events,
-                to_string(m.duration));
+    if (m.events > 0) {
+      if (auto rate = m.rate_per_sec(); std::isfinite(rate))
+        VAST_INFO("{} source produced {} events at a rate of {} events/sec in "
+                  "{}",
+                  reader->name(), m.events, static_cast<uint64_t>(rate),
+                  to_string(m.duration));
+      else
+        VAST_INFO("{} source produced {} events in {}", reader->name(),
+                  m.events, to_string(m.duration));
+    } else {
+      VAST_DEBUG("{} source produced 0 events in {}", reader->name(),
+                 to_string(m.duration));
+    }
   }
-#endif
   metrics = measurement{};
   caf::unsafe_send_as(self, accountant, std::move(r));
   // Send the per-event counters to the accountant.
