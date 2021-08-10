@@ -246,7 +246,6 @@ TEST(parser - duration) {
 }
 
 TEST(parser - list<subnet>) {
-  using namespace std::chrono_literals;
   auto x = std::vector<subnet>{};
   auto layout = list_type{subnet_type{}};
   auto r = list{"10.0.0.0/8", "172.16.0.0/16"};
