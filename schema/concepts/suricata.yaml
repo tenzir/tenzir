@@ -16,6 +16,7 @@
       - suricata.mqtt.src_ip
       - suricata.netflow.src_ip
       - suricata.nfs.src_ip
+      - suricata.packet.src_ip
       - suricata.rdp.src_ip
       - suricata.rfb.src_ip
       - suricata.sip.src_ip
@@ -43,6 +44,7 @@
       - suricata.mqtt.src_port
       - suricata.netflow.src_port
       - suricata.nfs.src_port
+      - suricata.packet.src_port
       - suricata.rdp.src_port
       - suricata.rfb.src_port
       - suricata.sip.src_port
@@ -70,6 +72,7 @@
       - suricata.mqtt.dest_ip
       - suricata.netflow.dest_ip
       - suricata.nfs.dest_ip
+      - suricata.packet.dest_ip
       - suricata.rdp.dest_ip
       - suricata.rfb.dest_ip
       - suricata.sip.dest_ip
@@ -97,6 +100,7 @@
       - suricata.mqtt.dest_port
       - suricata.netflow.dest_port
       - suricata.nfs.dest_port
+      - suricata.packet.dest_port
       - suricata.rdp.dest_port
       - suricata.rfb.dest_port
       - suricata.sip.dest_port
@@ -150,6 +154,7 @@
       - suricata.mqtt.proto
       - suricata.netflow.proto
       - suricata.nfs.proto
+      - suricata.packet.proto
       - suricata.rdp.proto
       - suricata.rfb.proto
       - suricata.sip.proto
@@ -177,6 +182,7 @@
       - suricata.mqtt.community_id
       - suricata.netflow.community_id
       - suricata.nfs.community_id
+      - suricata.packet.community_id
       - suricata.rdp.community_id
       - suricata.rfb.community_id
       - suricata.sip.community_id
@@ -244,6 +250,7 @@
       - suricata.mqtt.vlan
       - suricata.netflow.vlan
       - suricata.nfs.vlan
+      - suricata.packet.vlan
       - suricata.rdp.vlan
       - suricata.rfb.vlan
       - suricata.sip.vlan
@@ -271,6 +278,7 @@
       - suricata.mqtt.pcap_cnt
       - suricata.netflow.pcap_cnt
       - suricata.nfs.pcap_cnt
+      - suricata.packet.pcap_cnt
       - suricata.rdp.pcap_cnt
       - suricata.rfb.pcap_cnt
       - suricata.sip.pcap_cnt
