@@ -6,10 +6,9 @@ fixtures:
       node0 = Server(self.cmd,
                      ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node0', 'start'],
                      work_dir, name='node0', port=VAST_PORT,
-                     config_file=self.config_file')
+                     config_file=self.config_file)
       node1 = Server(self.cmd,
-                     ['-e', '127.0.0.1:42124',
-                      '-i', 'node1', 'start'],
+                     ['-e', '127.0.0.1:42124', '-i', 'node1', 'start'],
                      work_dir, name='node1', port=42124,
                      config_file=self.config_file)
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
