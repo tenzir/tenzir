@@ -81,8 +81,12 @@ public:
     requires(!(std::is_lvalue_reference_v<
                  Buffer> || std::is_trivially_move_assignable_v<Buffer>))
   static auto make(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
-    const auto view = as_bytes(buffer);
-    return make(view, [buffer = std::exchange(buffer, {})]() noexcept {
+    // Move the buffer into a unique pointer; otherwise, we might run into
+    // issues with small buffer optimizations where the view no longer points
+    // to the correct data once we moved the buffer into the deleter.
+    auto movable_buffer = std::make_unique<Buffer>(std::exchange(buffer, {}));
+    const auto view = as_bytes(*movable_buffer);
+    return make(view, [buffer = std::move(movable_buffer)]() noexcept {
       static_cast<void>(buffer);
     });
   }
