@@ -552,17 +552,26 @@ def tagselect(tags, tests):
 
 
 def run(args, test_dec):
+    def match(x, names):
+        forced = list(names)
+        return any(re.search(k, x.lower()) for k in forced)
     tests = test_dec["tests"]
     selected_tests = {}
     explicit_tests = {}
     if args.test:
         # Create a subset with only the submitted tests present as keys
-        lower = {t.lower() for t in args.test}
-        exists = lambda x: any(re.search(k, x.lower()) for k in lower)
-        explicit_tests = {k: tests[k] for k in tests.keys() if exists(k)}
-    if not args.test or args.tag:
+        enabled = list(map(str.lower, args.test))
+        explicit_tests = {k: tests[k] for k in tests.keys() if match(k, enabled)}
+    if not explicit_tests or args.tag:
         selected_tests = tagselect(args.tag, tests)
     tests = dict(selected_tests, **explicit_tests)
+    if args.disable:
+        # Remove disabled tests
+        disabled = list(map(str.lower, args.disable))
+        tests = {k: tests[k] for k in tests.keys() if not match(k, disabled)}
+    if args.dry_run:
+        print(tests.keys())
+        return
     try:
         with Tester(args, test_dec["fixtures"], test_dec["config-file"]) as tester:
             result = True
@@ -617,6 +626,9 @@ def main():
         "-t", "--test", nargs="+", help="The test(s) to run (runs all tests if unset)"
     )
     parser.add_argument(
+        "--disable", nargs="+", help="Test(s) that won't be run"
+    )
+    parser.add_argument(
         "-u", "--update", action="store_true", help="Update baseline for tests"
     )
     parser.add_argument(
@@ -625,6 +637,11 @@ def main():
         default="run_<current_ISO_timestamp>",
         type=Path,
         help="The basedir for the test runs",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print a list of the selected tests without running them",
     )
     parser.add_argument(
         "-k",
