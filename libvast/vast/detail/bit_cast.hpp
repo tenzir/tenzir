@@ -21,12 +21,11 @@ namespace vast::detail {
 /// are unspecified.
 /// TODO: Remove this when we have C++20, which ships with a compiler magic
 ///       version of this with constexpr support.
-template <
-  typename To, typename From,
-  typename = std::enable_if_t<
-    (sizeof(To) == sizeof(From))
-    && std::conjunction_v<std::is_trivially_copyable<From>, std::is_trivial<To>>>>
-To bit_cast(const From& src) noexcept {
+template <typename To, typename From>
+  requires(sizeof(To) == sizeof(From)
+           && std::is_trivially_copyable_v<From> && std::is_trivial_v<To>)
+To bit_cast(const From& src)
+noexcept {
   To dst;
   std::memcpy(&dst, &src, sizeof(To));
   return dst;

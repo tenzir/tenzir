@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/concepts.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -156,12 +157,8 @@ public:
   /// @param value The value for *key*.
   /// @returns An pair of an iterator and boolean flag that indicates whether
   ///          the entry has been added successfully.
-  template <class T>
-  auto insert(T&& x)
-  -> std::enable_if_t<
-    std::is_same_v<std::decay_t<T>, value_type>,
-    std::pair<iterator, bool>
-  > {
+  template <concepts::sameish<value_type> T>
+  std::pair<iterator, bool> insert(T&& x) {
     auto i = tracker_.find(x.first);
     if (i != tracker_.end()) {
       policy::access(xs_, i->second);

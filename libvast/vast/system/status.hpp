@@ -96,8 +96,9 @@ make_status_request_state(Ptr self) {
 /// @param responder The actor to retrieve additional status from.
 /// @param f The callback for a successful response.
 /// @param fe The callback for a failed request.
-template <class F, class Fe, class Ptr, class Result, class Extra, class Resp,
-          class = std::enable_if_t<std::is_invocable_v<F, caf::settings&>>>
+// clang-format off
+template <class F, class Fe, class Ptr, class Result, class Extra, class Resp>
+requires(std::is_invocable_v<F, caf::settings&>)
 void collect_status(
   const std::shared_ptr<status_request_state<Ptr, Result, Extra>>& rs,
   std::chrono::milliseconds timeout, status_verbosity verbosity, Resp responder,
@@ -116,6 +117,7 @@ void collect_status(
         fe(err);
       });
 }
+// clang-format on
 
 /// Requests a status response from another actor. Convenience overload for
 /// cases without extra state.

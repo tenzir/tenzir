@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <vast/concepts.hpp>
+
 #include <type_traits>
 
 namespace vast::detail {
@@ -72,13 +74,9 @@ struct totally_ordered : equality_comparable<T, U>,
       return copy;                                                             \
     }                                                                          \
                                                                                \
-    template <class Lhs, class Rhs>                                            \
-    friend auto operator OP(const Rhs& y, const Lhs& x) -> std::enable_if_t<   \
-      std::conjunction_v<std::is_same<Lhs, T>, std::is_same<Rhs, U>,           \
-                         std::negation<std::is_same<Lhs, Rhs>>>,               \
-      Lhs> {                                                                   \
-      static_assert(std::is_constructible_v<Lhs, Rhs>,                         \
-                    "LHS must be constructible from RHS");                     \
+    template <concepts::same_as<T> Lhs, concepts::same_as<U> Rhs>              \
+    friend Lhs operator OP(const Rhs& y, const Lhs& x) requires(               \
+      concepts::different<Lhs, Rhs> && std::is_constructible_v<Lhs, Rhs>) {    \
       Lhs result(y);                                                           \
       result OP## = x;                                                         \
       return result;                                                           \

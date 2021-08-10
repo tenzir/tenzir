@@ -24,16 +24,11 @@ class bitmap_bit_range;
 
 /// A type-erased bitmap. This type wraps a concrete bitmap instance and models
 /// the Bitmap concept at the same time.
-class bitmap : public bitmap_base<bitmap>,
-               detail::equality_comparable<bitmap> {
+class bitmap : public bitmap_base<bitmap>, detail::equality_comparable<bitmap> {
   friend bitmap_bit_range;
 
 public:
-  using types = caf::detail::type_list<
-    ewah_bitmap,
-    null_bitmap,
-    wah_bitmap
-  >;
+  using types = caf::detail::type_list<ewah_bitmap, null_bitmap, wah_bitmap>;
 
   using variant = caf::detail::tl_apply_t<types, caf::variant>;
 
@@ -45,8 +40,8 @@ public:
 
   /// Constructs a bitmap from a concrete bitmap type.
   /// @param bm The bitmap instance to type-erase.
-  template <class Bitmap, class = std::enable_if_t<detail::contains_type_v<
-                            types, std::decay_t<Bitmap>>>>
+  template <class Bitmap>
+    requires(detail::contains_type_v<types, std::decay_t<Bitmap>>)
   bitmap(Bitmap&& bm) : bitmap_(std::forward<Bitmap>(bm)) {
   }
 
@@ -81,7 +76,7 @@ public:
   friend bool operator==(const bitmap& x, const bitmap& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, bitmap& bm) {
+  friend auto inspect(Inspector& f, bitmap& bm) {
     return f(bm.bitmap_);
   }
 
@@ -99,11 +94,8 @@ public:
   [[nodiscard]] bool done() const;
 
 private:
-  using range_variant = caf::variant<
-    ewah_bitmap_range,
-    null_bitmap_range,
-    wah_bitmap_range
-  >;
+  using range_variant
+    = caf::variant<ewah_bitmap_range, null_bitmap_range, wah_bitmap_range>;
 
   range_variant range_;
 };

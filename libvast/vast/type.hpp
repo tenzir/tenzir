@@ -97,8 +97,8 @@ public:
   /// Constructs a type from a concrete instance.
   /// @tparam T a type that derives from @ref abstract_type.
   /// @param x An instance of a type.
-  template <class T,
-            class = std::enable_if_t<detail::contains_type_v<concrete_types, T>>>
+  template <class T>
+    requires(detail::contains_type_v<concrete_types, T>)
   type(T x) : ptr_{caf::make_counted<T>(std::move(x))} {
     // nop
   }
@@ -116,8 +116,8 @@ public:
   type& operator=(type&&) noexcept = default;
 
   /// Assigns a type from another instance
-  template <class T,
-            class = std::enable_if_t<detail::contains_type_v<concrete_types, T>>>
+  template <class T>
+    requires(detail::contains_type_v<concrete_types, T>)
   type& operator=(T x) {
     ptr_ = caf::make_counted<T>(std::move(x));
     return *this;

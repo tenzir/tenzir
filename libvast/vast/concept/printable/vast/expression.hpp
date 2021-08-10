@@ -17,6 +17,7 @@
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/type_traits.hpp"
 #include "vast/expression.hpp"
 
 #include <caf/none.hpp>
@@ -83,13 +84,9 @@ struct expression_printer : printer_base<expression_printer> {
   };
 
   template <class Iterator, class T>
-  auto print(Iterator& out, const T& x) const -> std::enable_if_t<
-    std::disjunction_v<std::is_same<T, meta_extractor>,
-                       std::is_same<T, field_extractor>,
-                       std::is_same<T, data_extractor>,
-                       std::is_same<T, predicate>, std::is_same<T, conjunction>,
-                       std::is_same<T, disjunction>, std::is_same<T, negation>>,
-    bool> {
+    requires(detail::is_any_v<T, meta_extractor, field_extractor, data_extractor,
+                              predicate, conjunction, disjunction, negation>)
+  auto print(Iterator& out, const T& x) const -> bool {
     return visitor<Iterator>{out}(x);
   }
 
@@ -100,12 +97,10 @@ struct expression_printer : printer_base<expression_printer> {
 };
 
 template <class T>
-struct printer_registry<
-  T, std::enable_if_t<std::disjunction_v<
-       std::is_same<T, meta_extractor>, std::is_same<T, field_extractor>,
-       std::is_same<T, data_extractor>, std::is_same<T, predicate>,
-       std::is_same<T, conjunction>, std::is_same<T, disjunction>,
-       std::is_same<T, negation>, std::is_same<T, expression>>>> {
+  requires(
+    detail::is_any_v<T, meta_extractor, field_extractor, data_extractor,
+                     predicate, conjunction, disjunction, negation, expression>)
+struct printer_registry<T> {
   using type = expression_printer;
 };
 

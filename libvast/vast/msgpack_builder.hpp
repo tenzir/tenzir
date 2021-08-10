@@ -91,10 +91,9 @@ public:
     /// @param x The object to add.
     /// @returns The number of bytes written or 0 on failure.
     template <format ElementFormat, class T = empty, class U = empty>
-    auto add(const T& x = {}, const U& y = {}) -> std::enable_if_t<
-      std::disjunction_v<std::is_same<T, empty>,
-                         std::negation<std::is_same<T, proxy<ElementFormat>>>>,
-      size_t> {
+      requires(concepts::same_as<
+                 T, empty> || concepts::different<T, proxy<ElementFormat>>)
+    auto add(const T& x = {}, const U& y = {}) -> size_t {
       if constexpr (std::is_same_v<InputValidationPolicy, input_validation>)
         if (size_ >= capacity<Format>())
           return 0;
@@ -236,10 +235,9 @@ public:
   /// @param x The object to add.
   /// @returns The number of bytes written or 0 on failure
   template <format Format, class T = empty, class U = empty>
-  [[nodiscard]] auto add(const T& x = {}, const U& y = {}) -> std::enable_if_t<
-    std::disjunction_v<std::is_same<T, empty>,
-                       std::negation<std::is_same<T, proxy<Format>>>>,
-    size_t> {
+    requires(
+      concepts::same_as<T, empty> || concepts::different<T, proxy<Format>>)
+  [[nodiscard]] auto add(const T& x = {}, const U& y = {}) -> size_t {
     if (!validate<Format>(x, y)) {
       VAST_ERROR("vast.msgpack_builder failed to validate {} of "
                  "format {}",
@@ -451,7 +449,8 @@ private:
 /// @param builder The builder to add *x* to.
 /// @param x The value to encode in *builder*.
 /// @returns The number of bytes written or 0 on failure.
-template <class Builder, class T, class = std::enable_if_t<std::is_empty_v<T>>>
+template <class Builder, class T>
+  requires(std::is_empty_v<T>)
 size_t put(Builder& builder, T) {
   return builder.template add<nil>();
 }

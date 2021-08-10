@@ -237,8 +237,8 @@ public:
 
   /// Constructs an expression.
   /// @param x The node to construct an expression from.
-  template <class T, class = std::enable_if_t<
-                       detail::contains_type_v<types, std::decay_t<T>>>>
+  template <class T>
+    requires(detail::contains_type_v<types, std::decay_t<T>>)
   expression(T&& x) : node_(std::forward<T>(x)) {
     // nop
   }

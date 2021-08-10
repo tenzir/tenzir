@@ -26,10 +26,8 @@ struct bitmap_printer : printer_base<bitmap_printer<Bitmap, Policy>> {
 };
 
 template <class Bitmap>
-struct printer_registry<
-  Bitmap,
-  std::enable_if_t<std::is_base_of_v<bitmap_base<Bitmap>, Bitmap>>
-> {
+  requires(std::is_base_of_v<bitmap_base<Bitmap>, Bitmap>)
+struct printer_registry<Bitmap> {
   using type = bitmap_printer<Bitmap, policy::expanded>;
 };
 

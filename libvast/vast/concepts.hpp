@@ -21,6 +21,12 @@ concept SameHelper = std::is_same_v<T, U>;
 template <class T, class U>
 concept same_as = SameHelper<T, U> && SameHelper<U, T>;
 
+template <class T, class U>
+concept sameish = same_as<std::decay_t<T>, std::decay_t<U>>;
+
+template <class T, class U>
+concept different = !same_as<T, U>;
+
 template <typename From, typename To>
 concept convertible_to = std::is_convertible_v<From, To> && requires(
   std::add_rvalue_reference_t<From> (&f)()) {

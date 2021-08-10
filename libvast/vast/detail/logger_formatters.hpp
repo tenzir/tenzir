@@ -19,6 +19,7 @@
 // clang-format on
 
 #include "vast/concept/printable/print.hpp"
+#include "vast/concepts.hpp"
 #include "vast/detail/logger.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
@@ -329,7 +330,7 @@ struct fmt::formatter<caf::error> {
 
 template <typename T>
 struct fmt::formatter<std::span<T>, fmt::format_context::char_type,
-                      std::enable_if_t<!std::is_same_v<T, std::byte>>> {
+                      std::enable_if_t<vast::concepts::different<T, std::byte>>> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();

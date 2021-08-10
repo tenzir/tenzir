@@ -682,11 +682,9 @@ private:
   // If we don't have a range_coder, we only support simple equality queries at
   // this point.
   template <class C>
+    requires(is_equality_coder<C>::value || is_bitslice_coder<C>::value)
   auto decode(const std::vector<C>& coders, relational_operator op,
-              value_type x) const
-    -> std::enable_if_t<
-      std::disjunction_v<is_equality_coder<C>, is_bitslice_coder<C>>,
-      bitmap_type> {
+              value_type x) const -> bitmap_type {
     VAST_ASSERT(op == relational_operator::equal
                 || op == relational_operator::not_equal);
     base_.decompose(x, xs_);

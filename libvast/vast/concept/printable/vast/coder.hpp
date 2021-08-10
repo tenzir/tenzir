@@ -9,10 +9,13 @@
 #pragma once
 
 #include "vast/bitmap_base.hpp"
+#include "vast/coder.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/core/ignore.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
+
+#include <type_traits>
 
 namespace vast {
 
@@ -34,12 +37,8 @@ struct vector_coder_printer
 };
 
 template <class Coder>
-struct printer_registry<
-  Coder,
-  std::enable_if_t<
-    std::is_base_of_v<vector_coder<typename Coder::bitmap_type>, Coder>
-  >
-> {
+  requires(std::is_base_of_v<vector_coder<typename Coder::bitmap_type>, Coder>)
+struct printer_registry<Coder> {
   using type = vector_coder_printer<
     typename Coder::bitmap_type,
     policy::expanded

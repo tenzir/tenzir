@@ -16,13 +16,6 @@
 namespace vast {
 
 class literal_printer : public printer_base<literal_printer> {
-  template <class T>
-  using enable_if_non_fp_arithmetic = std::enable_if_t<std::conjunction_v<
-    std::is_arithmetic<T>, std::negation<std::is_floating_point<T>>>>;
-
-  template <class T>
-  using enable_if_fp = std::enable_if_t<std::is_floating_point<T>{}>;
-
 public:
   using attribute = unused_type;
 
@@ -30,13 +23,13 @@ public:
   }
 
   template <class T>
-  explicit literal_printer(T x, enable_if_non_fp_arithmetic<T>* = nullptr)
-    : str_{std::to_string(x)} {
+    requires(std::is_arithmetic_v<T> && !std::is_floating_point_v<T>)
+  explicit literal_printer(T x) : str_{std::to_string(x)} {
   }
 
   template <class T>
-  explicit literal_printer(T x, enable_if_fp<T>* = nullptr)
-    : str_{std::to_string(x)} {
+    requires(std::is_floating_point_v<T>)
+  explicit literal_printer(T x) : str_{std::to_string(x)} {
     // Remove trailing zeros.
     str_.erase(str_.find_last_not_of('0') + 1, std::string::npos);
   }

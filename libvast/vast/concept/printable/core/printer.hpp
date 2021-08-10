@@ -76,7 +76,7 @@ private:
 /// one needs to specialize this struct and expose a member `type` with the
 /// concrete printer type.
 /// @tparam T the type to register a printer with.
-template <class T, class = void>
+template <class T>
 struct printer_registry;
 
 /// Retrieves a registered printer.
