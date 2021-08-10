@@ -18,8 +18,8 @@ jobs:
 
     - name: Clang Format
       run: |
-        brew install llvm
-        export PATH="$(brew --prefix llvm)/bin:${PATH}"
+        brew install clang-format
+        PATH="$(brew --prefix clang-format)/bin:${PATH}"
         git diff -U0 --no-color $(git merge-base origin/master HEAD) |
           scripts/clang-format-diff.py -p1
 
