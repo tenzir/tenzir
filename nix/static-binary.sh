@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/449b698a0b554996ac099b4e3534514528019269.tar.gz -i bash -p git nix coreutils nix-prefetch-github
+#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/449b698a0b554996ac099b4e3534514528019269.tar.gz -i bash -p git coreutils nix-prefetch-github
 
 nix --version
 nix-prefetch-github --version
@@ -100,7 +100,7 @@ EOF
 fi
 
 echo running "nix-build --no-out-link -E \'${exp}\'"
-result=$(nix-build --no-out-link -E "${exp}")
+result=$(nix-build --keep-failed --no-out-link -E "${exp}")
 
 mkdir -p build
 tar -C "${result}" \
