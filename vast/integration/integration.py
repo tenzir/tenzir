@@ -553,8 +553,7 @@ def tagselect(tags, tests):
 
 def run(args, test_dec):
     def match(x, names):
-        forced = list(names)
-        return any(re.search(k, x.lower()) for k in forced)
+        return any(re.search(k, x.lower()) for k in names)
 
     tests = test_dec["tests"]
     selected_tests = {}
@@ -621,12 +620,15 @@ def main():
         help="Run the testset from this test definition YAML file",
     )
     parser.add_argument(
-        "-T", "--tag", nargs="+", help="The tag for which tests will be run"
+        "-T", "--tag", action="store_true", help="The tag for which tests will be run"
     )
     parser.add_argument(
-        "-t", "--test", nargs="+", help="The test(s) to run (runs all tests if unset)"
+        "-t",
+        "--test",
+        action="append",
+        help="The test(s) to run (runs all tests if unset)",
     )
-    parser.add_argument("--disable", nargs="+", help="Test(s) that won't be run")
+    parser.add_argument("--disable", action="append", help="Test(s) that won't be run")
     parser.add_argument(
         "-u", "--update", action="store_true", help="Update baseline for tests"
     )
