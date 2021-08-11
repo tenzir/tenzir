@@ -102,8 +102,8 @@ stdenv.mkDerivation rec {
   installCheckPhase = ''
     python ../vast/integration/integration.py \
       --app ${placeholder "out"}/bin/vast \
-      --disable "Disk Monitor"
-      --disable "Partition-local Stores"
+      --disable "Disk Monitor" \
+      --disable "Partition-local Stores" \
       --disable "Transforms"
   '';
 
