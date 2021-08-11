@@ -73,13 +73,11 @@ public:
   /// to the buffer.
   /// @param buffer The byte buffer.
   /// @note This overload can only be selected if the buffer is an
-  /// rvalue-reference, is not trivially-constructible, and an overload of
-  /// *as_bytes* exists for the buffer. This is intended to guard against
-  /// accidental copies when calling this function.
+  /// rvalue-reference, and an overload of *as_bytes* exists for the buffer. This
+  /// is intended to guard against accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
-    requires(!std::is_lvalue_reference_v<Buffer> &&          //
-             !std::is_trivially_move_assignable_v<Buffer> && //
+    requires(!std::is_lvalue_reference_v<Buffer> && //
              requires(const Buffer& buffer) {
                { as_bytes(buffer) } -> concepts::same_as<view_type>;
              })
