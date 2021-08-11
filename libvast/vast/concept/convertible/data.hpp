@@ -99,15 +99,14 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
 // qualified or unqualified lookup is done when the definition of the template
 // is parsed, and only dependent lookup is done in the instantiation phase in
 // case the call is unqualified. That means a concept would only be able to
-// detect overloads that are declard later iff they happen to be in the same
+// detect overloads that are declared later iff they happen to be in the same
 // namespace as their arguments, but it won't pick up overloads like
 // `convert(std::string, std::string)` or `convert(uint64_t, uint64_t)`.
 // https://timsong-cpp.github.io/cppwp/n4868/temp.res#temp.dep.candidate
 // It would be preferable to forward declare `is_concrete_convertible` but that
 // is not allowed.
-// We don't do this for the is_convertible trait yet because clang 11 doesn't
-// support ad-hoc requires constraints, and we only need this detection for
-// `if constexpr` predicates here.
+// The only real way to solve this is to replace function overloading with
+// specializations of a converter struct template.
 #define IS_TYPED_CONVERTIBLE(from, to, type)                                   \
   requires {                                                                   \
     { vast::convert(from, to, type) } -> concepts::same_as<caf::error>;        \
