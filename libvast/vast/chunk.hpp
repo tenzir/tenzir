@@ -83,8 +83,8 @@ public:
              })
   static auto make(Buffer&& buffer) -> chunk_ptr {
     // Move the buffer into a unique pointer; otherwise, we might run into
-    // issues with small buffer optimizations where the view no longer points
-    // to the correct data once we moved the buffer into the deleter.
+    // issues when moving the buffer invalidates the span, e.g., for strings
+    // with small buffer optimizations.
     auto movable_buffer = std::make_unique<Buffer>(std::exchange(buffer, {}));
     const auto view = as_bytes(*movable_buffer);
     return make(view, [buffer = std::move(movable_buffer)]() noexcept {
