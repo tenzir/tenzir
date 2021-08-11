@@ -73,16 +73,21 @@ public:
   /// to the buffer.
   /// @param buffer The byte buffer.
   /// @note This overload can only be selected if the buffer is an
-  /// rvalue-reference, is not trivially-constructible, and an overload of
-  /// *as_bytes* exists for the buffer. This is intended to guard against
-  /// accidental copies when calling this function.
+  /// rvalue-reference, and an overload of *as_bytes* exists for the buffer. This
+  /// is intended to guard against accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
-    requires(!(std::is_lvalue_reference_v<
-                 Buffer> || std::is_trivially_move_assignable_v<Buffer>))
-  static auto make(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
-    const auto view = as_bytes(buffer);
-    return make(view, [buffer = std::exchange(buffer, {})]() noexcept {
+    requires(!std::is_lvalue_reference_v<Buffer> && //
+             requires(const Buffer& buffer) {
+               { as_bytes(buffer) } -> concepts::same_as<view_type>;
+             })
+  static auto make(Buffer&& buffer) -> chunk_ptr {
+    // Move the buffer into a unique pointer; otherwise, we might run into
+    // issues when moving the buffer invalidates the span, e.g., for strings
+    // with small buffer optimizations.
+    auto movable_buffer = std::make_unique<Buffer>(std::exchange(buffer, {}));
+    const auto view = as_bytes(*movable_buffer);
+    return make(view, [buffer = std::move(movable_buffer)]() noexcept {
       static_cast<void>(buffer);
     });
   }
@@ -98,8 +103,10 @@ public:
   /// @param buffer The byte buffer.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
-  static auto copy(const Buffer& buffer)
-    -> decltype(as_bytes(buffer), chunk_ptr{}) {
+    requires requires(const Buffer& buffer) {
+      { as_bytes(buffer) } -> concepts::same_as<view_type>;
+    }
+  static auto copy(const Buffer& buffer) -> chunk_ptr {
     const auto view = as_bytes(buffer);
     auto copy = std::make_unique<value_type[]>(view.size());
     const auto data = copy.get();

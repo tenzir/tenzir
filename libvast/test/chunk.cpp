@@ -63,8 +63,9 @@ TEST(serialization) {
 
 TEST(as_bytes) {
   std::string str = "foobarbaz";
+  auto copy = str;
   auto bytes
-    = std::span{reinterpret_cast<const std::byte*>(str.data()), str.size()};
+    = std::span{reinterpret_cast<const std::byte*>(copy.data()), copy.size()};
   auto x = chunk::make(std::move(str));
   CHECK_EQUAL(bytes, as_bytes(x));
 }
