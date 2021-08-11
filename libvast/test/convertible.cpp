@@ -237,6 +237,24 @@ TEST(complex - enum) {
   CHECK_EQUAL(x.value, Enum::baz);
 }
 
+TEST(parser - duration) {
+  using namespace std::chrono_literals;
+  auto x = duration{};
+  const auto* r = "10 minutes";
+  REQUIRE_EQUAL(convert(r, x), ec::no_error);
+  CHECK_EQUAL(x, duration{10min});
+}
+
+TEST(parser - list<subnet>) {
+  auto x = std::vector<subnet>{};
+  auto layout = list_type{subnet_type{}};
+  auto r = list{"10.0.0.0/8", "172.16.0.0/16"};
+  REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
+  auto ref = std::vector{unbox(to<subnet>("10.0.0.0/8")),
+                         unbox(to<subnet>("172.16.0.0/16"))};
+  CHECK_EQUAL(x, ref);
+}
+
 struct EC {
   enum class X { foo, bar, baz };
   X value;
@@ -259,24 +277,46 @@ TEST(complex - enum class) {
   CHECK_EQUAL(x.value, EC::X::baz);
 }
 
-struct Opt {
+struct StdOpt {
   std::optional<integer> value;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, Opt& c) {
+  friend auto inspect(Inspector& f, StdOpt& c) {
     return f(c.value);
   }
 
   static const record_type layout;
 };
 
-const record_type Opt::layout = {{"value", integer_type{}}};
+struct CafOpt {
+  caf::optional<integer> value;
 
-TEST(optional member variable) {
-  auto x = Opt{integer{22}};
+  template <class Inspector>
+  friend auto inspect(Inspector& f, CafOpt& c) {
+    return f(c.value);
+  }
+
+  static const record_type layout;
+};
+
+const record_type StdOpt::layout = {{"value", integer_type{}}};
+const record_type CafOpt::layout = {{"value", integer_type{}}};
+
+TEST(std::optional member variable) {
+  auto x = StdOpt{integer{22}};
   auto r = record{{"value", caf::none}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.value, std::nullopt);
+  r = record{{"value", integer{22}}};
+  REQUIRE_EQUAL(convert(r, x), ec::no_error);
+  CHECK_EQUAL(x.value->value, 22);
+}
+
+TEST(caf::optional member variable) {
+  auto x = CafOpt{integer{22}};
+  auto r = record{{"value", caf::none}};
+  REQUIRE_EQUAL(convert(r, x), ec::no_error);
+  CHECK_EQUAL(x.value, caf::none);
   r = record{{"value", integer{22}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.value->value, 22);

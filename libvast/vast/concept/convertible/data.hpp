@@ -10,6 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/parseable/parse.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
@@ -97,18 +99,22 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
 // qualified or unqualified lookup is done when the definition of the template
 // is parsed, and only dependent lookup is done in the instantiation phase in
 // case the call is unqualified. That means a concept would only be able to
-// detect overloads that are declard later iff they happen to be in the same
+// detect overloads that are declared later iff they happen to be in the same
 // namespace as their arguments, but it won't pick up overloads like
 // `convert(std::string, std::string)` or `convert(uint64_t, uint64_t)`.
 // https://timsong-cpp.github.io/cppwp/n4868/temp.res#temp.dep.candidate
 // It would be preferable to forward declare `is_concrete_convertible` but that
 // is not allowed.
-// We don't do this for the is_convertible trait yet because clang 11 doesn't
-// support ad-hoc requires constraints, and we only need this detection for
-// `if constexpr` predicates here.
+// The only real way to solve this is to replace function overloading with
+// specializations of a converter struct template.
 #define IS_TYPED_CONVERTIBLE(from, to, type)                                   \
   requires {                                                                   \
     { vast::convert(from, to, type) } -> concepts::same_as<caf::error>;        \
+  }
+
+#define IS_UNTYPED_CONVERTIBLE(from, to)                                       \
+  requires {                                                                   \
+    { vast::convert(from, to) } -> concepts::same_as<caf::error>;              \
   }
 
 template <class T>
@@ -364,6 +370,8 @@ public:
           }
           if constexpr (IS_TYPED_CONVERTIBLE(*d, dst, t))
             return convert(*d, dst, t);
+          if constexpr (IS_UNTYPED_CONVERTIBLE(*d, dst))
+            return convert(*d, dst);
           else
             return caf::make_error(
               ec::convert_error, fmt::format(": can't convert from {} to {} "
@@ -413,12 +421,31 @@ caf::error convert(const record& src, To& dst) {
   return convert(src, dst, dst.layout);
 }
 
+// TODO: Move to a dedicated header after conversion is refactored to use
+// specialization.
+template <has_parser_v To>
+caf::error convert(std::string_view src, To& dst) {
+  const auto* f = src.begin();
+  if (!parse(f, src.end(), dst))
+    return caf::make_error(ec::convert_error,
+                           fmt::format("unable to parse \"{}\" into a {}", src,
+                                       detail::pretty_type_name(dst)));
+  return caf::none;
+}
+
 // A concept to detect whether any previously declared overloads of
 // `convert` can be used for a combination of `Type`, `From`, and `To`.
 template <class From, class To, class Type>
-concept is_concrete_convertible
+concept is_concrete_typed_convertible
   = requires(const From& src, To& dst, const Type& type) {
   { vast::convert(src, dst, type) } -> concepts::same_as<caf::error>;
+};
+
+// The same concept but this time to check for any untyped convert
+// overloads.
+template <class From, class To>
+concept is_concrete_untyped_convertible = requires(const From& src, To& dst) {
+  { vast::convert(src, dst) } -> concepts::same_as<caf::error>;
 };
 
 // NOTE: This overload has to be last because we need to be able to detect
@@ -429,8 +456,10 @@ template <class To>
 caf::error convert(const data& src, To& dst, const type& t) {
   return caf::visit(
     [&]<class From, class Type>(const From& x, const Type& t) {
-      if constexpr (is_concrete_convertible<From, To, Type>)
+      if constexpr (is_concrete_typed_convertible<From, To, Type>)
         return convert(x, dst, t);
+      else if constexpr (is_concrete_untyped_convertible<From, To>)
+        return convert(x, dst);
       else
         return caf::make_error(ec::convert_error,
                                fmt::format("can't convert from {} to {} with "
