@@ -78,9 +78,12 @@ public:
   /// accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
-    requires(!(std::is_lvalue_reference_v<
-                 Buffer> || std::is_trivially_move_assignable_v<Buffer>))
-  static auto make(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
+    requires(!std::is_lvalue_reference_v<Buffer> &&          //
+             !std::is_trivially_move_assignable_v<Buffer> && //
+             requires(const Buffer& buffer) {
+               { as_bytes(buffer) } -> concepts::same_as<view_type>;
+             })
+  static auto make(Buffer&& buffer) -> chunk_ptr {
     // Move the buffer into a unique pointer; otherwise, we might run into
     // issues with small buffer optimizations where the view no longer points
     // to the correct data once we moved the buffer into the deleter.
@@ -102,8 +105,10 @@ public:
   /// @param buffer The byte buffer.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
-  static auto copy(const Buffer& buffer)
-    -> decltype(as_bytes(buffer), chunk_ptr{}) {
+    requires requires(const Buffer& buffer) {
+      { as_bytes(buffer) } -> concepts::same_as<view_type>;
+    }
+  static auto copy(const Buffer& buffer) -> chunk_ptr {
     const auto view = as_bytes(buffer);
     auto copy = std::make_unique<value_type[]>(view.size());
     const auto data = copy.get();
