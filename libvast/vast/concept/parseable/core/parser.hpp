@@ -107,7 +107,7 @@ using make_parser = typename parser_registry<T>::type;
 
 /// Checks whether the parser registry has a given type registered.
 template <class T>
-concept has_parser_v = requires {
+concept registered_parser_type = requires {
   typename parser_registry<T>::type;
 };
 

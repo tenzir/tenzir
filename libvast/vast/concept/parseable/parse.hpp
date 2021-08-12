@@ -15,14 +15,14 @@
 
 namespace vast {
 
-template <class Iterator, has_parser_v T, class... Args>
+template <class Iterator, registered_parser_type T, class... Args>
 auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args) -> bool {
   return make_parser<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
 template <class Iterator, access_parser T, class... Args>
-requires(!has_parser_v<T>) auto parse(Iterator& f, const Iterator& l, T& x,
-                                      Args&&... args) -> bool {
+  requires(!registered_parser_type<T>)
+auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args) -> bool {
   return access::parser_base<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
@@ -41,8 +41,8 @@ bool conjunctive_parse(Iterator& f, const Iterator& l, T& x, Ts&... xs) {
 } // namespace detail
 
 template <class Iterator, access_state T>
-requires(!has_parser_v<T>) auto parse(Iterator& f, const Iterator& l, T& x)
-  -> bool {
+  requires(!registered_parser_type<T>)
+auto parse(Iterator& f, const Iterator& l, T& x) -> bool {
   bool r;
   auto fun = [&](auto&... xs) {
     r = detail::conjunctive_parse(f, l, xs...);

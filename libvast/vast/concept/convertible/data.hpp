@@ -433,7 +433,7 @@ caf::error convert(const data& src, To& dst) {
 
 // TODO: Move to a dedicated header after conversion is refactored to use
 // specialization.
-template <has_parser_v To>
+template <registered_parser_type To>
 caf::error convert(std::string_view src, To& dst) {
   const auto* f = src.begin();
   if (!parse(f, src.end(), dst))
