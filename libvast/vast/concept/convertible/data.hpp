@@ -129,6 +129,9 @@ caf::error convert(const record& src, T& dst, const record_type& layout);
 template <has_layout T>
 caf::error convert(const record& src, T& dst);
 
+template <has_layout T>
+caf::error convert(const data& src, T& dst);
+
 // Generic overload when `src` and `dst` are of the same type.
 // TODO: remove the `!concepts::integral` constraint once count is a real type.
 template <class Type, class T>
@@ -419,6 +422,13 @@ caf::error convert(const record& src, To& dst, const record_type& layout) {
 template <has_layout To>
 caf::error convert(const record& src, To& dst) {
   return convert(src, dst, dst.layout);
+}
+
+template <has_layout To>
+caf::error convert(const data& src, To& dst) {
+  if (const auto* r = caf::get_if<record>(&src))
+    return convert(*r, dst);
+  return caf::make_error(ec::convert_error, "expected record, but got {}", src);
 }
 
 // TODO: Move to a dedicated header after conversion is refactored to use
