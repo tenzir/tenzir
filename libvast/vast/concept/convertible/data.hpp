@@ -70,7 +70,7 @@ caf::error insert_to_map(To& dst, typename To::key_type&& key,
     else
       // TODO: Consider continuing if the old and new values are the same.
       return caf::make_error(ec::convert_error,
-                             fmt::format("{}: redefinition detected: \"{}\" "
+                             fmt::format(": redefinition of {} detected: \"{}\" "
                                          "vs \"{}\"",
                                          key, entry->second, value));
   }
@@ -83,9 +83,17 @@ template <class... Args>
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
   if (in) {
     auto f = fmt::format("{}{{}}", fstring);
-    in.context() = caf::make_message(fmt::format(VAST_FMT_RUNTIME(f),
-                                                 std::forward<Args>(args)...,
-                                                 to_string(in.context())));
+    auto new_msg = in.context().apply({
+      [&](std::string& s) {
+        return caf::make_message(fmt::format(
+          VAST_FMT_RUNTIME(f), std::forward<Args>(args)..., std::move(s)));
+      },
+    });
+    if (new_msg)
+      in.context() = std::move(*new_msg);
+    else
+      in.context()
+        = caf::make_message(fmt::format(fstring, std::forward<Args>(args)...));
   }
   return std::move(in);
 }
@@ -241,7 +249,7 @@ caf::error convert(const map& src, To& dst, const map_type& t) {
       return detail::insert_to_map(dst, std::move(key), std::move(value));
     }();
     if (err)
-      return detail::prepend(std::move(err), "{}", x.first);
+      return detail::prepend(std::move(err), ".{}", x.first);
   }
   return caf::none;
 }
@@ -269,7 +277,7 @@ caf::error convert(const record& src, To& dst, const map_type& t) {
       return detail::insert_to_map(dst, std::move(key), std::move(value));
     }();
     if (err)
-      return detail::prepend(std::move(err), "{}", x.first);
+      return detail::prepend(std::move(err), ".{}", x.first);
   }
   return caf::none;
 }
@@ -319,7 +327,7 @@ caf::error convert(const list& src, To& dst, const list_type& t) {
   for (const auto& element : src) {
     const auto* rec = caf::get_if<record>(&element);
     if (!rec)
-      return caf::make_error(ec::convert_error, "no record in list");
+      return caf::make_error(ec::convert_error, ": no record in list");
     // Find the value from the record
     const auto data_key = get(*rec, key_field.trace);
     if (!data_key)
@@ -386,7 +394,7 @@ public:
         return caf::none;
       },
       f.type());
-    return detail::prepend(std::move(err), "{}", f.key());
+    return detail::prepend(std::move(err), ".{}", f.key());
   }
 
   template <class... Ts>
@@ -412,7 +420,7 @@ caf::error convert(const record& src, To& dst, const record_type& layout) {
       return convert(src, dst);
     else
       return caf::make_error(ec::convert_error,
-                             "destination types must have a "
+                             ": destination types must have a "
                              "static layout definition: {}",
                              detail::pretty_type_name(dst));
   }
@@ -429,7 +437,8 @@ template <has_layout To>
 caf::error convert(const data& src, To& dst) {
   if (const auto* r = caf::get_if<record>(&src))
     return convert(*r, dst);
-  return caf::make_error(ec::convert_error, "expected record, but got {}", src);
+  return caf::make_error(ec::convert_error, ": expected record, but got {}",
+                         src);
 }
 
 // TODO: Move to a dedicated header after conversion is refactored to use
@@ -439,8 +448,8 @@ caf::error convert(std::string_view src, To& dst) {
   const auto* f = src.begin();
   if (!parse(f, src.end(), dst))
     return caf::make_error(ec::convert_error,
-                           fmt::format("unable to parse \"{}\" into a {}", src,
-                                       detail::pretty_type_name(dst)));
+                           fmt::format(": unable to parse \"{}\" into a {}",
+                                       src, detail::pretty_type_name(dst)));
   return caf::none;
 }
 
