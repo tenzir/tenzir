@@ -71,7 +71,8 @@ struct parser_traits {
   using to_type = VastType;
 
   static constexpr auto can_be_parsed
-    = std::is_same_v<from_type, std::string_view> && has_parser_v<to_type>;
+    = std::is_same_v<from_type,
+                     std::string_view> && registered_parser_type<to_type>;
 };
 
 /// Default implementation of conversion from JSON type (known as one of
