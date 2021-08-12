@@ -93,6 +93,7 @@ stdenv.mkDerivation rec {
     "-DVAST_ENABLE_BACKTRACE=ON"
     "-DVAST_ENABLE_JEMALLOC=ON"
     "-DVAST_ENABLE_LSVAST=ON"
+    "-DCPM_USE_LOCAL_PACKAGES=ON"
     "-DCAF_ROOT_DIR=${caf}"
   ] ++ lib.optionals (buildType == "CI") [
     "-DVAST_ENABLE_ASSERTIONS=ON"

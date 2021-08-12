@@ -61,6 +61,7 @@ endif ()
 
 # -- includes ------------------------------------------------------------------
 
+# CMake
 include(CMakeDependentOption)
 include(CMakePackageConfigHelpers)
 include(CMakePrintHelpers)
@@ -70,6 +71,12 @@ include(CheckCXXSourceCompiles)
 include(CheckLibraryExists)
 include(FeatureSummary)
 include(GNUInstallDirs)
+
+# CPM
+include(CPM)
+CPMUsePackageLock(package-lock.cmake)
+
+# VAST
 include(VASTCheckCompilerVersion)
 include(VASTMacDependencyPaths)
 include(VASTProvideFindModule)
@@ -502,6 +509,10 @@ if (VAST_ENABLE_DEVELOPER_MODE)
   # Enable CAF's compile-time type ID checks.
   target_compile_definitions(libvast_internal
                              INTERFACE CAF_ENABLE_TYPE_ID_CHECKS)
+  set(CPM_UDOWNLOAD_ALL ON)
+else ()
+  # Disable downloading of packages via CPM.
+  set(CPM_LOCAL_PACKAGE_ONLY ON)
 endif ()
 
 if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
@@ -694,8 +705,10 @@ configure_package_config_file(
   INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
 install(
-  FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CPM.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/package-lock.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")

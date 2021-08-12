@@ -385,23 +385,28 @@ if (VAST_ENABLE_JOURNALD_LOGGING)
 endif ()
 
 # Link against fmt.
-target_compile_definitions(
-  libvast
-  PUBLIC
-    # Forbid unsafe duration_cast usage.
-    FMT_SAFE_DURATION_CAST
-    # Make fmt::internal an alias for fmt::detail. Remove when requiring fmt >= 7.
-    FMT_USE_INTERNAL)
-find_package(fmt 5.2.1 REQUIRED)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(fmt 5.2.1 REQUIRED)")
-target_link_libraries(libvast PUBLIC fmt::fmt)
-dependency_summary("fmt" fmt::fmt "Dependencies")
+CPMGetPackage(fmt)
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nCPMGetPackage(fmt)")
+if (TARGET fmt)
+  VASTSystemizeTarget(fmt)
+  target_link_libraries(libvast PUBLIC fmt)
+  list(APPEND VAST_USED_CPM_PACKAGES "fmt")
+else ()
+  target_link_libraries(libvast PUBLIC fmt::fmt)
+  dependency_summary("fmt" fmt::fmt "Dependencies")
+endif ()
 
 target_compile_definitions(libvast PUBLIC SPDLOG_FMT_EXTERNAL)
-find_package(spdlog 1.5.0 REQUIRED)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(spdlog 1.5.0 REQUIRED)")
-target_link_libraries(libvast PUBLIC spdlog::spdlog)
-dependency_summary("spdlog" spdlog::spdlog "Dependencies")
+CPMGetPackage(spdlog)
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nCPMGetPackage(spdlog)")
+if (TARGET spdlog)
+  VASTSystemizeTarget(spdlog)
+  target_link_libraries(libvast PUBLIC spdlog)
+  list(APPEND VAST_USED_CPM_PACKAGES "spdlog")
+else ()
+  target_link_libraries(libvast PUBLIC spdlog::spdlog)
+  dependency_summary("spdlog" spdlog::spdlog "Dependencies")
+endif ()
 
 # Link against simdjson.
 find_package(
@@ -500,7 +505,7 @@ endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
-  TARGETS libvast
+  TARGETS libvast ${VAST_USED_CPM_PACKAGES}
   EXPORT VASTTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

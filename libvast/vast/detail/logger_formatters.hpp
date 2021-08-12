@@ -48,14 +48,18 @@
 
 namespace vast::detail {
 
-#if FMT_VERSION >= 70000 // {fmt} 7+
+#if FMT_VERSION >= 80000 // {fmt} 8+
+
+using fmt::is_formattable;
+
+#elif FMT_VERSION >= 70000 // {fmt} 7.x
 
 template <typename T>
 struct is_formattable
-  : std::bool_constant<!std::is_same<
-      decltype(fmt::internal::arg_mapper<fmt::buffer_context<char>>().map(
-        std::declval<T>())),
-      fmt::internal::unformattable>::value> {};
+  : std::bool_constant<
+      !std::is_same<decltype(fmt::detail::arg_mapper<fmt::buffer_context<char>>()
+                               .map(std::declval<T>())),
+                    fmt::detail::unformattable>::value> {};
 
 #elif FMT_VERSION >= 60000 // {fmt} 6.x
 
@@ -84,11 +88,11 @@ struct is_formattable<
 // A fallback formatter using the `caf::detail::stringification_inspector`
 // concept, which uses ADL-available `to_string` overloads if available.
 template <typename T>
-struct fmt::internal::fallback_formatter<
+struct fmt::detail::fallback_formatter<
   T, fmt::format_context::char_type,
   std::enable_if_t<std::conjunction_v<
     std::negation<vast::detail::is_formattable<T>>,
-    std::negation<fmt::internal::is_streamable<T, fmt::format_context::char_type>>,
+    std::negation<fmt::detail::is_streamable<T, fmt::format_context::char_type>>,
     std::negation<vast::is_printable<std::back_insert_iterator<std::string>,
                                      std::decay_t<T>>>,
     caf::detail::is_inspectable<caf::detail::stringification_inspector, T>>>>
@@ -112,11 +116,11 @@ struct fmt::internal::fallback_formatter<
 
 // A fallback formatter using VAST's printable concept.
 template <typename T>
-struct fmt::internal::fallback_formatter<
+struct fmt::detail::fallback_formatter<
   T, fmt::format_context::char_type,
   std::enable_if_t<std::conjunction_v<
     std::negation<vast::detail::is_formattable<T>>,
-    std::negation<fmt::internal::is_streamable<T, fmt::format_context::char_type>>,
+    std::negation<fmt::detail::is_streamable<T, fmt::format_context::char_type>>,
     vast::is_printable<std::back_insert_iterator<std::string>, std::decay_t<T>>>>>
   : private formatter<basic_string_view<fmt::format_context::char_type>,
                       fmt::format_context::char_type> {
