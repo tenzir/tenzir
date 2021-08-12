@@ -40,10 +40,7 @@ std::shared_ptr<spdlog::logger>& logger();
 
 template <class T>
 auto pretty_type_name(const T&) {
-  if constexpr (std::is_pointer_v<T>)
-    return caf::detail::pretty_type_name(typeid(std::remove_pointer_t<T>));
-  else
-    return caf::detail::pretty_type_name(typeid(T));
+  return caf::detail::pretty_type_name(typeid(std::remove_pointer_t<T>));
 }
 
 template <class T>
