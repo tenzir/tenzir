@@ -113,6 +113,15 @@ OUT_OF_BOUNDS(count, uint16_t, 1u << 16)
 OUT_OF_BOUNDS(count, uint32_t, 1ull << 32)
 #undef OUT_OF_BOUNDS
 
+TEST(data overload) {
+  auto val = integer{42};
+  auto x = X<integer, int>{};
+  auto d = data{record{{"value", val}}};
+  CHECK_EQUAL(convert(d, x), ec::no_error);
+  d = val;
+  CHECK_EQUAL(convert(d, x), ec::convert_error);
+}
+
 TEST(failing) {
   auto r = record{{"value", integer{42}}};
   auto x = X<integer>{};
