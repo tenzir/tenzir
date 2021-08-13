@@ -35,7 +35,7 @@ struct fixture {
 FIXTURE_SCOPE(stable_map_tests, fixture)
 
 TEST(stable_map membership) {
-  CHECK(xs.find("qux") == xs.end());
+  CHECK(!xs.contains("qux"));
   CHECK(xs.find("foo") != xs.end());
   CHECK_EQUAL(xs.count("baz"), 1u);
 }

@@ -207,7 +207,12 @@ public:
 
   template <class L>
   size_type count(const L& x) const {
-    return find(x) == end() ? 0 : 1;
+    return contains(x) ? 1 : 0;
+  }
+
+  template <class L>
+  bool contains(const L& x) const {
+    return find(x) != end();
   }
 
   // -- operators ------------------------------------------------------------

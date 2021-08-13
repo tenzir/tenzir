@@ -161,7 +161,7 @@ public:
   // -- lookup ---------------------------------------------------------------
 
   [[nodiscard]] size_type count(const value_type& x) const {
-    return find(x) == end() ? 0 : 1;
+    return contains(x) ? 1 : 0;
   }
 
   iterator find(const value_type& x) {
@@ -170,6 +170,10 @@ public:
 
   [[nodiscard]] const_iterator find(const value_type& x) const {
     return Policy::lookup(xs_, x);
+  }
+
+  [[nodiscard]] bool contains(const value_type& x) const {
+    return find(x) != end();
   }
 
   // -- operators ------------------------------------------------------------
