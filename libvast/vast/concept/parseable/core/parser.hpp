@@ -9,7 +9,7 @@
 #pragma once
 
 #include "vast/concept/support/unused_type.hpp"
-#include "vast/detail/type_traits.hpp"
+#include "vast/concepts.hpp"
 
 #include <iterator>
 #include <tuple>
@@ -57,35 +57,35 @@ struct parser_base {
     return derived().parse(f, l, a) && f == l;
   }
 
-  // FIXME: don't ignore ADL.
-  template <class Range, class Attribute = unused_type>
-  auto operator()(Range&& r, Attribute& a = unused) const
-  -> decltype(std::begin(r), std::end(r), bool()) {
+  template <class... TAttributes>
+  auto operator()(concepts::range auto&& r, TAttributes&... attributes) const
+    -> bool {
     auto f = std::begin(r);
     auto l = std::end(r);
-    return derived().parse(f, l, a) && f == l;
+    if constexpr (sizeof...(TAttributes) == 0) {
+      return derived().parse(f, l, unused) && f == l;
+    } else if constexpr (sizeof...(TAttributes) == 1) {
+      return derived().parse(f, l, attributes...) && f == l;
+    } else {
+      auto t = std::tie(attributes...);
+      return derived().parse(f, l, t);
+    }
   }
 
-  // FIXME: don't ignore ADL.
-  template <class Range, class A0, class A1, class... As>
-  auto operator()(Range&& r, A0& a0, A1& a1, As&... as) const
-  -> decltype(std::begin(r), std::end(r), bool()) {
-    auto t = std::tie(a0, a1, as...);
-    return operator()(r, t);
-  }
-
-  template <class Iterator, class Attribute>
-  auto operator()(Iterator& f, const Iterator& l, Attribute& a) const
-  -> decltype(*f, ++f, f == l, bool()) {
-    return derived().parse(f, l, a);
-  }
-
-  template <class Iterator, class A0, class A1, class... As>
-  auto operator()(Iterator& f, const Iterator& l, A0& a0, A1& a1,
-                  As&... as) const
-  -> decltype(*f, ++f, f == l, bool()) {
-    auto t = std::tie(a0, a1, as...);
-    return derived().parse(f, l, t);
+  template <class Iterator, class... TAttributes>
+    requires requires(Iterator first, Iterator last) {
+      *first;
+      ++first;
+      first == last;
+    }
+  auto operator()(Iterator& first, const Iterator& last,
+                  TAttributes&... attributes) const {
+    if constexpr (sizeof...(TAttributes) == 1)
+      return derived().parse(first, last, attributes...);
+    else {
+      auto t = std::tie(attributes...);
+      return derived().parse(first, last, t);
+    }
   }
 
 private:

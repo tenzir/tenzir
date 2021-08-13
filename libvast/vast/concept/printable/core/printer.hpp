@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/concept/support/unused_type.hpp"
+#include "vast/concepts.hpp"
 
 #include <iterator>
 #include <tuple>
@@ -39,13 +40,9 @@ struct printer_base {
     return guard_printer<Derived, Guard>{derived(), fun};
   }
 
-  // FIXME: don't ignore ADL.
-  template <class Range, class... TAttributes>
-    requires requires(Range r) {
-      std::begin(r);
-      std::end(r);
-    }
-  auto operator()(Range&& r, const TAttributes&... attributes) const {
+  template <class... TAttributes>
+  auto
+  operator()(concepts::range auto&& r, const TAttributes&... attributes) const {
     if constexpr (sizeof...(TAttributes) == 0) {
       auto out = std::back_inserter(r);
       return derived().print(out, unused);

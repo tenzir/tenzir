@@ -38,6 +38,14 @@ concept transparent = requires {
   typename T::is_transparent;
 };
 
+// Replace this with std::ranges::range concept once all compilers support
+// <ranges> header
+template <class T>
+concept range = requires(T& t) {
+  std::begin(t);
+  std::end(t);
+};
+
 /// Types that work with std::data and std::size (= containers)
 template <class T>
 concept container = requires(T t) {
