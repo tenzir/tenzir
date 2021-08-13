@@ -211,7 +211,7 @@ public:
   }
 
   template <class L>
-  bool contains(const L& x) const {
+  [[nodiscard]] bool contains(const L& x) const {
     return find(x) != end();
   }
 
