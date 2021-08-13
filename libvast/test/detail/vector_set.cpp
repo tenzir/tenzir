@@ -25,8 +25,8 @@ struct fixture {
 
   void test() {
     MESSAGE("find");
-    CHECK(xs.find(0) == xs.end());
-    CHECK(xs.find(1) != xs.end());
+    CHECK(!xs.contains(0));
+    CHECK(xs.contains(1));
     CHECK(xs.find(2) != xs.end());
     CHECK(xs.find(4) == xs.end());
     CHECK_EQUAL(xs.count(8), 1u);

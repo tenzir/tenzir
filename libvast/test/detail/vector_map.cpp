@@ -35,7 +35,7 @@ struct fixture {
 FIXTURE_SCOPE(stable_map_tests, fixture)
 
 TEST(stable_map membership) {
-  CHECK(xs.find("qux") == xs.end());
+  CHECK(!xs.contains("qux"));
   CHECK(xs.find("foo") != xs.end());
   CHECK_EQUAL(xs.count("baz"), 1u);
 }
@@ -44,7 +44,7 @@ TEST(stable_map at) {
   CHECK_EQUAL(xs.at("foo"), 42);
   auto exception = std::out_of_range{""};
   try {
-    xs.at("qux");
+    [[maybe_unused]] auto _ = xs.at("qux");
   } catch (std::out_of_range& e) {
     exception = std::move(e);
   }
