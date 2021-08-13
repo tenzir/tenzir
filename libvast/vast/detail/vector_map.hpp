@@ -170,7 +170,7 @@ public:
   // -- lookup ---------------------------------------------------------------
 
   template <class L>
-  mapped_type& at(const L& key) {
+  [[nodiscard]] mapped_type& at(const L& key) {
     auto i = find(key);
     if (i == end())
       VAST_RAISE_ERROR(std::out_of_range,
@@ -188,7 +188,7 @@ public:
   }
 
   template <class L>
-  mapped_type& operator[](const L& key) {
+  [[nodiscard]] mapped_type& operator[](const L& key) {
     auto i = find(key);
     if (i != end())
       return i->second;
@@ -196,7 +196,7 @@ public:
   }
 
   template <class L>
-  iterator find(const L& x) {
+  [[nodiscard]] iterator find(const L& x) {
     return Policy::lookup(xs_, x);
   }
 
@@ -206,7 +206,7 @@ public:
   }
 
   template <class L>
-  size_type count(const L& x) const {
+  [[nodiscard]] size_type count(const L& x) const {
     return contains(x) ? 1 : 0;
   }
 

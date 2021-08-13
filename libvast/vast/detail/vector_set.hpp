@@ -164,7 +164,7 @@ public:
     return contains(x) ? 1 : 0;
   }
 
-  iterator find(const value_type& x) {
+  [[nodiscard]] iterator find(const value_type& x) {
     return Policy::lookup(xs_, x);
   }
 
