@@ -158,7 +158,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       if (detail::ends_with(fqn, *s)) {
         // Get ids.
         for (const auto& [layout_name, ids] : state.type_ids)
-          if (detail::starts_with(field.key(), layout_name))
+          if (field.key().starts_with(layout_name))
             row_ids |= ids;
       }
     }

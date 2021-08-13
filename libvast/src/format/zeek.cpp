@@ -71,9 +71,8 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     // - src/format/pcap.cpp
     t = count_type{}.name("port");
   if (caf::holds_alternative<none_type>(t)
-      && (detail::starts_with(zeek_type, "vector")
-          || detail::starts_with(zeek_type, "set")
-          || detail::starts_with(zeek_type, "table"))) {
+      && (zeek_type.starts_with("vector") || zeek_type.starts_with("set")
+          || zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
     // safely assume that we're dealing with a basic type inside the brackets.
     // If this will ever change, we'll have to enhance this simple parser.
@@ -158,7 +157,7 @@ void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
   // output is, e.g., "#path conn" instead of "#path zeek.conn". For all
   // non-Zeek types, we keep the prefix to avoid conflicts in tools that work
   // with Zeek TSV.
-  if (detail::starts_with(path, "zeek."))
+  if (path.starts_with("zeek."))
     path = path.substr(5);
   out << "#separator " << separator << '\n'
       << "#set_separator" << separator << set_separator << '\n'
@@ -260,7 +259,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       VAST_DEBUG("{} ignores empty line at {}", detail::pretty_type_name(this),
                  lines_->line_number());
       continue;
-    } else if (detail::starts_with(line, "#separator")) {
+    } else if (line.starts_with("#separator")) {
       // We encountered a new log file.
       if (auto err = finish(f))
         return err;
@@ -272,7 +271,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
         return caf::make_error(
           ec::parse_error, "unable to create a bulider for parsed layout at",
           lines_->line_number());
-    } else if (detail::starts_with(line, "#")) {
+    } else if (line.starts_with('#')) {
       // Ignore comments.
       VAST_DEBUG("{} ignores comment at line {}",
                  detail::pretty_type_name(this), lines_->line_number());

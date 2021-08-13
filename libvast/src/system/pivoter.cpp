@@ -52,8 +52,7 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   std::string edge;
   VAST_TRACE_SCOPE("{} {} {}", st.self, VAST_ARG(st.target),
                    VAST_ARG(indicator.name()));
-  if (detail::starts_with(st.target, "zeek")
-      && detail::starts_with(indicator.name(), "zeek"))
+  if (st.target.starts_with("zeek") && indicator.name().starts_with("zeek"))
     edge = "uid";
   else
     edge = "community_id";

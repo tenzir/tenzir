@@ -108,8 +108,7 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
       for (const auto& file : std::filesystem::directory_iterator{dir, ec}) {
         if (ec || !file.is_regular_file())
           break;
-        if (detail::starts_with(file.path().filename().string(), //
-                                "libvast-plugin-"))
+        if (file.path().filename().string().starts_with("libvast-plugin-"))
           paths_or_names.push_back(file.path());
       }
     }

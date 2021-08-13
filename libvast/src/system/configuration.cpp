@@ -89,8 +89,7 @@ caf::error configuration::parse(int argc, char** argv) {
   // needs to happen before the regular parsing of the command line since
   // plugins may add additional commands.
   auto is_not_plugin_opt = [](auto& x) {
-    return !detail::starts_with(x, "--plugins=")
-           && !detail::starts_with(x, "--plugin-dirs=");
+    return !x.starts_with("--plugins=") && !x.starts_with("--plugin-dirs=");
   };
   auto plugin_opt = std::stable_partition(
     command_line.begin(), command_line.end(), is_not_plugin_opt);
@@ -119,8 +118,8 @@ caf::error configuration::parse(int argc, char** argv) {
   }
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
-  auto is_vast_opt = [](auto& x) {
-    return !detail::starts_with(x, "--caf.");
+  auto is_vast_opt = [](const auto& x) {
+    return !x.starts_with("--caf.");
   };
   auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
                                        is_vast_opt);
@@ -156,7 +155,7 @@ caf::error configuration::parse(int argc, char** argv) {
   // If the user provided a config file on the command line, we attempt to
   // parse it last.
   for (auto& arg : command_line) {
-    if (detail::starts_with(arg, "--config=")) {
+    if (arg.starts_with("--config=")) {
       std::error_code err{};
       if (auto config = std::filesystem::path{arg.substr(9)};
           std::filesystem::exists(config, err))
@@ -200,8 +199,7 @@ caf::error configuration::parse(int argc, char** argv) {
   // Strip the caf. prefix from all keys.
   // TODO: Remove this after switching to CAF 0.18.
   for (auto& option : merged_config)
-    if (auto& key = option.first;
-        detail::starts_with(key.begin(), key.end(), "caf."))
+    if (auto& key = option.first; std::string_view{key}.starts_with("caf."))
       key.erase(0, 4);
   // Erase all null values because a caf::config_value has no such notion.
   for (auto i = merged_config.begin(); i != merged_config.end();) {
@@ -277,7 +275,7 @@ caf::error configuration::parse(int argc, char** argv) {
   // Try parsing all --caf.* settings. First, strip caf. prefix for the
   // CAF parser.
   for (auto& arg : caf_args)
-    if (detail::starts_with(arg, "--caf."))
+    if (arg.starts_with("--caf."))
       arg.erase(2, 4);
   // We clear the config_file_path first so it does not use
   // caf-application.ini as fallback during actor_system_config::parse().

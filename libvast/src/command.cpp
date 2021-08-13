@@ -319,7 +319,7 @@ caf::error parse_impl(invocation& result, const command& cmd,
       has_subcommand = position != last;
       break;
   }
-  if (position != last && detail::starts_with(*position, "-"))
+  if (position != last && position->starts_with('-'))
     return caf::make_error(ec::unrecognized_option, cmd.full_name(), *position);
   // Check for help option.
   if (has_subcommand && *position == "help") {
