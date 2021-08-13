@@ -40,30 +40,34 @@ struct printer_base {
   }
 
   // FIXME: don't ignore ADL.
-  template <class Range, class Attribute = unused_type>
-  auto operator()(Range&& r, const Attribute& a = unused) const
-  -> decltype(std::begin(r), std::end(r), bool()) {
-    auto out = std::back_inserter(r);
-    return derived().print(out, a);
+  template <class Range, class... TAttributes>
+    requires requires(Range r) {
+      std::begin(r);
+      std::end(r);
+    }
+  auto operator()(Range&& r, const TAttributes&... attributes) const {
+    if constexpr (sizeof...(TAttributes) == 0) {
+      auto out = std::back_inserter(r);
+      return derived().print(out, unused);
+    } else if constexpr (sizeof...(TAttributes) == 1) {
+      auto out = std::back_inserter(r);
+      return derived().print(out, attributes...);
+    } else
+      return operator()(r, std::tie(attributes...));
   }
 
-  // FIXME: don't ignore ADL.
-  template <class Range, class A0, class A1, class... As>
-  auto operator()(Range&& r, const A0& a0, const A1& a1, const As&... as) const
-  -> decltype(std::begin(r), std::end(r), bool()) {
-    return operator()(r, std::tie(a0, a1, as...));
-  }
-
-  template <class Iterator, class Attribute = unused_type>
-  auto operator()(Iterator&& out, const Attribute& a = unused) const
-  -> decltype(*out, ++out, bool()) {
-    return derived().print(out, a);
-  }
-
-  template <class Iterator, class A0, class A1, class... As>
-  auto operator()(Iterator&& out, const A0& a0, const A1& a1, const As&... as) const
-  -> decltype(*out, ++out, bool()) {
-    return operator()(out, std::tie(a0, a1, as...));
+  template <class Iterator, class... TAttributes>
+    requires requires(Iterator out) {
+      *out;
+      ++out;
+    }
+  auto operator()(Iterator&& out, const TAttributes&... attributes) const {
+    if constexpr (sizeof...(TAttributes) == 0)
+      return derived().print(out, unused);
+    else if constexpr (sizeof...(TAttributes) == 1)
+      return derived().print(out, attributes...);
+    else
+      return operator()(out, std::tie(attributes...));
   }
 
 private:
