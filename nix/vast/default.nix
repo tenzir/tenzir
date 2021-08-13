@@ -105,6 +105,12 @@ stdenv.mkDerivation rec {
       --disable "Disk Monitor" \
       --disable "Partition-local Stores" \
       --disable "Transforms"
+    mkdir -p lsvast-integration-test
+    ${placeholder "out"}/bin/vast -N -d lsvast-integration-test/vast.db import -r ../vast/integration/data/suricata/eve.json suricata
+    python ../vast/integration/integration.py \
+      --set ../vast/integration/lsvast_integration_suite.yaml \
+      --app ${placeholder "out"}/bin/lsvast \
+      --directory lsvast-integration-test
   '';
 
   meta = with lib; {
