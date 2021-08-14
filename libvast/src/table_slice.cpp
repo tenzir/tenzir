@@ -620,8 +620,8 @@ struct row_evaluator {
       auto neg = is_negated(op_);
       // auto abs_op = neg ? negate(op_) : op_;
       for (const auto& field : record_type::each{layout}) {
-        auto fqn = layout.name() + "." + field.key();
-        if (detail::ends_with(fqn, *s)) {
+        if (const auto fqn = layout.name() + "." + field.key();
+            fqn.ends_with(*s)) {
           result = true;
           break;
         }

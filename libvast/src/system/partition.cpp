@@ -154,8 +154,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       // a heuristic. We use the substring after the last dot for the
       // field name.
       // const auto& name = field.trace.back()->name;
-      auto fqn = field.key();
-      if (detail::ends_with(fqn, *s)) {
+      if (const auto fqn = field.key(); fqn.ends_with(*s)) {
         // Get ids.
         for (const auto& [layout_name, ids] : state.type_ids)
           if (field.key().starts_with(layout_name))
