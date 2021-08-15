@@ -274,8 +274,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 // partition.
                 auto matching = [&] {
                   for (const auto& pair : synopsis.second.field_synopses_) {
-                    auto fqn = pair.first.fqn();
-                    if (detail::ends_with(fqn, *s))
+                    if (const auto fqn = pair.first.fqn(); fqn.ends_with(*s))
                       return true;
                   }
                   return false;
@@ -295,8 +294,8 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
           return all_partitions();
         },
         [&](const field_extractor& lhs, const data&) -> result_type {
-          auto pred = [&](auto& field) {
-            return detail::ends_with(field.fqn(), lhs.field);
+          auto pred = [&](const auto& field) {
+            return field.fqn().ends_with(lhs.field);
           };
           return search(pred);
         },

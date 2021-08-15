@@ -189,39 +189,4 @@ std::string join(const std::vector<T>& v, std::string_view sep) {
   }
 }
 
-// TODO: drop hand-rolled starts_with and ends_with when switching to C++20
-
-/// Determines whether a string occurs at the beginning of another.
-/// @param begin The beginning of the string.
-/// @param end The end of the string.
-/// @param str The substring to check at the start of *[begin, end)*.
-/// @returns `true` iff *str* occurs at the beginning of *[begin, end)*.
-template <class Iterator>
-bool starts_with(Iterator begin, Iterator end, std::string_view str) {
-  using diff = typename std::iterator_traits<Iterator>::difference_type;
-  if (static_cast<diff>(str.size()) > end - begin)
-    return false;
-  return std::equal(str.begin(), str.end(), begin);
-}
-
-inline bool starts_with(std::string_view str, std::string_view start) {
-  return starts_with(str.begin(), str.end(), start);
-}
-
-/// Determines whether a string occurs at the end of another.
-/// @param begin The beginning of the string.
-/// @param end The end of the string.
-/// @param str The substring to check at the end of *[begin, end)*.
-/// @returns `true` iff *str* occurs at the end of *[begin, end)*.
-template <class Iterator>
-bool ends_with(Iterator begin, Iterator end, std::string_view str) {
-  using diff = typename std::iterator_traits<Iterator>::difference_type;
-  return static_cast<diff>(str.size()) <= end - begin
-         && std::equal(str.begin(), str.end(), end - str.size());
-}
-
-inline bool ends_with(std::string_view str, std::string_view end) {
-  return ends_with(str.begin(), str.end(), end);
-}
-
 } // namespace vast::detail

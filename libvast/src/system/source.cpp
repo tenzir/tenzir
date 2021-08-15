@@ -46,8 +46,8 @@ void source_state::initialize(const type_registry_actor& type_registry,
     blocking->request(type_registry, caf::infinite, atom::get_v)
       .receive(
         [=, this](type_set types) {
-          auto is_valid = [&](const auto& layout) {
-            return detail::starts_with(layout.name(), type_filter);
+          const auto is_valid = [&](const auto& layout) {
+            return layout.name().starts_with(type_filter);
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
