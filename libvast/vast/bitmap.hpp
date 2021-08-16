@@ -117,18 +117,21 @@ struct sum_type_access<vast::bitmap> : default_sum_type_access<vast::bitmap> {};
 
 namespace fmt {
 
-template <>
-struct formatter<vast::bitmap> {
+template <class Bitmap>
+  requires(caf::detail::tl_contains<vast::bitmap::types, Bitmap>::value
+           || std::is_same_v<Bitmap, vast::bitmap>)
+struct formatter<Bitmap> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <typename FormatContext>
-  auto format(const vast::bitmap& value, FormatContext& ctx) {
-    auto out = ctx.out();
-    vast::print(out, value);
-    return out;
+  auto format(const Bitmap& value, FormatContext& ctx) {
+    std::string buffer{};
+    // TODO: Support other policies via parse context.
+    vast::printers::bitmap<Bitmap, vast::policy::rle>(buffer, value);
+    return std::copy(buffer.begin(), buffer.end(), ctx.out());
   }
 };
 
