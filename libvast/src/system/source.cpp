@@ -139,7 +139,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        const type_registry_actor& type_registry, vast::schema local_schema,
        std::string type_filter, accountant_actor accountant,
        std::vector<transform>&& transforms) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(self));
+  VAST_TRACE_SCOPE("{}", VAST_ARG(*self));
   // Initialize state.
   self->state.self = self;
   self->state.name = reader->name();
@@ -153,7 +153,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.transformer
     = self->spawn(transformer, "source-transformer", std::move(transforms));
   if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", self);
+    VAST_ERROR("{} failed to spawn transformer", *self);
     self->quit();
     return {};
   }
@@ -161,7 +161,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->send(self->state.accountant, atom::announce_v, self->state.name);
   self->state.initialize(type_registry, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
+    VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
     self->state.done = true;
     if (self->state.mgr) {
       self->state.mgr->shutdown();
@@ -193,19 +193,19 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       if (self->state.has_sink && self->state.mgr->out().num_paths() == 0) {
         VAST_WARN("{} discards request for {} messages because all its "
                   "outbound paths were removed",
-                  self, num);
+                  *self, num);
         return;
       }
-      VAST_DEBUG("{} schedules generation of {} messages", self, num);
+      VAST_DEBUG("{} schedules generation of {} messages", *self, num);
       self
         ->request(caf::actor_cast<source_actor>(self), caf::infinite,
                   atom::internal_v, atom::run_v, static_cast<uint64_t>(num))
         .then(
           [=]() {
-            VAST_DEBUG("{} finished generation of {} messages", self, num);
+            VAST_DEBUG("{} finished generation of {} messages", *self, num);
           },
           [=](const caf::error& err) {
-            VAST_WARN("{} failed generation of {} messages: {}", self, num,
+            VAST_WARN("{} failed generation of {} messages: {}", *self, num,
                       err);
           });
     },
@@ -230,7 +230,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto t = timer::start(self->state.metrics);
       auto [err, produced] = self->state.reader->read(
         events, self->state.table_slice_size, push_slice);
-      VAST_DEBUG("{} read {} events", self, produced);
+      VAST_DEBUG("{} read {} events", *self, produced);
       t.stop(produced);
       self->state.count += produced;
       auto finish = [&] {
@@ -242,7 +242,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       };
       if (self->state.requested
           && self->state.count >= *self->state.requested) {
-        VAST_DEBUG("{} finished with {} events", self, self->state.count);
+        VAST_DEBUG("{} finished with {} events", *self, self->state.count);
         return finish();
       }
       if (err == ec::stalled) {
@@ -251,7 +251,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
           // message. Sending another one would create a parallel wakeup cycle.
           self->state.waiting_for_input = true;
           self->delayed_send(self, self->state.wakeup_delay, atom::wakeup_v);
-          VAST_DEBUG("{} scheduled itself to resume after {}", self,
+          VAST_DEBUG("{} scheduled itself to resume after {}", *self,
                      self->state.wakeup_delay);
           // Exponential backoff for the wakeup calls.
           // For each consecutive invocation of this generate handler that does
@@ -263,29 +263,29 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                    < self->state.reader->batch_timeout_ / 2)
             self->state.wakeup_delay *= 2;
         } else {
-          VAST_DEBUG("{} timed out but is already scheduled for wakeup", self);
+          VAST_DEBUG("{} timed out but is already scheduled for wakeup", *self);
         }
         return;
       }
       self->state.wakeup_delay = std::chrono::milliseconds::zero();
       if (err == ec::timeout) {
-        VAST_DEBUG("{} reached batch timeout and flushes its buffers", self);
+        VAST_DEBUG("{} reached batch timeout and flushes its buffers", *self);
         self->state.mgr->out().force_emit_batches();
       } else if (err != caf::none) {
         if (err != vast::ec::end_of_input)
-          VAST_INFO("{} completed with message: {}", self, render(err));
+          VAST_INFO("{} completed with message: {}", *self, render(err));
         else
-          VAST_DEBUG("{} completed at end of input", self);
+          VAST_DEBUG("{} completed at end of input", *self);
         return finish();
       }
-      VAST_DEBUG("{} ended a generation round regularly", self);
+      VAST_DEBUG("{} ended a generation round regularly", *self);
     },
     [self](atom::get, atom::schema) { //
       return self->state.reader->schema();
     },
-    [self](atom::put, schema sch) -> caf::result<void> {
-      VAST_DEBUG("{} received {}", self, VAST_ARG("schema", sch));
-      if (auto err = self->state.reader->schema(std::move(sch));
+    [self](atom::put, class schema schema) -> caf::result<void> {
+      VAST_DEBUG("{} received schema {}", *self, schema);
+      if (auto err = self->state.reader->schema(std::move(schema));
           err && err != caf::no_error)
         return err;
       return caf::unit;
@@ -295,7 +295,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     },
     [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
-      VAST_DEBUG("{} registers sink {}", self, VAST_ARG(sink));
+      VAST_DEBUG("{} registers sink {}", *self, VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
@@ -336,7 +336,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       return rs->promise;
     },
     [self](atom::wakeup) {
-      VAST_VERBOSE("{} wakes up to check for new input", self);
+      VAST_VERBOSE("{} wakes up to check for new input", *self);
       self->state.waiting_for_input = false;
       // If we are here, the reader returned with ec::stalled the last time it
       // was called. Let's check if we can read something now.
@@ -344,7 +344,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         self->state.mgr->push();
     },
     [self](atom::telemetry) {
-      VAST_DEBUG("{} got a telemetry atom", self);
+      VAST_DEBUG("{} got a telemetry atom", *self);
       self->state.send_report();
       if (!self->state.mgr->done())
         self->delayed_send<caf::message_priority::high>(

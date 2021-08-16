@@ -135,13 +135,13 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     ->do_receive(
       [&](caf::down_msg& msg) {
         VAST_ASSERT(msg.source == node);
-        VAST_DEBUG("{} received DOWN from node", self);
+        VAST_DEBUG("{} received DOWN from node", *self);
         stop = true;
         if (msg.reason != caf::exit_reason::user_shutdown)
           err = std::move(msg.reason);
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} got {}", self, ::strsignal(signal));
+        VAST_DEBUG("{} got {}", *self, ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM)
           self->send_exit(node, caf::exit_reason::user_shutdown);
         else

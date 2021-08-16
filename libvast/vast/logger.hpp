@@ -42,6 +42,16 @@
 #include "vast/detail/logger.hpp"
 #include "vast/detail/logger_formatters.hpp"
 
+// fmt::runtime is a function that selectively disables compile-time format
+// string evaluation. The VAST_FMT_RUNTIME macro wraps it for backwards
+// compatibility with {fmt} 7.x. The macro must be used for format strings that
+// cannot be known at compile-time.
+#if FMT_VERSION >= 80000 // {fmt} 8+
+#  define VAST_FMT_RUNTIME(...) ::fmt::runtime(__VA_ARGS__)
+#else
+#  define VAST_FMT_RUNTIME(...) (__VA_ARGS__)
+#endif
+
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 
 // A debugging macro that emits an additional log statement when leaving the
@@ -51,10 +61,11 @@
     auto CAF_UNIFYN(vast_log_trace_guard_)                                     \
       = [func_name_ = static_cast<const char*>(__func__)](                     \
           const std::string& format, auto&&... args) {                         \
-          VAST_DEBUG("ENTER {} " + format, __func__,                           \
+          VAST_DEBUG(VAST_FMT_RUNTIME("ENTER {} " + format), __func__,         \
                      std::forward<decltype(args)>(args)...);                   \
-          return ::caf::detail::make_scope_guard(                              \
-            [func_name_] { VAST_DEBUG("EXIT {}", func_name_); });              \
+          return ::caf::detail::make_scope_guard([func_name_] {                \
+            VAST_DEBUG("EXIT {}", func_name_);                                 \
+          });                                                                  \
         }(__VA_ARGS__);
 
 #  define VAST_TRACE(...)                                                      \

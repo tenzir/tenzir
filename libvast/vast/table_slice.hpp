@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/chunk.hpp"
+#include "vast/concept/printable/print.hpp"
 #include "vast/table_slice_encoding.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
@@ -346,3 +347,24 @@ filter(const table_slice& slice, const ids& hints);
                                       const expression& expr, const ids& hints);
 
 } // namespace vast
+
+#include "vast/concept/printable/vast/table_slice.hpp"
+
+namespace fmt {
+
+template <>
+struct formatter<vast::table_slice> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::table_slice& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+} // namespace fmt

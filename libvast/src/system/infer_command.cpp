@@ -14,7 +14,6 @@
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/vast/schema.hpp"
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"

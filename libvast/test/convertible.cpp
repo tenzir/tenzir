@@ -37,6 +37,18 @@ struct X {
   static const record_type layout;
 };
 
+namespace fmt {
+
+template <class From, class To>
+struct formatter<X<From, To>> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const X<From, To>& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+} // namespace fmt
+
 template <class From, class To>
 const record_type X<From, To>::layout = {{"value", data_to_type<From>{}}};
 

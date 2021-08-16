@@ -111,7 +111,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       if (self->state.purging) {
         VAST_DEBUG("{} ignores ping because a deletion is still in "
                    "progress",
-                   self);
+                   *self);
         return;
       }
       auto size = self->state.compute_dbdir_size();
@@ -121,11 +121,11 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // Nonetheless, if this becomes relevant we should switch to using
       // `inotify()` or similar to do real-time tracking of the db size.
       if (!size) {
-        VAST_WARN("{} failed to calculate recursive size of {}: {}", self,
+        VAST_WARN("{} failed to calculate recursive size of {}: {}", *self,
                   self->state.dbdir, size.error());
         return;
       }
-      VAST_VERBOSE("{} checks db-directory of size {}", self, *size);
+      VAST_VERBOSE("{} checks db-directory of size {}", *self, *size);
       if (*size > self->state.config.high_water_mark && !self->state.purging) {
         self->state.purging = true;
         // TODO: Remove the static_cast when switching to CAF 0.18.
@@ -137,7 +137,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
               // nop
             },
             [=](const caf::error& err) {
-              VAST_ERROR("{} failed to purge db-directory: {}", self, err);
+              VAST_ERROR("{} failed to purge db-directory: {}", *self, err);
             });
       }
     },
@@ -164,7 +164,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           continue;
         uuid id;
         if (!parsers::uuid(partition, id)) {
-          VAST_VERBOSE("{} failed to find partition {}", self, partition);
+          VAST_VERBOSE("{} failed to find partition {}", *self, partition);
           continue;
         }
         if (entry.is_regular_file()) {
@@ -176,14 +176,14 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           else
             VAST_WARN("{} failed to get file size and last write time for "
                       "partition {}",
-                      self, partition);
+                      *self, partition);
         }
       }
       if (partitions.empty()) {
-        VAST_VERBOSE("{} failed to find any partitions to delete", self);
+        VAST_VERBOSE("{} failed to find any partitions to delete", *self);
         return {};
       }
-      VAST_DEBUG("{} found {} partitions on disk", self, partitions.size());
+      VAST_DEBUG("{} found {} partitions on disk", *self, partitions.size());
       std::sort(partitions.begin(), partitions.end(),
                 [](const auto& lhs, const auto& rhs) {
                   return lhs.mtime < rhs.mtime;
@@ -192,19 +192,19 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       auto idx = std::min(partitions.size(), self->state.config.step_size);
       for (size_t i = 0; i < idx; ++i) {
         auto& partition = partitions.at(i);
-        VAST_VERBOSE("{} erases partition {} from index", self, partition.id);
+        VAST_VERBOSE("{} erases partition {} from index", *self, partition.id);
         self
           ->request(self->state.index, caf::infinite, atom::erase_v,
                     partition.id)
           .then(
             [=, sg = shared_guard](atom::done) {
               if (const auto size = self->state.compute_dbdir_size(); !size) {
-                VAST_WARN("{} failed to calculate size of {}: {}", self,
+                VAST_WARN("{} failed to calculate size of {}: {}", *self,
                           self->state.dbdir, size.error());
               } else {
                 VAST_VERBOSE("{} erased ids from index; leftover size is "
                              "{}",
-                             self, *size);
+                             *self, *size);
                 if (*size > self->state.config.low_water_mark) {
                   // Repeat until we're below the low water mark
                   self->send(self, atom::erase_v);
@@ -212,7 +212,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
               }
             },
             [=, sg = shared_guard](caf::error e) {
-              VAST_WARN("{} failed to erase from index: {}", self, render(e));
+              VAST_WARN("{} failed to erase from index: {}", *self, render(e));
             });
       }
       return {};

@@ -57,7 +57,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     return make_message(s.error());
   auto sink = *s;
   auto sink_guard = caf::detail::make_scope_guard([&] {
-    VAST_DEBUG("{} sending exit to sink", self);
+    VAST_DEBUG("{} sending exit to sink", *self);
     self->send_exit(sink, caf::exit_reason::user_shutdown);
   });
   self->monitor(sink);
@@ -85,7 +85,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(maybe_exporter.error()));
   auto exporter = caf::actor_cast<exporter_actor>(std::move(*maybe_exporter));
   auto exporter_guard = caf::detail::make_scope_guard([&] {
-    VAST_DEBUG("{} sending exit to exporter", self);
+    VAST_DEBUG("{} sending exit to exporter", *self);
     self->send_exit(exporter, caf::exit_reason::user_shutdown);
   });
   // Spawn explorer at the node.
@@ -96,7 +96,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   if (!explorer)
     return caf::make_message(std::move(explorer.error()));
   auto explorer_guard = caf::detail::make_scope_guard([&] {
-    VAST_DEBUG("{} sending exit to explorer", self);
+    VAST_DEBUG("{} sending exit to explorer", *self);
     self->send_exit(*explorer, caf::exit_reason::user_shutdown);
   });
   self->monitor(*explorer);
@@ -117,22 +117,18 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     ->do_receive(
       [&](caf::down_msg& msg) {
         if (msg.source == node) {
-          VAST_DEBUG("{} received DOWN from node",
-                     detail::pretty_type_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from node", inv.full_name);
         } else if (msg.source == *explorer) {
-          VAST_DEBUG("{} received DOWN from explorer",
-                     detail::pretty_type_name(inv.full_name));
-          explorer_guard.disable();
+          VAST_DEBUG("{} received DOWN from explorer", inv.full_name),
+            explorer_guard.disable();
         } else if (msg.source == sink) {
-          VAST_DEBUG("{} received DOWN from sink",
-                     detail::pretty_type_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from sink", inv.full_name);
           sink_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason) {
-          VAST_DEBUG("{} received error message: {}",
-                     detail::pretty_type_name(inv.full_name),
+          VAST_DEBUG("{} received error message: {}", inv.full_name,
                      self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
@@ -145,7 +141,9 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
           stop = true;
         }
       })
-    .until([&] { return stop; });
+    .until([&] {
+      return stop;
+    });
   if (err)
     return caf::make_message(std::move(err));
   return caf::none;

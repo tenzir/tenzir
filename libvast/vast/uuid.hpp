@@ -14,6 +14,7 @@
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/meta/hex_formatted.hpp>
+#include <fmt/format.h>
 
 #include <array>
 #include <cstddef>
@@ -96,3 +97,28 @@ struct hash<vast::uuid> {
 };
 
 } // namespace std
+
+namespace fmt {
+
+template <>
+struct formatter<vast::uuid> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::uuid& x, FormatContext& ctx) {
+    // e.g. 96107185-1838-48fb-906c-d1a9941ff407
+    static_assert(sizeof(vast::uuid) == 16, "id format changed, please update "
+                                            "formatter");
+    const auto args
+      = std::span{reinterpret_cast<const unsigned char*>(x.begin()), x.size()};
+    return format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
+                     join(args.subspan(0, 4), ""), join(args.subspan(4, 2), ""),
+                     join(args.subspan(6, 2), ""), join(args.subspan(8, 2), ""),
+                     join(args.subspan(10, 6), ""));
+  }
+};
+
+} // namespace fmt

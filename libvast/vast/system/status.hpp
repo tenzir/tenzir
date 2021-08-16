@@ -142,7 +142,7 @@ void collect_status(
       put(s, std::string_view{key}, std::move(response));
     },
     [self = rs->self, key, &s](const caf::error& err) {
-      VAST_WARN("{} failed to retrieve status for the key {}: {}", self, key,
+      VAST_WARN("{} failed to retrieve status for the key {}: {}", *self, key,
                 err);
       put(s, std::string_view{key}, fmt::to_string(err));
     });

@@ -88,7 +88,7 @@ value_index_ptr make(type x, caf::settings opts) {
                    digest_bytes);
         if (digest_bytes > 8) {
           VAST_WARN("{} expected cardinality exceeds "
-                    "maximum digest size {}, capping at 8 bytes",
+                    "maximum digest size, capping at 8 bytes",
                     __func__);
           digest_bytes = 8;
         }

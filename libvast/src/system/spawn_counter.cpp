@@ -39,7 +39,7 @@ spawn_counter(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::missing_component, "index");
   auto estimate = caf::get_or(args.inv.options, "vast.count.estimate", false);
   auto handle = self->spawn(counter, *expr, index, estimate);
-  VAST_VERBOSE("{} spawned a counter for {}", self, to_string(*expr));
+  VAST_VERBOSE("{} spawned a counter for {}", *self, to_string(*expr));
   return handle;
 }
 

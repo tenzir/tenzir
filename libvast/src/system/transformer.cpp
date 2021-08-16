@@ -35,7 +35,7 @@ transformer_stream_stage_ptr attach_transform_stage(
            detail::framed<table_slice> x) {
       if (x.header == detail::stream_control_header::eof) {
         VAST_DEBUG("{} quits after receiving EOF control message in stream",
-                   self);
+                   *self);
         self->send_exit(self, caf::make_error(ec::end_of_input));
         return;
       }

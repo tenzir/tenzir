@@ -83,8 +83,9 @@ template <class... Args>
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
   if (in) {
     auto f = fmt::format("{}{{}}", fstring);
-    in.context() = caf::make_message(
-      fmt::format(f, std::forward<Args>(args)..., to_string(in.context())));
+    in.context() = caf::make_message(fmt::format(VAST_FMT_RUNTIME(f),
+                                                 std::forward<Args>(args)...,
+                                                 to_string(in.context())));
   }
   return std::move(in);
 }

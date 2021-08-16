@@ -52,7 +52,7 @@ struct printer_registry<data> {
 };
 
 namespace printers {
-  auto const data = data_printer{};
+auto const data = data_printer{};
 } // namespace printers
 
 struct vast_list_printer : printer_base<vast_list_printer> {

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/bitmap_base.hpp"
+#include "vast/concept/printable/print.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/ewah_bitmap.hpp"
@@ -17,6 +18,7 @@
 
 #include <caf/detail/type_list.hpp>
 #include <caf/variant.hpp>
+#include <fmt/core.h>
 
 namespace vast {
 
@@ -110,3 +112,24 @@ template <>
 struct sum_type_access<vast::bitmap> : default_sum_type_access<vast::bitmap> {};
 
 } // namespace caf
+
+#include "vast/concept/printable/vast/bitmap.hpp"
+
+namespace fmt {
+
+template <>
+struct formatter<vast::bitmap> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::bitmap& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+} // namespace fmt

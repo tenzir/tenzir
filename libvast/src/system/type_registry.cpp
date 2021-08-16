@@ -90,7 +90,7 @@ caf::error type_registry_state::load_from_disk() {
                            fmt::format("failed to find directory {}: {}", dir,
                                        err.message()));
   if (!dir_exists) {
-    VAST_DEBUG("{} found no directory to load from", self);
+    VAST_DEBUG("{} found no directory to load from", *self);
     return caf::none;
   }
   const auto fname = filename();
@@ -106,7 +106,7 @@ caf::error type_registry_state::load_from_disk() {
     caf::binary_deserializer source{self->system(), *buffer};
     if (auto error = source(data))
       return error;
-    VAST_DEBUG("{} loaded state from disk", self);
+    VAST_DEBUG("{} loaded state from disk", *self);
   }
   return caf::none;
 }
@@ -120,12 +120,12 @@ void type_registry_state::insert(vast::type layout) {
     // the new layout is a superset of it.
     if (old_layouts.begin() != hint) {
       if (!is_subset(*old_layouts.begin(), *hint))
-        VAST_WARN("{} detected an incompatible layout change for {}", self,
+        VAST_WARN("{} detected an incompatible layout change for {}", *self,
                   hint->name());
       else
-        VAST_INFO("{} detected a layout change for {}", self, hint->name());
+        VAST_INFO("{} detected a layout change for {}", *self, hint->name());
     }
-    VAST_DEBUG("{} registered {}", self, hint->name());
+    VAST_DEBUG("{} registered {}", *self, hint->name());
   }
   // Move the newly inserted layout to the front.
   std::rotate(old_layouts.begin(), hint, std::next(hint));
@@ -145,11 +145,11 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   self->state.dir = dir;
   // Register the exit handler.
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} got EXIT from {}", self, msg.source);
+    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
     if (auto telemetry = self->state.telemetry(); !telemetry.empty())
       self->send(self->state.accountant, std::move(telemetry));
     if (auto err = self->state.save_to_disk())
-      VAST_ERROR("{} failed to persist state to disk: {}", self,
+      VAST_ERROR("{} failed to persist state to disk: {}", *self,
                  self->system().render(err));
     self->quit(msg.reason);
   });
@@ -166,7 +166,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   return {
     [self](atom::telemetry) {
       if (auto telemetry = self->state.telemetry(); !telemetry.empty()) {
-        VAST_TRACE_SCOPE("{} sends out a telemetry report to the {}", self,
+        VAST_TRACE_SCOPE("{} sends out a telemetry report to the {}", *self,
                          VAST_ARG("accountant", self->state.accountant));
         self->send(self->state.accountant, std::move(telemetry));
       }
@@ -174,12 +174,12 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
                          atom::telemetry_v);
     },
     [self](atom::status, status_verbosity v) {
-      VAST_TRACE_SCOPE("{} sends out a status report", self);
+      VAST_TRACE_SCOPE("{} sends out a status report", *self);
       return self->state.status(v);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_TRACE_SCOPE("{} attaches to {}", self, VAST_ARG("stream", in));
+      VAST_TRACE_SCOPE("{} attaches to {}", *self, VAST_ARG("stream", in));
       auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
@@ -189,7 +189,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       return result.inbound_slot();
     },
     [self](atom::get) {
-      VAST_TRACE_SCOPE("{} retrieves a list of all known types", self);
+      VAST_TRACE_SCOPE("{} retrieves a list of all known types", *self);
       return self->state.types();
     },
     [self](atom::put, taxonomies t) {
@@ -201,7 +201,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       return self->state.taxonomies;
     },
     [self](atom::load) -> caf::result<atom::ok> {
-      VAST_DEBUG("{} loads taxonomies", self);
+      VAST_DEBUG("{} loads taxonomies", *self);
       std::error_code err{};
       auto dirs = get_schema_dirs(self->system().config());
       concepts_map concepts;
@@ -209,7 +209,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       for (const auto& dir : dirs) {
         const auto dir_exists = std::filesystem::exists(dir, err);
         if (err)
-          VAST_WARN("{} failed to open directory {}: {}", self, dir,
+          VAST_WARN("{} failed to open directory {}: {}", *self, dir,
                     err.message());
         if (!dir_exists)
           continue;
@@ -217,25 +217,26 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
         if (!yamls)
           return yamls.error();
         for (auto& [file, yaml] : *yamls) {
-          VAST_DEBUG("{} extracts taxonomies from {}", self, file.string());
+          VAST_DEBUG("{} extracts taxonomies from {}", *self, file.string());
           if (auto err = convert(yaml, concepts, concepts_data_layout))
             return caf::make_error(ec::parse_error,
                                    "failed to extract concepts from file",
                                    file.string(), err.context());
           for (auto& [name, definition] : concepts) {
-            VAST_DEBUG("{} extracted concept {} with {} fields", self, name,
+            VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
                        definition.fields.size());
             for (auto& field : definition.fields)
-              VAST_TRACE("{} uses concept mapping {} -> {}", self, name, field);
+              VAST_TRACE("{} uses concept mapping {} -> {}", *self, name,
+                         field);
           }
           if (auto err = convert(yaml, models, models_data_layout))
             return caf::make_error(ec::parse_error,
                                    "failed to extract models from file",
                                    file.string(), err.context());
           for (auto& [name, definition] : models) {
-            VAST_DEBUG("{} extracted model {} with {} fields", self, name,
+            VAST_DEBUG("{} extracted model {} with {} fields", *self, name,
                        definition.definition.size());
-            VAST_TRACE("{} uses model mapping {} -> {}", self, name,
+            VAST_TRACE("{} uses model mapping {} -> {}", *self, name,
                        definition.definition);
           }
         }
@@ -249,7 +250,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     },
     [self](accountant_actor accountant) {
       VAST_ASSERT(accountant);
-      VAST_DEBUG("{} connects to {}", self, VAST_ARG(accountant));
+      VAST_DEBUG("{} connects to {}", *self, VAST_ARG(accountant));
       self->state.accountant = accountant;
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defaults::system::telemetry_rate,

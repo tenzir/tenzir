@@ -41,7 +41,7 @@ spawn_archive(node_actor::stateful_pointer<node_state> self,
       * get_or(args.inv.options, "vast.max-segment-size", sd::max_segment_size);
   auto handle
     = self->spawn(archive, args.dir / args.label, segments, max_segment_size);
-  VAST_VERBOSE("{} spawned the archive", self);
+  VAST_VERBOSE("{} spawned the archive", *self);
   if (auto [accountant] = self->state.registry.find<accountant_actor>();
       accountant)
     self->send(handle, accountant);

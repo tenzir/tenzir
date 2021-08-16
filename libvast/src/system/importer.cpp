@@ -63,7 +63,7 @@ public:
   }
 
   void finalize(const caf::error& err) override {
-    VAST_DEBUG("{} stopped with message: {}", state.self, render(err));
+    VAST_DEBUG("{} stopped with message: {}", *state.self, render(err));
   }
 
   importer_state& state;
@@ -83,13 +83,13 @@ public:
   void register_input_path(caf::inbound_path* ptr) override {
     driver_.state.inbound_descriptions[ptr]
       = std::exchange(driver_.state.inbound_description, "anonymous");
-    VAST_INFO("{} adds {} source", driver_.state.self,
+    VAST_INFO("{} adds {} source", *driver_.state.self,
               driver_.state.inbound_descriptions[ptr]);
     super::register_input_path(ptr);
   }
 
   void deregister_input_path(caf::inbound_path* ptr) noexcept override {
-    VAST_INFO("{} removes {} source", driver_.state.self,
+    VAST_INFO("{} removes {} source", *driver_.state.self,
               driver_.state.inbound_descriptions[ptr]);
     driver_.state.inbound_descriptions.erase(ptr);
     super::deregister_input_path(ptr);
@@ -123,7 +123,7 @@ caf::error importer_state::read_state() {
                                        "directory {}: {}",
                                        file, err.message()));
   if (file_exists) {
-    VAST_VERBOSE("{} reads persistent state from {}", self, file);
+    VAST_VERBOSE("{} reads persistent state from {}", *self, file);
     std::ifstream state_file{file.string()};
     state_file >> current.end;
     if (!state_file)
@@ -133,11 +133,11 @@ caf::error importer_state::read_state() {
     if (!state_file) {
       VAST_WARN("{} did not find next ID position in state file; "
                 "irregular shutdown detected",
-                self);
+                *self);
       current.next = current.end;
     }
   } else {
-    VAST_VERBOSE("{} did not find a state file at {}", self, file);
+    VAST_VERBOSE("{} did not find a state file at {}", *self, file);
     current.end = 0;
     current.next = 0;
   }
@@ -159,9 +159,9 @@ caf::error importer_state::write_state(write_mode mode) {
   state_file << current.end;
   if (mode == write_mode::with_next) {
     state_file << " " << current.next;
-    VAST_VERBOSE("{} persisted next available ID at {}", self, current.next);
+    VAST_VERBOSE("{} persisted next available ID at {}", *self, current.next);
   } else {
-    VAST_VERBOSE("{} persisted ID block boundary at {}", self, current.end);
+    VAST_VERBOSE("{} persisted ID block boundary at {}", *self, current.end);
   }
   return caf::none;
 }
@@ -223,10 +223,10 @@ void importer_state::send_report() {
     if (sample.value.events > 0) {
       if (auto rate = sample.value.rate_per_sec(); std::isfinite(rate))
         VAST_VERBOSE("{} handled {} events at a rate of {} events/sec in {}",
-                     self, sample.value.events, static_cast<uint64_t>(rate),
+                     *self, sample.value.events, static_cast<uint64_t>(rate),
                      to_string(sample.value.duration));
       else
-        VAST_VERBOSE("{} handled {} events in {}", self, sample.value.events,
+        VAST_VERBOSE("{} handled {} events in {}", *self, sample.value.events,
                      to_string(sample.value.duration));
     }
   };
@@ -244,11 +244,11 @@ importer(importer_actor::stateful_pointer<importer_state> self,
          std::vector<transform>&& input_transformations) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(dir));
   for (const auto& x : input_transformations)
-    VAST_VERBOSE("Loaded import transformation {}", x.name());
+    VAST_VERBOSE("{} loaded import transformation {}", *self, x.name());
   self->state.dir = dir;
   auto err = self->state.read_state();
   if (err) {
-    VAST_ERROR("{} failed to load state: {}", self, render(err));
+    VAST_ERROR("{} failed to load state: {}", *self, render(err));
     self->quit(std::move(err));
     return importer_actor::behavior_type::make_empty_behavior();
   }
@@ -276,7 +276,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   self->state.transformer = self->spawn(transformer, "input_transformer",
                                         std::move(input_transformations));
   if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", self);
+    VAST_ERROR("{} failed to spawn transformer", *self);
     self->quit(std::move(err));
     return importer_actor::behavior_type::make_empty_behavior();
   }
@@ -314,18 +314,18 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   return {
     // Register the ACCOUNTANT actor.
     [self](accountant_actor accountant) {
-      VAST_DEBUG("{} registers accountant {}", self, accountant);
+      VAST_DEBUG("{} registers accountant {}", *self, accountant);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) {
-      VAST_DEBUG("{} adds a new sink: {}", self, sink);
+      VAST_DEBUG("{} adds a new sink: {}", *self, sink);
       return self->delegate(self->state.transformer, sink);
     },
     // Register a FLUSH LISTENER actor.
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      VAST_DEBUG("{} adds new subscriber {}", self, listener);
+      VAST_DEBUG("{} adds new subscriber {}", *self, listener);
       VAST_ASSERT(self->state.stage != nullptr);
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
@@ -348,13 +348,13 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       // parts. Sadly, the current actor is already stored as the "other side"
       // of the stream in the outbound path, so we can't even hack around this
       // with `caf::unsafe_send_as()` or similar black magic.
-      VAST_DEBUG("{} adds a new source", self);
+      VAST_DEBUG("{} adds a new source", *self);
       return self->state.stage->add_inbound_path(in);
     },
     // -- stream_sink_actor<table_slice, std::string> --------------------------
     [self](caf::stream<table_slice> in, std::string desc) {
       self->state.inbound_description = std::move(desc);
-      VAST_DEBUG("{} adds a new {} source", self, desc);
+      VAST_DEBUG("{} adds a new {} source", *self, desc);
       return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------

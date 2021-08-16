@@ -17,6 +17,7 @@
 #include "vast/transform_steps/delete.hpp"
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/replace.hpp"
+#include "vast/uuid.hpp"
 
 using namespace std::literals;
 

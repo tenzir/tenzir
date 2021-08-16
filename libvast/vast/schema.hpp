@@ -8,6 +8,11 @@
 
 #pragma once
 
+#include "vast/concept/printable/core.hpp"
+#include "vast/concept/printable/print.hpp"
+#include "vast/concept/printable/string/char.hpp"
+#include "vast/concept/printable/string/string.hpp"
+#include "vast/concept/printable/vast/type.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/stable_set.hpp"
@@ -114,3 +119,24 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
 caf::expected<vast::schema> load_schema(const caf::actor_system_config& cfg);
 
 } // namespace vast
+
+#include "vast/concept/printable/vast/schema.hpp"
+
+namespace fmt {
+
+template <>
+struct formatter<vast::schema> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::schema& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+} // namespace fmt

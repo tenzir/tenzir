@@ -126,7 +126,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         }
         self->state.segment = std::move(*seg);
         // Delegate all deferred evaluations now that we have the partition chunk.
-        VAST_DEBUG("{} delegates {} deferred evaluations", self,
+        VAST_DEBUG("{} delegates {} deferred evaluations", *self,
                    self->state.deferred_requests.size());
         for (auto&& [expr, ids, rp] :
              std::exchange(self->state.deferred_requests, {}))
@@ -135,12 +135,12 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       },
       [self](caf::error& err) {
         VAST_ERROR("{} could not map passive store segment into memory: {}",
-                   self, render(err));
+                   *self, render(err));
         self->quit(std::move(err));
       });
   return {
     [self](query query, ids ids) -> caf::result<atom::done> {
-      VAST_DEBUG("{} handles new query", self);
+      VAST_DEBUG("{} handles new query", *self);
       if (!self->state.segment) {
         auto rp = self->make_response_promise<atom::done>();
         self->state.deferred_requests.emplace_back(query, ids, rp);
@@ -169,7 +169,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       }
       VAST_DEBUG("{} erases some ids");
       if (is_subset(self->state.segment->ids(), xs)) {
-        VAST_VERBOSE("{} gets wholly erased from {}", self, self->state.path);
+        VAST_VERBOSE("{} gets wholly erased from {}", *self, self->state.path);
         std::error_code err;
         std::filesystem::remove_all(self->state.path, err);
         if (err)
@@ -268,16 +268,16 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
         ->make_sink(
           in, [=](caf::unit_t&) {},
           [=](caf::unit_t&, std::vector<table_slice>& batch) {
-            VAST_TRACE("{} gets batch of {} table slices", self, batch.size());
+            VAST_TRACE("{} gets batch of {} table slices", *self, batch.size());
             for (auto& slice : batch) {
               if (auto error = self->state.builder->add(slice))
-                VAST_ERROR("{} failed to add table slice to store {}", self,
+                VAST_ERROR("{} failed to add table slice to store {}", *self,
                            render(error));
               self->state.events += slice.rows();
             }
           },
           [=](caf::unit_t&, const caf::error&) {
-            VAST_DEBUG("{} stream shuts down", self);
+            VAST_DEBUG("{} stream shuts down", *self);
             self->send(self, atom::internal_v, atom::persist_v);
           })
         .inbound_slot();

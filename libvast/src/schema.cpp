@@ -12,7 +12,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/env.hpp"

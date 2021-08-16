@@ -292,3 +292,15 @@ index(index_actor::stateful_pointer<index_state> self,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate);
 
 } // namespace vast::system
+
+namespace fmt {
+
+template <>
+struct formatter<vast::system::query_state> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const vast::system::query_state& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+} // namespace fmt

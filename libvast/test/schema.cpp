@@ -16,7 +16,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/error.hpp"
-#include "vast/concept/printable/vast/schema.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/test/test.hpp"

@@ -11,6 +11,7 @@
 #include <caf/actor.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/send.hpp>
+#include <fmt/core.h>
 
 namespace vast {
 
@@ -59,3 +60,20 @@ template <class Handle>
 scope_linked(Handle) -> scope_linked<Handle>;
 
 } // namespace vast
+
+namespace fmt {
+
+template <class T>
+struct formatter<vast::scope_linked<T>> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::scope_linked<T>& item, FormatContext& ctx) {
+    return format_to(ctx.out(), "{}", item.get());
+  }
+};
+
+} // namespace fmt

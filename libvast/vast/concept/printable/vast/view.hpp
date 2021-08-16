@@ -52,7 +52,9 @@ struct data_view_printer : printer_base<data_view_printer> {
       [&](const auto& x) {
         return make_printer<std::decay_t<decltype(x)>>{}(out, x);
       },
-      [&](const view<std::string>& x) { return string_view_printer{}(out, x); },
+      [&](const view<std::string>& x) {
+        return string_view_printer{}(out, x);
+      },
     };
     return caf::visit(f, d);
   }

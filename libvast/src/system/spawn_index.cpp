@@ -49,7 +49,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     opt("vast.max-queries", sd::num_query_supervisors),
     std::filesystem::path{opt("vast.meta-index-dir", indexdir.string())},
     opt("vast.meta-index-fp-rate", sd::string_synopsis_fp_rate));
-  VAST_VERBOSE("{} spawned the index", self);
+  VAST_VERBOSE("{} spawned the index", *self);
   if (accountant)
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);
