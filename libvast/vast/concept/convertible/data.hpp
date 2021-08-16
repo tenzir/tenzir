@@ -385,6 +385,8 @@ caf::error convert(const list& src, To& dst, const list_type& t) {
 
 class record_inspector {
 public:
+  using result_type = caf::error;
+
   template <class To>
   caf::error apply(const record_type::each::range_state& f, To& dst) {
     // Find the value from the record
