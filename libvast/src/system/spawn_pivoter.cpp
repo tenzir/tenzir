@@ -39,7 +39,7 @@ spawn_pivoter(node_actor::stateful_pointer<node_state> self,
     expr = *expr_;
   }
   auto handle = self->spawn(pivoter, self, target_name, expr);
-  VAST_VERBOSE("{} spawned a pivoter for {}", self, to_string(expr));
+  VAST_VERBOSE("{} spawned a pivoter for {}", *self, to_string(expr));
   return handle;
 }
 

@@ -37,10 +37,10 @@ void archive_state::send_report() {
     if (auto rate = m.rate_per_sec(); std::isfinite(rate))
       VAST_DEBUG("{} handled {} events at a rate of {} events/sec in "
                  "{}",
-                 self, m.events, static_cast<uint64_t>(rate),
+                 *self, m.events, static_cast<uint64_t>(rate),
                  to_string(m.duration));
     else
-      VAST_DEBUG("{} handled {} events in {}", self, m.events,
+      VAST_DEBUG("{} handled {} events in {}", *self, m.events,
                  to_string(m.duration));
   }
 #endif
@@ -116,27 +116,27 @@ archive(archive_actor::stateful_pointer<archive_state> self,
   VAST_VERBOSE("{} initializes global segment store in {} with a maximum "
                "segment "
                "size of {} and {} segments in memory",
-               self, dir, max_segment_size, capacity);
+               *self, dir, max_segment_size, capacity);
   self->state.self = self;
   if (auto store = segment_store::make(dir, max_segment_size, capacity)) {
     self->state.store = std::move(*store);
   } else {
-    VAST_ERROR("{} failed to load index state from disk: {}", self,
+    VAST_ERROR("{} failed to load index state from disk: {}", *self,
                render(store.error()));
     self->quit(store.error());
     return archive_actor::behavior_type::make_empty_behavior();
   }
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} got EXIT from {}", self, msg.source);
+    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
     self->state.send_report();
     if (auto err = self->state.store->flush())
-      VAST_ERROR("{} failed to flush archive {}", self, to_string(err));
+      VAST_ERROR("{} failed to flush archive {}", *self, to_string(err));
     self->state.store.reset();
     self->quit(msg.reason);
   });
   self->set_down_handler([self](const caf::down_msg& msg) {
-    VAST_DEBUG("{} received DOWN from {}", self, msg.source);
+    VAST_DEBUG("{} received DOWN from {}", *self, msg.source);
     auto it
       = std::find_if(self->state.requests.begin(), self->state.requests.end(),
                      [&](const auto& request) {
@@ -161,11 +161,11 @@ archive(archive_actor::stateful_pointer<archive_state> self,
   return {
     [self](vast::query query, const ids& xs) -> caf::result<atom::done> {
       VAST_DEBUG("{} got a request with the query {} and {} hints [{},  {})",
-                 self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
+                 *self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
       if (caf::holds_alternative<query::erase>(query.cmd)) {
         // We erase eagerly.
         if (auto err = self->state.store->erase(xs))
-          VAST_ERROR("{} failed to erase events: {}", self, render(err));
+          VAST_ERROR("{} failed to erase events: {}", *self, render(err));
         return atom::done_v;
       }
       return self->state.file_request(std::move(query), xs);
@@ -188,7 +188,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
         if (request.query.expr != expression{}) {
           auto c = tailor(request.query.expr, slice->layout());
           if (!c) {
-            VAST_ERROR("{} {}", self, c.error());
+            VAST_ERROR("{} {}", *self, c.error());
             request.cancelled = true;
             self->state.active_promise.deliver(c.error());
             // We deliver the remaining promises in this request regularly in
@@ -231,7 +231,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       } else {
         // We didn't get a slice from the segment store.
         if (slice.error() != caf::no_error) {
-          VAST_ERROR("{} failed to retrieve slice: {}", self, slice.error());
+          VAST_ERROR("{} failed to retrieve slice: {}", *self, slice.error());
           self->state.active_promise.deliver(slice.error());
         } else {
           self->state.active_promise.deliver(atom::done_v);
@@ -247,7 +247,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_DEBUG("{} got a new stream source", self);
+      VAST_DEBUG("{} got a new stream source", *self);
       return self
         ->make_sink(
           in,
@@ -255,12 +255,12 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             // nop
           },
           [=](caf::unit_t&, std::vector<table_slice>& batch) {
-            VAST_TRACE_SCOPE("{} got {} table slices", self, batch.size());
+            VAST_TRACE_SCOPE("{} got {} table slices", *self, batch.size());
             auto t = timer::start(self->state.measurement);
             uint64_t events = 0;
             for (auto& slice : batch) {
               if (auto error = self->state.store->put(slice))
-                VAST_ERROR("{} failed to add table slice to store {}", self,
+                VAST_ERROR("{} failed to add table slice to store {}", *self,
                            render(error));
               else
                 events += slice.rows();
@@ -273,9 +273,9 @@ archive(archive_actor::stateful_pointer<archive_state> self,
             // can't use `self` anymore.
             if (err && err != caf::exit_reason::unreachable) {
               if (err != caf::exit_reason::user_shutdown)
-                VAST_ERROR("{} got a stream error: {}", self, render(err));
+                VAST_ERROR("{} got a stream error: {}", *self, render(err));
               else
-                VAST_DEBUG("{} got a user shutdown error: {}", self,
+                VAST_DEBUG("{} got a user shutdown error: {}", *self,
                            render(err));
               // We can shutdown now because we only get a single stream from
               // the importer.
@@ -305,7 +305,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
     },
     [self](atom::erase, const ids& xs) {
       if (auto err = self->state.store->erase(xs))
-        VAST_ERROR("{} failed to erase events: {}", self, render(err));
+        VAST_ERROR("{} failed to erase events: {}", *self, render(err));
       return atom::done_v;
     },
   };

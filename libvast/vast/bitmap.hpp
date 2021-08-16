@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/bitmap_base.hpp"
+#include "vast/concept/printable/print.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/ewah_bitmap.hpp"
@@ -17,6 +18,7 @@
 
 #include <caf/detail/type_list.hpp>
 #include <caf/variant.hpp>
+#include <fmt/core.h>
 
 namespace vast {
 
@@ -110,3 +112,27 @@ template <>
 struct sum_type_access<vast::bitmap> : default_sum_type_access<vast::bitmap> {};
 
 } // namespace caf
+
+#include "vast/concept/printable/vast/bitmap.hpp"
+
+namespace fmt {
+
+template <class Bitmap>
+  requires(caf::detail::tl_contains<vast::bitmap::types, Bitmap>::value
+           || std::is_same_v<Bitmap, vast::bitmap>)
+struct formatter<Bitmap> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const Bitmap& value, FormatContext& ctx) {
+    std::string buffer{};
+    // TODO: Support other policies via parse context.
+    vast::printers::bitmap<Bitmap, vast::policy::rle>(buffer, value);
+    return std::copy(buffer.begin(), buffer.end(), ctx.out());
+  }
+};
+
+} // namespace fmt

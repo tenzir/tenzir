@@ -53,7 +53,7 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     query_opts = query_opts + preserve_ids;
   auto handle
     = self->spawn(exporter, *expr, query_opts, std::move(*transforms));
-  VAST_VERBOSE("{} spawned an exporter for {}", self, to_string(*expr));
+  VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(*expr));
   // Wire the exporter to all components.
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
@@ -68,11 +68,11 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
           // nop
         },
         [=, importer = importer](caf::error err) {
-          VAST_ERROR("{} failed to connect to importer {}: {}", self, importer,
+          VAST_ERROR("{} failed to connect to importer {}: {}", *self, importer,
                      err);
         });
   if (index) {
-    VAST_DEBUG("{} connects index to new exporter", self);
+    VAST_DEBUG("{} connects index to new exporter", *self);
     self->send(handle, index);
   }
   // Setting max-events to 0 means infinite.

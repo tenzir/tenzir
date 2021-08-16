@@ -12,6 +12,7 @@
 #include "vast/aliases.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/printable/print.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data/integer.hpp"
 #include "vast/defaults.hpp"
@@ -362,3 +363,27 @@ template <>
 struct sum_type_access<vast::data> : default_sum_type_access<vast::data> {};
 
 } // namespace caf
+
+#include "vast/concept/printable/vast/data.hpp"
+
+namespace fmt {
+
+template <>
+struct formatter<vast::data> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::data& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::integer> : formatter<vast::data> {};
+
+} // namespace fmt

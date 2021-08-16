@@ -54,7 +54,7 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
   self->state.name = self->state.writer->name();
   self->state.last_flush = steady_clock::now();
   if (max_events > 0) {
-    VAST_DEBUG("{} caps event export at {} events", self, max_events);
+    VAST_DEBUG("{} caps event export at {} events", *self, max_events);
     self->state.max_events = max_events;
   } else {
     // Interpret 0 as infinite.
@@ -66,7 +66,7 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
   });
   return {
     [self](table_slice slice) {
-      VAST_DEBUG("{} got: {} events from {}", self, slice.rows(),
+      VAST_DEBUG("{} got: {} events from {}", *self, slice.rows(),
                  self->current_sender());
       auto now = steady_clock::now();
       auto time_since_flush = now - self->state.last_flush;
@@ -82,7 +82,7 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
       }
       slice = std::move(*transformed);
       auto reached_max_events = [&] {
-        VAST_INFO("{} reached limit of {} events", self,
+        VAST_INFO("{} reached limit of {} events", *self,
                   self->state.max_events);
         self->state.writer->flush();
         self->state.send_report();
@@ -97,7 +97,7 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
       // Handle events.
       auto t = timer::start(self->state.measurement);
       if (auto err = self->state.writer->write(slice)) {
-        VAST_ERROR("{} {}", self, render(err));
+        VAST_ERROR("{} {}", *self, render(err));
         self->quit(std::move(err));
         return;
       }
@@ -114,21 +114,21 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
       }
     },
     [self](atom::limit, uint64_t max) {
-      VAST_DEBUG("{} caps event export at {} events", self, max);
+      VAST_DEBUG("{} caps event export at {} events", *self, max);
       if (self->state.processed < max)
         self->state.max_events = max;
       else
-        VAST_WARN("{} ignores new limit of {} (already processed",
-                  self->state.processed, " events)", self, max);
+        VAST_WARN("{} ignores new limit of {} (already processed {} events)",
+                  *self, max, self->state.processed);
     },
     [self](accountant_actor accountant) {
-      VAST_DEBUG("{} sets accountant to {}", self, accountant);
+      VAST_DEBUG("{} sets accountant to {}", *self, accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, atom::announce_v, st.name);
     },
     [self](atom::statistics, const caf::actor& statistics_subscriber) {
-      VAST_DEBUG("{} sets statistics subscriber to {}", self,
+      VAST_DEBUG("{} sets statistics subscriber to {}", *self,
                  statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },

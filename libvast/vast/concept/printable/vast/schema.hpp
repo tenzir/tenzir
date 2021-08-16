@@ -21,11 +21,8 @@ struct schema_printer : printer_base<schema_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const schema& s) const {
-    auto p = "type "
-          << printers::str
-          << " = "
-          << printers::type<policy::type_only>
-          << '\n';
+    auto p = "type " << printers::str << " = "
+                     << printers::type<policy::type_only> << '\n';
     for (auto& t : s)
       if (!p(out, t.name(), t))
         return false;
@@ -39,4 +36,3 @@ struct printer_registry<schema> {
 };
 
 } // namespace vast
-

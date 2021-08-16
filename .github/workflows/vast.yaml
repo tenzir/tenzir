@@ -258,7 +258,7 @@ jobs:
         uses: actions/upload-artifact@v2.2.4
         with:
           name: 'vast-integration-test-debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}'
-          path: '${{ env.BUILD_DIR }}/vast-integration-test'
+          path: '${{ env.BUILD_DIR }}/vast/vast-integration-test'
           if-no-files-found: ignore
 
       - name: Package
@@ -465,7 +465,7 @@ jobs:
         uses: actions/upload-artifact@v2.2.4
         with:
           name: 'vast-integration-test-macos-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}'
-          path: '${{ env.BUILD_DIR }}/vast-integration-test'
+          path: '${{ env.BUILD_DIR }}/vast/vast-integration-test'
           if-no-files-found: ignore
 
       - name: Package

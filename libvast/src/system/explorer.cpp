@@ -109,7 +109,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
     // Only the spawned EXPORTERs are expected to send down messages.
     auto& st = self->state;
     --st.running_exporters;
-    VAST_DEBUG("{} received DOWN from {} outstanding requests: {}", self,
+    VAST_DEBUG("{} received DOWN from {} outstanding requests: {}", *self,
                msg.source, st.running_exporters);
     quit_if_done();
   });
@@ -121,7 +121,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       if (!st.initial_exporter) {
         VAST_ERROR("{} received table slices before an initial "
                    "exporter",
-                   self);
+                   *self);
         return;
       }
       if (self->current_sender() != st.initial_exporter) {
@@ -146,7 +146,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
                              is_timestamp);
       if (it == layout.fields.end()) {
-        VAST_DEBUG("{} could not find timestamp field in {}", self, layout);
+        VAST_DEBUG("{} could not find timestamp field in {}", *self, layout);
         return;
       }
       std::optional<table_slice_column> by_column;
@@ -159,7 +159,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
           return;
         }
       }
-      VAST_DEBUG("{} uses {} to construct timebox", self, it->name);
+      VAST_DEBUG("{} uses {} to construct timebox", *self, it->name);
       auto column = table_slice_column::make(slice, it->name);
       VAST_ASSERT(column);
       for (size_t i = 0; i < column->size(); ++i) {
@@ -210,7 +210,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         // least one constraint.
         VAST_ASSERT(expr);
         auto query = to_string(*expr);
-        VAST_TRACE_SCOPE("{} spawns new exporter with query {}", self, query);
+        VAST_TRACE_SCOPE("{} spawns new exporter with query {}", *self, query);
         auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
         caf::put(exporter_invocation.options, "vast.export.preserve-ids", true);
         if (st.limits.per_result)
@@ -222,14 +222,14 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
           .then(
             [=](caf::actor handle) {
               auto exporter = caf::actor_cast<exporter_actor>(handle);
-              VAST_DEBUG("{} registers exporter {}", self, exporter);
+              VAST_DEBUG("{} registers exporter {}", *self, exporter);
               self->monitor(exporter);
               self->send(exporter, atom::sink_v, self);
               self->send(exporter, atom::run_v);
             },
             [=](caf::error error) {
               --self->state.running_exporters;
-              VAST_ERROR("{} failed to spawn exporter: {}", self, error);
+              VAST_ERROR("{} failed to spawn exporter: {}", *self, error);
             });
       }
     },
@@ -237,12 +237,12 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       self->state.initial_exporter = exporter.address();
     },
     [=]([[maybe_unused]] std::string name, query_status) {
-      VAST_DEBUG("{} received final status from {}", self, name);
+      VAST_DEBUG("{} received final status from {}", *self, name);
       self->state.initial_query_completed = true;
       quit_if_done();
     },
     [=](atom::sink, const caf::actor& sink) {
-      VAST_DEBUG("{} registers sink {}", self, sink);
+      VAST_DEBUG("{} registers sink {}", *self, sink);
       auto& st = self->state;
       st.sink = sink;
     }};

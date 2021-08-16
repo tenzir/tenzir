@@ -54,7 +54,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
   self->state.idx = factory<value_index>::make(index_type, index_opts);
   if (!self->state.idx) {
-    VAST_ERROR("{} failed to construct value index", self);
+    VAST_ERROR("{} failed to construct value index", *self);
     self->quit(caf::make_error(ec::unspecified, "failed to construct value "
                                                 "index"));
     return active_indexer_actor::behavior_type::make_empty_behavior();
@@ -62,12 +62,12 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
   return {
     [self](caf::stream<table_slice_column> in)
       -> caf::inbound_stream_slot<table_slice_column> {
-      VAST_TRACE("{} got a new stream", self);
+      VAST_TRACE("{} got a new stream", *self);
       self->state.stream_initiated = true;
       auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
-          VAST_TRACE("{} initializes stream", self);
+          VAST_TRACE("{} initializes stream", *self);
           // nop
         },
         [=](caf::unit_t&, const std::vector<table_slice_column>& columns) {
@@ -99,7 +99,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
       return result.inbound_slot();
     },
     [self](const curried_predicate& pred) {
-      VAST_DEBUG("{} got predicate: {}", self, pred);
+      VAST_DEBUG("{} got predicate: {}", *self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
       auto rep = to_internal(idx.type(), make_view(pred.rhs));
@@ -134,7 +134,7 @@ indexer_actor::behavior_type
 passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
                 uuid partition_id, value_index_ptr idx) {
   if (!idx) {
-    VAST_ERROR("{} got invalid value index pointer", self);
+    VAST_ERROR("{} got invalid value index pointer", *self);
     self->quit(caf::make_error(ec::end_of_input, "invalid value index "
                                                  "pointer"));
     return indexer_actor::behavior_type::make_empty_behavior();
@@ -144,13 +144,15 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
   self->state.idx = std::move(idx);
   return {
     [self](const curried_predicate& pred) {
-      VAST_DEBUG("{} got predicate: {}", self, pred);
+      VAST_DEBUG("{} got predicate: {}", *self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
       auto rep = to_internal(idx.type(), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },
-    [self](atom::shutdown) { self->quit(caf::exit_reason::user_shutdown); },
+    [self](atom::shutdown) {
+      self->quit(caf::exit_reason::user_shutdown);
+    },
   };
 }
 

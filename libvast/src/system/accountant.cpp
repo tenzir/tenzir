@@ -97,7 +97,7 @@ struct accountant_state_impl {
     if (!builder || builder->rows() == 0)
       return;
     auto slice = builder->finish();
-    VAST_DEBUG("{} generated slice with {} rows", self, slice.rows());
+    VAST_DEBUG("{} generated slice with {} rows", *self, slice.rows());
 
     slice_buffer.push(std::move(slice));
     mgr->advance();
@@ -108,7 +108,7 @@ struct accountant_state_impl {
     // handle NaN, and a bug that we were unable to reproduce reliably caused
     // the accountant to forward NaN to the index here.
     if (!std::isfinite(x)) {
-      VAST_DEBUG("{} cannot record a non-finite metric", self);
+      VAST_DEBUG("{} cannot record a non-finite metric", *self);
       return;
     }
     auto actor_id = self->current_sender()->id();
@@ -121,7 +121,7 @@ struct accountant_state_impl {
     }.name("vast.metrics");
       builder
         = factory<table_slice_builder>::make(cfg.self_sink.slice_type, layout);
-      VAST_DEBUG("{} obtained a table slice builder", self);
+      VAST_DEBUG("{} obtained a table slice builder", *self);
     }
     VAST_ASSERT(builder->add(ts, actor_map[actor_id], key, x));
     if (builder->rows() == static_cast<size_t>(cfg.self_sink.slice_size))
@@ -190,7 +190,7 @@ struct accountant_state_impl {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
     if (accumulator.events > 0)
       if (auto rate = accumulator.rate_per_sec(); std::isfinite(rate))
-        VAST_DEBUG("{} received {} events at a rate of {} events/sec", self,
+        VAST_DEBUG("{} received {} events at a rate of {} events/sec", *self,
                    accumulator.events, static_cast<uint64_t>(rate));
 #endif
     accumulator = {};
@@ -202,17 +202,17 @@ struct accountant_state_impl {
     bool start_file_sink = cfg.file_sink.enable && !old.file_sink.enable;
     bool stop_file_sink = !cfg.file_sink.enable && old.file_sink.enable;
     if (stop_file_sink) {
-      VAST_INFO("{} closing metrics output file {}", self, old.file_sink.path);
+      VAST_INFO("{} closing metrics output file {}", *self, old.file_sink.path);
       file_sink.reset(nullptr);
     }
     if (start_file_sink) {
       auto s = detail::make_output_stream(cfg.file_sink.path,
                                           std::filesystem::file_type::regular);
       if (s) {
-        VAST_INFO("{} writing metrics to {}", self, cfg.file_sink.path);
+        VAST_INFO("{} writing metrics to {}", *self, cfg.file_sink.path);
         file_sink = std::move(*s);
       } else {
-        VAST_INFO("{} could not open {} for metrics: {}", self,
+        VAST_INFO("{} could not open {} for metrics: {}", *self,
                   cfg.file_sink.path, s.error());
       }
     }
@@ -220,28 +220,29 @@ struct accountant_state_impl {
     bool start_uds_sink = cfg.uds_sink.enable && !old.uds_sink.enable;
     bool stop_uds_sink = !cfg.uds_sink.enable && old.uds_sink.enable;
     if (stop_uds_sink) {
-      VAST_INFO("{} closing metrics output socket {}", self, old.uds_sink.path);
+      VAST_INFO("{} closing metrics output socket {}", *self,
+                old.uds_sink.path);
       uds_sink.reset(nullptr);
     }
     if (start_uds_sink) {
       if (cfg.uds_sink.type == detail::socket_type::datagram) {
         auto s = detail::uds_datagram_sender::make(cfg.uds_sink.path);
         if (s) {
-          VAST_INFO("{} writes metrics to {}", self, cfg.uds_sink.path);
+          VAST_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);
           uds_datagram_sink
             = std::make_unique<detail::uds_datagram_sender>(std::move(*s));
         } else {
-          VAST_INFO("{} could not open {} for metrics: {}", self,
+          VAST_INFO("{} could not open {} for metrics: {}", *self,
                     cfg.uds_sink.path, s.error());
         }
       } else {
         auto s
           = detail::make_output_stream(cfg.uds_sink.path, cfg.uds_sink.type);
         if (s) {
-          VAST_INFO("{} writes metrics to {}", self, cfg.uds_sink.path);
+          VAST_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);
           uds_sink = std::move(*s);
         } else {
-          VAST_INFO("{} could not open {} for metrics: {}", self,
+          VAST_INFO("{} could not open {} for metrics: {}", *self,
                     cfg.uds_sink.path, s.error());
         }
       }
@@ -255,7 +256,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
            accountant_config cfg) {
   self->state.reset(new accountant_state_impl{self, std::move(cfg)});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} got EXIT from {}", self, msg.source);
+    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
     self->state->finish_slice();
     self->quit(msg.reason);
   });
@@ -263,10 +264,10 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     auto& st = *self->state;
     auto i = st.actor_map.find(msg.source.id());
     if (i != st.actor_map.end())
-      VAST_DEBUG("{} received DOWN from {} aka {}", self, i->second,
+      VAST_DEBUG("{} received DOWN from {} aka {}", *self, i->second,
                  msg.source);
     else
-      VAST_DEBUG("{} received DOWN from {}", self, msg.source);
+      VAST_DEBUG("{} received DOWN from {}", *self, msg.source);
     st.actor_map.erase(msg.source.id());
   });
   self->state->mgr = self->make_continuous_source(
@@ -284,11 +285,13 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       }
       VAST_TRACE_SCOPE("{} was asked for {} slices and produced {} ; {} are "
                        "remaining in buffer",
-                       self, num, produced, st.slice_buffer.size());
+                       *self, num, produced, st.slice_buffer.size());
     },
     // done?
-    [](const bool&) { return false; });
-  VAST_DEBUG("{} animates heartbeat loop", self);
+    [](const bool&) {
+      return false;
+    });
+  VAST_DEBUG("{} animates heartbeat loop", *self);
   self->delayed_send(self, overview_delay, atom::telemetry_v);
   return {
     [self](atom::announce, const std::string& name) {
@@ -300,32 +303,32 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
                                   std::make_tuple(std::string{"accountant"}));
     },
     [self](const std::string& key, duration value) {
-      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(key, value);
     },
     [self](const std::string& key, time value) {
-      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(key, value);
     },
     [self](const std::string& key, integer value) {
-      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(key, value.value);
     },
     [self](const std::string& key, count value) {
-      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(key, value);
     },
     [self](const std::string& key, real value) {
-      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(key, value);
     },
     [self](const report& r) {
-      VAST_TRACE_SCOPE("{} received a report from {}", self,
+      VAST_TRACE_SCOPE("{} received a report from {}", *self,
                        self->current_sender());
       time ts = std::chrono::system_clock::now();
       for (const auto& [key, value] : r) {
@@ -335,7 +338,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       }
     },
     [self](const performance_report& r) {
-      VAST_TRACE_SCOPE("{} received a performance report from {}", self,
+      VAST_TRACE_SCOPE("{} received a performance report from {}", *self,
                        self->current_sender());
       time ts = std::chrono::system_clock::now();
       for (const auto& [key, value] : r) {

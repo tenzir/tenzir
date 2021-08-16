@@ -49,6 +49,7 @@ struct no_input_validation {};
 ///         should be validated.
 template <class InputValidationPolicy = input_validation>
 class builder {
+public:
   struct empty {
     template <class Inspector>
     friend auto inspect(Inspector& f, empty&) {
@@ -56,7 +57,6 @@ class builder {
     }
   };
 
-public:
   using value_type = std::byte;
 
   /// A helper class to build formats incrementally. Zero or more calls of
@@ -676,3 +676,96 @@ size_t put_range(Builder& builder, const T& xs) {
 }
 
 } // namespace vast::msgpack
+
+namespace fmt {
+
+template <class Policy>
+struct formatter<vast::msgpack::builder<Policy>> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::msgpack::builder<Policy>& value, FormatContext& ctx) {
+    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
+  }
+};
+
+template <vast::msgpack::format Format>
+struct formatter<
+  vast::msgpack::builder<vast::msgpack::input_validation>::proxy<Format>> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::msgpack::builder<
+                vast::msgpack::input_validation>::proxy<Format>& value,
+              FormatContext& ctx) {
+    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
+  }
+};
+
+template <vast::msgpack::format Format>
+struct formatter<
+  vast::msgpack::builder<vast::msgpack::no_input_validation>::proxy<Format>> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::msgpack::builder<
+                vast::msgpack::no_input_validation>::proxy<Format>& value,
+              FormatContext& ctx) {
+    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
+  }
+};
+
+template <>
+struct formatter<vast::msgpack::builder<vast::msgpack::input_validation>::empty> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const typename vast::msgpack::builder<
+                vast::msgpack::input_validation>::empty& value,
+              FormatContext& ctx) {
+    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
+  }
+};
+
+template <>
+struct formatter<
+  vast::msgpack::builder<vast::msgpack::no_input_validation>::empty> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const typename vast::msgpack::builder<
+                vast::msgpack::no_input_validation>::empty& value,
+              FormatContext& ctx) {
+    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
+  }
+};
+
+template <>
+struct formatter<vast::msgpack::format> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::msgpack::format& value, FormatContext& ctx) {
+    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
+  }
+};
+
+} // namespace fmt

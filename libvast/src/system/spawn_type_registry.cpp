@@ -31,7 +31,7 @@ spawn_type_registry(node_actor::stateful_pointer<node_state> self,
                        "definitions: {}",
                        render(std::move(err)));
            });
-  VAST_VERBOSE("{} spawned the type-registry", self);
+  VAST_VERBOSE("{} spawned the type-registry", *self);
   if (auto [accountant] = self->state.registry.find<accountant_actor>();
       accountant)
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));

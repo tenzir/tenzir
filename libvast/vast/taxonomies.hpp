@@ -14,6 +14,7 @@
 #include "vast/type_set.hpp"
 
 #include <caf/meta/type_name.hpp>
+#include <fmt/format.h>
 
 #include <memory>
 #include <string>
@@ -118,3 +119,23 @@ caf::expected<expression> resolve(const taxonomies& t, const expression& e,
                                   const std::map<std::string, type_set>& seen);
 
 } // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::model> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const vast::model& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+template <>
+struct formatter<vast::concept_> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const vast::concept_& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+} // namespace fmt

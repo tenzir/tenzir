@@ -50,7 +50,7 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   // This is a heuristic to find the field for pivoting until a runtime
   // updated type registry is available to feed the algorithm above.
   std::string edge;
-  VAST_TRACE_SCOPE("{} {} {}", st.self, VAST_ARG(st.target),
+  VAST_TRACE_SCOPE("{} {} {}", *st.self, VAST_ARG(st.target),
                    VAST_ARG(indicator.name()));
   if (st.target.starts_with("zeek") && indicator.name().starts_with("zeek"))
     edge = "uid";
@@ -64,7 +64,7 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   }
 #endif
   st.cache.insert({indicator, std::nullopt});
-  VAST_WARN("{} got slice without shared column: {}", st.self,
+  VAST_WARN("{} got slice without shared column: {}", *st.self,
             indicator.name());
   return {};
 }
@@ -91,7 +91,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
     // Only the spawned EXPORTERs are expected to send down messages.
     auto& st = self->state;
     st.running_exporters--;
-    VAST_DEBUG("{} received DOWN from {} outstanding requests: {}", self,
+    VAST_DEBUG("{} received DOWN from {} outstanding requests: {}", *self,
                msg.source, st.running_exporters);
     quit_if_done();
   });
@@ -101,7 +101,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
       auto pivot_field = common_field(st, slice.layout());
       if (!pivot_field)
         return;
-      VAST_DEBUG("{} uses {} to extract {} events", self, *pivot_field,
+      VAST_DEBUG("{} uses {} to extract {} events", *self, *pivot_field,
                  st.target);
       auto column = table_slice_column::make(slice, pivot_field->name);
       VAST_ASSERT(column);
@@ -119,7 +119,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
         st.requested_ids.insert(*x);
       }
       if (xs.empty()) {
-        VAST_DEBUG("{} already queried for all {}", self, pivot_field->name);
+        VAST_DEBUG("{} already queried for all {}", *self, pivot_field->name);
         return;
       }
       auto expr
@@ -130,8 +130,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
       // TODO(ch9411): Drop the conversion to a string when node actors can
       //               be spawned without going through an invocation.
       auto query = to_string(expr);
-      VAST_DEBUG("{} queries for {} {}", self, xs.size(), pivot_field->name);
-      VAST_TRACE_SCOPE("{} spawns new exporter with query {}", self, query);
+      VAST_DEBUG("{} queries for {} {}", *self, xs.size(), pivot_field->name);
+      VAST_TRACE_SCOPE("{} spawns new exporter with query {}", *self, query);
       auto exporter_options = caf::settings{};
       caf::put(exporter_options, "vast.export.disable-taxonomies", true);
       auto exporter_invocation
@@ -141,24 +141,24 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
         .then(
           [=](caf::actor handle) {
             auto exporter = caf::actor_cast<exporter_actor>(handle);
-            VAST_DEBUG("{} registers exporter {}", self, exporter);
+            VAST_DEBUG("{} registers exporter {}", *self, exporter);
             self->monitor(exporter);
             self->send(exporter, atom::sink_v, self->state.sink);
             self->send(exporter, atom::run_v);
           },
           [=](caf::error error) {
             --self->state.running_exporters;
-            VAST_ERROR("{} failed to spawn exporter: {}", self, render(error));
+            VAST_ERROR("{} failed to spawn exporter: {}", *self, render(error));
           });
       ;
     },
     [=](std::string name, query_status) {
-      VAST_DEBUG("{} received final status from {}", self, name);
+      VAST_DEBUG("{} received final status from {}", *self, name);
       self->state.initial_query_completed = true;
       quit_if_done();
     },
     [=](atom::sink, const caf::actor& sink) {
-      VAST_DEBUG("{} registers sink {}", self, sink);
+      VAST_DEBUG("{} registers sink {}", *self, sink);
       auto& st = self->state;
       st.sink = sink;
     },

@@ -570,3 +570,24 @@ template <>
 struct equal_to<vast::data> : equal_to<vast::data_view> {};
 
 } // namespace std
+
+#include "vast/concept/printable/vast/view.hpp"
+
+namespace fmt {
+
+template <>
+struct formatter<vast::data_view> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::data_view& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+} // namespace fmt

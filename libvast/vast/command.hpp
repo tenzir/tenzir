@@ -15,6 +15,7 @@
 #include <caf/config_option_set.hpp>
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
+#include <fmt/format.h>
 
 #include <functional>
 #include <iosfwd>
@@ -242,3 +243,15 @@ void for_each(const command& cmd, F fun) {
 }
 
 } // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::invocation> : formatter<std::string> {
+  template <typename FormatContext>
+  auto format(const vast::invocation& item, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(item), ctx);
+  }
+};
+
+} // namespace fmt

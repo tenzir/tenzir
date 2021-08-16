@@ -14,6 +14,7 @@
 #include "vast/attribute.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/printable/print.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/range.hpp"
@@ -34,6 +35,7 @@
 #include <caf/none.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/sum_type.hpp>
+#include <fmt/core.h>
 
 #include <functional>
 #include <optional>
@@ -304,8 +306,9 @@ public:
   Derived& update_attributes(std::vector<attribute> xs) & {
     auto& attrs = this->attributes_;
     for (auto& x : xs) {
-      auto i = std::find_if(attrs.begin(), attrs.end(),
-                            [&](auto& attr) { return attr.key == x.key; });
+      auto i = std::find_if(attrs.begin(), attrs.end(), [&](auto& attr) {
+        return attr.key == x.key;
+      });
       if (i == attrs.end())
         attrs.push_back(std::move(x));
       else
@@ -317,8 +320,9 @@ public:
   Derived update_attributes(std::vector<attribute> xs) && {
     auto& attrs = this->attributes_;
     for (auto& x : xs) {
-      auto i = std::find_if(attrs.begin(), attrs.end(),
-                            [&](auto& attr) { return attr.key == x.key; });
+      auto i = std::find_if(attrs.begin(), attrs.end(), [&](auto& attr) {
+        return attr.key == x.key;
+      });
       if (i == attrs.end())
         attrs.push_back(std::move(x));
       else
@@ -948,7 +952,9 @@ std::string to_digest(const type& x);
 /// @see has_attribute
 template <class Type>
 const attribute* find_attribute(const Type& t, std::string_view key) {
-  auto pred = [&](auto& attr) { return attr.key == key; };
+  auto pred = [&](auto& attr) {
+    return attr.key == key;
+  };
   auto i = std::find_if(t.attributes().begin(), t.attributes().end(), pred);
   return i != t.attributes().end() ? &*i : nullptr;
 }
@@ -1143,3 +1149,87 @@ VAST_DEFINE_HASH_SPECIALIZATION(alias_type);
 #undef VAST_DEFINE_HASH_SPECIALIZATION
 
 } // namespace std
+
+#include "vast/concept/printable/vast/type.hpp"
+
+namespace fmt {
+
+template <>
+struct formatter<vast::type> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::type& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::none_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::bool_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::integer_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::count_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::real_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::duration_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::time_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::string_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::pattern_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::address_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::subnet_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::enumeration_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::list_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::map_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::record_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::alias_type> : formatter<vast::type> {};
+
+template <>
+struct formatter<vast::record_field> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::record_field& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+} // namespace fmt

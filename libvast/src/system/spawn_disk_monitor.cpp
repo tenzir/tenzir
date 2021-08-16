@@ -76,7 +76,7 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::filesystem_error, "could not find database "
                                                  "directory");
   auto handle = self->spawn(disk_monitor, config, db_dir_abs, index);
-  VAST_VERBOSE("{} spawned a disk monitor", self);
+  VAST_VERBOSE("{} spawned a disk monitor", *self);
   return caf::actor_cast<caf::actor>(handle);
 }
 

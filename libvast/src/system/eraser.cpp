@@ -39,11 +39,11 @@ void eraser_state::init(caf::timespan interval, std::string query,
       promise_ = self_->make_response_promise();
     auto expr = to<expression>(query_);
     if (!expr) {
-      VAST_ERROR("{} failed to parse query {}", self_, query_);
+      VAST_ERROR("{} failed to parse query {}", *self_, query_);
       return;
     }
     if (expr = normalize_and_validate(std::move(*expr)); !expr) {
-      VAST_ERROR("{} failed to normalize and validate {}", self_, query_);
+      VAST_ERROR("{} failed to normalize and validate {}", *self_, query_);
       return;
     }
     self_->send(index_, query::make_erase(std::move(*expr)));
@@ -56,7 +56,7 @@ void eraser_state::init(caf::timespan interval, std::string query,
 void eraser_state::transition_to(query_processor::state_name x) {
   VAST_TRACE_SCOPE("{}", VAST_ARG("state_name", x));
   if (state_ == idle && x != idle)
-    VAST_INFO("{} triggers new aging cycle", self_);
+    VAST_INFO("{} triggers new aging cycle", *self_);
   super::transition_to(x);
   if (x == idle) {
     if (promise_.pending())
@@ -69,7 +69,7 @@ void eraser_state::transition_to(query_processor::state_name x) {
 caf::behavior
 eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
        std::string query, index_actor index) {
-  VAST_TRACE_SCOPE("{} {} {} {} {}", VAST_ARG(self), VAST_ARG(interval),
+  VAST_TRACE_SCOPE("{} {} {} {} {}", VAST_ARG(*self), VAST_ARG(interval),
                    VAST_ARG(query), VAST_ARG(index));
   auto& st = self->state;
   st.init(interval, std::move(query), std::move(index));

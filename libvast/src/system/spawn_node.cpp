@@ -74,7 +74,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
       "unable to write to db-directory:", abs_dir.string());
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
-  VAST_DEBUG("{} acquires PID lock {}", node, pid_file.string());
+  VAST_DEBUG("node acquires PID lock {}", pid_file.string());
   if (auto err = detail::acquire_pid_file(pid_file))
     return err;
   // Spawn the node.

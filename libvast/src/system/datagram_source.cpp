@@ -48,18 +48,18 @@ caf::behavior datagram_source(
   self->state.transformer
     = self->spawn(transformer, "source-transformer", std::move(transforms));
   if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", self);
+    VAST_ERROR("{} failed to spawn transformer", *self);
     self->quit();
     return {};
   }
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
-    VAST_ERROR("{} could not open port {}", self, udp_listening_port);
+    VAST_ERROR("{} could not open port {}", *self, udp_listening_port);
     self->quit(std::move(udp_res.error()));
     return {};
   }
-  VAST_DEBUG("{} starts listening at port {}", self, udp_res->second);
+  VAST_DEBUG("{} starts listening at port {}", *self, udp_res->second);
   // Initialize state.
   self->state.self = self;
   self->state.name = reader->name();
@@ -73,7 +73,7 @@ caf::behavior datagram_source(
   self->send(self->state.accountant, atom::announce_v, self->state.name);
   self->state.initialize(type_registry, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
+    VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
     self->state.done = true;
     if (self->state.mgr)
       self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
@@ -96,7 +96,7 @@ caf::behavior datagram_source(
   auto result = datagram_source_actor::behavior_type{
     [self](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
-      VAST_DEBUG("{} got a new datagram of size {}", self, msg.buf.size());
+      VAST_DEBUG("{} got a new datagram of size {}", *self, msg.buf.size());
       auto t = timer::start(self->state.metrics);
       auto capacity = self->state.mgr->out().capacity();
       if (capacity == 0) {
@@ -123,7 +123,7 @@ caf::behavior datagram_source(
         self->state.done = true;
       if (err != caf::none && err != ec::end_of_input)
         VAST_WARN("{} has not enough capacity left in stream, dropping input!",
-                  self);
+                  *self);
       if (produced > 0)
         self->state.mgr->push();
       if (self->state.done)
@@ -134,7 +134,7 @@ caf::behavior datagram_source(
     },
     [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
-      VAST_DEBUG("{} (datagram) registers {}", self, VAST_ARG(sink));
+      VAST_DEBUG("{} (datagram) registers sink {}", *self, sink);
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
@@ -186,11 +186,11 @@ caf::behavior datagram_source(
       // nop
     },
     [self](atom::telemetry) {
-      VAST_DEBUG("{} got a telemetry atom", self);
+      VAST_DEBUG("{} got a telemetry atom", *self);
       self->state.send_report();
       if (self->state.dropped_packets > 0) {
         VAST_WARN("{} has no capacity left in stream and dropped {} packets",
-                  self, self->state.dropped_packets);
+                  *self, self->state.dropped_packets);
         self->state.dropped_packets = 0;
       }
       if (!self->state.done)

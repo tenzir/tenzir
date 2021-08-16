@@ -53,7 +53,7 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::missing_component, "type-registry");
   auto handle = self->spawn(importer, args.dir / args.label, archive, index,
                             type_registry, std::move(*transforms));
-  VAST_VERBOSE("{} spawned the importer", self);
+  VAST_VERBOSE("{} spawned the importer", *self);
   if (accountant) {
     self->send(handle, atom::telemetry_v);
     self->send(handle, accountant);
@@ -64,7 +64,7 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
     self->send(handle, atom::telemetry_v);
   }
   for (auto& source : self->state.registry.find_by_type("source")) {
-    VAST_DEBUG("{} connects source to new importer", self);
+    VAST_DEBUG("{} connects source to new importer", *self);
     self->anon_send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
   }
   return caf::actor_cast<caf::actor>(handle);

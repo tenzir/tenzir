@@ -14,8 +14,10 @@
 #include "vast/command.hpp"
 #include "vast/expression.hpp"
 
+#include <caf/deep_to_string.hpp>
 #include <caf/fwd.hpp>
 #include <caf/meta/type_name.hpp>
+#include <fmt/format.h>
 
 #include <filesystem>
 #include <optional>
@@ -70,3 +72,15 @@ caf::expected<std::optional<schema>> read_schema(const spawn_arguments& args);
 caf::error unexpected_arguments(const spawn_arguments& args);
 
 } // namespace vast::system
+
+namespace fmt {
+
+template <>
+struct formatter<vast::system::spawn_arguments> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const vast::system::spawn_arguments& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+} // namespace fmt

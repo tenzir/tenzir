@@ -92,14 +92,14 @@ evaluator_state::evaluator_state(
 }
 
 void evaluator_state::handle_result(const offset& position, const ids& result) {
-  VAST_DEBUG("{} got {} new hits for predicate at position {}", self,
+  VAST_DEBUG("{} got {} new hits for predicate at position {}", *self,
              rank(result), position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   auto& [missing, accumulated_hits] = *ptr;
   accumulated_hits |= result;
   if (--missing == 0) {
-    VAST_DEBUG("{} collected all results at position {}", self, position);
+    VAST_DEBUG("{} collected all results at position {}", *self, position);
     evaluate();
   }
   decrement_pending();
@@ -109,11 +109,11 @@ void evaluator_state::handle_missing_result(
   const offset& position, [[maybe_unused]] const caf::error& err) {
   VAST_WARN("{} received {} instead of a result for predicate at "
             "position {}",
-            self, render(err), position);
+            *self, render(err), position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
-    VAST_DEBUG("{} collected all results at position {}", self, position);
+    VAST_DEBUG("{} collected all results at position {}", *self, position);
     evaluate();
   }
   decrement_pending();
@@ -121,7 +121,7 @@ void evaluator_state::handle_missing_result(
 
 void evaluator_state::evaluate() {
   auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
-  VAST_DEBUG("{} got predicate_hits: {} expr_hits: {}", self, predicate_hits,
+  VAST_DEBUG("{} got predicate_hits: {} expr_hits: {}", *self, predicate_hits,
              expr_hits);
   auto delta = expr_hits - hits;
   if (any<1>(delta))
@@ -147,7 +147,7 @@ evaluator_state::hits_for(const offset& position) {
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           expression expr, std::vector<evaluation_triple> eval) {
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(expr), VAST_ARG(eval));
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(expr), caf::deep_to_string(eval));
   VAST_ASSERT(!eval.empty());
   self->state.expr = std::move(expr);
   self->state.eval = std::move(eval);
@@ -169,7 +169,7 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
                 });
       }
       if (self->state.pending_responses == 0) {
-        VAST_DEBUG("{} has nothing to evaluate for expression", self);
+        VAST_DEBUG("{} has nothing to evaluate for expression", *self);
         self->state.promise.deliver(ids{});
       }
       return self->state.promise;

@@ -11,6 +11,7 @@
 #include "vast/atoms.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/printable/print.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -435,3 +436,97 @@ struct hash<vast::expression> {
 };
 
 } // namespace std
+
+#include "vast/concept/printable/vast/expression.hpp"
+
+namespace fmt {
+
+template <>
+struct formatter<vast::expression> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::expression& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::data_extractor> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::data_extractor& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::meta_extractor> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::meta_extractor& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::relational_operator> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::relational_operator& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::predicate> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::predicate& value, FormatContext& ctx) {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::curried_predicate> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::curried_predicate& value, FormatContext& ctx) {
+    return format_to(ctx.out(), "{} {}", value.op, value.rhs);
+  }
+};
+
+} // namespace fmt

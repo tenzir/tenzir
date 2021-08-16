@@ -66,7 +66,7 @@ bool query_processor::request_more_results() {
     return false;
   VAST_DEBUG("{} asks the INDEX for more hits by scheduling {}"
              "additional partitions",
-             self_, n);
+             *self_, n);
   partitions_.scheduled = n;
   self_->send(index_, query_id_, n);
   return true;
@@ -75,7 +75,7 @@ bool query_processor::request_more_results() {
 // -- state management ---------------------------------------------------------
 
 void query_processor::transition_to(state_name x) {
-  VAST_DEBUG("{} transitions from state {} to state {}", self_, state_, x);
+  VAST_DEBUG("{} transitions from state {} to state {}", *self_, state_, x);
   self_->become(behaviors_[x]);
   state_ = x;
 }

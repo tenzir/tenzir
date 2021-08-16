@@ -108,3 +108,15 @@ struct query {
 };
 
 } // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::query> : formatter<std::string> {
+  template <typename FormatContext>
+  auto format(const vast::query& item, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(item), ctx);
+  }
+};
+
+} // namespace fmt

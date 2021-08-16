@@ -46,7 +46,7 @@ query_supervisor_actor::behavior_type query_supervisor(
     [self](const vast::query& query,
            const std::vector<std::pair<uuid, partition_actor>>& qm,
            const receiver_actor<atom::done>& client) {
-      VAST_DEBUG("{} {} got a new query for {} partitions: {}", self,
+      VAST_DEBUG("{} {} got a new query for {} partitions: {}", *self,
                  self->state.log_identifier, qm.size(), get_ids(qm));
       // TODO: We can save one message here if we handle this case in the
       // partition immediately.
@@ -65,7 +65,7 @@ query_supervisor_actor::behavior_type query_supervisor(
               if (--self->state.open_requests == 0) {
                 VAST_DEBUG("{} {} collected all results for the current batch "
                            "of partitions",
-                           self, self->state.log_identifier);
+                           *self, self->state.log_identifier);
                 // Ask master for more work after receiving the last sub
                 // result.
                 // TODO: We should schedule a new partition as soon as the
@@ -79,7 +79,7 @@ query_supervisor_actor::behavior_type query_supervisor(
               // TODO: Add a proper error handling path to escalate the error to
               // the client.
               VAST_ERROR("{} {} encountered error while supervising query {}",
-                         self, self->state.log_identifier, e);
+                         *self, self->state.log_identifier, e);
               if (--self->state.open_requests == 0) {
                 self->send(client, atom::done_v);
                 self->send(self->state.master, atom::worker_v, self);
