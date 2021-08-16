@@ -29,7 +29,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
   self->state.root = root;
   return {
     [self](atom::write, const std::filesystem::path& filename,
-           chunk_ptr chk) -> caf::result<atom::ok> {
+           const chunk_ptr& chk) -> caf::result<atom::ok> {
       VAST_ASSERT(chk != nullptr);
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
