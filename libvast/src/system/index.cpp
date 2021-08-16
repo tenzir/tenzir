@@ -353,14 +353,6 @@ void index_state::notify_flush_listeners() {
 
 void index_state::create_active_partition() {
   auto id = uuid::random();
-  caf::settings index_opts;
-  index_opts["cardinality"] = partition_capacity;
-  // These options must be kept in sync with vast/address_synopsis.hpp and
-  // vast/string_synopsis.hpp respectively.
-  auto synopsis_options = caf::settings{};
-  synopsis_options["max-partition-size"] = partition_capacity;
-  synopsis_options["address-synopsis-fp-rate"] = meta_index_fp_rate;
-  synopsis_options["string-synopsis-fp-rate"] = meta_index_fp_rate;
   // If we're using the global store, the importer already sends the table
   // slices. (In the long run, this should probably be streamlined so that all
   // data moves through the index. However, that requires some refactoring of
@@ -386,11 +378,9 @@ void index_state::create_active_partition() {
     store_name = "legacy_archive";
     active_partition.store = global_store;
   }
-  active_partition.actor
-    = self->spawn(::vast::system::active_partition, id, filesystem, index_opts,
-                  synopsis_options,
-                  static_cast<store_actor>(active_partition.store), store_name,
-                  store_header);
+  active_partition.actor = self->spawn(
+    ::vast::system::active_partition, id, filesystem, index_opts, synopsis_opts,
+    static_cast<store_actor>(active_partition.store), store_name, store_header);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
   active_partition.capacity = partition_capacity;
@@ -659,6 +649,12 @@ index(index_actor::stateful_pointer<index_state> self,
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                *self, dir, partition_capacity, max_inmem_partitions);
+  self->state.index_opts["cardinality"] = partition_capacity;
+  // These options must be kept in sync with vast/address_synopsis.hpp and
+  // vast/string_synopsis.hpp respectively.
+  self->state.synopsis_opts["max-partition-size"] = partition_capacity;
+  self->state.synopsis_opts["address-synopsis-fp-rate"] = meta_index_fp_rate;
+  self->state.synopsis_opts["string-synopsis-fp-rate"] = meta_index_fp_rate;
   // The global archive gets hard-coded special treatment for backwards
   // compatibility.
   self->state.partition_local_stores = store_backend != "archive";

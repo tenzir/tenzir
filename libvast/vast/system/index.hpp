@@ -270,8 +270,14 @@ struct index_state {
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
 
-  // The false positive rate for the meta index.
+  /// The false positive rate for the meta index.
   double meta_index_fp_rate = {};
+
+  /// Config options to be used for new synopses; passed to active partitions.
+  caf::settings synopsis_opts;
+
+  /// Config options for the index.
+  caf::settings index_opts;
 
   constexpr static inline auto name = "index";
 };
