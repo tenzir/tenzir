@@ -12,6 +12,7 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/parse.hpp"
+#include "vast/concept/printable/vast/type.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
