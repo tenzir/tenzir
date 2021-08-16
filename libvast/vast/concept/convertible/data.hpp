@@ -234,6 +234,20 @@ caf::error convert(const std::string& src, To& dst, const enumeration_type& t) {
 }
 // clang-format on
 
+template <class From, class To, class Type>
+caf::error convert(const From& src, std::optional<To>& dst, const Type& t) {
+  if (!dst)
+    dst = To{};
+  return convert(src, *dst, t);
+}
+
+template <class From, class To, class Type>
+caf::error convert(const From& src, caf::optional<To>& dst, const Type& t) {
+  if (!dst)
+    dst = To{};
+  return convert(src, *dst, t);
+}
+
 // Overload for lists.
 template <concepts::appendable To>
 caf::error convert(const list& src, To& dst, const list_type& t) {
