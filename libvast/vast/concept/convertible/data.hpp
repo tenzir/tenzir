@@ -396,42 +396,33 @@ public:
     if (*data_value == nullptr)
       return caf::none;
     auto err = caf::visit(
-      [&]<class Type>(const Type& t) -> caf::error {
+      [&]<class Data, class Type>(const Data& d, const Type& t) -> caf::error {
         using concrete_type = std::decay_t<Type>;
-        using concrete_data
-          = std::conditional_t<std::is_same_v<concrete_type, enumeration_type>,
-                               std::string, type_to_data<concrete_type>>;
         if constexpr (detail::is_any_v<concrete_type, alias_type, none_type>) {
           // Data conversion of none or alias type does not make sense.
           return caf::make_error(ec::convert_error, ": can't convert alias or "
                                                     "none types");
         } else {
-          const auto* d = caf::get_if<concrete_data>(*data_value);
-          if (!d) {
-            if (caf::holds_alternative<caf::none_t>(**data_value)) {
-              if constexpr (std::is_default_constructible_v<To>)
-                new (&dst) To{};
-              return caf::none;
-            }
-            return caf::make_error(ec::convert_error,
-                                   fmt::format(": unexpected data format at "
-                                               "{}: {}",
-                                               f.key(), **data_value));
+          if constexpr (std::is_same_v<Data, caf::none_t>) {
+            if constexpr (std::is_default_constructible_v<To>)
+              new (&dst) To{};
+            return caf::none;
+          } else {
+            if constexpr (IS_TYPED_CONVERTIBLE(d, dst, t))
+              return convert(d, dst, t);
+            if constexpr (IS_UNTYPED_CONVERTIBLE(d, dst))
+              return convert(d, dst);
+            else
+              return caf::make_error(
+                ec::convert_error,
+                fmt::format(": can't convert from {} to {} with type {}",
+                            detail::pretty_type_name(d),
+                            detail::pretty_type_name(dst), t));
           }
-          if constexpr (IS_TYPED_CONVERTIBLE(*d, dst, t))
-            return convert(*d, dst, t);
-          if constexpr (IS_UNTYPED_CONVERTIBLE(*d, dst))
-            return convert(*d, dst);
-          else
-            return caf::make_error(
-              ec::convert_error, fmt::format(": can't convert from {} to {} "
-                                             "with type {}",
-                                             detail::pretty_type_name(*d),
-                                             detail::pretty_type_name(dst), t));
         }
         return caf::none;
       },
-      f.type());
+      **data_value, f.type());
     return detail::prepend(std::move(err), ".{}", f.key());
   }
 
