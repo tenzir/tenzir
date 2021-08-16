@@ -485,3 +485,71 @@ TEST(list of record to map monoid) {
   CHECK_EQUAL(x["y"].value[0], 82u);
   CHECK_EQUAL(x["y"].value[1], 121u);
 }
+
+struct OptVec {
+  caf::optional<std::vector<std::string>> ovs = {};
+  caf::optional<uint64_t> ou = 0;
+
+  template <class Inspector>
+  friend typename Inspector::result_type inspect(Inspector& f, OptVec& x) {
+    return f(x.ovs, x.ou);
+  }
+
+  static inline const record_type layout = {
+    {"ovs", list_type{string_type{}}},
+    {"ou", count_type{}},
+  };
+};
+
+struct SMap {
+  vast::detail::stable_map<std::string, OptVec> xs;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, SMap& x) {
+    return f(x.xs);
+  }
+
+  static inline const record_type layout = {
+    {"xs", map_type{string_type{}, record_type{}}},
+  };
+};
+
+namespace fmt {
+
+template <>
+struct formatter<OptVec> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const OptVec& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+template <>
+struct formatter<SMap> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const SMap& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+} // namespace fmt
+
+TEST(record with list to optional vector) {
+  auto x = SMap{};
+  auto r = record{{"xs", record{{"foo", record{{"ovs", list{"a", "b", "c"}},
+                                               {"ou", caf::none}}},
+                                {"bar", record{{"ovs", list{"x", "y", "z"}}}},
+                                {"baz", record{{"ou", integer{42}}}}}}};
+  REQUIRE_EQUAL(convert(r, x), ec::no_error);
+  CHECK(x.xs.contains("foo"));
+  CHECK(x.xs.contains("bar"));
+  CHECK(x.xs.contains("baz"));
+  CHECK(x.xs["foo"].ovs);
+  CHECK_EQUAL(x.xs["foo"].ovs->size(), 3u);
+  CHECK(!x.xs["foo"].ou);
+  CHECK(x.xs["bar"].ovs);
+  CHECK_EQUAL(*x.xs["bar"].ou, 0u);
+  CHECK_EQUAL(x.xs["bar"].ovs->size(), 3u);
+  CHECK(!x.xs["baz"].ovs);
+  CHECK_EQUAL(*x.xs["baz"].ou, 42u);
+}
