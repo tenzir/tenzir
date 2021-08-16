@@ -133,14 +133,14 @@ concept has_layout = requires {
 };
 
 // Overload for records.
-template <concepts::inspectable T>
-caf::error convert(const record& src, T& dst, const record_type& layout);
+template <concepts::inspectable To>
+caf::error convert(const record& src, To& dst, const record_type& layout);
 
-template <has_layout T>
-caf::error convert(const record& src, T& dst);
+template <has_layout To>
+caf::error convert(const record& src, To& dst);
 
-template <has_layout T>
-caf::error convert(const data& src, T& dst);
+template <has_layout To>
+caf::error convert(const data& src, To& dst);
 
 // Generic overload when `src` and `dst` are of the same type.
 // TODO: remove the `!concepts::integral` constraint once count is a real type.
