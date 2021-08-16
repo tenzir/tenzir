@@ -181,6 +181,27 @@ caf::error convert(const count& src, To& dst, const count_type&) {
   return caf::none;
 }
 
+template <concepts::unsigned_integral To>
+caf::error convert(const integer& src, To& dst, const count_type&) {
+  if (src.value < 0)
+    return caf::make_error(
+      ec::convert_error, fmt::format(": {} can not be negative ({})",
+                                     detail::pretty_type_name(dst), src.value));
+  if constexpr (sizeof(To) >= sizeof(count)) {
+    dst = src.value;
+  } else {
+    if (src.value
+        > static_cast<integer::value_type>(std::numeric_limits<To>::max()))
+      return caf::make_error(ec::convert_error,
+                             fmt::format(": {} can not be represented by the "
+                                         "target variable [{}, {}]",
+                                         src, std::numeric_limits<To>::min(),
+                                         std::numeric_limits<To>::max()));
+    dst = detail::narrow_cast<To>(src.value);
+  }
+  return caf::none;
+}
+
 // Overload for integers.
 template <concepts::signed_integral To>
 caf::error convert(const integer& src, To& dst, const integer_type&) {
