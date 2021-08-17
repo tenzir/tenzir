@@ -227,8 +227,9 @@ template <class To>
 caf::error convert(const std::string& src, To& dst, const enumeration_type& t) {
   auto i = std::find(t.fields.begin(), t.fields.end(), src);
   if (i == t.fields.end())
-    return caf::make_error(ec::convert_error, ": {} is not a value of {}", src,
-        detail::pretty_type_name(dst));
+    return caf::make_error(ec::convert_error,
+                           fmt::format(": {} is not a value of {}", src,
+                                       detail::pretty_type_name(dst)));
   dst = detail::narrow_cast<To>(std::distance(t.fields.begin(), i));
   return caf::none;
 }
@@ -449,9 +450,9 @@ caf::error convert(const record& src, To& dst, const record_type& layout) {
       return convert(src, dst);
     else
       return caf::make_error(ec::convert_error,
-                             ": destination types must have a "
-                             "static layout definition: {}",
-                             detail::pretty_type_name(dst));
+                             fmt::format(": destination types must have a "
+                                         "static layout definition: {}",
+                                         detail::pretty_type_name(dst)));
   }
   auto ri = record_inspector{layout, src};
   return inspect(ri, dst);
@@ -466,8 +467,8 @@ template <has_layout To>
 caf::error convert(const data& src, To& dst) {
   if (const auto* r = caf::get_if<record>(&src))
     return convert(*r, dst);
-  return caf::make_error(ec::convert_error, ": expected record, but got {}",
-                         src);
+  return caf::make_error(ec::convert_error,
+                         fmt::format(": expected record, but got {}", src));
 }
 
 // TODO: Move to a dedicated header after conversion is refactored to use
