@@ -41,7 +41,8 @@ struct alternating {};
 
 template <class Policy>
 std::vector<table_slice> make_integers(size_t count) {
-  auto layout = record_type{{"value", integer_type{}}}.name("test.int");
+  auto layout
+    = legacy_record_type{{"value", legacy_integer_type{}}}.name("test.int");
   auto builder = msgpack_table_slice_builder::make(layout);
   VAST_ASSERT(builder != nullptr);
   std::vector<table_slice> result;

@@ -35,7 +35,7 @@ struct factory_traits<synopsis> {
   static key_type key(const type& t) {
     auto f = [](const auto& x) {
       using concrete_type = std::decay_t<decltype(x)>;
-      if constexpr (std::is_same_v<concrete_type, alias_type>)
+      if constexpr (std::is_same_v<concrete_type, legacy_alias_type>)
         return key(x.value_type);
       else
         return key<concrete_type>();

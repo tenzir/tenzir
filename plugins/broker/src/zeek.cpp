@@ -313,42 +313,42 @@ caf::error convert(tag type, tag sub_type, vast::type& result) {
       return caf::make_error(ec::parse_error, "unsupported value type",
                              static_cast<int>(type));
     case tag::type_bool:
-      result = bool_type{};
+      result = legacy_bool_type{};
       break;
     case tag::type_int:
-      result = integer_type{};
+      result = legacy_integer_type{};
       break;
     case tag::type_count:
     case tag::type_counter:
-      result = count_type{};
+      result = legacy_count_type{};
       break;
     case tag::type_port:
       // TODO: is there a pre-defined type alias called port in libvast?
-      result = count_type{}.name("port");
+      result = legacy_count_type{}.name("port");
       break;
     case tag::type_addr:
-      result = address_type{};
+      result = legacy_address_type{};
       break;
     case tag::type_subnet:
-      result = subnet_type{};
+      result = legacy_subnet_type{};
       break;
     case tag::type_double:
-      result = real_type{};
+      result = legacy_real_type{};
       break;
     case tag::type_time:
-      result = time_type{};
+      result = legacy_time_type{};
       break;
     case tag::type_interval:
-      result = duration_type{};
+      result = legacy_duration_type{};
       break;
     case tag::type_enum:
       // FIXME: unless we know all possible values a priori, we cannot use
       // enmuration_type here. Not sure how to go after this. Right now we
       // treat enums as strings. --MV
-      result = string_type{}.attributes({{"index", "hash"}});
+      result = legacy_string_type{}.attributes({{"index", "hash"}});
       break;
     case tag::type_string:
-      result = string_type{};
+      result = legacy_string_type{};
       break;
     case tag::type_table:
     case tag::type_vector: {
@@ -361,7 +361,7 @@ caf::error convert(tag type, tag sub_type, vast::type& result) {
       // Retain set semantics for tables.
       if (sub_type == tag::type_table)
         element_type.name("set");
-      result = list_type{std::move(element_type)};
+      result = legacy_list_type{std::move(element_type)};
       break;
     }
   }
@@ -370,7 +370,8 @@ caf::error convert(tag type, tag sub_type, vast::type& result) {
 
 } // namespace zeek
 
-caf::expected<record_type> process(const ::broker::zeek::LogCreate& msg) {
+caf::expected<legacy_record_type>
+process(const ::broker::zeek::LogCreate& msg) {
   // Parse Zeek's WriterBackend::WriterInfo.
   if (!msg.valid())
     return caf::make_error(ec::parse_error, "invalid log create message");
@@ -423,7 +424,7 @@ caf::expected<record_type> process(const ::broker::zeek::LogCreate& msg) {
       return err;
     fields.emplace_back(std::string{field.name}, std::move(field_type));
   }
-  return record_type{std::move(fields)}.name("zeek." + *type_name);
+  return legacy_record_type{std::move(fields)}.name("zeek." + *type_name);
 }
 
 caf::expected<std::vector<data>> process(const ::broker::zeek::LogWrite& msg) {

@@ -127,14 +127,15 @@ TEST(empty partition roundtrip) {
   state.events = 23;
   state.synopsis = std::make_shared<vast::partition_synopsis>();
   state.combined_layout
-    = vast::record_type{{"x", vast::count_type{}}}.name("y");
+    = vast::legacy_record_type{{"x", vast::legacy_count_type{}}}.name("y");
   auto& ids = state.type_ids["x"];
   ids.append_bits(0, 3);
   ids.append_bits(1, 3);
   // Prepare a layout for the partition synopsis. The partition synopsis only
   // looks at the layout of the table slices it gets, so we feed it
   // with an empty table slice.
-  auto layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
+  auto layout
+    = vast::legacy_record_type{{"x", vast::legacy_count_type{}}}.name("y");
   auto slice_builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, layout);
   REQUIRE(slice_builder);
@@ -212,7 +213,8 @@ TEST(full partition roundtrip) {
   run();
   REQUIRE(partition);
   // Add data to the partition.
-  auto layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
+  auto layout
+    = vast::legacy_record_type{{"x", vast::legacy_count_type{}}}.name("y");
   auto builder = vast::msgpack_table_slice_builder::make(layout);
   CHECK(builder->add(0u));
   auto slice = builder->finish();

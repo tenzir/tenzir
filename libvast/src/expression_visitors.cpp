@@ -401,7 +401,7 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
   if (caf::holds_alternative<none_type>(ex.type)) {
     auto matches = [&](const type& t) {
       const auto* p = &t;
-      while (const auto* a = caf::get_if<alias_type>(p)) {
+      while (const auto* a = caf::get_if<legacy_alias_type>(p)) {
         if (a->name() == ex.type.name())
           return compatible(*a, op_, d);
         p = &a->value_type;
@@ -435,7 +435,7 @@ caf::expected<expression>
 type_resolver::operator()(const field_extractor& ex, const data& d) {
   std::vector<expression> connective;
   // First, interpret the field as a suffix of a record field name.
-  if (auto r = caf::get_if<record_type>(&type_)) {
+  if (auto r = caf::get_if<legacy_record_type>(&type_)) {
     auto suffixes = r->find_suffix(ex.field);
     for (auto& offset : suffixes) {
       auto f = r->at(offset);

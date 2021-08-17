@@ -25,11 +25,12 @@ auto make_attr_printer(const T& x) {
 
 } // namespace detail
 
-struct enumeration_type_printer : printer_base<enumeration_type_printer> {
-  using attribute = enumeration_type;
+struct legacy_enumeration_type_printer
+  : printer_base<legacy_enumeration_type_printer> {
+  using attribute = legacy_enumeration_type;
 
   template <class Iterator>
-  bool print(Iterator& out, const enumeration_type& e) const {
+  bool print(Iterator& out, const legacy_enumeration_type& e) const {
     using namespace printers;
     using namespace printer_literals;
     auto p = "enum {"_P << (str % ", ") << '}';
@@ -39,8 +40,8 @@ struct enumeration_type_printer : printer_base<enumeration_type_printer> {
 };
 
 template <>
-struct printer_registry<enumeration_type> {
-  using type = enumeration_type_printer;
+struct printer_registry<legacy_enumeration_type> {
+  using type = legacy_enumeration_type_printer;
 };
 
 #define VAST_DEFINE_BASIC_TYPE_PRINTER(TYPE, DESC)                             \
@@ -62,16 +63,16 @@ struct printer_registry<enumeration_type> {
   };
 
 VAST_DEFINE_BASIC_TYPE_PRINTER(none_type, "none")
-VAST_DEFINE_BASIC_TYPE_PRINTER(bool_type, "bool")
-VAST_DEFINE_BASIC_TYPE_PRINTER(integer_type, "int")
-VAST_DEFINE_BASIC_TYPE_PRINTER(count_type, "count")
-VAST_DEFINE_BASIC_TYPE_PRINTER(real_type, "real")
-VAST_DEFINE_BASIC_TYPE_PRINTER(duration_type, "duration")
-VAST_DEFINE_BASIC_TYPE_PRINTER(time_type, "time")
-VAST_DEFINE_BASIC_TYPE_PRINTER(string_type, "string")
-VAST_DEFINE_BASIC_TYPE_PRINTER(pattern_type, "pattern")
-VAST_DEFINE_BASIC_TYPE_PRINTER(address_type, "addr")
-VAST_DEFINE_BASIC_TYPE_PRINTER(subnet_type, "subnet")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_bool_type, "bool")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_integer_type, "int")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_count_type, "count")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_real_type, "real")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_duration_type, "duration")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_time_type, "time")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_string_type, "string")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_pattern_type, "pattern")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_address_type, "addr")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_subnet_type, "subnet")
 #undef VAST_DEFINE_BASIC_TYPE_PRINTER
 
 // For the implementation, see below. (Must come after type due to recursion.)
@@ -88,10 +89,10 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(subnet_type, "subnet")
     using type = TYPE##_printer;                                               \
   };
 
-VAST_DECLARE_TYPE_PRINTER(list_type)
-VAST_DECLARE_TYPE_PRINTER(map_type)
-VAST_DECLARE_TYPE_PRINTER(record_type)
-VAST_DECLARE_TYPE_PRINTER(alias_type)
+VAST_DECLARE_TYPE_PRINTER(legacy_list_type)
+VAST_DECLARE_TYPE_PRINTER(legacy_map_type)
+VAST_DECLARE_TYPE_PRINTER(legacy_record_type)
+VAST_DECLARE_TYPE_PRINTER(legacy_alias_type)
 #undef VAST_DECLARE_TYPE_PRINTER
 
 namespace policy {
@@ -127,21 +128,21 @@ struct type_printer : printer_base<type_printer<Policy>> {
     if (show_type || t.name().empty()) {
       // clang-format off
       auto p = none_type_printer{}
-             | bool_type_printer{}
-             | integer_type_printer{}
-             | count_type_printer{}
-             | real_type_printer{}
-             | duration_type_printer{}
-             | time_type_printer{}
-             | string_type_printer{}
-             | pattern_type_printer{}
-             | address_type_printer{}
-             | subnet_type_printer{}
-             | enumeration_type_printer{}
-             | list_type_printer{}
-             | map_type_printer{}
-             | record_type_printer{}
-             | alias_type_printer{}
+             | legacy_bool_type_printer{}
+             | legacy_integer_type_printer{}
+             | legacy_count_type_printer{}
+             | legacy_real_type_printer{}
+             | legacy_duration_type_printer{}
+             | legacy_time_type_printer{}
+             | legacy_string_type_printer{}
+             | legacy_pattern_type_printer{}
+             | legacy_address_type_printer{}
+             | legacy_subnet_type_printer{}
+             | legacy_enumeration_type_printer{}
+             | legacy_list_type_printer{}
+             | legacy_map_type_printer{}
+             | legacy_record_type_printer{}
+             | legacy_alias_type_printer{}
              ;
       // clang-format on
       return p(out, t);
@@ -164,14 +165,16 @@ struct printer_registry<type> {
 // -- implementation of recursive type printers ------------------------------
 
 template <class Iterator>
-bool list_type_printer::print(Iterator& out, const list_type& t) const {
+bool legacy_list_type_printer::print(Iterator& out,
+                                     const legacy_list_type& t) const {
   auto p = "list<" << type_printer<policy::name_only>{} << '>';
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.value_type, t.attributes());
 }
 
 template <class Iterator>
-bool map_type_printer::print(Iterator& out, const map_type& t) const {
+bool legacy_map_type_printer::print(Iterator& out,
+                                    const legacy_map_type& t) const {
   using namespace printers;
   auto p =  "map<"
          << type_printer<policy::name_only>{}
@@ -198,7 +201,8 @@ struct printer_registry<record_field> {
 };
 
 template <class Iterator>
-bool record_type_printer::print(Iterator& out, const record_type& t) const {
+bool legacy_record_type_printer::print(Iterator& out,
+                                       const legacy_record_type& t) const {
   using namespace printer_literals;
   auto p = "record{"_P << (record_field_printer{} % ", ") << '}';
   auto a = detail::make_attr_printer(t);
@@ -206,7 +210,8 @@ bool record_type_printer::print(Iterator& out, const record_type& t) const {
 }
 
 template <class Iterator>
-bool alias_type_printer::print(Iterator& out, const alias_type& t) const {
+bool legacy_alias_type_printer::print(Iterator& out,
+                                      const legacy_alias_type& t) const {
   auto p = type_printer<policy::name_only>{};
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.value_type, t.attributes());

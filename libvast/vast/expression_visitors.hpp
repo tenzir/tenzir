@@ -133,8 +133,8 @@ struct type_resolver {
     auto make_predicate = [&](type t, offset off) {
       return predicate{data_extractor{std::move(t), off}, op_, x};
     };
-    if (auto r = caf::get_if<record_type>(&type_)) {
-      for (auto& i : record_type::each{*r})
+    if (auto r = caf::get_if<legacy_record_type>(&type_)) {
+      for (auto& i : legacy_record_type::each{*r})
         if (f(i.trace.back()->type))
           connective.emplace_back(
             make_predicate(i.trace.back()->type, i.offset));

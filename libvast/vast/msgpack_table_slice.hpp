@@ -25,7 +25,7 @@ struct msgpack_table_slice_state;
 template <>
 struct msgpack_table_slice_state<fbs::table_slice::msgpack::v0> {
   /// The deserialized table layout.
-  record_type layout;
+  legacy_record_type layout;
   size_t columns;
 };
 
@@ -45,7 +45,8 @@ public:
   /// a known layout.
   /// @param slice The encoding-specific FlatBuffers table.
   /// @param layout The table layout.
-  msgpack_table_slice(const FlatBuffer& slice, record_type layout) noexcept;
+  msgpack_table_slice(const FlatBuffer& slice,
+                      legacy_record_type layout) noexcept;
 
   /// Destroys a MessagePack-encoded table slice.
   ~msgpack_table_slice() noexcept;
@@ -61,7 +62,7 @@ public:
     = table_slice_encoding::msgpack;
 
   /// @returns The table layout.
-  [[nodiscard]] const record_type& layout() const noexcept;
+  [[nodiscard]] const legacy_record_type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] table_slice::size_type rows() const noexcept;

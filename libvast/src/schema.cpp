@@ -154,7 +154,7 @@ bool operator==(const schema& x, const schema& y) {
 //    save_type(t.value_type);
 //  }
 //
-//  void operator()(const record_type& t) const {
+//  void operator()(const legacy_record_type& t) const {
 //    auto size = t.fields.size();
 //    sink_.begin_sequence(size);
 //    for (auto& f : t.fields) {

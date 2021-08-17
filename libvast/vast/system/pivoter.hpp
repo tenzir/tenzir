@@ -55,7 +55,8 @@ struct pivoter_state {
 
   /// A cache for the connections between a source type and the target type,
   /// to avoid multiple computations of those.
-  mutable std::unordered_map<record_type, std::optional<record_field>> cache;
+  mutable std::unordered_map<legacy_record_type, std::optional<record_field>>
+    cache;
 
   /// A tracking counter of spawned exporters. Used for lifetime management.
   size_t running_exporters = 0;

@@ -26,7 +26,7 @@ using namespace vast::si_literals;
 
 TEST(string) {
   // This one-byte parameterization creates a collision for "foo" and "bar".
-  hash_index<1> idx{string_type{}};
+  hash_index<1> idx{legacy_string_type{}};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view("foo")));
   REQUIRE(idx.append(make_data_view("bar")));
@@ -45,13 +45,13 @@ TEST(string) {
 }
 
 TEST(serialization) {
-  hash_index<1> x{string_type{}};
+  hash_index<1> x{legacy_string_type{}};
   REQUIRE(x.append(make_data_view("foo")));
   REQUIRE(x.append(make_data_view("bar")));
   REQUIRE(x.append(make_data_view("baz")));
   std::vector<char> buf;
   REQUIRE(detail::serialize(buf, x) == caf::none);
-  hash_index<1> y{string_type{}};
+  hash_index<1> y{legacy_string_type{}};
   REQUIRE(detail::deserialize(buf, y) == caf::none);
   auto result = y.lookup(relational_operator::not_equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "101");
@@ -62,7 +62,7 @@ TEST(serialization) {
 // The attribute #index=hash selects the hash_index implementation.
 TEST(factory construction and parameterization) {
   factory<value_index>::initialize();
-  auto t = string_type{}.attributes({{"index", "hash"}});
+  auto t = legacy_string_type{}.attributes({{"index", "hash"}});
   caf::settings opts;
   MESSAGE("test cardinality that is a power of 2");
   opts["cardinality"] = 1_Ki;
@@ -83,7 +83,7 @@ TEST(factory construction and parameterization) {
 
 TEST(hash index for integer) {
   factory<value_index>::initialize();
-  auto t = integer_type{}.attributes({{"index", "hash"}});
+  auto t = legacy_integer_type{}.attributes({{"index", "hash"}});
   caf::settings opts;
   opts["cardinality"] = 1_Ki;
   auto idx = factory<value_index>::make(t, opts);
@@ -100,7 +100,8 @@ TEST(hash index for integer) {
 
 TEST(hash index for list) {
   factory<value_index>::initialize();
-  auto t = list_type{address_type{}}.attributes({{"index", "hash"}});
+  auto t
+    = legacy_list_type{legacy_address_type{}}.attributes({{"index", "hash"}});
   auto idx = factory<value_index>::make(t, caf::settings{});
   REQUIRE(idx != nullptr);
   auto xs = list{integer{1}, integer{2}, integer{3}};

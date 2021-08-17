@@ -32,7 +32,7 @@ protected:
   caf::error finish(consumer& f, caf::error result = caf::none);
 
   /// Tries to create a new table slice builder from given layout.
-  bool reset_builder(record_type layout);
+  bool reset_builder(legacy_record_type layout);
 
   /// Stores the current builder instance.
   table_slice_builder_ptr builder_;

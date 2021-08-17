@@ -22,10 +22,10 @@
 using namespace std::literals;
 
 // clang-format off
-const auto testdata_layout = vast::record_type{
-  {"uid", vast::string_type{}},
-  {"desc", vast::string_type{}},
-  {"index", vast::integer_type{}}}.name("testdata");
+const auto testdata_layout = vast::legacy_record_type{
+  {"uid", vast::legacy_string_type{}},
+  {"desc", vast::legacy_string_type{}},
+  {"index", vast::legacy_integer_type{}}}.name("testdata");
 // clang-format on
 
 struct transforms_fixture {
@@ -99,7 +99,7 @@ TEST(transform with multiple steps) {
   REQUIRE_EQUAL(transformed->layout().fields.size(), 2ull);
   CHECK_EQUAL(transformed->layout().fields[0].name, "uid");
   CHECK_EQUAL((*transformed).at(0, 0), vast::data_view{"xxx"sv});
-  auto wrong_layout = vast::record_type{testdata_layout}.name("foo");
+  auto wrong_layout = vast::legacy_record_type{testdata_layout}.name("foo");
   auto builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, wrong_layout);
   REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));

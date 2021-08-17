@@ -57,7 +57,7 @@ struct symbol_resolver {
     return concrete->update_attributes(x.attributes());
   }
 
-  caf::expected<type> operator()(alias_type x) {
+  caf::expected<type> operator()(legacy_alias_type x) {
     auto y = caf::visit(*this, x.value_type);
     if (!y)
       return y.error();
@@ -65,7 +65,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> operator()(list_type x) {
+  caf::expected<type> operator()(legacy_list_type x) {
     auto y = caf::visit(*this, x.value_type);
     if (!y)
       return y.error();
@@ -73,7 +73,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> operator()(map_type x) {
+  caf::expected<type> operator()(legacy_map_type x) {
     auto y = caf::visit(*this, x.value_type);
     if (!y)
       return y.error();
@@ -85,7 +85,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> operator()(record_type x) {
+  caf::expected<type> operator()(legacy_record_type x) {
     for (auto& [field_name, field_type] : x.fields) {
       auto y = caf::visit(*this, field_type);
       if (!y)
@@ -94,12 +94,12 @@ struct symbol_resolver {
     }
     if (has_attribute(x, "$algebra")) {
       VAST_ASSERT(x.fields.size() >= 2);
-      const auto* base = caf::get_if<record_type>(&x.fields[0].type);
+      const auto* base = caf::get_if<legacy_record_type>(&x.fields[0].type);
       VAST_ASSERT(base);
       auto acc = *base;
       auto it = ++x.fields.begin();
       for (; it < x.fields.end(); ++it) {
-        const auto* rhs = caf::get_if<record_type>(&it->type);
+        const auto* rhs = caf::get_if<legacy_record_type>(&it->type);
         VAST_ASSERT(rhs);
         if (it->name == "+") {
           auto result = merge(acc, *rhs);
@@ -201,7 +201,7 @@ struct symbol_map_parser : parser_base<symbol_map_parser> {
       // If the type has already a name, we're dealing with a symbol and have
       // to create an alias.
       if (!ty.name().empty())
-        ty = alias_type{ty}; // TODO: attributes
+        ty = legacy_alias_type{ty}; // TODO: attributes
       ty.name(name);
       if (!out.emplace(name, ty).second) {
         VAST_ERROR("multiple definitions of {} detected", name);

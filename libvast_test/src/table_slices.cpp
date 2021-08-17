@@ -33,7 +33,7 @@ namespace vast {
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
 make_random_table_slices(size_t num_slices, size_t slice_size,
-                         record_type layout, id offset, size_t seed) {
+                         legacy_record_type layout, id offset, size_t seed) {
   schema sc;
   sc.add(layout);
   // We have no access to the actor system, so we can only pick the default
@@ -101,58 +101,58 @@ namespace fixtures {
 
 table_slices::table_slices() {
   // Define our test layout.
-  layout = record_type{
-    {"a", bool_type{}},
-    {"b", integer_type{}},
-    {"c", count_type{}},
-    {"d", real_type{}},
-    {"e", duration_type{}},
-    {"f", time_type{}},
-    {"g", string_type{}},
-    {"h", pattern_type{}},
-    {"i", address_type{}},
-    {"j", subnet_type{}},
-    {"l", list_type{count_type{}}},
-    {"n", map_type{count_type{}, bool_type{}}},
+  layout = legacy_record_type{
+    {"a", legacy_bool_type{}},
+    {"b", legacy_integer_type{}},
+    {"c", legacy_count_type{}},
+    {"d", legacy_real_type{}},
+    {"e", legacy_duration_type{}},
+    {"f", legacy_time_type{}},
+    {"g", legacy_string_type{}},
+    {"h", legacy_pattern_type{}},
+    {"i", legacy_address_type{}},
+    {"j", legacy_subnet_type{}},
+    {"l", legacy_list_type{legacy_count_type{}}},
+    {"n", legacy_map_type{legacy_count_type{}, legacy_bool_type{}}},
     // test_lists
-    {"va", list_type{bool_type{}}},
-    {"vb", list_type{integer_type{}}},
-    {"vc", list_type{count_type{}}},
-    {"vd", list_type{real_type{}}},
-    {"ve", list_type{duration_type{}}},
-    {"vf", list_type{time_type{}}},
-    {"vg", list_type{string_type{}}},
-    {"vh", list_type{pattern_type{}}},
-    {"vi", list_type{address_type{}}},
-    {"vj", list_type{subnet_type{}}},
-    // {"vl", list_type{list_type{count_type{}}}},
-    // {"vm", list_type{map_type{count_type{}, bool_type{}}}},
+    {"va", legacy_list_type{legacy_bool_type{}}},
+    {"vb", legacy_list_type{legacy_integer_type{}}},
+    {"vc", legacy_list_type{legacy_count_type{}}},
+    {"vd", legacy_list_type{legacy_real_type{}}},
+    {"ve", legacy_list_type{legacy_duration_type{}}},
+    {"vf", legacy_list_type{legacy_time_type{}}},
+    {"vg", legacy_list_type{legacy_string_type{}}},
+    {"vh", legacy_list_type{legacy_pattern_type{}}},
+    {"vi", legacy_list_type{legacy_address_type{}}},
+    {"vj", legacy_list_type{legacy_subnet_type{}}},
+    // {"vl", legacy_list_type{legacy_list_type{legacy_count_type{}}}},
+    // {"vm", legacy_list_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}}},
     // -- test_maps_left
-    {"maa", map_type{bool_type{}, bool_type{}}},
-    {"mba", map_type{integer_type{}, bool_type{}}},
-    {"mca", map_type{count_type{}, bool_type{}}},
-    {"mda", map_type{real_type{}, bool_type{}}},
-    {"mea", map_type{duration_type{}, bool_type{}}},
-    {"mfa", map_type{time_type{}, bool_type{}}},
-    {"mga", map_type{string_type{}, bool_type{}}},
-    {"mha", map_type{pattern_type{}, bool_type{}}},
-    {"mia", map_type{address_type{}, bool_type{}}},
-    {"mja", map_type{subnet_type{}, bool_type{}}},
-    // {"mla", map_type{list_type{count_type{}}, bool_type{}}},
-    // {"mna", map_type{map_type{count_type{}, bool_type{}}, bool_type{}}},
+    {"maa", legacy_map_type{legacy_bool_type{}, legacy_bool_type{}}},
+    {"mba", legacy_map_type{legacy_integer_type{}, legacy_bool_type{}}},
+    {"mca", legacy_map_type{legacy_count_type{}, legacy_bool_type{}}},
+    {"mda", legacy_map_type{legacy_real_type{}, legacy_bool_type{}}},
+    {"mea", legacy_map_type{legacy_duration_type{}, legacy_bool_type{}}},
+    {"mfa", legacy_map_type{legacy_time_type{}, legacy_bool_type{}}},
+    {"mga", legacy_map_type{legacy_string_type{}, legacy_bool_type{}}},
+    {"mha", legacy_map_type{legacy_pattern_type{}, legacy_bool_type{}}},
+    {"mia", legacy_map_type{legacy_address_type{}, legacy_bool_type{}}},
+    {"mja", legacy_map_type{legacy_subnet_type{}, legacy_bool_type{}}},
+    // {"mla", legacy_map_type{legacy_list_type{legacy_count_type{}}, legacy_bool_type{}}},
+    // {"mna", legacy_map_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}, legacy_bool_type{}}},
     // -- test_maps_right (intentionally no maa)
-    {"mab", map_type{bool_type{}, integer_type{}}},
-    {"mac", map_type{bool_type{}, count_type{}}},
-    {"mad", map_type{bool_type{}, real_type{}}},
-    {"mae", map_type{bool_type{}, duration_type{}}},
-    {"maf", map_type{bool_type{}, time_type{}}},
-    {"mag", map_type{bool_type{}, string_type{}}},
-    {"mah", map_type{bool_type{}, pattern_type{}}},
-    {"mai", map_type{bool_type{}, address_type{}}},
-    {"maj", map_type{bool_type{}, subnet_type{}}},
-    // {"mal", map_type{bool_type{}, list_type{count_type{}}}},
-    // {"man", map_type{bool_type{}, map_type{count_type{}, bool_type{}}}},
-	{"aas", alias_type{alias_type{string_type{}}}},
+    {"mab", legacy_map_type{legacy_bool_type{}, legacy_integer_type{}}},
+    {"mac", legacy_map_type{legacy_bool_type{}, legacy_count_type{}}},
+    {"mad", legacy_map_type{legacy_bool_type{}, legacy_real_type{}}},
+    {"mae", legacy_map_type{legacy_bool_type{}, legacy_duration_type{}}},
+    {"maf", legacy_map_type{legacy_bool_type{}, legacy_time_type{}}},
+    {"mag", legacy_map_type{legacy_bool_type{}, legacy_string_type{}}},
+    {"mah", legacy_map_type{legacy_bool_type{}, legacy_pattern_type{}}},
+    {"mai", legacy_map_type{legacy_bool_type{}, legacy_address_type{}}},
+    {"maj", legacy_map_type{legacy_bool_type{}, legacy_subnet_type{}}},
+    // {"mal", legacy_map_type{legacy_bool_type{}, legacy_list_type{legacy_count_type{}}}},
+    // {"man", legacy_map_type{legacy_bool_type{}, legacy_map_type{legacy_count_type{}, legacy_bool_type{}}}},
+	{"aas", legacy_alias_type{legacy_alias_type{legacy_string_type{}}}},
   }.name("test");
   // A bunch of test data for nested type combinations.
   // clang-format off
@@ -336,7 +336,7 @@ void table_slices::test_message_serialization() {
 
 void table_slices::test_append_column_to_index() {
   MESSAGE(">> test append_column_to_index");
-  auto idx = factory<value_index>::make(integer_type{}, caf::settings{});
+  auto idx = factory<value_index>::make(legacy_integer_type{}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   auto slice = make_slice();
   slice.offset(0);

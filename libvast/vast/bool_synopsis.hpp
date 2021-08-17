@@ -12,7 +12,7 @@
 
 namespace vast {
 
-// A synopsis for a [bool type](@ref bool_type).
+// A synopsis for a [bool type](@ref legacy_bool_type).
 class bool_synopsis : public synopsis {
 public:
   explicit bool_synopsis(vast::type x);

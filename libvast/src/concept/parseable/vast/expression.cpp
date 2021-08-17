@@ -81,9 +81,9 @@ struct expander {
       if (auto t = caf::get_if<type_extractor>(&lhs))
         if (auto d = caf::get_if<data>(&rhs))
           if (op == relational_operator::equal)
-            if (caf::holds_alternative<subnet_type>(t->type))
+            if (caf::holds_alternative<legacy_subnet_type>(t->type))
               if (auto sn = caf::get_if<subnet>(d))
-                return predicate{type_extractor{address_type{}},
+                return predicate{type_extractor{legacy_address_type{}},
                                  relational_operator::in, *d};
       return caf::none;
     };

@@ -31,12 +31,12 @@ namespace {
 /// Returns the field that shall be used to extract values from for
 /// the pivot membership query.
 std::optional<record_field>
-common_field(const pivoter_state& st, const record_type& indicator) {
+common_field(const pivoter_state& st, const legacy_record_type& indicator) {
   auto f = st.cache.find(indicator);
   if (f != st.cache.end())
     return f->second;
     // TODO: This algorithm can be enabled once we have a live updated
-    //       type registry. (Switch the type of target to record_type.)
+    //       type registry. (Switch the type of target to legacy_record_type.)
 #if 0
   for (auto& t : target.fields) {
     for (auto& i : indicator.fields) {

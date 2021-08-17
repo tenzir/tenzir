@@ -91,7 +91,7 @@ public:
   size_t columns() const noexcept;
 
   /// @returns The table layout.
-  const record_type& layout() const noexcept;
+  const legacy_record_type& layout() const noexcept;
 
   /// @returns An identifier for the implementing class.
   virtual table_slice_encoding implementation_id() const noexcept = 0;
@@ -113,7 +113,7 @@ protected:
 
   /// Construct a builder for tables slices.
   /// @param layout The table layout.
-  explicit table_slice_builder(record_type layout) noexcept;
+  explicit table_slice_builder(legacy_record_type layout) noexcept;
 
   /// Adds data to the builder.
   /// @param x The data to add.
@@ -122,7 +122,7 @@ protected:
 
 private:
   // -- implementation details -------------------------------------------------
-  record_type layout_;
+  legacy_record_type layout_;
 };
 
 // -- intrusive_ptr facade -----------------------------------------------------

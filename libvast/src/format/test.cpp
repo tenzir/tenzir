@@ -46,12 +46,13 @@ caf::expected<distribution> make_distribution(const type& t) {
     return caf::make_error(ec::parse_error, "invalid distribution "
                                             "specification");
   if (name == "uniform") {
-    if (holds_alternative<integer_type>(t))
+    if (holds_alternative<legacy_integer_type>(t))
       return {std::uniform_int_distribution<vast::integer::value_type>{
         static_cast<vast::integer::value_type>(p0),
         static_cast<vast::integer::value_type>(p1)}};
-    else if (holds_alternative<bool_type>(t) || holds_alternative<count_type>(t)
-             || holds_alternative<string_type>(t))
+    else if (holds_alternative<legacy_bool_type>(t)
+             || holds_alternative<legacy_count_type>(t)
+             || holds_alternative<legacy_string_type>(t))
       return {std::uniform_int_distribution<count>{static_cast<count>(p0),
                                                    static_cast<count>(p1)}};
     else
@@ -81,7 +82,7 @@ struct initializer {
     return caf::no_error;
   }
 
-  caf::expected<void> operator()(const record_type& r) {
+  caf::expected<void> operator()(const legacy_record_type& r) {
     auto& xs = caf::get<list>(*data_);
     VAST_ASSERT(xs.size() == r.fields.size());
     for (auto i = 0u; i < r.fields.size(); ++i) {
@@ -132,33 +133,33 @@ struct randomizer {
     // Do nothing.
   }
 
-  void operator()(const integer_type&, integer& x) {
+  void operator()(const legacy_integer_type&, integer& x) {
     x.value = static_cast<integer::value_type>(sample());
   }
 
-  void operator()(const count_type&, count& x) {
+  void operator()(const legacy_count_type&, count& x) {
     x = sample();
   }
 
-  void operator()(const real_type&, real& x) {
+  void operator()(const legacy_real_type&, real& x) {
     x = sample();
   }
 
-  auto operator()(const time_type&, time& x) {
+  auto operator()(const legacy_time_type&, time& x) {
     x += std::chrono::duration_cast<duration>(double_seconds(sample()));
   }
 
-  auto operator()(const duration_type&, duration& x) {
+  auto operator()(const legacy_duration_type&, duration& x) {
     x += std::chrono::duration_cast<duration>(double_seconds(sample()));
   }
 
-  void operator()(const bool_type&, bool& b) {
+  void operator()(const legacy_bool_type&, bool& b) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<count> unif{0, 1};
     b = unif(gen);
   }
 
-  void operator()(const string_type&, std::string& str) {
+  void operator()(const legacy_string_type&, std::string& str) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<size_t> unif_size{0, 256};
     std::uniform_int_distribution<char> unif_char{32, 126}; // Printable ASCII
@@ -167,7 +168,7 @@ struct randomizer {
       c = unif_char(gen);
   }
 
-  void operator()(const address_type&, address& addr) {
+  void operator()(const legacy_address_type&, address& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.
     lcg gen{static_cast<lcg::result_type>(sample())};
@@ -181,8 +182,8 @@ struct randomizer {
     addr = {bytes, version, address::network};
   }
 
-  void operator()(const subnet_type&, subnet& sn) {
-    static type addr_type = address_type{};
+  void operator()(const legacy_subnet_type&, subnet& sn) {
+    static type addr_type = legacy_address_type{};
     address addr;
     (*this)(addr_type, addr);
     std::uniform_int_distribution<uint8_t> unif{0, 128};
@@ -190,7 +191,7 @@ struct randomizer {
   }
 
   // Can only be a record, because we don't support randomizing containers.
-  void operator()(const record_type& r, list& xs) {
+  void operator()(const legacy_record_type& r, list& xs) {
     for (auto i = 0u; i < xs.size(); ++i)
       visit(*this, r.fields[i].type, xs[i]);
   }

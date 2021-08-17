@@ -90,7 +90,7 @@ template <class Builder>
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_builder_ptr
-msgpack_table_slice_builder::make(record_type layout,
+msgpack_table_slice_builder::make(legacy_record_type layout,
                                   size_t initial_buffer_size) {
   return table_slice_builder_ptr{
     new msgpack_table_slice_builder{std::move(layout), initial_buffer_size},
@@ -166,7 +166,7 @@ void msgpack_table_slice_builder::reserve(size_t num_rows) {
 // -- implementation details ---------------------------------------------------
 
 msgpack_table_slice_builder::msgpack_table_slice_builder(
-  record_type layout, size_t initial_buffer_size)
+  legacy_record_type layout, size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
     flat_layout_{flatten(this->layout())},
     msgpack_builder_{data_},

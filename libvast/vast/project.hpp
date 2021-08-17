@@ -87,7 +87,8 @@ public:
             return std::nullopt;
           return data;
         } else if constexpr (detail::is_any_v<std::decay_t<decltype(type)>,
-                                              vast::list_type, vast::map_type>) {
+                                              vast::legacy_list_type,
+                                              vast::legacy_map_type>) {
           // Work around a mismatch in the type congruency check. We get
           // incomplete nested types from `data_to_type`, and those don't match
           // the actual types in the layout, so we call the unoptimized overload
@@ -246,20 +247,20 @@ projection<Types...> project(table_slice slice, Hints&&... hints) {
     if constexpr (std::is_convertible_v<decltype(hint), offset>) {
       if (auto field = layout.at(hint))
         if (detail::is_any_v<std::decay_t<decltype(type)>, vast::type,
-                             vast::list_type, vast::map_type> //
+                             vast::legacy_list_type, vast::legacy_map_type> //
             || congruent(field.type(), type))
           if (auto flat_index = layout.flat_index_at(hint))
             return *flat_index;
     } else if constexpr (std::is_constructible_v<std::string_view,
                                                  decltype(hint)>) {
       table_slice::size_type flat_index = 0;
-      for (const auto& field : record_type::each{layout}) {
+      for (const auto& field : legacy_record_type::each{layout}) {
         const auto full_name = layout.name() + '.' + field.key();
         auto name_view = std::string_view{full_name};
         while (true) {
           if (name_view == hint)
             if (detail::is_any_v<std::decay_t<decltype(type)>, vast::type,
-                                 vast::list_type, vast::map_type> //
+                                 vast::legacy_list_type, vast::legacy_map_type> //
                 || congruent(field.type(), type))
               return flat_index;
           auto colon = name_view.find_first_of('.');
@@ -272,10 +273,10 @@ projection<Types...> project(table_slice slice, Hints&&... hints) {
     } else if constexpr (std::is_convertible_v<decltype(hint),
                                                table_slice::size_type>) {
       table_slice::size_type flat_index = 0;
-      for (const auto& field : record_type::each{layout}) {
+      for (const auto& field : legacy_record_type::each{layout}) {
         if (flat_index == detail::narrow_cast<table_slice::size_type>(hint))
           if (detail::is_any_v<std::decay_t<decltype(type)>, vast::type,
-                               vast::list_type, vast::map_type> //
+                               vast::legacy_list_type, vast::legacy_map_type> //
               || congruent(field.type(), type))
             return flat_index;
         ++flat_index;

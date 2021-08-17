@@ -234,26 +234,26 @@ FIXTURE_SCOPE(zeek_reader_tests, fixture)
 TEST(zeek data parsing) {
   using namespace std::chrono;
   data d;
-  CHECK(zeek_parse(bool_type{}, "T", d));
+  CHECK(zeek_parse(legacy_bool_type{}, "T", d));
   CHECK(d == true);
-  CHECK(zeek_parse(integer_type{}, "-49329", d));
+  CHECK(zeek_parse(legacy_integer_type{}, "-49329", d));
   CHECK(d == integer{-49329});
-  CHECK(zeek_parse(count_type{}, "49329"s, d));
+  CHECK(zeek_parse(legacy_count_type{}, "49329"s, d));
   CHECK(d == count{49329});
-  CHECK(zeek_parse(time_type{}, "1258594163.566694", d));
+  CHECK(zeek_parse(legacy_time_type{}, "1258594163.566694", d));
   auto ts = duration_cast<vast::duration>(double_seconds{1258594163.566694});
   CHECK(d == vast::time{ts});
-  CHECK(zeek_parse(duration_type{}, "1258594163.566694", d));
+  CHECK(zeek_parse(legacy_duration_type{}, "1258594163.566694", d));
   CHECK(d == ts);
-  CHECK(zeek_parse(string_type{}, "\\x2afoo*"s, d));
+  CHECK(zeek_parse(legacy_string_type{}, "\\x2afoo*"s, d));
   CHECK(d == "*foo*");
-  CHECK(zeek_parse(address_type{}, "192.168.1.103", d));
+  CHECK(zeek_parse(legacy_address_type{}, "192.168.1.103", d));
   CHECK(d == *to<address>("192.168.1.103"));
-  CHECK(zeek_parse(subnet_type{}, "10.0.0.0/24", d));
+  CHECK(zeek_parse(legacy_subnet_type{}, "10.0.0.0/24", d));
   CHECK(d == *to<subnet>("10.0.0.0/24"));
-  CHECK(zeek_parse(list_type{integer_type{}}, "49329", d));
+  CHECK(zeek_parse(legacy_list_type{legacy_integer_type{}}, "49329", d));
   CHECK(d == list{integer{49329}});
-  CHECK(zeek_parse(list_type{string_type{}}, "49329,42", d));
+  CHECK(zeek_parse(legacy_list_type{legacy_string_type{}}, "49329,42", d));
   CHECK(d == list{"49329", "42"});
 }
 

@@ -252,7 +252,7 @@ template <>
 caf::expected<data>
 type_biased_convert_impl<std::string_view, enumeration>(std::string_view s,
                                                         const type& t) {
-  const auto& e = dynamic_cast<const enumeration_type&>(*t);
+  const auto& e = dynamic_cast<const legacy_enumeration_type&>(*t);
   const auto i = std::find(e.fields.begin(), e.fields.end(), s);
   if (i == e.fields.end())
     return caf::make_error(ec::parse_error, "invalid:", std::string{s});
@@ -263,7 +263,7 @@ template <>
 caf::expected<data>
 type_biased_convert_impl<::simdjson::dom::array, list>(::simdjson::dom::array a,
                                                        const type& t) {
-  const auto& v = dynamic_cast<const list_type&>(*t);
+  const auto& v = dynamic_cast<const legacy_list_type&>(*t);
   list xs;
   xs.reserve(a.size());
   for (const auto x : a) {
@@ -278,7 +278,7 @@ type_biased_convert_impl<::simdjson::dom::array, list>(::simdjson::dom::array a,
 template <>
 caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
   ::simdjson::dom::object o, const type& t) {
-  const auto& m = dynamic_cast<const map_type&>(*t);
+  const auto& m = dynamic_cast<const legacy_map_type&>(*t);
   map xs;
   xs.reserve(o.size());
   for (auto [k, v] : o) {
@@ -297,7 +297,7 @@ caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
 template <>
 caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, record>(
   ::simdjson::dom::object o, const type& t) {
-  const auto& r = dynamic_cast<const record_type&>(*t);
+  const auto& r = dynamic_cast<const legacy_record_type&>(*t);
   record xs;
   xs.reserve(o.size());
   for (auto [k, v] : o) {
@@ -445,9 +445,9 @@ const char* writer::name() const {
 }
 
 caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
-               const record_type& layout) {
+               const legacy_record_type& layout) {
   caf::error err = caf::none;
-  for (const auto& field : record_type::each(layout)) {
+  for (const auto& field : legacy_record_type::each(layout)) {
     auto lookup_result = lookup(field.key(), xs);
     // Non-existing fields are treated as empty (unset).
     if (lookup_result.error() != ::simdjson::error_code::SUCCESS) {

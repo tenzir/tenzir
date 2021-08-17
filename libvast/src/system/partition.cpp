@@ -149,7 +149,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       return {};
     }
     auto neg = is_negated(op);
-    for (const auto& field : record_type::each{state.combined_layout}) {
+    for (const auto& field : legacy_record_type::each{state.combined_layout}) {
       // As long as the combined layout is flattened, this must rely on
       // a heuristic. We use the substring after the last dot for the
       // field name.

@@ -31,7 +31,7 @@ namespace vast {
 /// ability to control the position/offset where to begin encoding of values.
 template <class Bitmap>
 struct coder {
-  using bitmap_type = Bitmap;
+  using bitlegacy_map_type = Bitmap;
   using size_type = typename Bitmap::size_type;
   using value_type = size_t;
 
@@ -88,7 +88,7 @@ struct coder {
 template <class Bitmap>
 class singleton_coder : detail::equality_comparable<singleton_coder<Bitmap>> {
 public:
-  using bitmap_type = Bitmap;
+  using bitlegacy_map_type = Bitmap;
   using size_type = typename Bitmap::size_type;
   using value_type = bool;
 
@@ -96,12 +96,12 @@ public:
     return 1;
   }
 
-  bitmap_type& bitmap_at(size_t index) {
+  bitlegacy_map_type& bitmap_at(size_t index) {
     VAST_ASSERT(index == 0);
     return bitmap_;
   }
 
-  [[nodiscard]] const bitmap_type& bitmap_at(size_t index) const {
+  [[nodiscard]] const bitlegacy_map_type& bitmap_at(size_t index) const {
     VAST_ASSERT(index == 0);
     return bitmap_;
   }
@@ -158,7 +158,7 @@ private:
 template <class Bitmap>
 class vector_coder : detail::equality_comparable<vector_coder<Bitmap>> {
 public:
-  using bitmap_type = Bitmap;
+  using bitlegacy_map_type = Bitmap;
   using size_type = typename Bitmap::size_type;
   using value_type = size_t;
 
@@ -218,23 +218,23 @@ class equality_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
 
-  using typename super::value_type;
+  using typename super::bitlegacy_map_type;
   using typename super::size_type;
-  using typename super::bitmap_type;
+  using typename super::value_type;
 
   using super::super;
 
-  bitmap_type& lazy_bitmap_at(size_t index) const {
+  bitlegacy_map_type& lazy_bitmap_at(size_t index) const {
     auto& result = this->bitmaps_[index];
     result.append_bits(false, this->size_ - result.size());
     return result;
   }
 
-  bitmap_type& bitmap_at(size_t index) {
+  bitlegacy_map_type& bitmap_at(size_t index) {
     return lazy_bitmap_at(index);
   }
 
-  const bitmap_type& bitmap_at(size_t index) const {
+  const bitlegacy_map_type& bitmap_at(size_t index) const {
     return lazy_bitmap_at(index);
   }
 
@@ -310,23 +310,23 @@ class range_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
 
-  using typename super::value_type;
+  using typename super::bitlegacy_map_type;
   using typename super::size_type;
-  using typename super::bitmap_type;
+  using typename super::value_type;
 
   using super::super;
 
-  bitmap_type& lazy_bitmap_at(size_t index) const {
+  bitlegacy_map_type& lazy_bitmap_at(size_t index) const {
     auto& result = this->bitmaps_[index];
     result.append_bits(true, this->size_ - result.size());
     return result;
   }
 
-  bitmap_type& bitmap_at(size_t index) {
+  bitlegacy_map_type& bitmap_at(size_t index) {
     return lazy_bitmap_at(index);
   }
 
-  const bitmap_type& bitmap_at(size_t index) const {
+  const bitlegacy_map_type& bitmap_at(size_t index) const {
     return lazy_bitmap_at(index);
   }
 
@@ -400,23 +400,23 @@ class bitslice_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
 
-  using typename super::value_type;
+  using typename super::bitlegacy_map_type;
   using typename super::size_type;
-  using typename super::bitmap_type;
+  using typename super::value_type;
 
   using super::super;
 
-  bitmap_type& lazy_bitmap_at(size_t index) const {
+  bitlegacy_map_type& lazy_bitmap_at(size_t index) const {
     auto& result = this->bitmaps_[index];
     result.append_bits(false, this->size_ - result.size());
     return result;
   }
 
-  bitmap_type& bitmap_at(size_t index) {
+  bitlegacy_map_type& bitmap_at(size_t index) {
     return lazy_bitmap_at(index);
   }
 
-  const bitmap_type& bitmap_at(size_t index) const {
+  const bitlegacy_map_type& bitmap_at(size_t index) const {
     return lazy_bitmap_at(index);
   }
 
@@ -526,7 +526,7 @@ class multi_level_coder
   : detail::equality_comparable<multi_level_coder<Coder>> {
 public:
   using coder_type = Coder;
-  using bitmap_type = typename coder_type::bitmap_type;
+  using bitlegacy_map_type = typename coder_type::bitlegacy_map_type;
   using size_type = typename coder_type::size_type;
   using value_type = typename coder_type::value_type;
 
@@ -547,7 +547,7 @@ public:
   }
 
   auto decode(relational_operator op, value_type x) const {
-    return coders_.empty() ? bitmap_type{} : decode(coders_, op, x);
+    return coders_.empty() ? bitlegacy_map_type{} : decode(coders_, op, x);
   }
 
   void skip(size_type n) {
@@ -603,15 +603,15 @@ private:
   // conjunction/disjunction of the others. While this decreases space
   // requirements by a factor of 1/b, it increases query time by b-1.
 
-  void init_coders(std::vector<singleton_coder<bitmap_type>>&) {
+  void init_coders(std::vector<singleton_coder<bitlegacy_map_type>>&) {
     // Nothing to for singleton coders.
   }
 
-  void init_coders(std::vector<range_coder<bitmap_type>>& coders) {
+  void init_coders(std::vector<range_coder<bitlegacy_map_type>>& coders) {
     // For range coders it suffices to use b-1 bitmaps because the last
     // bitmap always consists of all 1s and is hence superfluous.
     for (auto i = 0u; i < base_.size(); ++i)
-      coders[i] = range_coder<bitmap_type>{base_[i] - 1};
+      coders[i] = range_coder<bitlegacy_map_type>{base_[i] - 1};
   }
 
   template <class C>
@@ -622,7 +622,7 @@ private:
   }
 
   // Range-Eval-Opt
-  auto decode(const std::vector<range_coder<bitmap_type>>& coders,
+  auto decode(const std::vector<range_coder<bitlegacy_map_type>>& coders,
               relational_operator op, value_type x) const {
     VAST_ASSERT(
       !(op == relational_operator::in || op == relational_operator::not_in));
@@ -632,21 +632,21 @@ private:
     // Check boundaries first.
     if (x == 0) {
       if (op == relational_operator::less) // A < min => false
-        return bitmap_type{size(), false};
+        return bitlegacy_map_type{size(), false};
       else if (op == relational_operator::greater_equal) // A >= min => true
-        return bitmap_type{size(), true};
+        return bitlegacy_map_type{size(), true};
     } else if (op == relational_operator::less
                || op == relational_operator::greater_equal) {
       --x;
     }
     base_.decompose(x, xs_);
-    bitmap_type result{size(), true};
+    bitlegacy_map_type result{size(), true};
     auto get_bitmap = [&](size_t coder_index, size_t bitmap_index) -> auto& {
       return coders[coder_index].bitmap_at(bitmap_index);
     };
     switch (op) {
       default:
-        return bitmap_type{size(), false};
+        return bitlegacy_map_type{size(), false};
       case relational_operator::less:
       case relational_operator::less_equal:
       case relational_operator::greater:
@@ -684,7 +684,7 @@ private:
   template <class C>
     requires(is_equality_coder<C>::value || is_bitslice_coder<C>::value)
   auto decode(const std::vector<C>& coders, relational_operator op,
-              value_type x) const -> bitmap_type {
+              value_type x) const -> bitlegacy_map_type {
     VAST_ASSERT(op == relational_operator::equal
                 || op == relational_operator::not_equal);
     base_.decompose(x, xs_);

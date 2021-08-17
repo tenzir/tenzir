@@ -50,20 +50,23 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
 }
 
-const list_type concepts_data_layout = list_type{record_type{
-  {"concept", record_type{{"name", string_type{}.attributes({{"key"}})},
-                          {"description", string_type{}},
-                          {"fields", list_type{string_type{}}},
-                          {"concepts", list_type{string_type{}}}}}}};
+const legacy_list_type concepts_data_layout
+  = legacy_list_type{legacy_record_type{
+    {"concept", legacy_record_type{
+                  {"name", legacy_string_type{}.attributes({{"key"}})},
+                  {"description", legacy_string_type{}},
+                  {"fields", legacy_list_type{legacy_string_type{}}},
+                  {"concepts", legacy_list_type{legacy_string_type{}}}}}}};
 
 bool operator==(const model& lhs, const model& rhs) {
   return lhs.definition == rhs.definition;
 }
 
-const list_type models_data_layout = list_type{record_type{
-  {"model", record_type{{"name", string_type{}.attributes({{"key"}})},
-                        {"description", string_type{}},
-                        {"definition", list_type{string_type{}}}}}}};
+const legacy_list_type models_data_layout = legacy_list_type{legacy_record_type{
+  {"model", legacy_record_type{
+              {"name", legacy_string_type{}.attributes({{"key"}})},
+              {"description", legacy_string_type{}},
+              {"definition", legacy_list_type{legacy_string_type{}}}}}}};
 
 bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
   return lhs.concepts == rhs.concepts && lhs.models == rhs.models;
@@ -113,7 +116,7 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
       auto field = x.substr(pos + 1);
       return std::any_of(
         i->second.begin(), i->second.end(), [&](const type& t) {
-          if (const auto& layout = caf::get_if<record_type>(&t)) {
+          if (const auto& layout = caf::get_if<legacy_record_type>(&t)) {
             auto flat_layout = flatten(*layout);
             if (auto f = flat_layout.find(field))
               return compatible(f->type, op, data);

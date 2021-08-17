@@ -197,18 +197,18 @@ bool type_check(const type& t, const data_view& x) {
       // Cannot determine data type since data may always be null.
       return true;
     },
-    [&](const enumeration_type& u) {
+    [&](const legacy_enumeration_type& u) {
       auto e = caf::get_if<view<enumeration>>(&x);
       return e && *e < u.fields.size();
     },
-    [&](const list_type& u) {
+    [&](const legacy_list_type& u) {
       auto v = caf::get_if<view<list>>(&x);
       if (!v)
         return false;
       auto& xs = **v;
       return xs.empty() || type_check(u.value_type, xs.at(0));
     },
-    [&](const map_type& u) {
+    [&](const legacy_map_type& u) {
       auto v = caf::get_if<view<map>>(&x);
       if (!v)
         return false;
@@ -218,7 +218,7 @@ bool type_check(const type& t, const data_view& x) {
       auto [key, value] = xs.at(0);
       return type_check(u.key_type, key) && type_check(u.value_type, value);
     },
-    [&](const record_type& u) {
+    [&](const legacy_record_type& u) {
       // Until we have a separate data type for records we treat them as list.
       auto v = caf::get_if<view<list>>(&x);
       if (!v)
@@ -231,7 +231,9 @@ bool type_check(const type& t, const data_view& x) {
           return false;
       return true;
     },
-    [&](const alias_type& u) { return type_check(u.value_type, x); },
+    [&](const legacy_alias_type& u) {
+      return type_check(u.value_type, x);
+    },
   };
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
@@ -328,26 +330,32 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
 
 data_view to_canonical(const type& t, const data_view& x) {
   auto v = detail::overload{
-    [](const view<enumeration>& x, const enumeration_type& t) -> data_view {
+    [](const view<enumeration>& x,
+       const legacy_enumeration_type& t) -> data_view {
       if (materialize(x) >= t.fields.size())
         return caf::none;
       return make_view(t.fields[materialize(x)]);
     },
-    [&](auto&, auto&) { return x; },
+    [&](auto&, auto&) {
+      return x;
+    },
   };
   return caf::visit(v, x, t);
 }
 
 data_view to_internal(const type& t, const data_view& x) {
   auto v = detail::overload{
-    [](const view<std::string>& s, const enumeration_type& t) -> data_view {
+    [](const view<std::string>& s,
+       const legacy_enumeration_type& t) -> data_view {
       auto i = std::find(t.fields.begin(), t.fields.end(), s);
       if (i == t.fields.end())
         return caf::none;
       return detail::narrow_cast<enumeration>(
         std::distance(t.fields.begin(), i));
     },
-    [&](auto&, auto&) { return x; },
+    [&](auto&, auto&) {
+      return x;
+    },
   };
   return caf::visit(v, x, t);
 }

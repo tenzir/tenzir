@@ -63,7 +63,7 @@ const char* writer::name() const {
   return "arrow-writer";
 }
 
-bool writer::layout(const record_type& layout) {
+bool writer::layout(const legacy_record_type& layout) {
   if (current_layout_ == layout)
     return true;
   if (current_batch_writer_ != nullptr) {

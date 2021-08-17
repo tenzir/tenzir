@@ -56,9 +56,10 @@ struct generator {
 
   explicit generator(std::string name, size_t first_event_id)
     : offset(first_event_id) {
-    layout = record_type{{"timestamp", time_type{}.name("timestamp")},
-                         {"content", string_type{}}}
-               .name(std::move(name));
+    layout
+      = legacy_record_type{{"timestamp", legacy_time_type{}.name("timestamp")},
+                           {"content", legacy_string_type{}}}
+          .name(std::move(name));
   }
 
   table_slice operator()(size_t num) {
@@ -75,7 +76,7 @@ struct generator {
     return slice;
   }
 
-  record_type layout;
+  legacy_record_type layout;
 };
 
 // A closed interval of time.
@@ -88,9 +89,10 @@ struct mock_partition {
   mock_partition(std::string name, uuid uid, size_t num) : id(std::move(uid)) {
     generator g{std::move(name), num_events_per_parttion * num};
     slice = g(num_events_per_parttion);
-    range.from = get_timestamp(slice.at(0, 0, time_type{}.name("timestamp")));
+    range.from
+      = get_timestamp(slice.at(0, 0, legacy_time_type{}.name("timestamp")));
     range.to = get_timestamp(
-      slice.at(slice.rows() - 1, 0, time_type{}.name("timestamp")));
+      slice.at(slice.rows() - 1, 0, legacy_time_type{}.name("timestamp")));
   }
 
   uuid id;
@@ -249,7 +251,7 @@ TEST(meta index with bool synopsis) {
   // FIXME: do we have to replace the meta index from the fixture with a new
   // one for this test?
   auto meta_idx = self->spawn(meta_index);
-  auto layout = record_type{{"x", bool_type{}}}.name("test");
+  auto layout = legacy_record_type{{"x", legacy_bool_type{}}}.name("test");
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   REQUIRE(builder);

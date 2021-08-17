@@ -57,23 +57,23 @@ struct zeek_parser {
     return false;
   }
 
-  bool operator()(const bool_type&) const {
+  bool operator()(const legacy_bool_type&) const {
     return parse(parsers::tf);
   }
 
-  bool operator()(const integer_type&) const {
+  bool operator()(const legacy_integer_type&) const {
     static auto p = parsers::i64->*[](integer::value_type x) { //
       return integer{x};
     };
     return parse(p);
   }
 
-  bool operator()(const count_type&) const {
+  bool operator()(const legacy_count_type&) const {
     static auto p = parsers::u64->*[](count x) { return x; };
     return parse(p);
   }
 
-  bool operator()(const time_type&) const {
+  bool operator()(const legacy_time_type&) const {
     static auto p = parsers::real->*[](real x) {
       auto i = std::chrono::duration_cast<duration>(double_seconds(x));
       return time{i};
@@ -81,31 +81,31 @@ struct zeek_parser {
     return parse(p);
   }
 
-  bool operator()(const duration_type&) const {
+  bool operator()(const legacy_duration_type&) const {
     static auto p = parsers::real->*[](real x) {
       return std::chrono::duration_cast<duration>(double_seconds(x));
     };
     return parse(p);
   }
 
-  bool operator()(const string_type&) const {
+  bool operator()(const legacy_string_type&) const {
     static auto p
       = +parsers::any->*[](std::string x) { return detail::byte_unescape(x); };
     return parse(p);
   }
 
-  bool operator()(const pattern_type&) const {
+  bool operator()(const legacy_pattern_type&) const {
     static auto p
       = +parsers::any->*[](std::string x) { return detail::byte_unescape(x); };
     return parse(p);
   }
 
-  bool operator()(const address_type&) const {
+  bool operator()(const legacy_address_type&) const {
     static auto p = parsers::addr->*[](address x) { return x; };
     return parse(p);
   }
 
-  bool operator()(const subnet_type&) const {
+  bool operator()(const legacy_subnet_type&) const {
     static auto p = parsers::net->*[](subnet x) { return x; };
     return parse(p);
   }
@@ -129,36 +129,36 @@ struct zeek_parser_factory {
     return {};
   }
 
-  result_type operator()(const bool_type&) const {
+  result_type operator()(const legacy_bool_type&) const {
     return parsers::tf;
   }
 
-  result_type operator()(const real_type&) const {
+  result_type operator()(const legacy_real_type&) const {
     return parsers::real->*[](real x) { return x; };
   }
 
-  result_type operator()(const integer_type&) const {
+  result_type operator()(const legacy_integer_type&) const {
     return parsers::i64->*[](integer::value_type x) { return integer{x}; };
   }
 
-  result_type operator()(const count_type&) const {
+  result_type operator()(const legacy_count_type&) const {
     return parsers::u64->*[](count x) { return x; };
   }
 
-  result_type operator()(const time_type&) const {
+  result_type operator()(const legacy_time_type&) const {
     return parsers::real->*[](real x) {
       auto i = std::chrono::duration_cast<duration>(double_seconds(x));
       return time{i};
     };
   }
 
-  result_type operator()(const duration_type&) const {
+  result_type operator()(const legacy_duration_type&) const {
     return parsers::real->*[](real x) {
       return std::chrono::duration_cast<duration>(double_seconds(x));
     };
   }
 
-  result_type operator()(const string_type&) const {
+  result_type operator()(const legacy_string_type&) const {
     if (set_separator_.empty())
       return +parsers::any->*
              [](std::string x) { return detail::byte_unescape(x); };
@@ -168,7 +168,7 @@ struct zeek_parser_factory {
       };
   }
 
-  result_type operator()(const pattern_type&) const {
+  result_type operator()(const legacy_pattern_type&) const {
     if (set_separator_.empty())
       return +parsers::any->*
              [](std::string x) { return detail::byte_unescape(x); };
@@ -178,15 +178,15 @@ struct zeek_parser_factory {
       };
   }
 
-  result_type operator()(const address_type&) const {
+  result_type operator()(const legacy_address_type&) const {
     return parsers::addr->*[](address x) { return x; };
   }
 
-  result_type operator()(const subnet_type&) const {
+  result_type operator()(const legacy_subnet_type&) const {
     return parsers::net->*[](subnet x) { return x; };
   }
 
-  result_type operator()(const list_type& t) const {
+  result_type operator()(const legacy_list_type& t) const {
     return (caf::visit(*this, t.value_type) % set_separator_)
              ->*[](std::vector<Attribute> x) { return list(std::move(x)); };
   }
@@ -246,7 +246,7 @@ private:
   std::string unset_field_;
   vast::schema schema_;
   type type_;
-  record_type layout_;
+  legacy_record_type layout_;
   std::optional<size_t> proto_field_;
   std::vector<rule<iterator_type, data>> parsers_;
 };

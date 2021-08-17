@@ -63,15 +63,15 @@ table_slice_builder_ptr multi_layout_reader::builder(const type& t) {
   auto i = builders_.find(t);
   if (i != builders_.end())
     return i->second;
-  if (!caf::holds_alternative<record_type>(t)) {
+  if (!caf::holds_alternative<legacy_record_type>(t)) {
     VAST_ERROR("{} cannot create slice builder for non-record type: {}", name(),
                t);
     // Insert a nullptr into the map and return it to make sure the error gets
     // printed only once.
     return builders_[t];
   }
-  auto ptr = factory<table_slice_builder>::make(table_slice_type_,
-                                                caf::get<record_type>(t));
+  auto ptr = factory<table_slice_builder>::make(
+    table_slice_type_, caf::get<legacy_record_type>(t));
   builders_.emplace(t, ptr);
   return ptr;
 }

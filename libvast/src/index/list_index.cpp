@@ -30,8 +30,12 @@ list_index::list_index(vast::type t, caf::settings opts)
   max_size_ = caf::get_or(options(), "max-size",
                           defaults::index::max_container_elements);
   auto f = detail::overload{
-    [](const auto&) { return vast::type{}; },
-    [](const list_type& x) { return x.value_type; },
+    [](const auto&) {
+      return vast::type{};
+    },
+    [](const legacy_list_type& x) {
+      return x.value_type;
+    },
   };
   value_type_ = caf::visit(f, value_index::type());
   VAST_ASSERT(!caf::holds_alternative<none_type>(value_type_));

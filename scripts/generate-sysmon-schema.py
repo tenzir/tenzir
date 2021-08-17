@@ -82,7 +82,7 @@ def format_description(data):
     )
 
 
-def map_type(name, field_name):
+def legacy_map_type(name, field_name):
     """Maps a Sysmon event type to VAST type."""
     if name == "string":
         return "string"
@@ -106,7 +106,7 @@ def format_event_fields(data):
         yield textwrap.indent(
             text=f"""\
 // {event_field['description']}
-{event_field['name']}: {map_type(event_field['type'], event_field['name'])},""",
+{event_field['name']}: {legacy_map_type(event_field['type'], event_field['name'])},""",
             prefix="    ",
         )
 

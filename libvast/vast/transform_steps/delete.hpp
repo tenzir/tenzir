@@ -19,8 +19,8 @@ public:
 
   caf::expected<table_slice> operator()(table_slice&& slice) const override;
 
-  std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
-  operator()(vast::record_type layout,
+  std::pair<vast::legacy_record_type, std::shared_ptr<arrow::RecordBatch>>
+  operator()(vast::legacy_record_type layout,
              std::shared_ptr<arrow::RecordBatch> batch) const override;
 
 private:

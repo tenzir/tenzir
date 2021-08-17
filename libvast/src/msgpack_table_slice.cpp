@@ -141,43 +141,43 @@ data_view decode(msgpack::overlay& objects, const T& t) {
     // 'nil' is handled already above.
     VAST_ASSERT(!"null check too late");
     return {};
-  } else if constexpr (std::is_same_v<T, bool_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_bool_type>) {
     if (auto x = get<bool>(o))
       return make_data_view(*x);
-  } else if constexpr (std::is_same_v<T, integer_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_integer_type>) {
     auto to_integer = [](auto x) { return integer{x}; };
     auto f = make_signed_visitor(to_integer);
     return visit(f, o);
-  } else if constexpr (std::is_same_v<T, count_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_count_type>) {
     auto f = make_unsigned_visitor<converter<count>>();
     return visit(f, o);
-  } else if constexpr (std::is_same_v<T, real_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_real_type>) {
     if (auto x = get<double>(o))
       return make_data_view(*x);
-  } else if constexpr (std::is_same_v<T, duration_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_duration_type>) {
     using namespace std::chrono;
     auto to_ns = [](auto x) { return duration{nanoseconds{x}}; };
     auto f = make_signed_visitor(to_ns);
     return visit(f, o);
-  } else if constexpr (std::is_same_v<T, time_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_time_type>) {
     using namespace std::chrono;
     auto to_ts = [](auto x) { return time{duration{nanoseconds{x}}}; };
     auto f = make_signed_visitor(to_ts);
     return visit(f, o);
-  } else if constexpr (std::is_same_v<T, string_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_string_type>) {
     if (auto x = get<std::string_view>(o))
       return make_data_view(*x);
-  } else if constexpr (std::is_same_v<T, pattern_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_pattern_type>) {
     if (auto x = get<std::string_view>(o))
       return data_view{pattern_view{*x}};
-  } else if constexpr (std::is_same_v<T, address_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_address_type>) {
     if (auto x = get<std::string_view>(o)) {
       VAST_ASSERT(x->size() == 4 || x->size() == 16);
       auto family = x->size() == 4 ? address::ipv4 : address::ipv6;
       auto addr = address{x->data(), family, address::byte_order::network};
       return make_data_view(addr);
     }
-  } else if constexpr (std::is_same_v<T, subnet_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_subnet_type>) {
     if (auto xs = get<array_view>(o)) {
       VAST_ASSERT(xs->size() == 2);
       auto inner = xs->data();
@@ -188,24 +188,24 @@ data_view decode(msgpack::overlay& objects, const T& t) {
       auto length = *get<uint8_t>(inner.get());
       return data_view{view<subnet>{make_view(addr), length}};
     }
-  } else if constexpr (std::is_same_v<T, enumeration_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_enumeration_type>) {
     if (auto x = get<enumeration>(o))
       return make_data_view(*x);
-  } else if constexpr (std::is_same_v<T, list_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_list_type>) {
     if (auto xs = get<array_view>(o)) {
       auto ptr = caf::make_counted<msgpack_array_view>(t.value_type, *xs);
       return list_view_handle{list_view_ptr{std::move(ptr)}};
     }
-  } else if constexpr (std::is_same_v<T, map_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_map_type>) {
     if (auto xs = get<array_view>(o)) {
       auto ptr
         = caf::make_counted<msgpack_map_view>(t.key_type, t.value_type, *xs);
       return map_view_handle{map_view_ptr{std::move(ptr)}};
     }
-  } else if constexpr (std::is_same_v<T, record_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_record_type>) {
     VAST_ASSERT(!"records are unrolled");
     return {};
-  } else if constexpr (std::is_same_v<T, alias_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_alias_type>) {
     return decode(objects, t.value_type);
   } else {
     static_assert(detail::always_false_v<T>, "missing type");
@@ -253,7 +253,7 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
 
 template <class FlatBuffer>
 msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
-  const FlatBuffer& slice, record_type layout) noexcept
+  const FlatBuffer& slice, legacy_record_type layout) noexcept
   : slice_{slice}, state_{} {
   state_.layout = std::move(layout);
   state_.columns = state_.layout.num_leaves();
@@ -267,7 +267,8 @@ msgpack_table_slice<FlatBuffer>::~msgpack_table_slice() noexcept {
 // -- properties -------------------------------------------------------------
 
 template <class FlatBuffer>
-const record_type& msgpack_table_slice<FlatBuffer>::layout() const noexcept {
+const legacy_record_type&
+msgpack_table_slice<FlatBuffer>::layout() const noexcept {
   return state_.layout;
 }
 

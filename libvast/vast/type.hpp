@@ -51,21 +51,21 @@ namespace vast {
 /// @relates type
 using concrete_types = caf::detail::type_list<
   none_type,
-  bool_type,
-  integer_type,
-  count_type,
-  real_type,
-  duration_type,
-  time_type,
-  string_type,
-  pattern_type,
-  address_type,
-  subnet_type,
-  enumeration_type,
-  list_type,
-  map_type,
-  record_type,
-  alias_type
+  legacy_bool_type,
+  legacy_integer_type,
+  legacy_count_type,
+  legacy_real_type,
+  legacy_duration_type,
+  legacy_time_type,
+  legacy_string_type,
+  legacy_pattern_type,
+  legacy_address_type,
+  legacy_subnet_type,
+  legacy_enumeration_type,
+  legacy_list_type,
+  legacy_map_type,
+  legacy_record_type,
+  legacy_alias_type
 >;
 // clang-format on
 
@@ -200,7 +200,7 @@ enum class type_flags : uint8_t {
   container = 0b0000'1000,
 };
 
-/// Retrieves kind of a type, e.g., `string` for `string_type`.
+/// Retrieves kind of a type, e.g., `string` for `legacy_string_type`.
 /// @param x The type to query.
 /// @param the kind of *x*.
 /// @relates type
@@ -350,36 +350,36 @@ public:
     const char* name = nullptr;
     if constexpr (std::is_same_v<Derived, none_type>) {
       name = "vast.none_type";
-    } else if constexpr (std::is_same_v<Derived, bool_type>) {
-      name = "vast.bool_type";
-    } else if constexpr (std::is_same_v<Derived, integer_type>) {
-      name = "vast.integer_type";
-    } else if constexpr (std::is_same_v<Derived, count_type>) {
-      name = "vast.count_type";
-    } else if constexpr (std::is_same_v<Derived, real_type>) {
-      name = "vast.real_type";
-    } else if constexpr (std::is_same_v<Derived, duration_type>) {
-      name = "vast.duration_type";
-    } else if constexpr (std::is_same_v<Derived, time_type>) {
-      name = "vast.time_type";
-    } else if constexpr (std::is_same_v<Derived, string_type>) {
-      name = "vast.string_type";
-    } else if constexpr (std::is_same_v<Derived, pattern_type>) {
-      name = "vast.pattern_type";
-    } else if constexpr (std::is_same_v<Derived, address_type>) {
-      name = "vast.address_type";
-    } else if constexpr (std::is_same_v<Derived, subnet_type>) {
-      name = "vast.subnet_type";
-    } else if constexpr (std::is_same_v<Derived, enumeration_type>) {
-      name = "vast.enumeration_type";
-    } else if constexpr (std::is_same_v<Derived, list_type>) {
-      name = "vast.list_type";
-    } else if constexpr (std::is_same_v<Derived, map_type>) {
-      name = "vast.map_type";
-    } else if constexpr (std::is_same_v<Derived, record_type>) {
-      name = "vast.record_type";
-    } else if constexpr (std::is_same_v<Derived, alias_type>) {
-      name = "vast.alias_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_bool_type>) {
+      name = "vast.legacy_bool_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_integer_type>) {
+      name = "vast.legacy_integer_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_count_type>) {
+      name = "vast.legacy_count_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_real_type>) {
+      name = "vast.legacy_real_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_duration_type>) {
+      name = "vast.legacy_duration_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_time_type>) {
+      name = "vast.legacy_time_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_string_type>) {
+      name = "vast.legacy_string_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_pattern_type>) {
+      name = "vast.legacy_pattern_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_address_type>) {
+      name = "vast.legacy_address_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_subnet_type>) {
+      name = "vast.legacy_subnet_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_enumeration_type>) {
+      name = "vast.legacy_enumeration_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_list_type>) {
+      name = "vast.legacy_list_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_map_type>) {
+      name = "vast.legacy_map_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_record_type>) {
+      name = "vast.legacy_record_type";
+    } else if constexpr (std::is_same_v<Derived, legacy_alias_type>) {
+      name = "vast.legacy_alias_type";
     } else {
       static_assert(detail::always_false_v<Derived>, "cannot inspect non-leaf "
                                                      "type");
@@ -482,49 +482,49 @@ struct none_type final : basic_type<none_type> {};
 
 /// A type for true/false data.
 /// @relates type
-struct bool_type final : basic_type<bool_type> {};
+struct legacy_bool_type final : basic_type<legacy_bool_type> {};
 
 /// A type for positive and negative integers.
 /// @relates type
-struct integer_type final : basic_type<integer_type> {};
+struct legacy_integer_type final : basic_type<legacy_integer_type> {};
 
 /// A type for positive integers.
 /// @relates type
-struct count_type final : basic_type<count_type> {};
+struct legacy_count_type final : basic_type<legacy_count_type> {};
 
 /// A type for floating point numbers.
 /// @relates type
-struct real_type final : basic_type<real_type> {};
+struct legacy_real_type final : basic_type<legacy_real_type> {};
 
 /// A type for time durations.
 /// @relates type
-struct duration_type final : basic_type<duration_type> {};
+struct legacy_duration_type final : basic_type<legacy_duration_type> {};
 
 /// A type for absolute points in time.
 /// @relates type
-struct time_type final : basic_type<time_type> {};
+struct legacy_time_type final : basic_type<legacy_time_type> {};
 
 /// A string type for sequence of characters.
-struct string_type final : basic_type<string_type> {};
+struct legacy_string_type final : basic_type<legacy_string_type> {};
 
 /// A type for regular expressions.
 /// @relates type
-struct pattern_type final : basic_type<pattern_type> {};
+struct legacy_pattern_type final : basic_type<legacy_pattern_type> {};
 
 /// A type for IP addresses, both v4 and v6.
 /// @relates type
-struct address_type final : basic_type<address_type> {};
+struct legacy_address_type final : basic_type<legacy_address_type> {};
 
 /// A type for IP prefixes.
 /// @relates type
-struct subnet_type final : basic_type<subnet_type> {};
+struct legacy_subnet_type final : basic_type<legacy_subnet_type> {};
 
 /// The enumeration type consisting of a fixed number of strings.
 /// @relates type
-struct enumeration_type final : complex_type<enumeration_type> {
-  using super = complex_type<enumeration_type>;
+struct legacy_enumeration_type final : complex_type<legacy_enumeration_type> {
+  using super = complex_type<legacy_enumeration_type>;
 
-  explicit enumeration_type(std::vector<std::string> xs = {})
+  explicit legacy_enumeration_type(std::vector<std::string> xs = {})
     : fields{std::move(xs)} {
     // nop
   }
@@ -532,9 +532,9 @@ struct enumeration_type final : complex_type<enumeration_type> {
   std::vector<std::string> fields;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, enumeration_type& x) {
-    return f(caf::meta::type_name("vast.enumeration_type"), super::upcast(x),
-             caf::meta::omittable_if_empty(), x.fields);
+  friend auto inspect(Inspector& f, legacy_enumeration_type& x) {
+    return f(caf::meta::type_name("vast.legacy_enumeration_type"),
+             super::upcast(x), caf::meta::omittable_if_empty(), x.fields);
   }
 
   bool equals(const legacy_abstract_type& other) const final {
@@ -548,8 +548,8 @@ struct enumeration_type final : complex_type<enumeration_type> {
 
 /// A type representing a sequence of elements.
 /// @relates type
-struct list_type final : nested_type<list_type> {
-  using super = nested_type<list_type>;
+struct legacy_list_type final : nested_type<legacy_list_type> {
+  using super = nested_type<legacy_list_type>;
 
   using super::super;
 
@@ -559,10 +559,10 @@ struct list_type final : nested_type<list_type> {
 };
 
 /// A type representinng an associative array.
-struct map_type final : recursive_type<map_type> {
-  using super = recursive_type<map_type>;
+struct legacy_map_type final : recursive_type<legacy_map_type> {
+  using super = recursive_type<legacy_map_type>;
 
-  explicit map_type(type key = {}, type value = {})
+  explicit legacy_map_type(type key = {}, type value = {})
     : key_type{std::move(key)}, value_type{std::move(value)} {
     // nop
   }
@@ -575,8 +575,8 @@ struct map_type final : recursive_type<map_type> {
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, map_type& x) {
-    return f(caf::meta::type_name("vast.map_type"), super::upcast(x),
+  friend auto inspect(Inspector& f, legacy_map_type& x) {
+    return f(caf::meta::type_name("vast.legacy_map_type"), super::upcast(x),
              x.key_type, x.value_type);
   }
 
@@ -593,7 +593,7 @@ struct map_type final : recursive_type<map_type> {
 };
 
 /// A field of a record.
-/// @relates record_type
+/// @relates legacy_record_type
 struct record_field : detail::totally_ordered<record_field> {
   record_field() noexcept = default;
 
@@ -619,8 +619,8 @@ struct record_field : detail::totally_ordered<record_field> {
 };
 
 /// A sequence of fields, where each fields has a name and a type.
-struct record_type final : recursive_type<record_type> {
-  using super = recursive_type<record_type>;
+struct legacy_record_type final : recursive_type<legacy_record_type> {
+  using super = recursive_type<legacy_record_type>;
 
   /// Enables recursive record iteration.
   class each : public detail::range_facade<each> {
@@ -634,7 +634,7 @@ struct record_type final : recursive_type<record_type> {
       vast::offset offset;
     };
 
-    each(const record_type& r);
+    each(const legacy_record_type& r);
 
   private:
     friend detail::range_facade<each>;
@@ -644,16 +644,16 @@ struct record_type final : recursive_type<record_type> {
     [[nodiscard]] const range_state& get() const;
 
     range_state state_;
-    detail::stack_vector<const record_type*, 64> records_;
+    detail::stack_vector<const legacy_record_type*, 64> records_;
   };
 
-  record_type() = default;
+  legacy_record_type() = default;
 
   /// Constructs a record type from a list of fields.
-  explicit record_type(std::vector<record_field> xs) noexcept;
+  explicit legacy_record_type(std::vector<record_field> xs) noexcept;
 
   /// Constructs a record type from a list of fields.
-  record_type(std::initializer_list<record_field> xs) noexcept;
+  legacy_record_type(std::initializer_list<record_field> xs) noexcept;
 
   /// Calculates the number of basic types that can be found when traversing the
   /// tree. An faster version of `flatten(*this).fields.size()` or
@@ -696,15 +696,16 @@ struct record_type final : recursive_type<record_type> {
   const record_field* at(const offset& o) && = delete;
 
   /// Replaces the field at a given offset with `field`.
-  [[nodiscard]] caf::expected<record_type>
+  [[nodiscard]] caf::expected<legacy_record_type>
   assign(const offset& o, const record_field& field) const;
 
   /// Returns the field at the given offset with the full name as if the record
   /// was flattened.
   /// @param o The offset to resolve.
   /// @code{.cpp}
-  ///   auto r = record_type{{"x", record_type{"y", count_type{}}}};
-  ///   ASSERT_EQ(r.flat_field_at({0,0}), record_field{"x.y", count_type{}});
+  ///   auto r = legacy_record_type{{"x", legacy_record_type{"y",
+  ///   legacy_count_type{}}}}; ASSERT_EQ(r.flat_field_at({0,0}),
+  ///   record_field{"x.y", legacy_count_type{}});
   /// @endcode
   std::optional<record_field> flat_field_at(offset o) const;
 
@@ -716,12 +717,15 @@ struct record_type final : recursive_type<record_type> {
   /// @param i The index to resolve.
   std::optional<offset> offset_from_index(size_t i) const;
 
-  friend bool operator==(const record_type& x, const record_type& y);
-  friend bool operator<(const record_type& x, const record_type& y);
+  friend bool
+  operator==(const legacy_record_type& x, const legacy_record_type& y);
+  friend bool
+  operator<(const legacy_record_type& x, const legacy_record_type& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, record_type& x) {
-    return f(caf::meta::type_name("vast.record_type"), upcast(x), x.fields);
+  friend auto inspect(Inspector& f, legacy_record_type& x) {
+    return f(caf::meta::type_name("vast.legacy_record_type"), upcast(x),
+             x.fields);
   }
 
   std::vector<record_field> fields;
@@ -733,20 +737,21 @@ struct record_type final : recursive_type<record_type> {
 
 /// An alias of another type.
 /// @relates type
-struct alias_type final : nested_type<alias_type> {
-  using super = nested_type<alias_type>;
+struct legacy_alias_type final : nested_type<legacy_alias_type> {
+  using super = nested_type<legacy_alias_type>;
   using super::super;
 };
 
 // -- free functions ----------------------------------------------------------
 
-/// Creates a new unnamed record_type from an arbitrary number of record_types.
+/// Creates a new unnamed legacy_record_type from an arbitrary number of
+/// legacy_record_types.
 /// @param rs The source records.
-/// @returns The combined record_type.
-/// @relates record_type
+/// @returns The combined legacy_record_type.
+/// @relates legacy_record_type
 template <typename... Rs>
-record_type concat(const Rs&... rs) {
-  record_type result;
+legacy_record_type concat(const Rs&... rs) {
+  legacy_record_type result;
   result.fields.reserve((rs.fields.size() + ...));
   (result.fields.insert(result.fields.end(), rs.fields.begin(),
                         rs.fields.end()),
@@ -759,58 +764,60 @@ record_type concat(const Rs&... rs) {
   return result;
 }
 
-/// Creates a new unnamed record_type containing the fields and attribues of lhs
-/// and rhs. Errors if a field of the same name but different types is present
-/// in both inputs. Errors is the inputs disagree over the value of an attribute
-/// with a certain name.
-/// @returns The combined record_type.
-/// @relates record_type
-caf::expected<record_type>
-merge(const record_type& lhs, const record_type& rhs);
+/// Creates a new unnamed legacy_record_type containing the fields and attribues
+/// of lhs and rhs. Errors if a field of the same name but different types is
+/// present in both inputs. Errors is the inputs disagree over the value of an
+/// attribute with a certain name.
+/// @returns The combined legacy_record_type.
+/// @relates legacy_record_type
+caf::expected<legacy_record_type>
+merge(const legacy_record_type& lhs, const legacy_record_type& rhs);
 
 /// @relates priority_merge
 enum class merge_policy { prefer_left, prefer_right };
 
-/// Creates a new unnamed record_type containing the fields and attribues of lhs
-/// and rhs. Uses a merge_policy to decide wheter to use a field from lhs or rhs
-/// in case of a conflict.
-/// @returns The combined record_type.
-/// @relates record_type merge_policy
-record_type
-priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p);
+/// Creates a new unnamed legacy_record_type containing the fields and attribues
+/// of lhs and rhs. Uses a merge_policy to decide wheter to use a field from lhs
+/// or rhs in case of a conflict.
+/// @returns The combined legacy_record_type.
+/// @relates legacy_record_type merge_policy
+legacy_record_type
+priority_merge(const legacy_record_type& lhs, const legacy_record_type& rhs,
+               merge_policy p);
 
-/// Removes a field from a record_type by name.
+/// Removes a field from a legacy_record_type by name.
 /// @param r The record to mutate.
 /// @param path The sequence of keys pointing to the target field.
 /// @returns A new type without the target field if it exists in `r`.
 /// @pre `!path.empty()`
-/// @relates record_type
-std::optional<record_type>
-remove_field(const record_type& r, std::vector<std::string_view> path);
+/// @relates legacy_record_type
+std::optional<legacy_record_type>
+remove_field(const legacy_record_type& r, std::vector<std::string_view> path);
 
 /// As above, but use an offset instead of a vector of string to specify
 /// the field to be removed.
-std::optional<record_type> remove_field(const record_type& r, offset o);
+std::optional<legacy_record_type>
+remove_field(const legacy_record_type& r, offset o);
 
 /// Recursively flattens the arguments of a record type.
 /// @param rec The record to flatten.
 /// @returns The flattened record type.
-/// @relates record_type
-record_type flatten(const record_type& rec);
+/// @relates legacy_record_type
+legacy_record_type flatten(const legacy_record_type& rec);
 
-/// @relates type record_type
+/// @relates type legacy_record_type
 type flatten(const type& t);
 
 /// Queries whether `rec` is a flattened record.
-/// @relates type record_type
-bool is_flat(const record_type& rec);
+/// @relates type legacy_record_type
+bool is_flat(const legacy_record_type& rec);
 
 /// Queries whether `rec` is a flattened record.
-/// @relates type record_type
+/// @relates type legacy_record_type
 bool is_flat(const type& t);
 
 /// Computes the size of a flat representation of `rec`.
-size_t flat_size(const record_type& rec);
+size_t flat_size(const legacy_record_type& rec);
 
 /// Computes the size of a flat representation of `rec`.
 size_t flat_size(const type&);
@@ -826,7 +833,7 @@ struct type_traits {
 
 #define VAST_TYPE_TRAIT(name)                                                  \
   template <>                                                                  \
-  struct type_traits<name##_type> {                                            \
+  struct type_traits<legacy_##name##_type> {                                   \
     using data_type = name;                                                    \
   }
 
@@ -857,7 +864,7 @@ struct type_traits<none_type> {
 };
 
 template <>
-struct type_traits<string_type> {
+struct type_traits<legacy_string_type> {
   using data_type = std::string;
 };
 
@@ -1131,22 +1138,22 @@ namespace std {
 
 VAST_DEFINE_HASH_SPECIALIZATION(type);
 VAST_DEFINE_HASH_SPECIALIZATION(none_type);
-VAST_DEFINE_HASH_SPECIALIZATION(bool_type);
-VAST_DEFINE_HASH_SPECIALIZATION(integer_type);
-VAST_DEFINE_HASH_SPECIALIZATION(count_type);
-VAST_DEFINE_HASH_SPECIALIZATION(real_type);
-VAST_DEFINE_HASH_SPECIALIZATION(duration_type);
-VAST_DEFINE_HASH_SPECIALIZATION(time_type);
-VAST_DEFINE_HASH_SPECIALIZATION(string_type);
-VAST_DEFINE_HASH_SPECIALIZATION(pattern_type);
-VAST_DEFINE_HASH_SPECIALIZATION(address_type);
-VAST_DEFINE_HASH_SPECIALIZATION(subnet_type);
-VAST_DEFINE_HASH_SPECIALIZATION(enumeration_type);
-VAST_DEFINE_HASH_SPECIALIZATION(list_type);
-VAST_DEFINE_HASH_SPECIALIZATION(map_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_bool_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_integer_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_count_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_real_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_duration_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_time_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_string_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_pattern_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_address_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_subnet_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_enumeration_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_list_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_map_type);
 VAST_DEFINE_HASH_SPECIALIZATION(record_field);
-VAST_DEFINE_HASH_SPECIALIZATION(record_type);
-VAST_DEFINE_HASH_SPECIALIZATION(alias_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_record_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_alias_type);
 
 #undef VAST_DEFINE_HASH_SPECIALIZATION
 
@@ -1175,49 +1182,49 @@ template <>
 struct formatter<vast::none_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::bool_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_bool_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::integer_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_integer_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::count_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_count_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::real_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_real_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::duration_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_duration_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::time_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_time_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::string_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_string_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::pattern_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_pattern_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::address_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_address_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::subnet_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_subnet_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::enumeration_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_enumeration_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::list_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_list_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::map_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_map_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::record_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_record_type> : formatter<vast::type> {};
 
 template <>
-struct formatter<vast::alias_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_alias_type> : formatter<vast::type> {};
 
 template <>
 struct formatter<vast::record_field> {

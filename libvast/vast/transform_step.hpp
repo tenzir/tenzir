@@ -58,9 +58,9 @@ public:
   //  TODO: When we have implemented a way to recover the `layout` from the
   //  metadata stored in a record batch, we can drop the record type from
   //  this function signature.
-  [[nodiscard]] virtual std::pair<vast::record_type,
+  [[nodiscard]] virtual std::pair<vast::legacy_record_type,
                                   std::shared_ptr<arrow::RecordBatch>>
-  operator()(vast::record_type layout,
+  operator()(vast::legacy_record_type layout,
              std::shared_ptr<arrow::RecordBatch> batch) const = 0;
 };
 

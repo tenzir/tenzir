@@ -23,7 +23,7 @@ namespace vast {
 
 /// A standalone field of an event type, used to uniquely address an index
 /// column that may have the same field name across different event types.
-/// Example: { "zeek.conn", `id.orig_h", address_type{} }
+/// Example: { "zeek.conn", `id.orig_h", legacy_address_type{} }
 struct qualified_record_field
   : detail::totally_ordered<qualified_record_field> {
   // Required for serialization/deserialization.
@@ -42,7 +42,7 @@ struct qualified_record_field
   /// Constructs a qualified record field by prepending the layout name to a
   /// range state.
   qualified_record_field(std::string record_name,
-                         const record_type::each::range_state& field)
+                         const legacy_record_type::each::range_state& field)
     : layout_name{std::move(record_name)},
       field_name{field.key()},
       type{field.type()} {

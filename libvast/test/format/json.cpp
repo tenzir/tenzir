@@ -34,25 +34,29 @@ std::string_view eve_log
 FIXTURE_SCOPE(zeek_reader_tests, fixtures::deterministic_actor_system)
 
 TEST(json to data) {
-  auto layout = record_type{{"b", bool_type{}},
-                            {"c", count_type{}},
-                            {"r", real_type{}},
-                            {"i", integer_type{}},
-                            {"s", string_type{}},
-                            {"snum", string_type{}},
-                            {"a", address_type{}},
-                            {"sn", subnet_type{}},
-                            {"t", time_type{}},
-                            {"d", duration_type{}},
-                            {"d2", duration_type{}},
-                            {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                            {"lc", list_type{count_type{}}},
-                            {"lt", list_type{time_type{}}},
-                            {"rec", record_type{{"c", count_type{}},
-                                                {"s", string_type{}}}},
-                            {"msa", map_type{string_type{}, address_type{}}},
-                            {"mcs", map_type{count_type{}, string_type{}}}}
-                  .name("layout");
+  auto layout
+    = legacy_record_type{{"b", legacy_bool_type{}},
+                         {"c", legacy_count_type{}},
+                         {"r", legacy_real_type{}},
+                         {"i", legacy_integer_type{}},
+                         {"s", legacy_string_type{}},
+                         {"snum", legacy_string_type{}},
+                         {"a", legacy_address_type{}},
+                         {"sn", legacy_subnet_type{}},
+                         {"t", legacy_time_type{}},
+                         {"d", legacy_duration_type{}},
+                         {"d2", legacy_duration_type{}},
+                         {"e", legacy_enumeration_type{{"FOO", "BAR", "BAZ"}}},
+                         {"lc", legacy_list_type{legacy_count_type{}}},
+                         {"lt", legacy_list_type{legacy_time_type{}}},
+                         {"rec",
+                          legacy_record_type{{"c", legacy_count_type{}},
+                                             {"s", legacy_string_type{}}}},
+                         {"msa", legacy_map_type{legacy_string_type{},
+                                                 legacy_address_type{}}},
+                         {"mcs", legacy_map_type{legacy_count_type{},
+                                                 legacy_string_type{}}}}
+        .name("layout");
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   std::string_view str = R"json({

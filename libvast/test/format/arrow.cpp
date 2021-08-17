@@ -56,7 +56,7 @@ TEST(arrow batch) {
   for (auto& slice : zeek_conn_log)
     writer.write(slice);
   // Cause the writer to close its current Arrow writer.
-  writer.layout(record_type{});
+  writer.layout(legacy_record_type{});
   // Deserialize record batches, store them in arrow_table_slice objects, and
   // compare to the original slices.
   std::shared_ptr<arrow::Buffer> buf;

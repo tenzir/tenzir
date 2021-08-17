@@ -40,7 +40,7 @@ caf::error single_layout_reader::finish(consumer& f, caf::error result) {
   return result;
 }
 
-bool single_layout_reader::reset_builder(record_type layout) {
+bool single_layout_reader::reset_builder(legacy_record_type layout) {
   VAST_TRACE_SCOPE("{} {}", VAST_ARG(table_slice_type_), VAST_ARG(layout));
   builder_ = factory<table_slice_builder>::make(table_slice_type_,
                                                 std::move(layout));

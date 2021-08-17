@@ -39,7 +39,8 @@ public:
   /// @param initial_buffer_size The buffer size the builder starts with.
   /// @returns A table_slice_builder instance.
   static table_slice_builder_ptr
-  make(record_type layout, size_t initial_buffer_size = default_buffer_size);
+  make(legacy_record_type layout, size_t initial_buffer_size
+                                  = default_buffer_size);
 
   /// Destroys a MessagePack table slice builder.
   ~msgpack_table_slice_builder() override;
@@ -81,7 +82,7 @@ private:
   /// Constructs a MessagePack table slice builder.
   /// @param layout The layout of the slice.
   /// @param initial_buffer_size The buffer size the builder starts with.
-  explicit msgpack_table_slice_builder(record_type layout,
+  explicit msgpack_table_slice_builder(legacy_record_type layout,
                                        size_t initial_buffer_size
                                        = default_buffer_size);
 
@@ -94,7 +95,7 @@ private:
   size_t column_ = 0;
 
   /// A flattened representation of the layout.
-  record_type flat_layout_;
+  legacy_record_type flat_layout_;
 
   /// The serialized layout can be cached because every builder instance only
   /// produces slices of a single layout.

@@ -27,7 +27,7 @@ struct arrow_table_slice_state;
 template <>
 struct arrow_table_slice_state<fbs::table_slice::arrow::v0> {
   /// The deserialized table layout.
-  record_type layout;
+  legacy_record_type layout;
 
   /// The deserialized Arrow Record Batch.
   std::shared_ptr<arrow::RecordBatch> record_batch;
@@ -48,7 +48,8 @@ public:
   /// a known layout.
   /// @param slice The encoding-specific FlatBuffers table.
   /// @param layout The table layout.
-  arrow_table_slice(const FlatBuffer& slice, record_type layout) noexcept;
+  arrow_table_slice(const FlatBuffer& slice,
+                    legacy_record_type layout) noexcept;
 
   /// Destroys a Arrow-encoded table slice.
   ~arrow_table_slice() noexcept;
@@ -64,7 +65,7 @@ public:
     = table_slice_encoding::arrow;
 
   /// @returns The table layout.
-  [[nodiscard]] const record_type& layout() const noexcept;
+  [[nodiscard]] const legacy_record_type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] table_slice::size_type rows() const noexcept;

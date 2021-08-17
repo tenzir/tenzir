@@ -25,7 +25,7 @@ using namespace vast;
 using namespace std::string_literals;
 
 TEST(subnet) {
-  subnet_index idx{subnet_type{}};
+  subnet_index idx{legacy_subnet_type{}};
   auto s0 = *to<subnet>("192.168.0.0/24");
   auto s1 = *to<subnet>("192.168.1.0/24");
   auto s2 = *to<subnet>("fe80::/10");
@@ -83,7 +83,7 @@ TEST(subnet) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
-  subnet_index idx2{subnet_type{}};
+  subnet_index idx2{legacy_subnet_type{}};
   CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
   bm = idx2.lookup(relational_operator::not_equal, make_data_view(s1));
   CHECK_EQUAL(to_string(unbox(bm)), "101111");

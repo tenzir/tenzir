@@ -79,7 +79,7 @@ struct active_partition_state {
   bool streaming_initiated = {};
 
   /// The combined type of all columns of this partition
-  record_type combined_layout = {};
+  legacy_record_type combined_layout = {};
 
   /// Maps qualified fields to indexer actors.
   //  TODO: Should we use the tsl map here for heterogenous key lookup?
@@ -183,7 +183,7 @@ struct passive_partition_state {
   uuid id = {};
 
   /// The combined type of all columns of this partition
-  record_type combined_layout = {};
+  legacy_record_type combined_layout = {};
 
   /// Maps type names to ids. Used the answer #type queries.
   std::unordered_map<std::string, ids> type_ids = {};

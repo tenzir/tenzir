@@ -305,7 +305,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
               VAST_ASSERT(!lhs.type.name().empty());
               auto pred = [&](auto& field) {
                 const auto* p = &field.type;
-                while (const auto* a = caf::get_if<alias_type>(p)) {
+                while (const auto* a = caf::get_if<legacy_alias_type>(p)) {
                   if (a->name() == lhs.type.name())
                     return compatible(*a, x.op, d);
                   p = &a->value_type;
