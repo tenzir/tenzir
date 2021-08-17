@@ -312,12 +312,13 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
 caf::expected<caf::actor>
 spawn_accountant(node_actor::stateful_pointer<node_state> self,
                  spawn_arguments& args) {
-  auto& options = args.inv.options;
+  const auto& options = args.inv.options;
   auto metrics_opts = caf::get_or(options, "vast.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
   if (!cfg)
     return cfg.error();
-  return caf::actor_cast<caf::actor>(self->spawn(accountant, std::move(*cfg)));
+  return caf::actor_cast<caf::actor>(
+    self->spawn(accountant, std::move(*cfg), self->state.dir));
 }
 
 caf::expected<caf::actor>
@@ -644,21 +645,21 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     // Drop everything.
     registry.clear();
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
-    auto core_shutdown_sequence =
-      [=, core_shutdown_handles = std::move(core_shutdown_handles),
-       filesystem_handle = std::move(filesystem_handle)]() mutable {
-        for (const auto& comp : core_shutdown_handles)
-          self->demonitor(comp);
-        shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
-                                     shutdown_grace_period,
-                                     shutdown_kill_timeout);
-        // We deliberately do not send an exit message to the filesystem actor,
-        // as that would mean that actors not tracked by the component registry
-        // which hold a strong handle to the filesystem actor cannot use it for
-        // persistence on shutdown.
-        self->demonitor(filesystem_handle);
-        filesystem_handle = {};
-      };
+    auto core_shutdown_sequence
+      = [=, core_shutdown_handles = std::move(core_shutdown_handles),
+         filesystem_handle = std::move(filesystem_handle)]() mutable {
+          for (const auto& comp : core_shutdown_handles)
+            self->demonitor(comp);
+          shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
+                                       shutdown_grace_period,
+                                       shutdown_kill_timeout);
+          // We deliberately do not send an exit message to the filesystem
+          // actor, as that would mean that actors not tracked by the component
+          // registry which hold a strong handle to the filesystem actor cannot
+          // use it for persistence on shutdown.
+          self->demonitor(filesystem_handle);
+          filesystem_handle = {};
+        };
     terminate<policy::parallel>(self, std::move(aux_components),
                                 shutdown_grace_period, shutdown_kill_timeout)
       .then(
