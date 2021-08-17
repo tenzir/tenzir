@@ -93,8 +93,8 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
     if (new_msg)
       in.context() = std::move(*new_msg);
     else
-      in.context()
-        = caf::make_message(fmt::format(fstring, std::forward<Args>(args)...));
+      in.context() = caf::make_message(
+        fmt::format(VAST_FMT_RUNTIME(fstring), std::forward<Args>(args)...));
   }
   return std::move(in);
 }
