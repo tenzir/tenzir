@@ -52,8 +52,9 @@ struct accountant_state_impl {
 
   // -- constructor, destructors, and assignment operators ---------------------
 
-  accountant_state_impl(accountant_actor::pointer self, accountant_config cfg)
-    : self{self} {
+  accountant_state_impl(accountant_actor::pointer self, accountant_config cfg,
+                        std::filesystem::path root)
+    : self{self}, root{std::move(root)} {
     apply_config(std::move(cfg));
   }
 
@@ -61,6 +62,9 @@ struct accountant_state_impl {
 
   /// Stores the parent actor handle.
   accountant_actor::pointer self;
+
+  /// The root path of the database.
+  std::filesystem::path root;
 
   /// Stores the names of known actors to fill into the actor_name column.
   std::unordered_map<caf::actor_id, std::string> actor_map;
@@ -206,7 +210,7 @@ struct accountant_state_impl {
       file_sink.reset(nullptr);
     }
     if (start_file_sink) {
-      auto s = detail::make_output_stream(cfg.file_sink.path,
+      auto s = detail::make_output_stream(root / cfg.file_sink.path,
                                           std::filesystem::file_type::regular);
       if (s) {
         VAST_INFO("{} writing metrics to {}", *self, cfg.file_sink.path);
@@ -226,7 +230,7 @@ struct accountant_state_impl {
     }
     if (start_uds_sink) {
       if (cfg.uds_sink.type == detail::socket_type::datagram) {
-        auto s = detail::uds_datagram_sender::make(cfg.uds_sink.path);
+        auto s = detail::uds_datagram_sender::make(root / cfg.uds_sink.path);
         if (s) {
           VAST_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);
           uds_datagram_sink
@@ -236,8 +240,8 @@ struct accountant_state_impl {
                     cfg.uds_sink.path, s.error());
         }
       } else {
-        auto s
-          = detail::make_output_stream(cfg.uds_sink.path, cfg.uds_sink.type);
+        auto s = detail::make_output_stream(root / cfg.uds_sink.path,
+                                            cfg.uds_sink.type);
         if (s) {
           VAST_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);
           uds_sink = std::move(*s);
@@ -253,8 +257,9 @@ struct accountant_state_impl {
 
 accountant_actor::behavior_type
 accountant(accountant_actor::stateful_pointer<accountant_state> self,
-           accountant_config cfg) {
-  self->state.reset(new accountant_state_impl{self, std::move(cfg)});
+           accountant_config cfg, std::filesystem::path root) {
+  self->state.reset(
+    new accountant_state_impl{self, std::move(cfg), std::move(root)});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
     self->state->finish_slice();
@@ -332,8 +337,9 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
                        self->current_sender());
       time ts = std::chrono::system_clock::now();
       for (const auto& [key, value] : r) {
-        auto f
-          = [&, key = key](const auto& x) { self->state->record(key, x, ts); };
+        auto f = [&, key = key](const auto& x) {
+          self->state->record(key, x, ts);
+        };
         caf::visit(f, value);
       }
     },
