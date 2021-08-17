@@ -119,38 +119,39 @@ const std::vector<attribute>& type::attributes() const {
   return ptr_ ? ptr_->attributes_ : no_attributes;
 }
 
-abstract_type_ptr type::ptr() const {
+legacy_abstract_type_ptr type::ptr() const {
   return ptr_;
 }
 
-const abstract_type* type::raw_ptr() const noexcept {
+const legacy_abstract_type* type::raw_ptr() const noexcept {
   return ptr_ != nullptr ? ptr_.get() : &none_type_singleton;
 }
 
-const abstract_type* type::operator->() const noexcept {
+const legacy_abstract_type* type::operator->() const noexcept {
   return raw_ptr();
 }
 
-const abstract_type& type::operator*() const noexcept {
+const legacy_abstract_type& type::operator*() const noexcept {
   return *raw_ptr();
 }
 
-type::type(abstract_type_ptr x) : ptr_{std::move(x)} {
+type::type(legacy_abstract_type_ptr x) : ptr_{std::move(x)} {
   // nop
 }
 
-// -- abstract_type -----------------------------------------------------------
+// -- legacy_abstract_type
+// -----------------------------------------------------------
 
-abstract_type::~abstract_type() {
+legacy_abstract_type::~legacy_abstract_type() {
   // nop
 }
 
-bool abstract_type::equals(const abstract_type& other) const {
+bool legacy_abstract_type::equals(const legacy_abstract_type& other) const {
   return typeid(*this) == typeid(other) && name_ == other.name_
          && attributes_ == other.attributes_;
 }
 
-bool abstract_type::less_than(const abstract_type& other) const {
+bool legacy_abstract_type::less_than(const legacy_abstract_type& other) const {
   auto tx = std::type_index(typeid(*this));
   auto ty = std::type_index(typeid(other));
   if (tx != ty)
@@ -160,11 +161,11 @@ bool abstract_type::less_than(const abstract_type& other) const {
   return x < y;
 }
 
-bool operator==(const abstract_type& x, const abstract_type& y) {
+bool operator==(const legacy_abstract_type& x, const legacy_abstract_type& y) {
   return x.equals(y);
 }
 
-bool operator<(const abstract_type& x, const abstract_type& y) {
+bool operator<(const legacy_abstract_type& x, const legacy_abstract_type& y) {
   return x.less_than(y);
 }
 
@@ -417,11 +418,11 @@ record_type::assign(const offset& o, const record_field& field) const {
   return result;
 }
 
-bool record_type::equals(const abstract_type& other) const {
+bool record_type::equals(const legacy_abstract_type& other) const {
   return super::equals(other) && fields == downcast(other).fields;
 }
 
-bool record_type::less_than(const abstract_type& other) const {
+bool record_type::less_than(const legacy_abstract_type& other) const {
   return super::less_than(other) || fields < downcast(other).fields;
 }
 
@@ -1029,8 +1030,12 @@ data jsonize(const type& x) {
                      o[to_string(field.name)] = to_data(field.type);
                    return data{std::move(o)};
                  },
-                 [&](const alias_type& t) { return to_data(t.value_type); },
-                 [](const abstract_type&) { return data{}; },
+                 [&](const alias_type& t) {
+                   return to_data(t.value_type);
+                 },
+                 [](const legacy_abstract_type&) {
+                   return data{};
+                 },
                },
                x);
 }

@@ -55,7 +55,7 @@ class outbound_stream_slot;
 
 namespace vast {
 
-class abstract_type;
+class legacy_abstract_type;
 class address;
 class arrow_table_slice_builder;
 class bitmap;

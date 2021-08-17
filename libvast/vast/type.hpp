@@ -86,7 +86,7 @@ constexpr type_id_type type_id() {
 using type_digest = xxhash64::result_type;
 
 /// @relates type
-using abstract_type_ptr = caf::intrusive_cow_ptr<abstract_type>;
+using legacy_abstract_type_ptr = caf::intrusive_cow_ptr<legacy_abstract_type>;
 
 /// The sematic representation of data.
 class type : detail::totally_ordered<type> {
@@ -97,7 +97,7 @@ public:
   type() noexcept = default;
 
   /// Constructs a type from a concrete instance.
-  /// @tparam T a type that derives from @ref abstract_type.
+  /// @tparam T a type that derives from @ref legacy_abstract_type.
   /// @param x An instance of a type.
   template <class T>
     requires(detail::contains_type_v<concrete_types, T>)
@@ -167,13 +167,13 @@ public:
 
   /// @cond PRIVATE
 
-  [[nodiscard]] abstract_type_ptr ptr() const;
+  [[nodiscard]] legacy_abstract_type_ptr ptr() const;
 
-  [[nodiscard]] const abstract_type* raw_ptr() const noexcept;
+  [[nodiscard]] const legacy_abstract_type* raw_ptr() const noexcept;
 
-  const abstract_type* operator->() const noexcept;
+  const legacy_abstract_type* operator->() const noexcept;
 
-  const abstract_type& operator*() const noexcept;
+  const legacy_abstract_type& operator*() const noexcept;
 
   struct inspect_helper {
     type_id_type& type_tag;
@@ -186,9 +186,9 @@ public:
   friend bool operator<(const type& x, const type& y);
 
 private:
-  type(abstract_type_ptr x);
+  type(legacy_abstract_type_ptr x);
 
-  abstract_type_ptr ptr_;
+  legacy_abstract_type_ptr ptr_;
 };
 
 /// Describes properties of a type.
@@ -224,17 +224,19 @@ constexpr bool is(type_flags x) {
 
 /// The abstract base class for all types.
 /// @relates type
-class abstract_type : public caf::ref_counted,
-                      detail::totally_ordered<abstract_type> {
+class legacy_abstract_type : public caf::ref_counted,
+                             detail::totally_ordered<legacy_abstract_type> {
   friend type; // to change name/attributes of a copy.
 
 public:
-  virtual ~abstract_type();
+  virtual ~legacy_abstract_type();
 
   // -- introspection ---------------------------------------------------------
 
-  friend bool operator==(const abstract_type& x, const abstract_type& y);
-  friend bool operator<(const abstract_type& x, const abstract_type& y);
+  friend bool
+  operator==(const legacy_abstract_type& x, const legacy_abstract_type& y);
+  friend bool
+  operator<(const legacy_abstract_type& x, const legacy_abstract_type& y);
 
   /// @cond PRIVATE
 
@@ -244,20 +246,20 @@ public:
   /// @returns the index of this type in `concrete_types`.
   virtual int index() const noexcept = 0;
 
-  virtual abstract_type* copy() const = 0;
+  virtual legacy_abstract_type* copy() const = 0;
 
   /// @endcond
   template <class Inspector>
-  friend auto inspect(Inspector& f, abstract_type& x) {
-    return f(caf::meta::type_name("vast.abstract_type"),
+  friend auto inspect(Inspector& f, legacy_abstract_type& x) {
+    return f(caf::meta::type_name("vast.legacy_abstract_type"),
              caf::meta::omittable_if_empty(), x.name_,
              caf::meta::omittable_if_empty(), x.attributes_);
   }
 
 protected:
-  virtual bool equals(const abstract_type& other) const;
+  virtual bool equals(const legacy_abstract_type& other) const;
 
-  virtual bool less_than(const abstract_type& other) const;
+  virtual bool less_than(const legacy_abstract_type& other) const;
 
   std::string name_;
   std::vector<attribute> attributes_;
@@ -266,7 +268,7 @@ protected:
 /// The base class for all concrete types.
 /// @relates type
 template <class Derived>
-class concrete_type : public abstract_type,
+class concrete_type : public legacy_abstract_type,
                       detail::totally_ordered<Derived, Derived> {
 public:
   /// @returns the name of the type.
@@ -391,7 +393,7 @@ public:
 protected:
   // Convenience function to cast an abstract type into an instance of this
   // type. Useful in, e.g., the implementation of comparison operators.
-  static const Derived& downcast(const abstract_type& x) {
+  static const Derived& downcast(const legacy_abstract_type& x) {
     VAST_ASSERT(dynamic_cast<const Derived*>(&x) != nullptr);
     return static_cast<const Derived&>(x);
   }
@@ -462,12 +464,12 @@ struct nested_type : recursive_type<Derived> {
              x.value_type);
   }
 
-  [[nodiscard]] bool equals(const abstract_type& other) const final {
+  [[nodiscard]] bool equals(const legacy_abstract_type& other) const final {
     return super::equals(other)
            && value_type == super::downcast(other).value_type;
   }
 
-  [[nodiscard]] bool less_than(const abstract_type& other) const final {
+  [[nodiscard]] bool less_than(const legacy_abstract_type& other) const final {
     return super::less_than(other)
            && value_type < super::downcast(other).value_type;
   }
@@ -535,11 +537,11 @@ struct enumeration_type final : complex_type<enumeration_type> {
              caf::meta::omittable_if_empty(), x.fields);
   }
 
-  bool equals(const abstract_type& other) const final {
+  bool equals(const legacy_abstract_type& other) const final {
     return super::equals(other) && fields == downcast(other).fields;
   }
 
-  bool less_than(const abstract_type& other) const final {
+  bool less_than(const legacy_abstract_type& other) const final {
     return super::less_than(other) && fields < downcast(other).fields;
   }
 };
@@ -578,12 +580,12 @@ struct map_type final : recursive_type<map_type> {
              x.key_type, x.value_type);
   }
 
-  bool equals(const abstract_type& other) const final {
+  bool equals(const legacy_abstract_type& other) const final {
     return super::equals(other) && key_type == downcast(other).key_type
            && value_type == downcast(other).value_type;
   }
 
-  bool less_than(const abstract_type& other) const final {
+  bool less_than(const legacy_abstract_type& other) const final {
     return super::less_than(other)
            && std::tie(key_type, downcast(other).key_type)
                 < std::tie(value_type, downcast(other).value_type);
@@ -724,9 +726,9 @@ struct record_type final : recursive_type<record_type> {
 
   std::vector<record_field> fields;
 
-  bool equals(const abstract_type& other) const final;
+  bool equals(const legacy_abstract_type& other) const final;
 
-  bool less_than(const abstract_type& other) const final;
+  bool less_than(const legacy_abstract_type& other) const final;
 };
 
 /// An alias of another type.
@@ -983,8 +985,8 @@ namespace caf {
 
 template <class Result, class Dispatcher, class T>
 auto make_dispatch_fun() {
-  using fun = Result (*)(Dispatcher*, const vast::abstract_type&);
-  auto lambda = [](Dispatcher* d, const vast::abstract_type& ref) {
+  using fun = Result (*)(Dispatcher*, const vast::legacy_abstract_type&);
+  auto lambda = [](Dispatcher* d, const vast::legacy_abstract_type& ref) {
     return d->invoke(static_cast<const T&>(ref));
   };
   return static_cast<fun>(lambda);
@@ -1029,7 +1031,7 @@ struct sum_type_access<vast::type> {
 
   template <class Result, class Visitor, class... Ts>
   struct dispatcher {
-    using const_reference = const vast::abstract_type&;
+    using const_reference = const vast::legacy_abstract_type&;
     template <class... Us>
     Result dispatch(const_reference x, caf::detail::type_list<Us...>) {
       using fun = Result (*)(dispatcher*, const_reference);
