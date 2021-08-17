@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
 
 #include <cstddef>
 #include <vector>

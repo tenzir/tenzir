@@ -12,8 +12,8 @@
 
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/print.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/table_slice_encoding.hpp"
-#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/meta/load_callback.hpp>

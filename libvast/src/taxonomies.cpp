@@ -12,8 +12,8 @@
 #include "vast/detail/stable_set.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/type.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>

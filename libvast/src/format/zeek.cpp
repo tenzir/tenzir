@@ -12,7 +12,7 @@
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/escapers.hpp"
@@ -21,11 +21,11 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/zeekify.hpp"
 #include "vast/error.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/flatten_layout.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
 
 #include <caf/none.hpp>
 #include <caf/settings.hpp>

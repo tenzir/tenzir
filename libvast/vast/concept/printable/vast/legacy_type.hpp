@@ -11,7 +11,7 @@
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/vast/attribute.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 namespace vast {
 namespace detail {

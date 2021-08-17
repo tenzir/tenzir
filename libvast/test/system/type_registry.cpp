@@ -15,12 +15,12 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
 
 #include <caf/stateful_actor.hpp>
 #include <caf/test/dsl.hpp>

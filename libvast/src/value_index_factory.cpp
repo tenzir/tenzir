@@ -20,8 +20,8 @@
 #include "vast/index/list_index.hpp"
 #include "vast/index/string_index.hpp"
 #include "vast/index/subnet_index.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/optional.hpp>

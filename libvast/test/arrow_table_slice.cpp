@@ -16,9 +16,9 @@
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
 
 #include <arrow/api.h>
 #include <caf/make_copy_on_write.hpp>

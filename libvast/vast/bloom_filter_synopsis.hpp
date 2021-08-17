@@ -9,8 +9,8 @@
 #pragma once
 
 #include "vast/bloom_filter.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/synopsis.hpp"
-#include "vast/type.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/optional.hpp>

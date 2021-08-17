@@ -10,13 +10,13 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
+#include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/type.hpp"
 
 namespace vast {
 

@@ -15,6 +15,7 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/query.hpp"
@@ -24,7 +25,6 @@
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
 #include <flatbuffers/flatbuffers.h>

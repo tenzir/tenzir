@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/query.hpp"
@@ -21,7 +22,6 @@
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice_column.hpp"
-#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
 

@@ -12,8 +12,8 @@
 
 #include "vast/aliases.hpp"
 #include "vast/fbs/synopsis.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/operator.hpp"
-#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/fwd.hpp>

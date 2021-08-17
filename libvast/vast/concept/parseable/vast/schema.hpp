@@ -12,12 +12,12 @@
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
+#include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/type.hpp"
 
 namespace vast {
 

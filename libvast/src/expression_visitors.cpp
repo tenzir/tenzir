@@ -12,18 +12,18 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
+#include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
-#include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/die.hpp"
 #include "vast/ids.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <algorithm>

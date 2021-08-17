@@ -12,8 +12,8 @@
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/hasher.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/type.hpp"
 
 #include <caf/meta/load_callback.hpp>
 #include <caf/meta/type_name.hpp>

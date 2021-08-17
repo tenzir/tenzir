@@ -11,7 +11,7 @@
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/error.hpp>

@@ -18,7 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
 

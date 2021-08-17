@@ -27,6 +27,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/ids.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -39,7 +40,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/time.hpp"
-#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>

@@ -12,7 +12,7 @@
 
 #include "vast/defaults.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>

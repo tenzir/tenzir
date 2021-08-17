@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 namespace vast::detail {
 

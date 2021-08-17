@@ -16,8 +16,8 @@
 #include "vast/detail/fdoutbuf.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
 
 #include <arrow/util/config.h>
 #include <caf/none.hpp>

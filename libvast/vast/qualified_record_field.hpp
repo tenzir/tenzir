@@ -13,7 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include <string>
 #include <tuple>

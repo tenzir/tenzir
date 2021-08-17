@@ -10,8 +10,8 @@
 
 #include "vast/atoms.hpp"
 #include "vast/factory.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
 
 namespace vast {
 

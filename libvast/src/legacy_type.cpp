@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"

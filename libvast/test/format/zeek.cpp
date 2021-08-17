@@ -8,7 +8,7 @@
 
 #include "vast/format/zeek.hpp"
 
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include <istream>
 #include <sstream>
@@ -18,8 +18,8 @@
 #define SUITE format
 
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
 #include "vast/detail/fdinbuf.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"

@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/type.hpp>
+#include <vast/concept/printable/vast/legacy_type.hpp>
 #include <vast/concept/printable/vast/uuid.hpp>
 #include <vast/fbs/partition.hpp>
 #include <vast/fbs/utils.hpp>

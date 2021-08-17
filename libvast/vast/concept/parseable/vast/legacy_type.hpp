@@ -13,7 +13,7 @@
 #include "vast/concept/parseable/string/any.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/string/literal.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 namespace vast {
 

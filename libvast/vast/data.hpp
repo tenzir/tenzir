@@ -18,12 +18,12 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
 #include "vast/policy/merge_lists.hpp"
 #include "vast/subnet.hpp"
 #include "vast/time.hpp"
-#include "vast/type.hpp"
 
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>

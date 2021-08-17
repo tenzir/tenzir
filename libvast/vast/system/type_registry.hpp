@@ -11,10 +11,10 @@
 #include "vast/fwd.hpp"
 
 #include "vast/expression.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/taxonomies.hpp"
-#include "vast/type.hpp"
 #include "vast/type_set.hpp"
 
 #include <caf/expected.hpp>

@@ -8,17 +8,17 @@
 
 #define SUITE type
 
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
+#include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
-#include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
@@ -693,7 +693,9 @@ TEST(parseable) {
 }
 
 TEST(hashable) {
-  auto hash = [&](auto&& x) { return uhash<xxhash64>{}(x); };
+  auto hash = [&](auto&& x) {
+    return uhash<xxhash64>{}(x);
+  };
   CHECK_EQUAL(hash(type{}), 16682473723366582157ul);
   CHECK_EQUAL(hash(legacy_bool_type{}), 8019551906396149776ul);
   CHECK_EQUAL(hash(type{legacy_bool_type{}}), 693889673218214406ul);

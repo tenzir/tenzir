@@ -12,7 +12,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/env.hpp"
 #include "vast/detail/filter_dir.hpp"

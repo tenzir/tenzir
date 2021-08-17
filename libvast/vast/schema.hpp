@@ -12,11 +12,11 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/string/string.hpp"
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/stable_set.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include <caf/expected.hpp>
 

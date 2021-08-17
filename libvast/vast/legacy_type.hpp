@@ -1159,7 +1159,7 @@ VAST_DEFINE_HASH_SPECIALIZATION(legacy_alias_type);
 
 } // namespace std
 
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 
 namespace fmt {
 

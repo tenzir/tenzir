@@ -11,8 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/expression.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/system/node.hpp"
-#include "vast/type.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/fwd.hpp>

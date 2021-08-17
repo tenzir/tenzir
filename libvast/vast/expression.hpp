@@ -15,9 +15,9 @@
 #include "vast/data.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
-#include "vast/type.hpp"
 
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
