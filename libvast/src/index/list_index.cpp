@@ -38,7 +38,7 @@ list_index::list_index(vast::type t, caf::settings opts)
     },
   };
   value_type_ = caf::visit(f, value_index::type());
-  VAST_ASSERT(!caf::holds_alternative<none_type>(value_type_));
+  VAST_ASSERT(!caf::holds_alternative<legacy_none_type>(value_type_));
   size_t components = std::log10(max_size_);
   if (max_size_ % 10 != 0)
     ++components;

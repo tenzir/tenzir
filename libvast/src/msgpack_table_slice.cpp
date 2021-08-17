@@ -136,7 +136,7 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   auto o = objects.get();
   if (o.format() == nil)
     return {};
-  if constexpr (std::is_same_v<T, none_type>) {
+  if constexpr (std::is_same_v<T, legacy_none_type>) {
     // This branch should never get triggered because an object with format
     // 'nil' is handled already above.
     VAST_ASSERT(!"null check too late");

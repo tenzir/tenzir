@@ -50,7 +50,7 @@ namespace vast {
 // clang-format off
 /// @relates type
 using concrete_types = caf::detail::type_list<
-  none_type,
+  legacy_none_type,
   legacy_bool_type,
   legacy_integer_type,
   legacy_count_type,
@@ -348,8 +348,8 @@ public:
   template <class Inspector>
   friend auto inspect(Inspector& f, concrete_type& x) {
     const char* name = nullptr;
-    if constexpr (std::is_same_v<Derived, none_type>) {
-      name = "vast.none_type";
+    if constexpr (std::is_same_v<Derived, legacy_none_type>) {
+      name = "vast.legacy_none_type";
     } else if constexpr (std::is_same_v<Derived, legacy_bool_type>) {
       name = "vast.legacy_bool_type";
     } else if constexpr (std::is_same_v<Derived, legacy_integer_type>) {
@@ -478,7 +478,7 @@ struct nested_type : recursive_type<Derived> {
 // -- leaf types --------------------------------------------------------------
 
 /// Represents a default constructed type.
-struct none_type final : basic_type<none_type> {};
+struct legacy_none_type final : basic_type<legacy_none_type> {};
 
 /// A type for true/false data.
 /// @relates type
@@ -859,7 +859,7 @@ struct type_traits<vast::type> {
 };
 
 template <>
-struct type_traits<none_type> {
+struct type_traits<legacy_none_type> {
   using data_type = caf::none_t;
 };
 
@@ -1003,7 +1003,7 @@ template <>
 struct sum_type_access<vast::type> {
   using types = vast::concrete_types;
 
-  using type0 = vast::none_type;
+  using type0 = vast::legacy_none_type;
 
   static constexpr bool specialized = true;
 
@@ -1137,7 +1137,7 @@ namespace std {
   }
 
 VAST_DEFINE_HASH_SPECIALIZATION(type);
-VAST_DEFINE_HASH_SPECIALIZATION(none_type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_none_type);
 VAST_DEFINE_HASH_SPECIALIZATION(legacy_bool_type);
 VAST_DEFINE_HASH_SPECIALIZATION(legacy_integer_type);
 VAST_DEFINE_HASH_SPECIALIZATION(legacy_count_type);
@@ -1179,7 +1179,7 @@ struct formatter<vast::type> {
 };
 
 template <>
-struct formatter<vast::none_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_none_type> : formatter<vast::type> {};
 
 template <>
 struct formatter<vast::legacy_bool_type> : formatter<vast::type> {};

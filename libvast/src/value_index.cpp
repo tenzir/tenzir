@@ -132,7 +132,7 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
   type t;
   if (auto err = source(t))
     return err;
-  if (caf::holds_alternative<none_type>(t)) {
+  if (caf::holds_alternative<legacy_none_type>(t)) {
     x = nullptr;
     return caf::none;
   }

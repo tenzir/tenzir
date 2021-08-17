@@ -62,7 +62,7 @@ struct printer_registry<legacy_enumeration_type> {
     using type = TYPE##_printer;                                               \
   };
 
-VAST_DEFINE_BASIC_TYPE_PRINTER(none_type, "none")
+VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_none_type, "none")
 VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_bool_type, "bool")
 VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_integer_type, "int")
 VAST_DEFINE_BASIC_TYPE_PRINTER(legacy_count_type, "count")
@@ -127,7 +127,7 @@ struct type_printer : printer_base<type_printer<Policy>> {
     }
     if (show_type || t.name().empty()) {
       // clang-format off
-      auto p = none_type_printer{}
+      auto p = legacy_none_type_printer{}
              | legacy_bool_type_printer{}
              | legacy_integer_type_printer{}
              | legacy_count_type_printer{}

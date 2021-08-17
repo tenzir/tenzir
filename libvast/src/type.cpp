@@ -33,7 +33,7 @@ namespace vast {
 
 namespace {
 
-none_type none_type_singleton;
+legacy_none_type legacy_none_type_singleton;
 
 } // namespace
 
@@ -124,7 +124,7 @@ legacy_abstract_type_ptr type::ptr() const {
 }
 
 const legacy_abstract_type* type::raw_ptr() const noexcept {
-  return ptr_ != nullptr ? ptr_.get() : &none_type_singleton;
+  return ptr_ != nullptr ? ptr_.get() : &legacy_none_type_singleton;
 }
 
 const legacy_abstract_type* type::operator->() const noexcept {
@@ -729,7 +729,7 @@ struct data_congruence_checker {
     return false;
   }
 
-  bool operator()(const none_type&, caf::none_t) const {
+  bool operator()(const legacy_none_type&, caf::none_t) const {
     return true;
   }
 
@@ -941,7 +941,7 @@ bool type_check(const type& t, const data& x) {
       using data_type = type_to_data<std::decay_t<decltype(u)>>;
       return caf::holds_alternative<data_type>(x);
     },
-    [&](const none_type&) {
+    [&](const legacy_none_type&) {
       // Cannot determine data type since data may always be null.
       return true;
     },

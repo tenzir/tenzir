@@ -70,7 +70,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     // See also:
     // - src/format/pcap.cpp
     t = legacy_count_type{}.name("port");
-  if (caf::holds_alternative<none_type>(t)
+  if (caf::holds_alternative<legacy_none_type>(t)
       && (zeek_type.starts_with("vector") || zeek_type.starts_with("set")
           || zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
@@ -88,7 +88,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     // table[string]. In VAST, they are all lists.
     t = legacy_list_type{*elem};
   }
-  if (caf::holds_alternative<none_type>(t))
+  if (caf::holds_alternative<legacy_none_type>(t))
     return caf::make_error(ec::format_error,
                            "failed to parse type: ", std::string{zeek_type});
   return t;

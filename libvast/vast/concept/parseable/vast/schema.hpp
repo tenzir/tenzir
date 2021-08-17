@@ -49,7 +49,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> operator()(const none_type& x) {
+  caf::expected<type> operator()(const legacy_none_type& x) {
     VAST_ASSERT(!x.name().empty());
     auto concrete = lookup(x.name());
     if (!concrete)

@@ -356,7 +356,7 @@ public:
           std::is_same_v<concrete_type, legacy_enumeration_type>, std::string,
           type_to_data<concrete_type>>;
         if constexpr (detail::is_any_v<concrete_type, legacy_alias_type,
-                                       none_type>) {
+                                       legacy_none_type>) {
           // Data conversion of none or alias type does not make sense.
           return caf::make_error(ec::convert_error, ": can't convert alias or "
                                                     "none types");

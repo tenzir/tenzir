@@ -193,7 +193,7 @@ bool type_check(const type& t, const data_view& x) {
       using data_type = type_to_data<std::decay_t<decltype(u)>>;
       return caf::holds_alternative<view<data_type>>(x);
     },
-    [&](const none_type&) {
+    [&](const legacy_none_type&) {
       // Cannot determine data type since data may always be null.
       return true;
     },

@@ -100,11 +100,11 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
     >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
     >> '}') ->* to_record
     ;
-  static auto to_named_none_type = [](std::string name) -> type {
-    return none_type{}.name(std::move(name));
+  static auto to_named_legacy_none_type = [](std::string name) -> type {
+    return legacy_none_type{}.name(std::move(name));
   };
   static auto placeholder_parser
-    = (parsers::identifier) ->* to_named_none_type
+    = (parsers::identifier) ->* to_named_legacy_none_type
     ;
   rule<Iterator, type> type_expr_parser;
   auto algebra_leaf_parser

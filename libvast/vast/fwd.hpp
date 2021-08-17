@@ -105,7 +105,7 @@ struct legacy_list_type;
 struct legacy_map_type;
 struct model;
 struct negation;
-struct none_type;
+struct legacy_none_type;
 struct offset;
 struct partition_synopsis;
 struct legacy_pattern_type;

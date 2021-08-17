@@ -18,7 +18,7 @@
 namespace vast {
 
 /// Parses a type into an intermediate representation.
-/// References to user defined types are mapped to `none_type` and
+/// References to user defined types are mapped to `legacy_none_type` and
 /// need to be resolved later.
 struct type_parser : parser_base<type_parser> {
   using attribute = type;

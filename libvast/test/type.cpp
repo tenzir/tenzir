@@ -60,9 +60,9 @@ TEST(assignment) {
   t = {};
   CHECK(!t);
   CHECK(!holds_alternative<legacy_real_type>(t));
-  auto u = type{none_type{}};
+  auto u = type{legacy_none_type{}};
   CHECK(u);
-  CHECK(holds_alternative<none_type>(u));
+  CHECK(holds_alternative<legacy_none_type>(u));
 }
 
 TEST(copying) {
@@ -155,7 +155,7 @@ TEST(type / data compatibility) {
 
 TEST(serialization) {
   CHECK_ROUNDTRIP(type{});
-  CHECK_ROUNDTRIP(none_type{});
+  CHECK_ROUNDTRIP(legacy_none_type{});
   CHECK_ROUNDTRIP(legacy_bool_type{});
   CHECK_ROUNDTRIP(legacy_integer_type{});
   CHECK_ROUNDTRIP(legacy_count_type{});
@@ -171,7 +171,7 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(legacy_map_type{});
   CHECK_ROUNDTRIP(legacy_record_type{});
   CHECK_ROUNDTRIP(legacy_alias_type{});
-  CHECK_ROUNDTRIP(type{none_type{}});
+  CHECK_ROUNDTRIP(type{legacy_none_type{}});
   CHECK_ROUNDTRIP(type{legacy_bool_type{}});
   CHECK_ROUNDTRIP(type{legacy_integer_type{}});
   CHECK_ROUNDTRIP(type{legacy_count_type{}});
@@ -517,7 +517,7 @@ TEST(subset) {
 
 TEST(type_check) {
   MESSAGE("basic types");
-  TYPE_CHECK(none_type{}, caf::none);
+  TYPE_CHECK(legacy_none_type{}, caf::none);
   TYPE_CHECK(legacy_bool_type{}, false);
   TYPE_CHECK(legacy_integer_type{}, integer{42});
   TYPE_CHECK(legacy_count_type{}, 42u);
@@ -638,7 +638,7 @@ TEST(parseable) {
   CHECK(t == legacy_address_type{});
   MESSAGE("alias");
   CHECK(parsers::type("timestamp", t));
-  CHECK_EQUAL(t, none_type{}.name("timestamp"));
+  CHECK_EQUAL(t, legacy_none_type{}.name("timestamp"));
   MESSAGE("enum");
   CHECK(parsers::type("enum{foo, bar, baz}", t));
   CHECK(t == legacy_enumeration_type{{"foo", "bar", "baz"}});
@@ -672,8 +672,8 @@ TEST(parseable) {
   MESSAGE("record algebra");
   // clang-format off
   r = legacy_record_type{
-    {"", none_type{}.name("foo")},
-    {"+", none_type{}.name("bar")}
+    {"", legacy_none_type{}.name("foo")},
+    {"+", legacy_none_type{}.name("bar")}
   }.attributes({{"$algebra"}});
   // clang-format on
   CHECK_EQUAL(unbox(to<type>("foo+bar")), r);
@@ -686,7 +686,7 @@ TEST(parseable) {
   // clang-format off
   r = legacy_record_type{
     {"", legacy_record_type{{"a", legacy_real_type{}}}},
-    {"+", none_type{}.name("bar")}
+    {"+", legacy_none_type{}.name("bar")}
   }.attributes({{"$algebra"}});
   // clang-format on
   CHECK_EQUAL(unbox(to<type>(str)), r);

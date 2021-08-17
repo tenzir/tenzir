@@ -167,7 +167,8 @@ struct column_builder_trait<legacy_enumeration_type>
 };
 
 template <>
-struct column_builder_trait<none_type> : arrow::TypeTraits<arrow::NullType> {
+struct column_builder_trait<legacy_none_type>
+  : arrow::TypeTraits<arrow::NullType> {
   // -- member types -----------------------------------------------------------
 
   using super = arrow::TypeTraits<arrow::NullType>;
@@ -176,7 +177,7 @@ struct column_builder_trait<none_type> : arrow::TypeTraits<arrow::NullType> {
 
   using view_type = view<data_type>;
 
-  using meta_type = none_type;
+  using meta_type = legacy_none_type;
 
   // -- static member functions ------------------------------------------------
 

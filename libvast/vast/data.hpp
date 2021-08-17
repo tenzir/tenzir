@@ -233,7 +233,7 @@ VAST_DATA_TRAIT(record);
 
 template <>
 struct data_traits<caf::none_t> {
-  using type = none_type;
+  using type = legacy_none_type;
 };
 
 template <>
