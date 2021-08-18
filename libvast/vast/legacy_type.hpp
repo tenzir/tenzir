@@ -83,9 +83,6 @@ constexpr type_id_type type_id() {
 // -- type ------------------------------------------------------------------
 
 /// @relates type
-using type_digest = xxhash64::result_type;
-
-/// @relates type
 using legacy_abstract_type_ptr = caf::intrusive_cow_ptr<legacy_abstract_type>;
 
 /// The sematic representation of data.
