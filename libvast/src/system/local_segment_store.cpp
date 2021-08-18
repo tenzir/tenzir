@@ -34,9 +34,9 @@ namespace {
 // Handler for `vast::query` that is shared between active and passive stores.
 // Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
-caf::result<atom::done>
-handle_lookup(Actor& self, const vast::query& query, const vast::ids& ids,
-              const std::vector<table_slice>& slices) {
+caf::result<atom::done> handle_lookup(Actor& self, const vast::query& query,
+                                      const std::vector<table_slice>& slices) {
+  const auto& ids = query.ids;
   std::vector<expression> checkers;
   for (const auto& slice : slices) {
     if (query.expr == expression{}) {
@@ -109,8 +109,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                     filesystem_actor fs, const std::filesystem::path& path) {
   self->state.path = path;
   self->set_exit_handler([self](const caf::exit_msg&) {
-    for (auto&& [expr, ids, rp] :
-         std::exchange(self->state.deferred_requests, {}))
+    for (auto&& [expr, rp] : std::exchange(self->state.deferred_requests, {}))
       rp.deliver(caf::make_error(ec::lookup_error, "partition store shutting "
                                                    "down"));
   });
@@ -128,10 +127,9 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         // Delegate all deferred evaluations now that we have the partition chunk.
         VAST_DEBUG("{} delegates {} deferred evaluations", *self,
                    self->state.deferred_requests.size());
-        for (auto&& [expr, ids, rp] :
+        for (auto&& [query, rp] :
              std::exchange(self->state.deferred_requests, {}))
-          rp.delegate(static_cast<store_actor>(self), std::move(expr),
-                      std::move(ids));
+          rp.delegate(static_cast<store_actor>(self), std::move(query));
       },
       [self](caf::error& err) {
         VAST_ERROR("{} could not map passive store segment into memory: {}",
@@ -139,11 +137,11 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         self->quit(std::move(err));
       });
   return {
-    [self](query query, ids ids) -> caf::result<atom::done> {
+    [self](query query) -> caf::result<atom::done> {
       VAST_DEBUG("{} handles new query", *self);
       if (!self->state.segment) {
         auto rp = self->make_response_promise<atom::done>();
-        self->state.deferred_requests.emplace_back(query, ids, rp);
+        self->state.deferred_requests.emplace_back(query, rp);
         return rp;
       }
       // Special-case handling for "erase"-queries because their
@@ -151,20 +149,21 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       // in memory or on disk.
       if (caf::holds_alternative<query::erase>(query.cmd)) {
         return self->delegate(static_cast<store_actor>(self), atom::erase_v,
-                              ids);
+                              query.ids);
       }
-      auto slices = self->state.segment->lookup(ids);
+      auto slices = self->state.segment->lookup(query.ids);
       if (!slices)
         return slices.error();
-      return handle_lookup(self, query, ids, *slices);
+      return handle_lookup(self, query, *slices);
     },
     [self](atom::erase, ids xs) -> caf::result<atom::done> {
       if (!self->state.segment) {
         // Treat this as an "erase" query for the purposes of storing it
         // until the segment is loaded.
         auto rp = caf::typed_response_promise<atom::done>();
-        self->state.deferred_requests.emplace_back(query::make_erase({}), xs,
-                                                   rp);
+        auto query = query::make_erase({});
+        query.ids = std::move(xs);
+        self->state.deferred_requests.emplace_back(query, rp);
         return rp;
       }
       VAST_DEBUG("{} erases some ids");
@@ -232,21 +231,21 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   });
   auto result = local_store_actor::behavior_type{
     // store api
-    [self](const query& query, const ids& ids) -> caf::result<atom::done> {
+    [self](const query& query) -> caf::result<atom::done> {
       caf::expected<std::vector<table_slice>> slices = caf::error{};
       if (self->state.builder) {
-        slices = self->state.builder->lookup(ids);
+        slices = self->state.builder->lookup(query.ids);
       } else {
         VAST_ASSERT(self->state.segment.has_value());
-        slices = self->state.segment->lookup(ids);
+        slices = self->state.segment->lookup(query.ids);
       }
       if (!slices)
         return slices.error();
       if (caf::holds_alternative<query::erase>(query.cmd)) {
         return self->delegate(static_cast<store_actor>(self), atom::erase_v,
-                              ids);
+                              query.ids);
       }
-      return handle_lookup(self, query, ids, *slices);
+      return handle_lookup(self, query, *slices);
     },
     [self](const atom::erase&, const ids& ids) -> caf::result<atom::done> {
       // TODO: There is a race here when ids are erased while we're waiting

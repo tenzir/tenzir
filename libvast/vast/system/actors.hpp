@@ -102,9 +102,8 @@ using status_client_actor = typed_actor_fwd<
 
 /// The STORE actor interface.
 using store_actor = typed_actor_fwd<
-  // Handles an extraction for the given expression, optionally optimized by a
-  // set of ids to pre-select the events to evaluate.
-  caf::replies_to<query, ids>::with<atom::done>,
+  // Handles an extraction for the given expression.
+  caf::replies_to<query>::with<atom::done>,
   // TODO: Replace usage of `atom::erase` with `query::erase` in call sites.
   caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
 
@@ -200,8 +199,8 @@ using meta_index_actor = typed_actor_fwd<
   // Erase a single partition synopsis.
   caf::replies_to<atom::erase, uuid>::with<atom::ok>,
   // Evaluate the expression.
-  caf::replies_to<expression>::with< //
-    std::vector<uuid>>>::unwrap;
+  caf::replies_to<atom::candidates, vast::expression,
+                  vast::ids>::with<std::vector<vast::uuid>>>::unwrap;
 
 /// The INDEX actor interface.
 using index_actor = typed_actor_fwd<
@@ -211,7 +210,7 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<accountant_actor>,
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
-  // Evaluatates an query.
+  // Evaluates a query.
   caf::reacts_to<query>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,

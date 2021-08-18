@@ -72,7 +72,7 @@ std::unique_ptr<segment_store::lookup> archive_state::next_session() {
 }
 
 caf::typed_response_promise<atom::done>
-archive_state::file_request(vast::query query, const ids& xs) {
+archive_state::file_request(vast::query query) {
   auto rp = self->make_response_promise<atom::done>();
   auto it
     = std::find_if(requests.begin(), requests.end(),
@@ -86,7 +86,7 @@ archive_state::file_request(vast::query query, const ids& xs) {
       rp.deliver(atom::done_v);
       return rp;
     }
-    it->ids_queue.emplace(xs, rp);
+    it->ids_queue.emplace(query.ids, rp);
   } else {
     // Monitor the sink. We can cancel query execution for it when it goes down.
     // In case we already cleaned up a previous request we're doing unnecessary
@@ -98,6 +98,7 @@ archive_state::file_request(vast::query query, const ids& xs) {
                  [](query::erase&) { die("erase requests don't get filed"); },
                },
                query.cmd);
+    auto xs = query.ids;
     requests.emplace_back(std::move(query), std::make_pair(xs, rp));
   }
   if (!session) {
@@ -159,7 +160,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       it->cancelled = true;
   });
   return {
-    [self](vast::query query, const ids& xs) -> caf::result<atom::done> {
+    [self](vast::query query) -> caf::result<atom::done> {
+      const auto& xs = query.ids;
       VAST_DEBUG("{} got a request with the query {} and {} hints [{},  {})",
                  *self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
       if (caf::holds_alternative<query::erase>(query.cmd)) {
@@ -168,7 +170,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
           VAST_ERROR("{} failed to erase events: {}", *self, render(err));
         return atom::done_v;
       }
-      return self->state.file_request(std::move(query), xs);
+      return self->state.file_request(std::move(query));
     },
     [self](atom::internal, atom::resume) {
       VAST_ASSERT(self->state.session);

@@ -594,6 +594,10 @@ active_partition_actor::behavior_type active_partition(
               }
               // Shrink synopses for addr fields to optimal size.
               self->state.synopsis->shrink();
+              // TODO: It would probably make more sense if the partition
+              // synopsis keeps track of offset/events internally.
+              self->state.synopsis->offset = self->state.offset;
+              self->state.synopsis->events = self->state.events;
               // Create the partition flatbuffer.
               flatbuffers::FlatBufferBuilder builder;
               auto partition = pack(builder, self->state);
@@ -666,13 +670,23 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [self](vast::query query) -> caf::result<atom::done> {
+      auto rp = self->make_response_promise<atom::done>();
+      // Don't bother with with indexers, etc. if we already have an id set.
+      if (!query.ids.empty()) {
+        // TODO: Depending on the selectivity of the query and the rank of the
+        // ids, it may still be beneficial to load some of the indexers to prune
+        // the ids before hitting the store.
+        rp.delegate(self->state.store, std::move(query));
+        return rp;
+      }
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
       auto triples = evaluate(self->state, query.expr);
-      if (triples.empty())
-        return atom::done_v;
+      if (triples.empty()) {
+        rp.deliver(atom::done_v);
+        return rp;
+      }
       auto eval = self->spawn(evaluator, query.expr, triples);
-      auto rp = self->make_response_promise<atom::done>();
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, rp, query = std::move(query)](const ids& hits) mutable {
@@ -683,7 +697,8 @@ active_partition_actor::behavior_type active_partition(
               self->send(count->sink, rank(hits));
               rp.deliver(atom::done_v);
             } else {
-              rp.delegate(self->state.store, std::move(query), hits);
+              query.ids = hits;
+              rp.delegate(self->state.store, std::move(query));
             }
           },
           [rp](caf::error& err) mutable {
@@ -883,11 +898,22 @@ partition_actor::behavior_type passive_partition(
       if (self->state.indexers.empty())
         return caf::make_error(ec::system_error, "can not handle query because "
                                                  "shutdown was requested");
-      auto triples = evaluate(self->state, query.expr);
-      if (triples.empty())
-        return atom::done_v;
-      auto eval = self->spawn(evaluator, query.expr, triples);
       auto rp = self->make_response_promise<atom::done>();
+      // Don't bother with the indexers etc. if we already know the ids
+      // we want to retrieve.
+      if (!query.ids.empty()) {
+        // TODO: Depending on the selectivity of the query and the rank of the
+        // ids, it may still be beneficial to load some of the indexers to prune
+        // the ids before hitting the store.
+        rp.delegate(self->state.store, query);
+        return rp;
+      }
+      auto triples = evaluate(self->state, query.expr);
+      if (triples.empty()) {
+        rp.deliver(atom::done_v);
+        return rp;
+      }
+      auto eval = self->spawn(evaluator, query.expr, triples);
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, rp, query = std::move(query)](const ids& hits) mutable {
@@ -898,7 +924,8 @@ partition_actor::behavior_type passive_partition(
               self->send(count->sink, rank(hits));
               rp.deliver(atom::done_v);
             } else {
-              rp.delegate(self->state.store, std::move(query), hits);
+              query.ids = hits;
+              rp.delegate(self->state.store, std::move(query));
             }
           },
           [rp](caf::error& err) mutable {

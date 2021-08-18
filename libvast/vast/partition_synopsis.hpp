@@ -28,6 +28,12 @@ struct partition_synopsis {
   ///          synopsis.
   size_t memusage() const;
 
+  /// Id of the first event in the partition.
+  uint64_t offset;
+
+  // Number of events in the partition.
+  uint64_t events;
+
   /// Synopsis data structures for types.
   std::unordered_map<type, synopsis_ptr> type_synopses_;
 

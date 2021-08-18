@@ -25,6 +25,7 @@
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
@@ -44,7 +45,7 @@ ids to_ids(const count& x) {
 }
 
 caf::error
-run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
+run(caf::scoped_actor& self, index_actor index, const invocation& inv) {
   using namespace std::string_literals;
   auto output_format = get_or(inv.options, "vast.get.format", "json"s);
   auto writer = format::writer::make(output_format, inv.options);
@@ -52,23 +53,30 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
     return writer.error();
   // TODO: Sending one id at a time is overly pessimistic. A smarter algorithm
   // would request all ids at once and reorder the results for printing.
-  // Introduce an option to get the current behavior when implemnting this.
-  for (auto& c : inv.arguments) {
+  // Introduce an option to get the current behavior when implementing this.
+  for (const auto& c : inv.arguments) {
     auto i = to<count>(c);
     if (!i)
       return caf::make_error(ec::parse_error, c, "is not a positive integer");
+    vast::ids ids = to_ids(*i);
     // The caf::actor_cast here is necessary because a scoped actor cannot be a
     // typed actor. The message handlers below reflect those of the
     // receiver_actor<table_slice> exactly, but there's no way to verify that at
     // compile time. We can improve upon this situation when changing the
     // archive to stream its results.
     auto q = query::make_extract(self, query::extract::drop_ids, expression{});
-    self->send(archive, std::move(q), to_ids(*i));
+    q.ids = std::move(ids);
+    self->send(index, std::move(q));
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.
-      ([&](table_slice slice) { (*writer)->write(slice); },
-       [&](atom::done) { waiting = false; });
+      (
+        [&](const table_slice& slice) {
+          (*writer)->write(slice);
+        },
+        [&](atom::done) {
+          waiting = false;
+        });
   }
   return caf::none;
 }
@@ -87,12 +95,12 @@ caf::message get_command(const invocation& inv, caf::actor_system& sys) {
                        ? std::get<node_actor>(node_opt)
                        : std::get<scope_linked<node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
-  auto components = get_node_components<archive_actor>(self, node);
+  auto components = get_node_components<index_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
-  auto&& [archive] = *components;
-  VAST_ASSERT(archive);
-  auto err = run(self, archive, inv);
+  auto&& [index] = *components;
+  VAST_ASSERT(index);
+  auto err = run(self, index, inv);
   return caf::make_message(err);
 }
 

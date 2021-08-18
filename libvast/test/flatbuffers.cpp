@@ -39,7 +39,7 @@
 #include <filesystem>
 
 vast::system::store_actor::behavior_type dummy_store() {
-  return {[](const vast::query&, const vast::ids&) {
+  return {[](const vast::query&) {
             return vast::atom::done_v;
           },
           [](const vast::atom::erase&, const vast::ids&) {
@@ -126,6 +126,8 @@ TEST(empty partition roundtrip) {
   state.offset = 17;
   state.events = 23;
   state.synopsis = std::make_shared<vast::partition_synopsis>();
+  state.synopsis->offset = state.offset;
+  state.synopsis->events = state.events;
   state.combined_layout
     = vast::record_type{{"x", vast::count_type{}}}.name("y");
   auto& ids = state.type_ids["x"];
@@ -163,6 +165,8 @@ TEST(empty partition roundtrip) {
   REQUIRE(partition_v0->store());
   REQUIRE(partition_v0->store()->id());
   CHECK_EQUAL(partition_v0->store()->id()->str(), "legacy_archive");
+  CHECK_EQUAL(partition_v0->offset(), state.offset);
+  CHECK_EQUAL(partition_v0->events(), state.events);
   auto error = unpack(*partition_v0, recovered_state);
   CHECK(!error);
   CHECK_EQUAL(recovered_state.id, state.id);
@@ -175,16 +179,18 @@ TEST(empty partition roundtrip) {
   auto error2 = vast::system::unpack(*partition_v0, *ps);
   CHECK(!error2);
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
+  CHECK_EQUAL(ps->offset, state.offset);
+  CHECK_EQUAL(ps->events, state.events);
   auto meta_index = self->spawn(vast::system::meta_index);
   auto rp = self->request(meta_index, caf::infinite, vast::atom::merge_v,
                           recovered_state.id, ps);
   run();
   rp.receive([=](vast::atom::ok) {}, [=](const caf::error& err) { FAIL(err); });
-  auto rp2
-    = self->request(meta_index, caf::infinite,
-                    vast::expression{vast::predicate{
-                      vast::field_extractor{".x"},
-                      vast::relational_operator::equal, vast::data{0u}}});
+  auto rp2 = self->request(meta_index, caf::infinite, vast::atom::candidates_v,
+                           vast::expression{vast::predicate{
+                             vast::field_extractor{".x"},
+                             vast::relational_operator::equal, vast::data{0u}}},
+                           vast::ids{});
   run();
   rp2.receive(
     [&](const std::vector<vast::uuid>& candidates) {

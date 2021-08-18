@@ -306,6 +306,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((std::pair<std::string, vast::data>))
   VAST_ADD_TYPE_ID((std::vector<uint32_t>))
+  VAST_ADD_TYPE_ID((std::vector<vast::count>))
   VAST_ADD_TYPE_ID((std::vector<std::string>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>))

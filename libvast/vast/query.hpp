@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/bitmap.hpp"
 #include "vast/expression.hpp"
 #include "vast/system/actors.hpp"
 
@@ -65,7 +66,10 @@ struct query {
   using command = caf::variant<erase, count, extract>;
 
   command cmd;
+
   expression expr = {};
+
+  vast::ids ids = {};
 
   query(const command& cmd, const expression& expr) : cmd(cmd), expr(expr) {
   }
@@ -103,7 +107,7 @@ struct query {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query& q) {
-    return f(caf::meta::type_name("vast.query"), q.cmd, q.expr);
+    return f(caf::meta::type_name("vast.query"), q.cmd, q.expr, q.ids);
   }
 };
 
