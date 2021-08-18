@@ -10,6 +10,7 @@ endif ()
 add_executable(vast vast.cpp)
 VASTTargetEnableTooling(vast)
 target_link_libraries(vast PRIVATE vast::internal vast::libvast)
+VASTTargetLinkWholeArchive(vast PRIVATE vast::native_plugins)
 install(TARGETS vast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 add_executable(vast::vast ALIAS vast)
 
@@ -20,12 +21,6 @@ install(
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# Use static versions of VAST_REGISTER_PLUGIN family of macros when inside the
-# vast binary. This makes it possible to statically link a plugin against the
-# vast::vast target, or to write built-in plugins that are always loaded with
-# VAST.
-target_compile_definitions(vast PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 
 # -- example configuration file -----------------------------------------------
 
