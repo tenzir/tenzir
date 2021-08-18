@@ -11,7 +11,7 @@
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/error.hpp>
@@ -31,7 +31,7 @@ using value_index_ptr = std::unique_ptr<value_index>;
 /// and an explit query for nil, e.g., `x != 42 || x == nil`.
 class value_index {
 public:
-  value_index(vast::type x, caf::settings opts);
+  value_index(vast::legacy_type x, caf::settings opts);
 
   virtual ~value_index();
 
@@ -69,7 +69,7 @@ public:
   [[nodiscard]] size_type offset() const;
 
   /// @returns the type of the index.
-  [[nodiscard]] const vast::type& type() const;
+  [[nodiscard]] const vast::legacy_type& type() const;
 
   /// @returns the options of the index.
   [[nodiscard]] const caf::settings& options() const;
@@ -94,7 +94,7 @@ private:
 
   ewah_bitmap mask_;         ///< The position of all values excluding nil.
   ewah_bitmap none_;         ///< The positions of nil values.
-  const vast::type type_;    ///< The type of this index.
+  const vast::legacy_type type_; ///< The type of this index.
   const caf::settings opts_; ///< Runtime context with additional parameters.
 };
 

@@ -18,12 +18,12 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
 #include "vast/policy/merge_lists.hpp"
 #include "vast/subnet.hpp"
 #include "vast/time.hpp"
-#include "vast/type.hpp"
 
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
@@ -176,7 +176,7 @@ public:
   /// just the regular type, for complex objects it is a default-constructed
   /// type object without extended information. (eg. just "a record" with no
   /// further information about the record fields)
-  vast::type basic_type() const;
+  vast::legacy_type basic_type() const;
 
   /// @cond PRIVATE
 
@@ -212,7 +212,7 @@ struct data_traits {
 #define VAST_DATA_TRAIT(name)                                                  \
   template <>                                                                  \
   struct data_traits<name> {                                                   \
-    using type = name##_type;                                                  \
+    using type = legacy_##name##_type;                                         \
   }
 
 VAST_DATA_TRAIT(bool);
@@ -233,17 +233,17 @@ VAST_DATA_TRAIT(record);
 
 template <>
 struct data_traits<caf::none_t> {
-  using type = none_type;
+  using type = legacy_none_type;
 };
 
 template <>
 struct data_traits<std::string> {
-  using type = string_type;
+  using type = legacy_string_type;
 };
 
 template <>
 struct data_traits<data> {
-  using type = vast::type;
+  using type = vast::legacy_type;
 };
 
 /// @relates data type
@@ -276,7 +276,7 @@ size_t depth(const record& r);
 /// @param xs The record fields.
 /// @returns A record according to the fields as defined in *rt*.
 std::optional<record>
-make_record(const record_type& rt, std::vector<data>&& xs);
+make_record(const legacy_record_type& rt, std::vector<data>&& xs);
 
 /// Flattens a record recursively.
 record flatten(const record& r);
@@ -287,8 +287,8 @@ record flatten(const record& r);
 /// @param rt The record type according to which *r* should be flattened.
 /// @returns The flattened record if the nested structure of *r* is a valid
 ///          subset of *rt*.
-std::optional<record> flatten(const record& r, const record_type& rt);
-std::optional<data> flatten(const data& x, const type& t);
+std::optional<record> flatten(const record& r, const legacy_record_type& rt);
+std::optional<data> flatten(const data& x, const legacy_type& t);
 
 /// Merges one record into another such that the source overwrites potential
 /// keys in the destination.

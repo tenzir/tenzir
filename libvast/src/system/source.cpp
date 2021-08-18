@@ -53,12 +53,12 @@ void source_state::initialize(const type_registry_actor& type_registry,
           // type-registry.
           auto merged_schema = schema{};
           for (const auto& type : local_schema)
-            if (auto&& layout = caf::get_if<vast::record_type>(&type))
+            if (auto&& layout = caf::get_if<vast::legacy_record_type>(&type))
               if (is_valid(*layout))
                 merged_schema.add(*layout);
           // Second, filter valid types from all available record types.
           for (auto& type : types)
-            if (auto&& layout = caf::get_if<vast::record_type>(&type))
+            if (auto&& layout = caf::get_if<vast::legacy_record_type>(&type))
               if (is_valid(*layout))
                 merged_schema.add(*layout);
           // Third, try to set the new schema.

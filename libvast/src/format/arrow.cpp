@@ -16,8 +16,8 @@
 #include "vast/detail/fdoutbuf.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
 
 #include <arrow/util/config.h>
 #include <caf/none.hpp>
@@ -63,7 +63,7 @@ const char* writer::name() const {
   return "arrow-writer";
 }
 
-bool writer::layout(const record_type& layout) {
+bool writer::layout(const legacy_record_type& layout) {
   if (current_layout_ == layout)
     return true;
   if (current_batch_writer_ != nullptr) {

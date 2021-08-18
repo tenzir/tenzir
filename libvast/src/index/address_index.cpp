@@ -10,7 +10,7 @@
 
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
@@ -20,7 +20,7 @@
 
 namespace vast {
 
-address_index::address_index(vast::type t, caf::settings opts)
+address_index::address_index(vast::legacy_type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   bytes_.fill(byte_index{8});
 }

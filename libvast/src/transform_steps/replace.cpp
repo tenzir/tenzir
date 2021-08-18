@@ -50,8 +50,9 @@ caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-[[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
-replace_step::operator()(vast::record_type layout,
+[[nodiscard]] std::pair<vast::legacy_record_type,
+                        std::shared_ptr<arrow::RecordBatch>>
+replace_step::operator()(vast::legacy_record_type layout,
                          std::shared_ptr<arrow::RecordBatch> batch) const {
   auto offset = layout.resolve(field_);
   if (!offset)

@@ -57,7 +57,7 @@ struct exporter_state {
   accountant_actor accountant = {};
 
   /// Caches tailored candidate checkers.
-  std::unordered_map<type, expression> checkers = {};
+  std::unordered_map<legacy_type, expression> checkers = {};
 
   /// Caches results for the SINK.
   std::vector<table_slice> results = {};

@@ -132,10 +132,10 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         return;
       auto&& layout = slice.layout();
       auto is_timestamp = [](const record_field& field) {
-        const type* t = &field.type;
+        const legacy_type* t = &field.type;
         if (t->name() == "timestamp")
           return true;
-        while (auto x = caf::get_if<alias_type>(t)) {
+        while (auto x = caf::get_if<legacy_alias_type>(t)) {
           t = &x->value_type;
           if (t->name() == "timestamp")
             return true;
@@ -169,14 +169,15 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
           continue;
         std::optional<vast::expression> before_expr;
         if (st.before)
-          before_expr = predicate{type_extractor{time_type{}.name("timestamp")},
-                                  relational_operator::greater_equal,
-                                  data{*x - *st.before}};
+          before_expr
+            = predicate{type_extractor{legacy_time_type{}.name("timestamp")},
+                        relational_operator::greater_equal,
+                        data{*x - *st.before}};
 
         std::optional<vast::expression> after_expr;
         if (st.after)
           after_expr
-            = predicate{type_extractor{time_type{}.name("timestamp")},
+            = predicate{type_extractor{legacy_time_type{}.name("timestamp")},
                         relational_operator::less_equal, data{*x + *st.after}};
         std::optional<vast::expression> by_expr;
         if (st.by) {

@@ -143,7 +143,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
 }
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
-                         record_type layout) noexcept
+                         legacy_record_type layout) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   if (chunk_ && chunk_->unique()) {
     ++num_instances_;
@@ -181,7 +181,7 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                         const record_type& layout) {
+                         const legacy_record_type& layout) {
   *this = arrow_table_slice_builder::create(record_batch, layout);
 }
 
@@ -251,10 +251,10 @@ enum table_slice_encoding table_slice::encoding() const noexcept {
   return visit(f, as_flatbuffer(chunk_));
 }
 
-const record_type& table_slice::layout() const noexcept {
+const legacy_record_type& table_slice::layout() const noexcept {
   auto f = detail::overload{
     []() noexcept {
-      static const auto empty_layout = record_type{};
+      static const auto empty_layout = legacy_record_type{};
       return &empty_layout;
     },
     [&](const auto& encoded) noexcept {
@@ -332,9 +332,10 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
-data_view table_slice::at(table_slice::size_type row,
-                          table_slice::size_type column, const type& t) const {
-  if (const auto* alias = caf::get_if<alias_type>(&t))
+data_view
+table_slice::at(table_slice::size_type row, table_slice::size_type column,
+                const legacy_type& t) const {
+  if (const auto* alias = caf::get_if<legacy_alias_type>(&t))
     return at(row, column, alias->value_type);
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
@@ -619,7 +620,7 @@ struct row_evaluator {
       auto result = false;
       auto neg = is_negated(op_);
       // auto abs_op = neg ? negate(op_) : op_;
-      for (const auto& field : record_type::each{layout}) {
+      for (const auto& field : legacy_record_type::each{layout}) {
         if (const auto fqn = layout.name() + "." + field.key();
             fqn.ends_with(*s)) {
           result = true;

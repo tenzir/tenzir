@@ -35,7 +35,7 @@ struct fixture {
 FIXTURE_SCOPE(value_index_tests, fixture)
 
 TEST(list) {
-  auto container_type = list_type{string_type{}};
+  auto container_type = legacy_list_type{legacy_string_type{}};
   list_index idx{container_type};
   MESSAGE("append");
   list xs{"foo", "bar"};

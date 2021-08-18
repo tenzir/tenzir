@@ -12,21 +12,21 @@
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
+#include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/type.hpp"
 
 namespace vast {
 
-using symbol_map = std::unordered_map<std::string, type>;
+using symbol_map = std::unordered_map<std::string, legacy_type>;
 
 /// Converts a symbol_map into a schema. Can use an additional symbol table
 /// as context.
 struct symbol_resolver {
-  caf::expected<type> lookup(const std::string& key) {
+  caf::expected<legacy_type> lookup(const std::string& key) {
     // First we check if the key is already locally resolved.
     auto resolved_symbol = resolved.find(key);
     if (resolved_symbol != resolved.end())
@@ -45,11 +45,11 @@ struct symbol_resolver {
   }
 
   template <class Type>
-  caf::expected<type> operator()(Type x) {
+  caf::expected<legacy_type> operator()(Type x) {
     return std::move(x);
   }
 
-  caf::expected<type> operator()(const none_type& x) {
+  caf::expected<legacy_type> operator()(const legacy_none_type& x) {
     VAST_ASSERT(!x.name().empty());
     auto concrete = lookup(x.name());
     if (!concrete)
@@ -57,7 +57,7 @@ struct symbol_resolver {
     return concrete->update_attributes(x.attributes());
   }
 
-  caf::expected<type> operator()(alias_type x) {
+  caf::expected<legacy_type> operator()(legacy_alias_type x) {
     auto y = caf::visit(*this, x.value_type);
     if (!y)
       return y.error();
@@ -65,7 +65,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> operator()(list_type x) {
+  caf::expected<legacy_type> operator()(legacy_list_type x) {
     auto y = caf::visit(*this, x.value_type);
     if (!y)
       return y.error();
@@ -73,7 +73,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> operator()(map_type x) {
+  caf::expected<legacy_type> operator()(legacy_map_type x) {
     auto y = caf::visit(*this, x.value_type);
     if (!y)
       return y.error();
@@ -85,7 +85,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> operator()(record_type x) {
+  caf::expected<legacy_type> operator()(legacy_record_type x) {
     for (auto& [field_name, field_type] : x.fields) {
       auto y = caf::visit(*this, field_type);
       if (!y)
@@ -94,12 +94,12 @@ struct symbol_resolver {
     }
     if (has_attribute(x, "$algebra")) {
       VAST_ASSERT(x.fields.size() >= 2);
-      const auto* base = caf::get_if<record_type>(&x.fields[0].type);
+      const auto* base = caf::get_if<legacy_record_type>(&x.fields[0].type);
       VAST_ASSERT(base);
       auto acc = *base;
       auto it = ++x.fields.begin();
       for (; it < x.fields.end(); ++it) {
-        const auto* rhs = caf::get_if<record_type>(&it->type);
+        const auto* rhs = caf::get_if<legacy_record_type>(&it->type);
         VAST_ASSERT(rhs);
         if (it->name == "+") {
           auto result = merge(acc, *rhs);
@@ -139,7 +139,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> resolve(symbol_map::iterator next) {
+  caf::expected<legacy_type> resolve(symbol_map::iterator next) {
     auto value = std::move(*next);
     if (resolved.find(value.first) != resolved.end())
       return caf::make_error(ec::parse_error, "duplicate definition of",
@@ -196,12 +196,12 @@ struct symbol_map_parser : parser_base<symbol_map_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& out) const {
     static_assert(detail::is_any_v<Attribute, attribute, unused_type>);
     bool duplicate_symbol = false;
-    auto to_type = [&](std::tuple<std::string, type> t) -> type {
+    auto to_type = [&](std::tuple<std::string, legacy_type> t) -> legacy_type {
       auto [name, ty] = std::move(t);
       // If the type has already a name, we're dealing with a symbol and have
       // to create an alias.
       if (!ty.name().empty())
-        ty = alias_type{ty}; // TODO: attributes
+        ty = legacy_alias_type{ty}; // TODO: attributes
       ty.name(name);
       if (!out.emplace(name, ty).second) {
         VAST_ERROR("multiple definitions of {} detected", name);

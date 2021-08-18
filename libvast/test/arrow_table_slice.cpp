@@ -16,9 +16,9 @@
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
 
 #include <arrow/api.h>
 #include <caf/make_copy_on_write.hpp>
@@ -32,7 +32,7 @@ using namespace std::string_view_literals;
 namespace {
 
 template <class... Ts>
-auto make_slice(record_type layout, const Ts&... xs) {
+auto make_slice(legacy_record_type layout, const Ts&... xs) {
   auto builder = arrow_table_slice_builder::make(layout);
   auto ok = builder->add(xs...);
   if (!ok)
@@ -45,7 +45,7 @@ auto make_slice(record_type layout, const Ts&... xs) {
 
 template <class VastType, class... Ts>
 auto make_single_column_slice(const Ts&... xs) {
-  record_type layout{record_field{"foo", VastType{}}};
+  legacy_record_type layout{record_field{"foo", VastType{}}};
   return make_slice(layout, xs...);
 }
 
@@ -80,9 +80,11 @@ integer operator"" _i(unsigned long long int x) {
     FAIL("!! " #expression);
 
 TEST(single column - equality) {
-  auto t = count_type{};
-  auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, caf::none, 3_c);
-  auto slice2 = make_single_column_slice<count_type>(0_c, 1_c, caf::none, 3_c);
+  auto t = legacy_count_type{};
+  auto slice1
+    = make_single_column_slice<legacy_count_type>(0_c, 1_c, caf::none, 3_c);
+  auto slice2
+    = make_single_column_slice<legacy_count_type>(0_c, 1_c, caf::none, 3_c);
   CHECK_VARIANT_EQUAL(slice1.at(0, 0, t), slice2.at(0, 0, t));
   CHECK_VARIANT_EQUAL(slice1.at(1, 0, t), slice2.at(1, 0, t));
   CHECK_VARIANT_EQUAL(slice1.at(2, 0, t), slice2.at(2, 0, t));
@@ -94,8 +96,9 @@ TEST(single column - equality) {
 }
 
 TEST(single column - count) {
-  auto t = count_type{};
-  auto slice = make_single_column_slice<count_type>(0_c, 1_c, caf::none, 3_c);
+  auto t = legacy_count_type{};
+  auto slice
+    = make_single_column_slice<legacy_count_type>(0_c, 1_c, caf::none, 3_c);
   REQUIRE_EQUAL(slice.rows(), 4u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 0_c);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_c);
@@ -105,8 +108,9 @@ TEST(single column - count) {
 }
 
 TEST(single column - enumeration) {
-  auto t = enumeration_type{};
-  auto slice = make_single_column_slice<enumeration_type>(0_e, 1_e, caf::none);
+  auto t = legacy_enumeration_type{};
+  auto slice
+    = make_single_column_slice<legacy_enumeration_type>(0_e, 1_e, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 0_e);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_e);
@@ -115,8 +119,9 @@ TEST(single column - enumeration) {
 }
 
 TEST(single column - integer) {
-  auto t = integer_type{};
-  auto slice = make_single_column_slice<integer_type>(caf::none, 1_i, 2_i);
+  auto t = legacy_integer_type{};
+  auto slice
+    = make_single_column_slice<legacy_integer_type>(caf::none, 1_i, 2_i);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), caf::none);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_i);
@@ -125,8 +130,9 @@ TEST(single column - integer) {
 }
 
 TEST(single column - boolean) {
-  auto t = bool_type{};
-  auto slice = make_single_column_slice<bool_type>(false, caf::none, true);
+  auto t = legacy_bool_type{};
+  auto slice
+    = make_single_column_slice<legacy_bool_type>(false, caf::none, true);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), false);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
@@ -135,8 +141,9 @@ TEST(single column - boolean) {
 }
 
 TEST(single column - real) {
-  auto t = real_type{};
-  auto slice = make_single_column_slice<real_type>(1.23, 3.21, caf::none);
+  auto t = legacy_real_type{};
+  auto slice
+    = make_single_column_slice<legacy_real_type>(1.23, 3.21, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 1.23);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 3.21);
@@ -145,8 +152,9 @@ TEST(single column - real) {
 }
 
 TEST(single column - string) {
-  auto t = string_type{};
-  auto slice = make_single_column_slice<string_type>("a"sv, caf::none, "c"sv);
+  auto t = legacy_string_type{};
+  auto slice
+    = make_single_column_slice<legacy_string_type>("a"sv, caf::none, "c"sv);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), "a"sv);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
@@ -155,10 +163,10 @@ TEST(single column - string) {
 }
 
 TEST(single column - pattern) {
-  auto t = pattern_type{};
+  auto t = legacy_pattern_type{};
   auto p1 = pattern("foo.ar");
   auto p2 = pattern("hello* world");
-  auto slice = make_single_column_slice<pattern_type>(p1, p2, caf::none);
+  auto slice = make_single_column_slice<legacy_pattern_type>(p1, p2, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(p1));
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(p2));
@@ -169,9 +177,9 @@ TEST(single column - pattern) {
 TEST(single column - time) {
   using ts = vast::time;
   auto epoch = ts{duration{0}};
-  auto t = time_type{};
+  auto t = legacy_time_type{};
   auto slice
-    = make_single_column_slice<time_type>(epoch, caf::none, epoch + 48h);
+    = make_single_column_slice<legacy_time_type>(epoch, caf::none, epoch + 48h);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), epoch);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
@@ -182,8 +190,9 @@ TEST(single column - time) {
 TEST(single column - duration) {
   auto h0 = duration{0};
   auto h12 = h0 + 12h;
-  auto t = duration_type{};
-  auto slice = make_single_column_slice<duration_type>(h0, h12, caf::none);
+  auto t = legacy_duration_type{};
+  auto slice
+    = make_single_column_slice<legacy_duration_type>(h0, h12, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), h0);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), h12);
@@ -194,11 +203,12 @@ TEST(single column - duration) {
 TEST(single column - address) {
   using vast::address;
   using vast::to;
-  auto t = address_type{};
+  auto t = legacy_address_type{};
   auto a1 = unbox(to<address>("172.16.7.1"));
   auto a2 = unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329"));
   auto a3 = unbox(to<address>("2001:db8::"));
-  auto slice = make_single_column_slice<address_type>(caf::none, a1, a2, a3);
+  auto slice
+    = make_single_column_slice<legacy_address_type>(caf::none, a1, a2, a3);
   REQUIRE_EQUAL(slice.rows(), 4u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), caf::none);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), a1);
@@ -210,11 +220,12 @@ TEST(single column - address) {
 TEST(single column - subnet) {
   using vast::subnet;
   using vast::to;
-  auto t = subnet_type{};
+  auto t = legacy_subnet_type{};
   auto s1 = unbox(to<subnet>("172.16.7.0/8"));
   auto s2 = unbox(to<subnet>("172.16.0.0/16"));
   auto s3 = unbox(to<subnet>("172.0.0.0/24"));
-  auto slice = make_single_column_slice<subnet_type>(s1, s2, s3, caf::none);
+  auto slice
+    = make_single_column_slice<legacy_subnet_type>(s1, s2, s3, caf::none);
   REQUIRE_EQUAL(slice.rows(), 4u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), s1);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), s2);
@@ -224,8 +235,8 @@ TEST(single column - subnet) {
 }
 
 TEST(single column - list of integers) {
-  auto t = list_type{integer_type{}};
-  record_type layout{record_field{"values", t}};
+  auto t = legacy_list_type{legacy_integer_type{}};
+  legacy_record_type layout{record_field{"values", t}};
   list list1{1_i, 2_i, 3_i};
   list list2{10_i, 20_i};
   auto slice = make_slice(layout, list1, caf::none, list2);
@@ -237,8 +248,9 @@ TEST(single column - list of integers) {
 }
 
 TEST(single column - list of record) {
-  auto t = list_type{record_type{record_field{"a", string_type{}}}};
-  record_type layout{record_field{"values", t}};
+  auto t = legacy_list_type{
+    legacy_record_type{record_field{"a", legacy_string_type{}}}};
+  legacy_record_type layout{record_field{"values", t}};
   list list1{record{{"a", "123"}}, caf::none};
   auto slice = make_slice(layout, list1, caf::none);
   REQUIRE_EQUAL(slice.rows(), 2u);
@@ -248,8 +260,8 @@ TEST(single column - list of record) {
 }
 
 TEST(single column - list of strings) {
-  auto t = list_type{string_type{}};
-  record_type layout{record_field{"values", t}};
+  auto t = legacy_list_type{legacy_string_type{}};
+  legacy_record_type layout{record_field{"values", t}};
   list list1{"hello"s, "world"s};
   list list2{"a"s, "b"s, "c"s};
   auto slice = make_slice(layout, list1, list2, caf::none);
@@ -261,10 +273,10 @@ TEST(single column - list of strings) {
 }
 
 TEST(single column - list of list of integers) {
-  auto t = list_type{integer_type{}};
-  // Note: we call the copy ctor if we don't wrap list_type into a type.
-  auto llt = list_type{type{t}};
-  record_type layout{record_field{"values", llt}};
+  auto t = legacy_list_type{legacy_integer_type{}};
+  // Note: we call the copy ctor if we don't wrap legacy_list_type into a type.
+  auto llt = legacy_list_type{legacy_type{t}};
+  legacy_record_type layout{record_field{"values", llt}};
   list list11{1_i, 2_i, 3_i};
   list list12{10_i, 20_i};
   list list1{list11, list12};
@@ -280,8 +292,8 @@ TEST(single column - list of list of integers) {
 }
 
 TEST(single column - map) {
-  auto t = map_type{string_type{}, count_type{}};
-  record_type layout{record_field{"values", t}};
+  auto t = legacy_map_type{legacy_string_type{}, legacy_count_type{}};
+  legacy_record_type layout{record_field{"values", t}};
   map map1{{"foo"s, 42_c}, {"bar"s, 23_c}};
   map map2{{"a"s, 0_c}, {"b"s, 1_c}, {"c", 2_c}};
   auto slice = make_slice(layout, map1, map2, caf::none);
@@ -295,8 +307,8 @@ TEST(single column - map) {
 TEST(single column - serialization) {
   factory<table_slice_builder>::add<arrow_table_slice_builder>(
     table_slice_encoding::arrow);
-  auto t = count_type{};
-  auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
+  auto t = legacy_count_type{};
+  auto slice1 = make_single_column_slice<legacy_count_type>(0_c, 1_c, 2_c, 3_c);
   decltype(slice1) slice2 = {};
   {
     std::vector<char> buf;
@@ -313,8 +325,9 @@ TEST(single column - serialization) {
 }
 
 TEST(arrow schema from type with nested records) {
-  auto t
-    = record_type{{"a", record_type{{"b", record_type{{"c", string_type{}}}}}}};
+  auto t = legacy_record_type{
+    {"a", legacy_record_type{
+            {"b", legacy_record_type{{"c", legacy_string_type{}}}}}}};
   auto ft = flatten(t);
   auto af = make_arrow_schema(t);
   auto aft = make_arrow_schema(ft);
@@ -324,8 +337,8 @@ TEST(arrow schema from type with nested records) {
 TEST(record batch roundtrip) {
   factory<table_slice_builder>::add<arrow_table_slice_builder>(
     table_slice_encoding::arrow);
-  auto t = count_type{};
-  auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
+  auto t = legacy_count_type{};
+  auto slice1 = make_single_column_slice<legacy_count_type>(0_c, 1_c, 2_c, 3_c);
   auto batch = as_record_batch(slice1);
   auto slice2 = table_slice{batch, slice1.layout()};
   CHECK_EQUAL(slice1, slice2);
@@ -338,10 +351,10 @@ TEST(record batch roundtrip) {
 TEST(record batch roundtrip - adding column) {
   factory<table_slice_builder>::add<arrow_table_slice_builder>(
     table_slice_encoding::arrow);
-  auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
+  auto slice1 = make_single_column_slice<legacy_count_type>(0_c, 1_c, 2_c, 3_c);
   auto batch = as_record_batch(slice1);
   auto cb = arrow_table_slice_builder::column_builder::make(
-    string_type{}, arrow::default_memory_pool());
+    legacy_string_type{}, arrow::default_memory_pool());
   cb->add("0"sv);
   cb->add("1"sv);
   cb->add("2"sv);
@@ -351,16 +364,16 @@ TEST(record batch roundtrip - adding column) {
   auto new_batch = batch->AddColumn(1, "new", column);
   REQUIRE(new_batch.ok());
   auto new_layout = slice1.layout();
-  new_layout.fields.emplace_back("new", string_type{});
+  new_layout.fields.emplace_back("new", legacy_string_type{});
   auto slice2 = table_slice{new_batch.ValueUnsafe(), new_layout};
-  CHECK_VARIANT_EQUAL(slice2.at(0, 0, count_type{}), 0_c);
-  CHECK_VARIANT_EQUAL(slice2.at(1, 0, count_type{}), 1_c);
-  CHECK_VARIANT_EQUAL(slice2.at(2, 0, count_type{}), 2_c);
-  CHECK_VARIANT_EQUAL(slice2.at(3, 0, count_type{}), 3_c);
-  CHECK_VARIANT_EQUAL(slice2.at(0, 1, string_type{}), "0"sv);
-  CHECK_VARIANT_EQUAL(slice2.at(1, 1, string_type{}), "1"sv);
-  CHECK_VARIANT_EQUAL(slice2.at(2, 1, string_type{}), "2"sv);
-  CHECK_VARIANT_EQUAL(slice2.at(3, 1, string_type{}), "3"sv);
+  CHECK_VARIANT_EQUAL(slice2.at(0, 0, legacy_count_type{}), 0_c);
+  CHECK_VARIANT_EQUAL(slice2.at(1, 0, legacy_count_type{}), 1_c);
+  CHECK_VARIANT_EQUAL(slice2.at(2, 0, legacy_count_type{}), 2_c);
+  CHECK_VARIANT_EQUAL(slice2.at(3, 0, legacy_count_type{}), 3_c);
+  CHECK_VARIANT_EQUAL(slice2.at(0, 1, legacy_string_type{}), "0"sv);
+  CHECK_VARIANT_EQUAL(slice2.at(1, 1, legacy_string_type{}), "1"sv);
+  CHECK_VARIANT_EQUAL(slice2.at(2, 1, legacy_string_type{}), "2"sv);
+  CHECK_VARIANT_EQUAL(slice2.at(3, 1, legacy_string_type{}), "3"sv);
 }
 
 FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)

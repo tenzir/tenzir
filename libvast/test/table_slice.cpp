@@ -29,8 +29,8 @@ using namespace std::string_literals;
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
 
 TEST(random integer slices) {
-  auto t = integer_type{}.attributes({{"default", "uniform(100,200)"}});
-  record_type layout{{"i", t}};
+  auto t = legacy_integer_type{}.attributes({{"default", "uniform(100,200)"}});
+  legacy_record_type layout{{"i", t}};
   layout.name("test.integers");
   auto slices = unbox(make_random_table_slices(10, 10, layout));
   CHECK_EQUAL(slices.size(), 10u);

@@ -72,25 +72,26 @@ struct pcap {
 namespace vast::plugins::pcap {
 
 template <class... RecordFields>
-record_type make_packet_type(RecordFields&&... record_fields) {
+legacy_record_type make_packet_type(RecordFields&&... record_fields) {
   // FIXME: once we ship with builtin type aliases, we should reference the
   // port alias type here. Until then, we create the alias manually.
   // See also:
   // - src/format/zeek.cpp
-  auto port_type = count_type{}.name("port");
-  return record_type{{"time", time_type{}.name("timestamp")},
-                     {"src", address_type{}},
-                     {"dst", address_type{}},
-                     {"sport", port_type},
-                     {"dport", port_type},
-                     std::forward<RecordFields>(record_fields)...,
-                     {"payload", string_type{}.attributes({{"skip"}})}}
+  auto port_type = legacy_count_type{}.name("port");
+  return legacy_record_type{{"time", legacy_time_type{}.name("timestamp")},
+                            {"src", legacy_address_type{}},
+                            {"dst", legacy_address_type{}},
+                            {"sport", port_type},
+                            {"dport", port_type},
+                            std::forward<RecordFields>(record_fields)...,
+                            {"payload",
+                             legacy_string_type{}.attributes({{"skip"}})}}
     .name("pcap.packet");
 }
 
 const auto pcap_packet_type = make_packet_type();
-const auto pcap_packet_type_community_id = make_packet_type(
-  record_field{"community_id", string_type{}.attributes({{"index", "hash"}})});
+const auto pcap_packet_type_community_id = make_packet_type(record_field{
+  "community_id", legacy_string_type{}.attributes({{"index", "hash"}})});
 
 struct pcap_close_wrapper {
   void operator()(struct pcap* handle) const noexcept {
@@ -254,9 +255,9 @@ protected:
     VAST_ASSERT(max_events > 0);
     VAST_ASSERT(max_slice_size > 0);
     if (builder_ == nullptr) {
-      if (!caf::holds_alternative<record_type>(packet_type_))
+      if (!caf::holds_alternative<legacy_record_type>(packet_type_))
         return caf::make_error(ec::parse_error, "illegal packet type");
-      if (!reset_builder(caf::get<record_type>(packet_type_)))
+      if (!reset_builder(caf::get<legacy_record_type>(packet_type_)))
         return caf::make_error(ec::parse_error, "unable to create builder for "
                                                 "packet type");
     }
@@ -564,7 +565,7 @@ private:
   int64_t pseudo_realtime_;
   size_t snaplen_;
   bool community_id_;
-  type packet_type_;
+  legacy_type packet_type_;
   double drop_rate_threshold_;
   mutable pcap_stat last_stats_;
   mutable size_t discard_count_;

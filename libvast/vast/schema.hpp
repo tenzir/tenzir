@@ -12,11 +12,11 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/string/string.hpp"
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/stable_set.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include <caf/expected.hpp>
 
@@ -36,9 +36,9 @@ class data;
 /// A sequence of types.
 class schema : detail::equality_comparable<schema> {
 public:
-  using value_type = type;
-  using const_iterator = std::vector<type>::const_iterator;
-  using iterator = std::vector<type>::iterator;
+  using value_type = legacy_type;
+  using const_iterator = std::vector<value_type>::const_iterator;
+  using iterator = std::vector<value_type>::iterator;
 
   friend bool operator==(const schema& x, const schema& y);
 
@@ -57,15 +57,15 @@ public:
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `true` on success.
-  bool add(type t);
+  bool add(value_type t);
 
   /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.
   /// @returns The type with name *name* or `nullptr if no such type exists.
-  type* find(std::string_view name);
+  value_type* find(std::string_view name);
 
   //! @copydoc find(const std::string& name)
-  [[nodiscard]] const type* find(std::string_view name) const;
+  [[nodiscard]] const value_type* find(std::string_view name) const;
 
   // -- container API ----------------------------------------------------------
 
@@ -79,7 +79,7 @@ public:
   friend void serialize(caf::deserializer& source, schema& sch);
 
 private:
-  std::vector<type> types_;
+  std::vector<value_type> types_;
 };
 
 bool convert(const schema& s, data& d);

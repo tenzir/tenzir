@@ -23,9 +23,9 @@ class range_map {
   static_assert(std::is_arithmetic_v<Point>,
                 "Point must be an arithmetic type");
 
-  using map_type = std::map<Point, std::pair<Point, Value>>;
-  using map_iterator = typename map_type::iterator;
-  using map_const_iterator = typename map_type::const_iterator;
+  using legacy_map_type = std::map<Point, std::pair<Point, Value>>;
+  using map_iterator = typename legacy_map_type::iterator;
+  using map_const_iterator = typename legacy_map_type::const_iterator;
 
 public:
   struct entry {
@@ -71,7 +71,7 @@ public:
   }
 
   /// @returns the underlying container.
-  map_type& container() {
+  legacy_map_type& container() {
     return map_;
   }
 
@@ -292,7 +292,7 @@ private:
     return map_.emplace(std::move(l), std::move(pair)).second;
   }
 
-  map_type map_;
+  legacy_map_type map_;
 };
 
 } // namespace vast::detail

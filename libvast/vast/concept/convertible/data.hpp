@@ -12,14 +12,14 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/parse.hpp"
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/type.hpp"
 
 #include <caf/error.hpp>
 
@@ -43,8 +43,8 @@
 /// Similarly, data in `in` that does not match `out` is ignored.
 ///
 /// A special overload that can turn a list of records into a key-value map
-/// requires that one of the fields in the accompanying record_type has the
-/// "key" attribute. This field will then be used as the key in the target
+/// requires that one of the fields in the accompanying legacy_record_type has
+/// the "key" attribute. This field will then be used as the key in the target
 /// map.
 /// NOTE: The overload for `data` is defined last for reasons explained there.
 
@@ -129,12 +129,13 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
 
 template <class T>
 concept has_layout = requires {
-  concepts::same_as<decltype(T::layout), record_type>;
+  concepts::same_as<decltype(T::layout), legacy_record_type>;
 };
 
 // Overload for records.
 template <concepts::inspectable To>
-caf::error convert(const record& src, To& dst, const record_type& layout);
+caf::error
+convert(const record& src, To& dst, const legacy_record_type& layout);
 
 template <has_layout To>
 caf::error convert(const record& src, To& dst);
@@ -165,7 +166,7 @@ caf::error convert(const From& src, To& dst, const Type&) {
 
 // Overload for counts.
 template <concepts::unsigned_integral To>
-caf::error convert(const count& src, To& dst, const count_type&) {
+caf::error convert(const count& src, To& dst, const legacy_count_type&) {
   if constexpr (sizeof(To) >= sizeof(count)) {
     dst = src;
   } else {
@@ -182,7 +183,7 @@ caf::error convert(const count& src, To& dst, const count_type&) {
 }
 
 template <concepts::unsigned_integral To>
-caf::error convert(const integer& src, To& dst, const count_type&) {
+caf::error convert(const integer& src, To& dst, const legacy_count_type&) {
   if (src.value < 0)
     return caf::make_error(
       ec::convert_error, fmt::format(": {} can not be negative ({})",
@@ -204,7 +205,7 @@ caf::error convert(const integer& src, To& dst, const count_type&) {
 
 // Overload for integers.
 template <concepts::signed_integral To>
-caf::error convert(const integer& src, To& dst, const integer_type&) {
+caf::error convert(const integer& src, To& dst, const legacy_integer_type&) {
   if constexpr (sizeof(To) >= sizeof(integer::value)) {
     dst = src.value;
   } else {
@@ -224,7 +225,7 @@ caf::error convert(const integer& src, To& dst, const integer_type&) {
 // clang-format off
 template <class To>
   requires std::is_enum_v<To>
-caf::error convert(const std::string& src, To& dst, const enumeration_type& t) {
+caf::error convert(const std::string& src, To& dst, const legacy_enumeration_type& t) {
   auto i = std::find(t.fields.begin(), t.fields.end(), src);
   if (i == t.fields.end())
     return caf::make_error(ec::convert_error,
@@ -251,7 +252,7 @@ caf::error convert(const From& src, caf::optional<To>& dst, const Type& t) {
 
 // Overload for lists.
 template <concepts::appendable To>
-caf::error convert(const list& src, To& dst, const list_type& t) {
+caf::error convert(const list& src, To& dst, const legacy_list_type& t) {
   size_t num = 0;
   for (const auto& element : src) {
     typename To::value_type v{};
@@ -271,7 +272,7 @@ template <concepts::insertable To>
     typename To::mapped_type;
   }
 // clang-format on
-caf::error convert(const map& src, To& dst, const map_type& t) {
+caf::error convert(const map& src, To& dst, const legacy_map_type& t) {
   // TODO: Use structured bindings outside of the lambda once clang supports
   // that.
   for (const auto& x : src) {
@@ -299,7 +300,7 @@ template <concepts::insertable To>
     typename To::mapped_type;
   }
 // clang-format on
-caf::error convert(const record& src, To& dst, const map_type& t) {
+caf::error convert(const record& src, To& dst, const legacy_map_type& t) {
   // TODO: Use structured bindings outside of the lambda once clang supports
   // that.
   for (const auto& x : src) {
@@ -326,7 +327,7 @@ get(const record& rec,
 
 // Overload for list<record> to map.
 // NOTE: This conversion type needs a field with the "key" attribute in the
-// record_type. The field with the "key" attribute is pulled out and used
+// legacy_record_type. The field with the "key" attribute is pulled out and used
 // as the key for the new entry in the destination map.
 // clang-format off
 template <concepts::insertable To>
@@ -335,15 +336,15 @@ template <concepts::insertable To>
     typename To::mapped_type;
   }
 // clang-format on
-caf::error convert(const list& src, To& dst, const list_type& t) {
-  const auto* r = caf::get_if<record_type>(&t.value_type);
+caf::error convert(const list& src, To& dst, const legacy_list_type& t) {
+  const auto* r = caf::get_if<legacy_record_type>(&t.value_type);
   if (!r)
-    return caf::make_error(ec::convert_error,
-                           fmt::format(": expected a record_type, but got {}",
-                                       t.value_type));
+    return caf::make_error(
+      ec::convert_error,
+      fmt::format(": expected a legacy_record_type, but got {}", t.value_type));
   // Look for the "key" attribute in `r`.
-  auto key_field = record_type::each::range_state{};
-  for (const auto& leaf : record_type::each(*r)) {
+  auto key_field = legacy_record_type::each::range_state{};
+  for (const auto& leaf : legacy_record_type::each(*r)) {
     if (has_attribute(leaf.type(), "key")) {
       if (!key_field.offset.empty())
         return caf::make_error(
@@ -389,7 +390,7 @@ public:
   using result_type = caf::error;
 
   template <class To>
-  caf::error apply(const record_type::each::range_state& f, To& dst) {
+  caf::error apply(const legacy_record_type::each::range_state& f, To& dst) {
     // Find the value from the record
     const auto data_value = get(src, f.trace);
     if (!data_value)
@@ -399,7 +400,8 @@ public:
     auto err = caf::visit(
       [&]<class Data, class Type>(const Data& d, const Type& t) -> caf::error {
         using concrete_type = std::decay_t<Type>;
-        if constexpr (detail::is_any_v<concrete_type, alias_type, none_type>) {
+        if constexpr (detail::is_any_v<concrete_type, legacy_alias_type,
+                                       legacy_none_type>) {
           // Data conversion of none or alias type does not make sense.
           return caf::make_error(ec::convert_error, ": can't convert alias or "
                                                     "none types");
@@ -429,7 +431,7 @@ public:
 
   template <class... Ts>
   caf::error operator()(Ts&&... xs) {
-    const auto& rng = record_type::each(layout);
+    const auto& rng = legacy_record_type::each(layout);
     auto it = rng.begin();
     return caf::error::eval([&]() -> caf::error {
       if constexpr (!caf::meta::is_annotation<Ts>::value)
@@ -438,13 +440,14 @@ public:
     }...);
   }
 
-  const record_type& layout;
+  const legacy_record_type& layout;
   const record& src;
 };
 
 // Overload for records.
 template <concepts::inspectable To>
-caf::error convert(const record& src, To& dst, const record_type& layout) {
+caf::error
+convert(const record& src, To& dst, const legacy_record_type& layout) {
   if (layout.fields.empty()) {
     if constexpr (has_layout<To>)
       return convert(src, dst);
@@ -503,7 +506,7 @@ concept is_concrete_untyped_convertible = requires(const From& src, To& dst) {
 // it must not be declared before to prevent recursing into itself because
 // of the non-explicit constructor of `data`.
 template <class To>
-caf::error convert(const data& src, To& dst, const type& t) {
+caf::error convert(const data& src, To& dst, const legacy_type& t) {
   return caf::visit(
     [&]<class From, class Type>(const From& x, const Type& t) {
       if constexpr (is_concrete_typed_convertible<From, To, Type>)

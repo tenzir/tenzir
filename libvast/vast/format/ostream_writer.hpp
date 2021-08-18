@@ -70,9 +70,9 @@ protected:
   }
 
   template <class... Policies, class Printer>
-  caf::error
-  print_record(Printer& printer, const line_elements& le,
-               const record_type& layout, table_slice_row row, size_t& pos) {
+  caf::error print_record(Printer& printer, const line_elements& le,
+                          const legacy_record_type& layout, table_slice_row row,
+                          size_t& pos) {
     auto print_field = [&](auto& iter, const record_field& f, size_t column) {
       auto rep = [&](data_view x) {
         if constexpr (detail::is_any_v<policy::include_field_names, Policies...>)
@@ -89,7 +89,7 @@ protected:
     for (const auto& f : layout.fields) {
       if (!!start++)
         append(le.separator);
-      if (const auto& r = caf::get_if<record_type>(&f.type)) {
+      if (const auto& r = caf::get_if<legacy_record_type>(&f.type)) {
         if constexpr (detail::is_any_v<policy::include_field_names,
                                        Policies...>) {
           if (!printer.print(iter, f.name))

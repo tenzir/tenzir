@@ -50,7 +50,7 @@ struct source_state {
   caf::optional<expression> filter = {};
 
   /// Maps types to the tailored filter.
-  std::unordered_map<type, expression> checkers = {};
+  std::unordered_map<legacy_type, expression> checkers = {};
 
   /// Actor for collecting statistics.
   accountant_actor accountant = {};

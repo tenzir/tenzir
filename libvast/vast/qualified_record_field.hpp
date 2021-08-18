@@ -13,7 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include <string>
 #include <tuple>
@@ -23,7 +23,7 @@ namespace vast {
 
 /// A standalone field of an event type, used to uniquely address an index
 /// column that may have the same field name across different event types.
-/// Example: { "zeek.conn", `id.orig_h", address_type{} }
+/// Example: { "zeek.conn", `id.orig_h", legacy_address_type{} }
 struct qualified_record_field
   : detail::totally_ordered<qualified_record_field> {
   // Required for serialization/deserialization.
@@ -42,7 +42,7 @@ struct qualified_record_field
   /// Constructs a qualified record field by prepending the layout name to a
   /// range state.
   qualified_record_field(std::string record_name,
-                         const record_type::each::range_state& field)
+                         const legacy_record_type::each::range_state& field)
     : layout_name{std::move(record_name)},
       field_name{field.key()},
       type{field.type()} {
@@ -58,7 +58,7 @@ struct qualified_record_field
 
   std::string layout_name; ///< The name of the layout.
   std::string field_name;  ///< The name of the field.
-  vast::type type;         ///< The type of the field.
+  vast::legacy_type type;  ///< The type of the field.
 
   friend bool
   operator==(const qualified_record_field& x, const qualified_record_field& y);

@@ -29,7 +29,7 @@ namespace {
 class msgpack_array_view : public container_view<data_view>,
                            detail::totally_ordered<msgpack_array_view> {
 public:
-  msgpack_array_view(type value_type, msgpack::array_view xs)
+  msgpack_array_view(legacy_type value_type, msgpack::array_view xs)
     : size_{xs.size()}, value_type_{std::move(value_type)}, data_{xs.data()} {
     // nop
   }
@@ -43,14 +43,15 @@ public:
 
 private:
   size_t size_;
-  type value_type_;
+  legacy_type value_type_;
   msgpack::overlay data_;
 };
 
 class msgpack_map_view : public container_view<std::pair<data_view, data_view>>,
                          detail::totally_ordered<msgpack_map_view> {
 public:
-  msgpack_map_view(type key_type, type value_type, msgpack::array_view xs)
+  msgpack_map_view(legacy_type key_type, legacy_type value_type,
+                   msgpack::array_view xs)
     : size_{xs.size() / 2},
       key_type_{std::move(key_type)},
       value_type_{std::move(value_type)},
@@ -69,8 +70,8 @@ public:
 
 private:
   size_t size_;
-  type key_type_;
-  type value_type_;
+  legacy_type key_type_;
+  legacy_type value_type_;
   msgpack::overlay data_;
 };
 
@@ -128,7 +129,7 @@ auto make_unsigned_visitor(F f = {}) {
 }
 
 // Decodes a data view from one or more objects.
-data_view decode(msgpack::overlay& objects, const type& t);
+data_view decode(msgpack::overlay& objects, const legacy_type& t);
 
 template <class T>
 data_view decode(msgpack::overlay& objects, const T& t) {
@@ -136,48 +137,48 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   auto o = objects.get();
   if (o.format() == nil)
     return {};
-  if constexpr (std::is_same_v<T, none_type>) {
+  if constexpr (std::is_same_v<T, legacy_none_type>) {
     // This branch should never get triggered because an object with format
     // 'nil' is handled already above.
     VAST_ASSERT(!"null check too late");
     return {};
-  } else if constexpr (std::is_same_v<T, bool_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_bool_type>) {
     if (auto x = get<bool>(o))
       return make_data_view(*x);
-  } else if constexpr (std::is_same_v<T, integer_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_integer_type>) {
     auto to_integer = [](auto x) { return integer{x}; };
     auto f = make_signed_visitor(to_integer);
     return visit(f, o);
-  } else if constexpr (std::is_same_v<T, count_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_count_type>) {
     auto f = make_unsigned_visitor<converter<count>>();
     return visit(f, o);
-  } else if constexpr (std::is_same_v<T, real_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_real_type>) {
     if (auto x = get<double>(o))
       return make_data_view(*x);
-  } else if constexpr (std::is_same_v<T, duration_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_duration_type>) {
     using namespace std::chrono;
     auto to_ns = [](auto x) { return duration{nanoseconds{x}}; };
     auto f = make_signed_visitor(to_ns);
     return visit(f, o);
-  } else if constexpr (std::is_same_v<T, time_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_time_type>) {
     using namespace std::chrono;
     auto to_ts = [](auto x) { return time{duration{nanoseconds{x}}}; };
     auto f = make_signed_visitor(to_ts);
     return visit(f, o);
-  } else if constexpr (std::is_same_v<T, string_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_string_type>) {
     if (auto x = get<std::string_view>(o))
       return make_data_view(*x);
-  } else if constexpr (std::is_same_v<T, pattern_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_pattern_type>) {
     if (auto x = get<std::string_view>(o))
       return data_view{pattern_view{*x}};
-  } else if constexpr (std::is_same_v<T, address_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_address_type>) {
     if (auto x = get<std::string_view>(o)) {
       VAST_ASSERT(x->size() == 4 || x->size() == 16);
       auto family = x->size() == 4 ? address::ipv4 : address::ipv6;
       auto addr = address{x->data(), family, address::byte_order::network};
       return make_data_view(addr);
     }
-  } else if constexpr (std::is_same_v<T, subnet_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_subnet_type>) {
     if (auto xs = get<array_view>(o)) {
       VAST_ASSERT(xs->size() == 2);
       auto inner = xs->data();
@@ -188,24 +189,24 @@ data_view decode(msgpack::overlay& objects, const T& t) {
       auto length = *get<uint8_t>(inner.get());
       return data_view{view<subnet>{make_view(addr), length}};
     }
-  } else if constexpr (std::is_same_v<T, enumeration_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_enumeration_type>) {
     if (auto x = get<enumeration>(o))
       return make_data_view(*x);
-  } else if constexpr (std::is_same_v<T, list_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_list_type>) {
     if (auto xs = get<array_view>(o)) {
       auto ptr = caf::make_counted<msgpack_array_view>(t.value_type, *xs);
       return list_view_handle{list_view_ptr{std::move(ptr)}};
     }
-  } else if constexpr (std::is_same_v<T, map_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_map_type>) {
     if (auto xs = get<array_view>(o)) {
       auto ptr
         = caf::make_counted<msgpack_map_view>(t.key_type, t.value_type, *xs);
       return map_view_handle{map_view_ptr{std::move(ptr)}};
     }
-  } else if constexpr (std::is_same_v<T, record_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_record_type>) {
     VAST_ASSERT(!"records are unrolled");
     return {};
-  } else if constexpr (std::is_same_v<T, alias_type>) {
+  } else if constexpr (std::is_same_v<T, legacy_alias_type>) {
     return decode(objects, t.value_type);
   } else {
     static_assert(detail::always_false_v<T>, "missing type");
@@ -214,7 +215,7 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   vast::die("unreachable");
 }
 
-data_view decode(msgpack::overlay& objects, const type& t) {
+data_view decode(msgpack::overlay& objects, const legacy_type& t) {
   // Dispatch to the more specific decode.
   return caf::visit(
     [&](auto&& x) { return decode(objects, std::forward<decltype(x)>(x)); }, t);
@@ -253,7 +254,7 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
 
 template <class FlatBuffer>
 msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
-  const FlatBuffer& slice, record_type layout) noexcept
+  const FlatBuffer& slice, legacy_record_type layout) noexcept
   : slice_{slice}, state_{} {
   state_.layout = std::move(layout);
   state_.columns = state_.layout.num_leaves();
@@ -267,7 +268,8 @@ msgpack_table_slice<FlatBuffer>::~msgpack_table_slice() noexcept {
 // -- properties -------------------------------------------------------------
 
 template <class FlatBuffer>
-const record_type& msgpack_table_slice<FlatBuffer>::layout() const noexcept {
+const legacy_record_type&
+msgpack_table_slice<FlatBuffer>::layout() const noexcept {
   return state_.layout;
 }
 
@@ -322,7 +324,7 @@ msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
 template <class FlatBuffer>
 data_view msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                               table_slice::size_type column,
-                                              const type& t) const {
+                                              const legacy_type& t) const {
   const auto& offset_table = *slice_.offset_table();
   auto view = as_bytes(*slice_.data());
   // First find the desired row...

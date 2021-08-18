@@ -10,13 +10,13 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
+#include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/type.hpp"
 
 namespace vast {
 
@@ -39,7 +39,7 @@ static predicate::operand to_field_extractor(std::vector<std::string> xs) {
   return field_extractor{std::move(field)};
 }
 
-static predicate::operand to_type_extractor(type x) {
+static predicate::operand to_type_extractor(legacy_type x) {
   return type_extractor{std::move(x)};
 }
 
@@ -81,9 +81,9 @@ struct expander {
       if (auto t = caf::get_if<type_extractor>(&lhs))
         if (auto d = caf::get_if<data>(&rhs))
           if (op == relational_operator::equal)
-            if (caf::holds_alternative<subnet_type>(t->type))
+            if (caf::holds_alternative<legacy_subnet_type>(t->type))
               if (auto sn = caf::get_if<subnet>(d))
-                return predicate{type_extractor{address_type{}},
+                return predicate{type_extractor{legacy_address_type{}},
                                  relational_operator::in, *d};
       return caf::none;
     };
@@ -105,7 +105,7 @@ struct expander {
 /// 1. Convert the data instance x to T(x) == x
 /// 2. Apply type-specific expansion that results in a compound expression
 static expression expand(data x) {
-  auto infer_type = [](auto& d) -> type {
+  auto infer_type = [](auto& d) -> legacy_type {
     return data_to_type<std::decay_t<decltype(d)>>{};
   };
   auto lhs = type_extractor{caf::visit(infer_type, x)};

@@ -49,7 +49,7 @@ public:
     /// @param pool The Arrow memory pool to use.
     /// @returns A builder for columns of type `t`.
     static std::unique_ptr<column_builder>
-    make(const type& t, arrow::MemoryPool* pool);
+    make(const legacy_type& t, arrow::MemoryPool* pool);
   };
 
   // -- constructors, destructors, and assignment operators --------------------
@@ -59,7 +59,8 @@ public:
   /// @param initial_buffer_size The buffer size the builder starts with.
   /// @returns A table_slice_builder instance.
   static table_slice_builder_ptr
-  make(record_type layout, size_t initial_buffer_size = default_buffer_size);
+  make(legacy_record_type layout, size_t initial_buffer_size
+                                  = default_buffer_size);
 
   /// Destroys an Arrow table slice builder.
   ~arrow_table_slice_builder() noexcept override;
@@ -72,7 +73,7 @@ public:
   /// @pre `record_batch->schema()->Equals(make_arrow_schema(layout))``
   [[nodiscard]] table_slice static create(
     const std::shared_ptr<arrow::RecordBatch>& record_batch,
-    const record_type& layout,
+    const legacy_record_type& layout,
     size_t initial_buffer_size = default_buffer_size);
 
   /// @returns The number of columns in the table slice.
@@ -94,7 +95,7 @@ private:
   /// Constructs an Arrow table slice.
   /// @param layout The layout of the slice.
   /// @param initial_buffer_size The buffer size the builder starts with.
-  explicit arrow_table_slice_builder(record_type layout,
+  explicit arrow_table_slice_builder(legacy_record_type layout,
                                      size_t initial_buffer_size
                                      = default_buffer_size);
 
@@ -125,15 +126,15 @@ private:
 
 // -- utility functions --------------------------------------------------------
 
-/// Converts a VAST `record_type` to an Arrow `Schema`.
+/// Converts a VAST `legacy_record_type` to an Arrow `Schema`.
 /// @pre `t` must be a flattened.
 /// @param t The record type to convert.
 /// @returns An arrow representation of `t`.
-std::shared_ptr<arrow::Schema> make_arrow_schema(const record_type& t);
+std::shared_ptr<arrow::Schema> make_arrow_schema(const legacy_record_type& t);
 
 /// Converts a VAST `type` to an Arrow `DataType`.
 /// @param t The type to convert.
 /// @returns An arrow representation of `t`.
-std::shared_ptr<arrow::DataType> make_arrow_type(const type& t);
+std::shared_ptr<arrow::DataType> make_arrow_type(const legacy_type& t);
 
 } // namespace vast

@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/type.hpp>
+#include <vast/concept/printable/vast/legacy_type.hpp>
 #include <vast/concept/printable/vast/uuid.hpp>
 #include <vast/fbs/partition.hpp>
 #include <vast/fbs/utils.hpp>
@@ -132,7 +132,7 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
   }
   // Print column indices.
   std::cout << indent << "Column Indices\n";
-  vast::record_type combined_layout;
+  vast::legacy_record_type combined_layout;
   vast::fbs::deserialize_bytes(partition->combined_layout(), combined_layout);
   if (auto indexes = partition->indexes()) {
     if (indexes->size() != combined_layout.fields.size()) {

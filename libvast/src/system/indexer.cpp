@@ -14,7 +14,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/expression.hpp"
@@ -49,7 +49,7 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
 
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               type index_type, caf::settings index_opts) {
+               legacy_type index_type, caf::settings index_opts) {
   self->state.name = "indexer-" + to_string(index_type);
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
   self->state.idx = factory<value_index>::make(index_type, index_opts);

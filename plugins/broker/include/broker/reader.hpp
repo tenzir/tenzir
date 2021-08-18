@@ -10,8 +10,8 @@
 
 #include <vast/format/multi_layout_reader.hpp>
 #include <vast/fwd.hpp>
+#include <vast/legacy_type.hpp>
 #include <vast/schema.hpp>
-#include <vast/type.hpp>
 
 #include <broker/data.hh>
 #include <broker/endpoint.hh>

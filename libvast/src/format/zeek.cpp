@@ -12,7 +12,7 @@
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/escapers.hpp"
@@ -21,11 +21,11 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/zeekify.hpp"
 #include "vast/error.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/flatten_layout.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
 
 #include <caf/none.hpp>
 #include <caf/settings.hpp>
@@ -42,35 +42,35 @@ namespace {
 constexpr std::string_view type_name_prefix = "zeek.";
 
 // Creates a VAST type from an ASCII Zeek type in a log header.
-caf::expected<type> parse_type(std::string_view zeek_type) {
-  type t;
+caf::expected<legacy_type> parse_type(std::string_view zeek_type) {
+  legacy_type t;
   if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file")
-    t = string_type{};
+    t = legacy_string_type{};
   else if (zeek_type == "bool")
-    t = bool_type{};
+    t = legacy_bool_type{};
   else if (zeek_type == "int")
-    t = integer_type{};
+    t = legacy_integer_type{};
   else if (zeek_type == "count")
-    t = count_type{};
+    t = legacy_count_type{};
   else if (zeek_type == "double")
-    t = real_type{};
+    t = legacy_real_type{};
   else if (zeek_type == "time")
-    t = time_type{};
+    t = legacy_time_type{};
   else if (zeek_type == "interval")
-    t = duration_type{};
+    t = legacy_duration_type{};
   else if (zeek_type == "pattern")
-    t = pattern_type{};
+    t = legacy_pattern_type{};
   else if (zeek_type == "addr")
-    t = address_type{};
+    t = legacy_address_type{};
   else if (zeek_type == "subnet")
-    t = subnet_type{};
+    t = legacy_subnet_type{};
   else if (zeek_type == "port")
     // FIXME: once we ship with builtin type aliases, we should reference the
     // port alias type here. Until then, we create the alias manually.
     // See also:
     // - src/format/pcap.cpp
-    t = count_type{}.name("port");
-  if (caf::holds_alternative<none_type>(t)
+    t = legacy_count_type{}.name("port");
+  if (caf::holds_alternative<legacy_none_type>(t)
       && (zeek_type.starts_with("vector") || zeek_type.starts_with("set")
           || zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
@@ -86,9 +86,9 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
       return elem.error();
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. In VAST, they are all lists.
-    t = list_type{*elem};
+    t = legacy_list_type{*elem};
   }
-  if (caf::holds_alternative<none_type>(t))
+  if (caf::holds_alternative<legacy_none_type>(t))
     return caf::make_error(ec::format_error,
                            "failed to parse type: ", std::string{zeek_type});
   return t;
@@ -100,36 +100,36 @@ struct zeek_type_printer {
     return kind(x);
   }
 
-  std::string operator()(const count_type& t) const {
+  std::string operator()(const legacy_count_type& t) const {
     return t.name() == "port" ? "port" : "count";
   }
 
-  std::string operator()(const real_type&) const {
+  std::string operator()(const legacy_real_type&) const {
     return "double";
   }
 
-  std::string operator()(const time_type&) const {
+  std::string operator()(const legacy_time_type&) const {
     return "time";
   }
 
-  std::string operator()(const duration_type&) const {
+  std::string operator()(const legacy_duration_type&) const {
     return "interval";
   }
 
-  std::string operator()(const address_type&) const {
+  std::string operator()(const legacy_address_type&) const {
     return "addr";
   }
 
-  std::string operator()(const list_type& t) const {
+  std::string operator()(const legacy_list_type& t) const {
     return "vector[" + caf::visit(*this, t.value_type) + ']';
   }
 
-  std::string operator()(const alias_type& t) const {
+  std::string operator()(const legacy_alias_type& t) const {
     return caf::visit(*this, t.value_type);
   }
 };
 
-auto to_zeek_string(const type& t) {
+auto to_zeek_string(const legacy_type& t) {
   return caf::visit(zeek_type_printer{}, t);
 }
 
@@ -150,7 +150,8 @@ Stream& operator<<(Stream& out, const time_factory& t) {
   return out;
 }
 
-void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
+void print_header(const legacy_type& t, std::ostream& out,
+                  bool show_timestamp_tags) {
   auto path = std::string_view{t.name()};
   // To ensure that the printed output conforms to standard Zeek naming
   // practices, we strip VAST's internal "zeek." type prefix such that the
@@ -167,11 +168,11 @@ void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
   if (show_timestamp_tags)
     out << "#open" << separator << time_factory{} << '\n';
   out << "#fields";
-  auto r = caf::get<record_type>(t);
-  for (auto& e : record_type::each{r})
+  auto r = caf::get<legacy_record_type>(t);
+  for (auto& e : legacy_record_type::each{r})
     out << separator << to_string(e.key());
   out << "\n#types";
-  for (auto& e : record_type::each{r})
+  for (auto& e : legacy_record_type::each{r})
     out << separator << to_zeek_string(e.trace.back()->type);
   out << '\n';
 }
@@ -395,7 +396,7 @@ caf::error reader::parse_header() {
       proto_field_ = i;
   }
   // Construct type.
-  layout_ = record_type{std::move(record_fields)};
+  layout_ = legacy_record_type{std::move(record_fields)};
   layout_.name(std::string{type_name_prefix} + path);
   VAST_DEBUG("{} parsed zeek header:", detail::pretty_type_name(this));
   VAST_DEBUG("{}     #separator {}", detail::pretty_type_name(this),
@@ -412,12 +413,12 @@ caf::error reader::parse_header() {
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
   if (auto t = schema_.find(layout_.name())) {
-    auto r = caf::get_if<record_type>(t);
+    auto r = caf::get_if<legacy_record_type>(t);
     if (!r)
       return caf::make_error(ec::format_error,
                              "the zeek reader expects records for "
                              "the top level types in the schema");
-    for (const auto& field : record_type::each(*r)) {
+    for (const auto& field : legacy_record_type::each(*r)) {
       auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
                             [&](auto& hf) {
                               return hf.name == field.key();

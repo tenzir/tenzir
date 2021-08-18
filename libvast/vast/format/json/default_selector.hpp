@@ -52,7 +52,7 @@ private:
   }
 
 public:
-  std::optional<record_type>
+  std::optional<legacy_record_type>
   operator()(const ::simdjson::dom::object& obj) const {
     if (type_cache.empty())
       return {};
@@ -72,9 +72,9 @@ public:
                              "no schema provided or type "
                              "too restricted");
     for (auto& entry : sch) {
-      if (!caf::holds_alternative<record_type>(entry))
+      if (!caf::holds_alternative<legacy_record_type>(entry))
         continue;
-      auto layout = caf::get<record_type>(entry);
+      auto layout = caf::get<legacy_record_type>(entry);
       std::vector<std::string> cache_entry;
       for (auto& [k, v] : layout.fields)
         cache_entry.emplace_back(k);
@@ -99,7 +99,8 @@ public:
     return "json-reader";
   }
 
-  detail::flat_map<std::vector<std::string>, record_type> type_cache = {};
+  detail::flat_map<std::vector<std::string>, legacy_record_type> type_cache
+    = {};
 };
 
 } // namespace vast::format::json

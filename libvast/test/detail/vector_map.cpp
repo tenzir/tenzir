@@ -95,9 +95,9 @@ TEST(stable_map erase) {
 }
 
 TEST(stable_map comparison) {
-  using map_type = decltype(xs);
-  CHECK(xs == map_type{{"foo", 42}, {"baz", 1337}, {"bar", 4711}});
-  CHECK(xs != map_type{{"foo", 42}, {"bar", 4711}, {"baz", 1337}});
+  using legacy_map_type = decltype(xs);
+  CHECK(xs == legacy_map_type{{"foo", 42}, {"baz", 1337}, {"bar", 4711}});
+  CHECK(xs != legacy_map_type{{"foo", 42}, {"bar", 4711}, {"baz", 1337}});
 }
 
 FIXTURE_SCOPE_END()

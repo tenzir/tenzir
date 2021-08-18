@@ -25,7 +25,7 @@
 
 namespace vast {
 
-synopsis::synopsis(vast::type x) : type_{std::move(x)} {
+synopsis::synopsis(vast::legacy_type x) : type_{std::move(x)} {
   // nop
 }
 
@@ -33,7 +33,7 @@ synopsis::~synopsis() {
   // nop
 }
 
-const vast::type& synopsis::type() const {
+const vast::legacy_type& synopsis::type() const {
   return type_;
 }
 
@@ -43,7 +43,7 @@ synopsis_ptr synopsis::shrink() const {
 
 caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
   if (!ptr) {
-    static type dummy;
+    static legacy_type dummy;
     return sink(dummy);
   }
   return caf::error::eval(
@@ -53,7 +53,7 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
 
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   // Read synopsis type.
-  type t;
+  legacy_type t;
   if (auto err = source(t))
     return err;
   // Only nullptr has an none type.

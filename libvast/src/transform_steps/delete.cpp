@@ -47,8 +47,8 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
-delete_step::operator()(vast::record_type layout,
+std::pair<vast::legacy_record_type, std::shared_ptr<arrow::RecordBatch>>
+delete_step::operator()(vast::legacy_record_type layout,
                         std::shared_ptr<arrow::RecordBatch> batch) const {
   auto offset = layout.resolve(fieldname_);
   if (!offset)

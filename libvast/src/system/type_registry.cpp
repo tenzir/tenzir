@@ -111,7 +111,7 @@ caf::error type_registry_state::load_from_disk() {
   return caf::none;
 }
 
-void type_registry_state::insert(vast::type layout) {
+void type_registry_state::insert(vast::legacy_type layout) {
   auto& old_layouts = data[layout.name()];
   // Insert into the existing bucket.
   auto [hint, success] = old_layouts.insert(std::move(layout));

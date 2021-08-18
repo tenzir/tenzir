@@ -94,7 +94,7 @@ TEST(PCAP read 1) {
   REQUIRE_EQUAL(events_produced, 44u);
   auto&& layout = slice.layout();
   CHECK_EQUAL(layout.name(), "pcap.packet");
-  auto src_field = slice.at(43, 1, address_type{});
+  auto src_field = slice.at(43, 1, legacy_address_type{});
   auto src = unbox(caf::get_if<view<address>>(&src_field));
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
   auto community_id_column = table_slice_column::make(slice, "community_id");

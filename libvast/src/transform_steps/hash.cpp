@@ -32,7 +32,7 @@ caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
     return std::move(slice);
   // We just got the offset from `layout`, so we can safely dereference.
   auto column_index = *layout.flat_index_at(*offset);
-  layout.fields.emplace_back(out_, string_type{});
+  layout.fields.emplace_back(out_, legacy_string_type{});
   auto builder_ptr
     = factory<table_slice_builder>::make(slice.encoding(), layout);
   auto builder_error
@@ -58,8 +58,9 @@ caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-[[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
-hash_step::operator()(vast::record_type layout,
+[[nodiscard]] std::pair<vast::legacy_record_type,
+                        std::shared_ptr<arrow::RecordBatch>>
+hash_step::operator()(vast::legacy_record_type layout,
                       std::shared_ptr<arrow::RecordBatch> batch) const {
   // Get the target field if it exists.
   auto offset = layout.resolve(field_);
@@ -71,7 +72,7 @@ hash_step::operator()(vast::record_type layout,
   // Compute the hash values.
   auto column = batch->column(column_index);
   auto cb = arrow_table_slice_builder::column_builder::make(
-    string_type{}, arrow::default_memory_pool());
+    legacy_string_type{}, arrow::default_memory_pool());
   for (int i = 0; i < batch->num_rows(); ++i) {
     const auto& item = column->GetScalar(i);
     auto as_string = item.ValueOrDie()->ToString();
@@ -88,7 +89,7 @@ hash_step::operator()(vast::record_type layout,
   if (!result_batch.ok())
     return std::make_pair(std::move(layout), nullptr);
   // Adjust layout.
-  layout.fields.emplace_back(out_, string_type{});
+  layout.fields.emplace_back(out_, legacy_string_type{});
   return std::make_pair(std::move(layout), result_batch.ValueOrDie());
 }
 

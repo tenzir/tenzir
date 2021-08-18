@@ -39,8 +39,9 @@ public:
   // implemenetation above, because the `arrow_transform_step` already defines
   // a function that takes a generic table slice and transforms it to
   // arrow format. Many operations can be expressed more efficiently
-  [[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
-  operator()(vast::record_type layout,
+  [[nodiscard]] std::pair<vast::legacy_record_type,
+                          std::shared_ptr<arrow::RecordBatch>>
+  operator()(vast::legacy_record_type layout,
              std::shared_ptr<arrow::RecordBatch> batch) const override {
     return std::make_pair(std::move(layout), std::move(batch));
   }

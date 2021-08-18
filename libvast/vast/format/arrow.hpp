@@ -12,7 +12,7 @@
 
 #include "vast/defaults.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/type.hpp"
+#include "vast/legacy_type.hpp"
 
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
@@ -46,11 +46,11 @@ public:
     out_ = std::move(ptr);
   }
 
-  bool layout(const record_type& layout);
+  bool layout(const legacy_record_type& layout);
 
 private:
   output_stream_ptr out_;
-  record_type current_layout_;
+  legacy_record_type current_layout_;
   table_slice_builder_ptr current_builder_;
   batch_writer_ptr current_batch_writer_;
 };

@@ -53,7 +53,7 @@ private:
 /// @param layout The record type describing *xs*.
 /// @returns An error iff the operation failed.
 caf::error add(table_slice_builder& bptr, const ::simdjson::dom::object& xs,
-               const record_type& layout);
+               const legacy_record_type& layout);
 
 /// A reader for JSON data. It operates with a *selector* to determine the
 /// mapping of JSON object to the appropriate record type in the schema.

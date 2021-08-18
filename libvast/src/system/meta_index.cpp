@@ -205,7 +205,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         for (const auto& [part_id, part_syn] : synopses) {
           for (const auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
-              auto cleaned_type = vast::type{field.type}.attributes({});
+              auto cleaned_type = vast::legacy_type{field.type}.attributes({});
               // We rely on having a field -> nullptr mapping here for the
               // fields that don't have their own synopsis.
               if (syn) {
@@ -305,11 +305,11 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         },
         [&](const type_extractor& lhs, const data& d) -> result_type {
           auto result = [&] {
-            if (caf::holds_alternative<none_type>(lhs.type)) {
+            if (caf::holds_alternative<legacy_none_type>(lhs.type)) {
               VAST_ASSERT(!lhs.type.name().empty());
               auto pred = [&](auto& field) {
                 const auto* p = &field.type;
-                while (const auto* a = caf::get_if<alias_type>(p)) {
+                while (const auto* a = caf::get_if<legacy_alias_type>(p)) {
                   if (a->name() == lhs.type.name())
                     return compatible(*a, x.op, d);
                   p = &a->value_type;

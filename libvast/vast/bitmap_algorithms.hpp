@@ -138,18 +138,18 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
 ///       High-Cardinality Attributes*.
 template <class Iterator, class Operation>
 auto nary_eval(Iterator begin, Iterator end, Operation op) {
-  using bitmap_type = std::decay_t<decltype(*begin)>;
+  using bitlegacy_map_type = std::decay_t<decltype(*begin)>;
   // Exposes a pointer to represent either a non-owned bitmap from the input
   // sequence or an intermediary result.
   struct element {
-    explicit element(const bitmap_type* bm) : bitmap{bm} {
+    explicit element(const bitlegacy_map_type* bm) : bitmap{bm} {
     }
-    explicit element(bitmap_type&& bm)
-      : data{std::make_shared<bitmap_type>(std::move(bm))},
+    explicit element(bitlegacy_map_type&& bm)
+      : data{std::make_shared<bitlegacy_map_type>(std::move(bm))},
         bitmap{data.get()} {
     }
-    std::shared_ptr<bitmap_type> data;
-    const bitmap_type* bitmap;
+    std::shared_ptr<bitlegacy_map_type> data;
+    const bitlegacy_map_type* bitmap;
   };
   auto cmp = [](auto& lhs, auto& rhs) {
     // TODO: instead of using the bitmap size, we should consider whether
@@ -172,7 +172,7 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
     queue.pop();
     queue.emplace(op(*lhs.bitmap, *rhs.bitmap));
   }
-  return bitmap_type{};
+  return bitlegacy_map_type{};
 }
 
 template <class LHS, class RHS>

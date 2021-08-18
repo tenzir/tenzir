@@ -18,11 +18,11 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/include_field_names.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/detail/pretty_type_name.hpp>
@@ -58,12 +58,14 @@ namespace {
 /// * Perform convert function.
 ///
 /// Selecting a conversion function is a double lookup:
-/// * Find J type `convert(const ::simdjson::dom::element& e, const type& t)`.
+/// * Find J type `convert(const ::simdjson::dom::element& e, const legacy_type&
+/// t)`.
 /// * Find target D type.
-caf::expected<data> convert(const ::simdjson::dom::element& e, const type& t);
+caf::expected<data>
+convert(const ::simdjson::dom::element& e, const legacy_type& t);
 
 template <class T>
-caf::expected<data> convert_from_impl(T v, const type& t);
+caf::expected<data> convert_from_impl(T v, const legacy_type& t);
 
 template <class JsonType, class VastType>
 struct parser_traits {
@@ -78,7 +80,7 @@ struct parser_traits {
 /// Default implementation of conversion from JSON type (known as one of
 /// simdjson element_type) to an internal data type.
 template <class JsonType, class VastType>
-caf::expected<data> type_biased_convert_impl(JsonType j, const type& t) {
+caf::expected<data> type_biased_convert_impl(JsonType j, const legacy_type& t) {
   using ptraits = parser_traits<JsonType, VastType>;
   static_cast<void>(t);
   static_cast<void>(j);
@@ -105,7 +107,7 @@ caf::expected<data> type_biased_convert_impl(JsonType j, const type& t) {
 template <>
 caf::expected<data>
 type_biased_convert_impl<std::string_view, bool>(std::string_view s,
-                                                 const type&) {
+                                                 const legacy_type&) {
   if (s == "true")
     return true;
   else if (s == "false")
@@ -116,14 +118,14 @@ type_biased_convert_impl<std::string_view, bool>(std::string_view s,
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<int64_t, integer>(int64_t n, const type&) {
+type_biased_convert_impl<int64_t, integer>(int64_t n, const legacy_type&) {
   return integer{n};
 }
 
 template <>
 caf::expected<data>
 type_biased_convert_impl<std::string_view, integer>(std::string_view s,
-                                                    const type&) {
+                                                    const legacy_type&) {
   // Simdjson cannot be reused here as it doesn't accept hex numbers.
   if (int64_t x; parsers::json_int(s, x))
     return integer{x};
@@ -137,14 +139,14 @@ type_biased_convert_impl<std::string_view, integer>(std::string_view s,
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<int64_t, count>(int64_t n, const type&) {
+type_biased_convert_impl<int64_t, count>(int64_t n, const legacy_type&) {
   return detail::narrow_cast<count>(n);
 }
 
 template <>
 caf::expected<data>
 type_biased_convert_impl<std::string_view, count>(std::string_view s,
-                                                  const type&) {
+                                                  const legacy_type&) {
   if (count x; parsers::json_count(s, x))
     return x;
   if (real x; parsers::json_number(s, x)) {
@@ -157,20 +159,20 @@ type_biased_convert_impl<std::string_view, count>(std::string_view s,
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<int64_t, real>(int64_t n, const type&) {
+type_biased_convert_impl<int64_t, real>(int64_t n, const legacy_type&) {
   return detail::narrow_cast<real>(n);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<count, real>(count n, const type&) {
+type_biased_convert_impl<count, real>(count n, const legacy_type&) {
   return detail::narrow_cast<real>(n);
 }
 
 template <>
 caf::expected<data>
 type_biased_convert_impl<std::string_view, real>(std::string_view s,
-                                                 const type&) {
+                                                 const legacy_type&) {
   if (real x; parsers::json_number(s, x))
     return x;
   return caf::make_error(ec::convert_error, "cannot convert from",
@@ -185,74 +187,75 @@ auto to_duration_convert_impl(NumberType s) {
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<int64_t, duration>(int64_t s, const type&) {
+type_biased_convert_impl<int64_t, duration>(int64_t s, const legacy_type&) {
   return to_duration_convert_impl(s);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<count, duration>(count s, const type&) {
+type_biased_convert_impl<count, duration>(count s, const legacy_type&) {
   return to_duration_convert_impl(s);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<real, duration>(real s, const type&) {
+type_biased_convert_impl<real, duration>(real s, const legacy_type&) {
   return to_duration_convert_impl(s);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<int64_t, time>(int64_t s, const type&) {
+type_biased_convert_impl<int64_t, time>(int64_t s, const legacy_type&) {
   return time{to_duration_convert_impl(s)};
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<count, time>(count s, const type&) {
-  return time{to_duration_convert_impl(s)};
-}
-
-template <>
-caf::expected<data> type_biased_convert_impl<real, time>(real s, const type&) {
+type_biased_convert_impl<count, time>(count s, const legacy_type&) {
   return time{to_duration_convert_impl(s)};
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<bool, std::string>(bool s, const type&) {
+type_biased_convert_impl<real, time>(real s, const legacy_type&) {
+  return time{to_duration_convert_impl(s)};
+}
+
+template <>
+caf::expected<data>
+type_biased_convert_impl<bool, std::string>(bool s, const legacy_type&) {
   return to_string(s);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<count, std::string>(count s, const type&) {
+type_biased_convert_impl<count, std::string>(count s, const legacy_type&) {
   return to_string(s);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<int64_t, std::string>(int64_t s, const type&) {
+type_biased_convert_impl<int64_t, std::string>(int64_t s, const legacy_type&) {
   return to_string(s);
 }
 template <>
 caf::expected<data>
-type_biased_convert_impl<real, std::string>(real s, const type&) {
+type_biased_convert_impl<real, std::string>(real s, const legacy_type&) {
   return to_string(s);
 }
 
 template <>
 caf::expected<data>
 type_biased_convert_impl<std::string_view, std::string>(std::string_view s,
-                                                        const type&) {
+                                                        const legacy_type&) {
   return std::string{s};
 }
 
 template <>
 caf::expected<data>
 type_biased_convert_impl<std::string_view, enumeration>(std::string_view s,
-                                                        const type& t) {
-  const auto& e = dynamic_cast<const enumeration_type&>(*t);
+                                                        const legacy_type& t) {
+  const auto& e = dynamic_cast<const legacy_enumeration_type&>(*t);
   const auto i = std::find(e.fields.begin(), e.fields.end(), s);
   if (i == e.fields.end())
     return caf::make_error(ec::parse_error, "invalid:", std::string{s});
@@ -262,8 +265,8 @@ type_biased_convert_impl<std::string_view, enumeration>(std::string_view s,
 template <>
 caf::expected<data>
 type_biased_convert_impl<::simdjson::dom::array, list>(::simdjson::dom::array a,
-                                                       const type& t) {
-  const auto& v = dynamic_cast<const list_type&>(*t);
+                                                       const legacy_type& t) {
+  const auto& v = dynamic_cast<const legacy_list_type&>(*t);
   list xs;
   xs.reserve(a.size());
   for (const auto x : a) {
@@ -277,8 +280,8 @@ type_biased_convert_impl<::simdjson::dom::array, list>(::simdjson::dom::array a,
 
 template <>
 caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
-  ::simdjson::dom::object o, const type& t) {
-  const auto& m = dynamic_cast<const map_type&>(*t);
+  ::simdjson::dom::object o, const legacy_type& t) {
+  const auto& m = dynamic_cast<const legacy_map_type&>(*t);
   map xs;
   xs.reserve(o.size());
   for (auto [k, v] : o) {
@@ -296,8 +299,8 @@ caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
 
 template <>
 caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, record>(
-  ::simdjson::dom::object o, const type& t) {
-  const auto& r = dynamic_cast<const record_type&>(*t);
+  ::simdjson::dom::object o, const legacy_type& t) {
+  const auto& r = dynamic_cast<const legacy_record_type&>(*t);
   record xs;
   xs.reserve(o.size());
   for (auto [k, v] : o) {
@@ -325,7 +328,8 @@ template <class JsonType>
 struct from_json_x_converter {
   /// The signature of a function which takes an instance of JsonType and
   /// returns data innstance or an error.
-  using converter_callback = caf::expected<data> (*)(JsonType, const type& t);
+  using converter_callback
+    = caf::expected<data> (*)(JsonType, const legacy_type& t);
 
   /// A list of types which are possible destination types in the scope of
   /// conversion from JSON.
@@ -359,7 +363,7 @@ struct from_json_x_converter {
 };
 
 template <typename T>
-caf::expected<data> convert_from_impl(T v, const type& t) {
+caf::expected<data> convert_from_impl(T v, const legacy_type& t) {
   const auto type_index = t->index();
   using converter = from_json_x_converter<T>;
   if (0L <= type_index
@@ -370,12 +374,13 @@ caf::expected<data> convert_from_impl(T v, const type& t) {
 
 template <typename T>
 caf::expected<data>
-convert_from(::simdjson::simdjson_result<T> r, const type& t) {
+convert_from(::simdjson::simdjson_result<T> r, const legacy_type& t) {
   VAST_ASSERT(r.error() == ::simdjson::error_code::SUCCESS);
   return convert_from_impl<T>(r.value(), t);
 }
 
-caf::expected<data> convert(const ::simdjson::dom::element& e, const type& t) {
+caf::expected<data>
+convert(const ::simdjson::dom::element& e, const legacy_type& t) {
   switch (e.type()) {
     case ::simdjson::dom::element_type::ARRAY:
       return convert_from(e.get_array(), t);
@@ -445,9 +450,9 @@ const char* writer::name() const {
 }
 
 caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
-               const record_type& layout) {
+               const legacy_record_type& layout) {
   caf::error err = caf::none;
-  for (const auto& field : record_type::each(layout)) {
+  for (const auto& field : legacy_record_type::each(layout)) {
     auto lookup_result = lookup(field.key(), xs);
     // Non-existing fields are treated as empty (unset).
     if (lookup_result.error() != ::simdjson::error_code::SUCCESS) {

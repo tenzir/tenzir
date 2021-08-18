@@ -79,10 +79,11 @@ protected:
 
 private:
   struct rec_table {
-    record_type type;
+    legacy_record_type type;
     std::vector<std::string> sorted;
   };
-  caf::optional<record_type> make_layout(const std::vector<std::string>& names);
+  caf::optional<legacy_record_type>
+  make_layout(const std::vector<std::string>& names);
 
   caf::expected<parser_type> read_header(std::string_view line);
 

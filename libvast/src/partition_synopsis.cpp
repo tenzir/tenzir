@@ -36,12 +36,12 @@ void partition_synopsis::shrink() {
 
 void partition_synopsis::add(const table_slice& slice,
                              const caf::settings& synopsis_options) {
-  auto make_synopsis = [&](const type& t) -> synopsis_ptr {
+  auto make_synopsis = [&](const legacy_type& t) -> synopsis_ptr {
     return has_skip_attribute(t) ? nullptr
                                  : factory<synopsis>::make(t, synopsis_options);
   };
   auto& layout = slice.layout();
-  auto each = record_type::each(layout);
+  auto each = legacy_record_type::each(layout);
   auto field_it = each.begin();
   for (size_t col = 0; col < slice.columns(); ++col, ++field_it) {
     auto& type = field_it->type();
@@ -56,7 +56,7 @@ void partition_synopsis::add(const table_slice& slice,
       }
     };
     auto key = qualified_record_field{layout.name(), *field_it};
-    if (!caf::holds_alternative<string_type>(type)) {
+    if (!caf::holds_alternative<legacy_string_type>(type)) {
       // Locate the relevant synopsis.
       auto it = field_synopses_.find(key);
       if (it == field_synopses_.end()) {
@@ -71,7 +71,7 @@ void partition_synopsis::add(const table_slice& slice,
       // NOTE: if this is made configurable or removed, the pruning step from
       // the meta index lookup must be adjusted acordingly.
       field_synopses_[key] = nullptr;
-      auto cleaned_type = vast::type{field_it->type()}.attributes({});
+      auto cleaned_type = vast::legacy_type{field_it->type()}.attributes({});
       auto tt = type_synopses_.find(cleaned_type);
       if (tt == type_synopses_.end())
         tt = type_synopses_.emplace(cleaned_type, make_synopsis(type)).first;

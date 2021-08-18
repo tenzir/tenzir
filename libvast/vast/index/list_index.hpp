@@ -30,7 +30,7 @@ public:
   /// Constructs a sequence index of a given type.
   /// @param t The sequence type.
   /// @param opts Runtime options for element type construction.
-  explicit list_index(vast::type t, caf::settings opts = {});
+  explicit list_index(vast::legacy_type t, caf::settings opts = {});
 
   /// The bitmap index holding the sequence size.
   using size_bitmap_index
@@ -51,7 +51,7 @@ private:
   std::vector<value_index_ptr> elements_;
   size_t max_size_;
   size_bitmap_index size_;
-  vast::type value_type_;
+  vast::legacy_type value_type_;
 };
 
 } // namespace vast

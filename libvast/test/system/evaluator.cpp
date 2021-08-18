@@ -66,8 +66,8 @@ vast::system::indexer_actor::behavior_type dummy_indexer(counts xs) {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
-    layout.fields.emplace_back("x", count_type{});
-    layout.fields.emplace_back("y", count_type{});
+    layout.fields.emplace_back("x", legacy_count_type{});
+    layout.fields.emplace_back("y", legacy_count_type{});
     layout.name("test");
     // Spin up our dummies.
     auto& x_indexers = indexers["x"];
@@ -85,7 +85,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     container.emplace_back(sys.spawn(dummy_indexer, std::move(data)));
   }
 
-  record_type layout;
+  legacy_record_type layout;
 
   ids query(std::string_view expr_str) {
     auto expr = unbox(to<expression>(expr_str));

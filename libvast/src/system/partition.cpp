@@ -27,6 +27,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/ids.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -39,7 +40,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/time.hpp"
-#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>
@@ -149,7 +149,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       return {};
     }
     auto neg = is_negated(op);
-    for (const auto& field : record_type::each{state.combined_layout}) {
+    for (const auto& field : legacy_record_type::each{state.combined_layout}) {
       // As long as the combined layout is flattened, this must rely on
       // a heuristic. We use the substring after the last dot for the
       // field name.

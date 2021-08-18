@@ -24,7 +24,7 @@ struct field_selector {
     // nop
   }
 
-  std::optional<vast::record_type>
+  std::optional<vast::legacy_record_type>
   operator()(const ::simdjson::dom::object& j) {
     auto el = j.at_key(Specification::field);
     if (el.error())
@@ -52,7 +52,7 @@ struct field_selector {
       auto sn = detail::split(t.name(), ".");
       if (sn.size() != 2)
         continue;
-      auto r = caf::get_if<record_type>(&t);
+      auto r = caf::get_if<legacy_record_type>(&t);
       if (!r)
         continue;
       if (sn[0] == Specification::prefix)
@@ -75,7 +75,7 @@ struct field_selector {
   }
 
   /// A map of all seen types.
-  std::unordered_map<std::string, record_type> types;
+  std::unordered_map<std::string, legacy_record_type> types;
 
   /// A set of all unknown types; used to avoid printing duplicate warnings.
   std::unordered_set<std::string> unknown_types;

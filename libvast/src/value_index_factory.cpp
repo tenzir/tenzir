@@ -20,8 +20,8 @@
 #include "vast/index/list_index.hpp"
 #include "vast/index/string_index.hpp"
 #include "vast/index/subnet_index.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/optional.hpp>
@@ -35,7 +35,7 @@ namespace vast {
 namespace {
 
 template <class T>
-value_index_ptr make(type x, caf::settings opts) {
+value_index_ptr make(legacy_type x, caf::settings opts) {
   using int_type = caf::config_value::integer;
   // The cardinality must be an integer.
   if (auto i = opts.find("cardinality"); i != opts.end()) {
@@ -133,8 +133,9 @@ auto add_value_index_factory() {
 
 template <class T>
 auto add_arithmetic_index_factory() {
-  static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
-                                 real_type, duration_type, time_type>);
+  static_assert(detail::is_any_v<T, legacy_integer_type, legacy_count_type,
+                                 legacy_enumeration_type, legacy_real_type,
+                                 legacy_duration_type, legacy_time_type>);
   using concrete_data = type_to_data<T>;
   if constexpr (detail::is_any_v<concrete_data, integer>)
     return add_value_index_factory<
@@ -146,27 +147,27 @@ auto add_arithmetic_index_factory() {
 } // namespace
 
 void factory_traits<value_index>::initialize() {
-  add_value_index_factory<bool_type, arithmetic_index<bool>>();
-  add_arithmetic_index_factory<integer_type>();
-  add_arithmetic_index_factory<count_type>();
-  add_arithmetic_index_factory<real_type>();
-  add_arithmetic_index_factory<duration_type>();
-  add_arithmetic_index_factory<time_type>();
-  add_value_index_factory<enumeration_type, enumeration_index>();
-  add_value_index_factory<address_type, address_index>();
-  add_value_index_factory<subnet_type, subnet_index>();
-  add_value_index_factory<string_type, string_index>();
-  add_value_index_factory<list_type, list_index>();
+  add_value_index_factory<legacy_bool_type, arithmetic_index<bool>>();
+  add_arithmetic_index_factory<legacy_integer_type>();
+  add_arithmetic_index_factory<legacy_count_type>();
+  add_arithmetic_index_factory<legacy_real_type>();
+  add_arithmetic_index_factory<legacy_duration_type>();
+  add_arithmetic_index_factory<legacy_time_type>();
+  add_value_index_factory<legacy_enumeration_type, enumeration_index>();
+  add_value_index_factory<legacy_address_type, address_index>();
+  add_value_index_factory<legacy_subnet_type, subnet_index>();
+  add_value_index_factory<legacy_string_type, string_index>();
+  add_value_index_factory<legacy_list_type, list_index>();
 }
 
 factory_traits<value_index>::key_type
-factory_traits<value_index>::key(const type& t) {
+factory_traits<value_index>::key(const legacy_type& t) {
   auto f = [&](const auto& x) {
     using concrete_type = std::decay_t<decltype(x)>;
-    if constexpr (std::is_same_v<concrete_type, alias_type>) {
+    if constexpr (std::is_same_v<concrete_type, legacy_alias_type>) {
       return key(x.value_type);
     } else {
-      static type instance = concrete_type{};
+      static legacy_type instance = concrete_type{};
       return instance;
     }
   };

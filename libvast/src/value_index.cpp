@@ -15,7 +15,7 @@
 
 namespace vast {
 
-value_index::value_index(vast::type t, caf::settings opts)
+value_index::value_index(vast::legacy_type t, caf::settings opts)
   : type_{std::move(t)}, opts_{std::move(opts)} {
   // nop
 }
@@ -88,7 +88,7 @@ value_index::size_type value_index::offset() const {
   return std::max(none_.size(), mask_.size());
 }
 
-const type& value_index::type() const {
+const legacy_type& value_index::type() const {
   return type_;
 }
 
@@ -121,7 +121,7 @@ caf::error inspect(caf::deserializer& source, value_index& x) {
 }
 
 caf::error inspect(caf::serializer& sink, const value_index_ptr& x) {
-  static auto nullptr_type = type{};
+  static auto nullptr_type = legacy_type{};
   if (x == nullptr)
     return sink(nullptr_type);
   return caf::error::eval([&] { return sink(x->type(), x->options()); },
@@ -129,10 +129,10 @@ caf::error inspect(caf::serializer& sink, const value_index_ptr& x) {
 }
 
 caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
-  type t;
+  legacy_type t;
   if (auto err = source(t))
     return err;
-  if (caf::holds_alternative<none_type>(t)) {
+  if (caf::holds_alternative<legacy_none_type>(t)) {
     x = nullptr;
     return caf::none;
   }

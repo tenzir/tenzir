@@ -8,16 +8,17 @@
 
 #pragma once
 
+#include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
 
 #include <cstddef>
 #include <vector>
 
 /// Returns the type at `offset{xs...}`.
 template <class... Offsets>
-const vast::type& at(const vast::record_type& rec, Offsets... xs) {
+const vast::legacy_type&
+at(const vast::legacy_record_type& rec, Offsets... xs) {
   auto ptr = rec.at(vast::offset{static_cast<size_t>(xs)...});
   if (!ptr)
     FAIL("offset lookup failed at " << std::vector<int>{xs...});
@@ -26,9 +27,10 @@ const vast::type& at(const vast::record_type& rec, Offsets... xs) {
 
 /// Returns the record type at `offset{xs...}`.
 template <class... Offsets>
-const vast::record_type& rec_at(const vast::record_type& rec, Offsets... xs) {
+const vast::legacy_record_type&
+rec_at(const vast::legacy_record_type& rec, Offsets... xs) {
   auto& t = at(rec, xs...);
-  if (!caf::holds_alternative<vast::record_type>(t))
+  if (!caf::holds_alternative<vast::legacy_record_type>(t))
     FAIL("expected a record type at offset " << std::vector<int>{xs...});
-  return caf::get<vast::record_type>(t);
+  return caf::get<vast::legacy_record_type>(t);
 }

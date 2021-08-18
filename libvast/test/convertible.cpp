@@ -34,7 +34,7 @@ struct X {
     return fun(x.value);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
 namespace fmt {
@@ -50,7 +50,8 @@ struct formatter<X<From, To>> : formatter<std::string> {
 } // namespace fmt
 
 template <class From, class To>
-const record_type X<From, To>::layout = {{"value", data_to_type<From>{}}};
+const legacy_record_type X<From, To>::layout
+  = {{"value", data_to_type<From>{}}};
 
 template <class Type>
 auto test_basic = [](auto v) {
@@ -159,11 +160,12 @@ struct MultiMember {
     return f(a.x, a.y, a.z);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
-const record_type MultiMember::layout
-  = {{"x", integer_type{}}, {"y", bool_type{}}, {"z", duration_type{}}};
+const legacy_record_type MultiMember::layout = {{"x", legacy_integer_type{}},
+                                                {"y", legacy_bool_type{}},
+                                                {"z", legacy_duration_type{}}};
 
 TEST(multiple members) {
   using namespace std::chrono_literals;
@@ -183,10 +185,10 @@ struct Nest {
     return f(b.inner);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
-const record_type Nest::layout = {{"inner", record_type{}}};
+const legacy_record_type Nest::layout = {{"inner", legacy_record_type{}}};
 
 TEST(nested struct) {
   auto x = Nest{};
@@ -212,18 +214,19 @@ struct Complex {
     return f(x.a, x.b.c, x.b.d, x.e.f, x.e.g, x.h);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
-const record_type Complex::layout
-  = {{"a", string_type{}},
-     {"b", record_type{{"c", integer_type{}}, {"d", list_type{count_type{}}}}},
+const legacy_record_type Complex::layout
+  = {{"a", legacy_string_type{}},
+     {"b", legacy_record_type{{"c", legacy_integer_type{}},
+                              {"d", legacy_list_type{legacy_count_type{}}}}},
      {"e",
-      record_type{
-        {"f", integer_type{}},
-        {"g", count_type{}},
+      legacy_record_type{
+        {"f", legacy_integer_type{}},
+        {"g", legacy_count_type{}},
       }},
-     {"h", bool_type{}}};
+     {"h", legacy_bool_type{}}};
 
 TEST(nested struct - single layout) {
   auto x = Complex{};
@@ -245,11 +248,11 @@ struct Enum {
     return f(x.value);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
-const record_type Enum::layout
-  = record_type{{"value", enumeration_type{{"foo", "bar", "baz"}}}};
+const legacy_record_type Enum::layout = legacy_record_type{
+  {"value", legacy_enumeration_type{{"foo", "bar", "baz"}}}};
 
 TEST(complex - enum) {
   auto x = Enum{};
@@ -268,7 +271,7 @@ TEST(parser - duration) {
 
 TEST(parser - list<subnet>) {
   auto x = std::vector<subnet>{};
-  auto layout = list_type{subnet_type{}};
+  auto layout = legacy_list_type{legacy_subnet_type{}};
   auto r = list{"10.0.0.0/8", "172.16.0.0/16"};
   REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
   auto ref = std::vector{unbox(to<subnet>("10.0.0.0/8")),
@@ -285,11 +288,11 @@ struct EC {
     return f(x.value);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
-const record_type EC::layout
-  = record_type{{"value", enumeration_type{{"foo", "bar", "baz"}}}};
+const legacy_record_type EC::layout = legacy_record_type{
+  {"value", legacy_enumeration_type{{"foo", "bar", "baz"}}}};
 
 TEST(complex - enum class) {
   auto x = EC{};
@@ -306,7 +309,7 @@ struct StdOpt {
     return f(c.value);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
 struct CafOpt {
@@ -317,11 +320,11 @@ struct CafOpt {
     return f(c.value);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
-const record_type StdOpt::layout = {{"value", integer_type{}}};
-const record_type CafOpt::layout = {{"value", integer_type{}}};
+const legacy_record_type StdOpt::layout = {{"value", legacy_integer_type{}}};
+const legacy_record_type CafOpt::layout = {{"value", legacy_integer_type{}}};
 
 TEST(std::optional member variable) {
   auto x = StdOpt{integer{22}};
@@ -360,10 +363,11 @@ struct Vec {
     return f(e.xs);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
-const record_type Vec::layout = {{"xs", list_type{count_type{}}}};
+const legacy_record_type Vec::layout
+  = {{"xs", legacy_list_type{legacy_count_type{}}}};
 
 TEST(list to vector of unsigned) {
   auto x = Vec{};
@@ -385,10 +389,11 @@ struct VecS {
     return fun(f.xs);
   }
 
-  static const record_type layout;
+  static const legacy_record_type layout;
 };
 
-const record_type VecS::layout = {{"xs", list_type{record_type{}}}};
+const legacy_record_type VecS::layout
+  = {{"xs", legacy_list_type{legacy_record_type{}}}};
 
 TEST(list to vector of struct) {
   auto x = VecS{};
@@ -403,7 +408,7 @@ TEST(list to vector of struct) {
 TEST(map to map) {
   using Map = vast::detail::flat_map<count, std::string>;
   auto x = Map{};
-  auto layout = map_type{count_type{}, string_type{}};
+  auto layout = legacy_map_type{legacy_count_type{}, legacy_string_type{}};
   auto r = map{{1u, "foo"}, {12u, "bar"}, {997u, "baz"}};
   REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
@@ -415,7 +420,8 @@ TEST(map to map) {
 TEST(record to map) {
   using Map = vast::detail::stable_map<std::string, X<integer>>;
   auto x = Map{};
-  auto layout = map_type{string_type{}, record_type{{"value", integer_type{}}}};
+  auto layout = legacy_map_type{
+    legacy_string_type{}, legacy_record_type{{"value", legacy_integer_type{}}}};
   auto r = record{{"foo", record{{"value", integer{-42}}}},
                   {"bar", record{{"value", integer{1337}}}},
                   {"baz", record{{"value", integer{997}}}}};
@@ -429,9 +435,10 @@ TEST(record to map) {
 TEST(list of record to map) {
   using T = X<integer>;
   auto x = vast::detail::stable_map<std::string, T>{};
-  auto layout = list_type{record_type{
-    {"outer", record_type{{"value", integer_type{}},
-                          {"name", string_type{}.attributes({{"key"}})}}}}};
+  auto layout = legacy_list_type{legacy_record_type{
+    {"outer", legacy_record_type{
+                {"value", legacy_integer_type{}},
+                {"name", legacy_string_type{}.attributes({{"key"}})}}}}};
   auto l1
     = list{record{{"outer", record{{"name", "x"}, {"value", integer{1}}}}},
            record{{"outer", record{{"name", "y"}, {"value", integer{82}}}}}};
@@ -464,9 +471,10 @@ struct iList {
 
 TEST(list of record to map monoid) {
   auto x = vast::detail::stable_map<std::string, iList>{};
-  auto layout = list_type{record_type{
-    {"outer", record_type{{"value", list_type{count_type{}}},
-                          {"name", string_type{}.attributes({{"key"}})}}}}};
+  auto layout = legacy_list_type{legacy_record_type{
+    {"outer", legacy_record_type{
+                {"value", legacy_list_type{legacy_count_type{}}},
+                {"name", legacy_string_type{}.attributes({{"key"}})}}}}};
   auto l1 = list{
     record{
       {"outer", record{{"name", "x"}, {"value", list{count{1}, count{3}}}}}},
@@ -495,9 +503,9 @@ struct OptVec {
     return f(x.ovs, x.ou);
   }
 
-  static inline const record_type layout = {
-    {"ovs", list_type{string_type{}}},
-    {"ou", count_type{}},
+  static inline const legacy_record_type layout = {
+    {"ovs", legacy_list_type{legacy_string_type{}}},
+    {"ou", legacy_count_type{}},
   };
 };
 
@@ -509,8 +517,8 @@ struct SMap {
     return f(x.xs);
   }
 
-  static inline const record_type layout = {
-    {"xs", map_type{string_type{}, record_type{}}},
+  static inline const legacy_record_type layout = {
+    {"xs", legacy_map_type{legacy_string_type{}, legacy_record_type{}}},
   };
 };
 

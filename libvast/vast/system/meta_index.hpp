@@ -15,12 +15,12 @@
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/time_synopsis.hpp"
-#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/settings.hpp>

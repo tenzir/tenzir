@@ -31,7 +31,7 @@ class subnet_index : public value_index {
 public:
   using prefix_index = bitmap_index<uint8_t, equality_coder<ewah_bitmap>>;
 
-  explicit subnet_index(vast::type t, caf::settings opts = {});
+  explicit subnet_index(vast::legacy_type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 

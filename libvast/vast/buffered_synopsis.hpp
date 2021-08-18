@@ -20,7 +20,7 @@ template <typename T>
 struct buffered_synopsis_traits {
   // Create a new bloom filter synopsis from the given parameters
   template <typename HashFunction>
-  static synopsis_ptr make(vast::type type, bloom_filter_parameters p,
+  static synopsis_ptr make(vast::legacy_type type, bloom_filter_parameters p,
                            std::vector<size_t> seeds = {})
     = delete;
 
@@ -40,7 +40,8 @@ public:
   using element_type = T;
   using view_type = view<T>;
 
-  buffered_synopsis(vast::type x, double p) : synopsis{std::move(x)}, p_{p} {
+  buffered_synopsis(vast::legacy_type x, double p)
+    : synopsis{std::move(x)}, p_{p} {
     // nop
   }
 

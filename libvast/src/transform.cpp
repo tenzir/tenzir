@@ -74,8 +74,8 @@ caf::expected<table_slice> transform::apply(table_slice&& x) const {
   return std::move(x);
 }
 
-std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
-transform::apply(vast::record_type layout,
+std::pair<vast::legacy_record_type, std::shared_ptr<arrow::RecordBatch>>
+transform::apply(vast::legacy_record_type layout,
                  std::shared_ptr<arrow::RecordBatch> batch) const {
   VAST_DEBUG("applying {} arrow steps of transform {}", steps_.size(), name_);
   for (const auto& step : steps_) {

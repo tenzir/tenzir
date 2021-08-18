@@ -17,15 +17,15 @@ namespace vast::detail {
 
 using namespace std::string_literals;
 
-record_type zeekify(record_type layout) {
+legacy_record_type zeekify(legacy_record_type layout) {
   // The first field is almost exclusively the event timestamp for standard
   // Zeek logs. Its has the field name `ts`. For streaming JSON, some other
   // fields, e.g., `_path`, precede it.
   for (auto& field : layout.fields) {
     if (field.name == "ts") {
-      if (caf::holds_alternative<time_type>(field.type)) {
+      if (caf::holds_alternative<legacy_time_type>(field.type)) {
         VAST_DEBUG("using timestamp type for field {}", field.name);
-        // field.type = alias_type{field.type}.name("timestamp");
+        // field.type = legacy_alias_type{field.type}.name("timestamp");
         field.type.name("timestamp");
         break;
       }
@@ -33,7 +33,7 @@ record_type zeekify(record_type layout) {
   }
   // For fields that do not require substring search, use an optimized index.
   auto is_opaque_id = [](const auto& field) {
-    if (!caf::holds_alternative<string_type>(field.type))
+    if (!caf::holds_alternative<legacy_string_type>(field.type))
       return false;
     auto has_name = [&](const auto& name) {
       return name == field.name;

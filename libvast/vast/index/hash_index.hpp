@@ -82,7 +82,7 @@ public:
   /// Constructs a hash index for a particular type and digest cutoff.
   /// @param t The type associated with this index.
   /// @param opts Runtime context for index parameterization.
-  explicit hash_index(vast::type t, caf::settings opts = {})
+  explicit hash_index(vast::legacy_type t, caf::settings opts = {})
     : value_index{std::move(t), std::move(opts)} {
   }
 

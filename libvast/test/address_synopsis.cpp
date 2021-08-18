@@ -15,13 +15,13 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/synopsis.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
@@ -35,7 +35,8 @@ using namespace vast::si_literals;
 TEST(failed construction) {
   // If there's no type attribute with Bloom filter parameters present,
   // construction fails.
-  auto x = make_address_synopsis<xxhash64>(address_type{}, caf::settings{});
+  auto x
+    = make_address_synopsis<xxhash64>(legacy_address_type{}, caf::settings{});
   CHECK_EQUAL(x, nullptr);
 }
 
@@ -43,7 +44,8 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
   fixture() {
-    factory<synopsis>::add(address_type{}, make_address_synopsis<xxhash64>);
+    factory<synopsis>::add(legacy_address_type{},
+                           make_address_synopsis<xxhash64>);
   }
   caf::settings opts;
 };
@@ -59,7 +61,8 @@ FIXTURE_SCOPE(address_filter_synopsis_tests, fixture)
 TEST(construction via custom factory) {
   using namespace vast::test::nft;
   // Minimally sized Bloom filter to test expected collisions.
-  auto t = address_type{}.attributes({{"synopsis", "bloomfilter(1,0.1)"}});
+  auto t
+    = legacy_address_type{}.attributes({{"synopsis", "bloomfilter(1,0.1)"}});
   auto x = factory<synopsis>::make(t, opts);
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(to_addr_view("192.168.0.1"));
@@ -71,13 +74,14 @@ TEST(construction via custom factory) {
 }
 
 TEST(serialization with custom attribute type) {
-  auto t = address_type{}.attributes({{"synopsis", "bloomfilter(1000,0.1)"}});
+  auto t
+    = legacy_address_type{}.attributes({{"synopsis", "bloomfilter(1000,0.1)"}});
   CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(t, opts));
 }
 
 TEST(construction based on partition size) {
   opts["max-partition-size"] = 1_Mi;
-  auto ptr = factory<synopsis>::make(address_type{}, opts);
+  auto ptr = factory<synopsis>::make(legacy_address_type{}, opts);
   REQUIRE_NOT_EQUAL(ptr, nullptr);
   CHECK_ROUNDTRIP_DEREF(std::move(ptr));
 }
@@ -85,7 +89,7 @@ TEST(construction based on partition size) {
 TEST(updated params after shrinking) {
   opts["buffer-input-data"] = true;
   opts["max-partition-size"] = 1_Mi;
-  auto ptr = factory<synopsis>::make(address_type{}, opts);
+  auto ptr = factory<synopsis>::make(legacy_address_type{}, opts);
   ptr->add(to_addr_view("192.168.0.1"));
   ptr->add(to_addr_view("192.168.0.2"));
   ptr->add(to_addr_view("192.168.0.3"));

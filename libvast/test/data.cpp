@@ -45,17 +45,17 @@ TEST(maps) {
 
 TEST(flatten) {
   // clang-format off
-  auto rt = record_type{
-    {"a", string_type{}},
-    {"b", record_type{
-      {"c", integer_type{}},
-      {"d", list_type{integer_type{}}}
+  auto rt = legacy_record_type{
+    {"a", legacy_string_type{}},
+    {"b", legacy_record_type{
+      {"c", legacy_integer_type{}},
+      {"d", legacy_list_type{legacy_integer_type{}}}
     }},
-    {"e", record_type{
-      {"f", address_type{}},
-      {"g", count_type{}}
+    {"e", legacy_record_type{
+      {"f", legacy_address_type{}},
+      {"g", legacy_count_type{}}
     }},
-    {"h", bool_type{}}
+    {"h", legacy_bool_type{}}
   };
   auto xs = record{
     {"a", "foo"},

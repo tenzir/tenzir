@@ -55,7 +55,7 @@ class outbound_stream_slot;
 
 namespace vast {
 
-class abstract_type;
+class legacy_abstract_type;
 class address;
 class arrow_table_slice_builder;
 class bitmap;
@@ -80,45 +80,45 @@ class table_slice_builder;
 class table_slice_column;
 class transform;
 class transform_step;
-class type;
+class legacy_type;
 class uuid;
 class value_index;
 
-struct address_type;
-struct alias_type;
+struct legacy_address_type;
+struct legacy_alias_type;
 struct meta_extractor;
-struct bool_type;
+struct legacy_bool_type;
 struct concept_;
 struct conjunction;
-struct count_type;
+struct legacy_count_type;
 struct curried_predicate;
 struct data_extractor;
 struct disjunction;
-struct duration_type;
-struct enumeration_type;
+struct legacy_duration_type;
+struct legacy_enumeration_type;
 struct field_extractor;
 struct flow;
 struct integer;
-struct integer_type;
+struct legacy_integer_type;
 struct invocation;
-struct list_type;
-struct map_type;
+struct legacy_list_type;
+struct legacy_map_type;
 struct model;
 struct negation;
-struct none_type;
+struct legacy_none_type;
 struct offset;
 struct partition_synopsis;
-struct pattern_type;
+struct legacy_pattern_type;
 struct predicate;
 struct qualified_record_field;
 struct query;
-struct real_type;
-struct record_type;
+struct legacy_real_type;
+struct legacy_record_type;
 struct status;
-struct string_type;
-struct subnet_type;
+struct legacy_string_type;
+struct legacy_subnet_type;
 struct taxonomies;
-struct time_type;
+struct legacy_time_type;
 struct type_extractor;
 struct type_set;
 
@@ -288,7 +288,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::taxonomies))
-  VAST_ADD_TYPE_ID((vast::type))
+  VAST_ADD_TYPE_ID((vast::legacy_type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))

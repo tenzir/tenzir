@@ -37,7 +37,7 @@ public:
   using value_type = T;
   using coder_type = Coder;
   using binner_type = Binner;
-  using bitmap_type = typename coder_type::bitmap_type;
+  using bitlegacy_map_type = typename coder_type::bitlegacy_map_type;
   using size_type = typename coder_type::size_type;
 
   bitmap_index() = default;
@@ -78,7 +78,8 @@ public:
   /// @param op The relational operator to use for looking up *x*.
   /// @param x The value to find the bitmap for.
   /// @returns The bitmap for all values *v* where *op(v,x)* is `true`.
-  [[nodiscard]] bitmap_type lookup(relational_operator op, value_type x) const {
+  [[nodiscard]] bitlegacy_map_type
+  lookup(relational_operator op, value_type x) const {
     auto binned = binner_type::bin(x);
     // In case the binning causes a loss of precision, the comparison value
     // has to be adjusted by 1. E.g. a query for `dat > 1.1` will be

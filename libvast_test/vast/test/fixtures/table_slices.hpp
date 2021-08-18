@@ -12,12 +12,12 @@
 
 #include "vast/aliases.hpp"
 #include "vast/atoms.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -46,7 +46,8 @@ namespace vast {
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
 make_random_table_slices(size_t num_slices, size_t slice_size,
-                         record_type layout, id offset = 0, size_t seed = 0);
+                         legacy_record_type layout, id offset = 0,
+                         size_t seed = 0);
 
 /// Converts the table slice into a 2-D matrix in row-major order such that
 /// each row represents an event.
@@ -121,7 +122,7 @@ private:
 
   void test_append_column_to_index();
 
-  vast::record_type layout;
+  vast::legacy_record_type layout;
 
   vast::table_slice_builder_ptr builder;
 
