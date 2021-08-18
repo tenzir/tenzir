@@ -312,26 +312,37 @@ endif ()
 
 # -- libvast -------------------------------------------------------------------
 
+# Manually listed "native" plugins. These special plugins are essentially part
+# of the libvast library, but always loaded when linking against the
+# libvast_native_plugins library.
+set(libvast_native_plugin_sources
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/system/local_segment_store.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/delete.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/hash.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/replace.cpp")
+
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
+list(REMOVE_ITEM libvast_sources ${libvast_native_plugin_sources})
 list(SORT libvast_sources)
 
 add_library(libvast ${libvast_sources})
 VASTTargetEnableTooling(libvast)
 add_library(vast::libvast ALIAS libvast)
 
+add_library(libvast_native_plugins STATIC ${libvast_native_plugin_sources})
+VASTTargetEnableTooling(libvast_native_plugins)
+target_compile_definitions(libvast_native_plugins
+                           PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
+add_library(vast::native_plugins ALIAS libvast_native_plugins)
+
 if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.16")
   target_precompile_headers(libvast PUBLIC [["vast/fwd.hpp"]] <caf/fwd.hpp>)
 endif ()
 
 target_link_libraries(libvast PRIVATE libvast_internal)
-
-# Use static versions of VAST_REGISTER_PLUGIN family of macros when inside the
-# libvast library. This makes it possible to statically link a plugin against
-# the vast::libvast target, or to write built-in plugins that are always loaded
-# with libvast.
-target_compile_definitions(libvast PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
+target_link_libraries(libvast_native_plugins PRIVATE libvast libvast_internal)
 
 set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
                                          ON)

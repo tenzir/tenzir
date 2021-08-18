@@ -44,6 +44,12 @@ with section("parse"):
                 "nargs": 1,
             },
         },
+        "vasttargetlinkwholearchive": {
+            "spelling": "VASTTargetLinkWholeArchive",
+            "pargs": {
+                "nargs": 3,
+            },
+        },
     }
 
     # Override configurations per-command where available

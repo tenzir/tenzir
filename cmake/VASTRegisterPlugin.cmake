@@ -43,6 +43,32 @@ macro (VASTNormalizeInstallDirs)
   unset(_install)
 endmacro ()
 
+# A replacement for target_link_libraries that links static libraries using
+# the platform-specific whole-archive options. Please test any changes to this
+# macro on all supported platforms and compilers.
+macro (VASTTargetLinkWholeArchive target visibility library)
+  get_target_property(target_type ${library} TYPE)
+  if (target_type STREQUAL "STATIC_LIBRARY")
+    # Prevent elision of self-registration code in statically linked libraries,
+    # c.f., https://www.bfilipek.com/2018/02/static-vars-static-lib.html
+    # Possible PLATFORM_ID values:
+    # - Windows: Windows (Visual Studio, MinGW GCC)
+    # - Darwin: macOS/OS X (Clang, GCC)
+    # - Linux: Linux (GCC, Intel, PGI)
+    # - Android: Android NDK (GCC, Clang)
+    # - FreeBSD: FreeBSD
+    # - CrayLinuxEnvironment: Cray supercomputers (Cray compiler)
+    # - MSYS: Windows (MSYS2 shell native GCC)#
+    target_link_options(
+      ${target}
+      ${visibility}
+      $<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<TARGET_FILE:${library}>>
+      $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
+      $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>)
+  endif ()
+  target_link_libraries(${target} ${visibility} ${library})
+endmacro ()
+
 macro (make_absolute vars)
   foreach (var IN LISTS "${vars}")
     get_filename_component(var_abs "${var}" ABSOLUTE)
@@ -272,33 +298,6 @@ function (VASTRegisterPlugin)
     VASTNormalizeInstallDirs()
   endif ()
 
-  # A replacement for target_link_libraries that links static libraries using
-  # the platform-specific whole-archive options. Please test any changes to this
-  # macro on all supported platforms and compilers.
-  macro (target_link_whole_archive target visibility library)
-    get_target_property(target_type ${library} TYPE)
-    if (target_type STREQUAL "STATIC_LIBRARY")
-      # Prevent elision of self-registration code in statically linked libraries,
-      # c.f., https://www.bfilipek.com/2018/02/static-vars-static-lib.html
-      # Possible PLATFORM_ID values:
-      # - Windows: Windows (Visual Studio, MinGW GCC)
-      # - Darwin: macOS/OS X (Clang, GCC)
-      # - Linux: Linux (GCC, Intel, PGI)
-      # - Android: Android NDK (GCC, Clang)
-      # - FreeBSD: FreeBSD
-      # - CrayLinuxEnvironment: Cray supercomputers (Cray compiler)
-      # - MSYS: Windows (MSYS2 shell native GCC)#
-      target_link_options(
-        ${target}
-        ${visibility}
-        $<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<TARGET_FILE:${library}>>
-        $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
-        $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>
-      )
-    endif ()
-    target_link_libraries(${target} ${visibility} ${library})
-  endmacro ()
-
   if (NOT PLUGIN_TARGET)
     message(
       FATAL_ERROR "TARGET must be specified in call to VASTRegisterPlugin")
@@ -408,14 +407,14 @@ function (VASTRegisterPlugin)
   # Create a static library target for our plugin with the entrypoint, and use
   # static versions of VAST_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
-  target_link_whole_archive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
+  VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
                              PRIVATE VAST_ENABLE_STATIC_PLUGINS)
 
   if (VAST_ENABLE_STATIC_PLUGINS)
     # Link our static library against the vast binary directly.
-    target_link_whole_archive(vast PRIVATE ${PLUGIN_TARGET}-static)
+    VASTTargetLinkWholeArchive(vast PRIVATE ${PLUGIN_TARGET}-static)
   else ()
     # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
     # depending on the plugin type. This must not be user-configurable for
@@ -431,7 +430,7 @@ function (VASTRegisterPlugin)
 
     # Create a shared library target for our plugin.
     add_library(${PLUGIN_TARGET}-shared SHARED ${PLUGIN_ENTRYPOINT})
-    target_link_whole_archive(${PLUGIN_TARGET}-shared PUBLIC ${PLUGIN_TARGET})
+    VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-shared PUBLIC ${PLUGIN_TARGET})
     target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE vast::internal)
 
     # Install the plugin library to <libdir>/vast/plugins, and also configure
@@ -493,8 +492,8 @@ function (VASTRegisterPlugin)
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
                                                         vast::internal)
-    target_link_whole_archive(${PLUGIN_TARGET}-test PRIVATE
-                              ${PLUGIN_TARGET}-static)
+    VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
+                               ${PLUGIN_TARGET}-static)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
