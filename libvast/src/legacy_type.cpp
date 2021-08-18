@@ -1020,7 +1020,7 @@ const char* kind_tbl[] = {
 
 using caf::detail::tl_size;
 
-static_assert(std::size(kind_tbl) == tl_size<concrete_types>::value);
+static_assert(std::size(kind_tbl) == tl_size<legacy_concrete_types>::value);
 
 data jsonize(const type& x) {
   return visit(detail::overload{

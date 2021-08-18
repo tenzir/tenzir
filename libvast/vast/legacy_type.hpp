@@ -49,7 +49,7 @@ namespace vast {
 
 // clang-format off
 /// @relates type
-using concrete_types = caf::detail::type_list<
+using legacy_concrete_types = caf::detail::type_list<
   legacy_none_type,
   legacy_bool_type,
   legacy_integer_type,
@@ -75,9 +75,9 @@ constexpr type_id_type invalid_type_id = -1;
 
 template <class T>
 constexpr type_id_type type_id() {
-  static_assert(detail::contains_type_v<concrete_types, T>,
+  static_assert(detail::contains_type_v<legacy_concrete_types, T>,
                 "type IDs only available for concrete types");
-  return caf::detail::tl_index_of<concrete_types, T>::value;
+  return caf::detail::tl_index_of<legacy_concrete_types, T>::value;
 }
 
 // -- type ------------------------------------------------------------------
@@ -97,7 +97,7 @@ public:
   /// @tparam T a type that derives from @ref legacy_abstract_type.
   /// @param x An instance of a type.
   template <class T>
-    requires(detail::contains_type_v<concrete_types, T>)
+    requires(detail::contains_type_v<legacy_concrete_types, T>)
   type(T x) : ptr_{caf::make_counted<T>(std::move(x))} {
     // nop
   }
@@ -116,7 +116,7 @@ public:
 
   /// Assigns a type from another instance
   template <class T>
-    requires(detail::contains_type_v<concrete_types, T>)
+    requires(detail::contains_type_v<legacy_concrete_types, T>)
   type& operator=(T x) {
     ptr_ = caf::make_counted<T>(std::move(x));
     return *this;
@@ -240,7 +240,7 @@ public:
   /// @returns properties of the type.
   virtual type_flags flags() const noexcept = 0;
 
-  /// @returns the index of this type in `concrete_types`.
+  /// @returns the index of this type in `legacy_concrete_types`.
   virtual int index() const noexcept = 0;
 
   virtual legacy_abstract_type* copy() const = 0;
@@ -265,8 +265,8 @@ protected:
 /// The base class for all concrete types.
 /// @relates type
 template <class Derived>
-class concrete_type : public legacy_abstract_type,
-                      detail::totally_ordered<Derived, Derived> {
+class legacy_concrete_type : public legacy_abstract_type,
+                             detail::totally_ordered<Derived, Derived> {
 public:
   /// @returns the name of the type.
   const std::string& name() const {
@@ -343,7 +343,7 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, concrete_type& x) {
+  friend auto inspect(Inspector& f, legacy_concrete_type& x) {
     const char* name = nullptr;
     if constexpr (std::is_same_v<Derived, legacy_none_type>) {
       name = "vast.none_type";
@@ -396,11 +396,11 @@ protected:
   }
 
   template <class T>
-  static concrete_type<Derived>& upcast(T& x) {
-    return static_cast<concrete_type&>(x);
+  static legacy_concrete_type<Derived>& upcast(T& x) {
+    return static_cast<legacy_concrete_type&>(x);
   }
 
-  concrete_type* copy() const final {
+  legacy_concrete_type* copy() const final {
     return new Derived(derived());
   }
 
@@ -417,16 +417,16 @@ private:
 /// A type that does not depend on runtime information.
 /// @relates type
 template <class Derived>
-struct basic_type : concrete_type<Derived> {
+struct legacy_basic_type : legacy_concrete_type<Derived> {
   [[nodiscard]] type_flags flags() const noexcept final {
     return type_flags::basic;
   }
 };
 
 /// The base type for types that depend on runtime information.
-/// @relates basic_type type
+/// @relates legacy_basic_type type
 template <class Derived>
-struct complex_type : concrete_type<Derived> {
+struct legacy_complex_type : legacy_concrete_type<Derived> {
   [[nodiscard]] type_flags flags() const noexcept override {
     return type_flags::complex | type_flags::recursive;
   }
@@ -435,8 +435,8 @@ struct complex_type : concrete_type<Derived> {
 /// The base type for types that contain nested types.
 /// @relates type
 template <class Derived>
-struct recursive_type : complex_type<Derived> {
-  using super = complex_type<Derived>;
+struct legacy_recursive_type : legacy_complex_type<Derived> {
+  using super = legacy_complex_type<Derived>;
 
   [[nodiscard]] type_flags flags() const noexcept override {
     return type_flags::complex | type_flags::recursive;
@@ -445,11 +445,11 @@ struct recursive_type : complex_type<Derived> {
 
 /// The base type for types that a single nested type.
 template <class Derived>
-struct nested_type : recursive_type<Derived> {
-  friend class concrete_type<Derived>; // equals/less_than
-  using super = recursive_type<Derived>;
+struct legacy_nested_type : legacy_recursive_type<Derived> {
+  friend class legacy_concrete_type<Derived>; // equals/less_than
+  using super = legacy_recursive_type<Derived>;
 
-  explicit nested_type(type t = {}) : value_type{std::move(t)} {
+  explicit legacy_nested_type(type t = {}) : value_type{std::move(t)} {
     // nop
   }
 
@@ -475,51 +475,52 @@ struct nested_type : recursive_type<Derived> {
 // -- leaf types --------------------------------------------------------------
 
 /// Represents a default constructed type.
-struct legacy_none_type final : basic_type<legacy_none_type> {};
+struct legacy_none_type final : legacy_basic_type<legacy_none_type> {};
 
 /// A type for true/false data.
 /// @relates type
-struct legacy_bool_type final : basic_type<legacy_bool_type> {};
+struct legacy_bool_type final : legacy_basic_type<legacy_bool_type> {};
 
 /// A type for positive and negative integers.
 /// @relates type
-struct legacy_integer_type final : basic_type<legacy_integer_type> {};
+struct legacy_integer_type final : legacy_basic_type<legacy_integer_type> {};
 
 /// A type for positive integers.
 /// @relates type
-struct legacy_count_type final : basic_type<legacy_count_type> {};
+struct legacy_count_type final : legacy_basic_type<legacy_count_type> {};
 
 /// A type for floating point numbers.
 /// @relates type
-struct legacy_real_type final : basic_type<legacy_real_type> {};
+struct legacy_real_type final : legacy_basic_type<legacy_real_type> {};
 
 /// A type for time durations.
 /// @relates type
-struct legacy_duration_type final : basic_type<legacy_duration_type> {};
+struct legacy_duration_type final : legacy_basic_type<legacy_duration_type> {};
 
 /// A type for absolute points in time.
 /// @relates type
-struct legacy_time_type final : basic_type<legacy_time_type> {};
+struct legacy_time_type final : legacy_basic_type<legacy_time_type> {};
 
 /// A string type for sequence of characters.
-struct legacy_string_type final : basic_type<legacy_string_type> {};
+struct legacy_string_type final : legacy_basic_type<legacy_string_type> {};
 
 /// A type for regular expressions.
 /// @relates type
-struct legacy_pattern_type final : basic_type<legacy_pattern_type> {};
+struct legacy_pattern_type final : legacy_basic_type<legacy_pattern_type> {};
 
 /// A type for IP addresses, both v4 and v6.
 /// @relates type
-struct legacy_address_type final : basic_type<legacy_address_type> {};
+struct legacy_address_type final : legacy_basic_type<legacy_address_type> {};
 
 /// A type for IP prefixes.
 /// @relates type
-struct legacy_subnet_type final : basic_type<legacy_subnet_type> {};
+struct legacy_subnet_type final : legacy_basic_type<legacy_subnet_type> {};
 
 /// The enumeration type consisting of a fixed number of strings.
 /// @relates type
-struct legacy_enumeration_type final : complex_type<legacy_enumeration_type> {
-  using super = complex_type<legacy_enumeration_type>;
+struct legacy_enumeration_type final
+  : legacy_complex_type<legacy_enumeration_type> {
+  using super = legacy_complex_type<legacy_enumeration_type>;
 
   explicit legacy_enumeration_type(std::vector<std::string> xs = {})
     : fields{std::move(xs)} {
@@ -545,8 +546,8 @@ struct legacy_enumeration_type final : complex_type<legacy_enumeration_type> {
 
 /// A type representing a sequence of elements.
 /// @relates type
-struct legacy_list_type final : nested_type<legacy_list_type> {
-  using super = nested_type<legacy_list_type>;
+struct legacy_list_type final : legacy_nested_type<legacy_list_type> {
+  using super = legacy_nested_type<legacy_list_type>;
 
   using super::super;
 
@@ -556,8 +557,8 @@ struct legacy_list_type final : nested_type<legacy_list_type> {
 };
 
 /// A type representinng an associative array.
-struct legacy_map_type final : recursive_type<legacy_map_type> {
-  using super = recursive_type<legacy_map_type>;
+struct legacy_map_type final : legacy_recursive_type<legacy_map_type> {
+  using super = legacy_recursive_type<legacy_map_type>;
 
   explicit legacy_map_type(type key = {}, type value = {})
     : key_type{std::move(key)}, value_type{std::move(value)} {
@@ -616,8 +617,8 @@ struct record_field : detail::totally_ordered<record_field> {
 };
 
 /// A sequence of fields, where each fields has a name and a type.
-struct legacy_record_type final : recursive_type<legacy_record_type> {
-  using super = recursive_type<legacy_record_type>;
+struct legacy_record_type final : legacy_recursive_type<legacy_record_type> {
+  using super = legacy_recursive_type<legacy_record_type>;
 
   /// Enables recursive record iteration.
   class each : public detail::range_facade<each> {
@@ -733,8 +734,8 @@ struct legacy_record_type final : recursive_type<legacy_record_type> {
 
 /// An alias of another type.
 /// @relates type
-struct legacy_alias_type final : nested_type<legacy_alias_type> {
-  using super = nested_type<legacy_alias_type>;
+struct legacy_alias_type final : legacy_nested_type<legacy_alias_type> {
+  using super = legacy_nested_type<legacy_alias_type>;
   using super::super;
 };
 
@@ -997,7 +998,7 @@ auto make_dispatch_fun() {
 
 template <>
 struct sum_type_access<vast::type> {
-  using types = vast::concrete_types;
+  using types = vast::legacy_concrete_types;
 
   using type0 = vast::legacy_none_type;
 
@@ -1104,7 +1105,7 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
 /// @relates type
 template <class Inspector>
 auto inspect(Inspector& f, type::inspect_helper& x) {
-  auto g = make_inspect<Inspector>(concrete_types{});
+  auto g = make_inspect<Inspector>(legacy_concrete_types{});
   return g(f, x);
 }
 
