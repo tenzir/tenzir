@@ -108,6 +108,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   auto synopses_vector = builder.CreateVector(synopses);
   fbs::partition_synopsis::v0Builder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
+  vast::fbs::uinterval id_range{x.offset, x.offset + x.events};
+  ps_builder.add_id_range(&id_range);
   return ps_builder.Finish();
 }
 
@@ -115,6 +117,10 @@ caf::error
 unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
+  if (!x.id_range())
+    return caf::make_error(ec::format_error, "missing id range");
+  ps.offset = x.id_range()->begin();
+  ps.events = x.id_range()->end() - x.id_range()->begin();
   for (auto synopsis : *x.synopses()) {
     if (!synopsis)
       return caf::make_error(ec::format_error, "synopsis is null");

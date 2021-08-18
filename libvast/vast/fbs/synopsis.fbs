@@ -1,3 +1,5 @@
+include "interval.fbs";
+
 namespace vast.fbs.opaque_synopsis;
 
 table v0 {
@@ -50,6 +52,9 @@ table v0 {
   // TODO: Split this into separate vectors for field synopses
   // and type synopses.
   synopses: [synopsis.v0];
+
+  /// The id range of this partition.
+  id_range: vast.fbs.uinterval;
 }
 
 namespace vast.fbs.partition_synopsis;

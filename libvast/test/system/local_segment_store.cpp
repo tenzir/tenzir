@@ -64,10 +64,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   query(vast::system::store_actor actor, const vast::ids& ids) {
     bool done = false;
     std::vector<vast::table_slice> result;
-    self->send(actor,
-               vast::query::make_extract(
-                 self, vast::query::extract::preserve_ids, vast::expression{}),
-               ids);
+    auto query = vast::query::make_extract(
+      self, vast::query::extract::preserve_ids, vast::expression{});
+    query.ids = ids;
+    self->send(actor, query);
     run();
     std::this_thread::sleep_for(std::chrono::seconds{1});
 

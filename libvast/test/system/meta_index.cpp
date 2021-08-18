@@ -46,6 +46,8 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
   auto result = partition_synopsis{};
   auto synopsis_opts = caf::settings{};
   result.add(ts, synopsis_opts);
+  result.offset = ts.offset();
+  result.events = ts.rows();
   return result;
 }
 
@@ -161,7 +163,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     q += hhmmss;
     q += ".0";
     std::vector<uuid> result;
-    auto rp = self->request(meta_idx, caf::infinite, unbox(to<expression>(q)));
+    auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
+                            unbox(to<expression>(q)), vast::ids{});
     run();
     rp.receive(
       [&](std::vector<uuid> candidates) { result = std::move(candidates); },
@@ -175,8 +178,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   auto lookup(meta_index_actor& meta_idx, std::string_view expr) {
     std::vector<uuid> result;
-    auto rp
-      = self->request(meta_idx, caf::infinite, unbox(to<expression>(expr)));
+    auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
+                            unbox(to<expression>(expr)), vast::ids{});
     run();
     rp.receive(
       [&](std::vector<uuid> candidates) { result = std::move(candidates); },
@@ -257,18 +260,21 @@ TEST(meta index with bool synopsis) {
   REQUIRE(builder);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
+  slice.offset(0);
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps1 = make_partition_synopsis(slice);
   auto id1 = uuid::random();
   merge(meta_idx, id1, std::make_shared<partition_synopsis>(std::move(ps1)));
   CHECK(builder->add(make_data_view(false)));
   slice = builder->finish();
+  slice.offset(1);
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps2 = make_partition_synopsis(slice);
   auto id2 = uuid::random();
   merge(meta_idx, id2, std::make_shared<partition_synopsis>(std::move(ps2)));
   CHECK(builder->add(make_data_view(caf::none)));
   slice = builder->finish();
+  slice.offset(2);
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps3 = make_partition_synopsis(slice);
   auto id3 = uuid::random();
@@ -293,6 +299,69 @@ TEST(meta index with bool synopsis) {
   CHECK_EQUAL(lookup_("y != F"), none);
   CHECK_EQUAL(lookup_("y == F"), none);
   CHECK_EQUAL(lookup_("y != T"), none);
+}
+
+TEST(meta index messages) {
+  // The pregenerated partitions have ids [0,25), [25,50), ...
+  // We create `lookup_ids = {0, 31, 32}`.
+  auto lookup_ids = vast::ids{};
+  lookup_ids.append_bits(true, 1);
+  lookup_ids.append_bits(false, 30);
+  lookup_ids.append_bits(true, 2);
+  // All of the pregenerated data has "foo" as content and its id as timestamp,
+  // so this selects everything but the first partition.
+  auto expr = unbox(to<expression>("content == \"foo\" && :timestamp >= @25"));
+  // Sending an expression should return candidate partition ids
+  auto expr_response = self->request(meta_idx, caf::infinite,
+                                     atom::candidates_v, expr, vast::ids{});
+  run();
+  expr_response.receive(
+    [this](const std::vector<uuid>& candidates) {
+      auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
+      CHECK_EQUAL(candidates, expected);
+    },
+    [](const caf::error& e) {
+      auto msg = fmt::format("unexpected error {}", render(e));
+      FAIL(msg);
+    });
+  // Sending ids should return the partition ids containing these ids
+  auto ids_response = self->request(meta_idx, caf::infinite, atom::candidates_v,
+                                    vast::expression{}, lookup_ids);
+  run();
+  ids_response.receive(
+    [this](const std::vector<uuid>& candidates) {
+      auto expected = std::vector<uuid>{ids[0], ids[1]};
+      CHECK_EQUAL(candidates, expected);
+    },
+    [](const caf::error& e) {
+      auto msg = fmt::format("unexpected error {}", render(e));
+      FAIL(msg);
+    });
+  // Sending BOTH an expression and ids should return the intersection.
+  auto both_response = self->request(meta_idx, caf::infinite,
+                                     atom::candidates_v, expr, lookup_ids);
+  run();
+  both_response.receive(
+    [this](const std::vector<uuid>& candidates) {
+      auto expected = std::vector<uuid>{ids[1]};
+      CHECK_EQUAL(candidates, expected);
+    },
+    [](const caf::error& e) {
+      auto msg = fmt::format("unexpected error {}", render(e));
+      FAIL(msg);
+    });
+  // Sending NEITHER an expression nor ids should return an error.
+  auto neither_response
+    = self->request(meta_idx, caf::infinite, atom::candidates_v,
+                    vast::expression{}, vast::ids{});
+  run();
+  neither_response.receive(
+    [](const std::vector<uuid>&) {
+      FAIL("expected an error");
+    },
+    [](const caf::error&) {
+      // nop
+    });
 }
 
 FIXTURE_SCOPE_END()

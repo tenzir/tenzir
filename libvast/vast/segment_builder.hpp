@@ -73,7 +73,7 @@ private:
   flatbuffers::FlatBufferBuilder builder_;
   std::vector<flatbuffers::Offset<fbs::FlatTableSlice>> flat_slices_;
   std::vector<table_slice> slices_; // For queries to an unfinished segment.
-  std::vector<fbs::interval::v0> intervals_;
+  std::vector<fbs::uinterval> intervals_;
 };
 
 } // namespace vast

@@ -77,7 +77,6 @@ void explorer_state::forward_results(vast::table_slice slice) {
       num_sent += truncated.rows();
     }
   }
-  return;
 }
 
 caf::behavior

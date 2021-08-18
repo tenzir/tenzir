@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/flat_map.hpp"
+#include "vast/detail/range_map.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
@@ -80,6 +81,10 @@ public:
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
   // See also ae9dbed.
   detail::flat_map<uuid, partition_synopsis> synopses = {};
+
+  /// Maps ids to the corresponding partitions.
+  //  TODO: Maybe this should be moved into it a standalone actor.
+  detail::range_map<id, uuid> offset_map = {};
 };
 
 /// The META INDEX is the first index actor that queries hit. The result

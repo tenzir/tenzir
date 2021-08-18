@@ -1,0 +1,13 @@
+namespace vast.fbs;
+
+/// A half-open interval *[a,b)*
+struct interval {
+  begin: long = 0;
+  end: long = 0;
+}
+
+/// A half-open interval *[a,b)*, where a,b > 0
+struct uinterval {
+  begin: ulong = 0;
+  end: ulong = 0;
+}
