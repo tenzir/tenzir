@@ -34,7 +34,7 @@ namespace {
 // -- utility class for mapping Arrow lists to VAST container views ------------
 
 template <class Array>
-data_view value_at(const type& t, const Array& arr, size_t row);
+data_view value_at(const legacy_type& t, const Array& arr, size_t row);
 
 template <class T>
 class arrow_container_view : public container_view<T> {
@@ -47,7 +47,7 @@ public:
 
   using array_ptr = std::shared_ptr<arrow::Array>;
 
-  arrow_container_view(type element_type, array_ptr arr, int32_t offset,
+  arrow_container_view(legacy_type element_type, array_ptr arr, int32_t offset,
                        int32_t length)
     : element_type_(std::move(element_type)),
       offset_(offset),
@@ -81,7 +81,7 @@ public:
   }
 
 private:
-  type element_type_;
+  legacy_type element_type_;
   int32_t offset_;
   int32_t length_;
   std::shared_ptr<arrow::Array> arr_;
@@ -122,13 +122,13 @@ private:
   return f(arr, *dt)
 
 template <class F>
-void decode(const type& t, const arrow::BooleanArray& arr, F& f) {
+void decode(const legacy_type& t, const arrow::BooleanArray& arr, F& f) {
   DECODE_TRY_DISPATCH(bool);
   VAST_WARN("{} expected to decode a boolean but got a {}", __func__, kind(t));
 }
 
 template <class T, class F>
-void decode(const type& t, const arrow::NumericArray<T>& arr, F& f) {
+void decode(const legacy_type& t, const arrow::NumericArray<T>& arr, F& f) {
   if constexpr (arrow::is_floating_type<T>::value) {
     DECODE_TRY_DISPATCH(real);
     VAST_WARN("{} expected to decode a real but got a {}", __func__, kind(t));
@@ -148,7 +148,8 @@ void decode(const type& t, const arrow::NumericArray<T>& arr, F& f) {
 }
 
 template <class F>
-void decode(const type& t, const arrow::FixedSizeBinaryArray& arr, F& f) {
+void decode(const legacy_type& t, const arrow::FixedSizeBinaryArray& arr,
+            F& f) {
   DECODE_TRY_DISPATCH(address);
   DECODE_TRY_DISPATCH(subnet);
   VAST_WARN("{} expected to decode an address or subnet but got a {}", __func__,
@@ -156,7 +157,7 @@ void decode(const type& t, const arrow::FixedSizeBinaryArray& arr, F& f) {
 }
 
 template <class F>
-void decode(const type& t, const arrow::StringArray& arr, F& f) {
+void decode(const legacy_type& t, const arrow::StringArray& arr, F& f) {
   DECODE_TRY_DISPATCH(string);
   DECODE_TRY_DISPATCH(pattern);
   VAST_WARN("{} expected to decode a string or pattern but got a {}", __func__,
@@ -164,14 +165,14 @@ void decode(const type& t, const arrow::StringArray& arr, F& f) {
 }
 
 template <class F>
-void decode(const type& t, const arrow::TimestampArray& arr, F& f) {
+void decode(const legacy_type& t, const arrow::TimestampArray& arr, F& f) {
   DECODE_TRY_DISPATCH(time);
   VAST_WARN("{} expected to decode a timestamp but got a {}", __func__,
             kind(t));
 }
 
 template <class F>
-void decode(const type& t, const arrow::ListArray& arr, F& f) {
+void decode(const legacy_type& t, const arrow::ListArray& arr, F& f) {
   DECODE_TRY_DISPATCH(list);
   DECODE_TRY_DISPATCH(map);
   VAST_WARN("{} expected to decode a list or map but got a {}", __func__,
@@ -179,13 +180,13 @@ void decode(const type& t, const arrow::ListArray& arr, F& f) {
 }
 
 template <class F>
-void decode(const type& t, const arrow::StructArray& arr, F& f) {
+void decode(const legacy_type& t, const arrow::StructArray& arr, F& f) {
   DECODE_TRY_DISPATCH(record);
   VAST_WARN("{} expected to decode a record but got a {}", __func__, kind(t));
 }
 
 template <class F>
-void decode(const type& t, const arrow::Array& arr, F& f) {
+void decode(const legacy_type& t, const arrow::Array& arr, F& f) {
   switch (arr.type_id()) {
     default: {
       VAST_WARN("{} got an unrecognized Arrow type ID", __func__);
@@ -341,7 +342,7 @@ auto timestamp_at(const arrow::TimestampArray& arr, int64_t row) {
   return time{time_since_epoch};
 }
 
-auto container_view_at(type value_type, const arrow::ListArray& arr,
+auto container_view_at(legacy_type value_type, const arrow::ListArray& arr,
                        int64_t row) {
   auto offset = arr.value_offset(row);
   auto length = arr.value_length(row);
@@ -350,18 +351,20 @@ auto container_view_at(type value_type, const arrow::ListArray& arr,
                                       offset, length);
 }
 
-auto list_at(type value_type, const arrow::ListArray& arr, int64_t row) {
+auto list_at(legacy_type value_type, const arrow::ListArray& arr, int64_t row) {
   auto ptr = container_view_at(std::move(value_type), arr, row);
   return list_view_handle{list_view_ptr{std::move(ptr)}};
 }
 
-auto map_at(type key_type, type value_type, const arrow::ListArray& arr,
-            int64_t row) {
+auto map_at(legacy_type key_type, legacy_type value_type,
+            const arrow::ListArray& arr, int64_t row) {
   using view_impl = arrow_container_view<std::pair<data_view, data_view>>;
   auto offset = arr.value_offset(row);
   auto length = arr.value_length(row);
-  type kvp_type = legacy_record_type{{"key", std::move(key_type)},
-                                     {"value", std::move(value_type)}};
+  legacy_type kvp_type = legacy_record_type{
+    {"key", std::move(key_type)},
+    {"value", std::move(value_type)},
+  };
   auto ptr = caf::make_counted<view_impl>(std::move(kvp_type), arr.values(),
                                           offset, length);
   return map_view_handle{map_view_ptr{std::move(ptr)}};
@@ -467,7 +470,7 @@ private:
 };
 
 template <class Array>
-data_view value_at(const type& t, const Array& arr, size_t row) {
+data_view value_at(const legacy_type& t, const Array& arr, size_t row) {
   row_picker f{row};
   decode(t, arr, f);
   return std::move(f.result());
@@ -715,7 +718,7 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
 template <class FlatBuffer>
 data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             table_slice::size_type column,
-                                            const type& t) const {
+                                            const legacy_type& t) const {
   VAST_ASSERT(congruent(
     state_.layout.at(*state_.layout.offset_from_index(column))->type, t));
   auto&& batch = record_batch();

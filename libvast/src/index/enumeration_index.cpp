@@ -18,7 +18,7 @@
 
 namespace vast {
 
-enumeration_index::enumeration_index(vast::type t, caf::settings opts)
+enumeration_index::enumeration_index(vast::legacy_type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)},
     index_{std::numeric_limits<enumeration>::max() + 1} {
   // nop

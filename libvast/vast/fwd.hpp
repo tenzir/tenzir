@@ -80,7 +80,7 @@ class table_slice_builder;
 class table_slice_column;
 class transform;
 class transform_step;
-class type;
+class legacy_type;
 class uuid;
 class value_index;
 
@@ -288,7 +288,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::taxonomies))
-  VAST_ADD_TYPE_ID((vast::type))
+  VAST_ADD_TYPE_ID((vast::legacy_type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))

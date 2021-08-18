@@ -42,8 +42,8 @@ namespace {
 constexpr std::string_view type_name_prefix = "zeek.";
 
 // Creates a VAST type from an ASCII Zeek type in a log header.
-caf::expected<type> parse_type(std::string_view zeek_type) {
-  type t;
+caf::expected<legacy_type> parse_type(std::string_view zeek_type) {
+  legacy_type t;
   if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file")
     t = legacy_string_type{};
   else if (zeek_type == "bool")
@@ -129,7 +129,7 @@ struct zeek_type_printer {
   }
 };
 
-auto to_zeek_string(const type& t) {
+auto to_zeek_string(const legacy_type& t) {
   return caf::visit(zeek_type_printer{}, t);
 }
 
@@ -150,7 +150,8 @@ Stream& operator<<(Stream& out, const time_factory& t) {
   return out;
 }
 
-void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
+void print_header(const legacy_type& t, std::ostream& out,
+                  bool show_timestamp_tags) {
   auto path = std::string_view{t.name()};
   // To ensure that the printed output conforms to standard Zeek naming
   // practices, we strip VAST's internal "zeek." type prefix such that the

@@ -58,12 +58,12 @@ infer(const std::string& input, const caf::settings& options) {
   return result;
 }
 
-type deduce(simdjson::dom::element e) {
+legacy_type deduce(simdjson::dom::element e) {
   switch (e.type()) {
     case ::simdjson::dom::element_type::ARRAY:
       if (const auto arr = e.get_array(); arr.size())
         return legacy_list_type{deduce(arr.at(0))};
-      return legacy_list_type{type{}};
+      return legacy_list_type{legacy_type{}};
     case ::simdjson::dom::element_type::OBJECT: {
       legacy_record_type result;
       auto xs = e.get_object();

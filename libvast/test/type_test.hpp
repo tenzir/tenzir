@@ -17,7 +17,8 @@
 
 /// Returns the type at `offset{xs...}`.
 template <class... Offsets>
-const vast::type& at(const vast::legacy_record_type& rec, Offsets... xs) {
+const vast::legacy_type&
+at(const vast::legacy_record_type& rec, Offsets... xs) {
   auto ptr = rec.at(vast::offset{static_cast<size_t>(xs)...});
   if (!ptr)
     FAIL("offset lookup failed at " << std::vector<int>{xs...});

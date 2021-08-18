@@ -59,7 +59,7 @@ caf::error multi_layout_reader::finish(consumer& f, caf::error result) {
   return result;
 }
 
-table_slice_builder_ptr multi_layout_reader::builder(const type& t) {
+table_slice_builder_ptr multi_layout_reader::builder(const legacy_type& t) {
   auto i = builders_.find(t);
   if (i != builders_.end())
     return i->second;

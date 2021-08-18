@@ -331,7 +331,7 @@ caf::expected<void> validator::operator()(const field_extractor&, const data&) {
   return caf::no_error;
 }
 
-type_resolver::type_resolver(const type& t) : type_{t} {
+type_resolver::type_resolver(const legacy_type& t) : type_{t} {
 }
 
 caf::expected<expression> type_resolver::operator()(caf::none_t) {
@@ -399,7 +399,7 @@ type_resolver::operator()(const meta_extractor& ex, const data& d) {
 caf::expected<expression>
 type_resolver::operator()(const type_extractor& ex, const data& d) {
   if (caf::holds_alternative<legacy_none_type>(ex.type)) {
-    auto matches = [&](const type& t) {
+    auto matches = [&](const legacy_type& t) {
       const auto* p = &t;
       while (const auto* a = caf::get_if<legacy_alias_type>(p)) {
         if (a->name() == ex.type.name())
@@ -415,14 +415,17 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
     if (ex.type.name() == "timestamp") {
       if (!caf::holds_alternative<time>(d))
         return caf::make_error(ec::type_clash, ":timestamp", op_, d);
-      auto has_timestamp_attribute
-        = [&](const type& t) { return has_attribute(t, "timestamp"); };
+      auto has_timestamp_attribute = [&](const legacy_type& t) {
+        return has_attribute(t, "timestamp");
+      };
       return disjunction{resolve_extractor(matches, d),
                          resolve_extractor(has_timestamp_attribute, d)};
     }
     return resolve_extractor(matches, d);
   }
-  auto is_congruent = [&](const type& t) { return congruent(t, ex.type); };
+  auto is_congruent = [&](const legacy_type& t) {
+    return congruent(t, ex.type);
+  };
   return resolve_extractor(is_congruent, d);
 }
 
@@ -469,7 +472,7 @@ type_resolver::operator()(const data& d, const field_extractor& ex) {
   return (*this)(ex, d);
 }
 
-matcher::matcher(const type& t) : type_{t} {
+matcher::matcher(const legacy_type& t) : type_{t} {
   // nop
 }
 

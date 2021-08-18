@@ -96,7 +96,7 @@ public:
   /// @pre `row < rows() && column < columns()`
   [[nodiscard]] data_view
   at(table_slice::size_type row, table_slice::size_type column,
-     const type& t) const;
+     const legacy_type& t) const;
 
   /// @returns A shared pointer to the underlying Arrow Record Batch.
   [[nodiscard]] std::shared_ptr<arrow::RecordBatch>

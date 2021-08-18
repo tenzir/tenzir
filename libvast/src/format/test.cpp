@@ -31,7 +31,7 @@ namespace vast::format::test {
 
 namespace {
 
-caf::expected<distribution> make_distribution(const type& t) {
+caf::expected<distribution> make_distribution(const legacy_type& t) {
   using parsers::alpha;
   using parsers::real_opt_dot;
   auto i = std::find_if(t.attributes().begin(), t.attributes().end(),
@@ -98,7 +98,7 @@ struct initializer {
   data* data_ = nullptr;
 };
 
-caf::expected<blueprint> make_blueprint(const type& t) {
+caf::expected<blueprint> make_blueprint(const legacy_type& t) {
   blueprint bp;
   bp.data = construct(t);
   auto result = visit(initializer{bp}, t);
@@ -183,7 +183,7 @@ struct randomizer {
   }
 
   void operator()(const legacy_subnet_type&, subnet& sn) {
-    static type addr_type = legacy_address_type{};
+    static legacy_type addr_type = legacy_address_type{};
     address addr;
     (*this)(addr_type, addr);
     std::uniform_int_distribution<uint8_t> unif{0, 128};
@@ -252,7 +252,7 @@ void reader::reset(std::unique_ptr<std::istream>) {
 caf::error reader::schema(vast::schema sch) {
   if (sch.empty())
     return caf::make_error(ec::format_error, "empty schema");
-  std::unordered_map<type, blueprint> blueprints;
+  std::unordered_map<legacy_type, blueprint> blueprints;
   auto subset = vast::schema{};
   for (auto& t : sch) {
     auto sn = detail::split(t.name(), ".");

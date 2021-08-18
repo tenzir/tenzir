@@ -47,9 +47,9 @@ protected:
 
   /// @returns a table slice builder for given type, creating it on-the-fly if
   ///          necessary.
-  table_slice_builder_ptr builder(const type& t);
+  table_slice_builder_ptr builder(const legacy_type& t);
 
-  std::unordered_map<type, table_slice_builder_ptr> builders_;
+  std::unordered_map<legacy_type, table_slice_builder_ptr> builders_;
 };
 
 } // namespace vast::format

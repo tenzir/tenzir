@@ -93,7 +93,7 @@ public:
   /// @pre `row < rows() && column < columns()`
   [[nodiscard]] data_view
   at(table_slice::size_type row, table_slice::size_type column,
-     const type& t) const;
+     const legacy_type& t) const;
 
 private:
   // -- implementation details -------------------------------------------------

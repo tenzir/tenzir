@@ -86,38 +86,38 @@ constexpr type_id_type type_id() {
 using legacy_abstract_type_ptr = caf::intrusive_cow_ptr<legacy_abstract_type>;
 
 /// The sematic representation of data.
-class type : detail::totally_ordered<type> {
+class legacy_type : detail::totally_ordered<legacy_type> {
 public:
   // -- construction & assignment ---------------------------------------------
 
   /// Constructs an invalid type.
-  type() noexcept = default;
+  legacy_type() noexcept = default;
 
   /// Constructs a type from a concrete instance.
   /// @tparam T a type that derives from @ref legacy_abstract_type.
   /// @param x An instance of a type.
   template <class T>
     requires(detail::contains_type_v<legacy_concrete_types, T>)
-  type(T x) : ptr_{caf::make_counted<T>(std::move(x))} {
+  legacy_type(T x) : ptr_{caf::make_counted<T>(std::move(x))} {
     // nop
   }
 
   /// Copy-constructs a type.
-  type(const type& x) = default;
+  legacy_type(const legacy_type& x) = default;
 
   /// Copy-assigns a type.
-  type& operator=(const type& x) = default;
+  legacy_type& operator=(const legacy_type& x) = default;
 
   /// Move-constructs a type.
-  type(type&&) noexcept = default;
+  legacy_type(legacy_type&&) noexcept = default;
 
   /// Move-assigns a type.
-  type& operator=(type&&) noexcept = default;
+  legacy_type& operator=(legacy_type&&) noexcept = default;
 
   /// Assigns a type from another instance
   template <class T>
     requires(detail::contains_type_v<legacy_concrete_types, T>)
-  type& operator=(T x) {
+  legacy_type& operator=(T x) {
     ptr_ = caf::make_counted<T>(std::move(x));
     return *this;
   }
@@ -126,29 +126,29 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  type& name(const std::string& x) &;
+  legacy_type& name(const std::string& x) &;
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  type name(const std::string& x) &&;
+  legacy_type name(const std::string& x) &&;
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
-  type& attributes(std::vector<attribute> xs) &;
+  legacy_type& attributes(std::vector<attribute> xs) &;
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
-  type attributes(std::vector<attribute> xs) &&;
+  legacy_type attributes(std::vector<attribute> xs) &&;
 
   /// Inserts a list of attributes, updating already existing keys with new
   /// values.
   /// @param xs The list of attributes.
-  type& update_attributes(std::vector<attribute> xs) &;
+  legacy_type& update_attributes(std::vector<attribute> xs) &;
 
   /// Inserts a list of attributes, updating already existing keys with new
   /// values.
   /// @param xs The list of attributes.
-  type update_attributes(std::vector<attribute> xs) &&;
+  legacy_type update_attributes(std::vector<attribute> xs) &&;
 
   // -- inspectors ------------------------------------------------------------
 
@@ -174,16 +174,16 @@ public:
 
   struct inspect_helper {
     type_id_type& type_tag;
-    type& x;
+    legacy_type& x;
   };
 
   /// @endcond
 
-  friend bool operator==(const type& x, const type& y);
-  friend bool operator<(const type& x, const type& y);
+  friend bool operator==(const legacy_type& x, const legacy_type& y);
+  friend bool operator<(const legacy_type& x, const legacy_type& y);
 
 private:
-  type(legacy_abstract_type_ptr x);
+  legacy_type(legacy_abstract_type_ptr x);
 
   legacy_abstract_type_ptr ptr_;
 };
@@ -201,7 +201,7 @@ enum class type_flags : uint8_t {
 /// @param x The type to query.
 /// @param the kind of *x*.
 /// @relates type
-std::string kind(const type& x);
+std::string kind(const legacy_type& x);
 
 /// @relates type_flags
 constexpr type_flags operator|(type_flags x, type_flags y) {
@@ -223,7 +223,7 @@ constexpr bool is(type_flags x) {
 /// @relates type
 class legacy_abstract_type : public caf::ref_counted,
                              detail::totally_ordered<legacy_abstract_type> {
-  friend type; // to change name/attributes of a copy.
+  friend legacy_type; // to change name/attributes of a copy.
 
 public:
   virtual ~legacy_abstract_type();
@@ -449,11 +449,11 @@ struct legacy_nested_type : legacy_recursive_type<Derived> {
   friend class legacy_concrete_type<Derived>; // equals/less_than
   using super = legacy_recursive_type<Derived>;
 
-  explicit legacy_nested_type(type t = {}) : value_type{std::move(t)} {
+  explicit legacy_nested_type(legacy_type t = {}) : value_type{std::move(t)} {
     // nop
   }
 
-  type value_type; ///< The type of the enclosed element(s).
+  legacy_type value_type; ///< The type of the enclosed element(s).
 
   template <class Inspector>
   friend auto inspect(Inspector& f, Derived& x) {
@@ -560,13 +560,13 @@ struct legacy_list_type final : legacy_nested_type<legacy_list_type> {
 struct legacy_map_type final : legacy_recursive_type<legacy_map_type> {
   using super = legacy_recursive_type<legacy_map_type>;
 
-  explicit legacy_map_type(type key = {}, type value = {})
+  explicit legacy_map_type(legacy_type key = {}, legacy_type value = {})
     : key_type{std::move(key)}, value_type{std::move(value)} {
     // nop
   }
 
-  type key_type;   ///< The type of the map keys.
-  type value_type; ///< The type of the map values.
+  legacy_type key_type;   ///< The type of the map keys.
+  legacy_type value_type; ///< The type of the map values.
 
   type_flags flags() const noexcept final {
     return super::flags() | type_flags::container;
@@ -599,13 +599,13 @@ struct record_field : detail::totally_ordered<record_field> {
     // nop
   }
 
-  record_field(std::string name, vast::type type) noexcept
+  record_field(std::string name, vast::legacy_type type) noexcept
     : name{std::move(name)}, type{std::move(type)} {
     // nop
   }
 
-  std::string name; ///< The name of the field.
-  vast::type type;  ///< The type of the field.
+  std::string name;       ///< The name of the field.
+  vast::legacy_type type; ///< The type of the field.
 
   friend bool operator==(const record_field& x, const record_field& y);
   friend bool operator<(const record_field& x, const record_field& y);
@@ -625,7 +625,7 @@ struct legacy_record_type final : legacy_recursive_type<legacy_record_type> {
   public:
     struct range_state {
       [[nodiscard]] std::string key() const;
-      [[nodiscard]] const class type& type() const;
+      [[nodiscard]] const class legacy_type& type() const;
       [[nodiscard]] size_t depth() const;
 
       detail::stack_vector<const record_field*, 64> trace;
@@ -803,7 +803,7 @@ remove_field(const legacy_record_type& r, offset o);
 legacy_record_type flatten(const legacy_record_type& rec);
 
 /// @relates type legacy_record_type
-type flatten(const type& t);
+legacy_type flatten(const legacy_type& t);
 
 /// Queries whether `rec` is a flattened record.
 /// @relates type legacy_record_type
@@ -811,13 +811,13 @@ bool is_flat(const legacy_record_type& rec);
 
 /// Queries whether `rec` is a flattened record.
 /// @relates type legacy_record_type
-bool is_flat(const type& t);
+bool is_flat(const legacy_type& t);
 
 /// Computes the size of a flat representation of `rec`.
 size_t flat_size(const legacy_record_type& rec);
 
 /// Computes the size of a flat representation of `rec`.
-size_t flat_size(const type&);
+size_t flat_size(const legacy_type&);
 
 // -- helpers ----------------------------------------------------------------
 
@@ -851,7 +851,7 @@ VAST_TYPE_TRAIT(record);
 #undef VAST_TYPE_TRAIT
 
 template <>
-struct type_traits<vast::type> {
+struct type_traits<vast::legacy_type> {
   using data_type = vast::data;
 };
 
@@ -872,19 +872,19 @@ using type_to_data = typename type_traits<T>::data_type;
 
 /// @returns `true` if *x is a *basic* type.
 /// @relates type
-bool is_basic(const type& x);
+bool is_basic(const legacy_type& x);
 
 /// @returns `true` if *x is a *complex* type.
 /// @relates type
-bool is_complex(const type& x);
+bool is_complex(const legacy_type& x);
 
 /// @returns `true` if *x is a *recursive* type.
 /// @relates type
-bool is_recursive(const type& x);
+bool is_recursive(const legacy_type& x);
 
 /// @returns `true` if *x is a *container* type.
 /// @relates type
-bool is_container(const type& x);
+bool is_container(const legacy_type& x);
 
 /// Checks whether two types are *congruent* to each other, i.e., whether they
 /// are *representationally equal*.
@@ -892,21 +892,21 @@ bool is_container(const type& x);
 /// @param y The second type.
 /// @returns `true` *iff* *x* and *y* are congruent.
 /// @relates type data
-bool congruent(const type& x, const type& y);
+bool congruent(const legacy_type& x, const legacy_type& y);
 
 /// @relates type data
-bool congruent(const type& x, const data& y);
+bool congruent(const legacy_type& x, const data& y);
 
 /// @relates type data
-bool congruent(const data& x, const type& y);
+bool congruent(const data& x, const legacy_type& y);
 
 /// Replaces all types in `xs` that are congruent to a type in `with`.
 /// @param xs Pointers to the types that should get replaced.
 /// @param with Schema containing potentially congruent types.
 /// @returns an error if two types with the same name are not congruent.
 /// @relates type
-caf::error
-replace_if_congruent(std::initializer_list<type*> xs, const schema& with);
+caf::error replace_if_congruent(std::initializer_list<legacy_type*> xs,
+                                const schema& with);
 
 /// Checks whether the types of two nodes in a predicate are compatible with
 /// each other, i.e., whether operator evaluation for the given types is
@@ -918,37 +918,40 @@ replace_if_congruent(std::initializer_list<type*> xs, const schema& with);
 /// @param rhs The RHS of *op*.
 /// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
 /// @relates type data
-bool compatible(const type& lhs, relational_operator op, const type& rhs);
+bool compatible(const legacy_type& lhs, relational_operator op,
+                const legacy_type& rhs);
 
 /// @relates type data
-bool compatible(const type& lhs, relational_operator op, const data& rhs);
+bool compatible(const legacy_type& lhs, relational_operator op,
+                const data& rhs);
 
 /// @relates type data
-bool compatible(const data& lhs, relational_operator op, const type& rhs);
+bool compatible(const data& lhs, relational_operator op,
+                const legacy_type& rhs);
 
 /// Checks whether a type is a subset of another, i.e., whether all fields of
 /// the first type are contained within the second type.
 /// @param x The first type.
 /// @param y The second type.
 /// @returns `true` *iff* *x* is a subset of *y*.
-bool is_subset(const type& x, const type& y);
+bool is_subset(const legacy_type& x, const legacy_type& y);
 
 /// Checks whether data and type fit together.
 /// @param t The type that describes *d*.
 /// @param x The data to be checked against *t*.
 /// @returns `true` if *t* is a valid type for *x*.
-bool type_check(const type& t, const data& x);
+bool type_check(const legacy_type& t, const data& x);
 
-// TODO: move to the more idiomatic factory data::make(const type& t).
+// TODO: move to the more idiomatic factory data::make(const legacy_type& t).
 /// Default-construct a data instance for a given type.
 /// @param t The type to construct ::data from.
 /// @returns a default-constructed instance of type *t*.
 /// @relates type data
-data construct(const type& t);
+data construct(const legacy_type& t);
 
 /// @returns a digest ID for `x`.
 /// @relates type
-std::string to_digest(const type& x);
+std::string to_digest(const legacy_type& x);
 
 /// Tries to locate an attribute.
 /// @param t The type to check.
@@ -978,10 +981,10 @@ bool has_attribute(const Type& t, std::string_view key) {
 
 /// Tests whether a type has a "skip" attribute.
 /// @relates has_attribute type
-bool has_skip_attribute(const type& t);
+bool has_skip_attribute(const legacy_type& t);
 
 /// @relates type
-bool convert(const type& t, data& d);
+bool convert(const legacy_type& t, data& d);
 
 } // namespace vast
 
@@ -997,7 +1000,7 @@ auto make_dispatch_fun() {
 }
 
 template <>
-struct sum_type_access<vast::type> {
+struct sum_type_access<vast::legacy_type> {
   using types = vast::legacy_concrete_types;
 
   using type0 = vast::legacy_none_type;
@@ -1005,12 +1008,12 @@ struct sum_type_access<vast::type> {
   static constexpr bool specialized = true;
 
   template <class T, int Pos>
-  static bool is(const vast::type& x, sum_type_token<T, Pos>) {
+  static bool is(const vast::legacy_type& x, sum_type_token<T, Pos>) {
     return x->index() == Pos;
   }
 
   template <class T, int Pos>
-  static const T& get(const vast::type& x, sum_type_token<T, Pos>) {
+  static const T& get(const vast::legacy_type& x, sum_type_token<T, Pos>) {
     return static_cast<const T&>(*x);
   }
 
@@ -1020,7 +1023,7 @@ struct sum_type_access<vast::type> {
   // is not clear yet, so we'll refrain from using mutations on type value and
   // construct new ones instead.
   // template <class T, int Pos>
-  // static T* get_if(vast::type* x, sum_type_token<T, Pos>) {
+  // static T* get_if(vast::legacy_type* x, sum_type_token<T, Pos>) {
   //  x->ptr().unshare();
   //  auto ptr = x->raw_ptr();
   //  return ptr->index() == Pos ? const_cast<T*>(static_cast<const T*>(ptr))
@@ -1028,7 +1031,7 @@ struct sum_type_access<vast::type> {
   //}
 
   template <class T, int Pos>
-  static const T* get_if(const vast::type* x, sum_type_token<T, Pos>) {
+  static const T* get_if(const vast::legacy_type* x, sum_type_token<T, Pos>) {
     auto ptr = x->raw_ptr();
     return ptr->index() == Pos ? static_cast<const T*>(ptr) : nullptr;
   }
@@ -1054,7 +1057,7 @@ struct sum_type_access<vast::type> {
   };
 
   template <class Result, class Visitor, class... Ts>
-  static Result apply(const vast::type& x, Visitor&& v, Ts&&... xs) {
+  static Result apply(const vast::legacy_type& x, Visitor&& v, Ts&&... xs) {
     dispatcher<Result, decltype(v), decltype(xs)...> d{
       v, std::forward_as_tuple(xs...)};
     types token;
@@ -1071,8 +1074,8 @@ namespace vast {
 /// @private
 template <class Inspector, class T>
 auto make_inspect_fun() {
-  using fun = typename Inspector::result_type (*)(Inspector&, type&);
-  auto lambda = [](Inspector& g, type& ref) {
+  using fun = typename Inspector::result_type (*)(Inspector&, legacy_type&);
+  auto lambda = [](Inspector& g, legacy_type& ref) {
     T tmp;
     auto res = g(caf::meta::type_name("vast.type"), tmp);
     ref = std::move(tmp);
@@ -1084,19 +1087,19 @@ auto make_inspect_fun() {
 /// @private
 template <class Inspector, class... Ts>
 auto make_inspect(caf::detail::type_list<Ts...>) {
-  return [](Inspector& f, type::inspect_helper& x) -> caf::error {
+  return [](Inspector& f, legacy_type::inspect_helper& x) -> caf::error {
     using result_type = typename Inspector::result_type;
     if constexpr (Inspector::reads_state) {
       if (x.type_tag != invalid_type_id)
         caf::visit(f, x.x);
       return caf::none;
     } else {
-      using reference = type&;
+      using reference = legacy_type&;
       using fun = result_type (*)(Inspector&, reference);
       static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
       if (x.type_tag != invalid_type_id)
         return tbl[x.type_tag](f, x.x);
-      x.x = type{};
+      x.x = legacy_type{};
       return caf::none;
     }
   };
@@ -1104,17 +1107,17 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
 
 /// @relates type
 template <class Inspector>
-auto inspect(Inspector& f, type::inspect_helper& x) {
+auto inspect(Inspector& f, legacy_type::inspect_helper& x) {
   auto g = make_inspect<Inspector>(legacy_concrete_types{});
   return g(f, x);
 }
 
 /// @relates type
 template <class Inspector>
-auto inspect(Inspector& f, type& x) {
+auto inspect(Inspector& f, legacy_type& x) {
   // We use a single byte for the type index on the wire.
   auto type_tag = x ? static_cast<type_id_type>(x->index()) : invalid_type_id;
-  type::inspect_helper helper{type_tag, x};
+  legacy_type::inspect_helper helper{type_tag, x};
   return f(caf::meta::type_name("vast.type"), caf::meta::omittable(), type_tag,
            helper);
 }
@@ -1133,7 +1136,7 @@ namespace std {
     }                                                                          \
   }
 
-VAST_DEFINE_HASH_SPECIALIZATION(type);
+VAST_DEFINE_HASH_SPECIALIZATION(legacy_type);
 VAST_DEFINE_HASH_SPECIALIZATION(legacy_none_type);
 VAST_DEFINE_HASH_SPECIALIZATION(legacy_bool_type);
 VAST_DEFINE_HASH_SPECIALIZATION(legacy_integer_type);
@@ -1161,14 +1164,14 @@ VAST_DEFINE_HASH_SPECIALIZATION(legacy_alias_type);
 namespace fmt {
 
 template <>
-struct formatter<vast::type> {
+struct formatter<vast::legacy_type> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <typename FormatContext>
-  auto format(const vast::type& value, FormatContext& ctx) {
+  auto format(const vast::legacy_type& value, FormatContext& ctx) {
     auto out = ctx.out();
     vast::print(out, value);
     return out;
@@ -1176,52 +1179,53 @@ struct formatter<vast::type> {
 };
 
 template <>
-struct formatter<vast::legacy_none_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_none_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_bool_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_bool_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_integer_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_integer_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_count_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_count_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_real_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_real_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_duration_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_duration_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_time_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_time_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_string_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_string_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_pattern_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_pattern_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_address_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_address_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_subnet_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_subnet_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_enumeration_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_enumeration_type> : formatter<vast::legacy_type> {
+};
 
 template <>
-struct formatter<vast::legacy_list_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_list_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_map_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_map_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_record_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_record_type> : formatter<vast::legacy_type> {};
 
 template <>
-struct formatter<vast::legacy_alias_type> : formatter<vast::type> {};
+struct formatter<vast::legacy_alias_type> : formatter<vast::legacy_type> {};
 
 template <>
 struct formatter<vast::record_field> {

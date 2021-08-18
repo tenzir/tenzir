@@ -59,7 +59,7 @@ schema schema::combine(const schema& s1, const schema& s2) {
   return result;
 }
 
-bool schema::add(type t) {
+bool schema::add(schema::value_type t) {
   if (caf::holds_alternative<legacy_none_type>(t) || t.name().empty()
       || find(t.name()))
     return false;
@@ -67,14 +67,14 @@ bool schema::add(type t) {
   return true;
 }
 
-type* schema::find(std::string_view name) {
+schema::value_type* schema::find(std::string_view name) {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
   return nullptr;
 }
 
-const type* schema::find(std::string_view name) const {
+const schema::value_type* schema::find(std::string_view name) const {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
@@ -113,7 +113,7 @@ bool operator==(const schema& x, const schema& y) {
 // namespace {
 //
 // struct pointer_hash {
-//  size_t operator()(const type& t) const noexcept {
+//  size_t operator()(const legacy_type& t) const noexcept {
 //    return reinterpret_cast<size_t>(std::launder(t.ptr_.get()));
 //  }
 //};

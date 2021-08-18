@@ -41,7 +41,7 @@ struct fixture : fixtures::events {
   }
 
   table_slice zeek_conn_log_slice;
-  type id_type = unbox(zeek_conn_log[0].layout().at(offset{1})).type;
+  legacy_type id_type = unbox(zeek_conn_log[0].layout().at(offset{1})).type;
 };
 
 } // namespace

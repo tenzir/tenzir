@@ -503,7 +503,7 @@ data materialize(data_view xs);
 /// @param t The type that describes *x*.
 /// @param x The data view to be checked against *t*.
 /// @returns `true` if *t* is a valid type for *x*.
-bool type_check(const type& t, const data_view& x);
+bool type_check(const legacy_type& t, const data_view& x);
 
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
@@ -520,14 +520,14 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
 /// @param t The type that describes *x*.
 /// @param x The data view on the internal representation of the value.
 /// @return A data view on the external representation of the value.
-data_view to_canonical(const type& t, const data_view& x);
+data_view to_canonical(const legacy_type& t, const data_view& x);
 
 /// Converts a value from the type defined in the user interface to its
 /// internal representation. This is the inverse of to_canonical.
 /// @param t The type that describes *x*.
 /// @param x The data view on the external representation of the value.
 /// @return A data view on the internal representation of the value.
-data_view to_internal(const type& t, const data_view& x);
+data_view to_internal(const legacy_type& t, const data_view& x);
 
 } // namespace vast
 

@@ -181,7 +181,7 @@ TEST(normalization) {
 
 TEST(extractors) {
   auto port = legacy_alias_type{legacy_count_type{}}.name("port");
-  auto subport = legacy_alias_type{type{port}}.name("subport");
+  auto subport = legacy_alias_type{legacy_type{port}}.name("subport");
   auto s = legacy_record_type{{"real", legacy_real_type{}},
                               {"bool", legacy_bool_type{}},
                               {"host", legacy_address_type{}},
@@ -338,7 +338,7 @@ TEST(at) {
 
 TEST(resolve) {
   using result_type = std::vector<std::pair<offset, predicate>>;
-  auto resolve_pred = [](auto&& x, offset o, type t) -> result_type {
+  auto resolve_pred = [](auto&& x, offset o, legacy_type t) -> result_type {
     result_type result;
     auto pred = to<predicate>(x);
     auto resolved = type_resolver{t}(unbox(pred));

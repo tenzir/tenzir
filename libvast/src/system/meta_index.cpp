@@ -201,7 +201,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         for (const auto& [part_id, part_syn] : synopses) {
           for (const auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
-              auto cleaned_type = vast::type{field.type}.attributes({});
+              auto cleaned_type = vast::legacy_type{field.type}.attributes({});
               // We rely on having a field -> nullptr mapping here for the
               // fields that don't have their own synopsis.
               if (syn) {

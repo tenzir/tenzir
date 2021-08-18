@@ -21,7 +21,7 @@ namespace vast {
 /// References to user defined types are mapped to `legacy_none_type` and
 /// need to be resolved later.
 struct type_parser : parser_base<type_parser> {
-  using attribute = type;
+  using attribute = legacy_type;
 
   // Comments until the end of line.
   static constexpr auto comment
@@ -35,7 +35,7 @@ struct type_parser : parser_base<type_parser> {
 };
 
 template <>
-struct parser_registry<type> {
+struct parser_registry<legacy_type> {
   using type = type_parser;
 };
 

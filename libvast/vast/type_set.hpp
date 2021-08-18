@@ -15,8 +15,8 @@
 
 namespace vast {
 
-struct type_set : detail::stable_set<type> {
-  using super = detail::stable_set<type>;
+struct type_set : detail::stable_set<legacy_type> {
+  using super = detail::stable_set<legacy_type>;
   using super::super;
 
   template <class Inspector>

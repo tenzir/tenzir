@@ -25,13 +25,13 @@
 
 namespace vast {
 
-list_index::list_index(vast::type t, caf::settings opts)
+list_index::list_index(vast::legacy_type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   max_size_ = caf::get_or(options(), "max-size",
                           defaults::index::max_container_elements);
   auto f = detail::overload{
     [](const auto&) {
-      return vast::type{};
+      return vast::legacy_type{};
     },
     [](const legacy_list_type& x) {
       return x.value_type;

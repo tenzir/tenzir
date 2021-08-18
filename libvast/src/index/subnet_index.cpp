@@ -20,7 +20,7 @@
 
 namespace vast {
 
-subnet_index::subnet_index(vast::type x, caf::settings opts)
+subnet_index::subnet_index(vast::legacy_type x, caf::settings opts)
   : value_index{std::move(x), std::move(opts)},
     network_{legacy_address_type{}},
     length_{128 + 1} {

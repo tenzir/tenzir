@@ -12,7 +12,8 @@
 
 namespace vast {
 
-type annotate_parameters(type type, const bloom_filter_parameters& params) {
+legacy_type
+annotate_parameters(legacy_type type, const bloom_filter_parameters& params) {
   using namespace std::string_literals;
   auto v = "bloomfilter("s + std::to_string(*params.n) + ','
            + std::to_string(*params.p) + ')';
@@ -20,7 +21,7 @@ type annotate_parameters(type type, const bloom_filter_parameters& params) {
   return std::move(type).attributes({{"synopsis", std::move(v)}});
 }
 
-std::optional<bloom_filter_parameters> parse_parameters(const type& x) {
+std::optional<bloom_filter_parameters> parse_parameters(const legacy_type& x) {
   auto pred = [](auto& attr) {
     return attr.key == "synopsis" && attr.value != caf::none;
   };

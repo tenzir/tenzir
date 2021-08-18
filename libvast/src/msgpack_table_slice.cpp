@@ -29,7 +29,7 @@ namespace {
 class msgpack_array_view : public container_view<data_view>,
                            detail::totally_ordered<msgpack_array_view> {
 public:
-  msgpack_array_view(type value_type, msgpack::array_view xs)
+  msgpack_array_view(legacy_type value_type, msgpack::array_view xs)
     : size_{xs.size()}, value_type_{std::move(value_type)}, data_{xs.data()} {
     // nop
   }
@@ -43,14 +43,15 @@ public:
 
 private:
   size_t size_;
-  type value_type_;
+  legacy_type value_type_;
   msgpack::overlay data_;
 };
 
 class msgpack_map_view : public container_view<std::pair<data_view, data_view>>,
                          detail::totally_ordered<msgpack_map_view> {
 public:
-  msgpack_map_view(type key_type, type value_type, msgpack::array_view xs)
+  msgpack_map_view(legacy_type key_type, legacy_type value_type,
+                   msgpack::array_view xs)
     : size_{xs.size() / 2},
       key_type_{std::move(key_type)},
       value_type_{std::move(value_type)},
@@ -69,8 +70,8 @@ public:
 
 private:
   size_t size_;
-  type key_type_;
-  type value_type_;
+  legacy_type key_type_;
+  legacy_type value_type_;
   msgpack::overlay data_;
 };
 
@@ -128,7 +129,7 @@ auto make_unsigned_visitor(F f = {}) {
 }
 
 // Decodes a data view from one or more objects.
-data_view decode(msgpack::overlay& objects, const type& t);
+data_view decode(msgpack::overlay& objects, const legacy_type& t);
 
 template <class T>
 data_view decode(msgpack::overlay& objects, const T& t) {
@@ -214,7 +215,7 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   vast::die("unreachable");
 }
 
-data_view decode(msgpack::overlay& objects, const type& t) {
+data_view decode(msgpack::overlay& objects, const legacy_type& t) {
   // Dispatch to the more specific decode.
   return caf::visit(
     [&](auto&& x) { return decode(objects, std::forward<decltype(x)>(x)); }, t);
@@ -323,7 +324,7 @@ msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
 template <class FlatBuffer>
 data_view msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                               table_slice::size_type column,
-                                              const type& t) const {
+                                              const legacy_type& t) const {
   const auto& offset_table = *slice_.offset_table();
   auto view = as_bytes(*slice_.data());
   // First find the desired row...

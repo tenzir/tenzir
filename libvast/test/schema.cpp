@@ -306,7 +306,7 @@ TEST(parseable - out of order definitions) {
   CHECK(parsers::schema(str, sch));
   auto baz = unbox(sch.find("baz"));
   // clang-format off
-  auto expected = type{
+  auto expected = legacy_type{
     legacy_list_type{
       legacy_record_type{
         {"x", legacy_integer_type{}.name("foo")}
@@ -341,7 +341,7 @@ TEST(parseable - with context) {
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
-    auto expected = type{
+    auto expected = legacy_type{
       legacy_record_type{
         {"x", legacy_record_type{{"y", legacy_count_type{}.name("foo")}}}
       }.name("bar")
@@ -364,7 +364,7 @@ TEST(parseable - with context) {
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
-    auto expected = type{
+    auto expected = legacy_type{
       legacy_record_type{
         {"x", legacy_record_type{{"y", legacy_integer_type{}.name("foo")}}}
       }.name("bar")
@@ -387,7 +387,7 @@ TEST(parseable - with context) {
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
-    auto expected = type{
+    auto expected = legacy_type{
       legacy_record_type{
         {"x", legacy_record_type{{"y", legacy_integer_type{}.name("foo")}}}
       }.name("bar")
@@ -436,7 +436,7 @@ TEST(parseable - with context) {
     auto sch = unbox(r.resolve());
     auto gob = unbox(sch.find("gob"));
     // clang-format off
-    auto expected = type{
+    auto expected = legacy_type{
       legacy_record_type{
         {"x", legacy_integer_type{}},
         {"y", legacy_integer_type{}},
@@ -481,14 +481,14 @@ TEST(parseable - with context) {
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     // clang-format off
-    auto expected_lplus = type{
+    auto expected_lplus = legacy_type{
       legacy_record_type{
         {"a", legacy_integer_type{}},
         {"b", legacy_integer_type{}},
         {"c", legacy_real_type{}},
       }.name("lplus").attributes({{"attr_one"}, {"attr_two", "val"}})
     };
-    auto expected_rplus = type{
+    auto expected_rplus = legacy_type{
       legacy_record_type{
         {"a", legacy_real_type{}},
         {"b", legacy_integer_type{}},
@@ -526,7 +526,7 @@ TEST(parseable - with context) {
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
-    auto expected = type{
+    auto expected = legacy_type{
       legacy_record_type{
         {"a", legacy_record_type{
           {"x", legacy_count_type{}}
@@ -571,7 +571,7 @@ TEST(parseable - with context) {
     auto derived1 = unbox(sch.find("derived1"));
     auto derived2 = unbox(sch.find("derived2"));
     // clang-format off
-    auto expected = type{
+    auto expected = legacy_type{
       legacy_record_type{
         {"a", legacy_record_type{
           {"x", legacy_count_type{}},
@@ -609,7 +609,7 @@ TEST(parseable - overwriting with self reference) {
     auto sch = unbox(r.resolve());
     auto foo = unbox(sch.find("foo"));
     // clang-format off
-    auto expected = type{
+    auto expected = legacy_type{
       legacy_record_type{
         {"x", legacy_count_type{}},
         {"y", legacy_string_type{}}

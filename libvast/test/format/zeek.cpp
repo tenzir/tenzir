@@ -32,7 +32,7 @@ using namespace std::string_literals;
 namespace {
 
 template <class Attribute>
-bool zeek_parse(const type& t, const std::string& s, Attribute& attr) {
+bool zeek_parse(const legacy_type& t, const std::string& s, Attribute& attr) {
   return format::zeek::make_zeek_parser<std::string::const_iterator>(t)(s,
                                                                         attr);
 }

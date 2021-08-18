@@ -118,10 +118,10 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   }
 }
 
-vast::type data::basic_type() const {
+vast::legacy_type data::basic_type() const {
   return caf::visit(
     detail::overload{
-      [](const auto& x) -> vast::type {
+      [](const auto& x) -> vast::legacy_type {
         return typename data_traits<std::decay_t<decltype(x)>>::type{};
       },
     },
@@ -265,7 +265,7 @@ flatten(const record& r, const legacy_record_type& rt, size_t max_recursion) {
 }
 
 std::optional<data>
-flatten(const data& x, const type& t, size_t max_recursion) {
+flatten(const data& x, const legacy_type& t, size_t max_recursion) {
   if (max_recursion == 0) {
     VAST_WARN("partially discarding record: recursion limit of {} exceeded",
               defaults::max_recursion);
@@ -280,7 +280,7 @@ flatten(const data& x, const type& t, size_t max_recursion) {
 
 } // namespace
 
-std::optional<data> flatten(const data& x, const type& t) {
+std::optional<data> flatten(const data& x, const legacy_type& t) {
   return flatten(x, t, defaults::max_recursion);
 }
 

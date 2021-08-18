@@ -115,7 +115,7 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
       // A prefix of x matches an existing layout.
       auto field = x.substr(pos + 1);
       return std::any_of(
-        i->second.begin(), i->second.end(), [&](const type& t) {
+        i->second.begin(), i->second.end(), [&](const legacy_type& t) {
           if (const auto& layout = caf::get_if<legacy_record_type>(&t)) {
             auto flat_layout = flatten(*layout);
             if (auto f = flat_layout.find(field))

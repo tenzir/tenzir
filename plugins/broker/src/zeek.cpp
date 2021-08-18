@@ -307,7 +307,7 @@ caf::error extract(field& x, const ::broker::data& data) {
 /// Creates a VAST type from two Zeek type tags. Indeed, this is a partial
 /// function but the subset of Zeek's threading values that can show up in logs
 /// is quite limited, so it does cover all cases we encounter in practice.
-caf::error convert(tag type, tag sub_type, vast::type& result) {
+caf::error convert(tag type, tag sub_type, vast::legacy_type& result) {
   switch (type) {
     default:
       return caf::make_error(ec::parse_error, "unsupported value type",
@@ -355,7 +355,7 @@ caf::error convert(tag type, tag sub_type, vast::type& result) {
       // Zeek's threading values do not support tables/maps. We can treat them
       // as vectors. To avoid losing the set semantics, we can either have a
       // type alias or add a type attribute.
-      vast::type element_type;
+      vast::legacy_type element_type;
       if (auto err = convert(sub_type, tag::type_error, element_type))
         return err;
       // Retain set semantics for tables.

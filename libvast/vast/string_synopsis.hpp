@@ -24,7 +24,7 @@ namespace vast {
 
 template <class HashFunction>
 synopsis_ptr
-make_string_synopsis(vast::type type, bloom_filter_parameters params,
+make_string_synopsis(vast::legacy_type type, bloom_filter_parameters params,
                      std::vector<size_t> seeds = {});
 
 /// A synopsis for strings.
@@ -36,7 +36,7 @@ public:
 
   /// Constructs a string synopsis from an `legacy_string_type` and a Bloom
   /// filter.
-  string_synopsis(type x, typename super::bloom_filter_type bf)
+  string_synopsis(legacy_type x, typename super::bloom_filter_type bf)
     : super{std::move(x), std::move(bf)} {
     VAST_ASSERT(caf::holds_alternative<legacy_string_type>(this->type()));
   }
@@ -54,7 +54,7 @@ public:
 template <>
 struct buffered_synopsis_traits<std::string> {
   template <typename HashFunction>
-  static synopsis_ptr make(vast::type type, bloom_filter_parameters p,
+  static synopsis_ptr make(vast::legacy_type type, bloom_filter_parameters p,
                            std::vector<size_t> seeds = {}) {
     return make_string_synopsis<HashFunction>(std::move(type), std::move(p),
                                               std::move(seeds));
@@ -82,7 +82,7 @@ using buffered_string_synopsis = buffered_synopsis<std::string, Hash>;
 /// @relates string_synopsis
 template <class HashFunction>
 synopsis_ptr
-make_string_synopsis(vast::type type, bloom_filter_parameters params,
+make_string_synopsis(vast::legacy_type type, bloom_filter_parameters params,
                      std::vector<size_t> seeds) {
   VAST_ASSERT(caf::holds_alternative<legacy_string_type>(type));
   auto x = make_bloom_filter<HashFunction>(std::move(params), std::move(seeds));
@@ -103,8 +103,8 @@ make_string_synopsis(vast::type type, bloom_filter_parameters params,
 /// @pre `caf::holds_alternative<legacy_string_type>(type)`.
 /// @relates string_synopsis
 template <class HashFunction>
-synopsis_ptr
-make_buffered_string_synopsis(vast::type type, bloom_filter_parameters params) {
+synopsis_ptr make_buffered_string_synopsis(vast::legacy_type type,
+                                           bloom_filter_parameters params) {
   VAST_ASSERT(caf::holds_alternative<legacy_string_type>(type));
   if (!params.p) {
     return nullptr;
@@ -120,7 +120,8 @@ make_buffered_string_synopsis(vast::type type, bloom_filter_parameters params) {
 /// @returns A type-erased pointer to a synopsis.
 /// @relates string_synopsis
 template <class HashFunction>
-synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
+synopsis_ptr
+make_string_synopsis(vast::legacy_type type, const caf::settings& opts) {
   VAST_ASSERT(caf::holds_alternative<legacy_string_type>(type));
   if (auto xs = parse_parameters(type))
     return make_string_synopsis<HashFunction>(std::move(type), std::move(*xs));

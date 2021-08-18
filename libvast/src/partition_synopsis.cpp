@@ -36,7 +36,7 @@ void partition_synopsis::shrink() {
 
 void partition_synopsis::add(const table_slice& slice,
                              const caf::settings& synopsis_options) {
-  auto make_synopsis = [&](const type& t) -> synopsis_ptr {
+  auto make_synopsis = [&](const legacy_type& t) -> synopsis_ptr {
     return has_skip_attribute(t) ? nullptr
                                  : factory<synopsis>::make(t, synopsis_options);
   };
@@ -71,7 +71,7 @@ void partition_synopsis::add(const table_slice& slice,
       // NOTE: if this is made configurable or removed, the pruning step from
       // the meta index lookup must be adjusted acordingly.
       field_synopses_[key] = nullptr;
-      auto cleaned_type = vast::type{field_it->type()}.attributes({});
+      auto cleaned_type = vast::legacy_type{field_it->type()}.attributes({});
       auto tt = type_synopses_.find(cleaned_type);
       if (tt == type_synopses_.end())
         tt = type_synopses_.emplace(cleaned_type, make_synopsis(type)).first;

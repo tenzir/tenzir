@@ -565,7 +565,7 @@ private:
   int64_t pseudo_realtime_;
   size_t snaplen_;
   bool community_id_;
-  type packet_type_;
+  legacy_type packet_type_;
   double drop_rate_threshold_;
   mutable pcap_stat last_stats_;
   mutable size_t discard_count_;

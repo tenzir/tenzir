@@ -39,7 +39,7 @@ static predicate::operand to_field_extractor(std::vector<std::string> xs) {
   return field_extractor{std::move(field)};
 }
 
-static predicate::operand to_type_extractor(type x) {
+static predicate::operand to_type_extractor(legacy_type x) {
   return type_extractor{std::move(x)};
 }
 
@@ -105,7 +105,7 @@ struct expander {
 /// 1. Convert the data instance x to T(x) == x
 /// 2. Apply type-specific expansion that results in a compound expression
 static expression expand(data x) {
-  auto infer_type = [](auto& d) -> type {
+  auto infer_type = [](auto& d) -> legacy_type {
     return data_to_type<std::decay_t<decltype(d)>>{};
   };
   auto lhs = type_extractor{caf::visit(infer_type, x)};

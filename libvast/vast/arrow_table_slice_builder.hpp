@@ -49,7 +49,7 @@ public:
     /// @param pool The Arrow memory pool to use.
     /// @returns A builder for columns of type `t`.
     static std::unique_ptr<column_builder>
-    make(const type& t, arrow::MemoryPool* pool);
+    make(const legacy_type& t, arrow::MemoryPool* pool);
   };
 
   // -- constructors, destructors, and assignment operators --------------------
@@ -135,6 +135,6 @@ std::shared_ptr<arrow::Schema> make_arrow_schema(const legacy_record_type& t);
 /// Converts a VAST `type` to an Arrow `DataType`.
 /// @param t The type to convert.
 /// @returns An arrow representation of `t`.
-std::shared_ptr<arrow::DataType> make_arrow_type(const type& t);
+std::shared_ptr<arrow::DataType> make_arrow_type(const legacy_type& t);
 
 } // namespace vast

@@ -176,7 +176,7 @@ public:
   /// just the regular type, for complex objects it is a default-constructed
   /// type object without extended information. (eg. just "a record" with no
   /// further information about the record fields)
-  vast::type basic_type() const;
+  vast::legacy_type basic_type() const;
 
   /// @cond PRIVATE
 
@@ -243,7 +243,7 @@ struct data_traits<std::string> {
 
 template <>
 struct data_traits<data> {
-  using type = vast::type;
+  using type = vast::legacy_type;
 };
 
 /// @relates data type
@@ -288,7 +288,7 @@ record flatten(const record& r);
 /// @returns The flattened record if the nested structure of *r* is a valid
 ///          subset of *rt*.
 std::optional<record> flatten(const record& r, const legacy_record_type& rt);
-std::optional<data> flatten(const data& x, const type& t);
+std::optional<data> flatten(const data& x, const legacy_type& t);
 
 /// Merges one record into another such that the source overwrites potential
 /// keys in the destination.

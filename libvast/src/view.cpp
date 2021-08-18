@@ -187,7 +187,7 @@ data materialize(data_view x) {
 
 // WARNING: making changes to the logic of this function requires adapting the
 // companion overload in type.cpp.
-bool type_check(const type& t, const data_view& x) {
+bool type_check(const legacy_type& t, const data_view& x) {
   auto f = detail::overload{
     [&](const auto& u) {
       using data_type = type_to_data<std::decay_t<decltype(u)>>;
@@ -328,7 +328,7 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
   }
 }
 
-data_view to_canonical(const type& t, const data_view& x) {
+data_view to_canonical(const legacy_type& t, const data_view& x) {
   auto v = detail::overload{
     [](const view<enumeration>& x,
        const legacy_enumeration_type& t) -> data_view {
@@ -343,7 +343,7 @@ data_view to_canonical(const type& t, const data_view& x) {
   return caf::visit(v, x, t);
 }
 
-data_view to_internal(const type& t, const data_view& x) {
+data_view to_internal(const legacy_type& t, const data_view& x) {
   auto v = detail::overload{
     [](const view<std::string>& s,
        const legacy_enumeration_type& t) -> data_view {

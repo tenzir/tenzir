@@ -15,7 +15,7 @@
 
 namespace vast {
 
-bool_synopsis::bool_synopsis(vast::type x) : synopsis{std::move(x)} {
+bool_synopsis::bool_synopsis(vast::legacy_type x) : synopsis{std::move(x)} {
   VAST_ASSERT(caf::holds_alternative<legacy_bool_type>(type()));
 }
 

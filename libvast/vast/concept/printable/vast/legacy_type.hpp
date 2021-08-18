@@ -105,7 +105,7 @@ struct type_only {};
 
 template <class Policy>
 struct type_printer : printer_base<type_printer<Policy>> {
-  using attribute = type;
+  using attribute = legacy_type;
 
   constexpr static bool show_name
     = std::is_same<Policy, policy::signature>{}
@@ -118,7 +118,7 @@ struct type_printer : printer_base<type_printer<Policy>> {
   static_assert(show_name || show_type, "must show something");
 
   template <class Iterator>
-  bool print(Iterator& out, const type& t) const {
+  bool print(Iterator& out, const legacy_type& t) const {
     if (show_name && !t.name().empty()) {
       auto guard = printers::eps.with([] { return show_type; });
       auto p = (printers::str << ~(&guard << " = "));
@@ -158,7 +158,7 @@ template <class Policy>
 constexpr bool type_printer<Policy>::show_type;
 
 template <>
-struct printer_registry<type> {
+struct printer_registry<legacy_type> {
   using type = type_printer<policy::name_only>;
 };
 
@@ -224,4 +224,3 @@ type_printer<Policy> type{};
 
 } // namespace printers
 } // namespace vast
-

@@ -15,7 +15,7 @@ namespace vast {
 
 class time_synopsis final : public min_max_synopsis<time> {
 public:
-  time_synopsis(vast::type x);
+  time_synopsis(vast::legacy_type x);
 
   time_synopsis(time start, time end);
 

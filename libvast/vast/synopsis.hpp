@@ -33,7 +33,7 @@ public:
 
   /// Constructs a synopsis from a type.
   /// @param x The type the synopsis should act for.
-  explicit synopsis(vast::type x);
+  explicit synopsis(vast::legacy_type x);
 
   virtual ~synopsis();
 
@@ -65,7 +65,7 @@ public:
   [[nodiscard]] virtual bool equals(const synopsis& other) const noexcept = 0;
 
   /// @returns the type this synopsis operates for.
-  [[nodiscard]] const vast::type& type() const;
+  [[nodiscard]] const vast::legacy_type& type() const;
 
   // -- serialization ----------------------------------------------------------
 
@@ -86,7 +86,7 @@ public:
   }
 
 private:
-  vast::type type_;
+  vast::legacy_type type_;
 };
 
 /// @relates synopsis

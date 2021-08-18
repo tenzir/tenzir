@@ -332,8 +332,9 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
-data_view table_slice::at(table_slice::size_type row,
-                          table_slice::size_type column, const type& t) const {
+data_view
+table_slice::at(table_slice::size_type row, table_slice::size_type column,
+                const legacy_type& t) const {
   if (const auto* alias = caf::get_if<legacy_alias_type>(&t))
     return at(row, column, alias->value_type);
   VAST_ASSERT(row < rows());

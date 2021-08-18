@@ -133,7 +133,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         return;
       auto&& layout = slice.layout();
       auto is_timestamp = [](const record_field& field) {
-        const type* t = &field.type;
+        const legacy_type* t = &field.type;
         if (t->name() == "timestamp")
           return true;
         while (auto x = caf::get_if<legacy_alias_type>(t)) {

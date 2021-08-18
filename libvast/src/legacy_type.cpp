@@ -39,43 +39,43 @@ legacy_none_type legacy_none_type_singleton;
 
 // -- type ---------------------------------------------------------------------
 
-bool operator==(const type& x, const type& y) {
+bool operator==(const legacy_type& x, const legacy_type& y) {
   if (x.ptr_ && y.ptr_)
     return *x.ptr_ == *y.ptr_;
   return x.ptr_ == y.ptr_;
 }
 
-bool operator<(const type& x, const type& y) {
+bool operator<(const legacy_type& x, const legacy_type& y) {
   if (x.ptr_ && y.ptr_)
     return *x.ptr_ < *y.ptr_;
   return x.ptr_ < y.ptr_;
 }
 
-type& type::name(const std::string& x) & {
+legacy_type& legacy_type::name(const std::string& x) & {
   if (ptr_)
     ptr_.unshared().name_ = x;
   return *this;
 }
 
-type type::name(const std::string& x) && {
+legacy_type legacy_type::name(const std::string& x) && {
   if (ptr_)
     ptr_.unshared().name_ = x;
   return std::move(*this);
 }
 
-type& type::attributes(std::vector<attribute> xs) & {
+legacy_type& legacy_type::attributes(std::vector<attribute> xs) & {
   if (ptr_)
     ptr_.unshared().attributes_ = std::move(xs);
   return *this;
 }
 
-type type::attributes(std::vector<attribute> xs) && {
+legacy_type legacy_type::attributes(std::vector<attribute> xs) && {
   if (ptr_)
     ptr_.unshared().attributes_ = std::move(xs);
   return std::move(*this);
 }
 
-type& type::update_attributes(std::vector<attribute> xs) & {
+legacy_type& legacy_type::update_attributes(std::vector<attribute> xs) & {
   if (ptr_) {
     auto& attrs = ptr_.unshared().attributes_;
     for (auto& x : xs) {
@@ -90,7 +90,7 @@ type& type::update_attributes(std::vector<attribute> xs) & {
   return *this;
 }
 
-type type::update_attributes(std::vector<attribute> xs) && {
+legacy_type legacy_type::update_attributes(std::vector<attribute> xs) && {
   if (ptr_) {
     auto& attrs = ptr_.unshared().attributes_;
     for (auto& x : xs) {
@@ -105,37 +105,37 @@ type type::update_attributes(std::vector<attribute> xs) && {
   return std::move(*this);
 }
 
-type::operator bool() const {
+legacy_type::operator bool() const {
   return ptr_ != nullptr;
 }
 
-const std::string& type::name() const {
+const std::string& legacy_type::name() const {
   static const std::string empty_string = "";
   return ptr_ ? ptr_->name_ : empty_string;
 }
 
-const std::vector<attribute>& type::attributes() const {
+const std::vector<attribute>& legacy_type::attributes() const {
   static const std::vector<attribute> no_attributes = {};
   return ptr_ ? ptr_->attributes_ : no_attributes;
 }
 
-legacy_abstract_type_ptr type::ptr() const {
+legacy_abstract_type_ptr legacy_type::ptr() const {
   return ptr_;
 }
 
-const legacy_abstract_type* type::raw_ptr() const noexcept {
+const legacy_abstract_type* legacy_type::raw_ptr() const noexcept {
   return ptr_ != nullptr ? ptr_.get() : &legacy_none_type_singleton;
 }
 
-const legacy_abstract_type* type::operator->() const noexcept {
+const legacy_abstract_type* legacy_type::operator->() const noexcept {
   return raw_ptr();
 }
 
-const legacy_abstract_type& type::operator*() const noexcept {
+const legacy_abstract_type& legacy_type::operator*() const noexcept {
   return *raw_ptr();
 }
 
-type::type(legacy_abstract_type_ptr x) : ptr_{std::move(x)} {
+legacy_type::legacy_type(legacy_abstract_type_ptr x) : ptr_{std::move(x)} {
   // nop
 }
 
@@ -191,7 +191,7 @@ legacy_record_type::legacy_record_type(
   // nop
 }
 
-const type& legacy_record_type::each::range_state::type() const {
+const legacy_type& legacy_record_type::each::range_state::type() const {
   return trace.back()->type;
 }
 
@@ -519,7 +519,7 @@ merge(const legacy_record_type& lhs, const legacy_record_type& rhs) {
       auto x = merge(*lrec, *rrec);
       if (!x)
         return x.error();
-      it->type = type{std::move(*x)};
+      it->type = legacy_type{std::move(*x)};
     } else {
       result.fields.push_back(rfield);
     }
@@ -630,7 +630,7 @@ legacy_record_type flatten(const legacy_record_type& rec) {
   return result;
 }
 
-type flatten(const type& t) {
+legacy_type flatten(const legacy_type& t) {
   auto r = get_if<legacy_record_type>(&t);
   return r ? flatten(*r) : t;
 }
@@ -642,7 +642,7 @@ bool is_flat(const legacy_record_type& rec) {
   });
 }
 
-bool is_flat(const type& t) {
+bool is_flat(const legacy_type& t) {
   auto r = get_if<legacy_record_type>(&t);
   return !r || is_flat(*r);
 }
@@ -652,25 +652,25 @@ size_t flat_size(const legacy_record_type& rec) {
   return std::accumulate(rec.fields.begin(), rec.fields.end(), size_t{0}, op);
 }
 
-size_t flat_size(const type& t) {
+size_t flat_size(const legacy_type& t) {
   if (auto r = get_if<legacy_record_type>(&t))
     return flat_size(*r);
   return 1;
 }
 
-bool is_basic(const type& x) {
+bool is_basic(const legacy_type& x) {
   return x && is<type_flags::basic>(x->flags());
 }
 
-bool is_complex(const type& x) {
+bool is_complex(const legacy_type& x) {
   return x && is<type_flags::complex>(x->flags());
 }
 
-bool is_recursive(const type& x) {
+bool is_recursive(const legacy_type& x) {
   return x && is<type_flags::recursive>(x->flags());
 }
 
-bool is_container(const type& x) {
+bool is_container(const legacy_type& x) {
   return x && is<type_flags::container>(x->flags());
 }
 
@@ -804,20 +804,20 @@ struct data_congruence_checker {
 
 } // namespace
 
-bool congruent(const type& x, const type& y) {
+bool congruent(const legacy_type& x, const legacy_type& y) {
   return visit(type_congruence_checker{}, x, y);
 }
 
-bool congruent(const type& x, const data& y) {
+bool congruent(const legacy_type& x, const data& y) {
   return visit(data_congruence_checker{}, x, y);
 }
 
-bool congruent(const data& x, const type& y) {
+bool congruent(const data& x, const legacy_type& y) {
   return visit(data_congruence_checker{}, y, x);
 }
 
-caf::error
-replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
+caf::error replace_if_congruent(std::initializer_list<legacy_type*> xs,
+                                const schema& with) {
   for (auto x : xs)
     if (auto t = with.find(x->name()); t != nullptr) {
       if (!congruent(*x, *t))
@@ -827,7 +827,8 @@ replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
   return caf::none;
 }
 
-bool compatible(const type& lhs, relational_operator op, const type& rhs) {
+bool compatible(const legacy_type& lhs, relational_operator op,
+                const legacy_type& rhs) {
   auto string_and_pattern = [](auto& x, auto& y) {
     return (holds_alternative<legacy_string_type>(x)
             && holds_alternative<legacy_pattern_type>(y))
@@ -865,7 +866,8 @@ bool compatible(const type& lhs, relational_operator op, const type& rhs) {
   }
 }
 
-bool compatible(const type& lhs, relational_operator op, const data& rhs) {
+bool compatible(const legacy_type& lhs, relational_operator op,
+                const data& rhs) {
   auto string_and_pattern = [](auto& x, auto& y) {
     return (holds_alternative<legacy_string_type>(x)
             && holds_alternative<pattern>(y))
@@ -908,11 +910,12 @@ bool compatible(const type& lhs, relational_operator op, const data& rhs) {
   }
 }
 
-bool compatible(const data& lhs, relational_operator op, const type& rhs) {
+bool compatible(const data& lhs, relational_operator op,
+                const legacy_type& rhs) {
   return compatible(rhs, flip(op), lhs);
 }
 
-bool is_subset(const type& x, const type& y) {
+bool is_subset(const legacy_type& x, const legacy_type& y) {
   auto sub = caf::get_if<legacy_record_type>(&x);
   auto super = caf::get_if<legacy_record_type>(&y);
   // If either of the types is not a record type, check if they are
@@ -935,7 +938,7 @@ bool is_subset(const type& x, const type& y) {
 
 // WARNING: making changes to the logic of this function requires adapting the
 // companion overload in view.cpp.
-bool type_check(const type& t, const data& x) {
+bool type_check(const legacy_type& t, const data& x) {
   auto f = detail::overload{
     [&](const auto& u) {
       using data_type = type_to_data<std::decay_t<decltype(u)>>;
@@ -984,7 +987,7 @@ bool type_check(const type& t, const data& x) {
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
 
-data construct(const type& x) {
+data construct(const legacy_type& x) {
   return visit(detail::overload{
                  [](const auto& y) {
                    return data{type_to_data<std::decay_t<decltype(y)>>{}};
@@ -1005,8 +1008,8 @@ data construct(const type& x) {
                x);
 }
 
-std::string to_digest(const type& x) {
-  std::hash<type> h;
+std::string to_digest(const legacy_type& x) {
+  std::hash<legacy_type> h;
   return std::to_string(h(x));
 }
 
@@ -1022,7 +1025,7 @@ using caf::detail::tl_size;
 
 static_assert(std::size(kind_tbl) == tl_size<legacy_concrete_types>::value);
 
-data jsonize(const type& x) {
+data jsonize(const legacy_type& x) {
   return visit(detail::overload{
                  [](const legacy_enumeration_type& t) {
                    list a;
@@ -1060,15 +1063,15 @@ data jsonize(const type& x) {
 
 } // namespace
 
-std::string kind(const type& x) {
+std::string kind(const legacy_type& x) {
   return kind_tbl[x->index()];
 }
 
-bool has_skip_attribute(const type& t) {
+bool has_skip_attribute(const legacy_type& t) {
   return has_attribute(t, "skip");
 }
 
-bool convert(const type& t, data& d) {
+bool convert(const legacy_type& t, data& d) {
   record o;
   o["name"] = t.name();
   o["kind"] = kind(t);

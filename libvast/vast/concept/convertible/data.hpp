@@ -506,7 +506,7 @@ concept is_concrete_untyped_convertible = requires(const From& src, To& dst) {
 // it must not be declared before to prevent recursing into itself because
 // of the non-explicit constructor of `data`.
 template <class To>
-caf::error convert(const data& src, To& dst, const type& t) {
+caf::error convert(const data& src, To& dst, const legacy_type& t) {
   return caf::visit(
     [&]<class From, class Type>(const From& x, const Type& t) {
       if constexpr (is_concrete_typed_convertible<From, To, Type>)

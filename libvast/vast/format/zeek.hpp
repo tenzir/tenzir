@@ -197,7 +197,7 @@ struct zeek_parser_factory {
 /// Constructs a Zeek data parser from a type and set separator.
 template <class Iterator, class Attribute = data>
 rule<Iterator, Attribute>
-make_zeek_parser(const type& t, const std::string& set_separator = ",") {
+make_zeek_parser(const legacy_type& t, const std::string& set_separator = ",") {
   rule<Iterator, Attribute> r;
   auto sep = is_container(t) ? set_separator : "";
   return caf::visit(zeek_parser_factory<Iterator, Attribute>{sep}, t);
@@ -205,7 +205,7 @@ make_zeek_parser(const type& t, const std::string& set_separator = ",") {
 
 /// Parses non-container Zeek data.
 template <class Iterator, class Attribute = data>
-bool zeek_basic_parse(const type& t, Iterator& f, const Iterator& l,
+bool zeek_basic_parse(const legacy_type& t, Iterator& f, const Iterator& l,
                       Attribute& attr) {
   return caf::visit(zeek_parser<Iterator, Attribute>{f, l, attr}, t);
 }
@@ -245,7 +245,7 @@ private:
   std::string empty_field_;
   std::string unset_field_;
   vast::schema schema_;
-  type type_;
+  legacy_type type_;
   legacy_record_type layout_;
   std::optional<size_t> proto_field_;
   std::vector<rule<iterator_type, data>> parsers_;
@@ -272,7 +272,7 @@ public:
 
 private:
   std::filesystem::path dir_;
-  type previous_layout_;
+  legacy_type previous_layout_;
   bool show_timestamp_tags_;
 
   /// One writer for each layout.

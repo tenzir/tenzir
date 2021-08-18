@@ -162,7 +162,7 @@ public:
   /// @pre `row < rows() && column < columns()`
   /// @pre `t == *layout().at(*layout:).offset_from_index(column)) == t`
   [[nodiscard]] data_view
-  at(size_type row, size_type column, const type& t) const;
+  at(size_type row, size_type column, const legacy_type& t) const;
 
   /// Converts a table slice to an Apache Arrow Record Batch.
   /// @returns The pointer to the Record Batch.

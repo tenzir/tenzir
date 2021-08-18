@@ -20,7 +20,7 @@
 
 namespace vast {
 
-address_index::address_index(vast::type t, caf::settings opts)
+address_index::address_index(vast::legacy_type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   bytes_.fill(byte_index{8});
 }

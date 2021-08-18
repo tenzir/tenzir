@@ -275,7 +275,7 @@ TEST(single column - list of strings) {
 TEST(single column - list of list of integers) {
   auto t = legacy_list_type{legacy_integer_type{}};
   // Note: we call the copy ctor if we don't wrap legacy_list_type into a type.
-  auto llt = legacy_list_type{type{t}};
+  auto llt = legacy_list_type{legacy_type{t}};
   legacy_record_type layout{record_field{"values", llt}};
   list list11{1_i, 2_i, 3_i};
   list list12{10_i, 20_i};

@@ -53,7 +53,7 @@ public:
 
   /// Calls `add(x)` as long as `x` is not a vector, otherwise calls `add(y)`
   /// for each `y` in `x`.
-  [[nodiscard]] bool recursive_add(const data& x, const type& t);
+  [[nodiscard]] bool recursive_add(const data& x, const legacy_type& t);
 
   /// Adds data to the builder.
   /// @param x The data to add.

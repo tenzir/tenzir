@@ -35,7 +35,7 @@ namespace vast {
 namespace {
 
 template <class T>
-value_index_ptr make(type x, caf::settings opts) {
+value_index_ptr make(legacy_type x, caf::settings opts) {
   using int_type = caf::config_value::integer;
   // The cardinality must be an integer.
   if (auto i = opts.find("cardinality"); i != opts.end()) {
@@ -161,13 +161,13 @@ void factory_traits<value_index>::initialize() {
 }
 
 factory_traits<value_index>::key_type
-factory_traits<value_index>::key(const type& t) {
+factory_traits<value_index>::key(const legacy_type& t) {
   auto f = [&](const auto& x) {
     using concrete_type = std::decay_t<decltype(x)>;
     if constexpr (std::is_same_v<concrete_type, legacy_alias_type>) {
       return key(x.value_type);
     } else {
-      static type instance = concrete_type{};
+      static legacy_type instance = concrete_type{};
       return instance;
     }
   };

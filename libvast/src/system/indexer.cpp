@@ -49,7 +49,7 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
 
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               type index_type, caf::settings index_opts) {
+               legacy_type index_type, caf::settings index_opts) {
   self->state.name = "indexer-" + to_string(index_type);
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
   self->state.idx = factory<value_index>::make(index_type, index_opts);

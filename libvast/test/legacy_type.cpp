@@ -37,21 +37,21 @@ using namespace vast;
 FIXTURE_SCOPE(type_tests, fixtures::deterministic_actor_system)
 
 TEST(default construction) {
-  type t;
+  legacy_type t;
   CHECK(!t);
   CHECK(!holds_alternative<legacy_bool_type>(t));
 }
 
 TEST(construction) {
   auto s = legacy_string_type{};
-  auto t = type{s};
+  auto t = legacy_type{s};
   CHECK(t);
   CHECK(holds_alternative<legacy_string_type>(t));
   CHECK(get_if<legacy_string_type>(&t) != nullptr);
 }
 
 TEST(assignment) {
-  auto t = type{legacy_string_type{}};
+  auto t = legacy_type{legacy_string_type{}};
   CHECK(t);
   CHECK(holds_alternative<legacy_string_type>(t));
   t = legacy_real_type{};
@@ -60,29 +60,29 @@ TEST(assignment) {
   t = {};
   CHECK(!t);
   CHECK(!holds_alternative<legacy_real_type>(t));
-  auto u = type{legacy_none_type{}};
+  auto u = legacy_type{legacy_none_type{}};
   CHECK(u);
   CHECK(holds_alternative<legacy_none_type>(u));
 }
 
 TEST(copying) {
-  auto t = type{legacy_string_type{}};
+  auto t = legacy_type{legacy_string_type{}};
   auto u = t;
   CHECK(holds_alternative<legacy_string_type>(u));
 }
 
 TEST(names) {
-  type t;
+  legacy_type t;
   t.name("foo");
   CHECK(t.name().empty());
-  t = type{legacy_string_type{}};
+  t = legacy_type{legacy_string_type{}};
   t.name("foo");
   CHECK_EQUAL(t.name(), "foo");
 }
 
 TEST(attributes) {
   auto attrs = std::vector<attribute>{{"key", "value"}};
-  type t;
+  legacy_type t;
   t.attributes(attrs);
   CHECK(t.attributes().empty());
   t = legacy_string_type{};
@@ -92,12 +92,12 @@ TEST(attributes) {
 
 TEST(equality comparison) {
   MESSAGE("type-erased comparison");
-  CHECK(type{} == type{});
-  CHECK(type{legacy_bool_type{}} != type{});
-  CHECK(type{legacy_bool_type{}} == type{legacy_bool_type{}});
-  CHECK(type{legacy_bool_type{}} != type{legacy_real_type{}});
-  auto x = type{legacy_string_type{}};
-  auto y = type{legacy_string_type{}};
+  CHECK(legacy_type{} == legacy_type{});
+  CHECK(legacy_type{legacy_bool_type{}} != legacy_type{});
+  CHECK(legacy_type{legacy_bool_type{}} == legacy_type{legacy_bool_type{}});
+  CHECK(legacy_type{legacy_bool_type{}} != legacy_type{legacy_real_type{}});
+  auto x = legacy_type{legacy_string_type{}};
+  auto y = legacy_type{legacy_string_type{}};
   x.name("foo");
   CHECK(x != y);
   y.name("foo");
@@ -113,17 +113,17 @@ TEST(equality comparison) {
 }
 
 TEST(less - than comparison) {
-  CHECK(!(type{} < type{}));
+  CHECK(!(legacy_type{} < legacy_type{}));
   CHECK(!(legacy_real_type{} < legacy_real_type{}));
   CHECK(legacy_string_type{}.name("a") < legacy_string_type{}.name("b"));
   CHECK(legacy_record_type{}.name("a") < legacy_record_type{}.name("b"));
 }
 
 TEST(strict weak ordering) {
-  std::vector<type> xs{legacy_string_type{}, legacy_address_type{},
-                       legacy_pattern_type{}};
-  std::vector<type> ys{legacy_string_type{}, legacy_pattern_type{},
-                       legacy_address_type{}};
+  std::vector<legacy_type> xs{legacy_string_type{}, legacy_address_type{},
+                              legacy_pattern_type{}};
+  std::vector<legacy_type> ys{legacy_string_type{}, legacy_pattern_type{},
+                              legacy_address_type{}};
   std::sort(xs.begin(), xs.end());
   std::sort(ys.begin(), ys.end());
   CHECK(xs == ys);
@@ -154,7 +154,7 @@ TEST(type / data compatibility) {
 }
 
 TEST(serialization) {
-  CHECK_ROUNDTRIP(type{});
+  CHECK_ROUNDTRIP(legacy_type{});
   CHECK_ROUNDTRIP(legacy_none_type{});
   CHECK_ROUNDTRIP(legacy_bool_type{});
   CHECK_ROUNDTRIP(legacy_integer_type{});
@@ -171,22 +171,22 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(legacy_map_type{});
   CHECK_ROUNDTRIP(legacy_record_type{});
   CHECK_ROUNDTRIP(legacy_alias_type{});
-  CHECK_ROUNDTRIP(type{legacy_none_type{}});
-  CHECK_ROUNDTRIP(type{legacy_bool_type{}});
-  CHECK_ROUNDTRIP(type{legacy_integer_type{}});
-  CHECK_ROUNDTRIP(type{legacy_count_type{}});
-  CHECK_ROUNDTRIP(type{legacy_real_type{}});
-  CHECK_ROUNDTRIP(type{legacy_duration_type{}});
-  CHECK_ROUNDTRIP(type{legacy_time_type{}});
-  CHECK_ROUNDTRIP(type{legacy_string_type{}});
-  CHECK_ROUNDTRIP(type{legacy_pattern_type{}});
-  CHECK_ROUNDTRIP(type{legacy_address_type{}});
-  CHECK_ROUNDTRIP(type{legacy_subnet_type{}});
-  CHECK_ROUNDTRIP(type{legacy_enumeration_type{}});
-  CHECK_ROUNDTRIP(type{legacy_list_type{}});
-  CHECK_ROUNDTRIP(type{legacy_map_type{}});
-  CHECK_ROUNDTRIP(type{legacy_record_type{}});
-  CHECK_ROUNDTRIP(type{legacy_alias_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_none_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_bool_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_integer_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_count_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_real_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_duration_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_time_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_string_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_pattern_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_address_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_subnet_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_enumeration_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_list_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_map_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_record_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_alias_type{}});
   auto r
     = legacy_record_type{{"x", legacy_integer_type{}},
                          {"y", legacy_address_type{}},
@@ -459,16 +459,16 @@ TEST(congruence) {
   MESSAGE("aliases");
   auto a = legacy_alias_type{i};
   a = a.name("a");
-  CHECK(type{a} != type{i});
+  CHECK(legacy_type{a} != legacy_type{i});
   CHECK(congruent(a, i));
   a = legacy_alias_type{r0};
   a = a.name("r0");
-  CHECK(type{a} != type{r0});
+  CHECK(legacy_type{a} != legacy_type{r0});
   CHECK(congruent(a, r0));
   MESSAGE("unspecified type");
-  CHECK(congruent(type{}, type{}));
-  CHECK(!congruent(type{legacy_string_type{}}, type{}));
-  CHECK(!congruent(type{}, type{legacy_string_type{}}));
+  CHECK(congruent(legacy_type{}, legacy_type{}));
+  CHECK(!congruent(legacy_type{legacy_string_type{}}, legacy_type{}));
+  CHECK(!congruent(legacy_type{}, legacy_type{legacy_string_type{}}));
 }
 
 TEST(subset) {
@@ -556,7 +556,7 @@ TEST(type_check - nested record) {
     {"str", "x"},
     {"b", false}
   };
-  type t = legacy_record_type{
+  legacy_type t = legacy_record_type{
     {"x", legacy_string_type{}},
     {"r", legacy_record_type{
       {"i", legacy_integer_type{}},
@@ -573,7 +573,7 @@ TEST(type_check - nested record) {
 
 TEST(printable) {
   MESSAGE("basic types");
-  CHECK_EQUAL(to_string(type{}), "none");
+  CHECK_EQUAL(to_string(legacy_type{}), "none");
   CHECK_EQUAL(to_string(legacy_bool_type{}), "bool");
   CHECK_EQUAL(to_string(legacy_integer_type{}), "int");
   CHECK_EQUAL(to_string(legacy_count_type{}), "count");
@@ -600,9 +600,9 @@ TEST(printable) {
   CHECK_EQUAL(to_string(a), "real"); // haul through
   a = a.name("foo");
   CHECK_EQUAL(to_string(a), "real");
-  CHECK_EQUAL(to_string(type{a}), "foo");
+  CHECK_EQUAL(to_string(legacy_type{a}), "foo");
   MESSAGE("type");
-  auto t = type{};
+  auto t = legacy_type{};
   CHECK_EQUAL(to_string(t), "none");
   t = e;
   CHECK_EQUAL(to_string(t), "enum {foo, bar, baz}");
@@ -628,7 +628,7 @@ TEST(printable) {
 }
 
 TEST(parseable) {
-  type t;
+  legacy_type t;
   MESSAGE("basic");
   CHECK(parsers::type("bool", t));
   CHECK(t == legacy_bool_type{});
@@ -644,9 +644,10 @@ TEST(parseable) {
   CHECK(t == legacy_enumeration_type{{"foo", "bar", "baz"}});
   MESSAGE("container");
   CHECK(parsers::type("list<real>", t));
-  CHECK(t == type{legacy_list_type{legacy_real_type{}}});
+  CHECK(t == legacy_type{legacy_list_type{legacy_real_type{}}});
   CHECK(parsers::type("map<count, bool>", t));
-  CHECK(t == type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}});
+  CHECK(
+    t == legacy_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}});
   MESSAGE("record");
   auto str = R"__(record{"a b": addr, b: bool})__"sv;
   CHECK(parsers::type(str, t));
@@ -676,12 +677,12 @@ TEST(parseable) {
     {"+", legacy_none_type{}.name("bar")}
   }.attributes({{"$algebra"}});
   // clang-format on
-  CHECK_EQUAL(unbox(to<type>("foo+bar")), r);
-  CHECK_EQUAL(unbox(to<type>("foo + bar")), r);
+  CHECK_EQUAL(unbox(to<legacy_type>("foo+bar")), r);
+  CHECK_EQUAL(unbox(to<legacy_type>("foo + bar")), r);
   r.fields[1]
     = record_field{"-", legacy_record_type{{"bar", legacy_bool_type{}}}};
-  CHECK_EQUAL(unbox(to<type>("foo-bar")), r);
-  CHECK_EQUAL(unbox(to<type>("foo - bar")), r);
+  CHECK_EQUAL(unbox(to<legacy_type>("foo-bar")), r);
+  CHECK_EQUAL(unbox(to<legacy_type>("foo - bar")), r);
   str = "record{a: real} + bar"sv;
   // clang-format off
   r = legacy_record_type{
@@ -689,25 +690,26 @@ TEST(parseable) {
     {"+", legacy_none_type{}.name("bar")}
   }.attributes({{"$algebra"}});
   // clang-format on
-  CHECK_EQUAL(unbox(to<type>(str)), r);
+  CHECK_EQUAL(unbox(to<legacy_type>(str)), r);
 }
 
 TEST(hashable) {
   auto hash = [&](auto&& x) {
     return uhash<xxhash64>{}(x);
   };
-  CHECK_EQUAL(hash(type{}), 16682473723366582157ul);
+  CHECK_EQUAL(hash(legacy_type{}), 16682473723366582157ul);
   CHECK_EQUAL(hash(legacy_bool_type{}), 8019551906396149776ul);
-  CHECK_EQUAL(hash(type{legacy_bool_type{}}), 693889673218214406ul);
-  CHECK_NOT_EQUAL(hash(type{legacy_bool_type{}}), hash(legacy_bool_type{}));
+  CHECK_EQUAL(hash(legacy_type{legacy_bool_type{}}), 693889673218214406ul);
+  CHECK_NOT_EQUAL(hash(legacy_type{legacy_bool_type{}}),
+                  hash(legacy_bool_type{}));
   CHECK_NOT_EQUAL(hash(legacy_bool_type{}), hash(legacy_address_type{}));
-  CHECK_NOT_EQUAL(hash(type{legacy_bool_type{}}),
-                  hash(type{legacy_address_type{}}));
+  CHECK_NOT_EQUAL(hash(legacy_type{legacy_bool_type{}}),
+                  hash(legacy_type{legacy_address_type{}}));
   auto x = legacy_record_type{{"x", legacy_integer_type{}},
                               {"y", legacy_string_type{}},
                               {"z", legacy_list_type{legacy_real_type{}}}};
   CHECK_EQUAL(hash(x), 14779728178683051124ul);
-  CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
+  CHECK_EQUAL(to_digest(x), std::to_string(hash(legacy_type{x})));
 }
 
 TEST(json) {
@@ -760,7 +762,7 @@ TEST(json) {
   },
   "attributes": {}
 })__";
-  CHECK_EQUAL(to_json(to_data(type{r})), expected);
+  CHECK_EQUAL(to_json(to_data(legacy_type{r})), expected);
 }
 
 FIXTURE_SCOPE_END()

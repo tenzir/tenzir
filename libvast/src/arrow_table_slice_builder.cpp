@@ -462,7 +462,7 @@ arrow_table_slice_builder::column_builder::~column_builder() noexcept {
 }
 
 std::unique_ptr<arrow_table_slice_builder::column_builder>
-arrow_table_slice_builder::column_builder::make(const type& t,
+arrow_table_slice_builder::column_builder::make(const legacy_type& t,
                                                 arrow::MemoryPool* pool) {
   auto f = detail::overload{
     [=](const auto& x) -> std::unique_ptr<column_builder> {
@@ -672,7 +672,7 @@ std::shared_ptr<arrow::Schema> make_arrow_schema(const legacy_record_type& t) {
   return std::make_shared<arrow::Schema>(arrow_fields, metadata);
 }
 
-std::shared_ptr<arrow::DataType> make_arrow_type(const type& t) {
+std::shared_ptr<arrow::DataType> make_arrow_type(const legacy_type& t) {
   using data_type_ptr = std::shared_ptr<arrow::DataType>;
   auto f = detail::overload{
     [=](const auto& x) -> data_type_ptr {

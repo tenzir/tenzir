@@ -22,7 +22,7 @@ namespace syslog {
 
 namespace {
 
-type make_rfc5424_type() {
+legacy_type make_rfc5424_type() {
   // clang-format off
   return legacy_record_type{{
     {"facility", legacy_count_type{}},
@@ -44,7 +44,7 @@ type make_rfc5424_type() {
   // clang-format on
 }
 
-type make_unknown_type() {
+legacy_type make_unknown_type() {
   // clang-format off
   return legacy_record_type{{
     {"syslog_message", legacy_string_type{}}

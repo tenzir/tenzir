@@ -58,7 +58,7 @@ struct qualified_record_field
 
   std::string layout_name; ///< The name of the layout.
   std::string field_name;  ///< The name of the field.
-  vast::type type;         ///< The type of the field.
+  vast::legacy_type type;  ///< The type of the field.
 
   friend bool
   operator==(const qualified_record_field& x, const qualified_record_field& y);

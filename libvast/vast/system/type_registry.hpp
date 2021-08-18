@@ -48,7 +48,7 @@ struct type_registry_state {
   caf::error load_from_disk();
 
   /// Store a new layout in the registry.
-  void insert(vast::type layout);
+  void insert(vast::legacy_type layout);
 
   /// Get a list of known types from the registry.
   [[nodiscard]] type_set types() const;

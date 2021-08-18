@@ -31,7 +31,7 @@ table_slice_builder::~table_slice_builder() noexcept {
 
 // -- properties ---------------------------------------------------------------
 
-bool table_slice_builder::recursive_add(const data& x, const type& t) {
+bool table_slice_builder::recursive_add(const data& x, const legacy_type& t) {
   auto f = detail::overload{
     [&](const list& xs, const legacy_record_type& rt) {
       for (size_t i = 0; i < xs.size(); ++i) {
