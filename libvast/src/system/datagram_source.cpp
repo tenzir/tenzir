@@ -175,10 +175,21 @@ caf::behavior datagram_source(
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
         const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
-        collect_status(rs, timeout, v, self->state.transformer, src,
-                       "transformer");
-        auto& xs = put_list(rs->content, "sources");
-        xs.emplace_back(std::move(src));
+        collect_status(
+          rs, timeout, v, self->state.transformer,
+          [rs, src](caf::settings& response) mutable {
+            put(src, "transformer", std::move(response));
+            auto& xs = put_list(rs->content, "sources");
+            xs.emplace_back(std::move(src));
+          },
+          [rs, src](const caf::error& err) mutable {
+            VAST_WARN("{} failed to retrieve status for the key transformer: "
+                      "{}",
+                      *rs->self, err);
+            put(src, "transformer", fmt::to_string(err));
+            auto& xs = put_list(rs->content, "sources");
+            xs.emplace_back(std::move(src));
+          });
       }
       return rs->promise;
     },
