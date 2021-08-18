@@ -248,7 +248,7 @@ public:
   /// @endcond
   template <class Inspector>
   friend auto inspect(Inspector& f, legacy_abstract_type& x) {
-    return f(caf::meta::type_name("vast.legacy_abstract_type"),
+    return f(caf::meta::type_name("vast.abstract_type"),
              caf::meta::omittable_if_empty(), x.name_,
              caf::meta::omittable_if_empty(), x.attributes_);
   }
@@ -346,37 +346,37 @@ public:
   friend auto inspect(Inspector& f, concrete_type& x) {
     const char* name = nullptr;
     if constexpr (std::is_same_v<Derived, legacy_none_type>) {
-      name = "vast.legacy_none_type";
+      name = "vast.none_type";
     } else if constexpr (std::is_same_v<Derived, legacy_bool_type>) {
-      name = "vast.legacy_bool_type";
+      name = "vast.bool_type";
     } else if constexpr (std::is_same_v<Derived, legacy_integer_type>) {
-      name = "vast.legacy_integer_type";
+      name = "vast.integer_type";
     } else if constexpr (std::is_same_v<Derived, legacy_count_type>) {
-      name = "vast.legacy_count_type";
+      name = "vast.count_type";
     } else if constexpr (std::is_same_v<Derived, legacy_real_type>) {
-      name = "vast.legacy_real_type";
+      name = "vast.real_type";
     } else if constexpr (std::is_same_v<Derived, legacy_duration_type>) {
-      name = "vast.legacy_duration_type";
+      name = "vast.duration_type";
     } else if constexpr (std::is_same_v<Derived, legacy_time_type>) {
-      name = "vast.legacy_time_type";
+      name = "vast.time_type";
     } else if constexpr (std::is_same_v<Derived, legacy_string_type>) {
-      name = "vast.legacy_string_type";
+      name = "vast.string_type";
     } else if constexpr (std::is_same_v<Derived, legacy_pattern_type>) {
-      name = "vast.legacy_pattern_type";
+      name = "vast.pattern_type";
     } else if constexpr (std::is_same_v<Derived, legacy_address_type>) {
-      name = "vast.legacy_address_type";
+      name = "vast.address_type";
     } else if constexpr (std::is_same_v<Derived, legacy_subnet_type>) {
-      name = "vast.legacy_subnet_type";
+      name = "vast.subnet_type";
     } else if constexpr (std::is_same_v<Derived, legacy_enumeration_type>) {
-      name = "vast.legacy_enumeration_type";
+      name = "vast.enumeration_type";
     } else if constexpr (std::is_same_v<Derived, legacy_list_type>) {
-      name = "vast.legacy_list_type";
+      name = "vast.list_type";
     } else if constexpr (std::is_same_v<Derived, legacy_map_type>) {
-      name = "vast.legacy_map_type";
+      name = "vast.map_type";
     } else if constexpr (std::is_same_v<Derived, legacy_record_type>) {
-      name = "vast.legacy_record_type";
+      name = "vast.record_type";
     } else if constexpr (std::is_same_v<Derived, legacy_alias_type>) {
-      name = "vast.legacy_alias_type";
+      name = "vast.alias_type";
     } else {
       static_assert(detail::always_false_v<Derived>, "cannot inspect non-leaf "
                                                      "type");
@@ -530,8 +530,8 @@ struct legacy_enumeration_type final : complex_type<legacy_enumeration_type> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, legacy_enumeration_type& x) {
-    return f(caf::meta::type_name("vast.legacy_enumeration_type"),
-             super::upcast(x), caf::meta::omittable_if_empty(), x.fields);
+    return f(caf::meta::type_name("vast.enumeration_type"), super::upcast(x),
+             caf::meta::omittable_if_empty(), x.fields);
   }
 
   bool equals(const legacy_abstract_type& other) const final {
@@ -573,7 +573,7 @@ struct legacy_map_type final : recursive_type<legacy_map_type> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, legacy_map_type& x) {
-    return f(caf::meta::type_name("vast.legacy_map_type"), super::upcast(x),
+    return f(caf::meta::type_name("vast.map_type"), super::upcast(x),
              x.key_type, x.value_type);
   }
 
@@ -721,8 +721,7 @@ struct legacy_record_type final : recursive_type<legacy_record_type> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, legacy_record_type& x) {
-    return f(caf::meta::type_name("vast.legacy_record_type"), upcast(x),
-             x.fields);
+    return f(caf::meta::type_name("vast.record_type"), upcast(x), x.fields);
   }
 
   std::vector<record_field> fields;
