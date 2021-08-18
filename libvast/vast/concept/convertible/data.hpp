@@ -12,6 +12,7 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/parse.hpp"
+#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
@@ -70,7 +71,7 @@ caf::error insert_to_map(To& dst, typename To::key_type&& key,
     else
       // TODO: Consider continuing if the old and new values are the same.
       return caf::make_error(ec::convert_error,
-                             fmt::format("{}: redefinition detected: \"{}\" "
+                             fmt::format(": redefinition of {} detected: \"{}\" "
                                          "vs \"{}\"",
                                          key, entry->second, value));
   }
@@ -83,9 +84,17 @@ template <class... Args>
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
   if (in) {
     auto f = fmt::format("{}{{}}", fstring);
-    in.context() = caf::make_message(fmt::format(VAST_FMT_RUNTIME(f),
-                                                 std::forward<Args>(args)...,
-                                                 to_string(in.context())));
+    auto new_msg = in.context().apply({
+      [&](std::string& s) {
+        return caf::make_message(fmt::format(
+          VAST_FMT_RUNTIME(f), std::forward<Args>(args)..., std::move(s)));
+      },
+    });
+    if (new_msg)
+      in.context() = std::move(*new_msg);
+    else
+      in.context() = caf::make_message(
+        fmt::format(VAST_FMT_RUNTIME(fstring), std::forward<Args>(args)...));
   }
   return std::move(in);
 }
@@ -124,14 +133,15 @@ concept has_layout = requires {
 };
 
 // Overload for records.
-template <concepts::inspectable T>
-caf::error convert(const record& src, T& dst, const legacy_record_type& layout);
+template <concepts::inspectable To>
+caf::error
+convert(const record& src, To& dst, const legacy_record_type& layout);
 
-template <has_layout T>
-caf::error convert(const record& src, T& dst);
+template <has_layout To>
+caf::error convert(const record& src, To& dst);
 
-template <has_layout T>
-caf::error convert(const data& src, T& dst);
+template <has_layout To>
+caf::error convert(const data& src, To& dst);
 
 // Generic overload when `src` and `dst` are of the same type.
 // TODO: remove the `!concepts::integral` constraint once count is a real type.
@@ -172,6 +182,27 @@ caf::error convert(const count& src, To& dst, const legacy_count_type&) {
   return caf::none;
 }
 
+template <concepts::unsigned_integral To>
+caf::error convert(const integer& src, To& dst, const legacy_count_type&) {
+  if (src.value < 0)
+    return caf::make_error(
+      ec::convert_error, fmt::format(": {} can not be negative ({})",
+                                     detail::pretty_type_name(dst), src.value));
+  if constexpr (sizeof(To) >= sizeof(count)) {
+    dst = src.value;
+  } else {
+    if (src.value
+        > static_cast<integer::value_type>(std::numeric_limits<To>::max()))
+      return caf::make_error(ec::convert_error,
+                             fmt::format(": {} can not be represented by the "
+                                         "target variable [{}, {}]",
+                                         src, std::numeric_limits<To>::min(),
+                                         std::numeric_limits<To>::max()));
+    dst = detail::narrow_cast<To>(src.value);
+  }
+  return caf::none;
+}
+
 // Overload for integers.
 template <concepts::signed_integral To>
 caf::error convert(const integer& src, To& dst, const legacy_integer_type&) {
@@ -197,12 +228,27 @@ template <class To>
 caf::error convert(const std::string& src, To& dst, const legacy_enumeration_type& t) {
   auto i = std::find(t.fields.begin(), t.fields.end(), src);
   if (i == t.fields.end())
-    return caf::make_error(ec::convert_error, ": {} is not a value of {}", src,
-        detail::pretty_type_name(dst));
+    return caf::make_error(ec::convert_error,
+                           fmt::format(": {} is not a value of {}", src,
+                                       detail::pretty_type_name(dst)));
   dst = detail::narrow_cast<To>(std::distance(t.fields.begin(), i));
   return caf::none;
 }
 // clang-format on
+
+template <class From, class To, class Type>
+caf::error convert(const From& src, std::optional<To>& dst, const Type& t) {
+  if (!dst)
+    dst = To{};
+  return convert(src, *dst, t);
+}
+
+template <class From, class To, class Type>
+caf::error convert(const From& src, caf::optional<To>& dst, const Type& t) {
+  if (!dst)
+    dst = To{};
+  return convert(src, *dst, t);
+}
 
 // Overload for lists.
 template <concepts::appendable To>
@@ -241,7 +287,7 @@ caf::error convert(const map& src, To& dst, const legacy_map_type& t) {
       return detail::insert_to_map(dst, std::move(key), std::move(value));
     }();
     if (err)
-      return detail::prepend(std::move(err), "{}", x.first);
+      return detail::prepend(std::move(err), ".{}", x.first);
   }
   return caf::none;
 }
@@ -269,7 +315,7 @@ caf::error convert(const record& src, To& dst, const legacy_map_type& t) {
       return detail::insert_to_map(dst, std::move(key), std::move(value));
     }();
     if (err)
-      return detail::prepend(std::move(err), "{}", x.first);
+      return detail::prepend(std::move(err), ".{}", x.first);
   }
   return caf::none;
 }
@@ -319,7 +365,7 @@ caf::error convert(const list& src, To& dst, const legacy_list_type& t) {
   for (const auto& element : src) {
     const auto* rec = caf::get_if<record>(&element);
     if (!rec)
-      return caf::make_error(ec::convert_error, "no record in list");
+      return caf::make_error(ec::convert_error, ": no record in list");
     // Find the value from the record
     const auto data_key = get(*rec, key_field.trace);
     if (!data_key)
@@ -341,6 +387,8 @@ caf::error convert(const list& src, To& dst, const legacy_list_type& t) {
 
 class record_inspector {
 public:
+  using result_type = caf::error;
+
   template <class To>
   caf::error apply(const legacy_record_type::each::range_state& f, To& dst) {
     // Find the value from the record
@@ -350,44 +398,35 @@ public:
     if (*data_value == nullptr)
       return caf::none;
     auto err = caf::visit(
-      [&]<class Type>(const Type& t) -> caf::error {
+      [&]<class Data, class Type>(const Data& d, const Type& t) -> caf::error {
         using concrete_type = std::decay_t<Type>;
-        using concrete_data = std::conditional_t<
-          std::is_same_v<concrete_type, legacy_enumeration_type>, std::string,
-          type_to_data<concrete_type>>;
         if constexpr (detail::is_any_v<concrete_type, legacy_alias_type,
                                        legacy_none_type>) {
           // Data conversion of none or alias type does not make sense.
           return caf::make_error(ec::convert_error, ": can't convert alias or "
                                                     "none types");
         } else {
-          const auto* d = caf::get_if<concrete_data>(*data_value);
-          if (!d) {
-            if (caf::holds_alternative<caf::none_t>(**data_value)) {
-              if constexpr (std::is_default_constructible_v<To>)
-                new (&dst) To{};
-              return caf::none;
-            }
-            return caf::make_error(ec::convert_error,
-                                   fmt::format(": unexpected data format at "
-                                               "{}: {}",
-                                               f.key(), **data_value));
+          if constexpr (std::is_same_v<Data, caf::none_t>) {
+            if constexpr (std::is_default_constructible_v<To>)
+              new (&dst) To{};
+            return caf::none;
+          } else {
+            if constexpr (IS_TYPED_CONVERTIBLE(d, dst, t))
+              return convert(d, dst, t);
+            if constexpr (IS_UNTYPED_CONVERTIBLE(d, dst))
+              return convert(d, dst);
+            else
+              return caf::make_error(
+                ec::convert_error,
+                fmt::format(": can't convert from {} to {} with type {}",
+                            detail::pretty_type_name(d),
+                            detail::pretty_type_name(dst), t));
           }
-          if constexpr (IS_TYPED_CONVERTIBLE(*d, dst, t))
-            return convert(*d, dst, t);
-          if constexpr (IS_UNTYPED_CONVERTIBLE(*d, dst))
-            return convert(*d, dst);
-          else
-            return caf::make_error(
-              ec::convert_error, fmt::format(": can't convert from {} to {} "
-                                             "with type {}",
-                                             detail::pretty_type_name(*d),
-                                             detail::pretty_type_name(dst), t));
         }
         return caf::none;
       },
-      f.type());
-    return detail::prepend(std::move(err), "{}", f.key());
+      **data_value, f.type());
+    return detail::prepend(std::move(err), ".{}", f.key());
   }
 
   template <class... Ts>
@@ -414,9 +453,9 @@ convert(const record& src, To& dst, const legacy_record_type& layout) {
       return convert(src, dst);
     else
       return caf::make_error(ec::convert_error,
-                             "destination types must have a "
-                             "static layout definition: {}",
-                             detail::pretty_type_name(dst));
+                             fmt::format(": destination types must have a "
+                                         "static layout definition: {}",
+                                         detail::pretty_type_name(dst)));
   }
   auto ri = record_inspector{layout, src};
   return inspect(ri, dst);
@@ -431,7 +470,8 @@ template <has_layout To>
 caf::error convert(const data& src, To& dst) {
   if (const auto* r = caf::get_if<record>(&src))
     return convert(*r, dst);
-  return caf::make_error(ec::convert_error, "expected record, but got {}", src);
+  return caf::make_error(ec::convert_error,
+                         fmt::format(": expected record, but got {}", src));
 }
 
 // TODO: Move to a dedicated header after conversion is refactored to use
@@ -441,8 +481,8 @@ caf::error convert(std::string_view src, To& dst) {
   const auto* f = src.begin();
   if (!parse(f, src.end(), dst))
     return caf::make_error(ec::convert_error,
-                           fmt::format("unable to parse \"{}\" into a {}", src,
-                                       detail::pretty_type_name(dst)));
+                           fmt::format(": unable to parse \"{}\" into a {}",
+                                       src, detail::pretty_type_name(dst)));
   return caf::none;
 }
 

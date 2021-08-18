@@ -34,8 +34,10 @@ struct accountant_state
 /// Accumulates various performance metrics in a key-value format and writes
 /// them to VAST table slices.
 /// @param self The actor handle.
+/// @param cfg The accountant-specific configuration.
+/// @param self The root path for relative metric files.
 accountant_actor::behavior_type
 accountant(accountant_actor::stateful_pointer<accountant_state> self,
-           accountant_config cfg);
+           accountant_config cfg, std::filesystem::path root);
 
 } // namespace vast::system

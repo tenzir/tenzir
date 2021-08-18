@@ -66,7 +66,7 @@ resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs
       return maybe_path;
   }
   return caf::make_error(ec::invalid_configuration,
-                         fmt::format("failed to find plugin {}", name));
+                         fmt::format("failed to find the {} plugin", name));
 }
 
 } // namespace
@@ -178,9 +178,9 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
       };
       if (std::any_of(get().begin(), get().end(), has_same_name))
         return caf::make_error(ec::invalid_configuration,
-                               fmt::format("failed to load plugin {} because "
-                                           "another plugin already uses the "
-                                           "name {}",
+                               fmt::format("failed to load the {} plugin "
+                                           "because another plugin already "
+                                           "uses the name {}",
                                            path, (*plugin)->name()));
       get_mutable().push_back(std::move(*plugin));
       loaded_plugin_paths.emplace_back(std::move(path));
@@ -224,12 +224,11 @@ caf::error initialize(caf::actor_system_config& cfg) {
       if (!yaml_path_exists && !yml_path_exists)
         continue;
       if (yaml_path_exists && yml_path_exists)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("detected configuration files for "
-                                           "plugin {} at conflicting paths {} "
-                                           "and {}",
-                                           plugin->name(), yaml_path,
-                                           yml_path));
+        return caf::make_error(
+          ec::invalid_configuration,
+          fmt::format("detected configuration files for the {} plugin at "
+                      "conflicting paths {} and {}",
+                      plugin->name(), yaml_path, yml_path));
       const auto& path = yaml_path_exists ? yaml_path : yml_path;
       if (auto opts = load_yaml(path)) {
         if (auto opts_data = caf::get_if<record>(&*opts)) {
@@ -238,8 +237,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
         } else {
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("detected invalid plugin "
-                                             "configuration file for plugin {} "
-                                             "at {}",
+                                             "configuration file for the {} "
+                                             "plugin at {}",
                                              plugin->name(), path));
         }
       } else {
@@ -247,12 +246,12 @@ caf::error initialize(caf::actor_system_config& cfg) {
       }
     }
     // Third, initialize the plugin with the merged configuration.
-    VAST_VERBOSE("initializing plugin {} with options: {}", plugin->name(),
+    VAST_VERBOSE("initializing the {} plugin with options: {}", plugin->name(),
                  merged_config);
     if (auto err = plugin->initialize(std::move(merged_config)))
-      return caf::make_error(ec::unspecified,
-                             fmt::format("failed to initialize plugin {}: {} ",
-                                         plugin->name(), err));
+      return caf::make_error(
+        ec::unspecified, fmt::format("failed to initialize the {} plugin: {} ",
+                                     plugin->name(), err));
   }
   return caf::none;
 }

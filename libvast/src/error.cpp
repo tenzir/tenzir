@@ -63,8 +63,13 @@ void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
   size_t size = ctx.size();
   if (size > 0) {
     oss << ":";
-    for (size_t i = 0; i < size; ++i)
-      oss << ' ' << ctx.stringify(i);
+    for (size_t i = 0; i < size; ++i) {
+      oss << ' ';
+      if (ctx.match_element<std::string>(i))
+        oss << ctx.get_as<std::string>(i);
+      else
+        oss << ctx.stringify(i);
+    }
   }
 }
 
