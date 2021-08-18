@@ -419,7 +419,7 @@ process(const ::broker::zeek::LogCreate& msg) {
     zeek::field field;
     if (auto err = extract(field, x))
       return err;
-    type field_type;
+    legacy_type field_type;
     if (auto err = convert(field.type, field.sub_type, field_type))
       return err;
     fields.emplace_back(std::string{field.name}, std::move(field_type));
