@@ -671,14 +671,12 @@ active_partition_actor::behavior_type active_partition(
     },
     [self](vast::query query) -> caf::result<atom::done> {
       auto rp = self->make_response_promise<atom::done>();
+      // Don't bother with with indexers, etc. if we already have an id set.
       if (!query.ids.empty()) {
-        if (query.expr != vast::expression{})
-          rp.deliver(caf::make_error(ec::invalid_argument,
-                                     "query may only contain "
-                                     "either expression or "
-                                     "ids"));
-        else
-          rp.delegate(self->state.store, std::move(query));
+        // TODO: Depending on the selectivity of the query and the rank of the
+        // ids, it may still be beneficial to load some of the indexers to prune
+        // the ids before hitting the store.
+        rp.delegate(self->state.store, std::move(query));
         return rp;
       }
       // TODO: We should do a candidate check using `self->state.synopsis` and
@@ -904,13 +902,10 @@ partition_actor::behavior_type passive_partition(
       // Don't bother with the indexers etc. if we already know the ids
       // we want to retrieve.
       if (!query.ids.empty()) {
-        if (query.expr != vast::expression{})
-          rp.deliver(caf::make_error(ec::invalid_argument,
-                                     "query may only contain "
-                                     "either expression or "
-                                     "ids"));
-        else
-          rp.delegate(self->state.store, query);
+        // TODO: Depending on the selectivity of the query and the rank of the
+        // ids, it may still be beneficial to load some of the indexers to prune
+        // the ids before hitting the store.
+        rp.delegate(self->state.store, query);
         return rp;
       }
       auto triples = evaluate(self->state, query.expr);
