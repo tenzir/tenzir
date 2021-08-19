@@ -21,10 +21,10 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :gift: Features
 
-- The 'segment-store' store backend works correctly with 'vast get' and 'vast explore'.
+- The `segment-store` store backend works correctly with `vast get` and `vast explore`.
   [#1805](https://github.com/tenzir/vast/pull/1805)
 
-- VAST can now process EVE JSON events of type `suricata.packet`, which Suricata emits when the config option `tagged-packets` is set and a rule tags a packet using, e.g., `tag:session,5,packets;`.
+- VAST can now process Eve JSON events of type `suricata.packet` that Suricata emits when the config option `tagged-packets` is set and a rule tags a packet using, e.g., `tag:session,5,packets;`.
   [#1819](https://github.com/tenzir/vast/pull/1819)
   [#1833](https://github.com/tenzir/vast/pull/1833)
 
