@@ -6,6 +6,48 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [2021.08.26-rc1]
+
+### :warning: Changes
+
+- VAST no longer strips link-layer framing when ingesting PCAPs. The stored payload is the raw PCAP packet. Similarly, `vast export pcap` now includes a Ethernet link-layer framing, per libpcap's `DLT_EN10MB` link type.
+  [#1797](https://github.com/tenzir/vast/pull/1797)
+
+- Strings in error or warning log messages are no longer escaped, greatly improving readability of messages containing nested error contexts.
+  [#1842](https://github.com/tenzir/vast/pull/1842)
+
+- VAST now supports building against {fmt} 8 and spdlog 1.9.2, and now requires at least {fmt} 7.1.3.
+  [#1846](https://github.com/tenzir/vast/pull/1846)
+
+### :gift: Features
+
+- The 'segment-store' store backend works correctly with 'vast get' and 'vast explore'.
+  [#1805](https://github.com/tenzir/vast/pull/1805)
+
+- VAST can now process EVE JSON events of type `suricata.packet`, which Suricata emits when the config option `tagged-packets` is set and a rule tags a packet using, e.g., `tag:session,5,packets;`.
+  [#1819](https://github.com/tenzir/vast/pull/1819)
+  [#1833](https://github.com/tenzir/vast/pull/1833)
+
+### :beetle: Bug Fixes
+
+- Previously missing fields of suricata event types are now part of the concept definitions of `net.src.ip`, `net.src.port`, `net.dst.ip`, `net.dst.port`, `net.app`, `net.proto`, `net.community_id`, `net.vlan`, and `net.packets`.
+  [#1798](https://github.com/tenzir/vast/pull/1798)
+
+- Invalid segment files will no longer crash VAST at startup.
+  [#1820](https://github.com/tenzir/vast/pull/1820)
+
+- Plugins in the prebuilt Docker images no longer show `unspecified` as their version.
+  [#1828](https://github.com/tenzir/vast/pull/1828)
+
+- The configuration options `vast.metrics.{file,uds}-sink.path` now correctly specify paths relative to the database directory of VAST, rather than the current working directory of the VAST server.
+  [#1848](https://github.com/tenzir/vast/pull/1848)
+
+- The `segment-store` store backend and built-in transform steps (`hash`, `replace`, and `delete`) now function correctly in static VAST binaries.
+  [#1850](https://github.com/tenzir/vast/pull/1850)
+
+- The output of VAST status now includes status information for sources and sinks spawned in the VAST node, i.e., via `vast spawn source|sink <format>` rather than `vast import|export <format>`.
+  [#1852](https://github.com/tenzir/vast/pull/1852)
+
 ## [2021.07.29]
 
 ### :warning: Changes
@@ -1297,6 +1339,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[2021.08.26-rc1]: https://github.com/tenzir/vast/releases/tag/2021.08.26-rc1
 [2021.07.29]: https://github.com/tenzir/vast/releases/tag/2021.07.29
 [2021.06.24]: https://github.com/tenzir/vast/releases/tag/2021.06.24
 [2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
