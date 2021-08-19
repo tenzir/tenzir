@@ -110,10 +110,10 @@ void collect_status(
     ->template request<caf::message_priority::high>(
       responder, caf::duration{timeout}, atom::status_v, verbosity)
     .then(
-      [rs, f = std::forward<F>(f)](caf::settings& response) {
+      [rs, f = std::forward<F>(f)](caf::settings& response) mutable {
         f(response);
       },
-      [rs, fe = std::forward<Fe>(fe)](caf::error& err) {
+      [rs, fe = std::forward<Fe>(fe)](caf::error& err) mutable {
         fe(err);
       });
 }

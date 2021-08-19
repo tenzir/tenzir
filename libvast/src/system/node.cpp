@@ -178,9 +178,9 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   const auto timeout = defaults::system::initial_request_timeout;
   // Send out requests and collects answers.
   for (const auto& [label, component] : self->state.registry.components()) {
-    // Requests to busy sources and sinks can easily delay the combined response
-    // because the status requests don't get scheduled soon enough.
-    if (component.type == "source" || component.type == "sink")
+    // Requests to busy remote sources and sinks can easily delay the combined
+    // response because the status requests don't get scheduled soon enough.
+    if (component.actor.home_system().node() != self->home_system().node())
       continue;
     collect_status(rs, timeout, v, component.actor, rs->content,
                    component.type);
