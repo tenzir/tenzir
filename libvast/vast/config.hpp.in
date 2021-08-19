@@ -25,10 +25,10 @@ namespace vast::version {
 extern const char* version;
 
 /// The individual version components.
-extern unsigned short major;
-extern unsigned short minor;
-extern unsigned short patch;
-extern unsigned short tweak;
+extern const char* major;
+extern const char* minor;
+extern const char* patch;
+extern const char* tweak;
 
 /// Contains a hash of VAST's build tree.
 extern const char* build_tree_hash;
