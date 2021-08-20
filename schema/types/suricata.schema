@@ -97,17 +97,41 @@ type suricata.dcerpc = suricata.component.common + record {
   }
 }
 
+// At the time of writing no canonical documentation exists for dhcp events.
+// The fields can be derived from the logging code in:
+// https://github.com/OISF/suricata/blob/master/rust/src/dhcp/logger.rs
 type suricata.dhcp = suricata.component.common + record {
   dhcp: record {
-    type: string,
+    type: string, // consider switching to enum { request, reply, <unknown> }
     id: count #index=hash,
     client_mac: string #index=hash,
     assigned_ip: addr,
     client_ip: addr,
-    dhcp_type: string,
+    dhcp_type: enum {
+      discover,
+      offer,
+      request,
+      decline,
+      ack,
+      nak,
+      release,
+      inform,
+      unknown
+    },
+    // In requests:
     client_id: string #index=hash,
     hostname: string #ioc,
-    params: list<string>
+    requested_ip: addr,
+    params: list<string>,
+    // In replies:
+    relay_ip: addr,
+    next_server_ip: addr,
+    lease_time: count,
+    rebinding_time: count,
+    renewal_time: count,
+    subnet_mask: addr,
+    routers: list<addr>,
+    dns_servers: list<addr>
   }
 }
 
