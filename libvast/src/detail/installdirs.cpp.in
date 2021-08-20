@@ -60,6 +60,8 @@ std::filesystem::path install_datadir() {
 std::filesystem::path install_configdir() {
 #if VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   const auto [prefix, _] = install_prefix_and_suffix();
+  if (prefix == "/usr")
+    return "/etc/vast";
   return prefix / "@CMAKE_INSTALL_SYSCONFDIR@/vast";
 #else
   return "@CMAKE_INSTALL_FULL_SYSCONFDIR@/vast";
