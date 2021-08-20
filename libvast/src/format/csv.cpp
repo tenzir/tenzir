@@ -33,6 +33,26 @@ namespace vast::format::csv {
 
 namespace {
 
+/// A parser that passes the result of the qqstr parser to a nested parser.
+template <parser NestedParser>
+class quoted_parser : public parser_base<quoted_parser<NestedParser>> {
+public:
+  using attribute = typename NestedParser::attribute;
+
+  explicit quoted_parser(NestedParser parser) : parser_(std::move(parser)) {
+    // nop
+  }
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    if (std::string buffer; parsers::qqstr(f, l, buffer))
+      return parser_(buffer, x);
+    return false;
+  }
+
+  NestedParser parser_;
+};
+
 constexpr std::string_view empty = "\"\"";
 
 using output_iterator = std::back_insert_iterator<std::vector<char>>;
@@ -91,7 +111,11 @@ caf::error render(output_iterator&, const view<map>&) {
 }
 
 caf::error render(output_iterator& out, const view<data>& x) {
-  return caf::visit([&](const auto& y) { return render(out, y); }, x);
+  return caf::visit(
+    [&](const auto& y) {
+      return render(out, y);
+    },
+    x);
 }
 
 } // namespace
@@ -243,7 +267,9 @@ struct container_parser_builder {
       return (+(parsers::any - opt_.set_separator - opt_.kvp_separator))
         .with(to_enumeration);
     } else if constexpr (std::is_same_v<T, legacy_list_type>) {
-      auto list_insert = [](std::vector<Attribute> xs) { return xs; };
+      auto list_insert = [](std::vector<Attribute> xs) {
+        return xs;
+      };
       return ('[' >> ~(caf::visit(*this, t.value_type) % opt_.set_separator)
               >> ']')
                ->*list_insert;
@@ -328,12 +354,12 @@ struct csv_parser_factory {
         }
       }
       // If we do not have an explicit unit given, we require the unit suffix.
-      return (-parsers::duration).with(add_t<duration>{bptr_});
+      return (-(quoted_parser{parsers::duration} | parsers::duration))
+        .with(add_t<duration>{bptr_});
     } else if constexpr (std::is_same_v<T, legacy_string_type>) {
       return (-field).with(add_t<std::string>{bptr_});
     } else if constexpr (std::is_same_v<T, legacy_pattern_type>) {
-      return (-as<pattern>(as<std::string>(+(parsers::any - opt_.separator))))
-        .with(add_t<pattern>{bptr_});
+      return (-as<pattern>(as<std::string>(field))).with(add_t<pattern>{bptr_});
     } else if constexpr (std::is_same_v<T, legacy_enumeration_type>) {
       auto to_enumeration = [t](std::string s) -> caf::optional<enumeration> {
         auto i = std::find(t.fields.begin(), t.fields.end(), s);
@@ -348,11 +374,12 @@ struct csv_parser_factory {
       return (field ->* to_enumeration).with(add_t<enumeration>{bptr_});
       // clang-format on
     } else if constexpr (detail::is_any_v<T, legacy_list_type, legacy_map_type>) {
-      return (-container_parser_builder<Iterator, data>{opt_}(t))
-        .with(add_t<data>{bptr_});
+      auto pb = container_parser_builder<Iterator, data>{opt_};
+      return (-pb(t)).with(add_t<data>{bptr_});
     } else if constexpr (registered_parser_type<type_to_data<T>>) {
       using value_type = type_to_data<T>;
-      return (-make_parser<value_type>{}).with(add_t<value_type>{bptr_});
+      auto p = make_parser<value_type>{};
+      return (-(quoted_parser{p} | p)).with(add_t<value_type>{bptr_});
     } else {
       VAST_ERROR("csv parser builder failed to fetch a parser for type "
                  "{}",

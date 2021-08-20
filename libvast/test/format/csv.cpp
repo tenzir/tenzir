@@ -111,9 +111,9 @@ TEST(csv reader - simple) {
 }
 
 std::string_view l0_log1 = R"__(ts,addr,port
-2011-08-12T13:00:36.349948Z,147.32.84.165,1027
-2011-08-12T13:08:01.360925Z,147.32.84.165,
-2011-08-12T13:08:01.360925Z,,1029
+2011-08-12T13:00:36.349948Z,"147.32.84.165",1027
+"2011-08-12T13:08:01.360925Z",147.32.84.165,
+2011-08-12T13:08:01.360925Z,,"1029"
 2011-08-12T13:09:35.498887Z,147.32.84.165,1029
 2011-08-12T13:14:36.012344Z,147.32.84.165,1041
 ,147.32.84.165,1046
@@ -194,8 +194,8 @@ TEST(csv reader - layout with container) {
 std::string_view l1_log1 = R"__(s,ptn
 hello,world
 Tom,appeared
-on,the
-sidewalk,with
+"on",the
+sidewalk,"with"
 a,bucket
 of,whitewash
 and,a
@@ -258,7 +258,7 @@ TEST(csv reader - list of count) {
 }
 
 std::string_view l2_log_subnet = R"__(sn
-1.2.3.4/20
+"1.2.3.4/20"
 2001:db8::/125)__";
 
 TEST(csv reader - subnet) {
@@ -272,7 +272,7 @@ TEST(csv reader - subnet) {
 }
 
 std::string_view l2_log_duration = R"__(d,d2
-42s,5days)__";
+"42s",5days)__";
 
 TEST(csv reader - duration) {
   auto slices = run(l2_log_duration, 1, 1);
@@ -354,6 +354,10 @@ TEST(csv reader - line endings) {
   CHECK(slices[0].at(1, 1, legacy_duration_type{})
         == data{unbox(to<duration>("1days"))});
 }
+
+// Below are strings that extensively test quoting and escaping for string
+// fields and column names. For other field types, other tests above have
+// quoted field sprinkled all over them.
 
 std::string_view l3_quoted_strings_header = R"__(s1,"s2,3"
 a,b
