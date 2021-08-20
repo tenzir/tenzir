@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.08.26-rc2]
+## [2021.08.26-rc3]
 
 ### :warning: Changes
 
@@ -18,6 +18,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST now supports building against {fmt} 8 and spdlog 1.9.2, and now requires at least {fmt} 7.1.3.
   [#1846](https://github.com/tenzir/vast/pull/1846)
+
+- VAST now ships with an updated schema type for the `suricata.dhcp` event, covering all fields of the extended output.
+  [#1854](https://github.com/tenzir/vast/pull/1854)
 
 ### :gift: Features
 
@@ -47,6 +50,15 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The output of VAST status now includes status information for sources and sinks spawned in the VAST node, i.e., via `vast spawn source|sink <format>` rather than `vast import|export <format>`.
   [#1852](https://github.com/tenzir/vast/pull/1852)
+
+- In order to align with the [GNU Coding Standards](https://www.gnu.org/prep/standards/html_node/Directory-Variables.html), the static binary (and other relocatable binaries) now uses `/etc` as sysconfdir for installations to `/usr/bin/vast`.
+  [#1856](https://github.com/tenzir/vast/pull/1856)
+
+- VAST now only switches to journald style logging by default when it is actually supported.
+  [#1857](https://github.com/tenzir/vast/pull/1857)
+
+- The CSV parser now correctly parses quoted fields in non-string types. E.g., `"127.0.0.1"` in CSV now successfully parsers when a matching schema contains an `address` type field.
+  [#1858](https://github.com/tenzir/vast/pull/1858)
 
 ## [2021.07.29]
 
@@ -1339,7 +1351,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.08.26-rc2]: https://github.com/tenzir/vast/releases/tag/2021.08.26-rc2
+[2021.08.26-rc3]: https://github.com/tenzir/vast/releases/tag/2021.08.26-rc3
 [2021.07.29]: https://github.com/tenzir/vast/releases/tag/2021.07.29
 [2021.06.24]: https://github.com/tenzir/vast/releases/tag/2021.06.24
 [2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
