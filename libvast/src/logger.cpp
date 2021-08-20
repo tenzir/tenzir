@@ -220,7 +220,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   std::vector<spdlog::sink_ptr> sinks;
   // Add console sink.
   std::string default_sink_type
-    = systemd::connected_to_journal() ? "journald" : "stderr";
+    = VAST_ENABLE_JOURNALD_LOGGING && systemd::connected_to_journal()
+        ? "journald"
+        : "stderr";
   auto sink_type
     = caf::get_or(cfg_file, "vast.console-sink", default_sink_type);
   auto console_sink = [&]() -> spdlog::sink_ptr {
