@@ -44,7 +44,10 @@ vast:
   # The sink type to use for console logging. Possible values: stderr,
   # syslog, journald. Note that 'journald' can only be selected on linux
   # systems, and only if VAST was built with journald support.
-  console-sink: stderr
+  # The journald sink is used as default if VAST is started as a systemd
+  # service and the service is configured to use the journal for stderr,
+  # otherwise the default is the unstructured stderr sink.
+  #console-sink: stderr/journald
 
   # Mode for console log output generation. Automatic renders color only when
   # writing to a tty.
