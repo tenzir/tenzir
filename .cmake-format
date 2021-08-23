@@ -38,6 +38,12 @@ with section("parse"):
                 "nargs": 1,
             },
         },
+        "vastinstallexampleconfiguration": {
+            "spelling": "VASTInstallExampleConfiguration",
+            "pargs": {
+                "nargs": 3,
+            },
+        },
         "vastsystemizetarget": {
             "spelling": "VASTSystemizeTarget",
             "pargs": {
