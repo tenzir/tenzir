@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "broker/reader.hpp"
+#include "broker/writer.hpp"
 
 #include <vast/data.hpp>
 #include <vast/error.hpp>
@@ -19,7 +20,8 @@
 namespace vast::plugins::broker {
 
 /// The Broker reader plugin.
-class plugin final : public virtual reader_plugin {
+class plugin final : public virtual reader_plugin,
+                     public virtual writer_plugin {
 public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
@@ -44,12 +46,12 @@ public:
 
   /// Returns the import format's name.
   [[nodiscard]] const char* reader_format() const override {
-    return "broker";
+    return name();
   }
 
   /// Returns the `vast import <format>` helptext.
   [[nodiscard]] const char* reader_help() const override {
-    return "imports events via Zeek's Broker";
+    return "imports events from Zeek via Broker";
   }
 
   /// Returns the `vast import <format>` documentation.
@@ -91,8 +93,6 @@ this is where Zeek publishes log events. Use `--topic` to set a different topic.
 )__";
   }
 
-  /// Returns the options for the `vast import <format>` and `vast spawn source
-  /// <format>` commands.
   [[nodiscard]] caf::config_option_set
   reader_options(command::opts_builder&& opts) const override {
     return std::move(opts)
@@ -103,11 +103,37 @@ this is where Zeek publishes log events. Use `--topic` to set a different topic.
       .finish();
   };
 
-  /// Creates a reader, which will be available via `vast import <format>` and
-  /// `vast spawn source <format>`.
   [[nodiscard]] std::unique_ptr<format::reader>
   make_reader(const caf::settings& options) const override {
     return std::make_unique<reader>(options, nullptr);
+  }
+
+  [[nodiscard]] const char* writer_format() const override {
+    return name();
+  }
+
+  [[nodiscard]] const char* writer_help() const override {
+    return "exports events to Zeek via Broker";
+  }
+
+  [[nodiscard]] const char* writer_documentation() const override {
+    return R"__(TODO
+)__";
+  }
+
+  [[nodiscard]] caf::config_option_set
+  writer_options(command::opts_builder&& opts) const override {
+    return std::move(opts)
+      .add<bool>("listen", "listen instead of connect")
+      .add<std::string>("host", "the broker endpoint host")
+      .add<uint16_t>("port", "the broker endpoint port")
+      .add<std::string>("topic", "topic to publish to")
+      .finish();
+  }
+
+  [[nodiscard]] std::unique_ptr<format::writer>
+  make_writer(const caf::settings& options) const override {
+    return std::make_unique<writer>(options);
   }
 };
 

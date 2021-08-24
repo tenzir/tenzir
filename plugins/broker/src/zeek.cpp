@@ -445,9 +445,9 @@ process(const ::broker::zeek::LogCreate& msg) {
   static auto double_to_duration = [](double x) {
     return std::chrono::duration_cast<duration>(double_seconds{x});
   };
-  auto rotation_base = time{double_to_duration(*rotation_base_dbl)};
+  auto rotation_base = data{time{double_to_duration(*rotation_base_dbl)}};
   auto rotation_interval = double_to_duration(*rotation_interval_dbl);
-  auto network_time = time{double_to_duration(*network_time_dbl)};
+  auto network_time = data{time{double_to_duration(*network_time_dbl)}};
   VAST_DEBUG("creating Zeek log: stream={}, type={} "
              "rotation_base={} rotation_interval={} created={}",
              msg.stream_id(), *type_name, rotation_base, rotation_interval,
