@@ -18,9 +18,49 @@
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
 
+#include <broker/endpoint.hh>
+#include <broker/subscriber.hh>
+#include <broker/topic.hh>
+#include <caf/settings.hpp>
+
 #include <span>
 
 namespace vast::plugins::broker {
+
+std::unique_ptr<::broker::endpoint>
+make_endpoint(const caf::settings& options, std::string_view category) {
+  auto subcat = [&](auto sub) {
+    return std::string{category} + '.' + sub;
+  };
+  auto addr = caf::get_or(options, subcat("host"), "localhost");
+  auto port = caf::get_or(options, subcat("port"), uint16_t{9999});
+  auto listen = caf::get_or(options, subcat("listen"), false);
+  // Either open a socket and listen, or peer with the remote endpoint.
+  auto endpoint = std::make_unique<::broker::endpoint>();
+  if (listen) {
+    VAST_INFO("broker listening on {}:{}", addr, port);
+    endpoint->listen(addr, port);
+  } else {
+    auto timeout = caf::get_or(options, subcat("retry-timeout"), 10);
+    VAST_INFO("broker connects to {}:{} (retries every {} seconds)", addr, port,
+              timeout);
+    endpoint->peer(addr, port, ::broker::timeout::seconds(timeout));
+  }
+  return endpoint;
+}
+
+std::unique_ptr<::broker::subscriber>
+make_subscriber(::broker::endpoint& endpoint, std::vector<std::string> topics) {
+  std::vector<::broker::topic> broker_topics;
+  broker_topics.reserve(topics.size());
+  for (auto& topic : topics) {
+    VAST_INFO("broker subscribes to topic {}", topic);
+    broker_topics.push_back(std::move(topic));
+  }
+  auto max_queue_size = size_t{20}; // default is 20
+  return std::make_unique<::broker::subscriber>(
+    endpoint.make_subscriber(std::move(broker_topics), max_queue_size));
+}
 
 // Things we take directly from zeek.
 namespace zeek {

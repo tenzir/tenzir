@@ -19,6 +19,20 @@
 
 namespace vast::plugins::broker {
 
+/// Constructs a Broker endpoint from command line options.
+/// @param options The command line options.
+/// @param category The parent category for *options*.
+/// @returns A Broker endpoint.
+std::unique_ptr<::broker::endpoint>
+make_endpoint(const caf::settings& options, std::string_view category);
+
+/// Attaches a Broker subscriber to an endpoint.
+/// @param endpoint The endpoint to attach a subscriber to.
+/// @param topics The list of topics to subscribe to.
+/// @returns A subscriber for *topics*.
+std::unique_ptr<::broker::subscriber>
+make_subscriber(::broker::endpoint& endpoint, std::vector<std::string> topics);
+
 /// Handles a Zeek *log create* message. This message opens a log stream and
 /// conveys the type information needed to correctly interpret subsequent log
 /// writes.
