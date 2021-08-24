@@ -261,10 +261,20 @@ caf::error configuration::parse(int argc, char** argv) {
         return x.error();
     } else {
       // If the option is not relevant to CAF's custom options, we just store
-      // the value directly in the content, or append if it's a list.
-      if (auto content_list
-          = caf::get_if<caf::config_value::list>(&content, key)) {
-        content_list->emplace_back(value);
+      // the value directly in the content, or append/merge if it's a list.
+      auto content_as_list
+        = caf::get_if<caf::config_value::list>(&content, key);
+      const auto value_as_list = caf::get_if<caf::config_value::list>(&value);
+      if (content_as_list && value_as_list) {
+        for (const auto& elem : *value_as_list)
+          content_as_list->emplace_back(elem);
+      } else if (content_as_list) {
+        content_as_list->emplace_back(value);
+      } else if (value_as_list) {
+        auto values = caf::config_value::list{content[key]};
+        for (const auto& elem : *value_as_list)
+          values.emplace_back(elem);
+        caf::put(content, key, std::move(values));
       } else {
         caf::put(content, key, value);
       }
