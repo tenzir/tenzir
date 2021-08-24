@@ -1,2 +1,1 @@
-The memory counts in the output of `vast status` from now on use bytes
-instead of kilobytes for the unit.
+The memory counts in the output of `vast status` now represent bytes consistently, as opposed to a mix of bytes and kilobytes. 
