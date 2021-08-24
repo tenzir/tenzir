@@ -54,15 +54,16 @@ static caf::settings get_status_proc() {
   caf::settings result;
   auto skip = ignore(+parsers::any);
   auto ws = ignore(+parsers::space);
-  auto kvp = [&](const char* k, const std::string_view human_friendly, auto v) {
-    using T = decltype(v);
-    return (k >> ws >> si_parser<T>{} >> skip)->*[=, &result](T x) {
-      result[human_friendly] = x;
-    };
+  auto kvp = [&](const char* k, const std::string_view human_friendly) {
+    // The output says "kB", but the unit is actually "kiB".
+    return (k >> ws >> parsers::u64 >> ws >> "kB" >> skip)
+             ->*[=, &result](uint64_t x) {
+                   result[human_friendly] = x * 1024;
+                 };
   };
-  auto rss = kvp("VmRSS:", "current-memory-usage", size_t{});
-  auto size = kvp("VmHWM:", "peak-memory-usage", size_t{});
-  auto swap = kvp("VmSwap:", "swap-space-usage", size_t{});
+  auto rss = kvp("VmRSS:", "current-memory-usage");
+  auto size = kvp("VmHWM:", "peak-memory-usage");
+  auto swap = kvp("VmSwap:", "swap-space-usage");
   auto p = rss | size | swap | skip;
   while (true) {
     lines.next();
@@ -89,8 +90,10 @@ static caf::settings get_settings_mach() {
     return {};
   struct task_basic_info t_info;
   mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
-  task_info(task, TASK_BASIC_INFO, (task_info_t) &t_info, &t_info_count);
-  result["current-memory-usage"] = t_info.resident_size;
+  task_info(task, TASK_BASIC_INFO, (task_info_t)&t_info, &t_info_count);
+  // http://web.mit.edu/darwin/src/modules/xnu/osfmk/man/task_basic_info.html
+  // says the resident set size is counted in pages, so we multiply accordingly.
+  result["current-memory-usage"] = t_info.resident_size * PAGE_SIZE;
   return result;
 }
 
@@ -108,7 +111,7 @@ static caf::settings get_status_rusage() {
     VAST_WARN("{} failed to obtain rusage: {}", __func__, std::strerror(errno));
     return result;
   }
-  result["peak-memory-usage"] = ru.ru_maxrss;
+  result["peak-memory-usage"] = ru.ru_maxrss * 1024;
   return result;
 }
 
