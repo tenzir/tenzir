@@ -10,6 +10,7 @@
 
 #include "broker/zeek.hpp"
 
+#include <vast/legacy_type.hpp>
 #include <vast/logger.hpp>
 #include <vast/table_slice.hpp>
 
@@ -19,43 +20,68 @@ namespace vast::plugins::broker {
 
 namespace {
 
-caf::error convert(view<data> in, ::broker::data& out) {
+caf::error
+convert(view<data> in, ::broker::data& out, const legacy_type& field_type) {
   auto f = detail::overload{
-    [&](const auto& x) -> caf::error {
-      out = x;
-      return {};
+    [&](const auto& x, const auto& y) -> caf::error {
+      return caf::make_error(ec::type_clash, detail::pretty_type_name(x),
+                             detail::pretty_type_name(y));
     },
-    [&](caf::none_t) -> caf::error {
+    [&](caf::none_t, const auto&) -> caf::error {
       out = {};
       return {};
     },
-    [&](view<integer> x) -> caf::error {
-      out = x.value;
+    [&](caf::none_t, const legacy_alias_type&) -> caf::error {
+      out = {};
       return {};
     },
-    // FIXME: use double-dispatch together with the type to differentiate when
-    // we should use broker::port vs. plain counts. Using single dispatch on
-    // the data alone is not sufficient to make a proper type conversion.
-    [&](view<count> x) -> caf::error {
+    [&](count x, const legacy_alias_type& y) -> caf::error {
+      if (y.name() == "port") {
+        out = ::broker::port{static_cast<::broker::port::number_type>(x),
+                             ::broker::port::protocol::unknown};
+        return {};
+      }
+      return convert(in, out, y.value_type);
+    },
+    [&](const auto&, const legacy_alias_type& y) -> caf::error {
+      return convert(in, out, y.value_type);
+    },
+    [&](view<bool> x, const legacy_bool_type&) -> caf::error {
       out = x;
       return {};
     },
-    [&](view<std::string> x) -> caf::error {
+    [&](view<integer> x, const legacy_integer_type&) -> caf::error {
+      out = x.value;
+      return {};
+    },
+    [&](view<count> x, const legacy_count_type&) -> caf::error {
+      out = x;
+      return {};
+    },
+    [&](view<time> x, const legacy_time_type&) -> caf::error {
+      out = x;
+      return {};
+    },
+    [&](view<duration> x, const legacy_duration_type&) -> caf::error {
+      out = x;
+      return {};
+    },
+    [&](view<std::string> x, const legacy_string_type&) -> caf::error {
       out = std::string{x};
       return {};
     },
-    [&](view<pattern> x) -> caf::error {
+    [&](view<pattern> x, const legacy_pattern_type&) -> caf::error {
       out = std::string{x.string()};
       return {};
     },
-    [&](view<address> x) -> caf::error {
+    [&](view<address> x, const legacy_address_type&) -> caf::error {
       auto bytes
         = reinterpret_cast<const uint32_t*>(std::launder(x.data().data()));
       out = ::broker::address{bytes, ::broker::address::family::ipv6,
                               ::broker::address::byte_order::network};
       return {};
     },
-    [&](view<subnet> x) -> caf::error {
+    [&](view<subnet> x, const legacy_subnet_type&) -> caf::error {
       auto bytes = reinterpret_cast<const uint32_t*>(
         std::launder(x.network().data().data()));
       auto addr = ::broker::address{bytes, ::broker::address::family::ipv6,
@@ -63,55 +89,42 @@ caf::error convert(view<data> in, ::broker::data& out) {
       out = ::broker::subnet(addr, x.length());
       return {};
     },
-    [&](view<enumeration> x) -> caf::error {
-      // FIXME: use double-dispatch over (data_view, type) to get type
-      // information instead of just the raw integer.
-      //
-      // Details: we face two different implementation approaches for enums. To
-      // represent the actual enum value, Broker uses a string whereas VAST
-      // uses a 32-bit unsigned integer. We currently lose the type information
-      // by converting the VAST enum into a Broker count. A wholistic approach
-      // would include the type information for this data instance and perform
-      // the string conversion.
-      out = ::broker::count{x};
+    [&](view<enumeration> x, const legacy_enumeration_type& y) -> caf::error {
+      if (x >= y.fields.size())
+        return caf::make_error(ec::invalid_argument, "enum out of bounds");
+      out = ::broker::enum_value{y.fields[x]};
       return {};
     },
-    [&](view<list> xs) -> caf::error {
+    [&](view<list> xs, const legacy_list_type& l) -> caf::error {
       ::broker::vector result;
-      result.reserve(xs.size());
-      // TODO
-      // std::transform(xs.begin(), xs.end(), std::back_inserter(result),
-      //               [](const auto& x) {
-      //                 return to_broker(x);
-      //               });
+      result.resize(xs.size());
+      for (size_t i = 0; i < result.size(); ++i)
+        if (auto err = convert(xs->at(i), result[i], l.value_type))
+          return err;
       out = std::move(result);
       return {};
     },
-    [&](view<map> xs) -> caf::error {
+    [&](view<map> xs, const legacy_map_type& m) -> caf::error {
       ::broker::table result;
-      // TODO
-      // auto f = [](const auto& x) {
-      //  return std::pair{to_broker(x.first), to_broker(x.second)};
-      //};
-      // std::transform(xs.begin(), xs.end(), std::inserter(result,
-      // result.end()),
-      //               f);
+      for (size_t i = 0; i < result.size(); ++i) {
+        ::broker::data key;
+        ::broker::data value;
+        auto [key_view, value_view] = xs->at(i);
+        if (auto err = convert(key_view, key, m.key_type))
+          return err;
+        if (auto err = convert(value_view, value, m.value_type))
+          return err;
+        result.emplace(std::move(key), std::move(value));
+      }
       out = std::move(result);
       return {};
     },
-    [&](view<record> xs) -> caf::error {
-      ::broker::vector result;
-      result.reserve(xs.size());
-      // TODO
-      // auto f = [](const auto& x) {
-      //  return to_broker(x.second);
-      //};
-      // std::transform(xs.begin(), xs.end(), std::back_inserter(result), f);
-      out = std::move(result);
-      return {};
+    [&](view<record>, const legacy_record_type&) -> caf::error {
+      return caf::make_error(ec::invalid_argument, //
+                             "records must be flattened");
     },
   };
-  return caf::visit(f, in);
+  return caf::visit(f, in, field_type);
 }
 
 } // namespace
@@ -139,32 +152,28 @@ caf::error writer::write(const table_slice& slice) {
       },
       [&](const ::broker::status& status) -> caf::error {
         VAST_INFO("{} got Broker status: {}", name(), to_string(status));
-        // TODO: decide what to do based on status type.
         return {};
       },
     };
     if (auto err = caf::visit(f, x))
       return err;
   }
-  // Ship data to Zeek via Broker.
+  // Ship data to Zeek via Broker, one event per row.
   for (size_t row = 0; row < slice.rows(); ++row) {
-    // Assemble an event as a list of broker data values.
     ::broker::vector xs;
-    auto&& layout = slice.layout();
+    const auto& layout = slice.layout();
     auto columns = layout.fields.size();
     xs.reserve(columns);
+    auto flat_layout = flatten(layout);
     for (size_t col = 0; col < columns; ++col) {
       ::broker::data x;
-      if (auto err = convert(slice.at(row, col), x))
+      auto& field_type = flat_layout.fields[col].type;
+      if (auto err = convert(slice.at(row, col), x, field_type))
         return err;
       xs.push_back(std::move(x));
     }
-    // TODO: rethink how we are going to map the type name to Zeek events.
-    // The current format here assumes one global event that Zeek handles:
-    //     global result: event(id: string, data: any);
-    // We probably want a more fine-grained solution.
     ::broker::vector args(2);
-    args[0] = slice.layout().name();
+    args[0] = layout.name();
     args[1] = std::move(xs);
     auto event = ::broker::zeek::Event{event_name_, std::move(args)};
     endpoint_->publish(topic_, std::move(event));
