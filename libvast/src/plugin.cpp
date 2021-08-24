@@ -93,6 +93,10 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
   // Step 1: Get the necessary options.
   auto paths_or_names
     = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
+  if (paths_or_names.empty()) {
+    if (auto path_or_name = caf::get_if<std::string>(&cfg, "vast.plugins"))
+      paths_or_names = {std::move(*path_or_name)};
+  }
   if (paths_or_names.empty() && bundled_plugins.empty())
     return loaded_plugin_paths;
   const auto plugin_dirs = get_plugin_dirs(cfg);
