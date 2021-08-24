@@ -261,8 +261,13 @@ caf::error configuration::parse(int argc, char** argv) {
         return x.error();
     } else {
       // If the option is not relevant to CAF's custom options, we just store
-      // the value directly in the content.
-      put(content, key, value);
+      // the value directly in the content, or append if it's a list.
+      if (auto content_list
+          = caf::get_if<caf::config_value::list>(&content, key)) {
+        content_list->emplace_back(value);
+      } else {
+        caf::put(content, key, value);
+      }
     }
   }
   // If the user specifies a VAST_ENDPOINT, potentially use it. Precedence:
