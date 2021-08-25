@@ -121,8 +121,6 @@ using namespace std::chrono;
 
 namespace vast::system {
 
-namespace {
-
 caf::error extract_partition_synopsis(
   const std::filesystem::path& partition_path,
   const std::filesystem::path& partition_synopsis_path) {
@@ -154,8 +152,6 @@ caf::error extract_partition_synopsis(
   return io::save(partition_synopsis_path,
                   std::span{chunk_out->data(), chunk_out->size()});
 }
-
-} // namespace
 
 std::filesystem::path index_state::partition_path(const uuid& id) const {
   return dir / to_string(id);

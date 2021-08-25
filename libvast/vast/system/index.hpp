@@ -265,6 +265,13 @@ struct index_state {
   constexpr static inline auto name = "index";
 };
 
+/// Extract a partition synopsis from the partition at `partition_path`
+/// and write it to `partition_synopsis_path`.
+//  TODO: Move into separate header.
+caf::error
+extract_partition_synopsis(const std::filesystem::path& partition_path,
+                           const std::filesystem::path& partition_synopsis_path);
+
 /// Flatbuffer integration. Note that this is only one-way, restoring
 /// the index state needs additional runtime information.
 // TODO: Pull out the persisted part of the state into a separate struct
