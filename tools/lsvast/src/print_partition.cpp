@@ -78,7 +78,8 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
   indented_scope _(indent);
   vast::uuid id;
   if (partition->uuid())
-    unpack(*partition->uuid(), id);
+    if (auto error = unpack(*partition->uuid(), id))
+      std::cerr << indent << to_string(error);
   std::cout << indent << "uuid: " << to_string(id) << "\n";
   std::cout << indent << "offset: " << partition->offset() << "\n";
   std::cout << indent << "events: " << partition->events() << "\n";

@@ -138,13 +138,16 @@ caf::error extract_partition_synopsis(
   const auto* partition_v0 = partition->partition_as_v0();
   VAST_ASSERT(partition_v0);
   partition_synopsis ps;
-  unpack(*partition_v0, ps);
+  if (auto error = unpack(*partition_v0, ps))
+    return error;
   flatbuffers::FlatBufferBuilder builder;
-  auto ps_offset = *pack(builder, ps);
+  auto ps_offset = pack(builder, ps);
+  if (!ps_offset)
+    return ps_offset.error();
   fbs::PartitionSynopsisBuilder ps_builder(builder);
   ps_builder.add_partition_synopsis_type(
     fbs::partition_synopsis::PartitionSynopsis::v0);
-  ps_builder.add_partition_synopsis(ps_offset.Union());
+  ps_builder.add_partition_synopsis(ps_offset->Union());
   auto flatbuffer = ps_builder.Finish();
   fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
   auto chunk_out = fbs::release(builder);
@@ -216,7 +219,11 @@ caf::error index_state::load_from_disk() {
     for (const auto* uuid_fb : *partition_uuids) {
       VAST_ASSERT(uuid_fb);
       vast::uuid partition_uuid{};
-      unpack(*uuid_fb, partition_uuid);
+      if (auto error = unpack(*uuid_fb, partition_uuid))
+        return caf::make_error(ec::format_error, fmt::format("could not unpack "
+                                                             "uuid from "
+                                                             "index state: {}",
+                                                             error));
       auto part_path = partition_path(partition_uuid);
       auto synopsis_path = partition_synopsis_path(partition_uuid);
       if (!exists(part_path)) {
