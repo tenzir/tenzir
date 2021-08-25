@@ -113,15 +113,13 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   return ps_builder.Finish();
 }
 
-caf::error
-unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
-  if (!x.synopses())
-    return caf::make_error(ec::format_error, "missing synopses");
-  if (!x.id_range())
-    return caf::make_error(ec::format_error, "missing id range");
-  ps.offset = x.id_range()->begin();
-  ps.events = x.id_range()->end() - x.id_range()->begin();
-  for (auto synopsis : *x.synopses()) {
+namespace {
+
+// Not publicly exposed because it doesn't fully initialize `ps`.
+caf::error unpack_(
+  const flatbuffers::Vector<flatbuffers::Offset<fbs::synopsis::v0>>& synopses,
+  partition_synopsis& ps) {
+  for (auto synopsis : synopses) {
     if (!synopsis)
       return caf::make_error(ec::format_error, "synopsis is null");
     qualified_record_field qf;
@@ -139,6 +137,19 @@ unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
   return caf::none;
 }
 
+} // namespace
+
+caf::error
+unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
+  if (!x.id_range())
+    return caf::make_error(ec::format_error, "missing id range");
+  ps.offset = x.id_range()->begin();
+  ps.events = x.id_range()->end() - x.id_range()->begin();
+  if (!x.synopses())
+    return caf::make_error(ec::format_error, "missing synopses");
+  return unpack_(*x.synopses(), ps);
+}
+
 // This overload is for supporting the transition from VAST 2021.07.29
 // to 2021.08.26, where the `id_range` field was added to partition
 // synopsis. It can be removed once these versions are unsupported.
@@ -150,22 +161,7 @@ caf::error unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps,
   ps.events = events;
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
-  for (auto synopsis : *x.synopses()) {
-    if (!synopsis)
-      return caf::make_error(ec::format_error, "synopsis is null");
-    qualified_record_field qf;
-    if (auto error
-        = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf))
-      return error;
-    synopsis_ptr ptr;
-    if (auto error = unpack(*synopsis, ptr))
-      return error;
-    if (!qf.field_name.empty())
-      ps.field_synopses_[qf] = std::move(ptr);
-    else
-      ps.type_synopses_[qf.type] = std::move(ptr);
-  }
-  return caf::none;
+  return unpack_(*x.synopses(), ps);
 }
 
 } // namespace vast
