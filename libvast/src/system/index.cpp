@@ -138,13 +138,16 @@ caf::error extract_partition_synopsis(
   const auto* partition_v0 = partition->partition_as_v0();
   VAST_ASSERT(partition_v0);
   partition_synopsis ps;
-  unpack(*partition_v0, ps);
+  if (auto error = unpack(*partition_v0, ps))
+    return error;
   flatbuffers::FlatBufferBuilder builder;
-  auto ps_offset = *pack(builder, ps);
+  auto ps_offset = pack(builder, ps);
+  if (!ps_offset)
+    return ps_offset.error();
   fbs::PartitionSynopsisBuilder ps_builder(builder);
   ps_builder.add_partition_synopsis_type(
     fbs::partition_synopsis::PartitionSynopsis::v0);
-  ps_builder.add_partition_synopsis(ps_offset.Union());
+  ps_builder.add_partition_synopsis(ps_offset->Union());
   auto flatbuffer = ps_builder.Finish();
   fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
   auto chunk_out = fbs::release(builder);
