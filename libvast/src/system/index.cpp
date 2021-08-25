@@ -219,7 +219,11 @@ caf::error index_state::load_from_disk() {
     for (const auto* uuid_fb : *partition_uuids) {
       VAST_ASSERT(uuid_fb);
       vast::uuid partition_uuid{};
-      unpack(*uuid_fb, partition_uuid);
+      if (auto error = unpack(*uuid_fb, partition_uuid))
+        return caf::make_error(ec::format_error, fmt::format("could not unpack "
+                                                             "uuid from "
+                                                             "index state: {}",
+                                                             error));
       auto part_path = partition_path(partition_uuid);
       auto synopsis_path = partition_synopsis_path(partition_uuid);
       if (!exists(part_path)) {

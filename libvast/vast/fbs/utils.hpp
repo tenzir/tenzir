@@ -129,7 +129,7 @@ wrap(T const& x, const char* file_identifier = nullptr) {
 /// @param x The object to unpack *xs* into.
 /// @returns An error iff the operation failed.
 template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
-caf::error unwrap(std::span<const std::byte, Extent> xs, T& x) {
+[[nodiscard]] caf::error unwrap(std::span<const std::byte, Extent> xs, T& x) {
   if (auto flatbuf = as_flatbuffer<Flatbuffer>(xs))
     return unpack(*flatbuf, x);
   return caf::make_error(ec::unspecified, "flatbuffer verification failed");

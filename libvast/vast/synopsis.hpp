@@ -96,10 +96,10 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 
 /// Flatbuffer support.
-caf::expected<flatbuffers::Offset<fbs::synopsis::v0>>
+[[nodiscard]] caf::expected<flatbuffers::Offset<fbs::synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr&,
      const qualified_record_field&);
 
-caf::error unpack(const fbs::synopsis::v0&, synopsis_ptr&);
+[[nodiscard]] caf::error unpack(const fbs::synopsis::v0&, synopsis_ptr&);
 
 } // namespace vast

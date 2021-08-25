@@ -58,7 +58,8 @@ TEST(uuid roundtrip) {
   CHECK_NOT_EQUAL(uuid, uuid2);
   std::span<const std::byte> span{
     reinterpret_cast<const std::byte*>(fb->data()), fb->size()};
-  vast::fbs::unwrap<vast::fbs::uuid::v0>(span, uuid2);
+  auto error = vast::fbs::unwrap<vast::fbs::uuid::v0>(span, uuid2);
+  CHECK(!error);
   CHECK_EQUAL(uuid, uuid2);
 }
 
@@ -100,7 +101,8 @@ TEST(index roundtrip) {
   for (auto uuid : *partition_uuids) {
     REQUIRE(uuid);
     vast::uuid restored_uuid;
-    vast::unpack(*uuid, restored_uuid);
+    auto error = vast::unpack(*uuid, restored_uuid);
+    CHECK(!error);
     restored_uuids.insert(restored_uuid);
   }
   CHECK_EQUAL(expected_uuids, restored_uuids);

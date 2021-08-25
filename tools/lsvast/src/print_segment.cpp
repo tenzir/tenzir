@@ -22,11 +22,12 @@ namespace lsvast {
 
 void print_segment_v0(const vast::fbs::segment::v0* segment,
                       indentation& indent, const options& options) {
+  indented_scope _(indent);
   vast::uuid id;
   if (segment->uuid())
-    unpack(*segment->uuid(), id);
+    if (auto error = unpack(*segment->uuid(), id))
+      std::cerr << indent << to_string(error);
   std::cout << indent << "Segment\n";
-  indented_scope _(indent);
   std::cout << indent << "uuid: " << to_string(id) << "\n";
   std::cout << indent << "events: " << segment->events() << "\n";
   if (options.format.verbosity >= output_verbosity::verbose) {
