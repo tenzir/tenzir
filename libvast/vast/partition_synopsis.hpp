@@ -47,6 +47,10 @@ struct partition_synopsis {
 
   friend caf::error
   unpack(const fbs::partition_synopsis::v0&, partition_synopsis&);
+
+  friend caf::error
+  unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps,
+         uint64_t offset, uint64_t events);
 };
 
 } // namespace vast
