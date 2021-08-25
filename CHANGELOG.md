@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.08.26-rc3]
+## [2021.08.26-rc4]
 
 ### :warning: Changes
 
@@ -59,6 +59,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The CSV parser now correctly parses quoted fields in non-string types. E.g., `"127.0.0.1"` in CSV now successfully parsers when a matching schema contains an `address` type field.
   [#1858](https://github.com/tenzir/vast/pull/1858)
+
+- The memory counts in the output of `vast status` now represent bytes consistently, as opposed to a mix of bytes and kilobytes.
+  [#1862](https://github.com/tenzir/vast/pull/1862)
 
 ## [2021.07.29]
 
@@ -1351,7 +1354,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.08.26-rc3]: https://github.com/tenzir/vast/releases/tag/2021.08.26-rc3
+[2021.08.26-rc4]: https://github.com/tenzir/vast/releases/tag/2021.08.26-rc4
 [2021.07.29]: https://github.com/tenzir/vast/releases/tag/2021.07.29
 [2021.06.24]: https://github.com/tenzir/vast/releases/tag/2021.06.24
 [2021.05.27]: https://github.com/tenzir/vast/releases/tag/2021.05.27
