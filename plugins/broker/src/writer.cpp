@@ -129,7 +129,9 @@ convert(view<data> in, ::broker::data& out, const legacy_type& field_type) {
 
 } // namespace
 
-writer::writer(const caf::settings& options) {
+writer::writer(const caf::settings& options, caf::actor_system& sys) {
+  // TODO: consider spawning the endpoint core actor manually here because it
+  // contains an actor system.
   std::string category = "vast.export.broker";
   endpoint_ = make_endpoint(options, category);
   status_subscriber_ = std::make_unique<::broker::status_subscriber>(

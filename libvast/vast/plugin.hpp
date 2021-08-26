@@ -174,11 +174,23 @@ public:
   make_command() const = 0;
 };
 
+// -- format plugin -----------------------------------------------------------
+
+/// A base class for plugins that provider a reader or writer.
+class format_plugin : public virtual plugin {
+protected:
+  void actor_system(caf::actor_system* sys);
+  caf::actor_system* actor_system() const;
+
+private:
+  caf::actor_system* sys_ = {};
+};
+
 // -- reader plugin -----------------------------------------------------------
 
 /// A base class for plugins that add import formats.
 /// @relates plugin
-class reader_plugin : public virtual plugin {
+class reader_plugin : public virtual format_plugin {
 public:
   /// Returns the import format's name.
   [[nodiscard]] virtual const char* reader_format() const = 0;
@@ -196,6 +208,7 @@ public:
 
   /// Creates a reader, which will be available via `vast import <format>` and
   /// `vast spawn source <format>`.
+  /// @param options The options passed on the command line.
   /// @note Use `vast::detail::make_input_stream` to create an input stream from
   /// the options.
   [[nodiscard]] virtual std::unique_ptr<format::reader>
@@ -224,6 +237,7 @@ public:
 
   /// Creates a reader, which will be available via `vast export <format>` and
   /// `vast spawn sink <format>`.
+  /// @param options The options passed on the command line.
   /// @note Use `vast::detail::make_output_stream` to create an output stream
   /// from the options.
   [[nodiscard]] virtual std::unique_ptr<format::writer>

@@ -105,7 +105,8 @@ this is where Zeek publishes log events. Use `--topic` to set a different topic.
 
   [[nodiscard]] std::unique_ptr<format::reader>
   make_reader(const caf::settings& options) const override {
-    return std::make_unique<reader>(options, nullptr);
+    VAST_ASSERT(actor_system() != nullptr);
+    return std::make_unique<reader>(options, *actor_system());
   }
 
   [[nodiscard]] const char* writer_format() const override {
@@ -160,7 +161,8 @@ values.
 
   [[nodiscard]] std::unique_ptr<format::writer>
   make_writer(const caf::settings& options) const override {
-    return std::make_unique<writer>(options);
+    VAST_ASSERT(actor_system() != nullptr);
+    return std::make_unique<writer>(options, *actor_system());
   }
 };
 

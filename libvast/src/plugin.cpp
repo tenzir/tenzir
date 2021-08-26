@@ -456,4 +456,12 @@ enum plugin_ptr::type plugin_ptr::type() const noexcept {
   return type_;
 }
 
+void format_plugin::actor_system(caf::actor_system* sys) {
+  sys_ = sys;
+}
+
+caf::actor_system* format_plugin::actor_system() const {
+  return sys_;
+}
+
 } // namespace vast

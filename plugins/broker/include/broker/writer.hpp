@@ -24,7 +24,8 @@ class writer : public format::writer {
 public:
   /// Constructs a Broker writer.
   /// @param options The configuration options for the writer.
-  explicit writer(const caf::settings& options);
+  /// @param sys The actor system of the containing actor.
+  explicit writer(const caf::settings& options, caf::actor_system& sys);
 
   ~writer() override = default;
 

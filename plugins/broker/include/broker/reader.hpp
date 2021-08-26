@@ -31,7 +31,7 @@ class reader final : public format::multi_layout_reader {
 public:
   using super = multi_layout_reader;
 
-  reader(const caf::settings& options, std::unique_ptr<std::istream> in);
+  reader(const caf::settings& options, caf::actor_system& sys);
   reader(const reader&) = delete;
   reader& operator=(const reader&) = delete;
   reader(reader&&) noexcept = delete;

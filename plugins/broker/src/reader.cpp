@@ -30,10 +30,10 @@ using namespace std::string_literals;
 
 namespace vast::plugins::broker {
 
-reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
+reader::reader(const caf::settings& options, caf::actor_system& sys)
   : super{options} {
-  // We're not getting data via the passed istream and ignore the parameter.
-  VAST_ASSERT(in == nullptr);
+  // TODO: consider spawning the endpoint core actor manually here because it
+  // contains an actor system.
   endpoint_ = make_endpoint(options, "vast.import.broker");
   // Subscribe to control plane events.
   status_subscriber_ = std::make_unique<::broker::status_subscriber>(
