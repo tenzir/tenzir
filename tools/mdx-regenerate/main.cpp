@@ -1,15 +1,28 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/uuid.hpp>
 #include <vast/detail/logger_formatters.hpp>
 #include <vast/io/read.hpp>
+#include <vast/synopsis_factory.hpp>
 #include <vast/system/index.hpp>
 #include <vast/uuid.hpp>
+#include <vast/value_index_factory.hpp>
 
-#include <fmt/printf.h>
+#include <fmt/core.h>
 
 #include <filesystem>
 
 int main(int argc, char* argv[]) {
+  // vast::factory_traits<vast::value_index>::initialize();
+  vast::factory<vast::synopsis>::initialize();
+
   std::error_code err{};
   if (argc < 2) {
     fmt::print(stderr, "Usage: {} /path/to/vast.db\n", argv[0]);
@@ -67,5 +80,6 @@ int main(int argc, char* argv[]) {
                  vast::render(error));
       continue;
     }
+    fmt::print("successfully wrote {}\n", synopsis_path);
   }
 }
