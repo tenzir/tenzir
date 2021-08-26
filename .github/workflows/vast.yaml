@@ -293,8 +293,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref }}
-          fail-if-no-assets: false # don't fail if no previous assets exist
-          fail-if-no-release: true # only delete assets when `tag` refers to a release
+          # don't fail if no previous assets exist.
+          fail-if-no-assets: false
+          # only delete assets when `tag` refers to a release
+          fail-if-no-release: tru
           assets: "${{ env.PUBLISH_NAME }}.tar.gz"
 
       - name: Publish to GitHub Release
@@ -488,8 +490,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref }}
-          fail-if-no-assets: false # don't fail if no previous assets exist
-          fail-if-no-release: true # only delete assets when `tag` refers to a release
+          # don't fail if no previous assets exist
+          fail-if-no-assets: false
+          # only delete assets when `tag` refers to a release
+          fail-if-no-release: true
           assets: "${{ env.PUBLISH_NAME }}.tar.gz"
 
       - name: Publish to GitHub Release
@@ -811,8 +815,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref }}
-          fail-if-no-assets: false # don't fail if no previous assets exist
-          fail-if-no-release: true # only delete assets when `tag` refers to a release
+          # don't fail if no previous assets exist
+          fail-if-no-assets: false
+          # only delete assets when `tag` refers to a release
+          fail-if-no-release: true
           assets: "${{ matrix.nix.target }}-linux-static.tar.gz"
 
       - name: Upload Release Assets

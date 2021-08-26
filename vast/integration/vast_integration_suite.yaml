@@ -513,5 +513,3 @@ tests:
       - command: -N --config=@./vast-local-stores.yaml import suricata
         input: data/suricata/eve.json
       - command: -N export json '#type ni ""'
-
-

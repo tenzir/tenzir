@@ -70,7 +70,7 @@
     name: net.hostname
     description: >-
       A hostname of a machine.
-    concepts: 
+    concepts:
       - net.dst.hostname
       - net.src.hostname
 - concept:
