@@ -74,7 +74,7 @@ struct importer_state {
   [[nodiscard]] id available_ids() const noexcept;
 
   /// @returns various status metrics.
-  [[nodiscard]] caf::typed_response_promise<caf::settings>
+  [[nodiscard]] caf::typed_response_promise<record>
   status(status_verbosity v) const;
 
   /// The active id block.

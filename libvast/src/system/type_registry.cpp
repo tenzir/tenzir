@@ -26,7 +26,6 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/expected.hpp>
-#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -35,26 +34,26 @@ report type_registry_state::telemetry() const {
   return {};
 }
 
-caf::dictionary<caf::config_value>
-type_registry_state::status(status_verbosity v) const {
-  auto result = caf::settings{};
+record type_registry_state::status(status_verbosity v) const {
+  auto result = record{};
   if (v >= status_verbosity::detailed) {
     // The list of defined concepts
     if (v >= status_verbosity::debug) {
       auto& concepts_status = put_list(result, "concepts");
       for (const auto& [name, definition] : taxonomies.concepts) {
-        auto& concept_status = concepts_status.emplace_back().as_dictionary();
-        concept_status["name"] = name;
-        concept_status["description"] = definition.description;
-        concept_status["fields"] = definition.fields;
-        concept_status["concepts"] = definition.concepts;
+        auto& concept_status
+          = caf::get<record>(concepts_status.emplace_back(record{}));
+        put(concept_status, "name", name);
+        put(concept_status, "description", definition.description);
+        put(concept_status, "fields", definition.fields);
+        put(concept_status, "concepts", definition.concepts);
       }
       auto& models_status = put_list(result, "models");
       for (const auto& [name, definition] : taxonomies.models) {
-        auto& model_status = models_status.emplace_back().as_dictionary();
-        model_status["name"] = name;
-        model_status["description"] = definition.description;
-        model_status["definition"] = definition.definition;
+        auto& model_status = put_dictionary(models_status);
+        put(model_status, "name", name);
+        put(model_status, "description", definition.description);
+        put(model_status, "definition", definition.definition);
       }
       // Sorted list of all keys.
       auto keys = std::vector<std::string>(data.size());

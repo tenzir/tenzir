@@ -83,7 +83,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       }
     },
     [self](atom::status, status_verbosity v) {
-      auto result = caf::settings{};
+      auto result = record{};
       if (v >= status_verbosity::info)
         put(result, "type", "POSIX");
       if (v >= status_verbosity::debug) {

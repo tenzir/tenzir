@@ -38,7 +38,7 @@ struct transformer_state {
   std::string transformer_name;
 
   /// The cached status response.
-  caf::settings status;
+  record status;
 
   /// Name of the TRANSFORMER actor type.
   static constexpr const char* name = "transformer";

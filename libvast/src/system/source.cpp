@@ -30,7 +30,6 @@
 
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
-#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>
@@ -320,7 +319,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     [self](atom::status, status_verbosity v) {
       auto rs = make_status_request_state(self);
       if (v >= status_verbosity::detailed) {
-        caf::settings src;
+        record src;
         if (self->state.reader)
           put(src, "format", self->state.reader->name());
         put(src, "produced", self->state.count);
@@ -330,7 +329,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
         collect_status(
           rs, timeout, v, self->state.transformer,
-          [rs, src](caf::settings& response) mutable {
+          [rs, src](record& response) mutable {
             put(src, "transformer", std::move(response));
             auto& xs = put_list(rs->content, "sources");
             xs.emplace_back(std::move(src));

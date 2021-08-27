@@ -12,6 +12,7 @@
 
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/recursive_size.hpp"
 #include "vast/error.hpp"
@@ -19,7 +20,6 @@
 #include "vast/uuid.hpp"
 
 #include <caf/detail/scope_guard.hpp>
-#include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
@@ -144,8 +144,9 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
     [self](atom::erase) -> caf::result<void> {
       // Make sure the `purging` state will be reset once all continuations
       // have finished or we encountered an error.
-      auto shared_guard
-        = make_shared_guard([=] { self->state.purging = false; });
+      auto shared_guard = make_shared_guard([=] {
+        self->state.purging = false;
+      });
       auto err = std::error_code{};
       const auto index_dir
         = std::filesystem::directory_iterator(self->state.dbdir / "index", err);
@@ -219,7 +220,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
     },
     [](atom::status, status_verbosity) {
       // TODO: Return some useful information here.
-      return caf::settings{};
+      return record{};
     },
   };
 }

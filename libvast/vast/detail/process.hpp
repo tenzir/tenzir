@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "vast/aliases.hpp"
+
 #include <caf/expected.hpp>
-#include <caf/settings.hpp>
 
 #include <filesystem>
 
@@ -23,9 +24,8 @@ namespace vast::detail {
 caf::expected<std::filesystem::path> objectpath(const void* addr = nullptr);
 
 /// Retrieves runtime information about the current process.
-/// @returns a settings object containing information about system resource
-///          usage.
-caf::settings get_status();
+/// @returns a record containing information about system resource usage.
+record get_status();
 
 /// Forks a process to execute the given comand and returns its output
 /// as a string.

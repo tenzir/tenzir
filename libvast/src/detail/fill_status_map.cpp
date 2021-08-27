@@ -9,14 +9,15 @@
 #include "vast/detail/fill_status_map.hpp"
 
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/algorithms.hpp"
+#include "vast/system/status.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/downstream_manager.hpp>
 #include <caf/inbound_path.hpp>
 #include <caf/outbound_path.hpp>
 #include <caf/scheduled_actor.hpp>
-#include <caf/settings.hpp>
 #include <caf/stream_manager.hpp>
 
 #include <sstream>
@@ -58,7 +59,7 @@ pid_t pthread_id() {
 
 namespace vast::detail {
 
-void fill_status_map(caf::settings& xs, caf::stream_manager& mgr) {
+void fill_status_map(record& xs, caf::stream_manager& mgr) {
   // Manager status.
   put(xs, "idle", mgr.idle());
   put(xs, "congested", mgr.congested());
@@ -95,8 +96,7 @@ void fill_status_map(caf::settings& xs, caf::stream_manager& mgr) {
   }
 }
 
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     caf::scheduled_actor* self) {
+void fill_status_map(record& xs, caf::scheduled_actor* self) {
   put(xs, "actor-id", self->id());
   put(xs, "thread-id", thread_id());
 #if VAST_LINUX

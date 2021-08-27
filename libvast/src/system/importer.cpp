@@ -187,13 +187,15 @@ id importer_state::available_ids() const noexcept {
   return max_id - current.next;
 }
 
-caf::typed_response_promise<caf::settings>
+caf::typed_response_promise<record>
 importer_state::status(status_verbosity v) const {
   auto rs = make_status_request_state(self);
   // Gather general importer status.
   // TODO: caf::config_value can only represent signed 64 bit integers, which
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
+  record result;
+  result["ids.available"] = available_ids();
   if (v >= status_verbosity::detailed) {
     put(rs->content, "ids.available", to_string(available_ids()));
     put(rs->content, "ids.block.next", to_string(current.next));

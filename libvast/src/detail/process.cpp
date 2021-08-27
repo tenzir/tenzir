@@ -8,9 +8,9 @@
 
 #include "vast/detail/process.hpp"
 
-#include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/status.hpp"
 
 #include <caf/expected.hpp>
 
@@ -47,18 +47,18 @@
 
 namespace vast::detail {
 
-static caf::settings get_status_proc() {
+static record get_status_proc() {
   using namespace parser_literals;
   auto is = std::ifstream{"/proc/self/status"};
   auto lines = detail::line_range{is};
-  caf::settings result;
+  record result;
   auto skip = ignore(+parsers::any);
   auto ws = ignore(+parsers::space);
   auto kvp = [&](const char* k, const std::string_view human_friendly) {
     // The output says "kB", but the unit is actually "kiB".
     return (k >> ws >> parsers::u64 >> ws >> "kB" >> skip)
              ->*[=, &result](uint64_t x) {
-                   result[human_friendly] = x * 1024;
+                   put(result, human_friendly, x * 1024);
                  };
   };
   auto rss = kvp("VmRSS:", "current-memory-usage");
@@ -83,8 +83,8 @@ static caf::settings get_status_proc() {
 
 namespace vast::detail {
 
-static caf::settings get_settings_mach() {
-  caf::settings result;
+static record get_settings_mach() {
+  record result;
   task_t task = MACH_PORT_NULL;
   if (task_for_pid(current_task(), getpid(), &task) != KERN_SUCCESS)
     return {};
@@ -93,7 +93,7 @@ static caf::settings get_settings_mach() {
   task_info(task, TASK_BASIC_INFO, (task_info_t)&t_info, &t_info_count);
   // http://web.mit.edu/darwin/src/modules/xnu/osfmk/man/task_basic_info.html
   // says the resident set size is counted in pages, so we multiply accordingly.
-  result["current-memory-usage"] = t_info.resident_size * PAGE_SIZE;
+  put(result, "current-memory-usage", t_info.resident_size * PAGE_SIZE);
   return result;
 }
 
@@ -104,14 +104,14 @@ static caf::settings get_settings_mach() {
 
 namespace vast::detail {
 
-static caf::settings get_status_rusage() {
-  caf::settings result;
+static record get_status_rusage() {
+  record result;
   struct rusage ru;
   if (getrusage(RUSAGE_SELF, &ru) != 0) {
     VAST_WARN("{} failed to obtain rusage: {}", __func__, std::strerror(errno));
     return result;
   }
-  result["peak-memory-usage"] = ru.ru_maxrss * 1024;
+  put(result, "peak-memory-usage", ru.ru_maxrss * 1024);
   return result;
 }
 
@@ -160,19 +160,19 @@ caf::expected<std::filesystem::path> objectpath(const void* addr) {
   return objectpath_static();
 }
 
-caf::settings get_status() {
+record get_status() {
 #if VAST_LINUX
   return get_status_proc();
 #elif VAST_MACOS
   auto result = get_status_rusage();
-  merge_settings(get_settings_mach(), result, policy::merge_lists::no);
+  merge(get_settings_mach(), result, policy::merge_lists::no);
   return result;
 #elif VAST_POSIX
   return get_status_rusage();
 #else
   VAST_DEBUG("getting process information not supported");
   // Not implemented.
-  return caf::settings{};
+  return record{};
 #endif
 }
 

@@ -35,8 +35,7 @@ struct type_registry_state {
   [[nodiscard]] report telemetry() const;
 
   /// Summarizes the actors state.
-  [[nodiscard]] caf::dictionary<caf::config_value>
-  status(status_verbosity v) const;
+  [[nodiscard]] record status(status_verbosity v) const;
 
   /// Create the path that the type-registry is persisted at on disk.
   [[nodiscard]] std::filesystem::path filename() const;

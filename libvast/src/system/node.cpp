@@ -142,9 +142,8 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   struct extra_state {
     size_t memory_usage = 0;
     static void deliver(caf::typed_response_promise<std::string>&& promise,
-                        caf::settings&& content) {
-      detail::strip_settings(content);
-      if (auto json = to_json(to_data(content)))
+                        record&& content) {
+      if (auto json = to_json(content))
         promise.deliver(std::move(*json));
     }
   };
@@ -153,23 +152,18 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   // first, as the conversion to a caf::settings object fails otherwise. We can
   // remove the cleansing step once we use record instead of caf::settings for
   // retrieving the status.
-  auto version_data = retrieve_versions();
-  for (auto& [_, value] : version_data)
+  auto version = retrieve_versions();
+  for (auto& [_, value] : version)
     if (value == caf::none)
       value = record{};
-  if (auto version = to<caf::settings>(version_data))
-    put(rs->content, "version", *version);
-  else
-    VAST_WARN("{} failed to add remote version to status: {}", *self,
-              version.error());
+  put(rs->content, "version", version);
   // Pre-fill our result with system stats.
   auto& sys = self->system();
   auto& system = put_dictionary(rs->content, "system");
   if (v >= status_verbosity::info) {
     put(system, "in-memory-table-slices", table_slice::instances());
     put(system, "database-path", self->state.dir.string());
-    detail::merge_settings(detail::get_status(), system,
-                           policy::merge_lists::no);
+    merge(detail::get_status(), system, policy::merge_lists::no);
   }
   if (v >= status_verbosity::detailed) {
     auto& config_files = put_list(system, "config-files");

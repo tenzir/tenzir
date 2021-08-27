@@ -22,6 +22,7 @@
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/value_index.hpp"
@@ -123,7 +124,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
     },
     [self](atom::status, status_verbosity) {
-      caf::settings result;
+      record result;
       put(result, "memory-usage", self->state.idx->memusage());
       return result;
     },

@@ -340,9 +340,8 @@ caf::error segment_store::flush() {
   return caf::none;
 }
 
-void segment_store::inspect_status(caf::settings& xs,
-                                   system::status_verbosity v) {
-  using caf::put;
+void segment_store::inspect_status(record& xs, system::status_verbosity v) {
+  using vast::put;
   if (v >= system::status_verbosity::info) {
     put(xs, "events", num_events_);
     auto mem = builder_.table_slice_bytes();

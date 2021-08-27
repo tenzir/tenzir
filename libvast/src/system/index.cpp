@@ -447,12 +447,12 @@ void index_state::decomission_active_partition() {
       });
 }
 
-caf::typed_response_promise<caf::settings>
+caf::typed_response_promise<record>
 index_state::status(status_verbosity v) const {
   struct extra_state {
     size_t memory_usage = 0;
-    void deliver(caf::typed_response_promise<caf::settings>&& promise,
-                 caf::settings&& content) {
+    void
+    deliver(caf::typed_response_promise<record>&& promise, record&& content) {
       put(content, "index.memory-usage", memory_usage);
       promise.deliver(std::move(content));
     }
@@ -462,12 +462,9 @@ index_state::status(status_verbosity v) const {
     auto& stats_object = put_dictionary(rs->content, "statistics");
     auto& layout_object = put_dictionary(stats_object, "layouts");
     for (const auto& [name, layout_stats] : stats.layouts) {
-      auto xs = caf::dictionary<caf::config_value>{};
-      xs.emplace("count", layout_stats.count);
-      // We cannot use put_dictionary(layout_object, name) here, because this
-      // function splits the key at '.', which occurs in every layout name.
-      // Hence the fallback to low-level primitives.
-      layout_object.insert_or_assign(name, std::move(xs));
+      auto xs = record{};
+      put(xs, "count", layout_stats.count);
+      put(layout_object, name, std::move(xs));
     }
     put(rs->content, "meta-index-bytes", meta_index_bytes);
     put(rs->content, "num-active-partitions",
@@ -477,28 +474,30 @@ index_state::status(status_verbosity v) const {
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
     auto& partitions = put_dictionary(rs->content, "partitions");
     auto partition_status = [&](const uuid& id, const partition_actor& pa,
-                                caf::config_value::list& xs) {
+                                list& xs) {
       collect_status(
         rs, timeout, v, pa,
-        [=, &xs](const caf::settings& part_status) {
-          auto& ps = xs.emplace_back().as_dictionary();
+        [=, &xs](const record& part_status) {
+          auto& ps = caf::get<record>(xs.emplace_back(record{}));
           put(ps, "id", to_string(id));
-          if (auto s = caf::get_if<caf::config_value::integer>(&part_status,
-                                                               "memory-usage"))
-            rs->memory_usage += *s;
+          auto it = part_status.find("memory-usage");
+          if (it != part_status.end()) {
+            if (const auto* s = caf::get_if<count>(&it->second))
+              rs->memory_usage += *s;
+          }
           if (v >= status_verbosity::debug)
-            detail::merge_settings(part_status, ps, policy::merge_lists::no);
+            merge(part_status, ps, policy::merge_lists::no);
         },
         [=, this, &xs](const caf::error& err) {
           VAST_WARN("{} failed to retrieve status from {} : {}", *self, id,
                     render(err));
-          auto& ps = xs.emplace_back().as_dictionary();
+          auto& ps = caf::get<record>(xs.emplace_back(record{}));
           put(ps, "id", to_string(id));
           put(ps, "error", render(err));
         });
     };
     // Resident partitions.
-    auto& active = caf::put_list(partitions, "active");
+    auto& active = put_list(partitions, "active");
     active.reserve(1);
     if (active_partition.actor != nullptr)
       partition_status(active_partition.id, active_partition.actor, active);

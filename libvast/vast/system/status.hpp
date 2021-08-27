@@ -50,12 +50,11 @@ struct status_request_state_base {
   // Promise to the original request.
   caf::typed_response_promise<Result> promise;
   // Maps nodes to a map associating components with status information.
-  caf::settings content;
+  record content;
 };
 
 struct no_extra {
-  static void
-  deliver(caf::typed_response_promise<caf::settings>&& rp, caf::settings&& s) {
+  static void deliver(caf::typed_response_promise<record>&& rp, record&& s) {
     rp.deliver(std::move(s));
   }
 };
@@ -63,7 +62,7 @@ struct no_extra {
 template <class Ptr, class Result, class Extra>
 struct status_request_state : status_request_state_base<Ptr, Result>, Extra {};
 
-template <class Extra, class Result = caf::settings, class Ptr>
+template <class Extra, class Result = record, class Ptr>
 auto make_status_request_state(Ptr self) {
   using state_type = status_request_state<Ptr, Result, Extra>;
   // We need a custom deleter to deliver the promise, so we can't use
@@ -79,7 +78,7 @@ auto make_status_request_state(Ptr self) {
 }
 
 template <class Ptr>
-std::shared_ptr<status_request_state<Ptr, caf::settings, no_extra>>
+std::shared_ptr<status_request_state<Ptr, record, no_extra>>
 make_status_request_state(Ptr self) {
   return make_status_request_state<no_extra>(self);
 }
@@ -99,7 +98,7 @@ make_status_request_state(Ptr self) {
 /// @param fe The callback for a failed request.
 // clang-format off
 template <class F, class Fe, class Ptr, class Result, class Extra, class Resp>
-requires(std::is_invocable_v<F, caf::settings&>)
+requires(std::is_invocable_v<F, record&>)
 void collect_status(
   const std::shared_ptr<status_request_state<Ptr, Result, Extra>>& rs,
   std::chrono::milliseconds timeout, status_verbosity verbosity, Resp responder,
@@ -111,7 +110,7 @@ void collect_status(
     ->template request<caf::message_priority::high>(
       responder, caf::duration{timeout}, atom::status_v, verbosity)
     .then(
-      [rs, f = std::forward<F>(f)](caf::settings& response) mutable {
+      [rs, f = std::forward<F>(f)](record& response) mutable {
         f(response);
       },
       [rs, fe = std::forward<Fe>(fe)](caf::error& err) mutable {
@@ -130,16 +129,16 @@ void collect_status(
 /// @param timeout The timeout for the request.
 /// @param verbosity The requested verbosity level.
 /// @param responder The actor to retrieve additional status from.
-/// @param s The settings object to insert the response into.
+/// @param s The record to insert the response into.
 /// @param key The key at which the response shall be inserted.
 template <class Ptr, class Result, class Extra, class Resp>
 void collect_status(
   const std::shared_ptr<status_request_state<Ptr, Result, Extra>>& rs,
   std::chrono::milliseconds timeout, status_verbosity verbosity, Resp responder,
-  caf::settings& s, std::string_view key) {
+  record& s, std::string_view key) {
   collect_status(
     rs, timeout, verbosity, responder,
-    [key = std::string{key}, &s](caf::settings& response) {
+    [key = std::string{key}, &s](record& response) {
       put(s, key, std::move(response));
     },
     [self = rs->self, key = std::string{key}, &s](const caf::error& err) {
