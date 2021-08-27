@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/actors.hpp"

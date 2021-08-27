@@ -483,6 +483,70 @@ bool convert(const caf::config_value& x, data& y) {
   return caf::visit(f, x);
 }
 
+record& put(record& r, std::string_view key, const duration& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put(record& r, std::string_view key, const time& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put(record& r, std::string_view key, std::string_view value) {
+  r[key] = std::string{value};
+  return r;
+}
+
+record& put(record& r, std::string_view key, const pattern& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put(record& r, std::string_view key, const address& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put(record& r, std::string_view key, const subnet& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put(record& r, std::string_view key, const enumeration& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put(record& r, std::string_view key, const list& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put(record& r, std::string_view key, const map& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put(record& r, std::string_view key, const record& value) {
+  r[key] = value;
+  return r;
+}
+
+record& put_dictionary(record& r, std::string_view key) {
+  r[key] = record{};
+  return caf::get<record>(r[key]);
+}
+
+record& put_dictionary(list& l) {
+  return caf::get<record>(l.emplace_back(record{}));
+}
+
+list& put_list(record& r, std::string_view key) {
+  r[key] = list{};
+  return caf::get<list>(r[key]);
+}
+
 caf::expected<std::string> to_json(const data& x) {
   std::string str;
   auto out = std::back_inserter(str);

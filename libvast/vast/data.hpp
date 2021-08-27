@@ -199,6 +199,17 @@ private:
   variant data_;
 };
 
+} // namespace vast
+
+namespace caf {
+
+template <>
+struct sum_type_access<vast::data> : default_sum_type_access<vast::data> {};
+
+} // namespace caf
+
+namespace vast {
+
 // -- helpers -----------------------------------------------------------------
 
 /// Maps a concrete data type to a corresponding @ref type.
@@ -322,6 +333,80 @@ bool convert(const caf::dictionary<caf::config_value>& xs, record& ys);
 bool convert(const caf::dictionary<caf::config_value>& xs, data& y);
 bool convert(const caf::config_value& x, data& y);
 
+// -- manual creation ----------------------------------------------------------
+
+template <concepts::signed_integral T>
+record& put(record& r, std::string_view key, const T& value) {
+  r[key] = integer{value};
+  return r;
+}
+
+template <concepts::unsigned_integral T>
+record& put(record& r, std::string_view key, const T& value) {
+  r[key] = count{value};
+  return r;
+}
+
+template <concepts::floating_point T>
+record& put(record& r, std::string_view key, const T& value) {
+  r[key] = real{value};
+  return r;
+}
+
+record& put(record& r, std::string_view key, const duration& value);
+
+record& put(record& r, std::string_view key, const time& value);
+
+record& put(record& r, std::string_view key, std::string_view value);
+
+record& put(record& r, std::string_view key, const pattern& value);
+
+record& put(record& r, std::string_view key, const address& value);
+
+record& put(record& r, std::string_view key, const subnet& value);
+
+record& put(record& r, std::string_view key, const enumeration& value);
+
+record& put(record& r, std::string_view key, const list& value);
+
+record& put(record& r, std::string_view key, const map& value);
+
+record& put(record& r, std::string_view key, const record& value);
+
+template <concepts::range Ts>
+  requires(!concepts::convertible_to<Ts, std::string>)
+record& put(record& r, std::string_view key, const Ts& xs) {
+  if constexpr (requires {
+                  typename Ts::key_type;
+                  typename Ts::mapped_type;
+                }) {
+    if constexpr (concepts::same_as<typename Ts::key_type, std::string>) {
+      auto& dst = caf::get<record>(r.emplace(key, record{}).first->second);
+      for (const auto& [k, v] : xs) {
+        put(dst, k, v);
+      }
+    } else {
+      // TODO: fix
+      auto& dst = caf::get<map>(r.emplace(key, list{}).first->second);
+      for (const auto& [k, v] : xs) {
+        dst.emplace(data{k}, data{v});
+      }
+    }
+  } else {
+    auto& dst = caf::get<list>(r.emplace(key, list{}).first->second);
+    for (const auto& x : xs) {
+      dst.push_back(data{x});
+    }
+  }
+  return r;
+}
+
+record& put_dictionary(record& r, std::string_view key);
+
+record& put_dictionary(list& l);
+
+list& put_list(record& r, std::string_view key);
+
 // -- JSON -------------------------------------------------------------
 
 /// Prints data as JSON.
@@ -356,13 +441,6 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion
 caf::expected<std::string> to_yaml(const data& x);
 
 } // namespace vast
-
-namespace caf {
-
-template <>
-struct sum_type_access<vast::data> : default_sum_type_access<vast::data> {};
-
-} // namespace caf
 
 #include "vast/concept/printable/vast/data.hpp"
 
