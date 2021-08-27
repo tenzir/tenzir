@@ -231,6 +231,9 @@ caf::error initialize(caf::actor_system_config& cfg) {
                       plugin->name(), yaml_path, yml_path));
       const auto& path = yaml_path_exists ? yaml_path : yml_path;
       if (auto opts = load_yaml(path)) {
+        // Skip empty config files.
+        if (caf::holds_alternative<caf::none_t>(*opts))
+          continue;
         if (auto opts_data = caf::get_if<record>(&*opts)) {
           merge(*opts_data, merged_config, policy::merge_lists::yes);
           VAST_INFO("loaded plugin configuration file: {}", path);

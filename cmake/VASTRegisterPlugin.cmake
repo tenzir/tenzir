@@ -205,6 +205,55 @@ function (VASTCompileFlatBuffers)
       DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FBS_INCLUDE_DIRECTORY}")
 endfunction ()
 
+# Install a commented-out version of an example configuration file.
+macro (VASTInstallExampleConfiguration target source destination)
+  # Sanity checks macro inputs.
+  if (NOT TARGET "${target}")
+    message(FATAL_ERROR "target '${target}' does not exist")
+  endif ()
+  if (NOT IS_ABSOLUTE "${source}")
+    message(FATAL_ERROR "source '${source}' must be absolute")
+  endif ()
+  if (IS_ABSOLUTE "${destination}")
+    message(FATAL_ERROR "destination '${destination}' must be relative")
+  endif ()
+
+  # Write a CMake file that does the desired text transformations.
+  file(
+    WRITE "${CMAKE_CURRENT_BINARY_DIR}/${target}-example-config.cmake"
+    "\
+    cmake_minimum_required(VERSION 3.15...3.20 FATAL_ERROR)
+    file(READ \"${source}\" content)
+    # Randomly generated string that temporarily replaces semicolons.
+    set(dummy \"J.3t26kvfjEoi9BXbf2j.qMY\")
+    string(REPLACE \";\" \"\${dummy}\" content \"\${content}\")
+    string(REPLACE \"\\n\" \";\" content \"\${content}\")
+    list(TRANSFORM content PREPEND \"#\")
+    string(REPLACE \";\" \"\\n\" content \"\${content}\")
+    string(REPLACE \"\${dummy}\" \";\" content \"\${content}\")
+    file(WRITE
+      \"${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}\"
+      \"\${content}\")")
+
+  add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}"
+    MAIN_DEPENDENCY "${source}"
+    COMMENT "Copying example configuration file ${source}"
+    COMMAND ${CMAKE_COMMAND} -P
+            "${CMAKE_CURRENT_BINARY_DIR}/${target}-example-config.cmake")
+
+  add_custom_target(
+    ${target}-copy-example-configuration-file
+    DEPENDS
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}")
+
+  add_dependencies(${target} ${target}-copy-example-configuration-file)
+
+  install(
+    FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}"
+    DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
+endmacro ()
+
 # Support tools like clang-tidy by creating a compilation database and copying
 # it to the project root.
 function (VASTExportCompileCommands)
@@ -449,6 +498,14 @@ function (VASTRegisterPlugin)
     if (TARGET vast)
       add_dependencies(vast ${PLUGIN_TARGET}-shared)
     endif ()
+  endif ()
+
+  # Install an example configuration file, if it exists at the plugin project root.
+  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example")
+    VASTInstallExampleConfiguration(
+      ${PLUGIN_TARGET}
+      "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example"
+      "plugin/${PLUGIN_TARGET}.yaml")
   endif ()
 
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")

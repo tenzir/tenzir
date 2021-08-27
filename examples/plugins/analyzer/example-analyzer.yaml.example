@@ -1,0 +1,2 @@
+# Number of stream events after which the example-analyzer shuts down.
+max-events: 42
