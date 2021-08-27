@@ -192,7 +192,7 @@ jobs:
 
       - name: Configure Environment
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe --tags)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
@@ -388,7 +388,7 @@ jobs:
 
       - name: Configure Environment
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe --tags)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
@@ -591,7 +591,7 @@ jobs:
       - name: Determine VAST Package Name
         id: configure
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-release-gcc" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe --tags)-$(uname -s)-release-gcc" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
       - name: Download VAST
         uses: actions/download-artifact@v2
@@ -696,8 +696,8 @@ jobs:
           docker tag tenzir/vast-deps:latest "tenzir/vast-deps:${GITHUB_SHA}"
           docker push "tenzir/vast-deps:${GITHUB_SHA}"
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            docker tag tenzir/vast-deps:latest "tenzir/vast-deps:$(git describe)"
-            docker push "tenzir/vast-deps:$(git describe)"
+            docker tag tenzir/vast-deps:latest "tenzir/vast-deps:$(git describe --tags)"
+            docker push "tenzir/vast-deps:$(git describe --tags)"
           fi
       - name: Publish Development Docker Image
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
@@ -706,8 +706,8 @@ jobs:
           docker tag tenzir/vast-dev:latest "tenzir/vast-dev:${GITHUB_SHA}"
           docker push "tenzir/vast-dev:${GITHUB_SHA}"
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            docker tag tenzir/vast-dev:latest "tenzir/vast-dev:$(git describe)"
-            docker push "tenzir/vast-dev:$(git describe)"
+            docker tag tenzir/vast-dev:latest "tenzir/vast-dev:$(git describe --tags)"
+            docker push "tenzir/vast-dev:$(git describe --tags)"
           fi
       - name: Publish Production Docker Image
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
@@ -716,8 +716,8 @@ jobs:
           docker tag tenzir/vast:latest "tenzir/vast:${GITHUB_SHA}"
           docker push "tenzir/vast:${GITHUB_SHA}"
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            docker tag tenzir/vast:latest "tenzir/vast:$(git describe)"
-            docker push "tenzir/vast:$(git describe)"
+            docker tag tenzir/vast:latest "tenzir/vast:$(git describe --tags)"
+            docker push "tenzir/vast:$(git describe --tags)"
           fi
 
   build-nix:
