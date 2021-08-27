@@ -34,39 +34,14 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   : super{options} {
   // We're not getting data via the passed istream and ignore the parameter.
   VAST_ASSERT(in == nullptr);
-  // TODO: figure out how to pass VAST's actor system
-  endpoint_ = std::make_unique<::broker::endpoint>();
-  static const auto category = "vast.import.broker"s;
-  auto addr = caf::get_or(options, category + ".host", "localhost");
-  auto port = caf::get_or(options, category + ".port", uint16_t{9999});
-  auto listen = caf::get_or(options, category + ".listen", false);
-  // Either open a socket and listen or peer with the remote endpoint.
-  if (listen) {
-    VAST_INFO("{} listens on {}:{}", name(), addr, port);
-    endpoint_->listen(addr, port);
-  } else {
-    auto timeout = caf::get_or(options, "vast.import.broker.retry-timeout", 10);
-    VAST_INFO("{} connects to {}:{} (retries every {} seconds)", name(), addr,
-              port, timeout);
-    endpoint_->peer(addr, port, ::broker::timeout::seconds(timeout));
-  }
+  endpoint_ = make_endpoint(options, "vast.import.broker");
   // Subscribe to control plane events.
   status_subscriber_ = std::make_unique<::broker::status_subscriber>(
     endpoint_->make_status_subscriber());
   // Subscribe to data plane events.
   auto topics = caf::get_or(options, "vast.import.broker.topic",
                             std::vector{"zeek/logs"s});
-
-  std::vector<::broker::topic> broker_topics;
-  broker_topics.reserve(topics.size());
-  for (auto& topic : topics) {
-    VAST_INFO("{} subscribes to topic {}", name(), topic);
-    broker_topics.push_back(std::move(topic));
-  }
-  // auto max_queue_size = size_t{1'024}; // default is 20
-  auto max_queue_size = size_t{20}; // default is 20
-  subscriber_ = std::make_unique<::broker::subscriber>(
-    endpoint_->make_subscriber(std::move(broker_topics), max_queue_size));
+  subscriber_ = make_subscriber(*endpoint_, std::move(topics));
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
