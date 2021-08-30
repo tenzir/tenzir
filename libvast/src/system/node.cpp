@@ -35,6 +35,7 @@
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/system/shutdown.hpp"
@@ -169,6 +170,21 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     put(system, "database-path", self->state.dir.string());
     detail::merge_settings(detail::get_status(), system,
                            policy::merge_lists::no);
+  }
+  if (v >= status_verbosity::detailed) {
+    auto& config_files = put_list(system, "config-files");
+    std::transform(system::get_loaded_config_files().begin(),
+                   system::get_loaded_config_files().end(),
+                   std::back_inserter(config_files),
+                   [](const std::filesystem::path& x) {
+                     return caf::config_value{x.string()};
+                   });
+    std::transform(plugins::get_loaded_config_files().begin(),
+                   plugins::get_loaded_config_files().end(),
+                   std::back_inserter(config_files),
+                   [](const std::filesystem::path& x) {
+                     return caf::config_value{x.string()};
+                   });
   }
   if (v >= status_verbosity::debug) {
     put(system, "running-actors", sys.registry().running());

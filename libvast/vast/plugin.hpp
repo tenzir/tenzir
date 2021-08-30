@@ -78,6 +78,10 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg);
 /// Initialize loaded plugins.
 caf::error initialize(caf::actor_system_config& cfg);
 
+/// @returns The loaded plugin-specific config files.
+/// @note This function is not threadsafe.
+const std::vector<std::filesystem::path>& get_loaded_config_files();
+
 } // namespace plugins
 
 // -- plugin -------------------------------------------------------------------
