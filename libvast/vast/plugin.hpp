@@ -80,7 +80,7 @@ caf::error initialize(caf::actor_system_config& cfg);
 
 /// @returns The loaded plugin-specific config files.
 /// @note This function is not threadsafe.
-const std::vector<std::filesystem::path>& get_loaded_config_files();
+const std::vector<std::filesystem::path>& loaded_config_files();
 
 } // namespace plugins
 

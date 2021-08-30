@@ -40,7 +40,7 @@ namespace vast::system {
 
 namespace {
 
-std::vector<std::filesystem::path> loaded_config_files = {};
+std::vector<std::filesystem::path> loaded_config_files_singleton = {};
 
 } // namespace
 
@@ -58,8 +58,8 @@ config_dirs(const caf::actor_system_config& config) {
   return result;
 }
 
-const std::vector<std::filesystem::path>& get_loaded_config_files() {
-  return loaded_config_files;
+const std::vector<std::filesystem::path>& loaded_config_files() {
+  return loaded_config_files_singleton;
 }
 
 configuration::configuration() {
@@ -202,7 +202,7 @@ caf::error configuration::parse(int argc, char** argv) {
                                            "a map of key-value pairs",
                                            config));
       merge(*rec, merged_config, policy::merge_lists::yes);
-      loaded_config_files.push_back(config);
+      loaded_config_files_singleton.push_back(config);
     }
   }
   // Flatten everything for simplicity.

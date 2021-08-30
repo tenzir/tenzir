@@ -173,14 +173,14 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   }
   if (v >= status_verbosity::detailed) {
     auto& config_files = put_list(system, "config-files");
-    std::transform(system::get_loaded_config_files().begin(),
-                   system::get_loaded_config_files().end(),
+    std::transform(system::loaded_config_files().begin(),
+                   system::loaded_config_files().end(),
                    std::back_inserter(config_files),
                    [](const std::filesystem::path& x) {
                      return caf::config_value{x.string()};
                    });
-    std::transform(plugins::get_loaded_config_files().begin(),
-                   plugins::get_loaded_config_files().end(),
+    std::transform(plugins::loaded_config_files().begin(),
+                   plugins::loaded_config_files().end(),
                    std::back_inserter(config_files),
                    [](const std::filesystem::path& x) {
                      return caf::config_value{x.string()};

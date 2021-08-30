@@ -69,7 +69,7 @@ resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs
                          fmt::format("failed to find the {} plugin", name));
 }
 
-std::vector<std::filesystem::path> loaded_config_files = {};
+std::vector<std::filesystem::path> loaded_config_files_singleton = {};
 
 } // namespace
 
@@ -239,7 +239,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
         if (auto opts_data = caf::get_if<record>(&*opts)) {
           merge(*opts_data, merged_config, policy::merge_lists::yes);
           VAST_INFO("loaded plugin configuration file: {}", path);
-          loaded_config_files.push_back(path);
+          loaded_config_files_singleton.push_back(path);
         } else {
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("detected invalid plugin "
@@ -262,8 +262,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
   return caf::none;
 }
 
-const std::vector<std::filesystem::path>& get_loaded_config_files() {
-  return loaded_config_files;
+const std::vector<std::filesystem::path>& loaded_config_files() {
+  return loaded_config_files_singleton;
 }
 
 } // namespace plugins
