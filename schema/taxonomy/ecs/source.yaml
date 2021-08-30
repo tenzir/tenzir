@@ -6,43 +6,43 @@
 - concept:
     name: ecs.source.ip
     fields:
-    - suricata.alert.src_ip
-    - suricata.dhcp.src_ip
-    - suricata.dns.src_ip
-    - suricata.ftp.src_ip
-    - suricata.http.src_ip
-    - suricata.krb5.src_ip
-    - suricata.netflow.src_ip
-    - suricata.smb.src_ip
-    - suricata.ssh.src_ip
-    - suricata.smtp.src_ip
-    - suricata.tls.src_ip
+      - suricata.alert.src_ip
+      - suricata.dhcp.src_ip
+      - suricata.dns.src_ip
+      - suricata.ftp.src_ip
+      - suricata.http.src_ip
+      - suricata.krb5.src_ip
+      - suricata.netflow.src_ip
+      - suricata.smb.src_ip
+      - suricata.ssh.src_ip
+      - suricata.smtp.src_ip
+      - suricata.tls.src_ip
 - concept:
     name: ecs.source.ip
     fields:
-    - sysmon.NetworkConnection.SourceIp
+      - sysmon.NetworkConnection.SourceIp
 - concept:
     name: ecs.source.ip
     fields:
-    - zeek.conn.id.orig_h
-    - zeek.dce_rpc.id.orig_h
-    - zeek.dnp3.id.orig_h
-    - zeek.dpd.id.orig_h
-    - zeek.ftp.id.orig_h
-    - zeek.http.id.orig_h
-    - zeek.intel.id.orig_h
-    - zeek.irc.id.orig_h
-    - zeek.notice.id.orig_h
-    - zeek.ntlm.id.orig_h
-    - zeek.pe.id.orig_h
-    - zeek.radius.id.orig_h
-    - zeek.rdp.id.orig_h
-    - zeek.sip.id.orig_h
-    - zeek.smb.id.orig_h
-    - zeek.smtp.id.orig_h
-    - zeek.snmp.id.orig_h
-    - zeek.ssh.id.orig_h
-    - zeek.ssl.id.orig_h
-    - zeek.tunnel.id.orig_h
-    - zeek.weird.id.orig_h
-    - zeek.x509.id.orig_h
+      - zeek.conn.id.orig_h
+      - zeek.dce_rpc.id.orig_h
+      - zeek.dnp3.id.orig_h
+      - zeek.dpd.id.orig_h
+      - zeek.ftp.id.orig_h
+      - zeek.http.id.orig_h
+      - zeek.intel.id.orig_h
+      - zeek.irc.id.orig_h
+      - zeek.notice.id.orig_h
+      - zeek.ntlm.id.orig_h
+      - zeek.pe.id.orig_h
+      - zeek.radius.id.orig_h
+      - zeek.rdp.id.orig_h
+      - zeek.sip.id.orig_h
+      - zeek.smb.id.orig_h
+      - zeek.smtp.id.orig_h
+      - zeek.snmp.id.orig_h
+      - zeek.ssh.id.orig_h
+      - zeek.ssl.id.orig_h
+      - zeek.tunnel.id.orig_h
+      - zeek.weird.id.orig_h
+      - zeek.x509.id.orig_h

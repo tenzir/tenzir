@@ -8,33 +8,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2.2.2
-      with:
-        python-version: '3.9'
+      - uses: actions/setup-python@v2.2.2
+        with:
+          python-version: '3.9'
 
-    - name: Clang Format
-      run: |
-        brew install clang-format
-        PATH="$(brew --prefix clang-format)/bin:${PATH}"
-        git diff -U0 --no-color $(git merge-base origin/master HEAD) |
-          scripts/clang-format-diff.py -p1
+      - name: Clang Format
+        run: |
+          brew install clang-format
+          PATH="$(brew --prefix clang-format)/bin:${PATH}"
+          git diff -U0 --no-color $(git merge-base origin/master HEAD) |
+            scripts/clang-format-diff.py -p1
 
-    - name: CMake Format
-      run: |
-        pip install --upgrade pip cmake_format
-        git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakeLists.txt" "**.cmake" |
-          xargs cmake-format --in-place
-        git diff --exit-code
+      - name: CMake Format
+        run: |
+          pip install --upgrade cmake_format
+          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakeLists.txt" "**.cmake" |
+            xargs cmake-format --in-place
+          git diff --exit-code
 
-    - name: Black
-      run: |
-        pip install --upgrade pip black
-        # Note: black fails when it doesn't have to do anything.
-        git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
-          grep -v '\(\.json\|\.ipynb\|\.hpp\.in\|\.ref\|.example\)$' |
-          2>/dev/null xargs black || true
-        git diff --exit-code
+      - name: Black
+        run: |
+          pip install --upgrade black
+          # Note: black fails when it doesn't have to do anything.
+          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
+            grep -v '\(\.json\|\.ipynb\|\.hpp\.in\|\.ref\|.example\)$' |
+            2>/dev/null xargs black || true
+          git diff --exit-code
+
+      - name: yamllint
+        run: |
+          pip install --upgrade yamllint
+          git ls-files '*.yaml' '.yml' | xargs yamllint

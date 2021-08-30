@@ -13,7 +13,7 @@ vast:
           field: alert.action
     replace_rrname:
       - replace:
-          field : dns.rrname
+          field: dns.rrname
           value: "foobar.net"
     hash_uid:
       - hash:
