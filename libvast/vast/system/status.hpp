@@ -138,10 +138,10 @@ void collect_status(
   caf::settings& s, std::string_view key) {
   collect_status(
     rs, timeout, verbosity, responder,
-    [key, &s](caf::settings& response) {
+    [key = std::string{key}, &s](caf::settings& response) {
       put(s, std::string_view{key}, std::move(response));
     },
-    [self = rs->self, key, &s](const caf::error& err) {
+    [self = rs->self, key = std::string{key}, &s](const caf::error& err) {
       VAST_WARN("{} failed to retrieve status for the key {}: {}", *self, key,
                 err);
       put(s, std::string_view{key}, fmt::to_string(err));
