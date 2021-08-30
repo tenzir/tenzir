@@ -38,6 +38,12 @@
 
 namespace vast::system {
 
+namespace {
+
+std::vector<std::filesystem::path> loaded_config_files_singleton = {};
+
+} // namespace
+
 std::vector<std::filesystem::path>
 config_dirs(const caf::actor_system_config& config) {
   const auto bare_mode = caf::get_or(config.content, "vast.bare-mode", false);
@@ -50,6 +56,10 @@ config_dirs(const caf::actor_system_config& config) {
     result.push_back(std::filesystem::path{*home} / ".config" / "vast");
   result.push_back(detail::install_configdir());
   return result;
+}
+
+const std::vector<std::filesystem::path>& loaded_config_files() {
+  return loaded_config_files_singleton;
 }
 
 configuration::configuration() {
@@ -192,6 +202,7 @@ caf::error configuration::parse(int argc, char** argv) {
                                            "a map of key-value pairs",
                                            config));
       merge(*rec, merged_config, policy::merge_lists::yes);
+      loaded_config_files_singleton.push_back(config);
     }
   }
   // Flatten everything for simplicity.

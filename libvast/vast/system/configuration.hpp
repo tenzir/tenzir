@@ -22,6 +22,10 @@ namespace vast::system {
 std::vector<std::filesystem::path>
 config_dirs(const caf::actor_system_config& config);
 
+/// @returns The loaded config files of the application.
+/// @note This function is not threadsafe.
+const std::vector<std::filesystem::path>& loaded_config_files();
+
 /// Bundles all configuration parameters of a VAST system.
 class configuration : public caf::actor_system_config {
 public:
