@@ -547,6 +547,22 @@ list& put_list(record& r, std::string_view key) {
   return caf::get<list>(r[key]);
 }
 
+record strip(const record& xs) {
+  record result;
+  for (const auto& [k, v] : xs) {
+    if (caf::holds_alternative<caf::none_t>(v))
+      continue;
+    if (const auto* vr = caf::get_if<record>(&v)) {
+      auto nested = strip(*vr);
+      if (!nested.empty())
+        result.emplace(k, std::move(nested));
+    } else {
+      result.emplace(k, v);
+    }
+  }
+  return result;
+}
+
 caf::expected<std::string> to_json(const data& x) {
   std::string str;
   auto out = std::back_inserter(str);

@@ -407,6 +407,15 @@ record& put_record(list& l);
 
 list& put_list(record& r, std::string_view key);
 
+// -- strip ------------------------------------------------------------
+
+/// Remove empty sub-records from the tree.
+/// Example:
+///   { a = 13, b = {}, c = { d = {} } }
+/// is changed into:
+///   { a = 13 }
+record strip(const record& xs);
+
 // -- JSON -------------------------------------------------------------
 
 /// Prints data as JSON.

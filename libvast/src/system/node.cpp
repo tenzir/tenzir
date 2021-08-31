@@ -143,7 +143,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     size_t memory_usage = 0;
     static void deliver(caf::typed_response_promise<std::string>&& promise,
                         record&& content) {
-      if (auto json = to_json(content))
+      if (auto json = to_json(strip(content)))
         promise.deliver(std::move(*json));
     }
   };

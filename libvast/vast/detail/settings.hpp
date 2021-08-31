@@ -19,13 +19,6 @@ namespace vast::detail {
 void merge_settings(const caf::settings& src, caf::settings& dst,
                     enum policy::merge_lists merge_lists);
 
-/// Remove empty settings objects from the tree.
-/// Example:
-///   { a = 13, b = {}, c = { d = {} } }
-/// is changed into:
-///   { a = 13 }
-bool strip_settings(caf::settings& xs);
-
 /// Returns the amount of bytes specified by a config option.
 /// * If the key has a string or integer key giving a size, use that.
 /// * If the key doesn't exist, use the provided default value.
