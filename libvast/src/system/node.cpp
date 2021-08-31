@@ -180,7 +180,11 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   for (const auto& [label, component] : self->state.registry.components()) {
     // Requests to busy remote sources and sinks can easily delay the combined
     // response because the status requests don't get scheduled soon enough.
-    if (component.actor.home_system().node() != self->home_system().node())
+    // NOTE: We must use `caf::actor::node` rather than
+    // `caf::actor_system::node`, because the actor system for remote actors is
+    // proxied, so using `component.actor.home_system().node()` will result in
+    // a different `node_id` from the one we actually want to compare.
+    if (component.actor.node() != self->node())
       continue;
     collect_status(rs, timeout, v, component.actor, rs->content,
                    component.type);
