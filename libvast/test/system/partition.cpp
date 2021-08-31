@@ -38,8 +38,7 @@ system::filesystem_actor::behavior_type mock_filesystem(
       return self->make_response_promise<chunk_ptr>();
     },
     [](atom::status, system::status_verbosity) {
-      auto result = caf::settings{};
-      return result;
+      return record{};
     },
   };
 }

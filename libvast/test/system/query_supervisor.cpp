@@ -38,7 +38,7 @@ dummy_partition(system::partition_actor::pointer self, ids x) {
       FAIL("dummy implementation not available");
     },
     [=](atom::status, system::status_verbosity) {
-      return caf::settings{};
+      return record{};
     },
   };
 }
