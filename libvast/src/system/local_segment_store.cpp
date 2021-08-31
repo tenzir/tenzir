@@ -285,7 +285,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
     // Conform to the protocol of the STATUS CLIENT actor.
     [self](atom::status, status_verbosity) -> record {
       auto result = record{};
-      auto& store = put_dictionary(result, "segment-store");
+      auto& store = put_record(result, "segment-store");
       put(store, "events", self->state.events);
       put(store, "path", self->state.path.string());
       return result;

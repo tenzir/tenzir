@@ -50,7 +50,7 @@ record type_registry_state::status(status_verbosity v) const {
       }
       auto& models_status = put_list(result, "models");
       for (const auto& [name, definition] : taxonomies.models) {
-        auto& model_status = put_dictionary(models_status);
+        auto& model_status = put_record(models_status);
         put(model_status, "name", name);
         put(model_status, "description", definition.description);
         put(model_status, "definition", definition.definition);

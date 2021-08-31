@@ -159,7 +159,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   put(rs->content, "version", version);
   // Pre-fill our result with system stats.
   auto& sys = self->system();
-  auto& system = put_dictionary(rs->content, "system");
+  auto& system = put_record(rs->content, "system");
   if (v >= status_verbosity::info) {
     put(system, "in-memory-table-slices", table_slice::instances());
     put(system, "database-path", self->state.dir.string());

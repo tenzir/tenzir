@@ -350,11 +350,11 @@ void segment_store::inspect_status(record& xs, system::status_verbosity v) {
     put(xs, "memory-usage", mem);
   }
   if (v >= system::status_verbosity::detailed) {
-    auto& segments = put_dictionary(xs, "segments");
+    auto& segments = put_record(xs, "segments");
     auto& cached = put_list(segments, "cached");
     for (auto& kvp : cache_)
       cached.emplace_back(to_string(kvp.first));
-    auto& current = put_dictionary(segments, "current");
+    auto& current = put_record(segments, "current");
     put(current, "uuid", to_string(builder_.id()));
     put(current, "size", builder_.table_slice_bytes());
   }

@@ -459,8 +459,8 @@ index_state::status(status_verbosity v) const {
   };
   auto rs = make_status_request_state<extra_state>(self);
   if (v >= status_verbosity::detailed) {
-    auto& stats_object = put_dictionary(rs->content, "statistics");
-    auto& layout_object = put_dictionary(stats_object, "layouts");
+    auto& stats_object = put_record(rs->content, "statistics");
+    auto& layout_object = put_record(stats_object, "layouts");
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = record{};
       put(xs, "count", layout_stats.count);
@@ -472,7 +472,7 @@ index_state::status(status_verbosity v) const {
     put(rs->content, "num-cached-partitions", inmem_partitions.size());
     put(rs->content, "num-unpersisted-partitions", unpersisted.size());
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
-    auto& partitions = put_dictionary(rs->content, "partitions");
+    auto& partitions = put_record(rs->content, "partitions");
     auto partition_status = [&](const uuid& id, const partition_actor& pa,
                                 list& xs) {
       collect_status(

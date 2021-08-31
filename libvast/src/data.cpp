@@ -533,12 +533,12 @@ record& put(record& r, std::string_view key, const record& value) {
   return r;
 }
 
-record& put_dictionary(record& r, std::string_view key) {
+record& put_record(record& r, std::string_view key) {
   r[key] = record{};
   return caf::get<record>(r[key]);
 }
 
-record& put_dictionary(list& l) {
+record& put_record(list& l) {
   return caf::get<record>(l.emplace_back(record{}));
 }
 
