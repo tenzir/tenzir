@@ -382,21 +382,19 @@ record& put(record& r, std::string_view key, const Ts& xs) {
                 }) {
     if constexpr (concepts::same_as<typename Ts::key_type, std::string>) {
       auto& dst = caf::get<record>(r.emplace(key, record{}).first->second);
-      for (const auto& [k, v] : xs) {
+      for (const auto& [k, v] : xs)
         put(dst, k, v);
-      }
     } else {
-      // TODO: fix
-      auto& dst = caf::get<map>(r.emplace(key, list{}).first->second);
-      for (const auto& [k, v] : xs) {
-        dst.emplace(data{k}, data{v});
-      }
+      // TODO: Convert to map if possible. Implement after generic conversion
+      // to data is available.
+      auto& dst = caf::get<record>(r.emplace(key, record{}).first->second);
+      for (const auto& [k, v] : xs)
+        put(dst, fmt::to_string(k), v);
     }
   } else {
     auto& dst = caf::get<list>(r.emplace(key, list{}).first->second);
-    for (const auto& x : xs) {
+    for (const auto& x : xs)
       dst.push_back(data{x});
-    }
   }
   return r;
 }
