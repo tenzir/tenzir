@@ -71,10 +71,8 @@ TEST(load) {
     [&](atom::done&) {
       FAIL("unexpected done received");
     },
-    [&](const caf::settings& response) {
-      auto s
-        = unbox(caf::get_if<caf::config_value::string>(&response, "state"));
-      CHECK_EQUAL(s, "waiting for chunk");
+    [&](const record& response) {
+      CHECK_EQUAL(response, (record{{"state", "waiting for chunk"}}));
     },
     caf::after(0s) >>
       [&] {

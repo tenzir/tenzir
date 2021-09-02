@@ -122,11 +122,12 @@ TEST(status) {
               status_verbosity::debug)
     .receive(
       [&](record& status) {
-        auto failed_checks
-          = caf::get<uint64_t>(status["operations.checks.failed"]);
+        auto ops = caf::get<record>(status["operations"]);
+        auto checks = caf::get<record>(ops["checks"]);
+        auto failed_checks = caf::get<count>(checks["failed"]);
         CHECK_EQUAL(failed_checks, 1u);
-        auto failed_reads
-          = caf::get<uint64_t>(status["operations.reads.failed"]);
+        auto reads = caf::get<record>(ops["reads"]);
+        auto failed_reads = caf::get<count>(reads["failed"]);
         CHECK_EQUAL(failed_reads, 0u);
       },
       [&](const caf::error& err) {
