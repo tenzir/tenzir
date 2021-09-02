@@ -373,31 +373,8 @@ record& put(record& r, std::string_view key, const map& value);
 
 record& put(record& r, std::string_view key, const record& value);
 
-template <concepts::range Ts>
-  requires(!concepts::convertible_to<Ts, std::string>)
-record& put(record& r, std::string_view key, const Ts& xs) {
-  if constexpr (requires {
-                  typename Ts::key_type;
-                  typename Ts::mapped_type;
-                }) {
-    if constexpr (concepts::same_as<typename Ts::key_type, std::string>) {
-      auto& dst = caf::get<record>(r.emplace(key, record{}).first->second);
-      for (const auto& [k, v] : xs)
-        put(dst, k, v);
-    } else {
-      // TODO: Convert to map if possible. Implement after generic conversion
-      // to data is available.
-      auto& dst = caf::get<record>(r.emplace(key, record{}).first->second);
-      for (const auto& [k, v] : xs)
-        put(dst, fmt::to_string(k), v);
-    }
-  } else {
-    auto& dst = caf::get<list>(r.emplace(key, list{}).first->second);
-    for (const auto& x : xs)
-      dst.push_back(data{x});
-  }
-  return r;
-}
+record&
+put(record& r, std::string_view key, const std::vector<std::string>& value);
 
 record& put_record(record& r, std::string_view key);
 

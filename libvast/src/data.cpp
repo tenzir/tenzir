@@ -533,6 +533,14 @@ record& put(record& r, std::string_view key, const record& value) {
   return r;
 }
 
+record&
+put(record& r, std::string_view key, const std::vector<std::string>& value) {
+  auto& dst = caf::get<list>(r.emplace(key, list{}).first->second);
+  for (const auto& x : value)
+    dst.push_back(data{x});
+  return r;
+}
+
 record& put_record(record& r, std::string_view key) {
   r[key] = record{};
   return caf::get<record>(r[key]);
