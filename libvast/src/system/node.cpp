@@ -165,13 +165,13 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
                    system::loaded_config_files().end(),
                    std::back_inserter(config_files),
                    [](const std::filesystem::path& x) {
-                     return caf::config_value{x.string()};
+                     return x.string();
                    });
     std::transform(plugins::loaded_config_files().begin(),
                    plugins::loaded_config_files().end(),
                    std::back_inserter(config_files),
                    [](const std::filesystem::path& x) {
-                     return caf::config_value{x.string()};
+                     return x.string();
                    });
   }
   if (v >= status_verbosity::debug) {
