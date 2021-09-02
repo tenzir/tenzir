@@ -139,6 +139,24 @@ TEST(merge) {
   // clang-format on
 }
 
+TEST(strip) {
+  auto xs = record{
+    {"a", record{}},
+    {"b", count{5u}},
+    {"c",
+     record{
+       {"d",
+        record{
+          {"e", record{}},
+          {"f", caf::none},
+        }},
+     }},
+    {"g", caf::none},
+  };
+  auto expected = record{{"b", count{5u}}};
+  CHECK_EQUAL(strip(xs), expected);
+}
+
 TEST(construction) {
   CHECK(caf::holds_alternative<caf::none_t>(data{}));
   CHECK(caf::holds_alternative<bool>(data{true}));
