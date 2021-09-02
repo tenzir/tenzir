@@ -148,14 +148,8 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     }
   };
   auto rs = make_status_request_state<extra_state, std::string>(self);
-  // Pre-fill the version information. Note that we must remove all nil values
-  // first, as the conversion to a caf::settings object fails otherwise. We can
-  // remove the cleansing step once we use record instead of caf::settings for
-  // retrieving the status.
+  // Pre-fill the version information.
   auto version = retrieve_versions();
-  for (auto& [_, value] : version)
-    if (value == caf::none)
-      value = record{};
   put(rs->content, "version", version);
   // Pre-fill our result with system stats.
   auto& sys = self->system();
