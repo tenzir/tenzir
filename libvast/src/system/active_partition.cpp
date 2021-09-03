@@ -19,6 +19,7 @@
 #include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/partition_common.hpp"
 #include "vast/detail/settings.hpp"
@@ -532,6 +533,8 @@ active_partition_actor::behavior_type active_partition(
             ps["error"] = fmt::to_string(err);
           });
       }
+      if (v >= status_verbosity::debug)
+        detail::fill_status_map(rs->content, self);
       return rs->promise;
     },
   };
