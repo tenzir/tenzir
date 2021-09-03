@@ -143,9 +143,18 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     size_t memory_usage = 0;
     static void deliver(caf::typed_response_promise<std::string>&& promise,
                         record&& content) {
-      if (auto json = to_json(strip(content)))
+      // We strip and sort the output for a cleaner presentation of the data.
+      if (auto json = to_json(sort(strip(content))))
         promise.deliver(std::move(*json));
     }
+    // In-place sort each level of the tree.
+    static record& sort(record&& r) {
+      std::sort(r.begin(), r.end());
+      for (auto& [_, value] : r)
+        if (auto* nested = caf::get_if<record>(&value))
+          sort(std::move(*nested));
+      return r;
+    };
   };
   auto rs = make_status_request_state<extra_state, std::string>(self);
   // Pre-fill the version information.
