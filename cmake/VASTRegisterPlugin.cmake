@@ -178,12 +178,11 @@ function (VASTCompileFlatBuffers)
       COMMAND flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings -o
               "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
       COMMAND ${CMAKE_COMMAND} -E rename "${output_file}" "${desired_file}"
-      COMMAND
-        ${CMAKE_COMMAND} -P
-        "${CMAKE_CURRENT_BINARY_DIR}/fbs-strip-suffix-${basename}.cmake"
-        # We need to depend on all schemas here instead of just the one we're
-        # compiling currently because schemas may include other schema files.
-        SOURCES ${FBS_SCHEMAS}
+      COMMAND ${CMAKE_COMMAND} -P
+              "${CMAKE_CURRENT_BINARY_DIR}/fbs-strip-suffix-${basename}.cmake"
+      # We need to depend on all schemas here instead of just the one we're
+      # compiling currently because schemas may include other schema files.
+      DEPENDS ${FBS_SCHEMAS}
       COMMENT "Compiling FlatBuffers schema ${schema}")
     # We need an additional indirection via add_custom_target here, because
     # FBS_TARGET cannot depend on the OUTPUT of a add_custom_command directly,
