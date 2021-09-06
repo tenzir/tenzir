@@ -467,6 +467,16 @@ index_state::status(status_verbosity v) const {
       layout_object[name] = xs;
     }
     rs->content["meta-index-bytes"] = meta_index_bytes;
+    auto& worker_status = insert_record(rs->content, "workers");
+    worker_status["count"] = workers;
+    worker_status["idle"] = idle_workers.size();
+    worker_status["busy"] = workers - idle_workers.size();
+    auto& pending_status = insert_list(rs->content, "pending");
+    for (auto& [u, qs] : pending) {
+      auto& q = insert_record(pending_status);
+      q["id"] = fmt::to_string(u);
+      q["query"] = fmt::to_string(qs);
+    }
     rs->content["num-active-partitions"]
       = count{active_partition.actor == nullptr ? 0u : 1u};
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
@@ -663,6 +673,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.self = self;
   self->state.global_store = archive;
   self->state.accept_queries = true;
+  self->state.workers = num_workers;
   if (self->state.partition_local_stores) {
     self->state.store_plugin = plugins::find<store_plugin>(store_backend);
     if (!self->state.store_plugin) {
