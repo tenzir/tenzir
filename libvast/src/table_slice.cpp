@@ -296,7 +296,7 @@ void table_slice::offset(id offset) noexcept {
   offset_ = offset;
 }
 
-int table_slice::instances() noexcept {
+size_t table_slice::instances() noexcept {
   return num_instances_;
 }
 
