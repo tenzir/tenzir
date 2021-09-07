@@ -483,64 +483,6 @@ bool convert(const caf::config_value& x, data& y) {
   return caf::visit(f, x);
 }
 
-record& put(record& r, std::string_view key, const duration& value) {
-  r[key] = value;
-  return r;
-}
-
-record& put(record& r, std::string_view key, const time& value) {
-  r[key] = value;
-  return r;
-}
-
-record& put(record& r, std::string_view key, std::string_view value) {
-  r[key] = std::string{value};
-  return r;
-}
-
-record& put(record& r, std::string_view key, const pattern& value) {
-  r[key] = value;
-  return r;
-}
-
-record& put(record& r, std::string_view key, const address& value) {
-  r[key] = value;
-  return r;
-}
-
-record& put(record& r, std::string_view key, const subnet& value) {
-  r[key] = value;
-  return r;
-}
-
-record& put(record& r, std::string_view key, const enumeration& value) {
-  r[key] = value;
-  return r;
-}
-
-record& put(record& r, std::string_view key, const list& value) {
-  r[key] = value;
-  return r;
-}
-
-record& put(record& r, std::string_view key, const map& value) {
-  r[key] = value;
-  return r;
-}
-
-record& put(record& r, std::string_view key, const record& value) {
-  r[key] = value;
-  return r;
-}
-
-record&
-put(record& r, std::string_view key, const std::vector<std::string>& value) {
-  auto& dst = caf::get<list>(r.emplace(key, list{}).first->second);
-  for (const auto& x : value)
-    dst.push_back(data{x});
-  return r;
-}
-
 record& put_record(record& r, std::string_view key) {
   r[key] = record{};
   return caf::get<record>(r[key]);

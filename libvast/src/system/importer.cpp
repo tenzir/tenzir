@@ -195,13 +195,13 @@ importer_state::status(status_verbosity v) const {
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
   record result;
-  result["ids.available"] = available_ids();
+  result["ids.available"] = count{available_ids()};
   if (v >= status_verbosity::detailed) {
     auto ids = put_record(rs->content, "ids");
-    put(ids, "available", to_string(available_ids()));
+    ids["available"] = to_string(available_ids());
     auto block = put_record(ids, "block");
-    put(block, "next", to_string(current.next));
-    put(block, "end", to_string(current.end));
+    block["next"] = to_string(current.next);
+    block["end"] = to_string(current.end);
     auto& sources_status = put_list(rs->content, "sources");
     for (const auto& kv : inbound_descriptions)
       sources_status.emplace_back(kv.second);

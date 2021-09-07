@@ -341,13 +341,12 @@ caf::error segment_store::flush() {
 }
 
 void segment_store::inspect_status(record& xs, system::status_verbosity v) {
-  using vast::put;
   if (v >= system::status_verbosity::info) {
-    put(xs, "events", num_events_);
+    xs["events"] = count{num_events_};
     auto mem = builder_.table_slice_bytes();
     for (auto& segment : cache_)
       mem += segment.second.chunk()->size();
-    put(xs, "memory-usage", mem);
+    xs["memory-usage"] = count{mem};
   }
   if (v >= system::status_verbosity::detailed) {
     auto& segments = put_record(xs, "segments");
@@ -355,8 +354,8 @@ void segment_store::inspect_status(record& xs, system::status_verbosity v) {
     for (auto& kvp : cache_)
       cached.emplace_back(to_string(kvp.first));
     auto& current = put_record(segments, "current");
-    put(current, "uuid", to_string(builder_.id()));
-    put(current, "size", builder_.table_slice_bytes());
+    current["uuid"] = to_string(builder_.id());
+    current["size"] = count{builder_.table_slice_bytes()};
   }
 }
 

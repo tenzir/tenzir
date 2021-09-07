@@ -387,10 +387,10 @@ partition_actor::behavior_type passive_partition(
     [self](atom::status, status_verbosity /*v*/) -> record {
       record result;
       if (!self->state.partition_chunk) {
-        put(result, "state", "waiting for chunk");
+        result["state"] = "waiting for chunk";
         return result;
       }
-      put(result, "size", self->state.partition_chunk->size());
+      result["size"] = self->state.partition_chunk->size();
       size_t mem_indexers = 0;
       for (size_t i = 0; i < self->state.indexers.size(); ++i) {
         if (self->state.indexers[i])
@@ -401,16 +401,15 @@ partition_actor::behavior_type passive_partition(
                               ->data()
                               ->size();
       }
-      put(result, "memory-usage-indexers", mem_indexers);
+      result["memory-usage-indexers"] = mem_indexers;
       auto x = self->state.partition_chunk->incore();
       if (!x) {
-        put(result, "memory-usage-incore", render(x.error()));
-        put(result, "memory-usage",
-            self->state.partition_chunk->size() + mem_indexers
-              + sizeof(self->state));
+        result["memory-usage-incore"] = render(x.error());
+        result["memory-usage"] = self->state.partition_chunk->size()
+                                 + mem_indexers + sizeof(self->state);
       } else {
-        put(result, "memory-usage-incore", *x);
-        put(result, "memory-usage", *x + mem_indexers + sizeof(self->state));
+        result["memory-usage-incore"] = *x;
+        result["memory-usage"] = *x + mem_indexers + sizeof(self->state);
       }
       return result;
     },

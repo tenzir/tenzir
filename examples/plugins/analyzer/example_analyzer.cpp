@@ -119,7 +119,7 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
     [](atom::status, system::status_verbosity) -> record {
       // Return an arbitrary record here for use in the status command.
       auto result = record{};
-      put(result, "answer", 42);
+      result["answer"] = integer{42};
       return result;
     },
   };

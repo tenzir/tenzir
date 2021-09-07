@@ -286,8 +286,8 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
     [self](atom::status, status_verbosity) -> record {
       auto result = record{};
       auto& store = put_record(result, "segment-store");
-      put(store, "events", self->state.events);
-      put(store, "path", self->state.path.string());
+      store["events"] = count{self->state.events};
+      store["path"] = self->state.path.string();
       return result;
     },
     // internal handlers

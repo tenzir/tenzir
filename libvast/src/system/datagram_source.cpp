@@ -168,8 +168,8 @@ caf::behavior datagram_source(
       if (v >= status_verbosity::detailed) {
         record src;
         if (self->state.reader)
-          put(src, "format", self->state.reader->name());
-        put(src, "produced", self->state.count);
+          src["format"] = self->state.reader->name();
+        src["produced"] = count{self->state.count};
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
@@ -177,7 +177,7 @@ caf::behavior datagram_source(
         collect_status(
           rs, timeout, v, self->state.transformer,
           [rs, src](record& response) mutable {
-            put(src, "transformer", std::move(response));
+            src["transformer"] = std::move(response);
             auto& xs = put_list(rs->content, "sources");
             xs.emplace_back(std::move(src));
           },
@@ -185,7 +185,7 @@ caf::behavior datagram_source(
             VAST_WARN("{} failed to retrieve status for the key transformer: "
                       "{}",
                       *rs->self, err);
-            put(src, "transformer", fmt::to_string(err));
+            src["transformer"] = fmt::to_string(err);
             auto& xs = put_list(rs->content, "sources");
             xs.emplace_back(std::move(src));
           });

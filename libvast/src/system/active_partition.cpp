@@ -501,7 +501,7 @@ active_partition_actor::behavior_type active_partition(
         size_t memory_usage = 0;
         void deliver(caf::typed_response_promise<record>&& promise,
                      record&& content) {
-          put(content, "memory-usage", memory_usage);
+          content["memory-usage"] = count{memory_usage};
           promise.deliver(std::move(content));
         }
       };
@@ -517,7 +517,7 @@ active_partition_actor::behavior_type active_partition(
         collect_status(
           rs, timeout, v, i.second,
           [rs, v, &ps, &field = i.first](record& response) {
-            put(ps, "field", field.fqn());
+            ps["field"] = field.fqn();
             auto it = response.find("memory-usage");
             if (it != response.end()) {
               if (const auto* s = caf::get_if<count>(&it->second))
@@ -529,7 +529,7 @@ active_partition_actor::behavior_type active_partition(
           [rs, &ps, &field = i.first](caf::error& err) {
             VAST_WARN("{} failed to retrieve status from {} : {}", *rs->self,
                       field.fqn(), fmt::to_string(err));
-            put(ps, "error", fmt::to_string(err));
+            ps["error"] = fmt::to_string(err);
           });
       }
       return rs->promise;

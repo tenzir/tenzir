@@ -335,47 +335,6 @@ bool convert(const caf::config_value& x, data& y);
 
 // -- manual creation ----------------------------------------------------------
 
-template <concepts::signed_integral T>
-record& put(record& r, std::string_view key, const T& value) {
-  r[key] = integer{value};
-  return r;
-}
-
-template <concepts::unsigned_integral T>
-record& put(record& r, std::string_view key, const T& value) {
-  r[key] = count{value};
-  return r;
-}
-
-template <concepts::floating_point T>
-record& put(record& r, std::string_view key, const T& value) {
-  r[key] = real{value};
-  return r;
-}
-
-record& put(record& r, std::string_view key, const duration& value);
-
-record& put(record& r, std::string_view key, const time& value);
-
-record& put(record& r, std::string_view key, std::string_view value);
-
-record& put(record& r, std::string_view key, const pattern& value);
-
-record& put(record& r, std::string_view key, const address& value);
-
-record& put(record& r, std::string_view key, const subnet& value);
-
-record& put(record& r, std::string_view key, const enumeration& value);
-
-record& put(record& r, std::string_view key, const list& value);
-
-record& put(record& r, std::string_view key, const map& value);
-
-record& put(record& r, std::string_view key, const record& value);
-
-record&
-put(record& r, std::string_view key, const std::vector<std::string>& value);
-
 record& put_record(record& r, std::string_view key);
 
 record& put_record(list& l);

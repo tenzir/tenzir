@@ -313,9 +313,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       auto result = record{};
       if (v >= status_verbosity::info) {
         record exp;
-        put(exp, "expression", to_string(self->state.expr));
+        exp["expression"] = to_string(self->state.expr);
         if (v >= status_verbosity::detailed) {
-          put(exp, "start", caf::deep_to_string(self->state.start));
+          exp["start"] = caf::deep_to_string(self->state.start);
           auto& transform_names = put_list(exp, "transforms");
           for (const auto& t : self->state.transformer.transforms())
             transform_names.emplace_back(t.name());

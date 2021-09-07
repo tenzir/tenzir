@@ -159,13 +159,13 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   auto rs = make_status_request_state<extra_state, std::string>(self);
   // Pre-fill the version information.
   auto version = retrieve_versions();
-  put(rs->content, "version", version);
+  rs->content["version"] = version;
   // Pre-fill our result with system stats.
   auto& sys = self->system();
   auto& system = put_record(rs->content, "system");
   if (v >= status_verbosity::info) {
-    put(system, "in-memory-table-slices", table_slice::instances());
-    put(system, "database-path", self->state.dir.string());
+    system["in-memory-table-slices"] = count{table_slice::instances()};
+    system["database-path"] = self->state.dir.string();
     merge(detail::get_status(), system, policy::merge_lists::no);
   }
   if (v >= status_verbosity::detailed) {
@@ -184,9 +184,9 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
                    });
   }
   if (v >= status_verbosity::debug) {
-    put(system, "running-actors", sys.registry().running());
-    put(system, "detached-actors", sys.detached_actors());
-    put(system, "worker-threads", sys.scheduler().num_workers());
+    system["running-actors"] = count{sys.registry().running()};
+    system["detached-actors"] = count{sys.detached_actors()};
+    system["worker-threads"] = count{sys.scheduler().num_workers()};
   }
   const auto timeout = defaults::system::initial_request_timeout;
   // Send out requests and collects answers.

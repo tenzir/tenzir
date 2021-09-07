@@ -361,9 +361,9 @@ void index_state::create_active_partition() {
   // These options must be kept in sync with vast/address_synopsis.hpp and
   // vast/string_synopsis.hpp respectively.
   auto synopsis_options = caf::settings{};
-  put(synopsis_options, "max-partition-size", partition_capacity);
-  put(synopsis_options, "address-synopsis-fp-rate", meta_index_fp_rate);
-  put(synopsis_options, "string-synopsis-fp-rate", meta_index_fp_rate);
+  synopsis_options["max-partition-size"] = partition_capacity;
+  synopsis_options["address-synopsis-fp-rate"] = meta_index_fp_rate;
+  synopsis_options["string-synopsis-fp-rate"] = meta_index_fp_rate;
   // If we're using the global store, the importer already sends the table
   // slices. (In the long run, this should probably be streamlined so that all
   // data moves through the index. However, that requires some refactoring of
@@ -453,7 +453,7 @@ index_state::status(status_verbosity v) const {
     size_t memory_usage = 0;
     void
     deliver(caf::typed_response_promise<record>&& promise, record&& content) {
-      put(content, "index.memory-usage", memory_usage);
+      content["index.memory-usage"] = count{memory_usage};
       promise.deliver(std::move(content));
     }
   };
@@ -463,39 +463,38 @@ index_state::status(status_verbosity v) const {
     auto& layout_object = put_record(stats_object, "layouts");
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = record{};
-      put(xs, "count", layout_stats.count);
-      put(layout_object, name, std::move(xs));
+      xs["count"] = count{layout_stats.count};
+      layout_object["meta-index-bytes"] = meta_index_bytes;
     }
-    put(rs->content, "meta-index-bytes", meta_index_bytes);
-    put(rs->content, "num-active-partitions",
-        active_partition.actor == nullptr ? 0 : 1);
-    put(rs->content, "num-cached-partitions", inmem_partitions.size());
-    put(rs->content, "num-unpersisted-partitions", unpersisted.size());
+    rs->content["num-active-partitions"]
+      = count{active_partition.actor == nullptr ? 0u : 1u};
+    rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
+    rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
     auto& partitions = put_record(rs->content, "partitions");
-    auto partition_status = [&](const uuid& id, const partition_actor& pa,
-                                list& xs) {
-      collect_status(
-        rs, timeout, v, pa,
-        [=, &xs](const record& part_status) {
-          auto& ps = caf::get<record>(xs.emplace_back(record{}));
-          put(ps, "id", to_string(id));
-          auto it = part_status.find("memory-usage");
-          if (it != part_status.end()) {
-            if (const auto* s = caf::get_if<count>(&it->second))
-              rs->memory_usage += *s;
-          }
-          if (v >= status_verbosity::debug)
-            merge(part_status, ps, policy::merge_lists::no);
-        },
-        [=, this, &xs](const caf::error& err) {
-          VAST_WARN("{} failed to retrieve status from {} : {}", *self, id,
-                    render(err));
-          auto& ps = caf::get<record>(xs.emplace_back(record{}));
-          put(ps, "id", to_string(id));
-          put(ps, "error", render(err));
-        });
-    };
+    auto partition_status
+      = [&](const uuid& id, const partition_actor& pa, list& xs) {
+          collect_status(
+            rs, timeout, v, pa,
+            [=, &xs](const record& part_status) {
+              auto& ps = caf::get<record>(xs.emplace_back(record{}));
+              ps["id"] = to_string(id);
+              auto it = part_status.find("memory-usage");
+              if (it != part_status.end()) {
+                if (const auto* s = caf::get_if<count>(&it->second))
+                  rs->memory_usage += *s;
+              }
+              if (v >= status_verbosity::debug)
+                merge(part_status, ps, policy::merge_lists::no);
+            },
+            [=, this, &xs](const caf::error& err) {
+              VAST_WARN("{} failed to retrieve status from {} : {}", *self, id,
+                        render(err));
+              auto& ps = caf::get<record>(xs.emplace_back(record{}));
+              ps["id"] = to_string(id);
+              ps["error"] = render(err);
+            });
+        };
     // Resident partitions.
     auto& active = put_list(partitions, "active");
     active.reserve(1);
@@ -755,8 +754,8 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.decomission_active_partition();
     // Collect partitions for termination.
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
-    // on 'std::vector<caf::actor>' only. That should probably be generalized in
-    // the future.
+    // on 'std::vector<caf::actor>' only. That should probably be generalized
+    // in the future.
     std::vector<caf::actor> partitions;
     partitions.reserve(self->state.inmem_partitions.size() + 1);
     for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
@@ -764,8 +763,9 @@ index(index_actor::stateful_pointer<index_state> self,
     for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
       partitions.push_back(caf::actor_cast<caf::actor>(part));
     self->state.flush_to_disk();
-    // Receiving an EXIT message does not need to coincide with the state being
-    // destructed, so we explicitly clear the tables to release the references.
+    // Receiving an EXIT message does not need to coincide with the state
+    // being destructed, so we explicitly clear the tables to release the
+    // references.
     self->state.unpersisted.clear();
     self->state.inmem_partitions.clear();
     // Terminate partition actors.
@@ -994,8 +994,8 @@ index(index_actor::stateful_pointer<index_state> self,
                   if (err)
                     VAST_WARN("{} could not unlink partition synopsis at",
                               *self, synopsis_path);
-                  // TODO: We could send `all_ids` as the second argument here,
-                  // which doesn't really make sense from an interface
+                  // TODO: We could send `all_ids` as the second argument
+                  // here, which doesn't really make sense from an interface
                   // perspective but would save the partition from recomputing
                   // the same bitmap.
                   rp.delegate(partition_actor, atom::erase_v);

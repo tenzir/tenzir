@@ -139,12 +139,12 @@ void collect_status(
   collect_status(
     rs, timeout, verbosity, responder,
     [key = std::string{key}, &s](record& response) {
-      put(s, key, std::move(response));
+      s[key] = std::move(response);
     },
     [self = rs->self, key = std::string{key}, &s](const caf::error& err) {
       VAST_WARN("{} failed to retrieve status for the key {}: {}", *self, key,
                 err);
-      put(s, key, fmt::to_string(err));
+      s[key] = fmt::to_string(err);
     });
 }
 

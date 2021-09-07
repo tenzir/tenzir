@@ -85,14 +85,14 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
     [self](atom::status, status_verbosity v) {
       auto result = record{};
       if (v >= status_verbosity::info)
-        put(result, "type", "POSIX");
+        result["type"] = "POSIX";
       if (v >= status_verbosity::debug) {
         auto& ops = put_record(result, "operations");
         auto add_stats = [&](auto& name, auto& stats) {
           auto& dict = put_record(ops, name);
-          put(dict, "successful", stats.successful);
-          put(dict, "failed", stats.failed);
-          put(dict, "bytes", stats.bytes);
+          dict["successful"] = count{stats.successful};
+          dict["failed"] = count{stats.failed};
+          dict["bytes"] = count{stats.bytes};
         };
         add_stats("checks", self->state.stats.checks);
         add_stats("writes", self->state.stats.writes);

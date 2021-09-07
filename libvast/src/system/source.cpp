@@ -321,8 +321,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       if (v >= status_verbosity::detailed) {
         record src;
         if (self->state.reader)
-          put(src, "format", self->state.reader->name());
-        put(src, "produced", self->state.count);
+          src["format"] = self->state.reader->name();
+        src["produced"] = count{self->state.count};
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
@@ -330,7 +330,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         collect_status(
           rs, timeout, v, self->state.transformer,
           [rs, src](record& response) mutable {
-            put(src, "transformer", std::move(response));
+            src["transformer"] = std::move(response);
             auto& xs = put_list(rs->content, "sources");
             xs.emplace_back(std::move(src));
           },
@@ -338,7 +338,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
             VAST_WARN("{} failed to retrieve status for the key transformer: "
                       "{}",
                       *rs->self, err);
-            put(src, "transformer", fmt::to_string(err));
+            src["transformer"] = fmt::to_string(err);
             auto& xs = put_list(rs->content, "sources");
             xs.emplace_back(std::move(src));
           });
