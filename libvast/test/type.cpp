@@ -15,6 +15,9 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <random>
+
 namespace vast {
 
 TEST(none_type) {
@@ -89,6 +92,22 @@ TEST(alias_type) {
   CHECK(caf::holds_alternative<bool_type>(lat));
   CHECK_EQUAL(lat.name(), "l3");
   CHECK_EQUAL(fmt::format("{}", lat), "l3");
+}
+
+TEST(sorting) {
+  auto ts = std::vector<type>{
+    none_type{},
+    bool_type{},
+    integer_type{},
+    type{"custom_none", none_type{}},
+    type{"custom_bool", bool_type{}},
+    type{"custom_integer", integer_type{}},
+  };
+  std::shuffle(ts.begin(), ts.end(), std::random_device());
+  std::sort(ts.begin(), ts.end());
+  const char* expected
+    = "none bool integer custom_none custom_bool custom_integer";
+  CHECK_EQUAL(fmt::format("{}", fmt::join(ts, " ")), expected);
 }
 
 } // namespace vast
