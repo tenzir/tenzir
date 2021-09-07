@@ -55,7 +55,6 @@ class outbound_stream_slot;
 
 namespace vast {
 
-class legacy_abstract_type;
 class address;
 class arrow_table_slice_builder;
 class bitmap;
@@ -63,7 +62,10 @@ class chunk;
 class command;
 class data;
 class expression;
+class legacy_abstract_type;
+class legacy_type;
 class msgpack_table_slice_builder;
+class none_type;
 class pattern;
 class plugin;
 class plugin_ptr;
@@ -80,7 +82,7 @@ class table_slice_builder;
 class table_slice_column;
 class transform;
 class transform_step;
-class legacy_type;
+class type;
 class uuid;
 class value_index;
 
@@ -181,6 +183,7 @@ namespace fbs {
 
 struct FlatTableSlice;
 struct TableSlice;
+struct Type;
 
 namespace table_slice {
 

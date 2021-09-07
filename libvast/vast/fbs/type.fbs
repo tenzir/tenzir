@@ -1,0 +1,14 @@
+namespace vast.fbs.type;
+
+/// The sum type of all possible types.
+union Type {
+}
+
+namespace vast.fbs;
+
+/// The sematic representation of data.
+table Type {
+  type: type.Type;
+}
+
+root_type Type;
