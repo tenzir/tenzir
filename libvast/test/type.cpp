@@ -57,4 +57,19 @@ TEST(bool_type) {
   CHECK(caf::holds_alternative<bool_type>(lbt));
 }
 
+TEST(alias_type) {
+  const auto at = type{"l1", bool_type{}};
+  CHECK(caf::holds_alternative<bool_type>(at));
+  CHECK_EQUAL(at.name(), "l1");
+  CHECK_EQUAL(fmt::format("{}", at), "l1");
+  const auto aat = type{"l2", at};
+  CHECK(caf::holds_alternative<bool_type>(aat));
+  CHECK_EQUAL(aat.name(), "l2");
+  CHECK_EQUAL(fmt::format("{}", aat), "l2");
+  const auto lat = type{legacy_bool_type{}.name("l3")};
+  CHECK(caf::holds_alternative<bool_type>(lat));
+  CHECK_EQUAL(lat.name(), "l3");
+  CHECK_EQUAL(fmt::format("{}", lat), "l3");
+}
+
 } // namespace vast

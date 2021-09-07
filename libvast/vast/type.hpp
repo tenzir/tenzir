@@ -52,6 +52,13 @@ concept basic_type = requires(const T& type) {
 /// The sematic representation of data.
 class type final {
 public:
+  /// Indiciates whether to skip over alias and tag types when looking at the
+  /// underlying FlatBuffers representation.
+  enum class transparent {
+    yes, ///< Skip alias and tag types.
+    no,  ///< Include alias and tag types.
+  };
+
   /// Default-constructs a type, which is semantically equivalent to the
   /// *none_type*.
   type() noexcept;
@@ -98,6 +105,12 @@ public:
 
   // TODO: Add an implicit constructor for complex types.
 
+  /// Constructs a named type.
+  /// @param name The type name.
+  /// @param nested The aliased type.
+  /// @note Creates a copy of nested if the provided name is empty.
+  type(std::string_view name, const type& nested) noexcept;
+
   /// Constructs a type from a legacy_type.
   /// @relates legacy_type
   explicit type(const legacy_type& other) noexcept;
@@ -114,7 +127,9 @@ public:
 
   /// Returns the underlying FlatBuffers table representation.
   /// @note Include `vast/fbs/type.hpp` to be able to use this function.
-  [[nodiscard]] const fbs::Type& table() const noexcept;
+  /// @param transparent Whether to skip over alias and tag types
+  [[nodiscard]] const fbs::Type&
+  table(enum transparent transparent) const noexcept;
 
   /// Returns the concrete type index of this type.
   [[nodiscard]] uint8_t type_index() const noexcept;

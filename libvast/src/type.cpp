@@ -48,13 +48,44 @@ type::type(chunk_ptr table) noexcept : table_{std::move(table)} {
 #endif // VAST_ENABLE_ASSERTIONS
 }
 
+type::type(std::string_view name, const type& nested) noexcept {
+  if (name.empty()) {
+    // This special case exists for easier conversion of legacy types, which did
+    // not require an legacy alias type wrapping to have a name.
+    *this = nested;
+  } else {
+    const auto nested_bytes = as_bytes(nested);
+    // By default the builder allocates 1024 bytes, which is much more than
+    // what we require: 52 (fixed) + name (rounded up to a multiple of 4) +
+    // nested type.
+    const auto reserved_size
+      = 52 + (((name.size() + 3) / 4) * 4) + nested_bytes.size();
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto alias_type_name = builder.CreateString(name);
+    const auto alias_type_type = builder.CreateVector(
+      reinterpret_cast<const uint8_t*>(nested_bytes.data()),
+      nested_bytes.size());
+    const auto alias_type = fbs::type::alias_type::Createv0(
+      builder, alias_type_name, alias_type_type);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::alias_type_v0,
+                                      alias_type.Union());
+    builder.Finish(type);
+    auto result = builder.Release();
+    VAST_ASSERT(result.size() == reserved_size);
+    table_ = chunk::make(std::move(result));
+  }
+}
+
 type::type(const legacy_type& other) noexcept {
   auto f = detail::overload{
     [&](const legacy_none_type&) {
-      *this = none_type{};
+      *this = type{other.name(), none_type{}};
     },
     [&](const legacy_bool_type&) {
-      *this = bool_type{};
+      *this = type{other.name(), bool_type{}};
+    },
+    [&](const legacy_alias_type& alias) {
+      return type{other.name(), type{alias.value_type}};
     },
     [&](const auto&) {
       // TODO: Implement for all legacy types, then remove this handler.
@@ -71,14 +102,13 @@ type::type(const legacy_type& other) noexcept {
       // - legacy_list_type,
       // - legacy_map_type,
       // - legacy_record_type,
-      // - legacy_alias_type
     },
   };
   caf::visit(f, other);
 }
 
 type::operator bool() const noexcept {
-  return table().type_type() != fbs::type::Type::NONE;
+  return table(transparent::yes).type_type() != fbs::type::Type::NONE;
 }
 
 bool operator==(const type& lhs, const type& rhs) noexcept {
@@ -110,17 +140,29 @@ std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
                               : std::strong_ordering::equivalent;
 }
 
-const fbs::Type& type::table() const noexcept {
+const fbs::Type& type::table(enum transparent transparent) const noexcept {
   const auto& repr = as_bytes(*this);
   const auto* root = fbs::GetType(repr.data());
   VAST_ASSERT(root);
+  while (transparent == transparent::yes) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+        transparent = transparent::no;
+        break;
+      case fbs::type::Type::alias_type_v0:
+        root = root->type_as_alias_type_v0()->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
   return *root;
 }
 
 uint8_t type::type_index() const noexcept {
   static_assert(
     std::is_same_v<uint8_t, std::underlying_type_t<vast::fbs::type::Type>>);
-  return static_cast<uint8_t>(table().type_type());
+  return static_cast<uint8_t>(table(transparent::yes).type_type());
 }
 
 std::span<const std::byte> as_bytes(const type& x) noexcept {
@@ -128,11 +170,14 @@ std::span<const std::byte> as_bytes(const type& x) noexcept {
 }
 
 std::string_view type::name() const& noexcept {
-  switch (table().type_type()) {
+  const auto& root = table(transparent::no);
+  switch (root.type_type()) {
     case fbs::type::Type::NONE:
       return "none";
     case fbs::type::Type::bool_type_v0:
       return "bool";
+    case fbs::type::Type::alias_type_v0:
+      return root.type_as_alias_type_v0()->name()->string_view();
   }
 }
 
