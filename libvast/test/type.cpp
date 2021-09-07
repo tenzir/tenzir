@@ -57,6 +57,25 @@ TEST(bool_type) {
   CHECK(caf::holds_alternative<bool_type>(lbt));
 }
 
+TEST(integer_type) {
+  static_assert(concrete_type<integer_type>);
+  static_assert(basic_type<integer_type>);
+  const auto t = type{};
+  const auto it = type{integer_type{}};
+  CHECK(it);
+  CHECK_EQUAL(as_bytes(it), as_bytes(integer_type{}));
+  CHECK(t != it);
+  CHECK(t < it);
+  CHECK(t <= it);
+  CHECK_EQUAL(fmt::format("{}", it), "integer");
+  CHECK_EQUAL(fmt::format("{}", integer_type{}), "integer");
+  CHECK(!caf::holds_alternative<integer_type>(t));
+  CHECK(caf::holds_alternative<integer_type>(it));
+  const auto lit = type{legacy_integer_type{}};
+  CHECK(caf::holds_alternative<integer_type>(lit));
+}
+}
+
 TEST(alias_type) {
   const auto at = type{"l1", bool_type{}};
   CHECK(caf::holds_alternative<bool_type>(at));

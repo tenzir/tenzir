@@ -63,6 +63,7 @@ class chunk;
 class command;
 class data;
 class expression;
+class integer_type;
 class legacy_abstract_type;
 class legacy_type;
 class msgpack_table_slice_builder;

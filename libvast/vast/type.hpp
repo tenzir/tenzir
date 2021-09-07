@@ -27,7 +27,8 @@
 namespace vast {
 
 /// The list of concrete types.
-using concrete_types = caf::detail::type_list<none_type, bool_type>;
+using concrete_types
+  = caf::detail::type_list<none_type, bool_type, integer_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -177,6 +178,19 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const bool_type&) noexcept;
+};
+
+// -- integer_type ------------------------------------------------------------
+
+/// A signed integer.
+/// @relates type
+class integer_type final {
+public:
+  /// Returns the type index.
+  static uint8_t type_index() noexcept;
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte> as_bytes(const integer_type&) noexcept;
 };
 
 } // namespace vast

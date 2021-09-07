@@ -84,12 +84,14 @@ type::type(const legacy_type& other) noexcept {
     [&](const legacy_bool_type&) {
       *this = type{other.name(), bool_type{}};
     },
+    [&](const legacy_integer_type&) {
+      *this = type{other.name(), integer_type{}};
+    },
     [&](const legacy_alias_type& alias) {
       return type{other.name(), type{alias.value_type}};
     },
     [&](const auto&) {
       // TODO: Implement for all legacy types, then remove this handler.
-      // - legacy_integer_type,
       // - legacy_count_type,
       // - legacy_real_type,
       // - legacy_duration_type,
@@ -148,6 +150,7 @@ const fbs::Type& type::table(enum transparent transparent) const noexcept {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
         transparent = transparent::no;
         break;
       case fbs::type::Type::alias_type_v0:
@@ -176,6 +179,8 @@ std::string_view type::name() const& noexcept {
       return "none";
     case fbs::type::Type::bool_type_v0:
       return "bool";
+    case fbs::type::Type::integer_type_v0:
+      return "integer";
     case fbs::type::Type::alias_type_v0:
       return root.type_as_alias_type_v0()->name()->string_view();
   }
@@ -213,6 +218,28 @@ std::span<const std::byte> as_bytes(const bool_type&) noexcept {
     const auto bool_type = fbs::type::bool_type::Createv0(builder);
     const auto type = fbs::CreateType(builder, fbs::type::Type::bool_type_v0,
                                       bool_type.Union());
+    builder.Finish(type);
+    auto result = builder.Release();
+
+    VAST_ASSERT(result.size() == reserved_size);
+    return result;
+  }();
+  return as_bytes(buffer);
+}
+
+// -- integer_type ------------------------------------------------------------
+
+uint8_t integer_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::integer_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const integer_type&) noexcept {
+  static const auto buffer = []() noexcept {
+    constexpr auto reserved_size = 32;
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto integer_type = fbs::type::integer_type::Createv0(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::integer_type_v0,
+                                      integer_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
 

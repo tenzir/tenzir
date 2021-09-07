@@ -3,6 +3,11 @@ namespace vast.fbs.type.bool_type;
 /// A boolean value that can either be true or false.
 table v0 {}
 
+namespace vast.fbs.type.integer_type;
+
+/// A signed integer.
+table v0 {}
+
 namespace vast.fbs.type.alias_type;
 
 /// A type with a name.
@@ -16,6 +21,7 @@ namespace vast.fbs.type;
 /// The sum type of all possible types.
 union Type {
   bool_type.v0,
+  integer_type.v0,
   alias_type.v0,
 }
 
