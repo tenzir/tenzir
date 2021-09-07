@@ -1,7 +1,13 @@
+namespace vast.fbs.type.bool_type;
+
+/// A boolean value that can either be true or false.
+table v0 {}
+
 namespace vast.fbs.type;
 
 /// The sum type of all possible types.
 union Type {
+  bool_type.v0,
 }
 
 namespace vast.fbs;

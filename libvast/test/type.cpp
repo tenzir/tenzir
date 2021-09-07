@@ -39,4 +39,22 @@ TEST(none_type) {
   CHECK(caf::holds_alternative<none_type>(lnt));
 }
 
+TEST(bool_type) {
+  static_assert(concrete_type<bool_type>);
+  static_assert(basic_type<bool_type>);
+  const auto t = type{};
+  const auto bt = type{bool_type{}};
+  CHECK(bt);
+  CHECK_EQUAL(as_bytes(bt), as_bytes(bool_type{}));
+  CHECK(t != bt);
+  CHECK(t < bt);
+  CHECK(t <= bt);
+  CHECK_EQUAL(fmt::format("{}", bt), "bool");
+  CHECK_EQUAL(fmt::format("{}", bool_type{}), "bool");
+  CHECK(!caf::holds_alternative<bool_type>(t));
+  CHECK(caf::holds_alternative<bool_type>(bt));
+  const auto lbt = type{legacy_bool_type{}};
+  CHECK(caf::holds_alternative<bool_type>(lbt));
+}
+
 } // namespace vast

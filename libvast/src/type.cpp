@@ -53,9 +53,11 @@ type::type(const legacy_type& other) noexcept {
     [&](const legacy_none_type&) {
       *this = none_type{};
     },
+    [&](const legacy_bool_type&) {
+      *this = bool_type{};
+    },
     [&](const auto&) {
       // TODO: Implement for all legacy types, then remove this handler.
-      // - legacy_bool_type,
       // - legacy_integer_type,
       // - legacy_count_type,
       // - legacy_real_type,
@@ -129,6 +131,8 @@ std::string_view type::name() const& noexcept {
   switch (table().type_type()) {
     case fbs::type::Type::NONE:
       return "none";
+    case fbs::type::Type::bool_type_v0:
+      return "bool";
   }
 }
 
@@ -145,6 +149,28 @@ std::span<const std::byte> as_bytes(const none_type&) noexcept {
     const auto type = fbs::CreateType(builder);
     builder.Finish(type);
     auto result = builder.Release();
+    VAST_ASSERT(result.size() == reserved_size);
+    return result;
+  }();
+  return as_bytes(buffer);
+}
+
+// -- bool_type ---------------------------------------------------------------
+
+uint8_t bool_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::bool_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const bool_type&) noexcept {
+  static const auto buffer = []() noexcept {
+    constexpr auto reserved_size = 32;
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto bool_type = fbs::type::bool_type::Createv0(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::bool_type_v0,
+                                      bool_type.Union());
+    builder.Finish(type);
+    auto result = builder.Release();
+
     VAST_ASSERT(result.size() == reserved_size);
     return result;
   }();

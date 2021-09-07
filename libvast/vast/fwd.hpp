@@ -58,6 +58,7 @@ namespace vast {
 class address;
 class arrow_table_slice_builder;
 class bitmap;
+class bool_type;
 class chunk;
 class command;
 class data;
