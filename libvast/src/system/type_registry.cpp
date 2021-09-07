@@ -46,7 +46,7 @@ record type_registry_state::status(status_verbosity v) const {
           l.emplace_back(x);
         return l;
       };
-      auto& concepts_status = put_list(result, "concepts");
+      auto& concepts_status = insert_list(result, "concepts");
       for (const auto& [name, definition] : taxonomies.concepts) {
         auto& concept_status
           = caf::get<record>(concepts_status.emplace_back(record{}));
@@ -55,9 +55,9 @@ record type_registry_state::status(status_verbosity v) const {
         concept_status["fields"] = to_list(definition.fields);
         concept_status["concepts"] = to_list(definition.concepts);
       }
-      auto& models_status = put_list(result, "models");
+      auto& models_status = insert_list(result, "models");
       for (const auto& [name, definition] : taxonomies.models) {
-        auto& model_status = put_record(models_status);
+        auto& model_status = insert_record(models_status);
         model_status["name"] = name;
         model_status["description"] = definition.description;
         model_status["definition"] = to_list(definition.definition);

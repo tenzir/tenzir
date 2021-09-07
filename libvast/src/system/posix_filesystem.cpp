@@ -87,9 +87,9 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       if (v >= status_verbosity::info)
         result["type"] = "POSIX";
       if (v >= status_verbosity::debug) {
-        auto& ops = put_record(result, "operations");
+        auto& ops = insert_record(result, "operations");
         auto add_stats = [&](auto& name, auto& stats) {
-          auto& dict = put_record(ops, name);
+          auto& dict = insert_record(ops, name);
           dict["successful"] = count{stats.successful};
           dict["failed"] = count{stats.failed};
           dict["bytes"] = count{stats.bytes};

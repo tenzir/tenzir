@@ -162,14 +162,14 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   rs->content["version"] = version;
   // Pre-fill our result with system stats.
   auto& sys = self->system();
-  auto& system = put_record(rs->content, "system");
+  auto& system = insert_record(rs->content, "system");
   if (v >= status_verbosity::info) {
     system["in-memory-table-slices"] = count{table_slice::instances()};
     system["database-path"] = self->state.dir.string();
     merge(detail::get_status(), system, policy::merge_lists::no);
   }
   if (v >= status_verbosity::detailed) {
-    auto& config_files = put_list(system, "config-files");
+    auto& config_files = insert_list(system, "config-files");
     std::transform(system::loaded_config_files().begin(),
                    system::loaded_config_files().end(),
                    std::back_inserter(config_files),

@@ -335,11 +335,11 @@ bool convert(const caf::config_value& x, data& y);
 
 // -- manual creation ----------------------------------------------------------
 
-record& put_record(record& r, std::string_view key);
+record& insert_record(record& r, std::string_view key);
 
-record& put_record(list& l);
+record& insert_record(list& l);
 
-list& put_list(record& r, std::string_view key);
+list& insert_list(record& r, std::string_view key);
 
 // -- strip ------------------------------------------------------------
 

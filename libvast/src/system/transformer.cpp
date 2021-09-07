@@ -57,7 +57,7 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
             std::string name, std::vector<transform>&& transforms) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(name));
   self->state.transformer_name = std::move(name);
-  auto& transform_names = put_list(self->state.status, "transforms");
+  auto& transform_names = insert_list(self->state.status, "transforms");
   for (const auto& t : transforms)
     transform_names.emplace_back(t.name());
   self->state.transforms = transformation_engine{std::move(transforms)};

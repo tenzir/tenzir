@@ -371,7 +371,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     [self](atom::status, status_verbosity v) {
       auto result = record{};
       if (v >= status_verbosity::detailed) {
-        auto& components = put_record(result, "components");
+        auto& components = insert_record(result, "components");
         for (const auto& [aid, name] : self->state->actor_map)
           components.emplace(name, aid);
       }

@@ -483,16 +483,16 @@ bool convert(const caf::config_value& x, data& y) {
   return caf::visit(f, x);
 }
 
-record& put_record(record& r, std::string_view key) {
+record& insert_record(record& r, std::string_view key) {
   r[key] = record{};
   return caf::get<record>(r[key]);
 }
 
-record& put_record(list& l) {
+record& insert_record(list& l) {
   return caf::get<record>(l.emplace_back(record{}));
 }
 
-list& put_list(record& r, std::string_view key) {
+list& insert_list(record& r, std::string_view key) {
   r[key] = list{};
   return caf::get<list>(r[key]);
 }

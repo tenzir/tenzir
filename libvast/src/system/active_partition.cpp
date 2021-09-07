@@ -506,7 +506,7 @@ active_partition_actor::behavior_type active_partition(
         }
       };
       auto rs = make_status_request_state<extra_state>(self);
-      auto& indexer_states = put_list(rs->content, "indexers");
+      auto& indexer_states = insert_list(rs->content, "indexers");
       // Reservation is necessary to make sure the entries don't get relocated
       // as the underlying vector grows - `ps` would refer to the wrong memory
       // otherwise.

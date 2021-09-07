@@ -349,11 +349,11 @@ void segment_store::inspect_status(record& xs, system::status_verbosity v) {
     xs["memory-usage"] = count{mem};
   }
   if (v >= system::status_verbosity::detailed) {
-    auto& segments = put_record(xs, "segments");
-    auto& cached = put_list(segments, "cached");
+    auto& segments = insert_record(xs, "segments");
+    auto& cached = insert_list(segments, "cached");
     for (auto& kvp : cache_)
       cached.emplace_back(to_string(kvp.first));
-    auto& current = put_record(segments, "current");
+    auto& current = insert_record(segments, "current");
     current["uuid"] = to_string(builder_.id());
     current["size"] = count{builder_.table_slice_bytes()};
   }

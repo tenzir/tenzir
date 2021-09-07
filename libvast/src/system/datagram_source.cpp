@@ -178,7 +178,7 @@ caf::behavior datagram_source(
           rs, timeout, v, self->state.transformer,
           [rs, src](record& response) mutable {
             src["transformer"] = std::move(response);
-            auto& xs = put_list(rs->content, "sources");
+            auto& xs = insert_list(rs->content, "sources");
             xs.emplace_back(std::move(src));
           },
           [rs, src](const caf::error& err) mutable {
@@ -186,7 +186,7 @@ caf::behavior datagram_source(
                       "{}",
                       *rs->self, err);
             src["transformer"] = fmt::to_string(err);
-            auto& xs = put_list(rs->content, "sources");
+            auto& xs = insert_list(rs->content, "sources");
             xs.emplace_back(std::move(src));
           });
       }

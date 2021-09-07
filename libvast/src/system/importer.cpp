@@ -197,12 +197,12 @@ importer_state::status(status_verbosity v) const {
   record result;
   result["ids.available"] = count{available_ids()};
   if (v >= status_verbosity::detailed) {
-    auto ids = put_record(rs->content, "ids");
+    auto ids = insert_record(rs->content, "ids");
     ids["available"] = to_string(available_ids());
-    auto block = put_record(ids, "block");
+    auto block = insert_record(ids, "block");
     block["next"] = to_string(current.next);
     block["end"] = to_string(current.end);
-    auto& sources_status = put_list(rs->content, "sources");
+    auto& sources_status = insert_list(rs->content, "sources");
     for (const auto& kv : inbound_descriptions)
       sources_status.emplace_back(kv.second);
   }

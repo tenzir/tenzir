@@ -459,8 +459,8 @@ index_state::status(status_verbosity v) const {
   };
   auto rs = make_status_request_state<extra_state>(self);
   if (v >= status_verbosity::detailed) {
-    auto& stats_object = put_record(rs->content, "statistics");
-    auto& layout_object = put_record(stats_object, "layouts");
+    auto& stats_object = insert_record(rs->content, "statistics");
+    auto& layout_object = insert_record(stats_object, "layouts");
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = record{};
       xs["count"] = count{layout_stats.count};
@@ -471,7 +471,7 @@ index_state::status(status_verbosity v) const {
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
-    auto& partitions = put_record(rs->content, "partitions");
+    auto& partitions = insert_record(rs->content, "partitions");
     auto partition_status
       = [&](const uuid& id, const partition_actor& pa, list& xs) {
           collect_status(
@@ -496,15 +496,15 @@ index_state::status(status_verbosity v) const {
             });
         };
     // Resident partitions.
-    auto& active = put_list(partitions, "active");
+    auto& active = insert_list(partitions, "active");
     active.reserve(1);
     if (active_partition.actor != nullptr)
       partition_status(active_partition.id, active_partition.actor, active);
-    auto& cached = put_list(partitions, "cached");
+    auto& cached = insert_list(partitions, "cached");
     cached.reserve(inmem_partitions.size());
     for (const auto& [id, actor] : inmem_partitions)
       partition_status(id, actor, cached);
-    auto& unpersisted = put_list(partitions, "unpersisted");
+    auto& unpersisted = insert_list(partitions, "unpersisted");
     unpersisted.reserve(this->unpersisted.size());
     for (const auto& [id, actor] : this->unpersisted)
       partition_status(id, actor, unpersisted);

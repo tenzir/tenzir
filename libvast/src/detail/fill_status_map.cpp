@@ -65,7 +65,7 @@ void fill_status_map(record& xs, caf::stream_manager& mgr) {
   xs["congested"] = mgr.congested();
   // Downstream status.
   auto& out = mgr.out();
-  auto& downstream = put_record(xs, "downstream");
+  auto& downstream = insert_record(xs, "downstream");
   downstream["buffered"] = count{out.buffered()};
   downstream["max-capacity"] = integer{out.max_capacity()};
   downstream["paths"] = count{out.num_paths()};
@@ -73,7 +73,7 @@ void fill_status_map(record& xs, caf::stream_manager& mgr) {
   downstream["clean"] = out.clean();
   out.for_each_path([&](auto& opath) {
     auto name = "slot-" + std::to_string(opath.slots.sender);
-    auto& slot = put_record(downstream, name);
+    auto& slot = insert_record(downstream, name);
     slot["pending"] = opath.pending();
     slot["clean"] = opath.clean();
     slot["closing"] = opath.closing;
@@ -83,13 +83,13 @@ void fill_status_map(record& xs, caf::stream_manager& mgr) {
     slot["max-capacity"] = integer{opath.max_capacity};
   });
   // Upstream status.
-  auto& upstream = put_record(xs, "upstream");
+  auto& upstream = insert_record(xs, "upstream");
   auto& ipaths = mgr.inbound_paths();
   if (!ipaths.empty())
     xs["inbound-paths-idle"] = mgr.inbound_paths_idle();
   for (auto ipath : ipaths) {
     auto name = "slot-" + std::to_string(ipath->slots.receiver);
-    auto& slot = put_record(upstream, name);
+    auto& slot = insert_record(upstream, name);
     slot["priority"] = to_string(ipath->prio);
     slot["assigned-credit"] = integer{ipath->assigned_credit};
     slot["last-acked-batch-id"] = integer{ipath->last_acked_batch_id};
@@ -109,7 +109,7 @@ void fill_status_map(record& xs, caf::scheduled_actor* self) {
   for (auto& mgr : unique_values(self->stream_managers())) {
     name = "stream-";
     name += std::to_string(counter++);
-    fill_status_map(put_record(xs, name), *mgr);
+    fill_status_map(insert_record(xs, name), *mgr);
   }
 }
 
