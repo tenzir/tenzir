@@ -133,13 +133,13 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
       self->state.statistics_subscriber = statistics_subscriber;
     },
     [self](atom::status, status_verbosity v) {
-      caf::settings result;
+      record result;
       if (v >= status_verbosity::detailed) {
-        caf::settings sink_status;
+        record sink_status;
         if (self->state.writer)
-          put(sink_status, "format", self->state.writer->name());
-        put(sink_status, "processed", self->state.processed);
-        auto& xs = put_list(result, "sinks");
+          sink_status["format"] = self->state.writer->name();
+        sink_status["processed"] = count{self->state.processed};
+        auto& xs = insert_list(result, "sinks");
         xs.emplace_back(std::move(sink_status));
       }
       return result;
