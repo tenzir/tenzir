@@ -464,8 +464,9 @@ index_state::status(status_verbosity v) const {
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = record{};
       xs["count"] = count{layout_stats.count};
-      layout_object["meta-index-bytes"] = meta_index_bytes;
+      layout_object[name] = xs;
     }
+    layout_object["meta-index-bytes"] = meta_index_bytes;
     rs->content["num-active-partitions"]
       = count{active_partition.actor == nullptr ? 0u : 1u};
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
