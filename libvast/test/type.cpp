@@ -10,6 +10,7 @@
 
 #include "vast/type.hpp"
 
+#include "vast/detail/overload.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/test/test.hpp"
 
@@ -108,6 +109,21 @@ TEST(sorting) {
   const char* expected
     = "none bool integer custom_none custom_bool custom_integer";
   CHECK_EQUAL(fmt::format("{}", fmt::join(ts, " ")), expected);
+}
+
+TEST(sum type) {
+  // Returns a visitor that checks whether the expected concrete types are the
+  // types resulting in the visitation.
+  auto is_type = []<concrete_type... T>(const T&...) {
+    return []<concrete_type... U>(const U&...) {
+      return (std::is_same_v<T, U> && ...);
+    };
+  };
+  CHECK(caf::visit(is_type(none_type{}), type{}));
+  CHECK(caf::visit(is_type(none_type{}), type{none_type{}}));
+  CHECK(caf::visit(is_type(bool_type{}), type{bool_type{}}));
+  CHECK(caf::visit(is_type(bool_type{}, integer_type{}), type{bool_type{}},
+                   type{integer_type{}}));
 }
 
 } // namespace vast

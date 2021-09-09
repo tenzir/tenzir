@@ -12,6 +12,7 @@
 
 #include "vast/chunk.hpp"
 #include "vast/concepts.hpp"
+#include "vast/detail/type_traits.hpp"
 
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
@@ -210,6 +211,11 @@ struct sum_type_access<vast::type> final {
     return x.type_index() == T::type_index();
   }
 
+  template <class T, int Index>
+  static bool is(const vast::type&, sum_type_token<T, Index>) {
+    static_assert(vast::detail::always_false_v<T>, "T must be a concrete type");
+  }
+
   template <vast::basic_type T, int Index>
   static const T& get(const vast::type&, sum_type_token<T, Index>) {
     static const auto instance = T{};
@@ -217,6 +223,10 @@ struct sum_type_access<vast::type> final {
   }
 
   // TODO: Implement get() for complex types.
+  template <class T, int Index>
+  static const T& get(const vast::type&, sum_type_token<T, Index>) {
+    static_assert(vast::detail::always_false_v<T>, "T must be a concrete type");
+  }
 
   template <vast::concrete_type T, int Index>
   static const T* get_if(const vast::type* x, sum_type_token<T, Index> token) {
@@ -225,12 +235,52 @@ struct sum_type_access<vast::type> final {
     return nullptr;
   }
 
-  template <class Result, class Visitor, class... Ts>
-  static Result apply(const vast::type& x, Visitor&& v, Ts&&... xs) {
-    auto xs_as_tuple = std::forward_as_tuple(xs...);
-    auto indices = caf::detail::get_indices(xs_as_tuple);
-    return caf::detail::apply_args_suffxied(v, std::move(indices),
-                                            std::move(xs_as_tuple), x);
+  template <class T, int Index>
+  static const T* get_if(const vast::type*, sum_type_token<T, Index>) {
+    static_assert(vast::detail::always_false_v<T>, "T must be a concrete type");
+  }
+
+  template <vast::concrete_type... Ts, uint8_t... Indices>
+  static uint8_t index_from_type(caf::detail::type_list<Ts...>,
+                                 std::integer_sequence<uint8_t, Indices...>,
+                                 const vast::type& x) noexcept {
+    static const auto table = []() noexcept {
+      std::array<uint8_t, std::numeric_limits<uint8_t>::max()> tbl{};
+      tbl.fill(std::numeric_limits<uint8_t>::max());
+      (static_cast<void>(tbl[Ts::type_index()] = Indices), ...);
+      return tbl;
+    }();
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+    auto result = table[x.type_index()];
+    VAST_ASSERT(result != std::numeric_limits<uint8_t>::max());
+    return result;
+  }
+
+  template <class Result, class Visitor, vast::concrete_type... Ts,
+            uint8_t... Indices, class... Args>
+  static auto dispatch(caf::detail::type_list<Ts...> tl,
+                       std::integer_sequence<uint8_t, Indices...> is,
+                       const vast::type& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    static constexpr auto table = std::array{
+      +[](const vast::type& x, Visitor&& v, Args&&... xs) -> Result {
+        auto xs_as_tuple = std::forward_as_tuple(xs...);
+        auto indices = caf::detail::get_indices(xs_as_tuple);
+        return caf::detail::apply_args_suffxied(
+          std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+          get(x, sum_type_token<Ts, Indices>{}));
+      }...};
+    const auto dispatch = table[index_from_type(tl, is, x)];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+
+  template <class Result, class Visitor, class... Args>
+  static auto apply(const vast::type& x, Visitor&& v, Args&&... xs) -> Result {
+    return dispatch<Result>(
+      types{},
+      std::make_integer_sequence<uint8_t, caf::detail::tl_size<types>::value>{},
+      x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
   }
 };
 
