@@ -155,6 +155,13 @@ public:
   slice(size_type start, size_type length
                          = std::numeric_limits<size_type>::max()) const;
 
+  /// Creates a new chunk that structurally shares the data of this chunk.
+  /// @param view A view of the to-be sliced chunk.
+  /// @returns A new chunk over the subset.
+  /// @pre `view.begin() >= begin()`
+  /// @pre `view.end() <= end()`
+  chunk_ptr slice(view_type view) const;
+
   /// Adds an additional step for deleting this chunk.
   /// @param step Function object that gets called after all previous deletion
   /// steps ran. It must be nothrow-invocable, as it gets called during the

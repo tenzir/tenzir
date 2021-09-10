@@ -140,6 +140,12 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
   });
 }
 
+chunk_ptr chunk::slice(view_type view) const {
+  VAST_ASSERT(view.begin() >= begin());
+  VAST_ASSERT(view.end() <= end());
+  return slice(view.begin() - begin(), view.size());
+}
+
 // -- concepts -----------------------------------------------------------------
 
 std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept {
