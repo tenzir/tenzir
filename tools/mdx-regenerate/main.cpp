@@ -20,9 +20,7 @@
 #include <filesystem>
 
 int main(int argc, char* argv[]) {
-  // vast::factory_traits<vast::value_index>::initialize();
   vast::factory<vast::synopsis>::initialize();
-
   std::error_code err{};
   if (argc < 2) {
     fmt::print(stderr, "Usage: {} /path/to/vast.db\n", argv[0]);
@@ -39,7 +37,7 @@ int main(int argc, char* argv[]) {
     fmt::print(stderr, "No such file or directory: {}\n", index_file);
     return 1;
   }
-  fmt::print("loading list of partitions from {}\n", index_file);
+  fmt::print(stderr, "loading list of partitions from {}\n", index_file);
   auto buffer = vast::io::read(index_file);
   if (!buffer) {
     fmt::print(stderr, "failed to read index from {}: {}\n", index_file,
@@ -80,6 +78,6 @@ int main(int argc, char* argv[]) {
                  vast::render(error));
       continue;
     }
-    fmt::print("successfully wrote {}\n", synopsis_path);
+    fmt::print(stderr, "successfully wrote {}\n", synopsis_path);
   }
 }
