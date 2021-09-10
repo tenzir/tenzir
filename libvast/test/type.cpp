@@ -101,6 +101,25 @@ TEST(count_type) {
   CHECK(caf::holds_alternative<count_type>(lct));
 }
 
+TEST(real_type) {
+  static_assert(concrete_type<real_type>);
+  static_assert(basic_type<real_type>);
+  static_assert(!complex_type<real_type>);
+  const auto t = type{};
+  const auto rt = type{real_type{}};
+  CHECK(rt);
+  CHECK_EQUAL(as_bytes(rt), as_bytes(real_type{}));
+  CHECK(t != rt);
+  CHECK(t < rt);
+  CHECK(t <= rt);
+  CHECK_EQUAL(fmt::format("{}", rt), "real");
+  CHECK_EQUAL(fmt::format("{}", real_type{}), "real");
+  CHECK(!caf::holds_alternative<real_type>(t));
+  CHECK(caf::holds_alternative<real_type>(rt));
+  const auto lrt = type{legacy_real_type{}};
+  CHECK(caf::holds_alternative<real_type>(lrt));
+}
+
 TEST(list_type) {
   static_assert(concrete_type<list_type>);
   static_assert(!basic_type<list_type>);

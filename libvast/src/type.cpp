@@ -97,6 +97,9 @@ type::type(const legacy_type& other) noexcept {
     [&](const legacy_count_type&) {
       *this = type{other.name(), count_type{}};
     },
+    [&](const legacy_real_type&) {
+      *this = type{other.name(), real_type{}};
+    },
     [&](const legacy_list_type& list) {
       *this = type{other.name(), type{list_type{type{list.value_type}}}};
     },
@@ -105,7 +108,6 @@ type::type(const legacy_type& other) noexcept {
     },
     [&](const auto&) {
       // TODO: Implement for all legacy types, then remove this handler.
-      // - legacy_real_type,
       // - legacy_duration_type,
       // - legacy_time_type,
       // - legacy_string_type,
@@ -163,6 +165,7 @@ const fbs::Type& type::table(enum transparent transparent) const noexcept {
       case fbs::type::Type::bool_type_v0:
       case fbs::type::Type::integer_type_v0:
       case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
       case fbs::type::Type::list_type_v0:
         transparent = transparent::no;
         break;
@@ -196,6 +199,8 @@ std::string_view type::name() const& noexcept {
       return "integer";
     case fbs::type::Type::count_type_v0:
       return "count";
+    case fbs::type::Type::real_type_v0:
+      return "real";
     case fbs::type::Type::list_type_v0:
       return "list";
     case fbs::type::Type::alias_type_v0:
@@ -279,6 +284,28 @@ std::span<const std::byte> as_bytes(const count_type&) noexcept {
     const auto count_type = fbs::type::count_type::Createv0(builder);
     const auto type = fbs::CreateType(builder, fbs::type::Type::count_type_v0,
                                       count_type.Union());
+    builder.Finish(type);
+    auto result = builder.Release();
+
+    VAST_ASSERT(result.size() == reserved_size);
+    return result;
+  }();
+  return as_bytes(buffer);
+}
+
+// -- real_type ---------------------------------------------------------------
+
+uint8_t real_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::real_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const real_type&) noexcept {
+  static const auto buffer = []() noexcept {
+    constexpr auto reserved_size = 32;
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto real_type = fbs::type::real_type::Createv0(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::real_type_v0,
+                                      real_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
 
