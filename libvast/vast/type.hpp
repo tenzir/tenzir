@@ -29,12 +29,13 @@ namespace vast {
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<none_type, bool_type, integer_type>;
+  = caf::detail::type_list<none_type, bool_type, integer_type, list_type>;
 
 /// A concept that models any concrete type.
 template <class T>
 concept concrete_type = requires(const T& type) {
   requires caf::detail::tl_contains<concrete_types, T>::value;
+  requires std::is_final_v<T>;
   { T::type_index() } -> concepts::same_as<uint8_t>;
   { as_bytes(type) } -> concepts::same_as<std::span<const std::byte>>;
 };
@@ -42,17 +43,25 @@ concept concrete_type = requires(const T& type) {
 /// A concept that models basic concrete types, i.e., types that do not hold
 /// additional state.
 template <class T>
-concept basic_type = requires(const T& type) {
+concept basic_type = requires {
   requires concrete_type<T>;
+  requires std::is_empty_v<T>;
   requires std::is_trivial_v<T>;
 };
 
-// TODO: Add a concept for complex types.
+/// A concept that models basic concrete types, i.e., types that hold
+/// additional state and extend the lifetime of the surrounding type.
+template <class T>
+concept complex_type = requires {
+  requires concrete_type<T>;
+  requires std::is_base_of_v<type, T>;
+  requires sizeof(T) == sizeof(chunk_ptr);
+};
 
 // -- type --------------------------------------------------------------------
 
 /// The sematic representation of data.
-class type final {
+class type {
 public:
   /// Indiciates whether to skip over alias and tag types when looking at the
   /// underlying FlatBuffers representation.
@@ -89,14 +98,9 @@ public:
   /// Constructs a type from an owned sequence of bytes that must contain a
   /// valid `vast.fbs.Type` FlatBuffers root table.
   /// @param table A chunk containing a `vast.fbs.Type` FlatBuffers root table.
-  /// @note The chunk may extend past the end of the actual table, although it
-  /// is generally recommended not to do so because that increases the payload
-  /// size when sending types in messages over the wire via CAF. Please make
-  /// sure to specify both start and end when slicing chunks for nested
-  /// `vast.fbs.Type` FlatBuffers tables.
   /// @note The table offsets are verified only when assertions are enabled.
   /// @pre `table != nullptr`
-  explicit type(chunk_ptr table) noexcept;
+  explicit type(chunk_ptr&& table) noexcept;
 
   /// Implicitly construct a type from a basic concrete type.
   template <basic_type T>
@@ -105,7 +109,19 @@ public:
     // nop
   }
 
-  // TODO: Add an implicit constructor for complex types.
+  /// Implicitly construct a type from a complex concrete type.
+  template <complex_type T>
+  type(const T& other) noexcept : table_{other.table_} {
+    // nop
+  }
+
+  /// Implicitly construct a type from a complex concrete type.
+  template <complex_type T>
+    requires(std::is_rvalue_reference_v<T>)
+  type(T&& other) // NOLINT(bugprone-forwarding-reference-overload)
+  noexcept : table_{std::move(other.table_)} {
+    // nop
+  }
 
   /// Constructs a named type.
   /// @param name The type name.
@@ -142,17 +158,16 @@ public:
   /// Enables integration with CAF's type inspection.
   template <class Inspector>
   friend typename Inspector::result_type inspect(Inspector& f, type& x) {
-    return f(caf::meta::type_name("vast.type"), caf::meta::omittable_if_none(),
-             x.table_);
+    return f(caf::meta::type_name("vast.type"), x.table_);
   }
 
   /// Returns the name of this type.
   [[nodiscard]] std::string_view name() const& noexcept;
   [[nodiscard]] std::string_view name() && = delete;
 
-private:
+protected:
   /// The underlying representation of the type.
-  chunk_ptr table_ = {};
+  chunk_ptr table_ = {}; // NOLINT
 };
 
 // -- none_type ---------------------------------------------------------------
@@ -194,6 +209,49 @@ public:
   friend std::span<const std::byte> as_bytes(const integer_type&) noexcept;
 };
 
+// -- list_type ---------------------------------------------------------------
+
+/// An ordered sequence of values.
+/// @relates type
+class list_type final : private type {
+  friend class type;
+  friend struct caf::sum_type_access<vast::type>;
+
+public:
+  /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
+  /// @param other The copied-from type.
+  list_type(const list_type& other) noexcept;
+
+  /// Copy-assigns a type, resulting in a shallow copy with shared lifetime.
+  /// @param other The copied-from type.
+  list_type& operator=(const list_type& rhs) noexcept;
+
+  /// Move-constructs a type, leaving the moved-from type in a state
+  /// semantically equivalent to the *none_type*.
+  /// @param other The moved-from type.
+  list_type(list_type&& other) noexcept;
+
+  /// Move-constructs a type, leaving the moved-from type in a state
+  /// semantically equivalent to the *none_type*.
+  /// @param other The moved-from type.
+  list_type& operator=(list_type&& other) noexcept;
+
+  /// Destroys a type.
+  ~list_type() noexcept;
+
+  /// Constructs a list type with a known value type.
+  explicit list_type(const type& value_type) noexcept;
+
+  /// Returns the nested value type.
+  [[nodiscard]] type value_type() const noexcept;
+
+  /// Returns the type index.
+  static uint8_t type_index() noexcept;
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
+};
+
 } // namespace vast
 
 // -- sum_type_access ---------------------------------------------------------
@@ -222,7 +280,11 @@ struct sum_type_access<vast::type> final {
     return instance;
   }
 
-  // TODO: Implement get() for complex types.
+  template <vast::complex_type T, int Index>
+  static const T& get(const vast::type& x, sum_type_token<T, Index>) {
+    return static_cast<const T&>(x);
+  }
+
   template <class T, int Index>
   static const T& get(const vast::type&, sum_type_token<T, Index>) {
     static_assert(vast::detail::always_false_v<T>, "T must be a concrete type");
@@ -305,7 +367,16 @@ struct formatter<vast::type> {
   }
 };
 
-template <vast::concrete_type T>
+template <vast::basic_type T>
 struct formatter<T> : formatter<vast::type> {};
+
+template <vast::complex_type T>
+struct formatter<T> : formatter<vast::type> {
+  template <class FormatContext>
+  auto format(const T& value, FormatContext& ctx) -> decltype(ctx.out()) {
+    const auto t = vast::type{value};
+    return formatter<vast::type>::format(t, ctx);
+  }
+};
 
 } // namespace fmt

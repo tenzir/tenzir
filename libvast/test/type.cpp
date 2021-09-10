@@ -24,6 +24,7 @@ namespace vast {
 TEST(none_type) {
   static_assert(concrete_type<none_type>);
   static_assert(basic_type<none_type>);
+  static_assert(!complex_type<none_type>);
   const auto t = type{};
   const auto nt = type{none_type{}};
   CHECK(!t);
@@ -46,6 +47,7 @@ TEST(none_type) {
 TEST(bool_type) {
   static_assert(concrete_type<bool_type>);
   static_assert(basic_type<bool_type>);
+  static_assert(!complex_type<bool_type>);
   const auto t = type{};
   const auto bt = type{bool_type{}};
   CHECK(bt);
@@ -64,6 +66,7 @@ TEST(bool_type) {
 TEST(integer_type) {
   static_assert(concrete_type<integer_type>);
   static_assert(basic_type<integer_type>);
+  static_assert(!complex_type<integer_type>);
   const auto t = type{};
   const auto it = type{integer_type{}};
   CHECK(it);
@@ -78,6 +81,27 @@ TEST(integer_type) {
   const auto lit = type{legacy_integer_type{}};
   CHECK(caf::holds_alternative<integer_type>(lit));
 }
+}
+
+TEST(list_type) {
+  static_assert(concrete_type<list_type>);
+  static_assert(!basic_type<list_type>);
+  static_assert(complex_type<list_type>);
+  const auto t = type{};
+  const auto lit = type{list_type{integer_type{}}};
+  CHECK(lit);
+  CHECK_EQUAL(as_bytes(lit), as_bytes(list_type{integer_type{}}));
+  CHECK(t != lit);
+  CHECK(t < lit);
+  CHECK(t <= lit);
+  CHECK_EQUAL(fmt::format("{}", lit), "list");
+  CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list");
+  CHECK(!caf::holds_alternative<list_type>(t));
+  CHECK(caf::holds_alternative<list_type>(lit));
+  CHECK_EQUAL(caf::get<list_type>(lit).value_type(), type{integer_type{}});
+  const auto llbt = type{legacy_list_type{legacy_bool_type{}}};
+  CHECK(caf::holds_alternative<list_type>(llbt));
+  CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
 }
 
 TEST(alias_type) {

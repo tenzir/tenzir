@@ -39,7 +39,7 @@ type& type::operator=(type&& other) noexcept = default;
 
 type::~type() noexcept = default;
 
-type::type(chunk_ptr table) noexcept : table_{std::move(table)} {
+type::type(chunk_ptr&& table) noexcept : table_{std::move(table)} {
 #if VAST_ENABLE_ASSERTIONS
   const auto* const data = reinterpret_cast<const uint8_t*>(table_->data());
   auto verifier = flatbuffers::Verifier{data, table_->size()};
@@ -87,6 +87,9 @@ type::type(const legacy_type& other) noexcept {
     [&](const legacy_integer_type&) {
       *this = type{other.name(), integer_type{}};
     },
+    [&](const legacy_list_type& list) {
+      *this = type{other.name(), type{list_type{type{list.value_type}}}};
+    },
     [&](const legacy_alias_type& alias) {
       return type{other.name(), type{alias.value_type}};
     },
@@ -101,7 +104,6 @@ type::type(const legacy_type& other) noexcept {
       // - legacy_address_type,
       // - legacy_subnet_type,
       // - legacy_enumeration_type,
-      // - legacy_list_type,
       // - legacy_map_type,
       // - legacy_record_type,
     },
@@ -151,6 +153,7 @@ const fbs::Type& type::table(enum transparent transparent) const noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type_v0:
       case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::list_type_v0:
         transparent = transparent::no;
         break;
       case fbs::type::Type::alias_type_v0:
@@ -181,6 +184,8 @@ std::string_view type::name() const& noexcept {
       return "bool";
     case fbs::type::Type::integer_type_v0:
       return "integer";
+    case fbs::type::Type::list_type_v0:
+      return "list";
     case fbs::type::Type::alias_type_v0:
       return root.type_as_alias_type_v0()->name()->string_view();
   }
@@ -247,6 +252,49 @@ std::span<const std::byte> as_bytes(const integer_type&) noexcept {
     return result;
   }();
   return as_bytes(buffer);
+}
+
+// -- list_type ---------------------------------------------------------------
+
+list_type::list_type(const list_type& other) noexcept = default;
+
+list_type& list_type::operator=(const list_type& rhs) noexcept = default;
+
+list_type::list_type(list_type&& other) noexcept = default;
+
+list_type& list_type::operator=(list_type&& other) noexcept = default;
+
+list_type::~list_type() noexcept = default;
+
+list_type::list_type(const type& value_type) noexcept {
+  const auto value_type_bytes = as_bytes(value_type);
+  const auto reserved_size = 44 + value_type_bytes.size();
+  auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+  const auto list_type_offset = fbs::type::list_type::Createv0(
+    builder, builder.CreateVector(
+               reinterpret_cast<const uint8_t*>(value_type_bytes.data()),
+               value_type_bytes.size()));
+  const auto type_offset = fbs::CreateType(
+    builder, fbs::type::Type::list_type_v0, list_type_offset.Union());
+  builder.Finish(type_offset);
+  auto result = builder.Release();
+  VAST_ASSERT(result.size() == reserved_size);
+  auto chunk = chunk::make(std::move(result));
+  static_cast<type&>(*this) = type{std::move(chunk)};
+}
+
+type list_type::value_type() const noexcept {
+  const auto* view = table(transparent::yes).type_as_list_type_v0()->type();
+  VAST_ASSERT(view);
+  return type{table_->slice(as_bytes(*view))};
+}
+
+uint8_t list_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::list_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const list_type& x) noexcept {
+  return as_bytes(static_cast<const type&>(x));
 }
 
 } // namespace vast
