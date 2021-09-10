@@ -741,26 +741,6 @@ struct legacy_alias_type final : legacy_nested_type<legacy_alias_type> {
 
 // -- free functions ----------------------------------------------------------
 
-/// Creates a new unnamed legacy_record_type from an arbitrary number of
-/// legacy_record_types.
-/// @param rs The source records.
-/// @returns The combined legacy_record_type.
-/// @relates legacy_record_type
-template <typename... Rs>
-legacy_record_type concat(const Rs&... rs) {
-  legacy_record_type result;
-  result.fields.reserve((rs.fields.size() + ...));
-  (result.fields.insert(result.fields.end(), rs.fields.begin(),
-                        rs.fields.end()),
-   ...);
-  // TODO: This function is missing an integrity check that makes sure the
-  // result does not contain multiple fields with the same name.
-  // We should also add a differently named version that deduplicates completely
-  // identical fields and recurses into nested records under the same field
-  // name.
-  return result;
-}
-
 /// Creates a new unnamed legacy_record_type containing the fields and attribues
 /// of lhs and rhs. Errors if a field of the same name but different types is
 /// present in both inputs. Errors is the inputs disagree over the value of an
