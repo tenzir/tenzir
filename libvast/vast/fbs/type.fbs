@@ -12,7 +12,7 @@ namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
 table v0 {
-  type: [ubyte] (nested_flatbuffer: "vast.fbs.Type");
+  type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 }
 
 namespace vast.fbs.type.alias_type;

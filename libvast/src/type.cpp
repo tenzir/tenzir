@@ -41,11 +41,18 @@ type::~type() noexcept = default;
 
 type::type(chunk_ptr&& table) noexcept : table_{std::move(table)} {
 #if VAST_ENABLE_ASSERTIONS
+  VAST_ASSERT(table_);
+  VAST_ASSERT(table_->size() > 0);
   const auto* const data = reinterpret_cast<const uint8_t*>(table_->data());
   auto verifier = flatbuffers::Verifier{data, table_->size()};
   VAST_ASSERT(fbs::GetType(data)->Verify(verifier),
               "Encountered invalid vast.fbs.Type FlatBuffers table.");
-#endif // VAST_ENABLE_ASSERTIONS
+#  if defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
+  VAST_ASSERT(verifier.GetComputedSize() == table_->size(),
+              "Encountered unexpected excess bytes in vast.fbs.Type "
+              "FlatBuffers table.");
+#  endif // defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
+#endif   // VAST_ENABLE_ASSERTIONS
 }
 
 type::type(std::string_view name, const type& nested) noexcept {
