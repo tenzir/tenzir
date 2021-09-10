@@ -81,6 +81,24 @@ TEST(integer_type) {
   const auto lit = type{legacy_integer_type{}};
   CHECK(caf::holds_alternative<integer_type>(lit));
 }
+
+TEST(count_type) {
+  static_assert(concrete_type<count_type>);
+  static_assert(basic_type<count_type>);
+  static_assert(!complex_type<count_type>);
+  const auto t = type{};
+  const auto ct = type{count_type{}};
+  CHECK(ct);
+  CHECK_EQUAL(as_bytes(ct), as_bytes(count_type{}));
+  CHECK(t != ct);
+  CHECK(t < ct);
+  CHECK(t <= ct);
+  CHECK_EQUAL(fmt::format("{}", ct), "count");
+  CHECK_EQUAL(fmt::format("{}", count_type{}), "count");
+  CHECK(!caf::holds_alternative<count_type>(t));
+  CHECK(caf::holds_alternative<count_type>(ct));
+  const auto lct = type{legacy_count_type{}};
+  CHECK(caf::holds_alternative<count_type>(lct));
 }
 
 TEST(list_type) {

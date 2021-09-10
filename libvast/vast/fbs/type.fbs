@@ -8,6 +8,11 @@ namespace vast.fbs.type.integer_type;
 /// A signed integer.
 table v0 {}
 
+namespace vast.fbs.type.count_type;
+
+/// An unsigned integer.
+table v0 {}
+
 namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
@@ -29,6 +34,7 @@ namespace vast.fbs.type;
 union Type {
   bool_type.v0,
   integer_type.v0,
+  count_type.v0,
   list_type.v0,
   alias_type.v0,
 }

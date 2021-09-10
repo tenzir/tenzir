@@ -61,6 +61,7 @@ class bitmap;
 class bool_type;
 class chunk;
 class command;
+class count_type;
 class data;
 class expression;
 class integer_type;
