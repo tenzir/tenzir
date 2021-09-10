@@ -33,6 +33,11 @@ namespace vast.fbs.type.string_type;
 /// A string of characters.
 table v0 {}
 
+namespace vast.fbs.type.pattern_type;
+
+/// A regular expression.
+table v0 {}
+
 namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
@@ -59,6 +64,7 @@ union Type {
   duration_type.v0,
   time_type.v0,
   string_type.v0,
+  pattern_type.v0,
   list_type.v0,
   alias_type.v0,
 }

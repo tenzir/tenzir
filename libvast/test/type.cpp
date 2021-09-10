@@ -177,6 +177,25 @@ TEST(string_type) {
   CHECK(caf::holds_alternative<string_type>(lst));
 }
 
+TEST(pattern_type) {
+  static_assert(concrete_type<pattern_type>);
+  static_assert(basic_type<pattern_type>);
+  static_assert(!complex_type<pattern_type>);
+  const auto t = type{};
+  const auto pt = type{pattern_type{}};
+  CHECK(pt);
+  CHECK_EQUAL(as_bytes(pt), as_bytes(pattern_type{}));
+  CHECK(t != pt);
+  CHECK(t < pt);
+  CHECK(t <= pt);
+  CHECK_EQUAL(fmt::format("{}", pt), "pattern");
+  CHECK_EQUAL(fmt::format("{}", pattern_type{}), "pattern");
+  CHECK(!caf::holds_alternative<pattern_type>(t));
+  CHECK(caf::holds_alternative<pattern_type>(pt));
+  const auto lpt = type{legacy_pattern_type{}};
+  CHECK(caf::holds_alternative<pattern_type>(lpt));
+}
+
 TEST(list_type) {
   static_assert(concrete_type<list_type>);
   static_assert(!basic_type<list_type>);
