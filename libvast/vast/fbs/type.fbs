@@ -28,6 +28,11 @@ namespace vast.fbs.type.time_type;
 /// A point in time.
 table v0 {}
 
+namespace vast.fbs.type.string_type;
+
+/// A string of characters.
+table v0 {}
+
 namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
@@ -53,6 +58,7 @@ union Type {
   real_type.v0,
   duration_type.v0,
   time_type.v0,
+  string_type.v0,
   list_type.v0,
   alias_type.v0,
 }

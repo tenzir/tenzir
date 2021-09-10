@@ -158,6 +158,25 @@ TEST(time_type) {
   CHECK(caf::holds_alternative<time_type>(ltt));
 }
 
+TEST(string_type) {
+  static_assert(concrete_type<string_type>);
+  static_assert(basic_type<string_type>);
+  static_assert(!complex_type<string_type>);
+  const auto t = type{};
+  const auto st = type{string_type{}};
+  CHECK(st);
+  CHECK_EQUAL(as_bytes(st), as_bytes(string_type{}));
+  CHECK(t != st);
+  CHECK(t < st);
+  CHECK(t <= st);
+  CHECK_EQUAL(fmt::format("{}", st), "string");
+  CHECK_EQUAL(fmt::format("{}", string_type{}), "string");
+  CHECK(!caf::holds_alternative<string_type>(t));
+  CHECK(caf::holds_alternative<string_type>(st));
+  const auto lst = type{legacy_string_type{}};
+  CHECK(caf::holds_alternative<string_type>(lst));
+}
+
 TEST(list_type) {
   static_assert(concrete_type<list_type>);
   static_assert(!basic_type<list_type>);
