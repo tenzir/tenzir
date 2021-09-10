@@ -86,6 +86,7 @@ class synopsis;
 class table_slice;
 class table_slice_builder;
 class table_slice_column;
+class time_type;
 class transform;
 class transform_step;
 class type;

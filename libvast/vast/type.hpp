@@ -30,7 +30,7 @@ namespace vast {
 /// The list of concrete types.
 using concrete_types
   = caf::detail::type_list<none_type, bool_type, integer_type, count_type,
-                           real_type, duration_type, list_type>;
+                           real_type, duration_type, time_type, list_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -247,6 +247,19 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const duration_type&) noexcept;
+};
+
+// -- time_type ---------------------------------------------------------------
+
+/// A point in time.
+/// @relates type
+class time_type final {
+public:
+  /// Returns the type index.
+  static uint8_t type_index() noexcept;
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte> as_bytes(const time_type&) noexcept;
 };
 
 // -- list_type ---------------------------------------------------------------
