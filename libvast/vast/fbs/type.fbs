@@ -18,6 +18,11 @@ namespace vast.fbs.type.real_type;
 /// A floating-point value.
 table v0 {}
 
+namespace vast.fbs.type.duration_type;
+
+/// A time interval.
+table v0 {}
+
 namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
@@ -41,6 +46,7 @@ union Type {
   integer_type.v0,
   count_type.v0,
   real_type.v0,
+  duration_type.v0,
   list_type.v0,
   alias_type.v0,
 }

@@ -63,6 +63,7 @@ class chunk;
 class command;
 class count_type;
 class data;
+class duration_type;
 class expression;
 class integer_type;
 class legacy_abstract_type;

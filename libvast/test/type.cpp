@@ -120,6 +120,25 @@ TEST(real_type) {
   CHECK(caf::holds_alternative<real_type>(lrt));
 }
 
+TEST(duration_type) {
+  static_assert(concrete_type<duration_type>);
+  static_assert(basic_type<duration_type>);
+  static_assert(!complex_type<duration_type>);
+  const auto t = type{};
+  const auto dt = type{duration_type{}};
+  CHECK(dt);
+  CHECK_EQUAL(as_bytes(dt), as_bytes(duration_type{}));
+  CHECK(t != dt);
+  CHECK(t < dt);
+  CHECK(t <= dt);
+  CHECK_EQUAL(fmt::format("{}", dt), "duration");
+  CHECK_EQUAL(fmt::format("{}", duration_type{}), "duration");
+  CHECK(!caf::holds_alternative<duration_type>(t));
+  CHECK(caf::holds_alternative<duration_type>(dt));
+  const auto ldt = type{legacy_duration_type{}};
+  CHECK(caf::holds_alternative<duration_type>(ldt));
+}
+
 TEST(list_type) {
   static_assert(concrete_type<list_type>);
   static_assert(!basic_type<list_type>);
