@@ -366,7 +366,7 @@ void index_state::create_active_partition() {
   // data moves through the index. However, that requires some refactoring of
   // the archive itself so it can handle multiple input streams.)
   std::string store_name = {};
-  chunk_ptr store_header = chunk::empty();
+  chunk_ptr store_header = chunk::make_empty();
   if (partition_local_stores) {
     store_name = store_plugin->name();
     auto builder_and_header = store_plugin->make_store_builder(filesystem, id);

@@ -125,7 +125,7 @@ TEST(empty partition roundtrip) {
   vast::system::active_partition_state::serialization_data state;
   state.id = vast::uuid::random();
   state.store_id = "legacy_archive";
-  state.store_header = vast::chunk::empty();
+  state.store_header = vast::chunk::make_empty();
   state.offset = 17;
   state.events = 23;
   state.synopsis = std::make_shared<vast::partition_synopsis>();
@@ -218,7 +218,7 @@ TEST(full partition roundtrip) {
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid, fs,
                 caf::settings{}, caf::settings{}, vast::system::store_actor{},
-                store_id, vast::chunk::empty());
+                store_id, vast::chunk::make_empty());
   run();
   REQUIRE(partition);
   // Add data to the partition.

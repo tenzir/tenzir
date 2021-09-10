@@ -53,7 +53,7 @@ chunk_ptr chunk::make(view_type view, deleter_type&& deleter) noexcept {
   return chunk_ptr{new chunk{view, std::move(deleter)}, false};
 }
 
-chunk_ptr chunk::empty() noexcept {
+chunk_ptr chunk::make_empty() noexcept {
   return chunk_ptr{new chunk{view_type{}, deleter_type{}}, false};
 }
 
