@@ -11,9 +11,9 @@
 // The functions in this namespace take PartitionState as template argument
 // because the impelementation is the same for passive and active partitions.
 
+#include "vast/legacy_type.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/partition.hpp"
-#include "vast/legacy_type.hpp"
 
 namespace vast::detail {
 
@@ -28,10 +28,10 @@ fetch_indexer(const PartitionState& state, const data_extractor& dx,
   // Sanity check.
   if (dx.offset.empty())
     return {};
-  if (auto index = state.combined_layout.flat_index_at(dx.offset))
+  if (auto index = state.combined_layout().flat_index_at(dx.offset))
     return state.indexer_at(*index);
   VAST_WARN("{} got invalid offset for the combined layout {}", *state.self,
-            state.combined_layout);
+            state.combined_layout());
   return {};
 }
 
@@ -51,7 +51,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
-    for (auto& [name, ids] : state.type_ids)
+    for (auto& [name, ids] : state.type_ids())
       if (evaluate(name, op, x))
         row_ids |= ids;
   } else if (ex.kind == meta_extractor::field) {
@@ -63,7 +63,8 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       return {};
     }
     auto neg = is_negated(op);
-    for (const auto& field : legacy_record_type::each{state.combined_layout}) {
+    for (const auto& field :
+         legacy_record_type::each{state.combined_layout()}) {
       // As long as the combined layout is flattened, this must rely on
       // a heuristic. We use the substring after the last dot for the
       // field name.
@@ -71,15 +72,15 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       auto fqn = field.key();
       if (fqn.ends_with(*s)) {
         // Get ids.
-        for (const auto& [layout_name, ids] : state.type_ids)
+        for (const auto& [layout_name, ids] : state.type_ids())
           if (field.key().starts_with(layout_name))
             row_ids |= ids;
       }
     }
     if (neg) {
       auto partition_ids
-        = std::accumulate(state.type_ids.begin(), state.type_ids.end(), ids{},
-                          [](ids acc, const auto& x) {
+        = std::accumulate(state.type_ids().begin(), state.type_ids().end(),
+                          ids{}, [](ids acc, const auto& x) {
                             return acc | x.second;
                           });
       row_ids = partition_ids ^ row_ids;
@@ -111,7 +112,7 @@ evaluate(const PartitionState& state, const expression& expr) {
   std::vector<system::evaluation_triple> result;
   // Pretend the partition is a table, and return fitted predicates for the
   // partitions layout.
-  auto resolved = resolve(expr, state.combined_layout);
+  auto resolved = resolve(expr, state.combined_layout());
   for (auto& kvp : resolved) {
     // For each fitted predicate, look up the corresponding INDEXER
     // according to the specified type of extractor.

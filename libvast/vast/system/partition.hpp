@@ -56,6 +56,43 @@ struct active_partition_state {
     caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>;
 
+  /// Contains all the data necessary to create a partition flatbuffer.
+  struct serialization_data {
+    /// Uniquely identifies this partition.
+    vast::uuid id = {};
+
+    /// The first ID in the partition.
+    vast::id offset = {};
+
+    /// The number of events in the partition.
+    size_t events = {};
+
+    /// The name of the store backend
+    std::string store_id = {};
+
+    /// Opaque blob that is passed to the store backend on reading.
+    chunk_ptr store_header = {};
+
+    /// The combined type of all columns of this partition
+    vast::legacy_record_type combined_layout = {};
+
+    /// Maps type names to IDs. Used the answer #type queries.
+    std::unordered_map<std::string, ids> type_ids = {};
+
+    /// Partition synopsis for this partition. This is built up in parallel
+    /// to the one in the index, so it can be shrinked and serialized into
+    /// a `Partition` flatbuffer upon completion of this partition. Will be
+    /// sent back to the partition after persisting to minimize memory footprint
+    /// of the meta index.
+    /// Semantically this should be a unique_ptr, but caf requires message
+    /// types to be copy-constructible.
+    std::shared_ptr<partition_synopsis> synopsis = {};
+
+    /// A mapping from qualified field name to serialized indexer state
+    /// for each indexer in the partition.
+    std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
+  };
+
   // -- utility functions ------------------------------------------------------
 
   active_indexer_actor indexer_at(size_t position) const;
@@ -64,13 +101,17 @@ struct active_partition_state {
 
   void notify_flush_listeners();
 
+  const vast::legacy_record_type& combined_layout() const;
+
+  const std::unordered_map<std::string, ids>& type_ids() const;
+
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
   active_partition_actor::pointer self = nullptr;
 
-  /// Uniquely identifies this partition.
-  uuid id = {};
+  /// The data that will end up on disk in the partition flatbuffer.
+  serialization_data data;
 
   /// The streaming stage.
   partition_stream_stage_ptr stage = {};
@@ -78,25 +119,10 @@ struct active_partition_state {
   /// Tracks whether we already received at least one table slice.
   bool streaming_initiated = {};
 
-  /// The combined type of all columns of this partition
-  legacy_record_type combined_layout = {};
-
   /// Maps qualified fields to indexer actors.
   //  TODO: Should we use the tsl map here for heterogenous key lookup?
   detail::stable_map<qualified_record_field, active_indexer_actor> indexers
     = {};
-
-  /// Maps type names to IDs. Used the answer #type queries.
-  std::unordered_map<std::string, ids> type_ids = {};
-
-  /// Partition synopsis for this partition. This is built up in parallel
-  /// to the one in the index, so it can be shrinked and serialized into
-  /// a `Partition` flatbuffer upon completion of this partition. Will be
-  /// sent back to the partition after persisting to minimize memory footprint
-  /// of the meta index.
-  /// Semantically this should be a unique_ptr, but caf requires message
-  /// types to be copy-constructible.
-  std::shared_ptr<partition_synopsis> synopsis = {};
 
   /// Options to be used when adding events to the partition_synopsis.
   caf::settings synopsis_opts = {};
@@ -104,18 +130,8 @@ struct active_partition_state {
   /// A readable name for this partition
   std::string name = {};
 
-  /// The first ID in the partition.
-  vast::id offset = {};
-
-  /// The number of events in the partition.
-  size_t events = {};
-
   /// Whether VAST is configured to use partition-local stores.
   bool partition_local_stores = {};
-
-  std::string store_id = {};
-
-  chunk_ptr store_header = {};
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
@@ -168,6 +184,10 @@ struct passive_partition_state {
 
   indexer_actor indexer_at(size_t position) const;
 
+  const vast::legacy_record_type& combined_layout() const;
+
+  const std::unordered_map<std::string, ids>& type_ids() const;
+
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
@@ -183,10 +203,10 @@ struct passive_partition_state {
   uuid id = {};
 
   /// The combined type of all columns of this partition
-  legacy_record_type combined_layout = {};
+  legacy_record_type combined_layout_ = {};
 
   /// Maps type names to ids. Used the answer #type queries.
-  std::unordered_map<std::string, ids> type_ids = {};
+  std::unordered_map<std::string, ids> type_ids_ = {};
 
   /// A readable name for this partition
   std::string name = {};
@@ -227,7 +247,8 @@ struct passive_partition_state {
 
 // -- flatbuffers --------------------------------------------------------------
 caf::expected<flatbuffers::Offset<fbs::Partition>>
-pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x);
+pack(flatbuffers::FlatBufferBuilder& builder,
+     const active_partition_state::serialization_data& x);
 
 [[nodiscard]] caf::error
 unpack(const fbs::partition::v0& x, passive_partition_state& y);

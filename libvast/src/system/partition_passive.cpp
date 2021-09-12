@@ -78,6 +78,16 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
   return indexer;
 }
 
+const vast::legacy_record_type&
+passive_partition_state::combined_layout() const {
+  return combined_layout_;
+}
+
+const std::unordered_map<std::string, ids>&
+passive_partition_state::type_ids() const {
+  return type_ids_;
+}
+
 caf::error
 unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // Check that all fields exist.
@@ -123,14 +133,14 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
   if (auto error
-      = fbs::deserialize_bytes(combined_layout, state.combined_layout))
+      = fbs::deserialize_bytes(combined_layout, state.combined_layout_))
     return error;
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
-  if (state.combined_layout.fields.size() < indexes->size()) {
+  if (state.combined_layout_.fields.size() < indexes->size()) {
     VAST_ERROR("{} found incoherent number of indexers in deserialized state; "
                "{} fields for {} indexes",
-               state.name, state.combined_layout.fields.size(),
+               state.name, state.combined_layout_.fields.size(),
                indexes->size());
     return caf::make_error(ec::format_error, "incoherent number of indexers");
   }
@@ -145,12 +155,12 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
     auto type_ids_tuple = type_ids->Get(i);
     auto name = type_ids_tuple->name();
     auto ids_data = type_ids_tuple->ids();
-    auto& ids = state.type_ids[name->str()];
+    auto& ids = state.type_ids_[name->str()];
     if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
   }
   VAST_DEBUG("{} restored {} type-to-ids mapping for partition {}", state.name,
-             state.type_ids.size(), state.id);
+             state.type_ids_.size(), state.id);
   return caf::none;
 }
 
@@ -365,7 +375,7 @@ partition_actor::behavior_type passive_partition(
         VAST_WARN("{} failed to delete {}: {}; try deleting manually", *self,
                   self->state.path, err.message());
       vast::ids all_ids;
-      for (const auto& kv : self->state.type_ids) {
+      for (const auto& kv : self->state.type_ids_) {
         all_ids |= kv.second;
       }
       query q;

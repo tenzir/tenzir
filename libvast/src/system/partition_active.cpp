@@ -62,6 +62,16 @@ active_indexer_actor active_partition_state::indexer_at(size_t position) const {
   return as_vector(indexers)[position].second;
 }
 
+const vast::legacy_record_type&
+active_partition_state::combined_layout() const {
+  return data.combined_layout;
+}
+
+const std::unordered_map<std::string, ids>&
+active_partition_state::type_ids() const {
+  return data.type_ids;
+}
+
 void active_partition_state::add_flush_listener(flush_listener_actor listener) {
   VAST_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
   flush_listeners.emplace_back(std::move(listener));
@@ -82,23 +92,18 @@ bool partition_selector::operator()(const qualified_record_field& filter,
 }
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
-pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
+pack(flatbuffers::FlatBufferBuilder& builder,
+     const active_partition_state::serialization_data& x) {
   auto uuid = pack(builder, x.id);
   if (!uuid)
     return uuid.error();
   std::vector<flatbuffers::Offset<fbs::qualified_value_index::v0>> indices;
   // Note that the deserialization code relies on the order of indexers within
   // the flatbuffers being preserved.
-  for (auto& [qf, actor] : x.indexers) {
-    auto actor_id = actor.id();
-    auto chunk_it = x.chunks.find(actor_id);
-    if (chunk_it == x.chunks.end())
-      return caf::make_error(ec::logic_error, "no chunk for for actor id "
-                                                + to_string(actor_id));
-    auto& chunk = chunk_it->second;
+  for (const auto& [name, chunk] : x.indexer_chunks) {
     auto data = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size());
-    auto fieldname = builder.CreateString(qf.field_name);
+    auto fieldname = builder.CreateString(name);
     fbs::value_index::v0Builder vbuilder(builder);
     vbuilder.add_data(data);
     auto vindex = vbuilder.Finish();
@@ -163,18 +168,18 @@ active_partition_actor::behavior_type active_partition(
   chunk_ptr header) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
-  self->state.id = id;
-  self->state.offset = invalid_id;
-  self->state.events = 0;
   self->state.filesystem = std::move(filesystem);
   self->state.streaming_initiated = false;
-  self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
-  self->state.store_id = store_id;
-  self->state.store_header = std::move(header);
-  put(self->state.synopsis_opts, "buffer-input-data", true);
+  self->state.data.id = id;
+  self->state.data.offset = invalid_id;
+  self->state.data.events = 0;
+  self->state.data.synopsis = std::make_shared<partition_synopsis>();
+  self->state.data.store_id = store_id;
+  self->state.data.store_header = std::move(header);
   self->state.partition_local_stores = store_id != "archive";
   self->state.store = std::move(store);
+  put(self->state.synopsis_opts, "buffer-input-data", true);
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
@@ -184,30 +189,31 @@ active_partition_actor::behavior_type active_partition(
       // nop
     },
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
-      VAST_TRACE_SCOPE("partition {} got table slice {} {}", self->state.id,
-                       VAST_ARG(out), VAST_ARG(x));
+      VAST_TRACE_SCOPE("partition {} got table slice {} {}",
+                       self->state.data.id, VAST_ARG(out), VAST_ARG(x));
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
       auto first = x.offset();
       auto last = x.offset() + x.rows();
       auto layout = flatten(x.layout());
-      auto it = self->state.type_ids.emplace(layout.name(), ids{}).first;
+      auto it = self->state.data.type_ids.emplace(layout.name(), ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());
       // Mark the ids of this table slice for the current type.
       ids.append_bits(false, first - ids.size());
       ids.append_bits(true, last - first);
-      self->state.offset = std::min(x.offset(), self->state.offset);
-      self->state.events += x.rows();
-      self->state.synopsis->add(x, self->state.synopsis_opts);
+      self->state.data.offset = std::min(x.offset(), self->state.data.offset);
+      self->state.data.events += x.rows();
+      self->state.data.synopsis->add(x, self->state.synopsis_opts);
       size_t col = 0;
       VAST_ASSERT(!layout.fields.empty());
       for (auto& field : layout.fields) {
         auto qf = qualified_record_field{layout.name(), field};
         auto& idx = self->state.indexers[qf];
         if (!idx) {
-          self->state.combined_layout.fields.push_back(as_record_field(qf));
+          self->state.data.combined_layout.fields.push_back(
+            as_record_field(qf));
           idx = self->spawn(active_indexer, field.type, index_opts);
           auto slot = self->state.stage->add_outbound_path(idx);
           self->state.stage->out().set_filter(slot, qf);
@@ -359,14 +365,29 @@ active_partition_actor::behavior_type active_partition(
                 return;
               }
               // Shrink synopses for addr fields to optimal size.
-              self->state.synopsis->shrink();
+              self->state.data.synopsis->shrink();
               // TODO: It would probably make more sense if the partition
               // synopsis keeps track of offset/events internally.
-              self->state.synopsis->offset = self->state.offset;
-              self->state.synopsis->events = self->state.events;
+              self->state.data.synopsis->offset = self->state.data.offset;
+              self->state.data.synopsis->events = self->state.data.events;
+              for (auto& [qf, actor] : self->state.indexers) {
+                auto actor_id = actor.id();
+                auto chunk_it = self->state.chunks.find(actor_id);
+                if (chunk_it == self->state.chunks.end()) {
+                  auto error = caf::make_error(ec::logic_error,
+                                               "no chunk for for actor id "
+                                                 + to_string(actor_id));
+                  VAST_ERROR("{} failed to serialize: {}", self->state.name,
+                             render(error));
+                  self->state.persistence_promise.deliver(error);
+                  return;
+                }
+                self->state.data.indexer_chunks.push_back(
+                  std::make_pair(qf.field_name, chunk_it->second));
+              }
               // Create the partition flatbuffer.
               flatbuffers::FlatBufferBuilder builder;
-              auto partition = pack(builder, self->state);
+              auto partition = pack(builder, self->state.data);
               if (!partition) {
                 VAST_ERROR("{} failed to serialize {} with error: {}", *self,
                            self->state.name, render(partition.error()));
@@ -392,7 +413,8 @@ active_partition_actor::behavior_type active_partition(
               // need to handle errors here, since VAST can still start
               // correctly (if a bit slower) when the write fails.
               flatbuffers::FlatBufferBuilder synopsis_builder;
-              if (auto ps = pack(synopsis_builder, *self->state.synopsis)) {
+              if (auto ps
+                  = pack(synopsis_builder, *self->state.data.synopsis)) {
                 fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
                 ps_builder.add_partition_synopsis_type(
                   fbs::partition_synopsis::PartitionSynopsis::v0);
@@ -418,8 +440,8 @@ active_partition_actor::behavior_type active_partition(
                     // Relinquish ownership and send the shrunken synopsis to
                     // the index.
                     self->state.persistence_promise.deliver(
-                      self->state.synopsis);
-                    self->state.synopsis.reset();
+                      self->state.data.synopsis);
+                    self->state.data.synopsis.reset();
                   },
                   [=](caf::error e) {
                     self->state.persistence_promise.deliver(std::move(e));
