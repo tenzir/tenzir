@@ -207,6 +207,8 @@ tests:
         input: data/zeek/conn.log.gz
       - command: status --detailed
         transformation: jq '.index.statistics.layouts | del(."vast.metrics")'
+      - command: status --detailed
+        transformation: jq -ec 'paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
