@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/bitmap.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/expression.hpp"
 #include "vast/system/actors.hpp"
 
@@ -116,10 +117,45 @@ struct query {
 namespace fmt {
 
 template <>
-struct formatter<vast::query> : formatter<std::string> {
-  template <typename FormatContext>
-  auto format(const vast::query& item, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(item), ctx);
+struct formatter<vast::query> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::query& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    auto out = ctx.out();
+    auto f = vast::detail::overload{
+      [&](const vast::query::erase&) {
+        out = format_to(out, "erase(");
+      },
+      [&](const vast::query::count& cmd) {
+        out = format_to(out, "count(");
+        switch (cmd.mode) {
+          case vast::query::count::estimate:
+            out = format_to(out, "estimate, ");
+            break;
+          case vast::query::count::exact:
+            out = format_to(out, "exact, ");
+            break;
+        }
+      },
+      [&](const vast::query::extract& cmd) {
+        out = format_to(out, "extract(");
+        switch (cmd.policy) {
+          case vast::query::extract::drop_ids:
+            out = format_to(out, "drop_ids, ");
+            break;
+          case vast::query::extract::preserve_ids:
+            out = format_to(out, "preserve_ids, ");
+            break;
+        }
+      },
+    };
+    caf::visit(f, value.cmd);
+    return format_to(out, "{}, [{}])", value.expr, value.ids);
   }
 };
 
