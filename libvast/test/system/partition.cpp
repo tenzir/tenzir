@@ -8,11 +8,11 @@
 
 #define SUITE partition
 
-#include "vast/system/partition.hpp"
-
 #include "vast/fwd.hpp"
 
+#include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/passive_partition.hpp"
 #include "vast/system/status.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"

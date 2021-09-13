@@ -12,8 +12,9 @@
 // because the impelementation is the same for passive and active partitions.
 
 #include "vast/legacy_type.hpp"
+#include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/partition.hpp"
+#include "vast/system/passive_partition.hpp"
 
 namespace vast::detail {
 

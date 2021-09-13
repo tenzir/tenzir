@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/system/passive_partition.hpp"
+
 #include "vast/fwd.hpp"
 
 #include "vast/address_synopsis.hpp"
@@ -33,7 +35,6 @@
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/local_segment_store.hpp"
-#include "vast/system/partition.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
