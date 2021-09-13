@@ -4,7 +4,7 @@ type exists in the schema, VAST will dynamically create a new query to fetch the
 contextual data according to the type relationship.
 
 ```bash
-vast pivot [options] <type> <expr>
+vast pivot [options] <type> [<expr>]
 ```
 
 VAST uses the field `community_id` to pivot between logs and packets. Pivoting

@@ -60,12 +60,10 @@ read_query(const invocation& inv, std::string_view file_option,
                                "unable to read from " + *fname);
       assign_query(f);
     }
-  } else if (inv.arguments.empty()) {
-    // Read query from STDIN.
-    if (::isatty(::fileno(stdout)))
-      std::cerr << "please enter a query and confirm with CTRL-D: "
-                << std::flush;
-    assign_query(std::cin);
+  } else if (inv.arguments.size() <= argument_offset) {
+    VAST_VERBOSE("not providing a query causes everything to be exported; "
+                 "please be aware that this operation may be very expensive.");
+    result = "#type != \"this expression matches everything\"";
   } else if (inv.arguments.size() == argument_offset + 1) {
     result = inv.arguments[argument_offset];
   } else {
@@ -73,8 +71,6 @@ read_query(const invocation& inv, std::string_view file_option,
                "not allowed; please pass it as a single string "
                "instead.");
   }
-  if (result.empty())
-    return caf::make_error(ec::invalid_query);
   return result;
 }
 
