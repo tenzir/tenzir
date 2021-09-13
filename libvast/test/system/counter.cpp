@@ -60,13 +60,15 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     // Spawn INDEX and ARCHIVE, and a mock client.
     MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
-    auto fs = self->spawn(vast::system::posix_filesystem, directory);
+    fs = self->spawn(vast::system::posix_filesystem, directory);
     auto indexdir = directory / "index";
     archive = self->spawn(system::archive, directory / "archive",
                           defaults::system::segments,
                           defaults::system::max_segment_size);
-    index = self->spawn(system::index, fs, archive, indexdir,
-                        defaults::system::store_backend,
+    // We use the old global archive for this test setup, since we cannot easily
+    // reproduce a partially filled archive with partition-local store: All
+    // data that goes to an active partition also goes to its store.
+    index = self->spawn(system::index, fs, archive, indexdir, "archive",
                         defaults::import::table_slice_size, 100, 3, 1, indexdir,
                         0.01);
     client = sys.spawn(mock_client);
@@ -93,6 +95,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     sched.run_once();
   }
 
+  system::filesystem_actor fs;
   system::index_actor index;
   system::archive_actor archive;
   caf::actor client;
@@ -133,6 +136,33 @@ TEST(count IP point query with candidate check) {
   auto& client_state = deref<mock_client_actor>(client).state;
   CHECK_EQUAL(client_state.count, 105u);
   CHECK_EQUAL(client_state.received_done, true);
+}
+
+TEST(count IP point query with partition - local stores) {
+  // Create an index with partition-local store backend.
+  auto indexdir = directory / "index2";
+  auto index = self->spawn(system::index, fs, archive, indexdir,
+                           "segment-store", defaults::import::table_slice_size,
+                           100, 3, 1, indexdir, 0.01);
+  // Fill the INDEX with 400 rows from the Zeek conn log.
+  detail::spawn_container_source(sys, take(zeek_conn_log_full, 4), index);
+  MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
+  auto counter
+    = sys.spawn(system::counter,
+                unbox(to<expression>(":addr == 192.168.1.104")), index,
+                /*skip_candidate_check = */ false);
+  run();
+  anon_send(counter, atom::run_v, client);
+  sched.run_once();
+  // Once started, the COUNTER reaches out to the INDEX.
+  expect((query), from(counter).to(index));
+  run();
+  auto& client_state = deref<mock_client_actor>(client).state;
+  // The magic number 133 was taken from the first unit test.
+  CHECK_EQUAL(client_state.count, 133u);
+  CHECK_EQUAL(client_state.received_done, true);
+  self->send_exit(index, caf::exit_reason::user_shutdown);
+  self->send_exit(counter, caf::exit_reason::user_shutdown);
 }
 
 FIXTURE_SCOPE_END()

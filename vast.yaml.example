@@ -105,10 +105,8 @@ vast:
   meta-index-fp-rate: 0.01
 
   # The store backend to use. Can be either 'archive', 'segment-store', or
-  # the name of a user-provided store plugin. Note that the 'segment-store'
-  # backend is still experimental. Also note that 'vast get' and 'vast explore'
-  # currently work correctly with the 'archive' backend.
-  store-backend: archive
+  # the name of a user-provided store plugin.
+  store-backend: segment-store
 
   # The maximum number of segments cached by the archive.
   segments: 10

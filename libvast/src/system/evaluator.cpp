@@ -123,9 +123,7 @@ void evaluator_state::evaluate() {
   auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
   VAST_DEBUG("{} got predicate_hits: {} expr_hits: {}", *self, predicate_hits,
              expr_hits);
-  auto delta = expr_hits - hits;
-  if (any<1>(delta))
-    hits |= delta;
+  hits |= expr_hits;
 }
 
 void evaluator_state::decrement_pending() {

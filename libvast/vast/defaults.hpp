@@ -217,7 +217,7 @@ constexpr size_t taste_partitions = 5;
 constexpr size_t num_query_supervisors = 10;
 
 /// The store backend to use.
-constexpr const char* store_backend = "archive";
+constexpr const char* store_backend = "segment-store";
 
 /// Number of cached ARCHIVE segments.
 constexpr size_t segments = 10;
