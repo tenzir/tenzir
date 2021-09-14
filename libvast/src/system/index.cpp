@@ -453,7 +453,7 @@ index_state::status(status_verbosity v) const {
     size_t memory_usage = 0;
     void
     deliver(caf::typed_response_promise<record>&& promise, record&& content) {
-      content["index.memory-usage"] = count{memory_usage};
+      content["memory-usage"] = count{memory_usage};
       promise.deliver(std::move(content));
     }
   };
@@ -466,7 +466,7 @@ index_state::status(status_verbosity v) const {
       xs["count"] = count{layout_stats.count};
       layout_object[name] = xs;
     }
-    layout_object["meta-index-bytes"] = meta_index_bytes;
+    rs->content["meta-index-bytes"] = meta_index_bytes;
     rs->content["num-active-partitions"]
       = count{active_partition.actor == nullptr ? 0u : 1u};
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
@@ -497,6 +497,7 @@ index_state::status(status_verbosity v) const {
             });
         };
     // Resident partitions.
+    partitions.reserve(3u);
     auto& active = insert_list(partitions, "active");
     active.reserve(1);
     if (active_partition.actor != nullptr)
