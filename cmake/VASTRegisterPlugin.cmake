@@ -232,11 +232,15 @@ macro (VASTInstallExampleConfiguration target source destination)
     string(REPLACE \";\" \"\\n\" content \"\${content}\")
     string(REPLACE \"\${dummy}\" \";\" content \"\${content}\")
     file(WRITE
-      \"${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}\"
+      \"${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/${destination}\"
+      \"# NOTE: For this file to take effect, move it to:\\n\"
+      \"#   <prefix>/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}\\n\"
+      \"\\n\"
       \"\${content}\")")
 
   add_custom_command(
-    OUTPUT "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}"
+    OUTPUT
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/${destination}"
     MAIN_DEPENDENCY "${source}"
     COMMENT "Copying example configuration file ${source}"
     COMMAND ${CMAKE_COMMAND} -P
@@ -245,13 +249,15 @@ macro (VASTInstallExampleConfiguration target source destination)
   add_custom_target(
     ${target}-copy-example-configuration-file
     DEPENDS
-      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}")
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/${destination}"
+  )
 
   add_dependencies(${target} ${target}-copy-example-configuration-file)
 
   install(
-    FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}"
-    DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
+    FILES
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/${destination}"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/")
 endmacro ()
 
 # Support tools like clang-tidy by creating a compilation database and copying
