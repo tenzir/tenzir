@@ -161,7 +161,6 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   auto version = retrieve_versions();
   rs->content["version"] = version;
   // Pre-fill our result with system stats.
-  auto& sys = self->system();
   auto& system = insert_record(rs->content, "system");
   if (v >= status_verbosity::info) {
     system["in-memory-table-slices"] = count{table_slice::instances()};
@@ -184,6 +183,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
                    });
   }
   if (v >= status_verbosity::debug) {
+    auto& sys = self->system();
     system["running-actors"] = count{sys.registry().running()};
     system["detached-actors"] = count{sys.detached_actors()};
     system["worker-threads"] = count{sys.scheduler().num_workers()};
