@@ -6,7 +6,7 @@
 {"path":["importer","ids","available"],"type":"string"}
 {"path":["importer","ids","block","end"],"type":"string"}
 {"path":["importer","ids","block","next"],"type":"string"}
-{"path":["index","index","memory-usage"],"type":"number"}
+{"path":["index","memory-usage"],"type":"number"}
 {"path":["index","meta-index-bytes"],"type":"number"}
 {"path":["index","num-active-partitions"],"type":"number"}
 {"path":["index","num-cached-partitions"],"type":"number"}
@@ -16,8 +16,3 @@
 {"path":["system","config-files",0],"type":"string"}
 {"path":["system","database-path"],"type":"string"}
 {"path":["system","in-memory-table-slices"],"type":"number"}
-{"path":["version","Apache Arrow"],"type":"string"}
-{"path":["version","CAF"],"type":"string"}
-{"path":["version","VAST"],"type":"string"}
-{"path":["version","VAST Build Tree Hash"],"type":"string"}
-{"path":["version","jemalloc"],"type":"string"}
