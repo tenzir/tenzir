@@ -16,9 +16,9 @@
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/meta_index.hpp"
-#include "vast/system/partition.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>

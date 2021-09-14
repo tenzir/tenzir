@@ -19,9 +19,10 @@
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/query.hpp"
+#include "vast/system/active_partition.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/meta_index.hpp"
-#include "vast/system/partition.hpp"
+#include "vast/system/passive_partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -121,7 +122,7 @@ TEST(empty partition roundtrip) {
   // Init factory.
   vast::factory<vast::table_slice_builder>::initialize();
   // Create partition state.
-  vast::system::active_partition_state state;
+  vast::system::active_partition_state::serialization_data state;
   state.id = vast::uuid::random();
   state.store_id = "legacy_archive";
   state.store_header = vast::chunk::empty();
@@ -175,8 +176,8 @@ TEST(empty partition roundtrip) {
   CHECK_EQUAL(recovered_state.id, state.id);
   CHECK_EQUAL(recovered_state.offset, state.offset);
   CHECK_EQUAL(recovered_state.events, state.events);
-  CHECK_EQUAL(recovered_state.combined_layout, state.combined_layout);
-  CHECK_EQUAL(recovered_state.type_ids, state.type_ids);
+  CHECK_EQUAL(recovered_state.combined_layout_, state.combined_layout);
+  CHECK_EQUAL(recovered_state.type_ids_, state.type_ids);
   // Deserialize meta index state from this partition.
   auto ps = std::make_shared<vast::partition_synopsis>();
   auto error2 = vast::system::unpack(*partition_v0, *ps);
