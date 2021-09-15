@@ -208,7 +208,7 @@ tests:
       - command: status --detailed
         transformation: jq '.index.statistics.layouts | del(."vast.metrics")'
       - command: status --detailed
-        transformation: jq -ec 'del(.version) | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
+        transformation: jq -ec 'del(.version) | del(.system."swap-space-usage") | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
