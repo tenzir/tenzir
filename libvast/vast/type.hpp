@@ -19,8 +19,7 @@
 #include <caf/detail/type_list.hpp>
 #include <caf/meta/omittable_if_none.hpp>
 #include <caf/meta/type_name.hpp>
-#include <caf/sum_type_access.hpp>
-#include <caf/sum_type_token.hpp>
+#include <caf/sum_type.hpp>
 #include <fmt/core.h>
 
 #include <compare>
@@ -37,11 +36,11 @@ using concrete_types
 
 /// A concept that models any concrete type.
 template <class T>
-concept concrete_type = requires(const T& type) {
+concept concrete_type = requires(const T& value) {
   requires caf::detail::tl_contains<concrete_types, T>::value;
   requires std::is_final_v<T>;
   { T::type_index() } -> concepts::same_as<uint8_t>;
-  { as_bytes(type) } -> concepts::same_as<std::span<const std::byte>>;
+  { as_bytes(value) } -> concepts::same_as<std::span<const std::byte>>;
 };
 
 /// A concept that models basic concrete types, i.e., types that do not hold
@@ -56,10 +55,11 @@ concept basic_type = requires {
 /// A concept that models basic concrete types, i.e., types that hold
 /// additional state and extend the lifetime of the surrounding type.
 template <class T>
-concept complex_type = requires {
+concept complex_type = requires(const T& value) {
   requires concrete_type<T>;
   requires std::is_base_of_v<type, T>;
   requires sizeof(T) == sizeof(chunk_ptr);
+  { value.signature() } -> concepts::same_as<std::string>;
 };
 
 // -- type --------------------------------------------------------------------
@@ -186,6 +186,8 @@ public:
   }
 
   /// Returns the name of this type.
+  /// @note The result is empty if the contained type is unnammed. Built-in
+  /// types have no name. Use the {fmt} API to render a type's signature.
   [[nodiscard]] std::string_view name() const& noexcept;
   [[nodiscard]] std::string_view name() && = delete;
 
@@ -398,6 +400,9 @@ public:
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte>
   as_bytes(const enumeration_type& x) noexcept;
+
+  /// Renders the type's signature.
+  [[nodiscard]] std::string signature() const noexcept;
 };
 
 // -- list_type ---------------------------------------------------------------
@@ -441,6 +446,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
+
+  /// Renders the type's signature.
+  [[nodiscard]] std::string signature() const noexcept;
 };
 
 // -- map_type ----------------------------------------------------------------
@@ -487,6 +495,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
+
+  /// Renders the type's signature.
+  [[nodiscard]] std::string signature() const noexcept;
 };
 
 } // namespace vast
@@ -593,26 +604,99 @@ template <>
 struct formatter<vast::type> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
-    // TODO: Support format specifiers to format more than just names.
     return ctx.begin();
   }
 
   template <class FormatContext>
   auto format(const vast::type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "{}", value.name());
+    if (const auto& name = value.name(); !name.empty())
+      return format_to(ctx.out(), "{}", name);
+    return caf::visit(
+      [&]<vast::concrete_type T>(const T& x) {
+        return format_to(ctx.out(), "{}", x);
+      },
+      value);
   }
 };
 
-template <vast::basic_type T>
-struct formatter<T> : formatter<vast::type> {};
+template <vast::concrete_type T>
+struct formatter<T> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
 
-template <vast::complex_type T>
-struct formatter<T> : formatter<vast::type> {
   template <class FormatContext>
-  auto format(const T& value, FormatContext& ctx) -> decltype(ctx.out()) {
-    const auto t = vast::type{value};
-    return formatter<vast::type>::format(t, ctx);
+  auto format(const vast::none_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "none");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::bool_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "bool");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::integer_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "integer");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::count_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "count");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::real_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "real");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::duration_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "duration");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::time_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "time");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::string_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "string");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::pattern_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "pattern");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::address_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "address");
+  }
+
+  template <class FormatContext>
+  auto format(const vast::subnet_type&, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "subnet");
+  }
+
+  template <class FormatContext>
+  auto format(const T& value, FormatContext& ctx)
+    -> decltype(ctx.out()) requires(vast::complex_type<T>) {
+    return format_to(ctx.out(), "{}", value.signature());
   }
 };
 

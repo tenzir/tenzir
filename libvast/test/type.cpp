@@ -244,7 +244,7 @@ TEST(enumeration_type) {
   CHECK(t != et);
   CHECK(t < et);
   CHECK(t <= et);
-  CHECK_EQUAL(fmt::format("{}", et), "enumeration");
+  CHECK_EQUAL(fmt::format("{}", et), "enum {first: 0, third: 2, fourth: 3}");
   CHECK(!caf::holds_alternative<enumeration_type>(t));
   CHECK(caf::holds_alternative<enumeration_type>(et));
   CHECK_EQUAL(caf::get<enumeration_type>(et).field(0), "first");
@@ -270,8 +270,8 @@ TEST(list_type) {
   CHECK(t != lit);
   CHECK(t < lit);
   CHECK(t <= lit);
-  CHECK_EQUAL(fmt::format("{}", lit), "list");
-  CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list");
+  CHECK_EQUAL(fmt::format("{}", lit), "list<integer>");
+  CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<none>");
   CHECK(!caf::holds_alternative<list_type>(t));
   CHECK(caf::holds_alternative<list_type>(lit));
   CHECK_EQUAL(caf::get<list_type>(lit).value_type(), type{integer_type{}});
@@ -292,8 +292,8 @@ TEST(map_type) {
   CHECK(t != msit);
   CHECK(t < msit);
   CHECK(t <= msit);
-  CHECK_EQUAL(fmt::format("{}", msit), "map");
-  CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map");
+  CHECK_EQUAL(fmt::format("{}", msit), "map<string, integer>");
+  CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<none, none>");
   CHECK(!caf::holds_alternative<map_type>(t));
   CHECK(caf::holds_alternative<map_type>(msit));
   CHECK_EQUAL(caf::get<map_type>(msit).key_type(), type{string_type{}});
@@ -323,7 +323,7 @@ TEST(named types) {
 TEST(tagged types) {
   const auto at = type{bool_type{}, {{"first", "value"}, {"second"}}};
   CHECK(caf::holds_alternative<bool_type>(at));
-  CHECK_EQUAL(at.name(), "bool");
+  CHECK_EQUAL(at.name(), "");
   CHECK_EQUAL(at.tag("first"), "value");
   CHECK_EQUAL(at.tag("second"), "");
   CHECK_EQUAL(at.tag("third"), std::nullopt);

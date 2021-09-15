@@ -14,6 +14,9 @@
 #include "vast/legacy_type.hpp"
 
 #include <caf/sum_type.hpp>
+#include <fmt/format.h>
+
+// -- type --------------------------------------------------------------------
 
 namespace vast {
 
@@ -282,33 +285,20 @@ std::string_view type::name() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
-        return "none";
       case fbs::type::Type::bool_type_v0:
-        return "bool";
       case fbs::type::Type::integer_type_v0:
-        return "integer";
       case fbs::type::Type::count_type_v0:
-        return "count";
       case fbs::type::Type::real_type_v0:
-        return "real";
       case fbs::type::Type::duration_type_v0:
-        return "duration";
       case fbs::type::Type::time_type_v0:
-        return "time";
       case fbs::type::Type::string_type_v0:
-        return "string";
       case fbs::type::Type::pattern_type_v0:
-        return "pattern";
       case fbs::type::Type::address_type_v0:
-        return "address";
       case fbs::type::Type::subnet_type_v0:
-        return "subnet";
       case fbs::type::Type::enumeration_type_v0:
-        return "enumeration";
       case fbs::type::Type::list_type_v0:
-        return "list";
       case fbs::type::Type::map_type_v0:
-        return "map";
+        return "";
       case fbs::type::Type::tagged_type_v0:
         const auto* tagged_type = root->type_as_tagged_type_v0();
         if (const auto* name = tagged_type->name())
@@ -656,6 +646,22 @@ std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
 }
 
+std::string enumeration_type::signature() const noexcept {
+  const auto* fields
+    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
+  VAST_ASSERT(fields);
+  auto result = std::string{};
+  auto it = fields->begin();
+  VAST_ASSERT(it != fields->end());
+  fmt::format_to(std::back_inserter(result), "enum {{{}: {}",
+                 (*it)->name()->string_view(), (*it)->key());
+  while (++it != fields->end())
+    fmt::format_to(std::back_inserter(result), ", {}: {}",
+                   (*it)->name()->string_view(), (*it)->key());
+  fmt::format_to(std::back_inserter(result), "}}");
+  return result;
+}
+
 // -- list_type ---------------------------------------------------------------
 
 list_type::list_type(const list_type& other) noexcept = default;
@@ -697,6 +703,10 @@ uint8_t list_type::type_index() noexcept {
 
 std::span<const std::byte> as_bytes(const list_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
+}
+
+std::string list_type::signature() const noexcept {
+  return fmt::format("list<{}>", value_type());
 }
 
 // -- map_type ----------------------------------------------------------------
@@ -755,4 +765,7 @@ std::span<const std::byte> as_bytes(const map_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
 }
 
+std::string map_type::signature() const noexcept {
+  return fmt::format("map<{}, {}>", key_type(), value_type());
+}
 } // namespace vast
