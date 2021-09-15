@@ -482,6 +482,7 @@ index_state::status(status_verbosity v) const {
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
+    collect_status(rs, timeout, v, meta_index, rs->content, "meta-index");
     auto& partitions = insert_record(rs->content, "partitions");
     auto partition_status
       = [&](const uuid& id, const partition_actor& pa, list& xs) {

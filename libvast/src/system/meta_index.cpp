@@ -9,6 +9,7 @@
 #include "vast/system/meta_index.hpp"
 
 #include "vast/data.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/set_operations.hpp"
 #include "vast/detail/stable_set.hpp"
@@ -20,6 +21,7 @@
 #include "vast/query.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
 
@@ -406,7 +408,16 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
       else
         result = std::move(ids_candidates);
       return result;
-    }};
+    },
+    [=](atom::status, status_verbosity v) {
+      record result;
+      result["memory-usage"] = count{self->state.memusage()};
+      result["num-partitions"] = count{self->state.synopses.size()};
+      if (v >= status_verbosity::debug)
+        detail::fill_status_map(result, self);
+      return result;
+    },
+  };
 }
 
 } // namespace vast::system

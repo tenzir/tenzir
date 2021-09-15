@@ -199,7 +199,9 @@ using meta_index_actor = typed_actor_fwd<
   caf::replies_to<atom::erase, uuid>::with<atom::ok>,
   // Evaluate the expression.
   caf::replies_to<atom::candidates, vast::expression,
-                  vast::ids>::with<std::vector<vast::uuid>>>::unwrap;
+                  vast::ids>::with<std::vector<vast::uuid>>>
+  // Conform to the procotol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
 
 /// The INDEX actor interface.
 using index_actor = typed_actor_fwd<
