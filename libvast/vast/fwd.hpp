@@ -85,6 +85,7 @@ class segment_store;
 class store;
 class string_type;
 class subnet;
+class subnet_type;
 class synopsis;
 class table_slice;
 class table_slice_builder;

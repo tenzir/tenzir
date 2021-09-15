@@ -215,6 +215,25 @@ TEST(address_type) {
   CHECK(caf::holds_alternative<address_type>(lat));
 }
 
+TEST(subnet_type) {
+  static_assert(concrete_type<subnet_type>);
+  static_assert(basic_type<subnet_type>);
+  static_assert(!complex_type<subnet_type>);
+  const auto t = type{};
+  const auto st = type{subnet_type{}};
+  CHECK(st);
+  CHECK_EQUAL(as_bytes(st), as_bytes(subnet_type{}));
+  CHECK(t != st);
+  CHECK(t < st);
+  CHECK(t <= st);
+  CHECK_EQUAL(fmt::format("{}", st), "subnet");
+  CHECK_EQUAL(fmt::format("{}", subnet_type{}), "subnet");
+  CHECK(!caf::holds_alternative<subnet_type>(t));
+  CHECK(caf::holds_alternative<subnet_type>(st));
+  const auto lst = type{legacy_subnet_type{}};
+  CHECK(caf::holds_alternative<subnet_type>(lst));
+}
+
 TEST(list_type) {
   static_assert(concrete_type<list_type>);
   static_assert(!basic_type<list_type>);

@@ -43,6 +43,11 @@ namespace vast.fbs.type.address_type;
 /// An IP address (v4 or v6).
 table v0 {}
 
+namespace vast.fbs.type.subnet_type;
+
+/// A CIDR subnet.
+table v0 {}
+
 namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
@@ -80,6 +85,7 @@ union Type {
   string_type.v0,
   pattern_type.v0,
   address_type.v0,
+  subnet_type.v0,
   list_type.v0,
   tagged_type.v0,
 }
