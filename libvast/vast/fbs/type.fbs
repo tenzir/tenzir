@@ -38,6 +38,11 @@ namespace vast.fbs.type.pattern_type;
 /// A regular expression.
 table v0 {}
 
+namespace vast.fbs.type.address_type;
+
+/// An IP address (v4 or v6).
+table v0 {}
+
 namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
@@ -74,6 +79,7 @@ union Type {
   time_type.v0,
   string_type.v0,
   pattern_type.v0,
+  address_type.v0,
   list_type.v0,
   tagged_type.v0,
 }

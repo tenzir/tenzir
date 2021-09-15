@@ -196,6 +196,25 @@ TEST(pattern_type) {
   CHECK(caf::holds_alternative<pattern_type>(lpt));
 }
 
+TEST(address_type) {
+  static_assert(concrete_type<address_type>);
+  static_assert(basic_type<address_type>);
+  static_assert(!complex_type<address_type>);
+  const auto t = type{};
+  const auto at = type{address_type{}};
+  CHECK(at);
+  CHECK_EQUAL(as_bytes(at), as_bytes(address_type{}));
+  CHECK(t != at);
+  CHECK(t < at);
+  CHECK(t <= at);
+  CHECK_EQUAL(fmt::format("{}", at), "address");
+  CHECK_EQUAL(fmt::format("{}", address_type{}), "address");
+  CHECK(!caf::holds_alternative<address_type>(t));
+  CHECK(caf::holds_alternative<address_type>(at));
+  const auto lat = type{legacy_address_type{}};
+  CHECK(caf::holds_alternative<address_type>(lat));
+}
+
 TEST(list_type) {
   static_assert(concrete_type<list_type>);
   static_assert(!basic_type<list_type>);

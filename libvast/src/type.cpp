@@ -171,6 +171,9 @@ type::type(const legacy_type& other) noexcept {
     [&](const legacy_pattern_type&) {
       *this = type{other.name(), pattern_type{}, tags};
     },
+    [&](const legacy_address_type&) {
+      *this = type{other.name(), address_type{}, tags};
+    },
     [&](const legacy_list_type& list) {
       *this = type{other.name(), type{list_type{type{list.value_type}}}, tags};
     },
@@ -179,7 +182,6 @@ type::type(const legacy_type& other) noexcept {
     },
     [&](const auto&) {
       // TODO: Implement for all legacy types, then remove this handler.
-      // - legacy_address_type,
       // - legacy_subnet_type,
       // - legacy_enumeration_type,
       // - legacy_map_type,
@@ -237,6 +239,7 @@ const fbs::Type& type::table(enum transparent transparent) const noexcept {
       case fbs::type::Type::time_type_v0:
       case fbs::type::Type::string_type_v0:
       case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
       case fbs::type::Type::list_type_v0:
         transparent = transparent::no;
         break;
@@ -281,6 +284,8 @@ std::string_view type::name() const& noexcept {
         return "string";
       case fbs::type::Type::pattern_type_v0:
         return "pattern";
+      case fbs::type::Type::address_type_v0:
+        return "address";
       case fbs::type::Type::list_type_v0:
         return "list";
       case fbs::type::Type::tagged_type_v0:
@@ -307,6 +312,7 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
       case fbs::type::Type::time_type_v0:
       case fbs::type::Type::string_type_v0:
       case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
       case fbs::type::Type::list_type_v0:
         return std::nullopt;
       case fbs::type::Type::tagged_type_v0:
@@ -511,6 +517,28 @@ std::span<const std::byte> as_bytes(const pattern_type&) noexcept {
     const auto pattern_type = fbs::type::pattern_type::Createv0(builder);
     const auto type = fbs::CreateType(builder, fbs::type::Type::pattern_type_v0,
                                       pattern_type.Union());
+    builder.Finish(type);
+    auto result = builder.Release();
+
+    VAST_ASSERT(result.size() == reserved_size);
+    return result;
+  }();
+  return as_bytes(buffer);
+}
+
+// -- address_type ------------------------------------------------------------
+
+uint8_t address_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::address_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const address_type&) noexcept {
+  static const auto buffer = []() noexcept {
+    constexpr auto reserved_size = 32;
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto address_type = fbs::type::address_type::Createv0(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::address_type_v0,
+                                      address_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
 
