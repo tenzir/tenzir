@@ -34,8 +34,6 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using namespace vast;
 
-FIXTURE_SCOPE(type_tests, fixtures::deterministic_actor_system)
-
 TEST(default construction) {
   legacy_type t;
   CHECK(!t);
@@ -151,53 +149,6 @@ TEST(type / data compatibility) {
   CHECK(compatible(legacy_subnet_type{}, relational_operator::in,
                    legacy_subnet_type{}));
   CHECK(compatible(legacy_subnet_type{}, relational_operator::in, subnet{}));
-}
-
-TEST(serialization) {
-  CHECK_ROUNDTRIP(legacy_type{});
-  CHECK_ROUNDTRIP(legacy_none_type{});
-  CHECK_ROUNDTRIP(legacy_bool_type{});
-  CHECK_ROUNDTRIP(legacy_integer_type{});
-  CHECK_ROUNDTRIP(legacy_count_type{});
-  CHECK_ROUNDTRIP(legacy_real_type{});
-  CHECK_ROUNDTRIP(legacy_duration_type{});
-  CHECK_ROUNDTRIP(legacy_time_type{});
-  CHECK_ROUNDTRIP(legacy_string_type{});
-  CHECK_ROUNDTRIP(legacy_pattern_type{});
-  CHECK_ROUNDTRIP(legacy_address_type{});
-  CHECK_ROUNDTRIP(legacy_subnet_type{});
-  CHECK_ROUNDTRIP(legacy_enumeration_type{});
-  CHECK_ROUNDTRIP(legacy_list_type{});
-  CHECK_ROUNDTRIP(legacy_map_type{});
-  CHECK_ROUNDTRIP(legacy_record_type{});
-  CHECK_ROUNDTRIP(legacy_alias_type{});
-  CHECK_ROUNDTRIP(legacy_type{legacy_none_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_bool_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_integer_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_count_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_real_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_duration_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_time_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_string_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_pattern_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_address_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_subnet_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_enumeration_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_list_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_map_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_record_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_alias_type{}});
-  auto r
-    = legacy_record_type{{"x", legacy_integer_type{}},
-                         {"y", legacy_address_type{}},
-                         {"z", legacy_real_type{}.attributes({{"key", "valu"
-                                                                      "e"}})}};
-  // Make it recursive.
-  r = {{"a", legacy_map_type{legacy_string_type{}, legacy_count_type{}}},
-       {"b", legacy_list_type{legacy_bool_type{}}.name("foo")},
-       {"c", r}};
-  r.name("foo");
-  CHECK_ROUNDTRIP(r);
 }
 
 TEST(record range) {
@@ -763,6 +714,55 @@ TEST(json) {
   "attributes": {}
 })__";
   CHECK_EQUAL(to_json(to_data(legacy_type{r})), expected);
+}
+
+FIXTURE_SCOPE(type_tests, fixtures::deterministic_actor_system)
+
+TEST(serialization) {
+  CHECK_ROUNDTRIP(legacy_type{});
+  CHECK_ROUNDTRIP(legacy_none_type{});
+  CHECK_ROUNDTRIP(legacy_bool_type{});
+  CHECK_ROUNDTRIP(legacy_integer_type{});
+  CHECK_ROUNDTRIP(legacy_count_type{});
+  CHECK_ROUNDTRIP(legacy_real_type{});
+  CHECK_ROUNDTRIP(legacy_duration_type{});
+  CHECK_ROUNDTRIP(legacy_time_type{});
+  CHECK_ROUNDTRIP(legacy_string_type{});
+  CHECK_ROUNDTRIP(legacy_pattern_type{});
+  CHECK_ROUNDTRIP(legacy_address_type{});
+  CHECK_ROUNDTRIP(legacy_subnet_type{});
+  CHECK_ROUNDTRIP(legacy_enumeration_type{});
+  CHECK_ROUNDTRIP(legacy_list_type{});
+  CHECK_ROUNDTRIP(legacy_map_type{});
+  CHECK_ROUNDTRIP(legacy_record_type{});
+  CHECK_ROUNDTRIP(legacy_alias_type{});
+  CHECK_ROUNDTRIP(legacy_type{legacy_none_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_bool_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_integer_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_count_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_real_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_duration_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_time_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_string_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_pattern_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_address_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_subnet_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_enumeration_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_list_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_map_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_record_type{}});
+  CHECK_ROUNDTRIP(legacy_type{legacy_alias_type{}});
+  auto r
+    = legacy_record_type{{"x", legacy_integer_type{}},
+                         {"y", legacy_address_type{}},
+                         {"z", legacy_real_type{}.attributes({{"key", "valu"
+                                                                      "e"}})}};
+  // Make it recursive.
+  r = {{"a", legacy_map_type{legacy_string_type{}, legacy_count_type{}}},
+       {"b", legacy_list_type{legacy_bool_type{}}.name("foo")},
+       {"c", r}};
+  r.name("foo");
+  CHECK_ROUNDTRIP(r);
 }
 
 FIXTURE_SCOPE_END()
