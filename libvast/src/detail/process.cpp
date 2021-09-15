@@ -56,10 +56,9 @@ static record get_status_proc() {
   auto ws = ignore(+parsers::space);
   auto kvp = [&](const char* k, const std::string_view human_friendly) {
     // The output says "kB", but the unit is actually "kiB".
-    return (k >> ws >> parsers::u64 >> ws >> "kB" >> skip)
-             ->*[=, &result](uint64_t x) {
-                   result[human_friendly] = count{x * 1024};
-                 };
+    return (k >> ws >> parsers::u64 >> ws >> "kB")->*[=, &result](uint64_t x) {
+      result[human_friendly] = count{x * 1024};
+    };
   };
   auto rss = kvp("VmRSS:", "current-memory-usage");
   auto size = kvp("VmHWM:", "peak-memory-usage");

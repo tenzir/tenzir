@@ -14,5 +14,7 @@
 {"path":["index","partitions","active",0,"id"],"type":"string"}
 {"path":["index","statistics","layouts","zeek.conn","count"],"type":"number"}
 {"path":["system","config-files",0],"type":"string"}
+{"path":["system","current-memory-usage"],"type":"number"}
 {"path":["system","database-path"],"type":"string"}
 {"path":["system","in-memory-table-slices"],"type":"number"}
+{"path":["system","peak-memory-usage"],"type":"number"}
