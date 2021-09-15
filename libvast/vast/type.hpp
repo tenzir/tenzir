@@ -24,6 +24,7 @@
 #include <fmt/core.h>
 
 #include <compare>
+#include <initializer_list>
 
 namespace vast {
 
@@ -31,7 +32,8 @@ namespace vast {
 using concrete_types
   = caf::detail::type_list<none_type, bool_type, integer_type, count_type,
                            real_type, duration_type, time_type, string_type,
-                           pattern_type, address_type, subnet_type, list_type>;
+                           pattern_type, address_type, subnet_type,
+                           enumeration_type, list_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -344,6 +346,58 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const subnet_type&) noexcept;
+};
+
+// -- enumeration_type --------------------------------------------------------
+
+/// An enumeration type that can have one specific value.
+/// @relates type
+class enumeration_type final : private type {
+  friend class type;
+  friend struct caf::sum_type_access<vast::type>;
+
+public:
+  /// A field of an enumeration type.
+  struct field final {
+    std::string name;                 ///< The mame of the field.
+    std::optional<uint32_t> key = {}; ///< The optional index of the field.
+  };
+
+  /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
+  /// @param other The copied-from type.
+  enumeration_type(const enumeration_type& other) noexcept;
+
+  /// Copy-assigns a type, resulting in a shallow copy with shared lifetime.
+  /// @param other The copied-from type.
+  enumeration_type& operator=(const enumeration_type& rhs) noexcept;
+
+  /// Move-constructs a type, leaving the moved-from type in a state
+  /// semantically equivalent to the *none_type*.
+  /// @param other The moved-from type.
+  enumeration_type(enumeration_type&& other) noexcept;
+
+  /// Move-constructs a type, leaving the moved-from type in a state
+  /// semantically equivalent to the *none_type*.
+  /// @param other The moved-from type.
+  enumeration_type& operator=(enumeration_type&& other) noexcept;
+
+  /// Destroys a type.
+  ~enumeration_type() noexcept;
+
+  /// Constructs an enumeration type.
+  /// @pre `!fields.empty()`
+  explicit enumeration_type(const std::vector<struct field>& fields) noexcept;
+
+  /// Returns the field at the given key, or an empty string if it does not exist.
+  [[nodiscard]] std::string_view field(uint32_t key) const& noexcept;
+  [[nodiscard]] std::string_view field(uint32_t key) && = delete;
+
+  /// Returns the type index.
+  static uint8_t type_index() noexcept;
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte>
+  as_bytes(const enumeration_type& x) noexcept;
 };
 
 // -- list_type ---------------------------------------------------------------

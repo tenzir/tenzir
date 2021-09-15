@@ -48,6 +48,21 @@ namespace vast.fbs.type.subnet_type;
 /// A CIDR subnet.
 table v0 {}
 
+namespace vast.fbs.type.enumeration_type.field;
+
+/// The field of an enumeration type.
+table v0 {
+  key: uint (key);
+  name: string (required);
+}
+
+namespace vast.fbs.type.enumeration_type;
+
+/// An enumeration type that can have one specific value.
+table v0 {
+  fields: [field.v0] (required);
+}
+
 namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
@@ -86,6 +101,7 @@ union Type {
   pattern_type.v0,
   address_type.v0,
   subnet_type.v0,
+  enumeration_type.v0,
   list_type.v0,
   tagged_type.v0,
 }

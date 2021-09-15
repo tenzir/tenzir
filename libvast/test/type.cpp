@@ -234,6 +234,31 @@ TEST(subnet_type) {
   CHECK(caf::holds_alternative<subnet_type>(lst));
 }
 
+TEST(enumeration_type) {
+  static_assert(concrete_type<enumeration_type>);
+  static_assert(!basic_type<enumeration_type>);
+  static_assert(complex_type<enumeration_type>);
+  const auto t = type{};
+  const auto et = type{enumeration_type{{{"first"}, {"third", 2}, {"fourth"}}}};
+  CHECK(et);
+  CHECK(t != et);
+  CHECK(t < et);
+  CHECK(t <= et);
+  CHECK_EQUAL(fmt::format("{}", et), "enumeration");
+  CHECK(!caf::holds_alternative<enumeration_type>(t));
+  CHECK(caf::holds_alternative<enumeration_type>(et));
+  CHECK_EQUAL(caf::get<enumeration_type>(et).field(0), "first");
+  CHECK_EQUAL(caf::get<enumeration_type>(et).field(1), "");
+  CHECK_EQUAL(caf::get<enumeration_type>(et).field(2), "third");
+  CHECK_EQUAL(caf::get<enumeration_type>(et).field(3), "fourth");
+  const auto let = type{legacy_enumeration_type{{"first", "second", "third"}}};
+  CHECK(caf::holds_alternative<enumeration_type>(let));
+  CHECK_EQUAL(caf::get<enumeration_type>(let).field(0), "first");
+  CHECK_EQUAL(caf::get<enumeration_type>(let).field(1), "second");
+  CHECK_EQUAL(caf::get<enumeration_type>(let).field(2), "third");
+  CHECK_EQUAL(caf::get<enumeration_type>(let).field(3), "");
+}
+
 TEST(list_type) {
   static_assert(concrete_type<list_type>);
   static_assert(!basic_type<list_type>);

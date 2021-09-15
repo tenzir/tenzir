@@ -177,6 +177,13 @@ type::type(const legacy_type& other) noexcept {
     [&](const legacy_subnet_type&) {
       *this = type{other.name(), subnet_type{}, tags};
     },
+    [&](const legacy_enumeration_type& enumeration) {
+      auto fields = std::vector<struct enumeration_type::field>{};
+      fields.reserve(enumeration.fields.size());
+      for (const auto& field : enumeration.fields)
+        fields.push_back({field});
+      *this = type{other.name(), enumeration_type{fields}, tags};
+    },
     [&](const legacy_list_type& list) {
       *this = type{other.name(), type{list_type{type{list.value_type}}}, tags};
     },
@@ -185,7 +192,6 @@ type::type(const legacy_type& other) noexcept {
     },
     [&](const auto&) {
       // TODO: Implement for all legacy types, then remove this handler.
-      // - legacy_enumeration_type,
       // - legacy_map_type,
       // - legacy_record_type,
     },
@@ -243,6 +249,7 @@ const fbs::Type& type::table(enum transparent transparent) const noexcept {
       case fbs::type::Type::pattern_type_v0:
       case fbs::type::Type::address_type_v0:
       case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
       case fbs::type::Type::list_type_v0:
         transparent = transparent::no;
         break;
@@ -291,6 +298,8 @@ std::string_view type::name() const& noexcept {
         return "address";
       case fbs::type::Type::subnet_type_v0:
         return "subnet";
+      case fbs::type::Type::enumeration_type_v0:
+        return "enumeration";
       case fbs::type::Type::list_type_v0:
         return "list";
       case fbs::type::Type::tagged_type_v0:
@@ -319,6 +328,7 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
       case fbs::type::Type::pattern_type_v0:
       case fbs::type::Type::address_type_v0:
       case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
       case fbs::type::Type::list_type_v0:
         return std::nullopt;
       case fbs::type::Type::tagged_type_v0:
@@ -574,6 +584,68 @@ std::span<const std::byte> as_bytes(const subnet_type&) noexcept {
     return result;
   }();
   return as_bytes(buffer);
+}
+
+// -- enumeration_type --------------------------------------------------------
+
+enumeration_type::enumeration_type(
+  const enumeration_type& other) noexcept = default;
+
+enumeration_type&
+enumeration_type::operator=(const enumeration_type& rhs) noexcept = default;
+
+enumeration_type::enumeration_type(enumeration_type&& other) noexcept = default;
+
+enumeration_type&
+enumeration_type::operator=(enumeration_type&& other) noexcept = default;
+
+enumeration_type::~enumeration_type() noexcept = default;
+
+enumeration_type::enumeration_type(
+  const std::vector<struct field>& fields) noexcept {
+  VAST_ASSERT(!fields.empty(), "An enumeration type must not have zero fields");
+  // Unlike for other concrete types, we do not calculate the exact amount of
+  // bytes we need to allocate beforehand. This is because the individual
+  // fields are stored in a flat hash map, whose size cannot trivially be
+  // determined.
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  auto field_offsets
+    = std::vector<flatbuffers::Offset<fbs::type::enumeration_type::field::v0>>{};
+  field_offsets.reserve(fields.size());
+  for (uint32_t next_key = 0; const auto& field : fields) {
+    const auto key = field.key ? *field.key : next_key;
+    next_key = key + 1;
+    const auto name_offset = builder.CreateString(field.name);
+    field_offsets.emplace_back(
+      fbs::type::enumeration_type::field::Createv0(builder, key, name_offset));
+  }
+  const auto fields_offset = builder.CreateVectorOfSortedTables(&field_offsets);
+  const auto enumeration_type_offset
+    = fbs::type::enumeration_type::Createv0(builder, fields_offset);
+  const auto type_offset
+    = fbs::CreateType(builder, fbs::type::Type::enumeration_type_v0,
+                      enumeration_type_offset.Union());
+  builder.Finish(type_offset);
+  auto result = builder.Release();
+  auto chunk = chunk::make(std::move(result));
+  static_cast<type&>(*this) = type{std::move(chunk)};
+}
+
+std::string_view enumeration_type::field(uint32_t key) const& noexcept {
+  const auto* fields
+    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
+  VAST_ASSERT(fields);
+  if (const auto* field = fields->LookupByKey(key))
+    return field->name()->string_view();
+  return "";
+}
+
+uint8_t enumeration_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::enumeration_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
+  return as_bytes(static_cast<const type&>(x));
 }
 
 // -- list_type ---------------------------------------------------------------
