@@ -26,7 +26,6 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/expected.hpp>
-#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -35,33 +34,40 @@ report type_registry_state::telemetry() const {
   return {};
 }
 
-caf::dictionary<caf::config_value>
-type_registry_state::status(status_verbosity v) const {
-  auto result = caf::settings{};
+record type_registry_state::status(status_verbosity v) const {
+  auto result = record{};
   if (v >= status_verbosity::detailed) {
     // The list of defined concepts
     if (v >= status_verbosity::debug) {
-      auto& concepts_status = put_list(result, "concepts");
+      // TODO: Replace with a generic to data converter.
+      auto to_list = [](concepts::range auto xs) {
+        list l;
+        for (const auto& x : xs)
+          l.emplace_back(x);
+        return l;
+      };
+      auto& concepts_status = insert_list(result, "concepts");
       for (const auto& [name, definition] : taxonomies.concepts) {
-        auto& concept_status = concepts_status.emplace_back().as_dictionary();
+        auto& concept_status
+          = caf::get<record>(concepts_status.emplace_back(record{}));
         concept_status["name"] = name;
         concept_status["description"] = definition.description;
-        concept_status["fields"] = definition.fields;
-        concept_status["concepts"] = definition.concepts;
+        concept_status["fields"] = to_list(definition.fields);
+        concept_status["concepts"] = to_list(definition.concepts);
       }
-      auto& models_status = put_list(result, "models");
+      auto& models_status = insert_list(result, "models");
       for (const auto& [name, definition] : taxonomies.models) {
-        auto& model_status = models_status.emplace_back().as_dictionary();
+        auto& model_status = insert_record(models_status);
         model_status["name"] = name;
         model_status["description"] = definition.description;
-        model_status["definition"] = definition.definition;
+        model_status["definition"] = to_list(definition.definition);
       }
       // Sorted list of all keys.
       auto keys = std::vector<std::string>(data.size());
       std::transform(data.begin(), data.end(), keys.begin(),
                      [](const auto& x) { return x.first; });
       std::sort(keys.begin(), keys.end());
-      put(result, "types", keys);
+      result["types"] = to_list(keys);
       // The usual per-component status.
       detail::fill_status_map(result, self);
     }

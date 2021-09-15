@@ -384,14 +384,13 @@ partition_actor::behavior_type passive_partition(
       return self->delegate(self->state.store, atom::erase_v,
                             std::move(all_ids));
     },
-    [self](atom::status,
-           status_verbosity /*v*/) -> caf::config_value::dictionary {
-      caf::settings result;
+    [self](atom::status, status_verbosity /*v*/) -> record {
+      record result;
       if (!self->state.partition_chunk) {
-        caf::put(result, "state", "waiting for chunk");
+        result["state"] = "waiting for chunk";
         return result;
       }
-      caf::put(result, "size", self->state.partition_chunk->size());
+      result["size"] = self->state.partition_chunk->size();
       size_t mem_indexers = 0;
       for (size_t i = 0; i < self->state.indexers.size(); ++i) {
         if (self->state.indexers[i])
@@ -402,17 +401,15 @@ partition_actor::behavior_type passive_partition(
                               ->data()
                               ->size();
       }
-      caf::put(result, "memory-usage-indexers", mem_indexers);
+      result["memory-usage-indexers"] = mem_indexers;
       auto x = self->state.partition_chunk->incore();
       if (!x) {
-        caf::put(result, "memory-usage-incore", render(x.error()));
-        caf::put(result, "memory-usage",
-                 self->state.partition_chunk->size() + mem_indexers
-                   + sizeof(self->state));
+        result["memory-usage-incore"] = render(x.error());
+        result["memory-usage"] = self->state.partition_chunk->size()
+                                 + mem_indexers + sizeof(self->state);
       } else {
-        caf::put(result, "memory-usage-incore", *x);
-        caf::put(result, "memory-usage",
-                 *x + mem_indexers + sizeof(self->state));
+        result["memory-usage-incore"] = *x;
+        result["memory-usage"] = *x + mem_indexers + sizeof(self->state);
       }
       return result;
     },

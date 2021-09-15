@@ -97,8 +97,7 @@ using receiver_actor = typename typed_actor_fwd<
 /// The STATUS CLIENT actor interface.
 using status_client_actor = typed_actor_fwd<
   // Reply to a status request from the NODE.
-  caf::replies_to<atom::status, status_verbosity>::with< //
-    caf::dictionary<caf::config_value>>>::unwrap;
+  caf::replies_to<atom::status, status_verbosity>::with<record>>::unwrap;
 
 /// The STORE actor interface.
 using store_actor = typed_actor_fwd<

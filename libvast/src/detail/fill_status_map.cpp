@@ -9,14 +9,15 @@
 #include "vast/detail/fill_status_map.hpp"
 
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/algorithms.hpp"
+#include "vast/system/status.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/downstream_manager.hpp>
 #include <caf/inbound_path.hpp>
 #include <caf/outbound_path.hpp>
 #include <caf/scheduled_actor.hpp>
-#include <caf/settings.hpp>
 #include <caf/stream_manager.hpp>
 
 #include <sstream>
@@ -58,58 +59,57 @@ pid_t pthread_id() {
 
 namespace vast::detail {
 
-void fill_status_map(caf::settings& xs, caf::stream_manager& mgr) {
+void fill_status_map(record& xs, caf::stream_manager& mgr) {
   // Manager status.
-  put(xs, "idle", mgr.idle());
-  put(xs, "congested", mgr.congested());
+  xs["idle"] = mgr.idle();
+  xs["congested"] = mgr.congested();
   // Downstream status.
   auto& out = mgr.out();
-  auto& downstream = put_dictionary(xs, "downstream");
-  put(downstream, "buffered", out.buffered());
-  put(downstream, "max-capacity", out.max_capacity());
-  put(downstream, "paths", out.num_paths());
-  put(downstream, "stalled", out.stalled());
-  put(downstream, "clean", out.clean());
+  auto& downstream = insert_record(xs, "downstream");
+  downstream["buffered"] = count{out.buffered()};
+  downstream["max-capacity"] = integer{out.max_capacity()};
+  downstream["paths"] = count{out.num_paths()};
+  downstream["stalled"] = out.stalled();
+  downstream["clean"] = out.clean();
   out.for_each_path([&](auto& opath) {
     auto name = "slot-" + std::to_string(opath.slots.sender);
-    auto& slot = put_dictionary(downstream, name);
-    put(slot, "pending", opath.pending());
-    put(slot, "clean", opath.clean());
-    put(slot, "closing", opath.closing);
-    put(slot, "next-batch-id", opath.next_batch_id);
-    put(slot, "open-credit", opath.open_credit);
-    put(slot, "desired-batch-size", opath.desired_batch_size);
-    put(slot, "max-capacity", opath.max_capacity);
+    auto& slot = insert_record(downstream, name);
+    slot["pending"] = opath.pending();
+    slot["clean"] = opath.clean();
+    slot["closing"] = opath.closing;
+    slot["next-batch-id"] = integer{opath.next_batch_id};
+    slot["open-credit"] = integer{opath.open_credit};
+    slot["desired-batch-size"] = integer{opath.desired_batch_size};
+    slot["max-capacity"] = integer{opath.max_capacity};
   });
   // Upstream status.
-  auto& upstream = put_dictionary(xs, "upstream");
+  auto& upstream = insert_record(xs, "upstream");
   auto& ipaths = mgr.inbound_paths();
   if (!ipaths.empty())
-    put(xs, "inbound-paths-idle", mgr.inbound_paths_idle());
+    xs["inbound-paths-idle"] = mgr.inbound_paths_idle();
   for (auto ipath : ipaths) {
     auto name = "slot-" + std::to_string(ipath->slots.receiver);
-    auto& slot = put_dictionary(upstream, name);
-    put(slot, "priority", to_string(ipath->prio));
-    put(slot, "assigned-credit", ipath->assigned_credit);
-    put(slot, "last-acked-batch-id", ipath->last_acked_batch_id);
+    auto& slot = insert_record(upstream, name);
+    slot["priority"] = to_string(ipath->prio);
+    slot["assigned-credit"] = integer{ipath->assigned_credit};
+    slot["last-acked-batch-id"] = integer{ipath->last_acked_batch_id};
   }
 }
 
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     caf::scheduled_actor* self) {
-  put(xs, "actor-id", self->id());
-  put(xs, "thread-id", thread_id());
+void fill_status_map(record& xs, caf::scheduled_actor* self) {
+  xs["actor-id"] = count{self->id()};
+  xs["thread-id"] = thread_id();
 #if VAST_LINUX
-  put(xs, "pthread-id", pthread_id());
+  xs["pthread-id"] = integer{pthread_id()};
 #endif // VAST_LINUX
-  put(xs, "name", self->name());
-  put(xs, "mailbox-size", self->mailbox().size());
+  xs["name"] = self->name();
+  xs["mailbox-size"] = count{self->mailbox().size()};
   size_t counter = 0;
   std::string name;
   for (auto& mgr : unique_values(self->stream_managers())) {
     name = "stream-";
     name += std::to_string(counter++);
-    fill_status_map(put_dictionary(xs, name), *mgr);
+    fill_status_map(insert_record(xs, name), *mgr);
   }
 }
 

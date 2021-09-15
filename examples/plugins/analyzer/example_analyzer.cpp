@@ -116,10 +116,10 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
                })
         .inbound_slot();
     },
-    [](atom::status, system::status_verbosity) -> caf::settings {
-      // Return an arbitrary settings object here for use in the status command.
-      auto result = caf::settings{};
-      caf::put(result, "answer", 42);
+    [](atom::status, system::status_verbosity) -> record {
+      // Return an arbitrary record here for use in the status command.
+      auto result = record{};
+      result["answer"] = integer{42};
       return result;
     },
   };

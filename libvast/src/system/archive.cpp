@@ -294,7 +294,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     [self](atom::status, status_verbosity v) {
-      auto result = caf::settings{};
+      auto result = record{};
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       self->state.store->inspect_status(result, v);

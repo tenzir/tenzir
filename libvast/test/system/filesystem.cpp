@@ -121,12 +121,13 @@ TEST(status) {
     ->request(filesystem, caf::infinite, atom::status_v,
               status_verbosity::debug)
     .receive(
-      [&](const caf::dictionary<caf::config_value>& status) {
-        auto failed_checks
-          = caf::get<uint64_t>(status, "operations.checks.failed");
+      [&](record& status) {
+        auto ops = caf::get<record>(status["operations"]);
+        auto checks = caf::get<record>(ops["checks"]);
+        auto failed_checks = caf::get<count>(checks["failed"]);
         CHECK_EQUAL(failed_checks, 1u);
-        auto failed_reads
-          = caf::get<uint64_t>(status, "operations.reads.failed");
+        auto reads = caf::get<record>(ops["reads"]);
+        auto failed_reads = caf::get<count>(reads["failed"]);
         CHECK_EQUAL(failed_reads, 0u);
       },
       [&](const caf::error& err) {

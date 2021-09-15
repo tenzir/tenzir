@@ -38,8 +38,7 @@ system::filesystem_actor::behavior_type mock_filesystem(
       return self->make_response_promise<chunk_ptr>();
     },
     [](atom::status, system::status_verbosity) {
-      auto result = caf::settings{};
-      return result;
+      return record{};
     },
   };
 }
@@ -72,10 +71,8 @@ TEST(load) {
     [&](atom::done&) {
       FAIL("unexpected done received");
     },
-    [&](const caf::settings& response) {
-      auto s
-        = unbox(caf::get_if<caf::config_value::string>(&response, "state"));
-      CHECK_EQUAL(s, "waiting for chunk");
+    [&](const record& response) {
+      CHECK_EQUAL(response, (record{{"state", "waiting for chunk"}}));
     },
     caf::after(0s) >>
       [&] {

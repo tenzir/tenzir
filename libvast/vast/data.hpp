@@ -199,6 +199,17 @@ private:
   variant data_;
 };
 
+} // namespace vast
+
+namespace caf {
+
+template <>
+struct sum_type_access<vast::data> : default_sum_type_access<vast::data> {};
+
+} // namespace caf
+
+namespace vast {
+
 // -- helpers -----------------------------------------------------------------
 
 /// Maps a concrete data type to a corresponding @ref type.
@@ -322,6 +333,23 @@ bool convert(const caf::dictionary<caf::config_value>& xs, record& ys);
 bool convert(const caf::dictionary<caf::config_value>& xs, data& y);
 bool convert(const caf::config_value& x, data& y);
 
+// -- manual creation ----------------------------------------------------------
+
+record& insert_record(record& r, std::string_view key);
+
+record& insert_record(list& l);
+
+list& insert_list(record& r, std::string_view key);
+
+// -- strip ------------------------------------------------------------
+
+/// Remove empty sub-records from the tree.
+/// Example:
+///   { a = 13, b = {}, c = { d = {} } }
+/// is changed into:
+///   { a = 13 }
+record strip(const record& xs);
+
 // -- JSON -------------------------------------------------------------
 
 /// Prints data as JSON.
@@ -356,13 +384,6 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion
 caf::expected<std::string> to_yaml(const data& x);
 
 } // namespace vast
-
-namespace caf {
-
-template <>
-struct sum_type_access<vast::data> : default_sum_type_access<vast::data> {};
-
-} // namespace caf
 
 #include "vast/concept/printable/vast/data.hpp"
 

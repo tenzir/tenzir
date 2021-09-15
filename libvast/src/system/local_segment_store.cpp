@@ -18,6 +18,7 @@
 #include "vast/query.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/system/node_control.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/settings.hpp>
@@ -282,12 +283,11 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
         .inbound_slot();
     },
     // Conform to the protocol of the STATUS CLIENT actor.
-    [self](atom::status,
-           status_verbosity) -> caf::dictionary<caf::config_value> {
-      auto result = caf::settings{};
-      auto& store = put_dictionary(result, "segment-store");
-      put(store, "events", self->state.events);
-      put(store, "path", self->state.path.string());
+    [self](atom::status, status_verbosity) -> record {
+      auto result = record{};
+      auto& store = insert_record(result, "segment-store");
+      store["events"] = count{self->state.events};
+      store["path"] = self->state.path.string();
       return result;
     },
     // internal handlers

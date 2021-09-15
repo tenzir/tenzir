@@ -27,7 +27,6 @@
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
-#include <caf/settings.hpp>
 #include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -311,19 +310,19 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) {
-      auto result = caf::settings{};
+      auto result = record{};
       if (v >= status_verbosity::info) {
-        caf::settings exp;
-        put(exp, "expression", to_string(self->state.expr));
+        record exp;
+        exp["expression"] = to_string(self->state.expr);
         if (v >= status_verbosity::detailed) {
-          put(exp, "start", caf::deep_to_string(self->state.start));
-          auto& transform_names = put_list(exp, "transforms");
+          exp["start"] = caf::deep_to_string(self->state.start);
+          auto& transform_names = insert_list(exp, "transforms");
           for (const auto& t : self->state.transformer.transforms())
             transform_names.emplace_back(t.name());
           if (v >= status_verbosity::debug)
             detail::fill_status_map(exp, self);
         }
-        auto& xs = put_list(result, "queries");
+        auto& xs = insert_list(result, "queries");
         xs.emplace_back(std::move(exp));
       }
       return result;

@@ -483,6 +483,36 @@ bool convert(const caf::config_value& x, data& y) {
   return caf::visit(f, x);
 }
 
+record& insert_record(record& r, std::string_view key) {
+  r[key] = record{};
+  return caf::get<record>(r[key]);
+}
+
+record& insert_record(list& l) {
+  return caf::get<record>(l.emplace_back(record{}));
+}
+
+list& insert_list(record& r, std::string_view key) {
+  r[key] = list{};
+  return caf::get<list>(r[key]);
+}
+
+record strip(const record& xs) {
+  record result;
+  for (const auto& [k, v] : xs) {
+    if (caf::holds_alternative<caf::none_t>(v))
+      continue;
+    if (const auto* vr = caf::get_if<record>(&v)) {
+      auto nested = strip(*vr);
+      if (!nested.empty())
+        result.emplace(k, std::move(nested));
+    } else {
+      result.emplace(k, v);
+    }
+  }
+  return result;
+}
+
 caf::expected<std::string> to_json(const data& x) {
   std::string str;
   auto out = std::back_inserter(str);

@@ -30,7 +30,6 @@
 
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
-#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>
@@ -320,27 +319,27 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     [self](atom::status, status_verbosity v) {
       auto rs = make_status_request_state(self);
       if (v >= status_verbosity::detailed) {
-        caf::settings src;
+        record src;
         if (self->state.reader)
-          put(src, "format", self->state.reader->name());
-        put(src, "produced", self->state.count);
+          src["format"] = self->state.reader->name();
+        src["produced"] = count{self->state.count};
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
         const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
         collect_status(
           rs, timeout, v, self->state.transformer,
-          [rs, src](caf::settings& response) mutable {
-            put(src, "transformer", std::move(response));
-            auto& xs = put_list(rs->content, "sources");
+          [rs, src](record& response) mutable {
+            src["transformer"] = std::move(response);
+            auto& xs = insert_list(rs->content, "sources");
             xs.emplace_back(std::move(src));
           },
           [rs, src](const caf::error& err) mutable {
             VAST_WARN("{} failed to retrieve status for the key transformer: "
                       "{}",
                       *rs->self, err);
-            put(src, "transformer", fmt::to_string(err));
-            auto& xs = put_list(rs->content, "sources");
+            src["transformer"] = fmt::to_string(err);
+            auto& xs = insert_list(rs->content, "sources");
             xs.emplace_back(std::move(src));
           });
       }

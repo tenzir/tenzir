@@ -137,7 +137,7 @@ public:
   void offset(id offset) noexcept;
 
   /// @returns The number of in-memory table slices.
-  static int instances() noexcept;
+  static size_t instances() noexcept;
 
   // -- data access ------------------------------------------------------------
 

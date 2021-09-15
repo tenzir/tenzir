@@ -369,10 +369,9 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       }
     },
     [self](atom::status, status_verbosity v) {
-      using caf::put_dictionary;
-      auto result = caf::settings{};
+      auto result = record{};
       if (v >= status_verbosity::detailed) {
-        auto& components = put_dictionary(result, "components");
+        auto& components = insert_record(result, "components");
         for (const auto& [aid, name] : self->state->actor_map)
           components.emplace(name, aid);
       }

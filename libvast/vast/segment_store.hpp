@@ -100,7 +100,7 @@ public:
 
   caf::error flush();
 
-  void inspect_status(caf::settings& xs, system::status_verbosity v);
+  void inspect_status(record& xs, system::status_verbosity v);
 
 private:
   segment_store(std::filesystem::path dir, uint64_t max_segment_size,

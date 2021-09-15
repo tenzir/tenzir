@@ -496,38 +496,40 @@ active_partition_actor::behavior_type active_partition(
       return rp;
     },
     [self](atom::status,
-           status_verbosity v) -> caf::typed_response_promise<caf::settings> {
+           status_verbosity v) -> caf::typed_response_promise<record> {
       struct extra_state {
         size_t memory_usage = 0;
-        void deliver(caf::typed_response_promise<caf::settings>&& promise,
-                     caf::settings&& content) {
-          put(content, "memory-usage", memory_usage);
+        void deliver(caf::typed_response_promise<record>&& promise,
+                     record&& content) {
+          content["memory-usage"] = count{memory_usage};
           promise.deliver(std::move(content));
         }
       };
       auto rs = make_status_request_state<extra_state>(self);
-      auto& indexer_states = put_list(rs->content, "indexers");
+      auto& indexer_states = insert_list(rs->content, "indexers");
       // Reservation is necessary to make sure the entries don't get relocated
       // as the underlying vector grows - `ps` would refer to the wrong memory
       // otherwise.
       const auto timeout = defaults::system::initial_request_timeout / 5 * 3;
       indexer_states.reserve(self->state.indexers.size());
       for (auto& i : self->state.indexers) {
-        auto& ps = indexer_states.emplace_back().as_dictionary();
+        auto& ps = caf::get<record>(indexer_states.emplace_back(record{}));
         collect_status(
           rs, timeout, v, i.second,
-          [rs, v, &ps, &field = i.first](caf::settings& response) {
-            put(ps, "field", field.fqn());
-            if (auto s = caf::get_if<caf::config_value::integer>( //
-                  &response, "memory-usage"))
-              rs->memory_usage += *s;
+          [rs, v, &ps, &field = i.first](record& response) {
+            ps["field"] = field.fqn();
+            auto it = response.find("memory-usage");
+            if (it != response.end()) {
+              if (const auto* s = caf::get_if<count>(&it->second))
+                rs->memory_usage += *s;
+            }
             if (v >= status_verbosity::debug)
-              detail::merge_settings(response, ps, policy::merge_lists::no);
+              merge(response, ps, policy::merge_lists::no);
           },
           [rs, &ps, &field = i.first](caf::error& err) {
             VAST_WARN("{} failed to retrieve status from {} : {}", *rs->self,
                       field.fqn(), fmt::to_string(err));
-            put(ps, "error", fmt::to_string(err));
+            ps["error"] = fmt::to_string(err);
           });
       }
       return rs->promise;

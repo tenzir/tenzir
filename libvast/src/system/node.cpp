@@ -142,54 +142,51 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   struct extra_state {
     size_t memory_usage = 0;
     static void deliver(caf::typed_response_promise<std::string>&& promise,
-                        caf::settings&& content) {
-      detail::strip_settings(content);
-      if (auto json = to_json(to_data(content)))
+                        record&& content) {
+      // We strip and sort the output for a cleaner presentation of the data.
+      if (auto json = to_json(sort(strip(content))))
         promise.deliver(std::move(*json));
     }
+    // In-place sort each level of the tree.
+    static record& sort(record&& r) {
+      std::sort(r.begin(), r.end());
+      for (auto& [_, value] : r)
+        if (auto* nested = caf::get_if<record>(&value))
+          sort(std::move(*nested));
+      return r;
+    };
   };
   auto rs = make_status_request_state<extra_state, std::string>(self);
-  // Pre-fill the version information. Note that we must remove all nil values
-  // first, as the conversion to a caf::settings object fails otherwise. We can
-  // remove the cleansing step once we use record instead of caf::settings for
-  // retrieving the status.
-  auto version_data = retrieve_versions();
-  for (auto& [_, value] : version_data)
-    if (value == caf::none)
-      value = record{};
-  if (auto version = to<caf::settings>(version_data))
-    put(rs->content, "version", *version);
-  else
-    VAST_WARN("{} failed to add remote version to status: {}", *self,
-              version.error());
+  // Pre-fill the version information.
+  auto version = retrieve_versions();
+  rs->content["version"] = version;
   // Pre-fill our result with system stats.
-  auto& sys = self->system();
-  auto& system = put_dictionary(rs->content, "system");
+  auto& system = insert_record(rs->content, "system");
   if (v >= status_verbosity::info) {
-    put(system, "in-memory-table-slices", table_slice::instances());
-    put(system, "database-path", self->state.dir.string());
-    detail::merge_settings(detail::get_status(), system,
-                           policy::merge_lists::no);
+    system["in-memory-table-slices"] = count{table_slice::instances()};
+    system["database-path"] = self->state.dir.string();
+    merge(detail::get_status(), system, policy::merge_lists::no);
   }
   if (v >= status_verbosity::detailed) {
-    auto& config_files = put_list(system, "config-files");
+    auto& config_files = insert_list(system, "config-files");
     std::transform(system::loaded_config_files().begin(),
                    system::loaded_config_files().end(),
                    std::back_inserter(config_files),
                    [](const std::filesystem::path& x) {
-                     return caf::config_value{x.string()};
+                     return x.string();
                    });
     std::transform(plugins::loaded_config_files().begin(),
                    plugins::loaded_config_files().end(),
                    std::back_inserter(config_files),
                    [](const std::filesystem::path& x) {
-                     return caf::config_value{x.string()};
+                     return x.string();
                    });
   }
   if (v >= status_verbosity::debug) {
-    put(system, "running-actors", sys.registry().running());
-    put(system, "detached-actors", sys.detached_actors());
-    put(system, "worker-threads", sys.scheduler().num_workers());
+    auto& sys = self->system();
+    system["running-actors"] = count{sys.registry().running()};
+    system["detached-actors"] = count{sys.detached_actors()};
+    system["worker-threads"] = count{sys.scheduler().num_workers()};
   }
   const auto timeout = defaults::system::initial_request_timeout;
   // Send out requests and collects answers.
