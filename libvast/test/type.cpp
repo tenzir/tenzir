@@ -280,6 +280,31 @@ TEST(list_type) {
   CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
 }
 
+TEST(map_type) {
+  static_assert(concrete_type<map_type>);
+  static_assert(!basic_type<map_type>);
+  static_assert(complex_type<map_type>);
+  const auto t = type{};
+  const auto msit = type{map_type{string_type{}, integer_type{}}};
+  CHECK(msit);
+  CHECK_EQUAL(as_bytes(msit),
+              as_bytes(map_type{string_type{}, integer_type{}}));
+  CHECK(t != msit);
+  CHECK(t < msit);
+  CHECK(t <= msit);
+  CHECK_EQUAL(fmt::format("{}", msit), "map");
+  CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map");
+  CHECK(!caf::holds_alternative<map_type>(t));
+  CHECK(caf::holds_alternative<map_type>(msit));
+  CHECK_EQUAL(caf::get<map_type>(msit).key_type(), type{string_type{}});
+  CHECK_EQUAL(caf::get<map_type>(msit).value_type(), type{integer_type{}});
+  const auto lmabt
+    = type{legacy_map_type{legacy_address_type{}, legacy_bool_type{}}};
+  CHECK(caf::holds_alternative<map_type>(lmabt));
+  CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{address_type{}});
+  CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
+}
+
 TEST(named types) {
   const auto at = type{"l1", bool_type{}};
   CHECK(caf::holds_alternative<bool_type>(at));

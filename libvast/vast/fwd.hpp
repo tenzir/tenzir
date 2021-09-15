@@ -71,6 +71,7 @@ class integer_type;
 class legacy_abstract_type;
 class legacy_type;
 class list_type;
+class map_type;
 class msgpack_table_slice_builder;
 class none_type;
 class pattern;

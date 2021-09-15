@@ -33,7 +33,7 @@ using concrete_types
   = caf::detail::type_list<none_type, bool_type, integer_type, count_type,
                            real_type, duration_type, time_type, string_type,
                            pattern_type, address_type, subnet_type,
-                           enumeration_type, list_type>;
+                           enumeration_type, list_type, map_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -441,6 +441,52 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
+};
+
+// -- map_type ----------------------------------------------------------------
+
+/// An associative mapping from keys to values.
+/// @relates type
+class map_type final : private type {
+  friend class type;
+  friend struct caf::sum_type_access<vast::type>;
+
+public:
+  /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
+  /// @param other The copied-from type.
+  map_type(const map_type& other) noexcept;
+
+  /// Copy-assigns a type, resulting in a shallow copy with shared lifetime.
+  /// @param other The copied-from type.
+  map_type& operator=(const map_type& rhs) noexcept;
+
+  /// Move-constructs a type, leaving the moved-from type in a state
+  /// semantically equivalent to the *none_type*.
+  /// @param other The moved-from type.
+  map_type(map_type&& other) noexcept;
+
+  /// Move-constructs a type, leaving the moved-from type in a state
+  /// semantically equivalent to the *none_type*.
+  /// @param other The moved-from type.
+  map_type& operator=(map_type&& other) noexcept;
+
+  /// Destroys a type.
+  ~map_type() noexcept;
+
+  /// Constructs a map type with known key and value types.
+  explicit map_type(const type& key_type, const type& value_type) noexcept;
+
+  /// Returns the nested key type.
+  [[nodiscard]] type key_type() const noexcept;
+
+  /// Returns the nested value type.
+  [[nodiscard]] type value_type() const noexcept;
+
+  /// Returns the type index.
+  static uint8_t type_index() noexcept;
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
 };
 
 } // namespace vast

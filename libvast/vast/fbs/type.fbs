@@ -70,6 +70,14 @@ table v0 {
   type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 }
 
+namespace vast.fbs.type.map_type;
+
+/// An associative mapping from keys to values.
+table v0 {
+  key_type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
+  value_type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
+}
+
 namespace vast.fbs.type.tagged_type.tag;
 
 /// A key-value pair type annotation.
@@ -103,6 +111,7 @@ union Type {
   subnet_type.v0,
   enumeration_type.v0,
   list_type.v0,
+  map_type.v0,
   tagged_type.v0,
 }
 

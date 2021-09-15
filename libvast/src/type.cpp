@@ -187,12 +187,16 @@ type::type(const legacy_type& other) noexcept {
     [&](const legacy_list_type& list) {
       *this = type{other.name(), type{list_type{type{list.value_type}}}, tags};
     },
+    [&](const legacy_map_type& list) {
+      *this = type{other.name(),
+                   type{map_type{type{list.key_type}, type{list.value_type}}},
+                   tags};
+    },
     [&](const legacy_alias_type& alias) {
       return type{other.name(), type{alias.value_type}, tags};
     },
     [&](const auto&) {
       // TODO: Implement for all legacy types, then remove this handler.
-      // - legacy_map_type,
       // - legacy_record_type,
     },
   };
@@ -251,6 +255,7 @@ const fbs::Type& type::table(enum transparent transparent) const noexcept {
       case fbs::type::Type::subnet_type_v0:
       case fbs::type::Type::enumeration_type_v0:
       case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
         transparent = transparent::no;
         break;
       case fbs::type::Type::tagged_type_v0:
@@ -302,6 +307,8 @@ std::string_view type::name() const& noexcept {
         return "enumeration";
       case fbs::type::Type::list_type_v0:
         return "list";
+      case fbs::type::Type::map_type_v0:
+        return "map";
       case fbs::type::Type::tagged_type_v0:
         const auto* tagged_type = root->type_as_tagged_type_v0();
         if (const auto* name = tagged_type->name())
@@ -330,6 +337,7 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
       case fbs::type::Type::subnet_type_v0:
       case fbs::type::Type::enumeration_type_v0:
       case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
         return std::nullopt;
       case fbs::type::Type::tagged_type_v0:
         const auto* tagged_type = root->type_as_tagged_type_v0();
@@ -688,6 +696,62 @@ uint8_t list_type::type_index() noexcept {
 }
 
 std::span<const std::byte> as_bytes(const list_type& x) noexcept {
+  return as_bytes(static_cast<const type&>(x));
+}
+
+// -- map_type ----------------------------------------------------------------
+
+map_type::map_type(const map_type& other) noexcept = default;
+
+map_type& map_type::operator=(const map_type& rhs) noexcept = default;
+
+map_type::map_type(map_type&& other) noexcept = default;
+
+map_type& map_type::operator=(map_type&& other) noexcept = default;
+
+map_type::~map_type() noexcept = default;
+
+map_type::map_type(const type& key_type, const type& value_type) noexcept {
+  const auto key_type_bytes = as_bytes(key_type);
+  const auto value_type_bytes = as_bytes(value_type);
+  const auto reserved_size
+    = 52 + key_type_bytes.size() + value_type_bytes.size();
+  auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+  const auto key_type_offset = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(key_type_bytes.data()),
+    key_type_bytes.size());
+  const auto value_type_offset = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(value_type_bytes.data()),
+    value_type_bytes.size());
+  const auto map_type_offset = fbs::type::map_type::Createv0(
+    builder, key_type_offset, value_type_offset);
+  const auto type_offset = fbs::CreateType(
+    builder, fbs::type::Type::map_type_v0, map_type_offset.Union());
+  builder.Finish(type_offset);
+  auto result = builder.Release();
+  VAST_ASSERT(result.size() == reserved_size);
+  auto chunk = chunk::make(std::move(result));
+  static_cast<type&>(*this) = type{std::move(chunk)};
+}
+
+type map_type::key_type() const noexcept {
+  const auto* view = table(transparent::yes).type_as_map_type_v0()->key_type();
+  VAST_ASSERT(view);
+  return type{table_->slice(as_bytes(*view))};
+}
+
+type map_type::value_type() const noexcept {
+  const auto* view
+    = table(transparent::yes).type_as_map_type_v0()->value_type();
+  VAST_ASSERT(view);
+  return type{table_->slice(as_bytes(*view))};
+}
+
+uint8_t map_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::map_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const map_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
 }
 
