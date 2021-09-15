@@ -55,68 +55,127 @@ type::type(chunk_ptr&& table) noexcept : table_{std::move(table)} {
 #endif   // VAST_ENABLE_ASSERTIONS
 }
 
-type::type(std::string_view name, const type& nested) noexcept {
-  if (name.empty()) {
+type::type(std::string_view name, const type& nested,
+           const std::vector<struct tag>& tags) noexcept {
+  if (name.empty() && tags.empty()) {
     // This special case exists for easier conversion of legacy types, which did
     // not require an legacy alias type wrapping to have a name.
     *this = nested;
   } else {
     const auto nested_bytes = as_bytes(nested);
-    // By default the builder allocates 1024 bytes, which is much more than
-    // what we require: 52 (fixed) + name (rounded up to a multiple of 4) +
-    // nested type.
-    const auto reserved_size
-      = 52 + (((name.size() + 3) / 4) * 4) + nested_bytes.size();
+    const auto reserved_size = [&]() noexcept {
+      // By default the builder allocates 1024 bytes, which is much more than
+      // what we require, and since we can easily calculate the exact amount we
+      // should do that. The total length is made up from the following terms:
+      // - 52 bytes FlatBuffers table framing
+      // - Nested type FlatBuffers table size
+      // - All contained string lengths, rounded up to four each
+      // - 12 bytes if tags exist
+      // - 16 bytes for every tag
+      // - 16 bytes for every tag with a value
+      size_t size = 52;
+      size += nested_bytes.size();
+      size += ((name.size() + 3) / 4) * 4;
+      if (!tags.empty()) {
+        size += 12;
+        for (const auto& tag : tags) {
+          size += 16;
+          size += ((tag.key.size() + 3) / 4) * 4;
+          if (tag.value) {
+            size += 16;
+            size += ((tag.value->size() + 3) / 4) * 4;
+          }
+        }
+      }
+      return size;
+    }();
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto alias_type_name = builder.CreateString(name);
-    const auto alias_type_type = builder.CreateVector(
+    const auto nested_type_offset = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(nested_bytes.data()),
       nested_bytes.size());
-    const auto alias_type = fbs::type::alias_type::Createv0(
-      builder, alias_type_name, alias_type_type);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::alias_type_v0,
-                                      alias_type.Union());
-    builder.Finish(type);
+    const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
+    const auto tags_offset =
+      [&]() noexcept -> flatbuffers::Offset<flatbuffers::Vector<
+                       flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>> {
+      if (tags.empty())
+        return 0;
+      auto tags_offsets
+        = std::vector<flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>{};
+      tags_offsets.reserve(tags.size());
+      for (const auto& tag : tags) {
+        const auto key_offset = builder.CreateString(tag.key);
+        const auto value_offset
+          = tag.value ? builder.CreateString(*tag.value) : 0;
+        tags_offsets.emplace_back(fbs::type::tagged_type::tag::Createv0(
+          builder, key_offset, value_offset));
+      }
+      return builder.CreateVectorOfSortedTables(&tags_offsets);
+    }();
+    const auto tagged_type_offset = fbs::type::tagged_type::Createv0(
+      builder, nested_type_offset, name_offset, tags_offset);
+    const auto type_offset = fbs::CreateType(
+      builder, fbs::type::Type::tagged_type_v0, tagged_type_offset.Union());
+    builder.Finish(type_offset);
     auto result = builder.Release();
     VAST_ASSERT(result.size() == reserved_size);
     table_ = chunk::make(std::move(result));
   }
 }
 
+type::type(std::string_view name, const type& nested) noexcept
+  : type(name, nested, {}) {
+  // nop
+}
+
+type::type(const type& nested, const std::vector<struct tag>& tags) noexcept
+  : type("", nested, tags) {
+  // nop
+}
+
 type::type(const legacy_type& other) noexcept {
+  const auto tags = [&] {
+    auto result = std::vector<struct tag>{};
+    const auto& attributes = other.attributes();
+    result.reserve(attributes.size());
+    for (const auto& attribute : other.attributes())
+      result.push_back({attribute.key, attribute.value
+                                         ? *attribute.value
+                                         : std::optional<std::string>{}});
+    return result;
+  }();
   auto f = detail::overload{
     [&](const legacy_none_type&) {
-      *this = type{other.name(), none_type{}};
+      *this = type{other.name(), none_type{}, tags};
     },
     [&](const legacy_bool_type&) {
-      *this = type{other.name(), bool_type{}};
+      *this = type{other.name(), bool_type{}, tags};
     },
     [&](const legacy_integer_type&) {
-      *this = type{other.name(), integer_type{}};
+      *this = type{other.name(), integer_type{}, tags};
     },
     [&](const legacy_count_type&) {
-      *this = type{other.name(), count_type{}};
+      *this = type{other.name(), count_type{}, tags};
     },
     [&](const legacy_real_type&) {
-      *this = type{other.name(), real_type{}};
+      *this = type{other.name(), real_type{}, tags};
     },
     [&](const legacy_duration_type&) {
-      *this = type{other.name(), duration_type{}};
+      *this = type{other.name(), duration_type{}, tags};
     },
     [&](const legacy_time_type&) {
-      *this = type{other.name(), time_type{}};
+      *this = type{other.name(), time_type{}, tags};
     },
     [&](const legacy_string_type&) {
-      *this = type{other.name(), string_type{}};
+      *this = type{other.name(), string_type{}, tags};
     },
     [&](const legacy_pattern_type&) {
-      *this = type{other.name(), pattern_type{}};
+      *this = type{other.name(), pattern_type{}, tags};
     },
     [&](const legacy_list_type& list) {
-      *this = type{other.name(), type{list_type{type{list.value_type}}}};
+      *this = type{other.name(), type{list_type{type{list.value_type}}}, tags};
     },
     [&](const legacy_alias_type& alias) {
-      return type{other.name(), type{alias.value_type}};
+      return type{other.name(), type{alias.value_type}, tags};
     },
     [&](const auto&) {
       // TODO: Implement for all legacy types, then remove this handler.
@@ -181,8 +240,8 @@ const fbs::Type& type::table(enum transparent transparent) const noexcept {
       case fbs::type::Type::list_type_v0:
         transparent = transparent::no;
         break;
-      case fbs::type::Type::alias_type_v0:
-        root = root->type_as_alias_type_v0()->type_nested_root();
+      case fbs::type::Type::tagged_type_v0:
+        root = root->type_as_tagged_type_v0()->type_nested_root();
         VAST_ASSERT(root);
         break;
     }
@@ -201,30 +260,68 @@ std::span<const std::byte> as_bytes(const type& x) noexcept {
 }
 
 std::string_view type::name() const& noexcept {
-  const auto& root = table(transparent::no);
-  switch (root.type_type()) {
-    case fbs::type::Type::NONE:
-      return "none";
-    case fbs::type::Type::bool_type_v0:
-      return "bool";
-    case fbs::type::Type::integer_type_v0:
-      return "integer";
-    case fbs::type::Type::count_type_v0:
-      return "count";
-    case fbs::type::Type::real_type_v0:
-      return "real";
-    case fbs::type::Type::duration_type_v0:
-      return "duration";
-    case fbs::type::Type::time_type_v0:
-      return "time";
-    case fbs::type::Type::string_type_v0:
-      return "string";
-    case fbs::type::Type::pattern_type_v0:
-      return "pattern";
-    case fbs::type::Type::list_type_v0:
-      return "list";
-    case fbs::type::Type::alias_type_v0:
-      return root.type_as_alias_type_v0()->name()->string_view();
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+        return "none";
+      case fbs::type::Type::bool_type_v0:
+        return "bool";
+      case fbs::type::Type::integer_type_v0:
+        return "integer";
+      case fbs::type::Type::count_type_v0:
+        return "count";
+      case fbs::type::Type::real_type_v0:
+        return "real";
+      case fbs::type::Type::duration_type_v0:
+        return "duration";
+      case fbs::type::Type::time_type_v0:
+        return "time";
+      case fbs::type::Type::string_type_v0:
+        return "string";
+      case fbs::type::Type::pattern_type_v0:
+        return "pattern";
+      case fbs::type::Type::list_type_v0:
+        return "list";
+      case fbs::type::Type::tagged_type_v0:
+        const auto* tagged_type = root->type_as_tagged_type_v0();
+        if (const auto* name = tagged_type->name())
+          return name->string_view();
+        root = tagged_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
+}
+
+std::optional<std::string_view> type::tag(const char* key) const& noexcept {
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::list_type_v0:
+        return std::nullopt;
+      case fbs::type::Type::tagged_type_v0:
+        const auto* tagged_type = root->type_as_tagged_type_v0();
+        if (const auto* tags = tagged_type->tags()) {
+          if (const auto* tag = tags->LookupByKey(key)) {
+            if (const auto* value = tag->value())
+              return value->string_view();
+            return "";
+          }
+        }
+        root = tagged_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
   }
 }
 

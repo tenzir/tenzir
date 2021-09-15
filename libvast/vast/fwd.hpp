@@ -95,6 +95,7 @@ class type;
 class uuid;
 class value_index;
 
+struct attribute;
 struct legacy_address_type;
 struct legacy_alias_type;
 struct meta_extractor;

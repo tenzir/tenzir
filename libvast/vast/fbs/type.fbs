@@ -45,12 +45,21 @@ table v0 {
   type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 }
 
-namespace vast.fbs.type.alias_type;
+namespace vast.fbs.type.tagged_type.tag;
 
-/// A type with a name.
+/// A key-value pair type annotation.
 table v0 {
-  name: string (required);
+  key: string (key);
+  value: string;
+}
+
+namespace vast.fbs.type.tagged_type;
+
+/// A type with a name, tags, or both.
+table v0 {
   type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
+  name: string;
+  tags: [tag.v0];
 }
 
 namespace vast.fbs.type;
@@ -66,7 +75,7 @@ union Type {
   string_type.v0,
   pattern_type.v0,
   list_type.v0,
-  alias_type.v0,
+  tagged_type.v0,
 }
 
 namespace vast.fbs;

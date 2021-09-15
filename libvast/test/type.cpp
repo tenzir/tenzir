@@ -217,7 +217,7 @@ TEST(list_type) {
   CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
 }
 
-TEST(alias_type) {
+TEST(named types) {
   const auto at = type{"l1", bool_type{}};
   CHECK(caf::holds_alternative<bool_type>(at));
   CHECK_EQUAL(at.name(), "l1");
@@ -232,6 +232,26 @@ TEST(alias_type) {
   CHECK_EQUAL(fmt::format("{}", lat), "l3");
 }
 
+TEST(tagged types) {
+  const auto at = type{bool_type{}, {{"first", "value"}, {"second"}}};
+  CHECK(caf::holds_alternative<bool_type>(at));
+  CHECK_EQUAL(at.name(), "bool");
+  CHECK_EQUAL(at.tag("first"), "value");
+  CHECK_EQUAL(at.tag("second"), "");
+  CHECK_EQUAL(at.tag("third"), std::nullopt);
+  CHECK_EQUAL(at.tag("fourth"), std::nullopt);
+  const auto aat = type{"l2", at, {{"third", "nesting works!"}}};
+  CHECK(caf::holds_alternative<bool_type>(aat));
+  CHECK_EQUAL(aat.name(), "l2");
+  CHECK_EQUAL(aat.tag("first"), "value");
+  CHECK_EQUAL(aat.tag("second"), "");
+  CHECK_EQUAL(aat.tag("third"), "nesting works!");
+  CHECK_EQUAL(aat.tag("fourth"), std::nullopt);
+  const auto lat
+    = type{legacy_bool_type{}.attributes({{"first", "value"}, {"second"}})};
+  CHECK_EQUAL(lat, at);
+}
+
 TEST(sorting) {
   auto ts = std::vector<type>{
     none_type{},
@@ -244,7 +264,7 @@ TEST(sorting) {
   std::shuffle(ts.begin(), ts.end(), std::random_device());
   std::sort(ts.begin(), ts.end());
   const char* expected
-    = "none bool integer custom_none custom_bool custom_integer";
+    = "none bool integer custom_bool custom_none custom_integer";
   CHECK_EQUAL(fmt::format("{}", fmt::join(ts, " ")), expected);
 }
 

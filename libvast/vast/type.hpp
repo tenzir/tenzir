@@ -65,11 +65,17 @@ concept complex_type = requires {
 /// The sematic representation of data.
 class type {
 public:
-  /// Indiciates whether to skip over alias and tag types when looking at the
+  /// An owned key-value pair annotation.
+  struct tag final {
+    std::string key;                       ///< The key.
+    std::optional<std::string> value = {}; ///< The value (optional).
+  };
+
+  /// Indiciates whether to skip over internal types when looking at the
   /// underlying FlatBuffers representation.
-  enum class transparent {
-    yes, ///< Skip alias and tag types.
-    no,  ///< Include alias and tag types.
+  enum class transparent : uint8_t {
+    yes, ///< Skip internal types.
+    no,  ///< Include internal types. Use with caution.
   };
 
   /// Default-constructs a type, which is semantically equivalent to the
@@ -125,11 +131,25 @@ public:
     // nop
   }
 
+  /// Constructs a named and tagged type.
+  /// @param name The type name.
+  /// @param nested The aliased type.
+  /// @param tags The key-value type annotations.
+  /// @note Creates a copy of nested if the provided name and tags are empty.
+  type(std::string_view name, const type& nested,
+       const std::vector<struct tag>& tags) noexcept;
+
   /// Constructs a named type.
   /// @param name The type name.
   /// @param nested The aliased type.
   /// @note Creates a copy of nested if the provided name is empty.
   type(std::string_view name, const type& nested) noexcept;
+
+  /// Constructs a tagged type.
+  /// @param nested The aliased type.
+  /// @param tags The key-value type annotations.
+  /// @note Creates a copy of nested if the tags are empty.
+  type(const type& nested, const std::vector<struct tag>& tags) noexcept;
 
   /// Constructs a type from a legacy_type.
   /// @relates legacy_type
@@ -166,6 +186,17 @@ public:
   /// Returns the name of this type.
   [[nodiscard]] std::string_view name() const& noexcept;
   [[nodiscard]] std::string_view name() && = delete;
+
+  /// Returns the value of a tag by name, if it exists.
+  /// @param key The key of the tag.
+  /// @note If a tag exists and its value is empty, the result contains an empty
+  /// string to. If the tag does not exists, the result is `std::nullopt`.
+  // TODO: The generated FlatBuffers code does not work with `std::string_view`.
+  // Re-evaluate when upgrading to FlatBuffers 2.0
+  [[nodiscard]] std::optional<std::string_view>
+  tag(const char* key) const& noexcept;
+  [[nodiscard]] std::optional<std::string_view>
+  tag(const char* key) && = delete;
 
 protected:
   /// The underlying representation of the type.
