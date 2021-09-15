@@ -198,7 +198,7 @@ importer_state::status(status_verbosity v) const {
   result["ids.available"] = count{available_ids()};
   if (v >= status_verbosity::detailed) {
     auto& ids = insert_record(rs->content, "ids");
-    ids["available"] = to_string(available_ids());
+    ids["available"] = count{available_ids()};
     auto& block = insert_record(ids, "block");
     block["next"] = count{current.next};
     block["end"] = count{current.end};

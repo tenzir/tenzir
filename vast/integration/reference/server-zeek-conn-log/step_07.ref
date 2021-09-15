@@ -3,9 +3,9 @@
 {"path":["archive","segments","current","size"],"type":"number"}
 {"path":["archive","segments","current","uuid"],"type":"string"}
 {"path":["filesystem","type"],"type":"string"}
-{"path":["importer","ids","available"],"type":"string"}
-{"path":["importer","ids","block","end"],"type":"string"}
-{"path":["importer","ids","block","next"],"type":"string"}
+{"path":["importer","ids","available"],"type":"number"}
+{"path":["importer","ids","block","end"],"type":"number"}
+{"path":["importer","ids","block","next"],"type":"number"}
 {"path":["index","memory-usage"],"type":"number"}
 {"path":["index","meta-index-bytes"],"type":"number"}
 {"path":["index","num-active-partitions"],"type":"number"}
