@@ -44,7 +44,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   // Read options and arguments.
   auto output_format = caf::get_or(inv.options, "vast.explore.format", "json"s);
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(inv, "vast.export.read", 0);
+  auto query = read_query(inv, "vast.export.read", must_provide_query::yes, 0);
   if (!query)
     return caf::make_message(std::move(query.error()));
   size_t max_events_search

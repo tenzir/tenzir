@@ -2,7 +2,7 @@ The `export` command retrieves a subset of data according to a given query
 expression. The export format must be explicitly specified:
 
 ```bash
-vast export [options] <format> [options] <expr>
+vast export [options] <format> [options] [<expr>]
 ```
 
 This is easiest explained on an example:
@@ -36,3 +36,5 @@ format has a `--flush-interval` option that determines after how many packets
 the output is flushed to disk. A list of format-specific options can be
 retrieved using the `vast export <format> help`, and individual documentation is
 available using `vast export <format> documentation`.
+
+Not providing the query causes everything to be exported.

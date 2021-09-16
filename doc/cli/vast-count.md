@@ -1,5 +1,11 @@
 The `count` command counts the number of events that a given query
-expression yields.  For example:
+expression yields. 
+
+```bash
+vast count [options] [<expr>]
+```
+
+For example:
 
 ```bash
 vast count ':addr in 192.168.0.0/16'
