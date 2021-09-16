@@ -1,5 +1,9 @@
 The `explore` command correlates spatially and temporally related activity.
 
+```bash
+vast explore [options] <type> <expr>
+```
+
 :::note Work In Progress
 This documentation does not represent the current state of the `vast explore`
 command. Only some of the options shown below are currently implemented.

@@ -50,7 +50,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   auto guard = caf::detail::make_scope_guard(
     [&] { self->send_exit(snk, caf::exit_reason::user_shutdown); });
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(inv, "vast.export.read");
+  auto query = read_query(inv, "vast.export.read", must_provide_query::no);
   if (!query)
     return caf::make_message(std::move(query.error()));
   // Transform expression if needed, e.g., for PCAP sink.

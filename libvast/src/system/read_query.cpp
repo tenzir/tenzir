@@ -38,7 +38,7 @@ namespace vast::system {
 
 caf::expected<std::string>
 read_query(const invocation& inv, std::string_view file_option,
-           size_t argument_offset) {
+           enum must_provide_query must_provide_query, size_t argument_offset) {
   VAST_TRACE_SCOPE("{} {}", inv, file_option);
   std::string result;
   auto assign_query = [&](std::istream& in) {
@@ -61,9 +61,17 @@ read_query(const invocation& inv, std::string_view file_option,
       assign_query(f);
     }
   } else if (inv.arguments.size() <= argument_offset) {
-    VAST_VERBOSE("not providing a query causes everything to be exported; "
-                 "please be aware that this operation may be very expensive.");
-    result = "#type != \"this expression matches everything\"";
+    switch (must_provide_query) {
+      case must_provide_query::yes:
+        VAST_ERROR("no query provided, but command requires a query argument");
+        break;
+      case must_provide_query::no:
+        VAST_VERBOSE("not providing a query causes everything to be exported; "
+                     "please be aware that this operation may be very "
+                     "expensive.");
+        result = "#type != \"this expression matches everything\"";
+        break;
+    }
   } else if (inv.arguments.size() == argument_offset + 1) {
     result = inv.arguments[argument_offset];
   } else {
