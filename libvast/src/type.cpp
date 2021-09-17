@@ -16,7 +16,7 @@
 #include <caf/sum_type.hpp>
 #include <fmt/format.h>
 
-// -- type --------------------------------------------------------------------
+// -- utility functions -------------------------------------------------------
 
 namespace vast {
 
@@ -28,7 +28,47 @@ std::span<const std::byte> none_type_representation() {
   return as_bytes(none_type{});
 }
 
+constexpr size_t reserved_string_size(std::string_view str) {
+  // This helper function calculates the length of a string in a FlatBuffers
+  // table. It adds an extra byte because strings in FlatBuffers tables are
+  // always zero-terminated, and then rounds up to a full four bytes because of
+  // the included padding.
+  return str.empty() ? 0 : (((str.size() + 1 + 3) / 4) * 4);
+}
+
+const fbs::Type*
+resolve_transparent(const fbs::Type* root, enum type::transparent transparent
+                                           = type::transparent::yes) {
+  VAST_ASSERT(root);
+  while (transparent == type::transparent::yes) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+        transparent = type::transparent::no;
+        break;
+      case fbs::type::Type::tagged_type_v0:
+        root = root->type_as_tagged_type_v0()->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
+  return root;
+}
 } // namespace
+
+// -- type --------------------------------------------------------------------
 
 type::type() noexcept = default;
 
@@ -78,15 +118,15 @@ type::type(std::string_view name, const type& nested,
       // - 16 bytes for every tag with a value
       size_t size = 52;
       size += nested_bytes.size();
-      size += ((name.size() + 3) / 4) * 4;
+      size += reserved_string_size(name);
       if (!tags.empty()) {
         size += 12;
         for (const auto& tag : tags) {
           size += 16;
-          size += ((tag.key.size() + 3) / 4) * 4;
+          size += reserved_string_size(tag.key);
           if (tag.value) {
             size += 16;
-            size += ((tag.value->size() + 3) / 4) * 4;
+            size += reserved_string_size(*tag.value);
           }
         }
       }
@@ -241,33 +281,7 @@ std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
 
 const fbs::Type& type::table(enum transparent transparent) const noexcept {
   const auto& repr = as_bytes(*this);
-  const auto* root = fbs::GetType(repr.data());
-  VAST_ASSERT(root);
-  while (transparent == transparent::yes) {
-    switch (root->type_type()) {
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-        transparent = transparent::no;
-        break;
-      case fbs::type::Type::tagged_type_v0:
-        root = root->type_as_tagged_type_v0()->type_nested_root();
-        VAST_ASSERT(root);
-        break;
-    }
-  }
-  return *root;
+  return *resolve_transparent(fbs::GetType(repr.data()), transparent);
 }
 
 uint8_t type::type_index() const noexcept {
@@ -629,15 +643,6 @@ enumeration_type::enumeration_type(
   static_cast<type&>(*this) = type{std::move(chunk)};
 }
 
-std::string_view enumeration_type::field(uint32_t key) const& noexcept {
-  const auto* fields
-    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
-  VAST_ASSERT(fields);
-  if (const auto* field = fields->LookupByKey(key))
-    return field->name()->string_view();
-  return "";
-}
-
 uint8_t enumeration_type::type_index() noexcept {
   return static_cast<uint8_t>(fbs::type::Type::enumeration_type_v0);
 }
@@ -660,6 +665,15 @@ std::string enumeration_type::signature() const noexcept {
                    (*it)->name()->string_view(), (*it)->key());
   fmt::format_to(std::back_inserter(result), "}}");
   return result;
+}
+
+std::string_view enumeration_type::field(uint32_t key) const& noexcept {
+  const auto* fields
+    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
+  VAST_ASSERT(fields);
+  if (const auto* field = fields->LookupByKey(key))
+    return field->name()->string_view();
+  return "";
 }
 
 // -- list_type ---------------------------------------------------------------
@@ -691,12 +705,6 @@ list_type::list_type(const type& value_type) noexcept {
   static_cast<type&>(*this) = type{std::move(chunk)};
 }
 
-type list_type::value_type() const noexcept {
-  const auto* view = table(transparent::yes).type_as_list_type_v0()->type();
-  VAST_ASSERT(view);
-  return type{table_->slice(as_bytes(*view))};
-}
-
 uint8_t list_type::type_index() noexcept {
   return static_cast<uint8_t>(fbs::type::Type::list_type_v0);
 }
@@ -707,6 +715,12 @@ std::span<const std::byte> as_bytes(const list_type& x) noexcept {
 
 std::string list_type::signature() const noexcept {
   return fmt::format("list<{}>", value_type());
+}
+
+type list_type::value_type() const noexcept {
+  const auto* view = table(transparent::yes).type_as_list_type_v0()->type();
+  VAST_ASSERT(view);
+  return type{table_->slice(as_bytes(*view))};
 }
 
 // -- map_type ----------------------------------------------------------------
@@ -744,6 +758,18 @@ map_type::map_type(const type& key_type, const type& value_type) noexcept {
   static_cast<type&>(*this) = type{std::move(chunk)};
 }
 
+uint8_t map_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::map_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const map_type& x) noexcept {
+  return as_bytes(static_cast<const type&>(x));
+}
+
+std::string map_type::signature() const noexcept {
+  return fmt::format("map<{}, {}>", key_type(), value_type());
+}
+
 type map_type::key_type() const noexcept {
   const auto* view = table(transparent::yes).type_as_map_type_v0()->key_type();
   VAST_ASSERT(view);
@@ -755,17 +781,5 @@ type map_type::value_type() const noexcept {
     = table(transparent::yes).type_as_map_type_v0()->value_type();
   VAST_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
-}
-
-uint8_t map_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::map_type_v0);
-}
-
-std::span<const std::byte> as_bytes(const map_type& x) noexcept {
-  return as_bytes(static_cast<const type&>(x));
-}
-
-std::string map_type::signature() const noexcept {
-  return fmt::format("map<{}, {}>", key_type(), value_type());
 }
 } // namespace vast

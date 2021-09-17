@@ -390,10 +390,6 @@ public:
   /// @pre `!fields.empty()`
   explicit enumeration_type(const std::vector<struct field>& fields) noexcept;
 
-  /// Returns the field at the given key, or an empty string if it does not exist.
-  [[nodiscard]] std::string_view field(uint32_t key) const& noexcept;
-  [[nodiscard]] std::string_view field(uint32_t key) && = delete;
-
   /// Returns the type index.
   static uint8_t type_index() noexcept;
 
@@ -403,6 +399,10 @@ public:
 
   /// Renders the type's signature.
   [[nodiscard]] std::string signature() const noexcept;
+
+  /// Returns the field at the given key, or an empty string if it does not exist.
+  [[nodiscard]] std::string_view field(uint32_t key) const& noexcept;
+  [[nodiscard]] std::string_view field(uint32_t key) && = delete;
 };
 
 // -- list_type ---------------------------------------------------------------
@@ -438,9 +438,6 @@ public:
   /// Constructs a list type with a known value type.
   explicit list_type(const type& value_type) noexcept;
 
-  /// Returns the nested value type.
-  [[nodiscard]] type value_type() const noexcept;
-
   /// Returns the type index.
   static uint8_t type_index() noexcept;
 
@@ -449,6 +446,9 @@ public:
 
   /// Renders the type's signature.
   [[nodiscard]] std::string signature() const noexcept;
+
+  /// Returns the nested value type.
+  [[nodiscard]] type value_type() const noexcept;
 };
 
 // -- map_type ----------------------------------------------------------------
@@ -483,6 +483,15 @@ public:
 
   /// Constructs a map type with known key and value types.
   explicit map_type(const type& key_type, const type& value_type) noexcept;
+
+  /// Returns the type index.
+  static uint8_t type_index() noexcept;
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
+
+  /// Renders the type's signature.
+  [[nodiscard]] std::string signature() const noexcept;
 
   /// Returns the nested key type.
   [[nodiscard]] type key_type() const noexcept;
