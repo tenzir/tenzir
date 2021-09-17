@@ -10,6 +10,7 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/die.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/legacy_type.hpp"
 
@@ -56,6 +57,7 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
       case fbs::type::Type::enumeration_type_v0:
       case fbs::type::Type::list_type_v0:
       case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
         transparent = type::transparent::no;
         break;
       case fbs::type::Type::tagged_type_v0:
@@ -66,6 +68,55 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
   }
   return root;
 }
+
+template <class T>
+  requires(std::is_same_v<T, struct record_type::field>  //
+           || std::is_same_v<T, record_type::field_view> //
+           || std::is_same_v<T, record_field>)
+void construct_record_type(type& self, const T* begin, const T* end) {
+  VAST_ASSERT(begin != end, "A record type must not have zero fields.");
+  const auto reserved_size = [&]() noexcept {
+    // By default the builder allocates 1024 bytes, which is much more than
+    // what we require, and since we can easily calculate the exact amount we
+    // should do that. The total length is made up from the following terms:
+    // - 52 bytes FlatBuffers table framing
+    // - 24 bytes for each contained field.
+    // - All contained string lengths, rounded up to four each.
+    // - All contained nested type FlatBuffers.
+    size_t size = 52;
+    for (auto it = begin; it != end; ++it) {
+      const auto& type_bytes = as_bytes(it->type);
+      size += 24;
+      VAST_ASSERT(!it->name.empty(), "Record field names must not be empty.");
+      size += reserved_string_size(it->name);
+      size += type_bytes.size();
+    }
+    return size;
+  }();
+  auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+  auto field_offsets
+    = std::vector<flatbuffers::Offset<fbs::type::record_type::field::v0>>{};
+  field_offsets.reserve(end - begin);
+  for (auto it = begin; it != end; ++it) {
+    const auto type_bytes = as_bytes(it->type);
+    const auto name_offset = builder.CreateString(it->name);
+    const auto type_offset = builder.CreateVector(
+      reinterpret_cast<const uint8_t*>(type_bytes.data()), type_bytes.size());
+    field_offsets.emplace_back(fbs::type::record_type::field::Createv0(
+      builder, name_offset, type_offset));
+  }
+  const auto fields_offset = builder.CreateVector(field_offsets);
+  const auto record_type_offset
+    = fbs::type::record_type::Createv0(builder, fields_offset);
+  const auto type_offset = fbs::CreateType(
+    builder, fbs::type::Type::record_type_v0, record_type_offset.Union());
+  builder.Finish(type_offset);
+  auto result = builder.Release();
+  VAST_ASSERT(result.size() == reserved_size);
+  auto chunk = chunk::make(std::move(result));
+  self = type{std::move(chunk)};
+}
+
 } // namespace
 
 // -- type --------------------------------------------------------------------
@@ -238,9 +289,12 @@ type::type(const legacy_type& other) noexcept {
     [&](const legacy_alias_type& alias) {
       return type{other.name(), type{alias.value_type}, tags};
     },
-    [&](const auto&) {
-      // TODO: Implement for all legacy types, then remove this handler.
-      // - legacy_record_type,
+    [&](const legacy_record_type& record) {
+      auto fields = std::vector<struct record_type::field_view>{};
+      fields.reserve(record.fields.size());
+      for (const auto& field : record.fields)
+        fields.push_back({field.name, type{field.type}});
+      *this = type{other.name(), type{record_type{fields}}, tags};
     },
   };
   caf::visit(f, other);
@@ -312,6 +366,7 @@ std::string_view type::name() const& noexcept {
       case fbs::type::Type::enumeration_type_v0:
       case fbs::type::Type::list_type_v0:
       case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
         return "";
       case fbs::type::Type::tagged_type_v0:
         const auto* tagged_type = root->type_as_tagged_type_v0();
@@ -342,6 +397,7 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
       case fbs::type::Type::enumeration_type_v0:
       case fbs::type::Type::list_type_v0:
       case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
         return std::nullopt;
       case fbs::type::Type::tagged_type_v0:
         const auto* tagged_type = root->type_as_tagged_type_v0();
@@ -357,6 +413,12 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
         break;
     }
   }
+}
+
+type flatten(const type& type) noexcept {
+  if (const auto* record = caf::get_if<record_type>(&type))
+    return flatten(*record);
+  return type;
 }
 
 // -- none_type ---------------------------------------------------------------
@@ -782,4 +844,221 @@ type map_type::value_type() const noexcept {
   VAST_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
+
+// -- record_type -------------------------------------------------------------
+
+record_type::record_type(const record_type& other) noexcept = default;
+
+record_type& record_type::operator=(const record_type& rhs) noexcept = default;
+
+record_type::record_type(record_type&& other) noexcept = default;
+
+record_type& record_type::operator=(record_type&& other) noexcept = default;
+
+record_type::~record_type() noexcept = default;
+
+record_type::record_type(const std::vector<struct field_view>& fields) noexcept {
+  construct_record_type(*this, fields.data(), fields.data() + fields.size());
+}
+
+record_type::record_type(
+  std::initializer_list<struct field_view> fields) noexcept
+  : record_type{std::vector<struct field_view>{fields}} {
+  // nop
+}
+
+record_type::record_type(const std::vector<struct field>& fields) noexcept {
+  construct_record_type(*this, fields.data(), fields.data() + fields.size());
+}
+
+std::string record_type::signature() const noexcept {
+  auto result = std::string{};
+  auto iterable = fields();
+  auto it = iterable.begin();
+  VAST_ASSERT(it != iterable.end());
+  fmt::format_to(std::back_inserter(result), "record {{{}", *it);
+  while (++it != iterable.end())
+    fmt::format_to(std::back_inserter(result), ", {}", *it);
+  fmt::format_to(std::back_inserter(result), "}}");
+  return result;
+}
+
+record_type::iterable record_type::fields() const noexcept {
+  return iterable{*this};
+};
+
+record_type::leaf_iterable record_type::leaves() const noexcept {
+  return leaf_iterable{*this};
+}
+
+record_type::field_view record_type::field(size_t index) const noexcept {
+  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
+  const auto* field = record->fields()->Get(index);
+  VAST_ASSERT(field);
+  return {
+    field->name()->string_view(),
+    type{table_->slice(as_bytes(*field->type()))},
+  };
+}
+
+record_type::field_view record_type::field(offset index) const noexcept {
+  VAST_ASSERT(!index.empty(), "offset must not be empty");
+  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  for (size_t i = 0; i < index.size() - 1; ++i) {
+    VAST_ASSERT(index[i] < record->fields()->size(), "index out of bounds");
+    record = record->fields()
+               ->Get(index[i])
+               ->type_nested_root()
+               ->type_as_record_type_v0();
+    VAST_ASSERT(record, "offset contains excess indices");
+  }
+  VAST_ASSERT(index.back() < record->fields()->size(), "index out of bounds");
+  const auto* field = record->fields()->Get(index.back());
+  VAST_ASSERT(field);
+  return {
+    field->name()->string_view(),
+    type{table_->slice(as_bytes(*field->type()))},
+  };
+}
+
+record_type flatten(const record_type& type) noexcept {
+  auto fields = std::vector<record_type::field_view>{};
+  for (const auto& [field, _] : type.leaves())
+    fields.push_back(field);
+  return record_type{fields};
+}
+
+uint8_t record_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::record_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const record_type& x) noexcept {
+  return as_bytes(static_cast<const type&>(x));
+}
+
+record_type::iterable::iterable(record_type type) noexcept
+  : index_{0}, type_{std::move(type)} {
+  // nop
+}
+
+void record_type::iterable::next() noexcept {
+  ++index_;
+}
+
+bool record_type::iterable::done() const noexcept {
+  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  return index_ >= record->fields()->size();
+}
+
+record_type::field_view record_type::iterable::get() const noexcept {
+  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  const auto* field = record->fields()->Get(index_);
+  VAST_ASSERT(field);
+  return {
+    field->name()->string_view(),
+    type{type_.table_->slice(as_bytes(*field->type()))},
+  };
+}
+
+record_type::leaf_iterable::leaf_iterable(record_type type) noexcept
+  : index_(), type_{std::move(type)} {
+  index_.push_back(0);
+}
+
+void record_type::leaf_iterable::next() noexcept {
+  if (index_.empty())
+    return;
+  const auto* view = &type_.table(transparent::yes);
+  VAST_ASSERT(view);
+  auto records = std::vector{view->type_as_record_type_v0()};
+  VAST_ASSERT(records.back());
+  // Resolve everything but the last index.
+  VAST_ASSERT(!index_.empty());
+  for (size_t i = 0; i < index_.size() - 1; ++i) {
+    VAST_ASSERT(index_[i] < records.back()->fields()->size());
+    view = resolve_transparent(
+      records.back()->fields()->Get(index_[i])->type_nested_root());
+    VAST_ASSERT(view);
+    records.push_back(view->type_as_record_type_v0());
+    VAST_ASSERT(records.back());
+  }
+  // Increment the last index, and step out of nestec records until we're back
+  // in a record that we have not iterated over completely.
+  while (++index_.back() == records.back()->fields()->size()) {
+    index_.pop_back();
+    if (index_.empty())
+      return;
+    records.pop_back();
+  }
+  // Find the next valid offset by going to the next field, and recursively
+  // stepping into it until we've arrived at a leaf field.
+  while (true) {
+    VAST_ASSERT(index_.back() < records.back()->fields()->size());
+    view = resolve_transparent(
+      records.back()->fields()->Get(index_.back())->type_nested_root());
+    VAST_ASSERT(view);
+    switch (view->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+        return;
+      case fbs::type::Type::record_type_v0:
+        records.push_back(view->type_as_record_type_v0());
+        VAST_ASSERT(records.back());
+        index_.push_back(0);
+        break;
+      case fbs::type::Type::tagged_type_v0:
+        die("tagged types must be resolved at this point.");
+        break;
+    }
+  }
+}
+
+bool record_type::leaf_iterable::done() const noexcept {
+  return index_.empty();
+}
+
+std::pair<record_type::field_view, offset>
+record_type::leaf_iterable::get() const noexcept {
+  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  // Resolve everything but the last layer.
+  VAST_ASSERT(!index_.empty());
+  for (size_t i = 0; i < index_.size() - 1; ++i) {
+    VAST_ASSERT(index_[i] < record->fields()->size());
+    record = resolve_transparent(
+               record->fields()->Get(index_[i])->type_nested_root())
+               ->type_as_record_type_v0();
+    VAST_ASSERT(record);
+  }
+  // Resolve the last layer.
+  VAST_ASSERT(index_.back() < record->fields()->size());
+  const auto* field = record->fields()->Get(index_.back());
+  VAST_ASSERT(field);
+  VAST_ASSERT(!field->type_nested_root()->type_as_record_type_v0());
+  return {
+    {
+      field->name()->string_view(),
+      type{type_.table_->slice(as_bytes(*field->type()))},
+    },
+    index_,
+  };
+}
+
 } // namespace vast

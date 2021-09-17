@@ -305,6 +305,39 @@ TEST(map_type) {
   CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
 }
 
+TEST(record_type) {
+  static_assert(concrete_type<record_type>);
+  static_assert(!basic_type<record_type>);
+  static_assert(complex_type<record_type>);
+  const auto t = type{};
+  const auto rt = type{record_type{
+    {"i", integer_type{}},
+    {"r1",
+     record_type{
+       {"p", type{"port", integer_type{}}},
+       {"a", address_type{}},
+     }},
+    {"b", bool_type{}},
+    {"r2",
+     record_type{
+       {"s", subnet_type{}},
+     }},
+  }};
+  CHECK_EQUAL(fmt::format("{}", rt), "record {i: integer, r1: record {p: port, "
+                                     "a: address}, b: bool, r2: record {s: "
+                                     "subnet}}");
+  const auto& r = caf::get<record_type>(rt);
+  CHECK_EQUAL(r.field(2).type, bool_type{});
+  CHECK_EQUAL(r.field({1, 1}).type, address_type{});
+  CHECK_EQUAL(r.field({3, 0}).name, "s");
+  CHECK_EQUAL(fmt::format("{}", fmt::join(r.fields(), ", ")),
+              "i: integer, r1: record {p: port, a: address}, b: bool, r2: "
+              "record {s: subnet}");
+  CHECK_EQUAL(fmt::format("{}", fmt::join(flatten(r).fields(), ", ")),
+              "i: integer, p: port, a: address, b: bool, s: subnet");
+  CHECK_EQUAL(flatten(rt), type{flatten(r)});
+}
+
 TEST(named types) {
   const auto at = type{"l1", bool_type{}};
   CHECK(caf::holds_alternative<bool_type>(at));

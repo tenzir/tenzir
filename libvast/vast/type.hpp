@@ -12,7 +12,10 @@
 
 #include "vast/chunk.hpp"
 #include "vast/concepts.hpp"
+#include "vast/detail/range.hpp"
+#include "vast/detail/stack_vector.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/offset.hpp"
 
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
@@ -32,7 +35,7 @@ using concrete_types
   = caf::detail::type_list<none_type, bool_type, integer_type, count_type,
                            real_type, duration_type, time_type, string_type,
                            pattern_type, address_type, subnet_type,
-                           enumeration_type, list_type, map_type>;
+                           enumeration_type, list_type, map_type, record_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -201,6 +204,9 @@ public:
   tag(const char* key) const& noexcept;
   [[nodiscard]] std::optional<std::string_view>
   tag(const char* key) && = delete;
+
+  /// Returns a flattened type.
+  friend type flatten(const type& type) noexcept;
 
 protected:
   /// The underlying representation of the type.
@@ -498,15 +504,127 @@ public:
 
   /// Returns the nested value type.
   [[nodiscard]] type value_type() const noexcept;
+};
+
+// -- record_type -------------------------------------------------------------
+
+/// A list of fields, each of which have a name and type.
+/// @relates type
+class record_type final : private type {
+  friend class type;
+  friend struct caf::sum_type_access<vast::type>;
+
+  /// An iterable view over the fields of a record type.
+  struct iterable;
+
+  /// An iterable view over the leaf fields of a record type.
+  struct leaf_iterable;
+
+public:
+  /// A record type field.
+  struct field final {
+    std::string name; ///< The mame of the field.
+    class type type;  ///< The type of the field.
+  };
+
+  /// A sliced view on a record type field.
+  struct field_view final {
+    std::string_view name; /// The name of the field.
+    class type type;       /// The type of the field.
+  };
+
+  /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
+  /// @param other The copied-from type.
+  record_type(const record_type& other) noexcept;
+
+  /// Copy-assigns a type, resulting in a shallow copy with shared lifetime.
+  /// @param other The copied-from type.
+  record_type& operator=(const record_type& rhs) noexcept;
+
+  /// Move-constructs a type, leaving the moved-from type in a state
+  /// semantically equivalent to the *none_type*.
+  /// @param other The moved-from type.
+  record_type(record_type&& other) noexcept;
+
+  /// Move-constructs a type, leaving the moved-from type in a state
+  /// semantically equivalent to the *none_type*.
+  /// @param other The moved-from type.
+  record_type& operator=(record_type&& other) noexcept;
+
+  /// Destroys a type.
+  ~record_type() noexcept;
+
+  /// Constructs a record type from a set of field views.
+  /// @param fields The ordered fields of the record type.
+  /// @pre `!fields.empty()`
+  explicit record_type(const std::vector<struct field_view>& fields) noexcept;
+  explicit record_type(std::initializer_list<struct field_view> fields) noexcept;
+
+  /// Constructs a record type from a set of fields.
+  /// @param fields The ordered fields of the record type.
+  /// @pre `!fields.empty()`
+  explicit record_type(const std::vector<struct field>& fields) noexcept;
 
   /// Returns the type index.
   static uint8_t type_index() noexcept;
 
   /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
+  friend std::span<const std::byte> as_bytes(const record_type& x) noexcept;
 
   /// Renders the type's signature.
   [[nodiscard]] std::string signature() const noexcept;
+
+  /// Returns an iterable view over the fields of a record type.
+  [[nodiscard]] iterable fields() const noexcept;
+
+  /// Returns an iterable view over the leaf fields of a record type.
+  [[nodiscard]] leaf_iterable leaves() const noexcept;
+
+  /// Returns the field at the given index.
+  [[nodiscard]] field_view field(size_t index) const noexcept;
+
+  /// Returns the field at the given offset.
+  [[nodiscard]] field_view field(offset index) const noexcept;
+
+  /// Returns a new, flattened record type.
+  friend record_type flatten(const record_type& type) noexcept;
+};
+
+/// An iterable over the fields of a record.
+struct record_type::iterable final : detail::range_facade<struct iterable> {
+  friend class record_type;
+  friend class detail::range_facade<struct iterable>;
+
+private:
+  /// Constructs an iterable from a record type.
+  explicit iterable(record_type type) noexcept;
+
+  // Range facade implementation details.
+  void next() noexcept;
+  [[nodiscard]] bool done() const noexcept;
+  [[nodiscard]] field_view get() const noexcept;
+
+  size_t index_;     ///< The index of the currently selected field.
+  record_type type_; ///< The record type we're iterating over.
+};
+
+/// An iterable over the leaf fields of a record.
+struct record_type::leaf_iterable final
+  : detail::range_facade<struct leaf_iterable> {
+  friend class record_type;
+  friend class detail::range_facade<struct leaf_iterable>;
+
+private:
+  /// Constructs a leaf_iterable from a record type.
+  explicit leaf_iterable(record_type type) noexcept;
+
+  // Range facade implementation details.
+  void next() noexcept;
+  [[nodiscard]] bool done() const noexcept;
+  [[nodiscard]] std::pair<field_view, offset> get() const noexcept;
+
+  offset index_;     ///< The offset of the currently selected leaf field.
+  record_type type_; ///< The record type we're iterating over.
 };
 
 } // namespace vast
@@ -706,6 +824,34 @@ struct formatter<T> {
   auto format(const T& value, FormatContext& ctx)
     -> decltype(ctx.out()) requires(vast::complex_type<T>) {
     return format_to(ctx.out(), "{}", value.signature());
+  }
+};
+
+template <>
+struct formatter<struct vast::record_type::field> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const struct vast::record_type::field& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "{}: {}", value.name, value.type);
+  }
+};
+
+template <>
+struct formatter<vast::record_type::field_view> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::record_type::field_view& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "{}: {}", value.name, value.type);
   }
 };
 

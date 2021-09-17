@@ -78,6 +78,21 @@ table v0 {
   value_type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 }
 
+namespace vast.fbs.type.record_type.field;
+
+/// A typed field with a name.
+table v0 {
+  name: string (required);
+  type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
+}
+
+namespace vast.fbs.type.record_type;
+
+/// A list of fields, each of which have a name and type.
+table v0 {
+  fields: [field.v0] (required);
+}
+
 namespace vast.fbs.type.tagged_type.tag;
 
 /// A key-value pair type annotation.
@@ -112,6 +127,7 @@ union Type {
   enumeration_type.v0,
   list_type.v0,
   map_type.v0,
+  record_type.v0,
   tagged_type.v0,
 }
 

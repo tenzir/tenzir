@@ -80,6 +80,7 @@ class plugin;
 class plugin_ptr;
 class port;
 class real_type;
+class record_type;
 class schema;
 class segment;
 class segment_builder;
