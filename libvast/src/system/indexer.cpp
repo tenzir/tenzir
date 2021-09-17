@@ -17,6 +17,7 @@
 #include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
@@ -123,9 +124,11 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
     [self](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
     },
-    [self](atom::status, status_verbosity) {
+    [self](atom::status, status_verbosity v) {
       record result;
       result["memory-usage"] = count{self->state.idx->memusage()};
+      if (v >= status_verbosity::debug)
+        detail::fill_status_map(result, self);
       return result;
     },
   };

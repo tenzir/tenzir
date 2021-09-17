@@ -226,6 +226,9 @@ struct index_state {
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};
 
+  /// The number of query supervisors.
+  size_t workers = 0;
+
   /// Caches idle workers.
   std::vector<query_supervisor_actor> idle_workers = {};
 
