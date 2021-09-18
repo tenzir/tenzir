@@ -23,7 +23,7 @@
 #include <caf/meta/omittable_if_none.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/sum_type.hpp>
-#include <fmt/core.h>
+#include <fmt/format.h>
 
 #include <compare>
 #include <initializer_list>
@@ -62,7 +62,6 @@ concept complex_type = requires(const T& value) {
   requires concrete_type<T>;
   requires std::is_base_of_v<type, T>;
   requires sizeof(T) == sizeof(chunk_ptr);
-  { value.signature() } -> concepts::same_as<std::string>;
 };
 
 // -- type --------------------------------------------------------------------
@@ -371,6 +370,12 @@ public:
     std::optional<uint32_t> key = {}; ///< The optional index of the field.
   };
 
+  /// A view on a field of an enumeration type.
+  struct field_view final {
+    std::string_view name; ///< The mame of the field.
+    uint32_t key;          /// The index of the field.
+  };
+
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
   /// @param other The copied-from type.
   enumeration_type(const enumeration_type& other) noexcept;
@@ -403,12 +408,13 @@ public:
   friend std::span<const std::byte>
   as_bytes(const enumeration_type& x) noexcept;
 
-  /// Renders the type's signature.
-  [[nodiscard]] std::string signature() const noexcept;
-
   /// Returns the field at the given key, or an empty string if it does not exist.
   [[nodiscard]] std::string_view field(uint32_t key) const& noexcept;
   [[nodiscard]] std::string_view field(uint32_t key) && = delete;
+
+  /// Returns a view onto all fields, sorted by key.
+  [[nodiscard]] std::vector<field_view> fields() const& noexcept;
+  [[nodiscard]] std::vector<field_view> fields() && = delete;
 };
 
 // -- list_type ---------------------------------------------------------------
@@ -449,9 +455,6 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
-
-  /// Renders the type's signature.
-  [[nodiscard]] std::string signature() const noexcept;
 
   /// Returns the nested value type.
   [[nodiscard]] type value_type() const noexcept;
@@ -495,9 +498,6 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
-
-  /// Renders the type's signature.
-  [[nodiscard]] std::string signature() const noexcept;
 
   /// Returns the nested key type.
   [[nodiscard]] type key_type() const noexcept;
@@ -570,9 +570,6 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const record_type& x) noexcept;
-
-  /// Renders the type's signature.
-  [[nodiscard]] std::string signature() const noexcept;
 
   /// Returns an iterable view over the fields of a record type.
   [[nodiscard]] iterable fields() const noexcept;
@@ -821,9 +818,43 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const T& value, FormatContext& ctx)
-    -> decltype(ctx.out()) requires(vast::complex_type<T>) {
-    return format_to(ctx.out(), "{}", value.signature());
+  auto format(const vast::enumeration_type& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "enum {{{}}}", fmt::join(value.fields(), ", "));
+  }
+
+  template <class FormatContext>
+  auto format(const vast::list_type& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "list<{}>", value.value_type());
+  }
+
+  template <class FormatContext>
+  auto format(const vast::map_type& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "map<{}, {}>", value.key_type(),
+                     value.value_type());
+  }
+
+  template <class FormatContext>
+  auto format(const vast::record_type& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "record {{{}}}",
+                     fmt::join(value.fields(), ", "));
+  }
+};
+
+template <>
+struct formatter<struct vast::enumeration_type::field_view> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const struct vast::enumeration_type::field_view& value,
+              FormatContext& ctx) -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "{}: {}", value.name, value.key);
   }
 };
 

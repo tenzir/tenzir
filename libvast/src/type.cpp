@@ -713,22 +713,6 @@ std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
 }
 
-std::string enumeration_type::signature() const noexcept {
-  const auto* fields
-    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
-  VAST_ASSERT(fields);
-  auto result = std::string{};
-  auto it = fields->begin();
-  VAST_ASSERT(it != fields->end());
-  fmt::format_to(std::back_inserter(result), "enum {{{}: {}",
-                 (*it)->name()->string_view(), (*it)->key());
-  while (++it != fields->end())
-    fmt::format_to(std::back_inserter(result), ", {}: {}",
-                   (*it)->name()->string_view(), (*it)->key());
-  fmt::format_to(std::back_inserter(result), "}}");
-  return result;
-}
-
 std::string_view enumeration_type::field(uint32_t key) const& noexcept {
   const auto* fields
     = table(transparent::yes).type_as_enumeration_type_v0()->fields();
@@ -736,6 +720,18 @@ std::string_view enumeration_type::field(uint32_t key) const& noexcept {
   if (const auto* field = fields->LookupByKey(key))
     return field->name()->string_view();
   return "";
+}
+
+std::vector<enumeration_type::field_view>
+enumeration_type::fields() const& noexcept {
+  const auto* fields
+    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
+  VAST_ASSERT(fields);
+  auto result = std::vector<field_view>{};
+  result.reserve(fields->size());
+  for (const auto& field : *fields)
+    result.push_back({field->name()->string_view(), field->key()});
+  return result;
 }
 
 // -- list_type ---------------------------------------------------------------
@@ -773,10 +769,6 @@ uint8_t list_type::type_index() noexcept {
 
 std::span<const std::byte> as_bytes(const list_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
-}
-
-std::string list_type::signature() const noexcept {
-  return fmt::format("list<{}>", value_type());
 }
 
 type list_type::value_type() const noexcept {
@@ -828,10 +820,6 @@ std::span<const std::byte> as_bytes(const map_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
 }
 
-std::string map_type::signature() const noexcept {
-  return fmt::format("map<{}, {}>", key_type(), value_type());
-}
-
 type map_type::key_type() const noexcept {
   const auto* view = table(transparent::yes).type_as_map_type_v0()->key_type();
   VAST_ASSERT(view);
@@ -869,18 +857,6 @@ record_type::record_type(
 
 record_type::record_type(const std::vector<struct field>& fields) noexcept {
   construct_record_type(*this, fields.data(), fields.data() + fields.size());
-}
-
-std::string record_type::signature() const noexcept {
-  auto result = std::string{};
-  auto iterable = fields();
-  auto it = iterable.begin();
-  VAST_ASSERT(it != iterable.end());
-  fmt::format_to(std::back_inserter(result), "record {{{}", *it);
-  while (++it != iterable.end())
-    fmt::format_to(std::back_inserter(result), ", {}", *it);
-  fmt::format_to(std::back_inserter(result), "}}");
-  return result;
 }
 
 record_type::iterable record_type::fields() const noexcept {
