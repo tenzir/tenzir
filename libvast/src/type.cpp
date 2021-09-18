@@ -279,12 +279,11 @@ type::type(const legacy_type& other) noexcept {
       *this = type{other.name(), enumeration_type{fields}, tags};
     },
     [&](const legacy_list_type& list) {
-      *this = type{other.name(), type{list_type{type{list.value_type}}}, tags};
+      *this = type{other.name(), list_type{type{list.value_type}}, tags};
     },
     [&](const legacy_map_type& list) {
       *this = type{other.name(),
-                   type{map_type{type{list.key_type}, type{list.value_type}}},
-                   tags};
+                   map_type{type{list.key_type}, type{list.value_type}}, tags};
     },
     [&](const legacy_alias_type& alias) {
       return type{other.name(), type{alias.value_type}, tags};
@@ -294,7 +293,7 @@ type::type(const legacy_type& other) noexcept {
       fields.reserve(record.fields.size());
       for (const auto& field : record.fields)
         fields.push_back({field.name, type{field.type}});
-      *this = type{other.name(), type{record_type{fields}}, tags};
+      *this = type{other.name(), record_type{fields}, tags};
     },
   };
   caf::visit(f, other);
