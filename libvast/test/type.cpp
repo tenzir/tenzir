@@ -404,4 +404,28 @@ TEST(sum type) {
                    type{integer_type{}}));
 }
 
+TEST(hashes) {
+  auto hash = []<type_or_concrete_type T>(const T& value) {
+    auto hasher = std::hash<T>{};
+    return hasher(value);
+  };
+  CHECK_EQUAL(hash(none_type{}), 0x5DF28E92BCCA4531ul);
+  CHECK_EQUAL(hash(bool_type{}), 0xBFF0C79D40554449ul);
+  CHECK_EQUAL(hash(integer_type{}), 0xD8C66D08F868662Bul);
+  CHECK_EQUAL(hash(count_type{}), 0x2F80823CB9D60C3Bul);
+  CHECK_EQUAL(hash(real_type{}), 0x8AC3473B0C9FDB7Aul);
+  CHECK_EQUAL(hash(duration_type{}), 0x9FB2CA5D9CDF512Aul);
+  CHECK_EQUAL(hash(time_type{}), 0x379DC79C15D4FC1Aul);
+  CHECK_EQUAL(hash(string_type{}), 0x3F92527B5CA01E46ul);
+  CHECK_EQUAL(hash(pattern_type{}), 0xB58A4DFCBCAB3AA0ul);
+  CHECK_EQUAL(hash(address_type{}), 0xB195BC7644771465ul);
+  CHECK_EQUAL(hash(subnet_type{}), 0xCF652DBCCA4AAED5ul);
+  CHECK_EQUAL(hash(enumeration_type{{{"a"}, {"b"}, {"c"}}}),
+              0x624171C602B39999ul);
+  CHECK_EQUAL(hash(list_type{integer_type{}}), 0xFAE238FED25FDCD0ul);
+  CHECK_EQUAL(hash(map_type{time_type{}, string_type{}}), 0xF6694A1437D5D288ul);
+  CHECK_EQUAL(hash(record_type{{"a", address_type{}}, {"b", bool_type{}}}),
+              0x4BB2B1174A8B3788ul);
+}
+
 } // namespace vast
