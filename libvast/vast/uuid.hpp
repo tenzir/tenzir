@@ -64,6 +64,9 @@ public:
     return std::span<const std::byte, num_bytes>{x.id_};
   }
 
+  /// @returns The binary data as a pair of 64 bit integers.
+  [[nodiscard]] std::pair<uint64_t, uint64_t> as_u64() const;
+
   template <class Inspector>
   friend auto inspect(Inspector& f, uuid& x) {
     return f(caf::meta::hex_formatted(), x.id_);

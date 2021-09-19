@@ -18,6 +18,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
@@ -351,6 +352,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       } else {
         VAST_DEBUG("{} received all hits from {} partition(s) in {}", *self,
                    self->state.query.expected, vast::to_string(runtime));
+        VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
         if (self->state.accountant)
           self->send(self->state.accountant, "exporter.hits.runtime", runtime);
         shutdown(self);

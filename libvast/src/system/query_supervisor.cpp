@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/tracepoint.hpp"
 #include "vast/logger.hpp"
 #include "vast/query.hpp"
 
@@ -57,16 +58,23 @@ query_supervisor_actor::behavior_type query_supervisor(
         return;
       }
       VAST_ASSERT(self->state.open_requests == 0);
+      auto start = std::chrono::steady_clock::now();
+      auto query_trace_id = query_id.as_u64().first;
       for (const auto& [id, partition] : qm) {
+        auto partition_trace_id = id.as_u64().first;
         ++self->state.open_requests;
         // TODO: Add a proper configurable timeout.
         self->request(partition, caf::infinite, query)
           .then(
             [=](atom::done) {
+              auto delta = std::chrono::steady_clock::now() - start;
+              VAST_TRACEPOINT(query_partition_done, query_trace_id,
+                              partition_trace_id, delta.count());
               if (--self->state.open_requests == 0) {
                 VAST_DEBUG("{} {} collected all results for the current batch "
                            "of partitions",
                            *self, self->state.log_identifier);
+                VAST_TRACEPOINT(query_supervisor_done, query_trace_id);
                 // Ask master for more work after receiving the last sub
                 // result.
                 // TODO: We should schedule a new partition as soon as the
@@ -81,6 +89,9 @@ query_supervisor_actor::behavior_type query_supervisor(
               // the client.
               VAST_ERROR("{} {} encountered error while supervising query {}",
                          *self, self->state.log_identifier, e);
+              auto delta = std::chrono::steady_clock::now() - start;
+              VAST_TRACEPOINT(query_partition_error, query_trace_id,
+                              partition_trace_id, delta.count());
               if (--self->state.open_requests == 0) {
                 self->send(client, atom::done_v);
                 self->send(self->state.master, atom::worker_v, self);

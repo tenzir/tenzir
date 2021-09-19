@@ -80,6 +80,12 @@ uuid::const_reference uuid::operator[](size_t i) const {
   return id_[i];
 }
 
+std::pair<uint64_t, uint64_t> uuid::as_u64() const {
+  auto lh = *reinterpret_cast<const uint64_t*>(&id_[0]);
+  auto rh = *reinterpret_cast<const uint64_t*>(&id_[8]);
+  return std::make_pair(lh, rh);
+}
+
 uuid::iterator uuid::begin() {
   return id_.begin();
 }
