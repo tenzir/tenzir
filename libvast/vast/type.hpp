@@ -73,10 +73,16 @@ concept complex_type = requires(const T& value) {
 /// The sematic representation of data.
 class type {
 public:
-  /// An owned key-value pair annotation.
+  /// An owned key-value type annotation.
   struct tag final {
     std::string key;                       ///< The key.
     std::optional<std::string> value = {}; ///< The value (optional).
+  };
+
+  /// A view on a key-value type annotation.
+  struct tag_view final {
+    std::string_view key;   ///< The key.
+    std::string_view value; ///< The value (empty if unset).
   };
 
   /// Indiciates whether to skip over internal types when looking at the
@@ -207,6 +213,10 @@ public:
   tag(const char* key) const& noexcept;
   [[nodiscard]] std::optional<std::string_view>
   tag(const char* key) && = delete;
+
+  /// Returns a view on all tags.
+  [[nodiscard]] std::vector<tag_view> tags() const& noexcept;
+  [[nodiscard]] std::vector<tag_view> tags() && = delete;
 
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
@@ -781,13 +791,34 @@ struct formatter<vast::type> {
   template <class FormatContext>
   auto format(const vast::type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
+    auto out = ctx.out();
     if (const auto& name = value.name(); !name.empty())
-      return format_to(ctx.out(), "{}", name);
-    return caf::visit(
-      [&]<vast::concrete_type T>(const T& x) {
-        return format_to(ctx.out(), "{}", x);
-      },
-      value);
+      out = format_to(out, "{}", name);
+    else
+      caf::visit(
+        [&](const auto& x) {
+          out = format_to(out, "{}", x);
+        },
+        value);
+    if (const auto& tags = value.tags(); !tags.empty())
+      out = format_to(out, " {}", fmt::join(tags, " "));
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::type::tag_view> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::type::tag_view& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    if (value.value.empty())
+      return format_to(ctx.out(), "#{}", value.key);
+    return format_to(ctx.out(), "#{}={}", value.key, value.value);
   }
 };
 

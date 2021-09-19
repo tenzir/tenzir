@@ -362,13 +362,16 @@ TEST(tagged types) {
   CHECK_EQUAL(at.tag("second"), "");
   CHECK_EQUAL(at.tag("third"), std::nullopt);
   CHECK_EQUAL(at.tag("fourth"), std::nullopt);
-  const auto aat = type{"l2", at, {{"third", "nesting works!"}}};
+  CHECK_EQUAL(fmt::format("{}", at), "bool #first=value #second");
+  const auto aat = type{"l2", at, {{"third", "nestingworks"}}};
   CHECK(caf::holds_alternative<bool_type>(aat));
   CHECK_EQUAL(aat.name(), "l2");
   CHECK_EQUAL(aat.tag("first"), "value");
   CHECK_EQUAL(aat.tag("second"), "");
-  CHECK_EQUAL(aat.tag("third"), "nesting works!");
+  CHECK_EQUAL(aat.tag("third"), "nestingworks");
   CHECK_EQUAL(aat.tag("fourth"), std::nullopt);
+  CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks #first=value "
+                                      "#second");
   const auto lat
     = type{legacy_bool_type{}.attributes({{"first", "value"}, {"second"}})};
   CHECK_EQUAL(lat, at);
