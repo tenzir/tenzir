@@ -61,9 +61,10 @@ TEST(lookup) {
   auto p2 = sys.spawn(dummy_partition, make_ids({3, 5}));
   run();
   MESSAGE("fill query map and trigger supervisor");
+  auto query_id = uuid::random();
   system::query_map qm{
     {uuid::random(), p0}, {uuid::random(), p1}, {uuid::random(), p2}};
-  self->send(sv,
+  self->send(sv, atom::supervise_v, query_id,
              vast::query::make_count(self, query::count::mode::estimate,
                                      unbox(to<expression>("x == 42"))),
              std::move(qm),

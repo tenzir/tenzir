@@ -43,13 +43,14 @@ query_supervisor_actor::behavior_type query_supervisor(
   self->state.master = std::move(master);
   self->send(self->state.master, atom::worker_v, self);
   return {
-    [self](const vast::query& query,
+    [self](atom::supervise, const vast::uuid& query_id,
+           const vast::query& query,
            const std::vector<std::pair<uuid, partition_actor>>& qm,
            const receiver_actor<atom::done>& client) {
       VAST_DEBUG("{} {} got a new query for {} partitions: {}", *self,
                  self->state.log_identifier, qm.size(), get_ids(qm));
       // TODO: We can save one message here if we handle this case in the
-      // partition immediately.
+      // index immediately.
       if (qm.empty()) {
         self->send(client, atom::done_v);
         self->send(self->state.master, atom::worker_v, self);
@@ -69,7 +70,7 @@ query_supervisor_actor::behavior_type query_supervisor(
                 // Ask master for more work after receiving the last sub
                 // result.
                 // TODO: We should schedule a new partition as soon as the
-                // prvious one has finished, otherwise each batch will be as
+                // previous one has finished, otherwise each batch will be as
                 // slow as the worst case of the batch.
                 self->send(client, atom::done_v);
                 self->send(self->state.master, atom::worker_v, self);

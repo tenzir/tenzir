@@ -923,7 +923,8 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} scheduled {} more partition(s) for query id {}"
                  "with {} partitions remaining",
                  *self, actors.size(), query_id, query_state.partitions.size());
-      self->send(*worker, query_state.query, std::move(actors), client);
+      self->send(*worker, atom::supervise_v, query_id, query_state.query,
+                 std::move(actors), client);
       // Cleanup if we exhausted all candidates.
       if (query_state.partitions.empty())
         self->state.pending.erase(iter);
