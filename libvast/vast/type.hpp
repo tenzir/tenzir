@@ -216,6 +216,18 @@ protected:
   chunk_ptr table_ = {}; // NOLINT
 };
 
+/// Compares the underlying representation of two types for equality.
+template <type_or_concrete_type T, type_or_concrete_type U>
+bool operator==(const T& lhs, const U& rhs) noexcept {
+  return type{lhs} == type{rhs};
+}
+
+/// Compares the underlying representation of two types lexicographically.
+template <type_or_concrete_type T, type_or_concrete_type U>
+std::strong_ordering operator<=>(const T& lhs, const U& rhs) noexcept {
+  return type{lhs} <=> type{rhs};
+}
+
 // -- none_type ---------------------------------------------------------------
 
 /// Represents a default constructed type.
