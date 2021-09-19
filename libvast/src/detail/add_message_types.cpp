@@ -36,6 +36,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/taxonomies.hpp"
+#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>

@@ -12,6 +12,7 @@
 
 #include "vast/detail/overload.hpp"
 #include "vast/legacy_type.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
 #include <fmt/format.h>
@@ -427,5 +428,41 @@ TEST(hashes) {
   CHECK_EQUAL(hash(record_type{{"a", address_type{}}, {"b", bool_type{}}}),
               0x4BB2B1174A8B3788ul);
 }
+
+FIXTURE_SCOPE(type_fixture, fixtures::deterministic_actor_system)
+
+TEST(serialization) {
+  CHECK_ROUNDTRIP(type{});
+  CHECK_ROUNDTRIP(type{none_type{}});
+  CHECK_ROUNDTRIP(type{bool_type{}});
+  CHECK_ROUNDTRIP(type{integer_type{}});
+  CHECK_ROUNDTRIP(type{count_type{}});
+  CHECK_ROUNDTRIP(type{real_type{}});
+  CHECK_ROUNDTRIP(type{duration_type{}});
+  CHECK_ROUNDTRIP(type{time_type{}});
+  CHECK_ROUNDTRIP(type{string_type{}});
+  CHECK_ROUNDTRIP(type{pattern_type{}});
+  CHECK_ROUNDTRIP(type{address_type{}});
+  CHECK_ROUNDTRIP(type{subnet_type{}});
+  CHECK_ROUNDTRIP(type{enumeration_type{{{"a"}, {"b"}, {"c"}}}});
+  CHECK_ROUNDTRIP(type{list_type{integer_type{}}});
+  CHECK_ROUNDTRIP(type{map_type{address_type{}, subnet_type{}}});
+  const auto rt = type{record_type{
+    {"i", integer_type{}},
+    {"r1",
+     record_type{
+       {"p", type{"port", integer_type{}}},
+       {"a", address_type{}},
+     }},
+    {"b", bool_type{}},
+    {"r2",
+     record_type{
+       {"s", subnet_type{}},
+     }},
+  }};
+  CHECK_ROUNDTRIP(rt);
+}
+
+FIXTURE_SCOPE_END()
 
 } // namespace vast
