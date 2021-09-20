@@ -100,9 +100,6 @@ private:
   const index_state& state_;
 };
 
-using pending_query_map
-  = detail::stable_map<uuid, std::vector<evaluation_triple>>;
-
 struct query_state {
   /// The UUID of the query.
   vast::uuid id;
