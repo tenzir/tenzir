@@ -1,0 +1,263 @@
+#! /usr/bin/env python3
+# @lint-avoid-python-3-compatibility-imports
+#
+# query_tracing - Show VAST query statistics
+
+from __future__ import print_function
+from bcc import BPF, USDT
+import ctypes
+from ctypes import c_int, c_ulonglong, c_byte, c_ushort
+from sys import argv
+
+if len(argv) != 2:
+    print("USAGE: %s /path/to/libvast.so" % argv[0])
+    exit()
+
+vast_path = argv[1]
+
+u = USDT(path=vast_path)
+# TODO: Later versions of bcc allow writing 'vast:query_new' to explicitly specify
+#       the provider, but the one from ubuntu doesn't have that feature yet.
+u.enable_probe("query_new", "query_new_handler")
+u.enable_probe("query_meta_index", "query_meta_index_handler")
+u.enable_probe("query_resume", "query_resume_handler")
+u.enable_probe("query_partition_done", "query_partition_done_handler")
+u.enable_probe("query_partition_error", "query_partition_error_handler")
+u.enable_probe("query_done", "query_done_handler")
+
+# load BPF program
+b = BPF(
+    text="""
+#include <uapi/linux/ptrace.h>
+
+enum event_types {
+    EVENT_QUERY_DONE = 0,
+    EVENT_PARTITION_DONE = 1,
+    EVENT_INDEX_RESUME = 2,
+};
+
+struct query_summary {
+    u64 start_ts;
+    u64 midx_ts;
+    u64 done_ts;
+    u16 candidates;   
+    u16 errors;       // count of partition errors
+};
+
+struct partition_done_event {
+    u64 partition_id;
+    u64 ts; // absolute timestamp
+    u64 delta; // ns between request and response
+    u8 is_error;
+};
+
+struct index_resume_event {
+    u64 ts;    // absolute timestamp
+    u64 delta; // execution time of `collect_query_actors()`
+    u16 count; // #actors in this batch
+};
+
+struct perf_output {
+    u64 query_id;
+    char type;
+    union {
+        struct query_summary query_summary;
+        struct partition_done_event partition_done;
+        struct index_resume_event index_resume;
+    } event;
+};
+
+BPF_HASH(queries, u64, struct query_summary);
+BPF_PERF_OUTPUT(events);
+
+// Note that `bpf_usdt_readarg()` can only be called directly in the entry
+// point, so we can't move it in a static helper function.
+void query_new_handler(struct pt_regs *ctx) { 
+  uint64_t uuid = 0;
+  bpf_usdt_readarg(1, ctx, &uuid);
+  struct query_summary summary = {};
+  summary.start_ts = bpf_ktime_get_ns();
+  queries.insert(&uuid, &summary);
+  return; 
+}
+
+void query_meta_index_handler(struct pt_regs *ctx) { 
+  uint64_t uuid = 0;
+  uint64_t candidates = 0;
+  bpf_usdt_readarg(1, ctx, &uuid);
+  bpf_usdt_readarg(2, ctx, &candidates);
+  struct query_summary *summary = queries.lookup(&uuid);
+  if (!summary)
+    return;
+  summary->midx_ts = bpf_ktime_get_ns();
+  summary->candidates = candidates;
+  return;
+}
+
+void query_resume_handler(struct pt_regs *ctx) {
+  uint64_t query_uuid = 0;
+  uint64_t count = 0;
+  uint64_t delta = 0;
+  uint64_t now = bpf_ktime_get_ns();
+  bpf_usdt_readarg(1, ctx, &query_uuid);
+  bpf_usdt_readarg(2, ctx, &count);
+  bpf_usdt_readarg(3, ctx, &delta);
+  // Push a `partition_done_event`.
+  {
+      struct perf_output perf = {};
+      perf.type = EVENT_INDEX_RESUME;
+      perf.query_id = query_uuid;
+      perf.event.index_resume.ts = now;
+      perf.event.index_resume.count = count;
+      perf.event.index_resume.delta = delta;
+      events.perf_submit(ctx, &perf, sizeof(perf));
+  }
+  return;
+}
+
+static void _push_partition_done(struct pt_regs *ctx, u64 query_id, u64 partition_id, u64 ts, u64 delta, u8 is_error) {
+  struct perf_output perf = {};
+  perf.type = EVENT_PARTITION_DONE;
+  perf.query_id = query_id;
+  perf.event.partition_done.partition_id = partition_id;
+  perf.event.partition_done.delta = delta;
+  perf.event.partition_done.ts = ts;
+  perf.event.partition_done.is_error = is_error;
+  events.perf_submit(ctx, &perf, sizeof(perf));    
+}
+
+void query_partition_done_handler(struct pt_regs *ctx) {
+  uint64_t query_id = 0;
+  uint64_t partition_id = 0;
+  uint64_t delta = 0;
+  uint64_t now = bpf_ktime_get_ns();
+  bpf_usdt_readarg(1, ctx, &query_id);
+  bpf_usdt_readarg(2, ctx, &partition_id);
+  bpf_usdt_readarg(3, ctx, &delta);
+  _push_partition_done(ctx, query_id, partition_id, now, delta, false);
+  return;
+}
+
+void query_partition_error_handler(struct pt_regs *ctx) {
+  uint64_t query_id = 0;
+  uint64_t partition_id = 0;
+  uint64_t delta = 0;
+  uint64_t now = bpf_ktime_get_ns();
+  bpf_usdt_readarg(1, ctx, &query_id);
+  bpf_usdt_readarg(2, ctx, &partition_id);
+  bpf_usdt_readarg(3, ctx, &delta);
+  _push_partition_done(ctx, query_id, partition_id, now, delta, true);
+  struct query_summary *summary = queries.lookup(&query_id);
+  if (!summary)
+    return;
+  summary->errors += 1;
+  return;
+}
+
+void query_done_handler(struct pt_regs *ctx) {
+  uint64_t query_id = 0;
+  bpf_usdt_readarg(1, ctx, &query_id);
+  struct query_summary *summary = queries.lookup(&query_id);
+  if (!summary)
+    return;
+  summary->done_ts = bpf_ktime_get_ns();
+  struct perf_output perf = {};
+  perf.type = EVENT_QUERY_DONE;
+  perf.query_id = query_id;
+  memcpy(&perf.event.query_summary, summary, sizeof(*summary));
+  queries.delete(&query_id);
+  events.perf_submit(ctx, &perf, sizeof(perf));
+}
+""",
+    usdt_contexts=[u],
+)
+
+# Unions are not magically translated, so we need to do it with ctypes manually
+
+EVENT_QUERY_DONE = 0
+EVENT_PARTITION_DONE = 1
+EVENT_INDEX_RESUME = 2
+
+
+class query_summary(ctypes.Structure):
+    _fields_ = [
+        ("start_ts", c_ulonglong),
+        ("midx_ts", c_ulonglong),
+        ("done_ts", c_ulonglong),
+        ("candidates", c_ushort),
+        ("errors", c_ushort),
+    ]
+
+
+class partition_done_event(ctypes.Structure):
+    _fields_ = [
+        ("partition_id", c_ulonglong),
+        ("ts", c_ulonglong),
+        ("delta", c_ulonglong),
+        ("is_error", c_byte),
+    ]
+
+
+class index_resume_event(ctypes.Structure):
+    _fields_ = [("ts", c_ulonglong), ("delta", c_ulonglong), ("count", c_ushort)]
+
+
+class events(ctypes.Union):
+    _fields_ = [
+        ("query_summary", query_summary),
+        ("partition_done", partition_done_event),
+        ("index_resume", index_resume_event),
+    ]
+
+
+class perf_output(ctypes.Structure):
+    _fields_ = [("query_id", c_ulonglong), ("type", c_byte), ("event", events)]
+
+
+# Header. We use R "long" format for easier subsequent plotting. For example,
+# to generate a ridgeline plot of the collected timings the following can
+# be used:
+#
+#     library(tidyverse)
+#     library(ggplot2)
+#     library(ggridges)
+#     data = read.table('queries.tsv', sep='\t', header = TRUE)
+#     data %>% ggplot(aes(x=value, y=variable)) + geom_density_ridges()
+
+print("variable\tvalue\tquery_id")
+
+partition_timings = {}
+resume_timings = {}
+
+table = b["events"]
+table._event_class = perf_output
+
+# process event
+def print_event(cpu, data, size):
+    perf_event = table.event(data)
+    query_id = perf_event.query_id
+    if perf_event.type == EVENT_QUERY_DONE:
+        query_summary = perf_event.event.query_summary
+        midx_time = (float(query_summary.midx_ts - query_summary.start_ts)) / 1000
+        done_time = (float(query_summary.done_ts - query_summary.start_ts)) / 1000
+        print(f"MIDX\t{midx_time}\t{query_id}")
+        print(f"DONE\t{done_time}\t{query_id}")
+    elif perf_event.type == EVENT_PARTITION_DONE:
+        partition_done = perf_event.event.partition_done
+        ts = partition_done.ts
+        print(f"PARTITION_DONE\t{ts}\t{query_id}")
+    elif perf_event.type == EVENT_INDEX_RESUME:
+        index_resume = perf_event.event.index_resume
+        ts = index_resume.ts
+        print(f"INDEX_RESUME\t{ts}\t{query_id}")
+    else:
+        print(f"unknown event type {event.type}")
+
+
+# loop with callback to print_event
+b["events"].open_perf_buffer(print_event)
+while 1:
+    try:
+        b.perf_buffer_poll()
+    except KeyboardInterrupt:
+        exit()
