@@ -228,6 +228,14 @@ public:
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
 
+  /// Checks whether two types are *congruent* to each other, i.e., whether they
+  /// are *representationally equal*.
+  /// @param x The first type or data.
+  /// @param y The second type or data.
+  friend bool congruent(const type& x, const type& y) noexcept;
+  friend bool congruent(const type& x, const data& y) noexcept;
+  friend bool congruent(const data& x, const type& y) noexcept;
+
 protected:
   /// The underlying representation of the type.
   chunk_ptr table_ = {}; // NOLINT
@@ -624,6 +632,12 @@ public:
 struct record_type::iterable final : detail::range_facade<struct iterable> {
   friend class record_type;
   friend class detail::range_facade<struct iterable>;
+
+  /// Access a field by index.
+  [[nodiscard]] field_view operator[](size_t index) const noexcept;
+
+  /// Get the number of fields in the record field.
+  [[nodiscard]] size_t size() const noexcept;
 
 private:
   /// Constructs an iterable from a record type.

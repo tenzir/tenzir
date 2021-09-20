@@ -470,6 +470,47 @@ TEST(hashes) {
               0x4BB2B1174A8B3788ul);
 }
 
+TEST(congruence) {
+  auto i = type{integer_type{}};
+  auto j = type{integer_type{}};
+  CHECK(i == j);
+  i = type{"i", i};
+  j = type{"j", j};
+  CHECK(i != j);
+  auto c = type{"c", count_type{}};
+  CHECK(congruent(i, i));
+  CHECK(congruent(i, j));
+  CHECK(!congruent(i, c));
+  auto l0 = type{list_type{i}};
+  auto l1 = type{list_type{j}};
+  auto l2 = type{list_type{c}};
+  CHECK(l0 != l1);
+  CHECK(l0 != l2);
+  CHECK(congruent(l0, l1));
+  CHECK(!congruent(l1, l2));
+  auto r0 = type{record_type{
+    {"a", address_type{}},
+    {"b", bool_type{}},
+    {"c", count_type{}},
+  }};
+  auto r1 = type{record_type{
+    {"x", address_type{}},
+    {"y", bool_type{}},
+    {"z", count_type{}},
+  }};
+  CHECK(r0 != r1);
+  CHECK(congruent(r0, r1));
+  auto a = type{"a", i};
+  CHECK(a != i);
+  CHECK(congruent(a, i));
+  a = type{"r0", r0};
+  CHECK(a != r0);
+  CHECK(congruent(a, r0));
+  CHECK(congruent(type{}, type{}));
+  CHECK(!congruent(type{string_type{}}, type{}));
+  CHECK(!congruent(type{}, type{string_type{}}));
+}
+
 FIXTURE_SCOPE(type_fixture, fixtures::deterministic_actor_system)
 
 TEST(serialization) {

@@ -8,6 +8,7 @@
 
 #include "vast/type.hpp"
 
+#include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/die.hpp"
@@ -524,6 +525,113 @@ type flatten(const type& type) noexcept {
   return type;
 }
 
+bool congruent(const type& x, const type& y) noexcept {
+  auto f = detail::overload{
+    [](const enumeration_type& x, const enumeration_type& y) noexcept {
+      const auto xf = x.fields();
+      const auto yf = y.fields();
+      if (xf.size() != yf.size())
+        return false;
+      for (size_t i = 0; i < xf.size(); ++i)
+        if (xf[i].key != yf[i].key)
+          return false;
+      return true;
+    },
+    [](const list_type& x, const list_type& y) noexcept {
+      return congruent(x.value_type(), y.value_type());
+    },
+    [](const map_type& x, const map_type& y) noexcept {
+      return congruent(x.key_type(), y.key_type())
+             && congruent(x.value_type(), y.value_type());
+    },
+    [](const record_type& x, const record_type& y) noexcept {
+      const auto xf = x.fields();
+      const auto yf = y.fields();
+      if (xf.size() != yf.size())
+        return false;
+      for (size_t i = 0; i < xf.size(); ++i)
+        if (!congruent(xf[i].type, yf[i].type))
+          return false;
+      return true;
+    },
+    []<complex_type T>(const T&, const T&) noexcept {
+      static_assert(detail::always_false_v<T>, "missing congruency check for "
+                                               "complex type");
+    },
+    []<concrete_type T, concrete_type U>(const T&, const U&) noexcept {
+      return std::is_same_v<T, U>;
+    },
+  };
+  return caf::visit(f, x, y);
+}
+
+bool congruent(const type& x, const data& y) noexcept {
+  auto f = detail::overload{
+    [](const auto&, const auto&) noexcept {
+      return false;
+    },
+    [](const none_type&, caf::none_t) noexcept {
+      return true;
+    },
+    [](const bool_type&, bool) noexcept {
+      return true;
+    },
+    [](const integer_type&, integer) noexcept {
+      return true;
+    },
+    [](const count_type&, count) noexcept {
+      return true;
+    },
+    [](const real_type&, real) noexcept {
+      return true;
+    },
+    [](const duration_type&, duration) noexcept {
+      return true;
+    },
+    [](const time_type&, time) noexcept {
+      return true;
+    },
+    [](const string_type&, const std::string&) noexcept {
+      return true;
+    },
+    [](const pattern_type&, const pattern&) noexcept {
+      return true;
+    },
+    [](const address_type&, const address&) noexcept {
+      return true;
+    },
+    [](const subnet_type&, const subnet&) noexcept {
+      return true;
+    },
+    [](const enumeration_type& x, const std::string& y) noexcept {
+      const auto xf = x.fields();
+      return std::any_of(xf.begin(), xf.end(), [&](const auto& field) {
+        return field.name == y;
+      });
+    },
+    [](const list_type&, const list&) noexcept {
+      return true;
+    },
+    [](const map_type&, const map&) noexcept {
+      return true;
+    },
+    [](const record_type& x, const list& y) noexcept {
+      const auto xf = x.fields();
+      if (xf.size() != y.size())
+        return false;
+      for (size_t i = 0; i < xf.size(); ++i)
+        if (!congruent(xf[i].type, y[i]))
+          return false;
+      return true;
+    },
+  };
+  return caf::visit(f, x, y);
+}
+
+bool congruent(const data& x, const type& y) noexcept {
+  return congruent(y, x);
+}
+
 // -- none_type ---------------------------------------------------------------
 
 uint8_t none_type::type_index() noexcept {
@@ -1018,6 +1126,26 @@ std::span<const std::byte> as_bytes(const record_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
 }
 
+/// Access a field by index.
+[[nodiscard]] record_type::field_view
+record_type::iterable::operator[](size_t index) const noexcept {
+  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  const auto* field = record->fields()->Get(index);
+  VAST_ASSERT(field);
+  return {
+    field->name()->string_view(),
+    type{type_.table_->slice(as_bytes(*field->type()))},
+  };
+}
+
+/// Get the number of fields in the record field.
+size_t record_type::iterable::size() const noexcept {
+  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  return record->fields()->size();
+}
+
 record_type::iterable::iterable(record_type type) noexcept
   : index_{0}, type_{std::move(type)} {
   // nop
@@ -1034,14 +1162,7 @@ bool record_type::iterable::done() const noexcept {
 }
 
 record_type::field_view record_type::iterable::get() const noexcept {
-  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
-  VAST_ASSERT(record);
-  const auto* field = record->fields()->Get(index_);
-  VAST_ASSERT(field);
-  return {
-    field->name()->string_view(),
-    type{type_.table_->slice(as_bytes(*field->type()))},
-  };
+  return (*this)[index_];
 }
 
 record_type::leaf_iterable::leaf_iterable(record_type type) noexcept
