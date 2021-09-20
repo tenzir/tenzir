@@ -223,6 +223,11 @@ struct index_state {
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};
 
+  /// Maps exporter actor address to known query ID for monitoring
+  /// purposes.
+  std::unordered_map<caf::actor_addr, std::unordered_set<uuid>> monitored_queries
+    = {};
+
   /// The number of query supervisors.
   size_t workers = 0;
 
