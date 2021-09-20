@@ -158,32 +158,20 @@ type::type(std::string_view name, const type& nested,
   } else {
     const auto nested_bytes = as_bytes(nested);
     const auto reserved_size = [&]() noexcept {
-      // By default the builder allocates 1024 bytes, which is much more than
-      // what we require, and since we can easily calculate the exact amount we
-      // should do that. The total length is made up from the following terms:
+      // The total length is made up from the following terms:
       // - 52 bytes FlatBuffers table framing
       // - Nested type FlatBuffers table size
       // - All contained string lengths, rounded up to four each
-      // - 12 bytes if tags exist
-      // - 16 bytes for every tag
-      // - 16 bytes for every tag with a value
+      // Note that this cannot account for tags, since they are stored in hash
+      // map which makes calculating the space requirements non-trivial.
       size_t size = 52;
       size += nested_bytes.size();
       size += reserved_string_size(name);
-      if (!tags.empty()) {
-        size += 12;
-        for (const auto& tag : tags) {
-          size += 16;
-          size += reserved_string_size(tag.key);
-          if (tag.value) {
-            size += 16;
-            size += reserved_string_size(*tag.value);
-          }
-        }
-      }
       return size;
-    }();
-    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    };
+    auto builder = tags.empty()
+                     ? flatbuffers::FlatBufferBuilder{reserved_size()}
+                     : flatbuffers::FlatBufferBuilder{};
     const auto nested_type_offset = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(nested_bytes.data()),
       nested_bytes.size());
@@ -211,7 +199,6 @@ type::type(std::string_view name, const type& nested,
       builder, fbs::type::Type::tagged_type_v0, tagged_type_offset.Union());
     builder.Finish(type_offset);
     auto result = builder.Release();
-    VAST_ASSERT(result.size() == reserved_size);
     table_ = chunk::make(std::move(result));
   }
 }
@@ -232,9 +219,10 @@ type::type(const legacy_type& other) noexcept {
     const auto& attributes = other.attributes();
     result.reserve(attributes.size());
     for (const auto& attribute : other.attributes())
-      result.push_back({attribute.key, attribute.value
-                                         ? *attribute.value
-                                         : std::optional<std::string>{}});
+      result.push_back({
+        attribute.key,
+        attribute.value ? *attribute.value : std::optional<std::string>{},
+      });
     return result;
   }();
   auto f = detail::overload{
@@ -297,6 +285,84 @@ type::type(const legacy_type& other) noexcept {
     },
   };
   caf::visit(f, other);
+}
+
+type::operator legacy_type() const noexcept {
+  auto f = detail::overload{
+    [&](const none_type&) -> legacy_type {
+      return legacy_none_type{};
+    },
+    [&](const bool_type&) -> legacy_type {
+      return legacy_bool_type{};
+    },
+    [&](const integer_type&) -> legacy_type {
+      return legacy_integer_type{};
+    },
+    [&](const count_type&) -> legacy_type {
+      return legacy_count_type{};
+    },
+    [&](const real_type&) -> legacy_type {
+      return legacy_real_type{};
+    },
+    [&](const duration_type&) -> legacy_type {
+      return legacy_duration_type{};
+    },
+    [&](const time_type&) -> legacy_type {
+      return legacy_time_type{};
+    },
+    [&](const string_type&) -> legacy_type {
+      return legacy_string_type{};
+    },
+    [&](const pattern_type&) -> legacy_type {
+      return legacy_pattern_type{};
+    },
+    [&](const address_type&) -> legacy_type {
+      return legacy_address_type{};
+    },
+    [&](const subnet_type&) -> legacy_type {
+      return legacy_subnet_type{};
+    },
+    [&](const enumeration_type& enumeration) -> legacy_type {
+      auto result = legacy_enumeration_type{};
+      for (uint32_t i = 0; const auto& field : enumeration.fields()) {
+        VAST_ASSERT(i++ == field.key, "failed to convert enumeration type to "
+                                      "legacy enumeration type");
+        result.fields.emplace_back(std::string{field.name});
+      }
+      return result;
+    },
+    [&](const list_type& list) -> legacy_type {
+      return legacy_list_type{legacy_type{list.value_type()}};
+    },
+    [&](const map_type& map) -> legacy_type {
+      return legacy_map_type{
+        legacy_type{map.key_type()},
+        legacy_type{map.value_type()},
+      };
+    },
+    [&](const record_type& record) -> legacy_type {
+      auto result = legacy_record_type{};
+      for (const auto& field : record.fields())
+        result.fields.push_back({
+          std::string{field.name},
+          legacy_type{field.type},
+        });
+      return result;
+    },
+  };
+  auto result = caf::visit(f, *this);
+  if (!name().empty())
+    result = legacy_alias_type{std::move(result)}.name(std::string{name()});
+  for (const auto& tag : tags()) {
+    if (tag.value.empty())
+      result.update_attributes({{std::string{tag.key}}});
+    else
+      result.update_attributes({{
+        std::string{tag.key},
+        std::string{tag.value},
+      }});
+  }
+  return result;
 }
 
 type::operator bool() const noexcept {
@@ -406,6 +472,44 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
               return value->string_view();
             return "";
           }
+        }
+        root = tagged_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
+}
+
+std::vector<type::tag_view> type::tags() const& noexcept {
+  auto result = std::vector<type::tag_view>{};
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
+        return result;
+      case fbs::type::Type::tagged_type_v0:
+        const auto* tagged_type = root->type_as_tagged_type_v0();
+        if (const auto* tags = tagged_type->tags()) {
+          result.reserve(result.size() + tags->size());
+          for (const auto& tag : *tags)
+            result.push_back({
+              tag->key()->string_view(),
+              tag->value() ? tag->value()->string_view() : "",
+            });
         }
         root = tagged_type->type_nested_root();
         VAST_ASSERT(root);

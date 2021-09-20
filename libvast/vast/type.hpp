@@ -169,6 +169,13 @@ public:
   /// @relates legacy_type
   explicit type(const legacy_type& other) noexcept;
 
+  /// Converts a type into a legacy_type.
+  /// @note The roundtrip `type{legacy_type{*this}}` will produce a different
+  /// type beccause of the inconsistent handling of names for legacy types. The
+  /// types will be semantically equivalent, but may not compare equal.
+  /// @relates legacy_type
+  explicit operator legacy_type() const noexcept;
+
   /// Returns whether the type contains a conrete type other than the *none_type*.
   [[nodiscard]] explicit operator bool() const noexcept;
 

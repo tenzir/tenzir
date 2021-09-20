@@ -339,6 +339,44 @@ TEST(record_type) {
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
 }
 
+TEST(legacy_type conversion) {
+  const auto rt = type{record_type{
+    {"i", integer_type{}},
+    {"r1",
+     record_type{
+       {"p", type{"port", integer_type{}}},
+       {"a", address_type{}},
+     }},
+    {"b", type{bool_type{}, {{"key"}}}},
+    {"r2",
+     record_type{
+       {"s", type{subnet_type{}, {{"key", "value"}}}},
+     }},
+  }};
+  const auto lrt = legacy_type{legacy_record_type{
+    {"i", legacy_integer_type{}},
+    {"r1",
+     legacy_record_type{
+       {"p", legacy_alias_type{legacy_integer_type{}}.name("port")},
+       {"a", legacy_address_type{}},
+     }},
+    {"b", legacy_bool_type{}.attributes({{"key"}})},
+    {"r2",
+     legacy_record_type{
+       {"s", legacy_subnet_type{}.attributes({{"key", "value"}})},
+     }},
+  }};
+  // Note that rt == type{lrt} fails because the types are semantically
+  // equivalent, but not exactly equivalent because of the inconsistent handling
+  // of naming in legacy types. As such, the following checks fail:
+  //   CHECK_EQUAL(rt, type{lrt});
+  //   CHECK_EQUAL(legacy_type{rt}, lrt);
+  // Instead, we instead compare the printed versions of the types for
+  // equivalence.
+  CHECK_EQUAL(fmt::format("{}", rt), fmt::format("{}", type{lrt}));
+  CHECK_EQUAL(fmt::format("{}", legacy_type{rt}), fmt::format("{}", lrt));
+}
+
 TEST(named types) {
   const auto at = type{"l1", bool_type{}};
   CHECK(caf::holds_alternative<bool_type>(at));
