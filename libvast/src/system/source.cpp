@@ -289,8 +289,16 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         return err;
       return caf::unit;
     },
-    [self](expression& expr) {
-      self->state.filter = std::move(expr);
+    [self](expression& expr) -> caf::result<void> {
+      auto normalized_expr = normalize_and_validate(std::move(expr));
+      if (!normalized_expr) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("failed to normalize expression: "
+                                           "{}",
+                                           normalized_expr.error()));
+      }
+      self->state.filter = std::move(*normalized_expr);
+      return {};
     },
     [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
