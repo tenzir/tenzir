@@ -667,7 +667,7 @@ ids evaluate(const expression& expr, const table_slice& slice) {
 }
 
 std::optional<table_slice>
-filter(const table_slice& slice, const expression& expr, const ids& hints) {
+filter(const table_slice& slice, expression expr, const ids& hints) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   auto slice_ids = make_ids({{offset, offset + slice.rows()}});
@@ -678,10 +678,19 @@ filter(const table_slice& slice, const expression& expr, const ids& hints) {
   auto selection_rank = rank(selection);
   if (selection_rank == 0)
     return std::nullopt;
-  if (expr == expression{}) {
+  const auto has_expr = expr != expression{};
+  if (!has_expr) {
     // Do all rows qualify?
     if (rank(slice_ids) == selection_rank)
       return slice;
+  } else {
+    // Tailor the expression to the type; this is required for using the
+    // row_evaluator, which expects field and type extractors to be resolved
+    // already.
+    auto tailored_expr = tailor(expr, slice.layout());
+    if (!tailored_expr)
+      return {};
+    expr = std::move(*tailored_expr);
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
@@ -706,8 +715,12 @@ filter(const table_slice& slice, const expression& expr, const ids& hints) {
   VAST_ASSERT(builder);
   auto flat_layout = flatten(slice.layout());
   auto check = [&](row_evaluator eval) {
-    if (expr == expression{})
+    // If no expression was provided, we rely on the provided hints only.
+    if (!has_expr)
       return true;
+    // Check if the expression was unable to be tailored to the type.
+    if (expr == expression{})
+      return false;
     return caf::visit(eval, expr);
   };
   for (auto id : select(selection)) {
