@@ -26,6 +26,7 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/index.hpp"
@@ -808,11 +809,6 @@ index(index_actor::stateful_pointer<index_state> self,
                      *self, query);
         return caf::skip;
       }
-      // TODO: This check is not required technically, but we use the query
-      // supervisor availability to rate-limit meta-index lookups. Do we
-      // really need this?
-      if (!self->state.worker_available())
-        return caf::skip;
       // Query handling
       auto mid = self->current_message_id();
       auto sender = self->current_sender();
@@ -824,18 +820,34 @@ index(index_actor::stateful_pointer<index_state> self,
         unsafe_response(self, sender, {}, mid.response_id(),
                         std::forward<decltype(xs)>(xs)...);
       };
-      // Convenience function for dropping out without producing hits.
-      // Makes sure that clients always receive a 'done' message.
-      auto no_result = [=] {
-        respond(uuid::nil(), uint32_t{0}, uint32_t{0});
-        caf::anon_send(client, atom::done_v);
-      };
       // Sanity check.
       if (!sender) {
         VAST_WARN("{} ignores an anonymous query", *self);
         respond(caf::sec::invalid_argument);
         return {};
       }
+      // TODO: This check is not required technically, but we use the query
+      // supervisor availability to rate-limit meta-index lookups. Do we
+      // really need this?
+      if (!self->state.worker_available())
+        return caf::skip;
+      // Allows the client to query further results after initial taste.
+      auto query_id = uuid::random();
+      // Ensure the query id is unique.
+      while (self->state.pending.find(query_id) != self->state.pending.end()
+             || query_id == uuid::nil())
+        query_id = uuid::random();
+      // Convenience function for dropping out without producing hits.
+      // Makes sure that clients always receive a 'done' message.
+      auto no_result = [=] {
+        respond(query_id, uint32_t{0}, uint32_t{0});
+        caf::anon_send(client, atom::done_v);
+      };
+      auto query_string = to_string(query.expr);
+      // We only use the first 64 bit of the id as key to avoid every
+      // probe having to read a user-space pointer, and 64 bit should
+      // be unique enough for any tracing run.
+      VAST_TRACEPOINT(query_new, query_id.as_u64().first, query_string.c_str());
       std::vector<uuid> candidates;
       if (self->state.active_partition.actor)
         candidates.push_back(self->state.active_partition.id);
@@ -843,6 +855,7 @@ index(index_actor::stateful_pointer<index_state> self,
         candidates.push_back(id);
       auto rp = self->make_response_promise<void>();
       // Get all potentially matching partitions.
+      auto start = std::chrono::steady_clock::now();
       self
         ->request(self->state.meta_index, caf::infinite, atom::candidates_v,
                   query.expr, query.ids)
@@ -866,13 +879,6 @@ index(index_actor::stateful_pointer<index_state> self,
               untyped_rp.deliver(caf::unit);
               return;
             }
-            // Allows the client to query further results after initial taste.
-            auto query_id = uuid::random();
-            // Ensure the query id is unique.
-            while (self->state.pending.find(query_id)
-                     != self->state.pending.end()
-                   || query_id == uuid::nil())
-              query_id = uuid::random();
             auto total = candidates.size();
             auto scheduled = detail::narrow<uint32_t>(
               std::min(candidates.size(), self->state.taste_partitions));
@@ -880,6 +886,9 @@ index(index_actor::stateful_pointer<index_state> self,
             auto result
               = self->state.pending.emplace(query_id, std::move(lookup));
             VAST_ASSERT(result.second);
+            auto delta = std::chrono::steady_clock::now() - start;
+            VAST_TRACEPOINT(query_meta_index, query_id.as_u64().first, total,
+                            delta.count());
             respond(query_id, detail::narrow<uint32_t>(total), scheduled);
             rp.delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
           },
@@ -915,6 +924,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto worker = self->state.next_worker();
       if (!worker)
         return caf::skip;
+      auto now = std::chrono::steady_clock::now();
       // Get partition actors, spawning new ones if needed.
       auto actors
         = self->state.collect_query_actors(query_state, num_partitions);
@@ -923,7 +933,11 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} scheduled {} more partition(s) for query id {}"
                  "with {} partitions remaining",
                  *self, actors.size(), query_id, query_state.partitions.size());
-      self->send(*worker, query_state.query, std::move(actors), client);
+      auto delta = std::chrono::steady_clock::now() - now;
+      VAST_TRACEPOINT(query_resume, query_id.as_u64().first, actors.size(),
+                      delta.count());
+      self->send(*worker, atom::supervise_v, query_id, query_state.query,
+                 std::move(actors), client);
       // Cleanup if we exhausted all candidates.
       if (query_state.partitions.empty())
         self->state.pending.erase(iter);

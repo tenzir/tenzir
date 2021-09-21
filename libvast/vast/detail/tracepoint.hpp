@@ -55,7 +55,7 @@
 //
 // [1]: Note that for bpftrace versions <= 0.8, the tracepoint name in this
 //      example would need to be specified as `meta_index_lookup` instead
-//      of `vast:meta_index_lookup`.
+//      of `vast:meta_index_lookup`, and the binary would need to be named `vast`.
 //
 //
 // # Inner Workings
@@ -255,13 +255,19 @@
 ///
 ///               perf probe:        `sdt_vast:foo` or `%foo`
 ///               bpftrace:          `usdt:/path/to/libvast.so:vast:foo`
-///               bpftrace (<= 0.8): `usdt:/path/to/libvast.so:foo`
+///               bpftrace (<= 0.8): `usdt:/path/to/vast:foo`
 ///               bcc:               `USDT("/path/to/libvast.so")
 ///                                     .enable_probe("foo", "foo_handler")`
 ///
+///             NOTE: Versions of bpftrace prior to 0.8 implicitly assume that
+///             the provider is the same as the binary name and fail with an
+///             misleading error if it is not. As a workaround, symlinks can
+///             can be used when setting the tracepoint.
+///
 /// @param args Further arguments. These must be "simple" arguments like
 ///             integers or pointers, and no more than the number of available
-///             registers.
+///             registers. On x86, only the first 6 arguments can be accessed
+///             at runtime.
 #define VAST_TRACEPOINT(name, ...) \
   FOLLY_SDT(vast, name, __VA_ARGS__)
 
