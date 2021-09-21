@@ -929,10 +929,6 @@ bool type_check(const legacy_type& t, const data& x);
 /// @relates type data
 data construct(const legacy_type& t);
 
-/// @returns a digest ID for `x`.
-/// @relates type
-std::string to_digest(const legacy_type& x);
-
 /// Tries to locate an attribute.
 /// @param t The type to check.
 /// @param key The attribute key.

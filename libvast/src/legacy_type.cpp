@@ -1008,11 +1008,6 @@ data construct(const legacy_type& x) {
                x);
 }
 
-std::string to_digest(const legacy_type& x) {
-  std::hash<legacy_type> h;
-  return std::to_string(h(x));
-}
-
 namespace {
 
 const char* kind_tbl[] = {

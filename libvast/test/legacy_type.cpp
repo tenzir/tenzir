@@ -660,7 +660,6 @@ TEST(hashable) {
                               {"y", legacy_string_type{}},
                               {"z", legacy_list_type{legacy_real_type{}}}};
   CHECK_EQUAL(hash(x), 14779728178683051124ul);
-  CHECK_EQUAL(to_digest(x), std::to_string(hash(legacy_type{x})));
 }
 
 TEST(json) {
