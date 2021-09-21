@@ -100,9 +100,6 @@ private:
   const index_state& state_;
 };
 
-using pending_query_map
-  = detail::stable_map<uuid, std::vector<evaluation_triple>>;
-
 struct query_state {
   /// The UUID of the query.
   vast::uuid id;
@@ -225,6 +222,11 @@ struct index_state {
 
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};
+
+  /// Maps exporter actor address to known query ID for monitoring
+  /// purposes.
+  std::unordered_map<caf::actor_addr, std::unordered_set<uuid>> monitored_queries
+    = {};
 
   /// The number of query supervisors.
   size_t workers = 0;
