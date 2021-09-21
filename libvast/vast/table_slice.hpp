@@ -228,7 +228,7 @@ public:
   ///          expression.
   /// @pre `slice.encoding() != table_slice_encoding::none`
   friend std::optional<table_slice>
-  filter(const table_slice& slice, const expression& expr, const ids& hints);
+  filter(const table_slice& slice, expression expr, const ids& hints);
 
   /// Counts the rows that match an expression.
   /// @param slice The input table slice.
@@ -316,7 +316,7 @@ ids evaluate(const expression& expr, const table_slice& slice);
 // Attribute-specifier-seqs are not allowed in friend function declarations, so
 // we re-declare the filter functions with nodiscard here.
 [[nodiscard]] std::optional<table_slice>
-filter(const table_slice& slice, const expression& expr, const ids& hints);
+filter(const table_slice& slice, expression expr, const ids& hints);
 
 /// Produces a new table slice consisting only of events that match the given
 /// expression. Does not preserve ids, use `select`instead if the id mapping
