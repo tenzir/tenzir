@@ -12,8 +12,10 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/die.hpp"
+#include "vast/error.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/legacy_type.hpp"
+#include "vast/schema.hpp"
 
 #include <caf/sum_type.hpp>
 #include <fmt/format.h>
@@ -519,6 +521,31 @@ std::vector<type::tag_view> type::tags() const& noexcept {
   }
 }
 
+bool is_container(const type& type) noexcept {
+  const auto& root = type.table(type::transparent::yes);
+  switch (root.type_type()) {
+    case fbs::type::Type::NONE:
+    case fbs::type::Type::bool_type_v0:
+    case fbs::type::Type::integer_type_v0:
+    case fbs::type::Type::count_type_v0:
+    case fbs::type::Type::real_type_v0:
+    case fbs::type::Type::duration_type_v0:
+    case fbs::type::Type::time_type_v0:
+    case fbs::type::Type::string_type_v0:
+    case fbs::type::Type::pattern_type_v0:
+    case fbs::type::Type::address_type_v0:
+    case fbs::type::Type::subnet_type_v0:
+    case fbs::type::Type::enumeration_type_v0:
+      return false;
+    case fbs::type::Type::list_type_v0:
+    case fbs::type::Type::map_type_v0:
+    case fbs::type::Type::record_type_v0:
+      return true;
+    case fbs::type::Type::tagged_type_v0:
+      die("tagged types must be resolved at this point.");
+  }
+}
+
 type flatten(const type& type) noexcept {
   if (const auto* record = caf::get_if<record_type>(&type))
     return flatten(*record);
@@ -630,6 +657,92 @@ bool congruent(const type& x, const data& y) noexcept {
 
 bool congruent(const data& x, const type& y) noexcept {
   return congruent(y, x);
+}
+
+bool compatible(const type& lhs, relational_operator op,
+                const type& rhs) noexcept {
+  auto string_and_pattern = [](auto& x, auto& y) {
+    return (caf::holds_alternative<string_type>(x)
+            && caf::holds_alternative<pattern_type>(y))
+           || (caf::holds_alternative<pattern_type>(x)
+               && caf::holds_alternative<string_type>(y));
+  };
+  switch (op) {
+    case relational_operator::match:
+    case relational_operator::not_match:
+      return string_and_pattern(lhs, rhs);
+    case relational_operator::equal:
+    case relational_operator::not_equal:
+      return !lhs || !rhs || string_and_pattern(lhs, rhs)
+             || congruent(lhs, rhs);
+    case relational_operator::less:
+    case relational_operator::less_equal:
+    case relational_operator::greater:
+    case relational_operator::greater_equal:
+      return congruent(lhs, rhs);
+    case relational_operator::in:
+    case relational_operator::not_in:
+      if (caf::holds_alternative<string_type>(lhs))
+        return caf::holds_alternative<string_type>(rhs) || is_container(rhs);
+      else if (caf::holds_alternative<address_type>(lhs)
+               || caf::holds_alternative<subnet_type>(lhs))
+        return caf::holds_alternative<subnet_type>(rhs) || is_container(rhs);
+      else
+        return is_container(rhs);
+    case relational_operator::ni:
+      return compatible(rhs, relational_operator::in, lhs);
+    case relational_operator::not_ni:
+      return compatible(rhs, relational_operator::not_in, lhs);
+  }
+  die("missing case for relational operator");
+}
+
+bool compatible(const type& lhs, relational_operator op,
+                const data& rhs) noexcept {
+  auto string_and_pattern = [](auto& x, auto& y) {
+    return (caf::holds_alternative<string_type>(x)
+            && caf::holds_alternative<pattern>(y))
+           || (caf::holds_alternative<pattern_type>(x)
+               && caf::holds_alternative<std::string>(y));
+  };
+  switch (op) {
+    case relational_operator::match:
+    case relational_operator::not_match:
+      return string_and_pattern(lhs, rhs);
+    case relational_operator::equal:
+    case relational_operator::not_equal:
+      return !lhs || caf::holds_alternative<caf::none_t>(rhs)
+             || string_and_pattern(lhs, rhs) || congruent(lhs, rhs);
+    case relational_operator::less:
+    case relational_operator::less_equal:
+    case relational_operator::greater:
+    case relational_operator::greater_equal:
+      return congruent(lhs, rhs);
+    case relational_operator::in:
+    case relational_operator::not_in:
+      if (caf::holds_alternative<string_type>(lhs))
+        return caf::holds_alternative<std::string>(rhs) || is_container(rhs);
+      else if (caf::holds_alternative<address_type>(lhs)
+               || caf::holds_alternative<subnet_type>(lhs))
+        return caf::holds_alternative<subnet>(rhs) || is_container(rhs);
+      else
+        return is_container(rhs);
+    case relational_operator::ni:
+    case relational_operator::not_ni:
+      if (caf::holds_alternative<std::string>(rhs))
+        return caf::holds_alternative<string_type>(lhs) || is_container(lhs);
+      else if (caf::holds_alternative<address>(rhs)
+               || caf::holds_alternative<subnet>(rhs))
+        return caf::holds_alternative<subnet_type>(lhs) || is_container(lhs);
+      else
+        return is_container(lhs);
+  }
+  die("missing case for relational operator");
+}
+
+bool compatible(const data& lhs, relational_operator op,
+                const type& rhs) noexcept {
+  return compatible(rhs, flip(op), lhs);
 }
 
 // -- none_type ---------------------------------------------------------------

@@ -228,6 +228,9 @@ public:
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
 
+  /// Checks whether a type is a container type.
+  friend bool is_container(const type& type) noexcept;
+
   /// Checks whether two types are *congruent* to each other, i.e., whether they
   /// are *representationally equal*.
   /// @param x The first type or data.
@@ -235,6 +238,24 @@ public:
   friend bool congruent(const type& x, const type& y) noexcept;
   friend bool congruent(const type& x, const data& y) noexcept;
   friend bool congruent(const data& x, const type& y) noexcept;
+
+  /// Checks whether the types of two nodes in a predicate are compatible with
+  /// each other, i.e., whether operator evaluation for the given types is
+  /// semantically correct.
+  /// @note This function assumes the AST has already been normalized with the
+  /// extractor occurring at the LHS and the value at the RHS.
+  /// @param lhs The LHS of *op*.
+  /// @param op The operator under which to compare *lhs* and *rhs*.
+  /// @param rhs The RHS of *op*.
+  /// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
+  /// @relates expression
+  /// @relates data
+  friend bool
+  compatible(const type& lhs, relational_operator op, const type& rhs) noexcept;
+  friend bool
+  compatible(const type& lhs, relational_operator op, const data& rhs) noexcept;
+  friend bool
+  compatible(const data& lhs, relational_operator op, const type& rhs) noexcept;
 
 protected:
   /// The underlying representation of the type.

@@ -10,6 +10,7 @@
 
 #include "vast/type.hpp"
 
+#include "vast/data.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
@@ -509,6 +510,15 @@ TEST(congruence) {
   CHECK(congruent(type{}, type{}));
   CHECK(!congruent(type{string_type{}}, type{}));
   CHECK(!congruent(type{}, type{string_type{}}));
+}
+
+TEST(compatibility) {
+  CHECK(compatible(type{address_type{}}, relational_operator::in,
+                   type{subnet_type{}}));
+  CHECK(compatible(type{address_type{}}, relational_operator::in, subnet{}));
+  CHECK(compatible(type{subnet_type{}}, relational_operator::in,
+                   type{subnet_type{}}));
+  CHECK(compatible(type{subnet_type{}}, relational_operator::in, subnet{}));
 }
 
 FIXTURE_SCOPE(type_fixture, fixtures::deterministic_actor_system)
