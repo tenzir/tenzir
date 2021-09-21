@@ -745,6 +745,31 @@ bool compatible(const data& lhs, relational_operator op,
   return compatible(rhs, flip(op), lhs);
 }
 
+bool is_subset(const type& x, const type& y) noexcept {
+  const auto* sub = caf::get_if<record_type>(&x);
+  const auto* super = caf::get_if<record_type>(&y);
+  // If either of the types is not a record type, check if they are
+  // congruent instead.
+  if (!sub || !super)
+    return congruent(x, y);
+  // Check whether all fields of the subset exist in the superset.
+  for (const auto& sub_field : sub->fields()) {
+    bool exists_in_superset = false;
+    for (const auto& super_field : super->fields()) {
+      if (sub_field.name == super_field.name) {
+        // Perform the check recursively to support nested record types.
+        if (!is_subset(sub_field.type, super_field.type))
+          return false;
+        exists_in_superset = true;
+      }
+    }
+    // Not all fields of the subset exist in the superset; exit early.
+    if (!exists_in_superset)
+      return false;
+  }
+  return true;
+}
+
 // -- none_type ---------------------------------------------------------------
 
 uint8_t none_type::type_index() noexcept {

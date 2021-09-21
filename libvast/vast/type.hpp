@@ -257,6 +257,13 @@ public:
   friend bool
   compatible(const data& lhs, relational_operator op, const type& rhs) noexcept;
 
+  /// Checks whether a type is a subset of another, i.e., whether all fields of
+  /// the first type are contained within the second type.
+  /// @param x The first type.
+  /// @param y The second type.
+  /// @returns `true` *iff* *x* is a subset of *y*.
+  friend bool is_subset(const type& x, const type& y) noexcept;
+
 protected:
   /// The underlying representation of the type.
   chunk_ptr table_ = {}; // NOLINT

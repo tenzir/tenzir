@@ -521,6 +521,53 @@ TEST(compatibility) {
   CHECK(compatible(type{subnet_type{}}, relational_operator::in, subnet{}));
 }
 
+TEST(subset) {
+  auto i = type{integer_type{}};
+  auto j = type{integer_type{}};
+  CHECK(is_subset(i, j));
+  i = type{"i", i};
+  j = type{"j", j};
+  CHECK(is_subset(i, j));
+  auto c = type{"c", count_type{}};
+  CHECK(is_subset(i, i));
+  CHECK(is_subset(i, j));
+  CHECK(!is_subset(i, c));
+  auto r0 = type{record_type{
+    {"a", address_type{}},
+    {"b", bool_type{}},
+    {"c", count_type{}},
+  }};
+  // Rename a field.
+  auto r1 = type{record_type{
+    {"a", address_type{}},
+    {"b", bool_type{}},
+    {"d", count_type{}},
+  }};
+  // Add a field.
+  auto r2 = type{record_type{
+    {"a", address_type{}},
+    {"b", bool_type{}},
+    {"c", count_type{}},
+    {"d", count_type{}},
+  }};
+  // Remove a field.
+  auto r3 = type{record_type{
+    {"a", address_type{}},
+    {"c", count_type{}},
+  }};
+  // Change a field's type.
+  auto r4 = type{record_type{
+    {"a", pattern_type{}},
+    {"b", bool_type{}},
+    {"c", count_type{}},
+  }};
+  CHECK(is_subset(r0, r0));
+  CHECK(!is_subset(r0, r1));
+  CHECK(is_subset(r0, r2));
+  CHECK(!is_subset(r0, r3));
+  CHECK(!is_subset(r0, r4));
+}
+
 FIXTURE_SCOPE(type_fixture, fixtures::deterministic_actor_system)
 
 TEST(serialization) {
