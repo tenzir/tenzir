@@ -230,6 +230,10 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto [err, produced] = self->state.reader->read(
         events, self->state.table_slice_size, push_slice);
       VAST_DEBUG("{} read {} events", *self, produced);
+      // TODO: We use the produced number in metrics and INFO logs, but it is
+      // the number _before_ filtering which may be a bit unexpected to the
+      // user. Because we filter the slices 1-by-1 this isn't an easy change to
+      // make. This is especially annoying when the filter is invalid.
       t.stop(produced);
       self->state.count += produced;
       auto finish = [&] {
