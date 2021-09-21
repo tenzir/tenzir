@@ -303,13 +303,15 @@ validator::operator()(const meta_extractor& ex, const data& d) {
                            "type meta extractor requires string or pattern "
                            "operand",
                            "#type", op_, d);
-  if (ex.kind == meta_extractor::field
-      && !(caf::holds_alternative<std::string>(d)
-           || caf::holds_alternative<pattern>(d)))
-    return caf::make_error(ec::syntax_error,
-                           "field attribute extractor requires string or "
-                           "pattern operand",
-                           "#field", op_, d);
+  if (ex.kind == meta_extractor::field) {
+    if (!caf::holds_alternative<std::string>(d)
+        || op_ != relational_operator::equal)
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("field attribute extractor only "
+                                         "supports string equality operations: "
+                                         "#field {} {}",
+                                         op_, d));
+  }
   return caf::no_error;
 }
 
