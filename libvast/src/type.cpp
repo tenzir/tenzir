@@ -290,7 +290,7 @@ type::type(const legacy_type& other) noexcept {
   caf::visit(f, other);
 }
 
-type::operator legacy_type() const noexcept {
+legacy_type type::to_legacy_type() const noexcept {
   auto f = detail::overload{
     [&](const none_type&) -> legacy_type {
       return legacy_none_type{};
@@ -335,12 +335,12 @@ type::operator legacy_type() const noexcept {
       return result;
     },
     [&](const list_type& list) -> legacy_type {
-      return legacy_list_type{legacy_type{list.value_type()}};
+      return legacy_list_type{list.value_type().to_legacy_type()};
     },
     [&](const map_type& map) -> legacy_type {
       return legacy_map_type{
-        legacy_type{map.key_type()},
-        legacy_type{map.value_type()},
+        map.key_type().to_legacy_type(),
+        map.value_type().to_legacy_type(),
       };
     },
     [&](const record_type& record) -> legacy_type {
@@ -348,7 +348,7 @@ type::operator legacy_type() const noexcept {
       for (const auto& field : record.fields())
         result.fields.push_back({
           std::string{field.name},
-          legacy_type{field.type},
+          field.type.to_legacy_type(),
         });
       return result;
     },

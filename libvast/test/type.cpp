@@ -375,7 +375,7 @@ TEST(legacy_type conversion) {
   // Instead, we instead compare the printed versions of the types for
   // equivalence.
   CHECK_EQUAL(fmt::format("{}", rt), fmt::format("{}", type{lrt}));
-  CHECK_EQUAL(fmt::format("{}", legacy_type{rt}), fmt::format("{}", lrt));
+  CHECK_EQUAL(fmt::format("{}", rt.to_legacy_type()), fmt::format("{}", lrt));
 }
 
 TEST(named types) {
