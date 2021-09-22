@@ -1216,6 +1216,82 @@ record_type::leaf_iterable record_type::leaves() const noexcept {
   return leaf_iterable{*this};
 }
 
+std::optional<offset>
+record_type::resolve_prefix(std::string_view key) const noexcept {
+  if (key.empty())
+    return {};
+  auto index = static_cast<offset::size_type>(-1);
+  for (auto&& field : fields()) {
+    ++index;
+    VAST_ASSERT(!field.name.empty());
+    // Check whether the field name is a prefix of the key to resolve.
+    auto [name_mismatch, key_mismatch] = std::mismatch(
+      field.name.begin(), field.name.end(), key.begin(), key.end());
+    if (name_mismatch == field.name.end()) {
+      // If it's an exact match we already have our result.
+      if (key_mismatch == key.end())
+        return offset{index};
+      // Otherwise, if the remainder begings with the . separator and the nested
+      // type is a record type, we can recurse and try to match the remainder.
+      if (*key_mismatch++ != '.')
+        continue;
+      if (const auto* record = caf::get_if<record_type>(&field.type)) {
+        if (auto result
+            = record->resolve_prefix(key.substr(key_mismatch - key.begin()))) {
+          result->insert(result->begin(), index);
+          return result;
+        }
+      }
+    }
+  }
+  return {};
+}
+
+std::vector<offset>
+record_type::resolve_suffix(std::string_view key) const noexcept {
+  auto result = std::vector<offset>{};
+  for (auto&& [_, offset] : leaves()) {
+    auto name = this->key(offset);
+    auto [name_mismatch, key_mismatch]
+      = std::mismatch(name.rbegin(), name.rend(), key.rbegin(), key.rend());
+    if (key_mismatch == key.rend()) {
+      if (name_mismatch == name.rend() || *name_mismatch == '.')
+        result.push_back(std::move(offset));
+    }
+  }
+  return result;
+}
+
+std::string_view record_type::key(size_t index) const noexcept {
+  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
+  const auto* field = record->fields()->Get(index);
+  VAST_ASSERT(field);
+  return field->name()->string_view();
+}
+
+std::string record_type::key(const offset& index) const noexcept {
+  auto result = std::string{};
+  const auto* record = table(type::transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  for (size_t i = 0; i < index.size() - 1; ++i) {
+    VAST_ASSERT(index[i] < record->fields()->size());
+    const auto* field = record->fields()->Get(index[i]);
+    VAST_ASSERT(field);
+    fmt::format_to(std::back_inserter(result), "{}.",
+                   field->name()->string_view());
+    record = field->type_nested_root()->type_as_record_type_v0();
+    VAST_ASSERT(record);
+  }
+  VAST_ASSERT(index.back() < record->fields()->size());
+  const auto* field = record->fields()->Get(index.back());
+  VAST_ASSERT(field);
+  fmt::format_to(std::back_inserter(result), "{}",
+                 field->name()->string_view());
+  return result;
+}
+
 record_type::field_view record_type::field(size_t index) const noexcept {
   const auto* record = table(transparent::yes).type_as_record_type_v0();
   VAST_ASSERT(record);
@@ -1228,7 +1304,7 @@ record_type::field_view record_type::field(size_t index) const noexcept {
   };
 }
 
-record_type::field_view record_type::field(offset index) const noexcept {
+record_type::field_view record_type::field(const offset& index) const noexcept {
   VAST_ASSERT(!index.empty(), "offset must not be empty");
   const auto* record = table(transparent::yes).type_as_record_type_v0();
   VAST_ASSERT(record);
@@ -1250,9 +1326,12 @@ record_type::field_view record_type::field(offset index) const noexcept {
 }
 
 record_type flatten(const record_type& type) noexcept {
-  auto fields = std::vector<record_type::field_view>{};
-  for (const auto& [field, _] : type.leaves())
-    fields.push_back(field);
+  auto fields = std::vector<struct record_type::field>{};
+  for (const auto& [field, offset] : type.leaves())
+    fields.push_back({
+      type.key(offset),
+      field.type,
+    });
   return record_type{fields};
 }
 

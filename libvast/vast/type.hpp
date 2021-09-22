@@ -646,11 +646,25 @@ public:
   /// Returns an iterable view over the leaf fields of a record type.
   [[nodiscard]] leaf_iterable leaves() const noexcept;
 
+  /// Resolves a key into an offset.
+  /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
+  /// but not 'x.y_other.z' .
+  [[nodiscard]] std::optional<offset>
+  resolve_prefix(std::string_view key) const noexcept;
+
+  /// Resolves a key into a list of offsets by suffix matching the given key.
+  /// @note This only matches on full keys, so the key 'y.z' matches 'x.y.z' but
+  /// not 'x.other_y.z'.
+  [[nodiscard]] std::vector<offset>
+  resolve_suffix(std::string_view key) const noexcept;
+
+  /// Computes the flattened field name at a given index.
+  [[nodiscard]] std::string_view key(size_t index) const noexcept;
+  [[nodiscard]] std::string key(const offset& index) const noexcept;
+
   /// Returns the field at the given index.
   [[nodiscard]] field_view field(size_t index) const noexcept;
-
-  /// Returns the field at the given offset.
-  [[nodiscard]] field_view field(offset index) const noexcept;
+  [[nodiscard]] field_view field(const offset& index) const noexcept;
 
   /// Returns a new, flattened record type.
   friend record_type flatten(const record_type& type) noexcept;

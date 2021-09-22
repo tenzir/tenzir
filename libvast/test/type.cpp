@@ -336,8 +336,42 @@ TEST(record_type) {
               "i: integer, r1: record {p: port, a: address}, b: bool, r2: "
               "record {s: subnet}");
   CHECK_EQUAL(fmt::format("{}", fmt::join(flatten(r).fields(), ", ")),
-              "i: integer, p: port, a: address, b: bool, s: subnet");
+              "i: integer, r1.p: port, r1.a: address, b: bool, r2.s: subnet");
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
+}
+
+TEST(record_type name resolving) {
+  const auto rt = record_type{
+    {"i", integer_type{}},
+    {"r",
+     record_type{
+       {"p", type{"port", integer_type{}}},
+       {"a", address_type{}},
+       {"not_i", integer_type{}},
+     }},
+    {"b", type{bool_type{}, {{"key"}}}},
+    {"r2",
+     record_type{
+       {"s", type{subnet_type{}, {{"key", "value"}}}},
+       {"r",
+        record_type{
+          {"a", address_type{}},
+        }},
+     }},
+  };
+  CHECK_EQUAL(rt.resolve_prefix("i"), offset{0});
+  CHECK_EQUAL(rt.resolve_prefix("r2"), offset{3});
+  CHECK_EQUAL(rt.resolve_prefix("r.a"), (offset{1, 1}));
+  CHECK_EQUAL(rt.resolve_prefix("a"), std::nullopt);
+  CHECK_EQUAL(rt.resolve_prefix("r.not"), std::nullopt);
+  CHECK_EQUAL(rt.resolve_suffix("a"), (std::vector<offset>{{1, 1}, {3, 1, 0}}));
+  CHECK_EQUAL(rt.resolve_suffix("r.a"),
+              (std::vector<offset>{{1, 1}, {3, 1, 0}}));
+  CHECK_EQUAL(rt.resolve_suffix("r"), (std::vector<offset>{}));
+  CHECK_EQUAL(rt.resolve_suffix("r2.r.a"), (std::vector<offset>{{3, 1, 0}}));
+  CHECK_EQUAL(rt.resolve_suffix("2.r.a"), (std::vector<offset>{}));
+  CHECK_EQUAL(rt.resolve_suffix("i"), (std::vector<offset>{{0}}));
+  CHECK_EQUAL(rt.resolve_suffix(""), (std::vector<offset>{}));
 }
 
 TEST(legacy_type conversion) {
