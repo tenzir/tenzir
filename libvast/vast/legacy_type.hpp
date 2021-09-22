@@ -785,14 +785,6 @@ legacy_record_type flatten(const legacy_record_type& rec);
 /// @relates type legacy_record_type
 legacy_type flatten(const legacy_type& t);
 
-/// Queries whether `rec` is a flattened record.
-/// @relates type legacy_record_type
-bool is_flat(const legacy_record_type& rec);
-
-/// Queries whether `rec` is a flattened record.
-/// @relates type legacy_record_type
-bool is_flat(const legacy_type& t);
-
 /// Computes the size of a flat representation of `rec`.
 size_t flat_size(const legacy_record_type& rec);
 
