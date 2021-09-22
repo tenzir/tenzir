@@ -1021,42 +1021,6 @@ using caf::detail::tl_size;
 
 static_assert(std::size(kind_tbl) == tl_size<legacy_concrete_types>::value);
 
-data jsonize(const legacy_type& x) {
-  return visit(detail::overload{
-                 [](const legacy_enumeration_type& t) {
-                   list a;
-                   std::transform(t.fields.begin(), t.fields.end(),
-                                  std::back_inserter(a),
-                                  [](auto& x) { return data{x}; });
-                   return data{std::move(a)};
-                 },
-                 [&](const legacy_list_type& t) {
-                   record o;
-                   o["value_type"] = to_data(t.value_type);
-                   return data{std::move(o)};
-                 },
-                 [&](const legacy_map_type& t) {
-                   record o;
-                   o["key_type"] = to_data(t.key_type);
-                   o["value_type"] = to_data(t.value_type);
-                   return data{std::move(o)};
-                 },
-                 [&](const legacy_record_type& t) {
-                   record o;
-                   for (auto& field : t.fields)
-                     o[to_string(field.name)] = to_data(field.type);
-                   return data{std::move(o)};
-                 },
-                 [&](const legacy_alias_type& t) {
-                   return to_data(t.value_type);
-                 },
-                 [](const legacy_abstract_type&) {
-                   return data{};
-                 },
-               },
-               x);
-}
-
 } // namespace
 
 std::string kind(const legacy_type& x) {
@@ -1065,19 +1029,6 @@ std::string kind(const legacy_type& x) {
 
 bool has_skip_attribute(const legacy_type& t) {
   return has_attribute(t, "skip");
-}
-
-bool convert(const legacy_type& t, data& d) {
-  record o;
-  o["name"] = t.name();
-  o["kind"] = kind(t);
-  o["structure"] = jsonize(t);
-  record attrs;
-  for (auto& a : t.attributes())
-    attrs.emplace(a.key, a.value ? data{*a.value} : data{});
-  o["attributes"] = std::move(attrs);
-  d = std::move(o);
-  return true;
 }
 
 } // namespace vast

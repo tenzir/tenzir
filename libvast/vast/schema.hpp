@@ -82,8 +82,6 @@ private:
   std::vector<value_type> types_;
 };
 
-bool convert(const schema& s, data& d);
-
 /// Loads the complete schema for an invocation by combining the configured
 /// schemas with the ones passed directly as command line options.
 /// @param options The set of command line options.

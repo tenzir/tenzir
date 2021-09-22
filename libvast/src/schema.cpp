@@ -184,16 +184,6 @@ void serialize(caf::deserializer& source, schema& sch) {
   parse(i, str.end(), sch);
 }
 
-bool convert(const schema& s, data& d) {
-  record o;
-  list a;
-  std::transform(s.begin(), s.end(), std::back_inserter(a),
-                 [](auto& t) { return to_data(t); });
-  o["types"] = std::move(a);
-  d = std::move(o);
-  return true;
-}
-
 caf::expected<schema> get_schema(const caf::settings& options) {
   // Get the default schema from the registry.
   auto schema_reg_ptr = event_types::get();

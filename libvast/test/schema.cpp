@@ -622,30 +622,3 @@ TEST(parseable - overwriting with self reference) {
     CHECK_EQUAL(bar, expected);
   }
 }
-
-TEST(json) {
-  schema s;
-  auto t0 = legacy_count_type{};
-  t0 = t0.name("foo");
-  CHECK(s.add(t0));
-  auto t1 = legacy_string_type{};
-  t1 = t1.name("bar");
-  CHECK(s.add(t1));
-  auto expected = R"__({
-  "types": [
-    {
-      "name": "foo",
-      "kind": "count",
-      "structure": null,
-      "attributes": {}
-    },
-    {
-      "name": "bar",
-      "kind": "string",
-      "structure": null,
-      "attributes": {}
-    }
-  ]
-})__";
-  CHECK_EQUAL(to_json(to_data(s)), expected);
-}

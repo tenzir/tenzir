@@ -662,59 +662,6 @@ TEST(hashable) {
   CHECK_EQUAL(hash(x), 14779728178683051124ul);
 }
 
-TEST(json) {
-  auto e = legacy_enumeration_type{{"foo", "bar", "baz"}};
-  e = e.name("e");
-  auto t = legacy_map_type{legacy_bool_type{}, legacy_count_type{}};
-  t.name("bit_table");
-  auto r = legacy_record_type{
-    {"x", legacy_address_type{}.attributes({{"skip"}})},
-    {"y", legacy_bool_type{}.attributes({{"default", "F"}})},
-    {"z", legacy_record_type{{"inner", e}}}};
-  r = r.name("foo");
-  auto expected = R"__({
-  "name": "foo",
-  "kind": "record",
-  "structure": {
-    "x": {
-      "name": "",
-      "kind": "address",
-      "structure": null,
-      "attributes": {
-        "skip": null
-      }
-    },
-    "y": {
-      "name": "",
-      "kind": "bool",
-      "structure": null,
-      "attributes": {
-        "default": "F"
-      }
-    },
-    "z": {
-      "name": "",
-      "kind": "record",
-      "structure": {
-        "inner": {
-          "name": "e",
-          "kind": "enumeration",
-          "structure": [
-            "foo",
-            "bar",
-            "baz"
-          ],
-          "attributes": {}
-        }
-      },
-      "attributes": {}
-    }
-  },
-  "attributes": {}
-})__";
-  CHECK_EQUAL(to_json(to_data(legacy_type{r})), expected);
-}
-
 FIXTURE_SCOPE(type_tests, fixtures::deterministic_actor_system)
 
 TEST(serialization) {

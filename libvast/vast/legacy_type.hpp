@@ -959,9 +959,6 @@ bool has_attribute(const Type& t, std::string_view key) {
 /// @relates has_attribute type
 bool has_skip_attribute(const legacy_type& t);
 
-/// @relates type
-bool convert(const legacy_type& t, data& d);
-
 } // namespace vast
 
 namespace caf {
