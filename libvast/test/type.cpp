@@ -374,6 +374,38 @@ TEST(record_type name resolving) {
   CHECK_EQUAL(rt.resolve_suffix(""), (std::vector<offset>{}));
 }
 
+TEST(record_type flat index computation) {
+  auto x = record_type{
+    {"x",
+     record_type{
+       {"y",
+        record_type{
+          {"z", integer_type{}},
+          {"k", bool_type{}},
+        }},
+       {"m",
+        record_type{
+          {"y",
+           record_type{
+             {"a", address_type{}},
+           }},
+          {"f", real_type{}},
+        }},
+       {"b", bool_type{}},
+     }},
+    {"y",
+     record_type{
+       {"b", bool_type{}},
+     }},
+  };
+  CHECK_EQUAL(x.flat_index(offset({0, 0, 0})), 0u);
+  CHECK_EQUAL(x.flat_index(offset({0, 0, 1})), 1u);
+  CHECK_EQUAL(x.flat_index(offset({0, 1, 0, 0})), 2u);
+  CHECK_EQUAL(x.flat_index(offset({0, 1, 1})), 3u);
+  CHECK_EQUAL(x.flat_index(offset({0, 2})), 4u);
+  CHECK_EQUAL(x.flat_index(offset({1, 0})), 5u);
+}
+
 TEST(legacy_type conversion) {
   const auto rt = type{record_type{
     {"i", integer_type{}},

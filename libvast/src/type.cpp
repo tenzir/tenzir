@@ -120,6 +120,36 @@ void construct_record_type(type& self, const T* begin, const T* end) {
   self = type{std::move(chunk)};
 }
 
+size_t flat_size(const fbs::Type* view) noexcept {
+  VAST_ASSERT(view);
+  switch (view->type_type()) {
+    case fbs::type::Type::NONE:
+    case fbs::type::Type::bool_type_v0:
+    case fbs::type::Type::integer_type_v0:
+    case fbs::type::Type::count_type_v0:
+    case fbs::type::Type::real_type_v0:
+    case fbs::type::Type::duration_type_v0:
+    case fbs::type::Type::time_type_v0:
+    case fbs::type::Type::string_type_v0:
+    case fbs::type::Type::pattern_type_v0:
+    case fbs::type::Type::address_type_v0:
+    case fbs::type::Type::subnet_type_v0:
+    case fbs::type::Type::enumeration_type_v0:
+    case fbs::type::Type::list_type_v0:
+    case fbs::type::Type::map_type_v0:
+      return 1;
+    case fbs::type::Type::record_type_v0: {
+      const auto* record = view->type_as_record_type_v0();
+      auto result = size_t{0};
+      for (const auto& field : *record->fields())
+        result += flat_size(field->type_nested_root());
+      return result;
+    }
+    case fbs::type::Type::tagged_type_v0:
+      return flat_size(view->type_as_tagged_type_v0()->type_nested_root());
+  }
+};
+
 } // namespace
 
 // -- type --------------------------------------------------------------------
@@ -1495,6 +1525,26 @@ record_type::field_view record_type::field(const offset& index) const noexcept {
     field->name()->string_view(),
     type{table_->slice(as_bytes(*field->type()))},
   };
+}
+
+size_t record_type::flat_index(const offset& index) const noexcept {
+  VAST_ASSERT(!index.empty(), "offset must not be empty");
+  auto result = size_t{0};
+  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  for (size_t i = 0; i < index.size(); ++i) {
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // Add the flat size of the fields up until before the record type the
+    // offset tells us to recurse into.
+    VAST_ASSERT(index[i] < fields->size(), "index out of bounds");
+    for (size_t j = 0; j < index[i]; ++j)
+      result += flat_size(fields->Get(j)->type_nested_root());
+    // Recurse into the next layer, but don't count that record type itself.
+    record = resolve_transparent(fields->Get(index[i])->type_nested_root())
+               ->type_as_record_type_v0();
+  }
+  return result;
 }
 
 record_type flatten(const record_type& type) noexcept {

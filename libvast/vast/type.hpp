@@ -732,6 +732,11 @@ public:
   [[nodiscard]] field_view field(size_t index) const noexcept;
   [[nodiscard]] field_view field(const offset& index) const noexcept;
 
+  /// Returns the flat index to a given offset.
+  /// @note This is necessary to work with the table_slice API, which does not
+  /// support direct access via offsets, but rather requires a flat index.
+  [[nodiscard]] size_t flat_index(const offset& index) const noexcept;
+
   /// Returns a new, flattened record type.
   friend record_type flatten(const record_type& type) noexcept;
 };
