@@ -416,6 +416,13 @@ std::span<const std::byte> as_bytes(const type& x) noexcept {
   return x.table_ ? as_bytes(*x.table_) : none_type_representation();
 }
 
+data type::construct() const noexcept {
+  auto f = []<concrete_type T>(const T& x) noexcept -> data {
+    return x.construct();
+  };
+  return caf::visit(f, *this);
+}
+
 std::string_view type::name() const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
@@ -770,6 +777,89 @@ bool is_subset(const type& x, const type& y) noexcept {
   return true;
 }
 
+// WARNING: making changes to the logic of this function requires adapting the
+// companion overload in view.cpp.
+bool type_check(const type& x, const data& y) noexcept {
+  auto f = detail::overload{
+    [&](const none_type&, const auto&) {
+      // Cannot determine data type since data may always be
+      // null.
+      return true;
+    },
+    [&](const auto&, const caf::none_t&) {
+      // Every type can be assigned nil.
+      return true;
+    },
+    [&](const none_type&, const caf::none_t&) {
+      return true;
+    },
+    [&](const enumeration_type& t, const enumeration& u) {
+      return !t.field(u).empty();
+    },
+    [&](const list_type& t, const list& u) {
+      if (u.empty())
+        return true;
+      const auto vt = t.value_type();
+      auto it = u.begin();
+      const auto check = [&](const auto& d) noexcept {
+        return type_check(vt, d);
+      };
+      if (check(*it)) {
+        // Technically lists can contain heterogenous data,
+        // but for optimization purposes we only check the
+        // first element when assertions are disabled.
+        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
+                    "expected a homogenous list");
+        return true;
+      }
+      return false;
+    },
+    [&](const map_type& t, const map& u) {
+      if (u.empty())
+        return true;
+      const auto kt = t.key_type();
+      const auto vt = t.value_type();
+      auto it = u.begin();
+      const auto check = [&](const auto& d) noexcept {
+        return type_check(kt, d.first) && type_check(vt, d.second);
+      };
+      if (check(*it)) {
+        // Technically maps can contain heterogenous data,
+        // but for optimization purposes we only check the
+        // first element when assertions are disabled.
+        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
+                    "expected a homogenous map");
+        return true;
+      }
+      return false;
+    },
+    [&](const record_type& t, const record& u) {
+      auto tf = t.fields();
+      if (u.size() != tf.size())
+        return false;
+      for (size_t i = 0; i < u.size(); ++i) {
+        const auto field = tf[i];
+        const auto& [k, v] = as_vector(u)[i];
+        if (field.name != k || type_check(field.type, v))
+          return false;
+      }
+      return true;
+    },
+    [&]<basic_type T, class U>(const T&, const U&) {
+      // For basic types we can solely rely on the result of
+      // construct.
+      return std::is_same_v<type_to_data_t<T>, U>;
+    },
+    [&]<complex_type T, class U>(const T&, const U&) {
+      // We don't have a matching overload.
+      static_assert(!std::is_same_v<type_to_data_t<T>, U>, //
+                    "missing type check overload");
+      return false;
+    },
+  };
+  return caf::visit(f, x, y);
+}
+
 // -- none_type ---------------------------------------------------------------
 
 uint8_t none_type::type_index() noexcept {
@@ -789,6 +879,10 @@ std::span<const std::byte> as_bytes(const none_type&) noexcept {
   return as_bytes(buffer);
 }
 
+caf::none_t none_type::construct() noexcept {
+  return {};
+}
+
 // -- bool_type ---------------------------------------------------------------
 
 uint8_t bool_type::type_index() noexcept {
@@ -804,11 +898,14 @@ std::span<const std::byte> as_bytes(const bool_type&) noexcept {
                                       bool_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-
     VAST_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
+}
+
+bool bool_type::construct() noexcept {
+  return {};
 }
 
 // -- integer_type ------------------------------------------------------------
@@ -833,6 +930,10 @@ std::span<const std::byte> as_bytes(const integer_type&) noexcept {
   return as_bytes(buffer);
 }
 
+integer integer_type::construct() noexcept {
+  return {};
+}
+
 // -- count_type --------------------------------------------------------------
 
 uint8_t count_type::type_index() noexcept {
@@ -853,6 +954,10 @@ std::span<const std::byte> as_bytes(const count_type&) noexcept {
     return result;
   }();
   return as_bytes(buffer);
+}
+
+count count_type::construct() noexcept {
+  return {};
 }
 
 // -- real_type ---------------------------------------------------------------
@@ -877,6 +982,10 @@ std::span<const std::byte> as_bytes(const real_type&) noexcept {
   return as_bytes(buffer);
 }
 
+real real_type::construct() noexcept {
+  return {};
+}
+
 // -- duration_type -----------------------------------------------------------
 
 uint8_t duration_type::type_index() noexcept {
@@ -897,6 +1006,10 @@ std::span<const std::byte> as_bytes(const duration_type&) noexcept {
     return result;
   }();
   return as_bytes(buffer);
+}
+
+duration duration_type::construct() noexcept {
+  return {};
 }
 
 // -- time_type ---------------------------------------------------------------
@@ -921,6 +1034,10 @@ std::span<const std::byte> as_bytes(const time_type&) noexcept {
   return as_bytes(buffer);
 }
 
+time time_type::construct() noexcept {
+  return {};
+}
+
 // -- string_type --------------------------------------------------------------
 
 uint8_t string_type::type_index() noexcept {
@@ -941,6 +1058,10 @@ std::span<const std::byte> as_bytes(const string_type&) noexcept {
     return result;
   }();
   return as_bytes(buffer);
+}
+
+std::string string_type::construct() noexcept {
+  return {};
 }
 
 // -- pattern_type ------------------------------------------------------------
@@ -965,6 +1086,10 @@ std::span<const std::byte> as_bytes(const pattern_type&) noexcept {
   return as_bytes(buffer);
 }
 
+pattern pattern_type::construct() noexcept {
+  return {};
+}
+
 // -- address_type ------------------------------------------------------------
 
 uint8_t address_type::type_index() noexcept {
@@ -987,6 +1112,10 @@ std::span<const std::byte> as_bytes(const address_type&) noexcept {
   return as_bytes(buffer);
 }
 
+address address_type::construct() noexcept {
+  return {};
+}
+
 // -- subnet_type -------------------------------------------------------------
 
 uint8_t subnet_type::type_index() noexcept {
@@ -1007,6 +1136,10 @@ std::span<const std::byte> as_bytes(const subnet_type&) noexcept {
     return result;
   }();
   return as_bytes(buffer);
+}
+
+subnet subnet_type::construct() noexcept {
+  return {};
 }
 
 // -- enumeration_type --------------------------------------------------------
@@ -1060,6 +1193,20 @@ uint8_t enumeration_type::type_index() noexcept {
 
 std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
+}
+
+enumeration enumeration_type::construct() const noexcept {
+  const auto* fields
+    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
+  VAST_ASSERT(fields);
+  VAST_ASSERT(fields->size() > 0);
+  const auto value = fields->Get(0)->key();
+  // TODO: Currently, enumeration can not holds keys that don't fit a uint8_t;
+  // when switching to a strong typedef for enumeration we should change that.
+  // An example use case is NetFlow, where many enumeration values require usage
+  // of a uint16_t, which for now we would need to model as strings in schemas.
+  VAST_ASSERT(value <= std::numeric_limits<enumeration>::max());
+  return static_cast<enumeration>(value);
 }
 
 std::string_view enumeration_type::field(uint32_t key) const& noexcept {
@@ -1120,6 +1267,10 @@ std::span<const std::byte> as_bytes(const list_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
 }
 
+list list_type::construct() noexcept {
+  return {};
+}
+
 type list_type::value_type() const noexcept {
   const auto* view = table(transparent::yes).type_as_list_type_v0()->type();
   VAST_ASSERT(view);
@@ -1169,6 +1320,10 @@ std::span<const std::byte> as_bytes(const map_type& x) noexcept {
   return as_bytes(static_cast<const type&>(x));
 }
 
+map map_type::construct() noexcept {
+  return {};
+}
+
 type map_type::key_type() const noexcept {
   const auto* view = table(transparent::yes).type_as_map_type_v0()->key_type();
   VAST_ASSERT(view);
@@ -1206,6 +1361,23 @@ record_type::record_type(
 
 record_type::record_type(const std::vector<struct field>& fields) noexcept {
   construct_record_type(*this, fields.data(), fields.data() + fields.size());
+}
+
+uint8_t record_type::type_index() noexcept {
+  return static_cast<uint8_t>(fbs::type::Type::record_type_v0);
+}
+
+std::span<const std::byte> as_bytes(const record_type& x) noexcept {
+  return as_bytes(static_cast<const type&>(x));
+}
+
+record record_type::construct() const noexcept {
+  auto fs = fields();
+  auto result = record{};
+  result.reserve(fs.size());
+  for (const auto& field : fs)
+    result.emplace(field.name, field.type.construct());
+  return result;
 }
 
 record_type::iterable record_type::fields() const noexcept {
@@ -1262,7 +1434,7 @@ record_type::resolve_suffix(std::string_view key) const noexcept {
   return result;
 }
 
-std::string_view record_type::key(size_t index) const noexcept {
+std::string_view record_type::key(size_t index) const& noexcept {
   const auto* record = table(transparent::yes).type_as_record_type_v0();
   VAST_ASSERT(record);
   VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
@@ -1333,14 +1505,6 @@ record_type flatten(const record_type& type) noexcept {
       field.type,
     });
   return record_type{fields};
-}
-
-uint8_t record_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::record_type_v0);
-}
-
-std::span<const std::byte> as_bytes(const record_type& x) noexcept {
-  return as_bytes(static_cast<const type&>(x));
 }
 
 /// Access a field by index.

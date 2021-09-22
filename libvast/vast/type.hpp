@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/concepts.hpp"
 #include "vast/detail/range.hpp"
@@ -44,6 +45,7 @@ concept concrete_type = requires(const T& value) {
   requires std::is_final_v<T>;
   { T::type_index() } -> concepts::same_as<uint8_t>;
   { as_bytes(value) } -> concepts::same_as<std::span<const std::byte>>;
+  { value.construct() };
 };
 
 /// A concept that models any concrete type, or the abstract type class itself.
@@ -67,6 +69,15 @@ concept complex_type = requires(const T& value) {
   requires std::is_base_of_v<type, T>;
   requires sizeof(T) == sizeof(chunk_ptr);
 };
+
+/// Maps type to corresponding data.
+template <type_or_concrete_type T>
+struct type_to_data
+  : std::remove_cvref<decltype(std::declval<T>().construct())> {};
+
+/// @copydoc type_to_data
+template <type_or_concrete_type T>
+using type_to_data_t = typename type_to_data<T>::type;
 
 // -- type --------------------------------------------------------------------
 
@@ -198,6 +209,9 @@ public:
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const type& x) noexcept;
 
+  /// Constructs data from the type.
+  [[nodiscard]] data construct() const noexcept;
+
   /// Enables integration with CAF's type inspection.
   template <class Inspector>
   friend typename Inspector::result_type inspect(Inspector& f, type& x) {
@@ -264,6 +278,12 @@ public:
   /// @returns `true` *iff* *x* is a subset of *y*.
   friend bool is_subset(const type& x, const type& y) noexcept;
 
+  /// Checks whether data and type fit together.
+  /// @param x The type that describes the data..
+  /// @param y The data to be checked against the type.
+  /// @returns `true` if *x* is a valid type for *y*.
+  friend bool type_check(const type& x, const data& y) noexcept;
+
 protected:
   /// The underlying representation of the type.
   chunk_ptr table_ = {}; // NOLINT
@@ -292,6 +312,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const none_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static caf::none_t construct() noexcept;
 };
 
 // -- bool_type ---------------------------------------------------------------
@@ -305,6 +328,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const bool_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static bool construct() noexcept;
 };
 
 // -- integer_type ------------------------------------------------------------
@@ -318,6 +344,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const integer_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static integer construct() noexcept;
 };
 
 // -- count_type --------------------------------------------------------------
@@ -331,6 +360,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const count_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static count construct() noexcept;
 };
 
 // -- real_type ---------------------------------------------------------------
@@ -344,6 +376,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const real_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static real construct() noexcept;
 };
 
 // -- duration_type -----------------------------------------------------------
@@ -357,6 +392,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const duration_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static duration construct() noexcept;
 };
 
 // -- time_type ---------------------------------------------------------------
@@ -370,6 +408,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const time_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static time construct() noexcept;
 };
 
 // -- string_type --------------------------------------------------------------
@@ -383,6 +424,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const string_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static std::string construct() noexcept;
 };
 
 // -- pattern_type ------------------------------------------------------------
@@ -396,6 +440,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const pattern_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static pattern construct() noexcept;
 };
 
 // -- address_type ------------------------------------------------------------
@@ -409,6 +456,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const address_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static address construct() noexcept;
 };
 
 // -- subnet_type -------------------------------------------------------------
@@ -422,6 +472,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const subnet_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static subnet construct() noexcept;
 };
 
 // -- enumeration_type --------------------------------------------------------
@@ -477,6 +530,9 @@ public:
   friend std::span<const std::byte>
   as_bytes(const enumeration_type& x) noexcept;
 
+  /// Constructs data from the type.
+  [[nodiscard]] enumeration construct() const noexcept;
+
   /// Returns the field at the given key, or an empty string if it does not exist.
   [[nodiscard]] std::string_view field(uint32_t key) const& noexcept;
   [[nodiscard]] std::string_view field(uint32_t key) && = delete;
@@ -525,6 +581,9 @@ public:
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
 
+  /// Constructs data from the type.
+  [[nodiscard]] static list construct() noexcept;
+
   /// Returns the nested value type.
   [[nodiscard]] type value_type() const noexcept;
 };
@@ -567,6 +626,9 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static map construct() noexcept;
 
   /// Returns the nested key type.
   [[nodiscard]] type key_type() const noexcept;
@@ -640,6 +702,9 @@ public:
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const record_type& x) noexcept;
 
+  /// Constructs data from the type.
+  [[nodiscard]] record construct() const noexcept;
+
   /// Returns an iterable view over the fields of a record type.
   [[nodiscard]] iterable fields() const noexcept;
 
@@ -659,7 +724,8 @@ public:
   resolve_suffix(std::string_view key) const noexcept;
 
   /// Computes the flattened field name at a given index.
-  [[nodiscard]] std::string_view key(size_t index) const noexcept;
+  [[nodiscard]] std::string_view key(size_t index) const& noexcept;
+  [[nodiscard]] std::string_view key(size_t index) && = delete;
   [[nodiscard]] std::string key(const offset& index) const noexcept;
 
   /// Returns the field at the given index.
