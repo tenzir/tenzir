@@ -941,7 +941,7 @@ bool is_subset(const legacy_type& x, const legacy_type& y) {
 bool type_check(const legacy_type& t, const data& x) {
   auto f = detail::overload{
     [&](const auto& u) {
-      using data_type = type_to_data<std::decay_t<decltype(u)>>;
+      using data_type = legacy_type_to_data<std::decay_t<decltype(u)>>;
       return caf::holds_alternative<data_type>(x);
     },
     [&](const legacy_none_type&) {
@@ -990,7 +990,8 @@ bool type_check(const legacy_type& t, const data& x) {
 data construct(const legacy_type& x) {
   return visit(detail::overload{
                  [](const auto& y) {
-                   return data{type_to_data<std::decay_t<decltype(y)>>{}};
+                   return data{
+                     legacy_type_to_data<std::decay_t<decltype(y)>>{}};
                  },
                  [](const legacy_record_type& t) {
                    list xs;

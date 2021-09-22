@@ -75,7 +75,7 @@ public:
 
     reference operator*() const noexcept {
       auto get = [&](auto column, auto type) noexcept
-        -> std::optional<view<type_to_data<decltype(type)>>> {
+        -> std::optional<view<legacy_type_to_data<decltype(type)>>> {
         if constexpr (std::is_same_v<std::decay_t<decltype(type)>,
                                      vast::legacy_type>) {
           // TODO: Wrapping a data_view inside an optional is kind of
@@ -97,12 +97,12 @@ public:
           auto data = proj_.slice_.at(row_, column);
           if (caf::holds_alternative<caf::none_t>(data))
             return std::nullopt;
-          return caf::get<view<type_to_data<decltype(type)>>>(data);
+          return caf::get<view<legacy_type_to_data<decltype(type)>>>(data);
         } else {
           auto data = proj_.slice_.at(row_, column, std::move(type));
           if (caf::holds_alternative<caf::none_t>(data))
             return std::nullopt;
-          return caf::get<view<type_to_data<decltype(type)>>>(data);
+          return caf::get<view<legacy_type_to_data<decltype(type)>>>(data);
         }
       };
       return detail::tuple_zip_and_map(

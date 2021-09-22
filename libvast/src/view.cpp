@@ -190,7 +190,7 @@ data materialize(data_view x) {
 bool type_check(const legacy_type& t, const data_view& x) {
   auto f = detail::overload{
     [&](const auto& u) {
-      using data_type = type_to_data<std::decay_t<decltype(u)>>;
+      using data_type = legacy_type_to_data<std::decay_t<decltype(u)>>;
       return caf::holds_alternative<view<data_type>>(x);
     },
     [&](const legacy_none_type&) {

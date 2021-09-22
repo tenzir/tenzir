@@ -284,8 +284,8 @@ struct container_parser_builder {
       auto kvp =
         caf::visit(*this, t.key_type) >> ws >> opt_.kvp_separator >> ws >> caf::visit(*this, t.value_type);
       return (ws >> '{' >> ws >> (kvp % (ws >> opt_.set_separator >> ws)) >> ws >> '}' >> ws) ->* map_insert;
-    } else if constexpr (registered_parser_type<type_to_data<T>>) {
-      using value_type = type_to_data<T>;
+    } else if constexpr (registered_parser_type<legacy_type_to_data<T>>) {
+      using value_type = legacy_type_to_data<T>;
       auto ws = ignore(*parsers::space);
       return (ws >> make_parser<value_type>{} >> ws) ->* [](value_type x) {
         return x;
@@ -376,8 +376,8 @@ struct csv_parser_factory {
     } else if constexpr (detail::is_any_v<T, legacy_list_type, legacy_map_type>) {
       auto pb = container_parser_builder<Iterator, data>{opt_};
       return (-pb(t)).with(add_t<data>{bptr_});
-    } else if constexpr (registered_parser_type<type_to_data<T>>) {
-      using value_type = type_to_data<T>;
+    } else if constexpr (registered_parser_type<legacy_type_to_data<T>>) {
+      using value_type = legacy_type_to_data<T>;
       auto p = make_parser<value_type>{};
       return (-(quoted_parser{p} | p)).with(add_t<value_type>{bptr_});
     } else {

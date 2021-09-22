@@ -136,7 +136,7 @@ auto add_arithmetic_index_factory() {
   static_assert(detail::is_any_v<T, legacy_integer_type, legacy_count_type,
                                  legacy_enumeration_type, legacy_real_type,
                                  legacy_duration_type, legacy_time_type>);
-  using concrete_data = type_to_data<T>;
+  using concrete_data = legacy_type_to_data<T>;
   if constexpr (detail::is_any_v<concrete_data, integer>)
     return add_value_index_factory<
       T, arithmetic_index<typename concrete_data::value_type>>();

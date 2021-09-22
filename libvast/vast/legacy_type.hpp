@@ -848,7 +848,7 @@ struct type_traits<legacy_string_type> {
 /// Retrieves the concrete @ref data type for a given type from the hierarchy.
 /// @relates type data type_traits
 template <class T>
-using type_to_data = typename type_traits<T>::data_type;
+using legacy_type_to_data = typename type_traits<T>::data_type;
 
 /// @returns `true` if *x is a *basic* type.
 /// @relates type
