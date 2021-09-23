@@ -10,7 +10,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :warning: Changes
 
-- The default store backend was changed to "segment-store", in order to enable the use of partition transforms in the future.
+- The default store backend now is `segment-store` in order to enable the use of partition transforms in the future. To continue using the (now deprecated) legacy store backend, set `vast.store-backend` to archive.
   [#1876](https://github.com/tenzir/vast/pull/1876)
 
 - Example configuration files are now installed to the datarootdir as opposed to the sysconfdir in order to avoid overriding previously installed configuration files.
@@ -24,10 +24,10 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `broker` plugin is now a also *writer* plugin on top of being already a *reader* plugin. The new plugin enables exporting query results directly into a a Zeek process, e.g., to write Zeek scripts that incorporate context from the past. Run `vast export broker <expr>` to ship events via Broker that Zeek dispatches under the event `VAST::data(layout: string, data: any)`.
   [#1863](https://github.com/tenzir/vast/pull/1863)
 
-- Added a new tool 'mdx-regenerate' that can be used to re-create all the .mdx files in a database directory in the latest file format version while VAST is running. This can be useful for advanced users in case of file corruption or in preparation for version upgrades that bump the format version.
+- The new tool `mdx-regenerate` allows operators to re-create all `.mdx` files in a database directory to the latest file format version while VAST is running. This is useful for advanced users in preparation for version upgrades that bump the format version.
   [#1866](https://github.com/tenzir/vast/pull/1866)
 
-- Running `vat status --detailed` now lists all loaded configuration files under `.system.config-files`.
+- Running `vat status --detailed` now lists all loaded configuration files under `system.config-files`.
   [#1871](https://github.com/tenzir/vast/pull/1871)
 
 - The query argument to the export and count commands may now be omitted, which causes the commands to operate on all data. Note that this may be a very expensive operation, so use with caution.
