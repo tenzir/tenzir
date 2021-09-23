@@ -6,6 +6,53 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [2021.09.30-rc1]
+
+### :warning: Changes
+
+- The default store backend now is `segment-store` in order to enable the use of partition transforms in the future. To continue using the (now deprecated) legacy store backend, set `vast.store-backend` to archive.
+  [#1876](https://github.com/tenzir/vast/pull/1876)
+
+- Example configuration files are now installed to the datarootdir as opposed to the sysconfdir in order to avoid overriding previously installed configuration files.
+  [#1880](https://github.com/tenzir/vast/pull/1880)
+
+### :gift: Features
+
+- If present in the plugin source directory, the build scaffolding now automatically installs `<plugin>.yaml.example` files, commenting out every line so the file has no effect. This serves as documentation for operators that can modify the installed file in-place.
+  [#1860](https://github.com/tenzir/vast/pull/1860)
+
+- The `broker` plugin is now a also *writer* plugin on top of being already a *reader* plugin. The new plugin enables exporting query results directly into a a Zeek process, e.g., to write Zeek scripts that incorporate context from the past. Run `vast export broker <expr>` to ship events via Broker that Zeek dispatches under the event `VAST::data(layout: string, data: any)`.
+  [#1863](https://github.com/tenzir/vast/pull/1863)
+
+- The new tool `mdx-regenerate` allows operators to re-create all `.mdx` files in a database directory to the latest file format version while VAST is running. This is useful for advanced users in preparation for version upgrades that bump the format version.
+  [#1866](https://github.com/tenzir/vast/pull/1866)
+
+- Running `vat status --detailed` now lists all loaded configuration files under `system.config-files`.
+  [#1871](https://github.com/tenzir/vast/pull/1871)
+
+- The query argument to the export and count commands may now be omitted, which causes the commands to operate on all data. Note that this may be a very expensive operation, so use with caution.
+  [#1879](https://github.com/tenzir/vast/pull/1879)
+
+- The output of `vast status --detailed` now contains information about queries   that are currently processed in the index.
+  [#1881](https://github.com/tenzir/vast/pull/1881)
+
+### :beetle: Bug Fixes
+
+- The status command no longer occasionally contains garbage keys when the VAST server is under high load.
+  [#1872](https://github.com/tenzir/vast/pull/1872)
+
+- Remote sources and sinks are no longer erroneously included in the output of VAST status.
+  [#1873](https://github.com/tenzir/vast/pull/1873)
+
+- The index now correctly cancels pending queries when the requester dies.
+  [#1884](https://github.com/tenzir/vast/pull/1884)
+
+- Import filter expressions now work correctly with queries using field extractors, e.g., `vast import suricata 'event_type == "alert"' < path/to/eve.json`.
+  [#1885](https://github.com/tenzir/vast/pull/1885)
+
+- Expression predicates of the `#field` type now produce error messages instead of empty result sets for operations that are not supported.
+  [#1886](https://github.com/tenzir/vast/pull/1886)
+
 ## [2021.08.26]
 
 ### :warning: Changes
@@ -1354,6 +1401,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[2021.09.30-rc1]: https://github.com/tenzir/vast/releases/tag/2021.09.30-rc1
 [2021.08.26]: https://github.com/tenzir/vast/releases/tag/2021.08.26
 [2021.07.29]: https://github.com/tenzir/vast/releases/tag/2021.07.29
 [2021.06.24]: https://github.com/tenzir/vast/releases/tag/2021.06.24
