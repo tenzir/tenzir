@@ -240,6 +240,7 @@ TEST(extractors) {
 }
 
 TEST(validation - meta extractor) {
+  MESSAGE("#type");
   // The "type" attribute extractor requires a string operand.
   auto expr = to<expression>("#type == \"foo\"");
   REQUIRE(expr);
@@ -248,6 +249,22 @@ TEST(validation - meta extractor) {
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
   expr = to<expression>("#type == zeek.conn");
+  REQUIRE(expr);
+  CHECK(!caf::visit(validator{}, *expr));
+  MESSAGE("#field");
+  expr = to<expression>("#field == \"id.orig_h\"");
+  REQUIRE(expr);
+  CHECK(caf::visit(validator{}, *expr));
+  expr = to<expression>("#field ~ \"orig\"");
+  REQUIRE(expr);
+  CHECK(!caf::visit(validator{}, *expr));
+  expr = to<expression>("#field == /orig/");
+  REQUIRE(expr);
+  CHECK(!caf::visit(validator{}, *expr));
+  expr = to<expression>("#field ni \"orig\"");
+  REQUIRE(expr);
+  CHECK(!caf::visit(validator{}, *expr));
+  expr = to<expression>("\"orig\" in #field");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
 }
