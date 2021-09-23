@@ -73,6 +73,41 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
 }
 
 template <class T>
+  requires(std::is_same_v<T, struct enumeration_type::field> //
+           || std::is_same_v<T, enumeration_type::field_view>)
+void construct_enumeration_type(type& self, const T* begin, const T* end) {
+  VAST_ASSERT(begin != end, "An enumeration type must not have zero "
+                            "fields");
+  // Unlike for other concrete types, we do not calculate the exact amount of
+  // bytes we need to allocate beforehand. This is because the individual
+  // fields are stored in a flat hash map, whose size cannot trivially be
+  // determined.
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  auto field_offsets
+    = std::vector<flatbuffers::Offset<fbs::type::enumeration_type::field::v0>>{};
+  field_offsets.reserve(end - begin);
+  uint32_t next_key = 0;
+  for (const auto* it = begin; it != end; ++it) {
+    const auto key
+      = it->key != std::numeric_limits<uint32_t>::max() ? it->key : next_key;
+    next_key = key + 1;
+    const auto name_offset = builder.CreateString(it->name);
+    field_offsets.emplace_back(
+      fbs::type::enumeration_type::field::Createv0(builder, key, name_offset));
+  }
+  const auto fields_offset = builder.CreateVectorOfSortedTables(&field_offsets);
+  const auto enumeration_type_offset
+    = fbs::type::enumeration_type::Createv0(builder, fields_offset);
+  const auto type_offset
+    = fbs::CreateType(builder, fbs::type::Type::enumeration_type_v0,
+                      enumeration_type_offset.Union());
+  builder.Finish(type_offset);
+  auto result = builder.Release();
+  auto chunk = chunk::make(std::move(result));
+  self = type{std::move(chunk)};
+}
+
+template <class T>
   requires(std::is_same_v<T, struct record_type::field>  //
            || std::is_same_v<T, record_type::field_view> //
            || std::is_same_v<T, record_field>)
@@ -1188,33 +1223,21 @@ enumeration_type::operator=(enumeration_type&& other) noexcept = default;
 enumeration_type::~enumeration_type() noexcept = default;
 
 enumeration_type::enumeration_type(
+  const std::vector<field_view>& fields) noexcept {
+  construct_enumeration_type(*this, fields.data(),
+                             fields.data() + fields.size());
+}
+
+enumeration_type::enumeration_type(
+  std::initializer_list<field_view> fields) noexcept
+  : enumeration_type{std::vector<field_view>{fields}} {
+  // nop
+}
+
+enumeration_type::enumeration_type(
   const std::vector<struct field>& fields) noexcept {
-  VAST_ASSERT(!fields.empty(), "An enumeration type must not have zero fields");
-  // Unlike for other concrete types, we do not calculate the exact amount of
-  // bytes we need to allocate beforehand. This is because the individual
-  // fields are stored in a flat hash map, whose size cannot trivially be
-  // determined.
-  auto builder = flatbuffers::FlatBufferBuilder{};
-  auto field_offsets
-    = std::vector<flatbuffers::Offset<fbs::type::enumeration_type::field::v0>>{};
-  field_offsets.reserve(fields.size());
-  for (uint32_t next_key = 0; const auto& field : fields) {
-    const auto key = field.key ? *field.key : next_key;
-    next_key = key + 1;
-    const auto name_offset = builder.CreateString(field.name);
-    field_offsets.emplace_back(
-      fbs::type::enumeration_type::field::Createv0(builder, key, name_offset));
-  }
-  const auto fields_offset = builder.CreateVectorOfSortedTables(&field_offsets);
-  const auto enumeration_type_offset
-    = fbs::type::enumeration_type::Createv0(builder, fields_offset);
-  const auto type_offset
-    = fbs::CreateType(builder, fbs::type::Type::enumeration_type_v0,
-                      enumeration_type_offset.Union());
-  builder.Finish(type_offset);
-  auto result = builder.Release();
-  auto chunk = chunk::make(std::move(result));
-  static_cast<type&>(*this) = type{std::move(chunk)};
+  construct_enumeration_type(*this, fields.data(),
+                             fields.data() + fields.size());
 }
 
 uint8_t enumeration_type::type_index() noexcept {
@@ -1233,8 +1256,9 @@ enumeration enumeration_type::construct() const noexcept {
   const auto value = fields->Get(0)->key();
   // TODO: Currently, enumeration can not holds keys that don't fit a uint8_t;
   // when switching to a strong typedef for enumeration we should change that.
-  // An example use case is NetFlow, where many enumeration values require usage
-  // of a uint16_t, which for now we would need to model as strings in schemas.
+  // An example use case is NetFlow, where many enumeration values require
+  // usage of a uint16_t, which for now we would need to model as strings in
+  // schemas.
   VAST_ASSERT(value <= std::numeric_limits<enumeration>::max());
   return static_cast<enumeration>(value);
 }
@@ -1379,13 +1403,12 @@ record_type& record_type::operator=(record_type&& other) noexcept = default;
 
 record_type::~record_type() noexcept = default;
 
-record_type::record_type(const std::vector<struct field_view>& fields) noexcept {
+record_type::record_type(const std::vector<field_view>& fields) noexcept {
   construct_record_type(*this, fields.data(), fields.data() + fields.size());
 }
 
-record_type::record_type(
-  std::initializer_list<struct field_view> fields) noexcept
-  : record_type{std::vector<struct field_view>{fields}} {
+record_type::record_type(std::initializer_list<field_view> fields) noexcept
+  : record_type{std::vector<field_view>{fields}} {
   // nop
 }
 
@@ -1433,8 +1456,9 @@ record_type::resolve_prefix(std::string_view key) const noexcept {
       // If it's an exact match we already have our result.
       if (key_mismatch == key.end())
         return offset{index};
-      // Otherwise, if the remainder begings with the . separator and the nested
-      // type is a record type, we can recurse and try to match the remainder.
+      // Otherwise, if the remainder begings with the . separator and the
+      // nested type is a record type, we can recurse and try to match the
+      // remainder.
       if (*key_mismatch++ != '.')
         continue;
       if (const auto* record = caf::get_if<record_type>(&field.type)) {

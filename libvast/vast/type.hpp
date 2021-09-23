@@ -488,14 +488,16 @@ class enumeration_type final : private type {
 public:
   /// A field of an enumeration type.
   struct field final {
-    std::string name;                 ///< The mame of the field.
-    std::optional<uint32_t> key = {}; ///< The optional index of the field.
+    std::string name; ///< The mame of the field.
+    uint32_t key = std::numeric_limits<uint32_t>::max(); /// The optional index
+                                                         /// of the field.
   };
 
   /// A view on a field of an enumeration type.
   struct field_view final {
     std::string_view name; ///< The mame of the field.
-    uint32_t key;          /// The index of the field.
+    uint32_t key = std::numeric_limits<uint32_t>::max(); ///< The optional index
+                                                         ///< of the field.
   };
 
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
@@ -519,8 +521,10 @@ public:
   /// Destroys a type.
   ~enumeration_type() noexcept;
 
-  /// Constructs an enumeration type.
+  /// Constructs an enumeraton type from a set of fields or field views.
   /// @pre `!fields.empty()`
+  explicit enumeration_type(const std::vector<field_view>& fields) noexcept;
+  explicit enumeration_type(std::initializer_list<field_view> fields) noexcept;
   explicit enumeration_type(const std::vector<struct field>& fields) noexcept;
 
   /// Returns the type index.
@@ -685,15 +689,11 @@ public:
   /// Destroys a type.
   ~record_type() noexcept;
 
-  /// Constructs a record type from a set of field views.
-  /// @param fields The ordered fields of the record type.
-  /// @pre `!fields.empty()`
-  explicit record_type(const std::vector<struct field_view>& fields) noexcept;
-  explicit record_type(std::initializer_list<struct field_view> fields) noexcept;
-
   /// Constructs a record type from a set of fields.
   /// @param fields The ordered fields of the record type.
   /// @pre `!fields.empty()`
+  explicit record_type(const std::vector<field_view>& fields) noexcept;
+  explicit record_type(std::initializer_list<field_view> fields) noexcept;
   explicit record_type(const std::vector<struct field>& fields) noexcept;
 
   /// Returns the type index.

@@ -241,7 +241,7 @@ TEST(enumeration_type) {
   static_assert(!basic_type<enumeration_type>);
   static_assert(complex_type<enumeration_type>);
   const auto t = type{};
-  const auto et = type{enumeration_type{{{"first"}, {"third", 2}, {"fourth"}}}};
+  const auto et = type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}};
   CHECK(et);
   CHECK(t != et);
   CHECK(t < et);
@@ -529,7 +529,7 @@ TEST(hashes) {
   CHECK_EQUAL(hash(pattern_type{}), 0xB58A4DFCBCAB3AA0ul);
   CHECK_EQUAL(hash(address_type{}), 0xB195BC7644771465ul);
   CHECK_EQUAL(hash(subnet_type{}), 0xCF652DBCCA4AAED5ul);
-  CHECK_EQUAL(hash(enumeration_type{{{"a"}, {"b"}, {"c"}}}),
+  CHECK_EQUAL(hash(enumeration_type{{"a"}, {"b"}, {"c"}}),
               0x624171C602B39999ul);
   CHECK_EQUAL(hash(list_type{integer_type{}}), 0xFAE238FED25FDCD0ul);
   CHECK_EQUAL(hash(map_type{time_type{}, string_type{}}), 0xF6694A1437D5D288ul);
@@ -649,7 +649,7 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{pattern_type{}});
   CHECK_ROUNDTRIP(type{address_type{}});
   CHECK_ROUNDTRIP(type{subnet_type{}});
-  CHECK_ROUNDTRIP(type{enumeration_type{{{"a"}, {"b"}, {"c"}}}});
+  CHECK_ROUNDTRIP(type{enumeration_type{{"a"}, {"b"}, {"c"}}});
   CHECK_ROUNDTRIP(type{list_type{integer_type{}}});
   CHECK_ROUNDTRIP(type{map_type{address_type{}, subnet_type{}}});
   const auto rt = type{record_type{
