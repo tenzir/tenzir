@@ -179,12 +179,13 @@ public:
 
   /// Constructs a type from a legacy_type.
   /// @relates legacy_type
-  explicit type(const legacy_type& other) noexcept;
+  [[nodiscard]] static type from_legacy_type(const legacy_type& other) noexcept;
 
   /// Converts a type into a legacy_type.
-  /// @note The roundtrip `type{to_legacy_type()}` will produce a different
-  /// type beccause of the inconsistent handling of names for legacy types. The
-  /// types will be semantically equivalent, but may not compare equal.
+  /// @note The roundtrip `type::from_legacy_type{x.to_legacy_type()}` will
+  /// produce a different type beccause of the inconsistent handling of names
+  /// for legacy types. The types will be semantically equivalent, but may not
+  /// compare equal.
   /// @relates legacy_type
   [[nodiscard]] legacy_type to_legacy_type() const noexcept;
 

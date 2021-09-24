@@ -41,8 +41,8 @@ TEST(none_type) {
   CHECK_EQUAL(fmt::format("{}", none_type{}), "none");
   CHECK(caf::holds_alternative<none_type>(t));
   CHECK(caf::holds_alternative<none_type>(nt));
-  const auto lt = type{legacy_type{}};
-  const auto lnt = type{legacy_none_type{}};
+  const auto lt = type::from_legacy_type(legacy_type{});
+  const auto lnt = type::from_legacy_type(legacy_none_type{});
   CHECK(caf::holds_alternative<none_type>(lt));
   CHECK(caf::holds_alternative<none_type>(lnt));
 }
@@ -62,7 +62,7 @@ TEST(bool_type) {
   CHECK_EQUAL(fmt::format("{}", bool_type{}), "bool");
   CHECK(!caf::holds_alternative<bool_type>(t));
   CHECK(caf::holds_alternative<bool_type>(bt));
-  const auto lbt = type{legacy_bool_type{}};
+  const auto lbt = type::from_legacy_type(legacy_bool_type{});
   CHECK(caf::holds_alternative<bool_type>(lbt));
 }
 
@@ -81,7 +81,7 @@ TEST(integer_type) {
   CHECK_EQUAL(fmt::format("{}", integer_type{}), "integer");
   CHECK(!caf::holds_alternative<integer_type>(t));
   CHECK(caf::holds_alternative<integer_type>(it));
-  const auto lit = type{legacy_integer_type{}};
+  const auto lit = type::from_legacy_type(legacy_integer_type{});
   CHECK(caf::holds_alternative<integer_type>(lit));
 }
 
@@ -100,7 +100,7 @@ TEST(count_type) {
   CHECK_EQUAL(fmt::format("{}", count_type{}), "count");
   CHECK(!caf::holds_alternative<count_type>(t));
   CHECK(caf::holds_alternative<count_type>(ct));
-  const auto lct = type{legacy_count_type{}};
+  const auto lct = type::from_legacy_type(legacy_count_type{});
   CHECK(caf::holds_alternative<count_type>(lct));
 }
 
@@ -119,7 +119,7 @@ TEST(real_type) {
   CHECK_EQUAL(fmt::format("{}", real_type{}), "real");
   CHECK(!caf::holds_alternative<real_type>(t));
   CHECK(caf::holds_alternative<real_type>(rt));
-  const auto lrt = type{legacy_real_type{}};
+  const auto lrt = type::from_legacy_type(legacy_real_type{});
   CHECK(caf::holds_alternative<real_type>(lrt));
 }
 
@@ -138,7 +138,7 @@ TEST(duration_type) {
   CHECK_EQUAL(fmt::format("{}", duration_type{}), "duration");
   CHECK(!caf::holds_alternative<duration_type>(t));
   CHECK(caf::holds_alternative<duration_type>(dt));
-  const auto ldt = type{legacy_duration_type{}};
+  const auto ldt = type::from_legacy_type(legacy_duration_type{});
   CHECK(caf::holds_alternative<duration_type>(ldt));
 }
 
@@ -157,7 +157,7 @@ TEST(time_type) {
   CHECK_EQUAL(fmt::format("{}", time_type{}), "time");
   CHECK(!caf::holds_alternative<time_type>(t));
   CHECK(caf::holds_alternative<time_type>(tt));
-  const auto ltt = type{legacy_time_type{}};
+  const auto ltt = type::from_legacy_type(legacy_time_type{});
   CHECK(caf::holds_alternative<time_type>(ltt));
 }
 
@@ -176,7 +176,7 @@ TEST(string_type) {
   CHECK_EQUAL(fmt::format("{}", string_type{}), "string");
   CHECK(!caf::holds_alternative<string_type>(t));
   CHECK(caf::holds_alternative<string_type>(st));
-  const auto lst = type{legacy_string_type{}};
+  const auto lst = type::from_legacy_type(legacy_string_type{});
   CHECK(caf::holds_alternative<string_type>(lst));
 }
 
@@ -195,7 +195,7 @@ TEST(pattern_type) {
   CHECK_EQUAL(fmt::format("{}", pattern_type{}), "pattern");
   CHECK(!caf::holds_alternative<pattern_type>(t));
   CHECK(caf::holds_alternative<pattern_type>(pt));
-  const auto lpt = type{legacy_pattern_type{}};
+  const auto lpt = type::from_legacy_type(legacy_pattern_type{});
   CHECK(caf::holds_alternative<pattern_type>(lpt));
 }
 
@@ -214,7 +214,7 @@ TEST(address_type) {
   CHECK_EQUAL(fmt::format("{}", address_type{}), "address");
   CHECK(!caf::holds_alternative<address_type>(t));
   CHECK(caf::holds_alternative<address_type>(at));
-  const auto lat = type{legacy_address_type{}};
+  const auto lat = type::from_legacy_type(legacy_address_type{});
   CHECK(caf::holds_alternative<address_type>(lat));
 }
 
@@ -233,7 +233,7 @@ TEST(subnet_type) {
   CHECK_EQUAL(fmt::format("{}", subnet_type{}), "subnet");
   CHECK(!caf::holds_alternative<subnet_type>(t));
   CHECK(caf::holds_alternative<subnet_type>(st));
-  const auto lst = type{legacy_subnet_type{}};
+  const auto lst = type::from_legacy_type(legacy_subnet_type{});
   CHECK(caf::holds_alternative<subnet_type>(lst));
 }
 
@@ -254,7 +254,8 @@ TEST(enumeration_type) {
   CHECK_EQUAL(caf::get<enumeration_type>(et).field(1), "");
   CHECK_EQUAL(caf::get<enumeration_type>(et).field(2), "third");
   CHECK_EQUAL(caf::get<enumeration_type>(et).field(3), "fourth");
-  const auto let = type{legacy_enumeration_type{{"first", "second", "third"}}};
+  const auto let = type::from_legacy_type(
+    legacy_enumeration_type{{"first", "second", "third"}});
   CHECK(caf::holds_alternative<enumeration_type>(let));
   CHECK_EQUAL(caf::get<enumeration_type>(let).field(0), "first");
   CHECK_EQUAL(caf::get<enumeration_type>(let).field(1), "second");
@@ -278,7 +279,8 @@ TEST(list_type) {
   CHECK(!caf::holds_alternative<list_type>(t));
   CHECK(caf::holds_alternative<list_type>(lit));
   CHECK_EQUAL(caf::get<list_type>(lit).value_type(), type{integer_type{}});
-  const auto llbt = type{legacy_list_type{legacy_bool_type{}}};
+  const auto llbt
+    = type::from_legacy_type(legacy_list_type{legacy_bool_type{}});
   CHECK(caf::holds_alternative<list_type>(llbt));
   CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
 }
@@ -301,8 +303,8 @@ TEST(map_type) {
   CHECK(caf::holds_alternative<map_type>(msit));
   CHECK_EQUAL(caf::get<map_type>(msit).key_type(), type{string_type{}});
   CHECK_EQUAL(caf::get<map_type>(msit).value_type(), type{integer_type{}});
-  const auto lmabt
-    = type{legacy_map_type{legacy_address_type{}, legacy_bool_type{}}};
+  const auto lmabt = type::from_legacy_type(
+    legacy_map_type{legacy_address_type{}, legacy_bool_type{}});
   CHECK(caf::holds_alternative<map_type>(lmabt));
   CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{address_type{}});
   CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
@@ -594,7 +596,8 @@ TEST(legacy_type conversion) {
   //   CHECK_EQUAL(legacy_type{rt}, lrt);
   // Instead, we instead compare the printed versions of the types for
   // equivalence.
-  CHECK_EQUAL(fmt::format("{}", rt), fmt::format("{}", type{lrt}));
+  CHECK_EQUAL(fmt::format("{}", rt),
+              fmt::format("{}", type::from_legacy_type(lrt)));
   CHECK_EQUAL(fmt::format("{}", rt.to_legacy_type()), fmt::format("{}", lrt));
 }
 
@@ -607,7 +610,7 @@ TEST(named types) {
   CHECK(caf::holds_alternative<bool_type>(aat));
   CHECK_EQUAL(aat.name(), "l2");
   CHECK_EQUAL(fmt::format("{}", aat), "l2");
-  const auto lat = type{legacy_bool_type{}.name("l3")};
+  const auto lat = type::from_legacy_type(legacy_bool_type{}.name("l3"));
   CHECK(caf::holds_alternative<bool_type>(lat));
   CHECK_EQUAL(lat.name(), "l3");
   CHECK_EQUAL(fmt::format("{}", lat), "l3");
@@ -631,8 +634,8 @@ TEST(tagged types) {
   CHECK_EQUAL(aat.tag("fourth"), std::nullopt);
   CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks #first=value "
                                       "#second");
-  const auto lat
-    = type{legacy_bool_type{}.attributes({{"first", "value"}, {"second"}})};
+  const auto lat = type::from_legacy_type(
+    legacy_bool_type{}.attributes({{"first", "value"}, {"second"}}));
   CHECK_EQUAL(lat, at);
 }
 

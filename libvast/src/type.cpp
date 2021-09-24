@@ -278,7 +278,7 @@ type::type(const type& nested, const std::vector<struct tag>& tags) noexcept
   // nop
 }
 
-type::type(const legacy_type& other) noexcept {
+type type::from_legacy_type(const legacy_type& other) noexcept {
   const auto tags = [&] {
     auto result = std::vector<struct tag>{};
     const auto& attributes = other.attributes();
@@ -292,64 +292,67 @@ type::type(const legacy_type& other) noexcept {
   }();
   auto f = detail::overload{
     [&](const legacy_none_type&) {
-      *this = type{other.name(), none_type{}, tags};
+      return type{other.name(), none_type{}, tags};
     },
     [&](const legacy_bool_type&) {
-      *this = type{other.name(), bool_type{}, tags};
+      return type{other.name(), bool_type{}, tags};
     },
     [&](const legacy_integer_type&) {
-      *this = type{other.name(), integer_type{}, tags};
+      return type{other.name(), integer_type{}, tags};
     },
     [&](const legacy_count_type&) {
-      *this = type{other.name(), count_type{}, tags};
+      return type{other.name(), count_type{}, tags};
     },
     [&](const legacy_real_type&) {
-      *this = type{other.name(), real_type{}, tags};
+      return type{other.name(), real_type{}, tags};
     },
     [&](const legacy_duration_type&) {
-      *this = type{other.name(), duration_type{}, tags};
+      return type{other.name(), duration_type{}, tags};
     },
     [&](const legacy_time_type&) {
-      *this = type{other.name(), time_type{}, tags};
+      return type{other.name(), time_type{}, tags};
     },
     [&](const legacy_string_type&) {
-      *this = type{other.name(), string_type{}, tags};
+      return type{other.name(), string_type{}, tags};
     },
     [&](const legacy_pattern_type&) {
-      *this = type{other.name(), pattern_type{}, tags};
+      return type{other.name(), pattern_type{}, tags};
     },
     [&](const legacy_address_type&) {
-      *this = type{other.name(), address_type{}, tags};
+      return type{other.name(), address_type{}, tags};
     },
     [&](const legacy_subnet_type&) {
-      *this = type{other.name(), subnet_type{}, tags};
+      return type{other.name(), subnet_type{}, tags};
     },
     [&](const legacy_enumeration_type& enumeration) {
       auto fields = std::vector<struct enumeration_type::field>{};
       fields.reserve(enumeration.fields.size());
       for (const auto& field : enumeration.fields)
         fields.push_back({field});
-      *this = type{other.name(), enumeration_type{fields}, tags};
+      return type{other.name(), enumeration_type{fields}, tags};
     },
     [&](const legacy_list_type& list) {
-      *this = type{other.name(), list_type{type{list.value_type}}, tags};
+      return type{other.name(), list_type{from_legacy_type(list.value_type)},
+                  tags};
     },
     [&](const legacy_map_type& list) {
-      *this = type{other.name(),
-                   map_type{type{list.key_type}, type{list.value_type}}, tags};
+      return type{other.name(),
+                  map_type{from_legacy_type(list.key_type),
+                           from_legacy_type(list.value_type)},
+                  tags};
     },
     [&](const legacy_alias_type& alias) {
-      return type{other.name(), type{alias.value_type}, tags};
+      return type{other.name(), from_legacy_type(alias.value_type), tags};
     },
     [&](const legacy_record_type& record) {
       auto fields = std::vector<struct record_type::field_view>{};
       fields.reserve(record.fields.size());
       for (const auto& field : record.fields)
-        fields.push_back({field.name, type{field.type}});
-      *this = type{other.name(), record_type{fields}, tags};
+        fields.push_back({field.name, from_legacy_type(field.type)});
+      return type{other.name(), record_type{fields}, tags};
     },
   };
-  caf::visit(f, other);
+  return caf::visit(f, other);
 }
 
 legacy_type type::to_legacy_type() const noexcept {
