@@ -12,6 +12,7 @@
 
 #include <caf/meta/type_name.hpp>
 
+#include <compare>
 #include <cstddef>
 
 namespace vast {
@@ -26,6 +27,9 @@ struct offset : detail::stack_vector<size_t, 64> {
     typename Inspector::result_type {
     return f(caf::meta::type_name("vast.offset"), static_cast<super&>(x));
   }
+
+  friend std::strong_ordering
+  operator<=>(const offset& lhs, const offset& rhs) noexcept;
 };
 
 } // namespace vast
