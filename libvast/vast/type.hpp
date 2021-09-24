@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/concepts.hpp"
+#include "vast/detail/function.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -668,6 +669,19 @@ public:
     class type type;       /// The type of the field.
   };
 
+  /// A transformation that can be applied to a record type; maps a valid offset
+  /// to a function that transforms a field into other fields.
+  using transformation
+    = std::pair<offset, detail::function<std::vector<struct field>(
+                          const field_view&) noexcept>>;
+
+  /// The behavior of the merge function in case of conflicts.
+  enum class merge_conflict {
+    fail,         ///< Fail.
+    prefer_left,  ///< Take the field from lhs.
+    prefer_right, ///< Take the field from rhs.
+  };
+
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
   /// @param other The copied-from type.
   record_type(const record_type& other) noexcept;
@@ -736,6 +750,36 @@ public:
   /// @note This is necessary to work with the table_slice API, which does not
   /// support direct access via offsets, but rather requires a flat index.
   [[nodiscard]] size_t flat_index(const offset& index) const noexcept;
+
+  /// A transformation that drops fields.
+  static transformation::second_type drop() noexcept;
+
+  /// A transformation that replaces a field.
+  static transformation::second_type
+  assign(std::vector<struct field> fields) noexcept;
+
+  /// A transformation that inserts fields before the index.
+  static transformation::second_type
+  insert_before(std::vector<struct field> fields) noexcept;
+
+  /// A transformation that inserts fields after the index.
+  static transformation::second_type
+  insert_after(std::vector<struct field> fields) noexcept;
+
+  /// Creates a new record by applying a set of transformations to this record.
+  /// @note The changes are applied back-to-front over the individual fields.
+  /// This function returns nullopt if the result is empty.
+  /// @note While it is possible to apply multiple transformations to the same
+  /// field in one go, this may lead to unwanted field duplication.
+  /// @pre While this function can operate on non-leaf fields, it requires that
+  /// transformations none of the offsets have the same prefix.
+  [[nodiscard]] std::optional<record_type>
+  transform(std::vector<transformation> transformations) const noexcept;
+
+  /// Creates a new record by merging two records.
+  friend caf::expected<record_type>
+  merge(const record_type& lhs, const record_type& rhs,
+        enum merge_conflict merge_conflict) noexcept;
 
   /// Returns a new, flattened record type.
   friend record_type flatten(const record_type& type) noexcept;

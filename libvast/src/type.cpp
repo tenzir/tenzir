@@ -108,10 +108,7 @@ void construct_enumeration_type(type& self, const T* begin, const T* end) {
 }
 
 template <class T>
-  requires(std::is_same_v<T, struct record_type::field>  //
-           || std::is_same_v<T, record_type::field_view> //
-           || std::is_same_v<T, record_field>)
-void construct_record_type(type& self, const T* begin, const T* end) {
+void construct_record_type(type& self, const T& begin, const T& end) {
   VAST_ASSERT(begin != end, "A record type must not have zero fields.");
   const auto reserved_size = [&]() noexcept {
     // By default the builder allocates 1024 bytes, which is much more than
@@ -1569,6 +1566,229 @@ size_t record_type::flat_index(const offset& index) const noexcept {
                ->type_as_record_type_v0();
   }
   return result;
+}
+
+record_type::transformation::second_type record_type::drop() noexcept {
+  return [](const field_view&) noexcept -> std::vector<struct field> {
+    return {};
+  };
+}
+
+record_type::transformation::second_type
+record_type::assign(std::vector<struct field> fields) noexcept {
+  return [fields = std::move(fields)](
+           const field_view&) noexcept -> std::vector<struct field> {
+    return fields;
+  };
+}
+
+record_type::transformation::second_type
+record_type::insert_before(std::vector<struct field> fields) noexcept {
+  return [fields = std::move(fields)](const field_view& field) mutable noexcept
+         -> std::vector<struct field> {
+    fields.reserve(fields.size() + 1);
+    fields.push_back({std::string{field.name}, field.type});
+    return fields;
+  };
+}
+
+record_type::transformation::second_type
+record_type::insert_after(std::vector<struct field> fields) noexcept {
+  return [fields = std::move(fields)](const field_view& field) mutable noexcept
+         -> std::vector<struct field> {
+    fields.reserve(fields.size() + 1);
+    fields.insert(fields.begin(), {std::string{field.name}, field.type});
+    return fields;
+  };
+}
+
+std::optional<record_type> record_type::transform(
+  std::vector<transformation> transformations) const noexcept {
+  const auto do_transform
+    = [](const auto& do_transform, const record_type& self, offset index,
+         std::vector<transformation>::iterator& current,
+         const std::vector<transformation>::iterator end) noexcept
+    -> std::optional<record_type> {
+    if (current == end)
+      return self;
+    auto new_fields = std::vector<struct field>{};
+    auto old_fields = self.fields();
+    new_fields.reserve(old_fields.size());
+    index.emplace_back(old_fields.size());
+    while (index.back() > 0 && current != end) {
+      const auto& old_field = old_fields[--index.back()];
+      // Compare the offsets of the next target with our current offset.
+      auto& target = *current;
+      const auto [index_mismatch, target_mismatch] = std::mismatch(
+        index.begin(), index.end(), target.first.begin(), target.first.end());
+      if (index_mismatch == index.end()
+          && target_mismatch == target.first.end()) {
+        // The offset matches exactly, so we apply the transformation.
+        do {
+          auto replacements
+            = std::invoke(std::move(current->second), old_field);
+          std::move(replacements.rbegin(), replacements.rend(),
+                    std::back_inserter(new_fields));
+          ++current;
+        } while (current->first == index);
+      } else if (index_mismatch == index.end()) {
+        // The index is a prefix of the target offset for the next
+        // transformation, so we recurse one level deeper.
+        VAST_ASSERT(caf::holds_alternative<record_type>(old_field.type));
+        if (auto sub_result
+            = do_transform(do_transform, caf::get<record_type>(old_field.type),
+                           index, current, end))
+          new_fields.push_back({
+            std::string{old_field.name},
+            std::move(*sub_result),
+          });
+        // Check for invalid arguments on the way in.
+        VAST_ASSERT(index != current->first,
+                    "cannot apply transformations to both a nested record type "
+                    "and its children at the same time.");
+      } else {
+        // Check for invalid arguments on the way out.
+        VAST_ASSERT(target_mismatch != target.first.end(),
+                    "cannot apply transformations to both a nested record type "
+                    "and its children at the same time.");
+        // We don't have a match and we also don't have a transformation, so
+        // we just leave the field untouched.
+        new_fields.push_back({
+          std::string{old_field.name},
+          old_field.type,
+        });
+      }
+    }
+    // In case we exited the loop earlier, we still have to add all the
+    // remaining fields back to the modified record (untouched).
+    while (index.back() > 0) {
+      const auto& old_field = old_fields[--index.back()];
+      new_fields.push_back({
+        std::string{old_field.name},
+        old_field.type,
+      });
+    }
+    if (new_fields.empty())
+      return std::nullopt;
+    type result{};
+    construct_record_type(result, new_fields.rbegin(), new_fields.rend());
+    return caf::get<record_type>(result);
+  };
+  // Sort transformations by offsets in reverse order.
+  std::stable_sort(transformations.begin(), transformations.end(),
+                   [](const auto& lhs, const auto& rhs) noexcept {
+                     return lhs.first > rhs.first;
+                   });
+  auto current = transformations.begin();
+  auto result
+    = do_transform(do_transform, *this, {}, current, transformations.end());
+  VAST_ASSERT(current == transformations.end(), "index out of bounds");
+  return result;
+}
+
+caf::expected<record_type>
+merge(const record_type& lhs, const record_type& rhs,
+      enum record_type::merge_conflict merge_conflict) noexcept {
+  auto do_merge = [&](const record_type::field_view& lfield,
+                      const record_type::field_view& rfield) noexcept {
+    return detail::overload{
+      [&](const record_type& lhs,
+          const record_type& rhs) noexcept -> caf::expected<type> {
+        if (auto result = merge(lhs, rhs, merge_conflict))
+          return *result;
+        else
+          return result.error();
+      },
+      [&]<concrete_type T, concrete_type U>(
+        const T& lhs, const U& rhs) noexcept -> caf::expected<type> {
+        switch (merge_conflict) {
+          case record_type::merge_conflict::fail: {
+            if (congruent(lhs, rhs)) {
+              if (lfield.type.name() != rfield.type.name())
+                return caf::make_error(
+                  ec::logic_error,
+                  fmt::format("conflicting alias types {} and {} for "
+                              "field {}; failed to merge {} and {}",
+                              lfield.type.name(), rfield.type.name(),
+                              rfield.name, lhs, rhs));
+              const auto lhs_tags = lfield.type.tags();
+              const auto rhs_tags = rfield.type.tags();
+              const auto conflicting_tag
+                = std::any_of(lhs_tags.begin(), lhs_tags.end(),
+                              [&](const auto& lhs_tag) noexcept {
+                                return rfield.type.tag(lhs_tag.key.data())
+                                       != lhs_tag.value;
+                              });
+              if (conflicting_tag)
+                return caf::make_error(
+                  ec::logic_error,
+                  fmt::format("conflicting tags ['{}'] and ['{}'] for "
+                              "field {}; failed to merge {} and {}",
+                              fmt::join(lhs_tags, "', '"),
+                              fmt::join(rhs_tags, "', '"), rfield.name, lhs,
+                              rhs));
+              auto tags = std::vector<struct type::tag>{};
+              tags.reserve(lhs_tags.size() + rhs_tags.size());
+              for (const auto& tag : lhs_tags)
+                tags.push_back({std::string{tag.key},
+                                std::optional{std::string{tag.value}}});
+              for (const auto& tag : rhs_tags)
+                tags.push_back({std::string{tag.key},
+                                std::optional{std::string{tag.value}}});
+              return type{lfield.type.name(), lfield.type, tags};
+            }
+            return caf::make_error(ec::logic_error,
+                                   fmt::format("conflicting field {}; "
+                                               "failed to "
+                                               "merge {} and {}",
+                                               rfield.name, lhs, rhs));
+          }
+          case record_type::merge_conflict::prefer_left:
+            return lfield.type;
+          case record_type::merge_conflict::prefer_right:
+            return rfield.type;
+        }
+        die("unhandled merge conflict case");
+      },
+    };
+  };
+  auto transformations = std::vector<record_type::transformation>{};
+  auto additions = std::vector<struct record_type::field>{};
+  auto rfields = rhs.fields();
+  transformations.reserve(rfields.size());
+  auto err = caf::error{};
+  for (auto rfield : rfields) {
+    if (const auto& lindex = lhs.resolve_prefix(rfield.name)) {
+      transformations.emplace_back(
+        *lindex,
+        [&, rfield = std::move(rfield)](
+          const record_type::field_view& lfield) mutable noexcept
+        -> std::vector<struct record_type::field> {
+          if (auto result = caf::visit(do_merge(lfield, rfield), lfield.type,
+                                       rfield.type)) {
+            return {{
+              std::string{rfield.name},
+              *result,
+            }};
+          } else {
+            err = std::move(result.error());
+            return {};
+          }
+        });
+    } else {
+      additions.push_back({std::string{rfield.name}, std::move(rfield.type)});
+    }
+  }
+  auto result = lhs.transform(std::move(transformations));
+  if (err)
+    return err;
+  VAST_ASSERT(result);
+  result = result->transform({{
+    {result->fields().size() - 1},
+    record_type::insert_after(std::move(additions)),
+  }});
+  VAST_ASSERT(result);
+  return std::move(*result);
 }
 
 record_type flatten(const record_type& type) noexcept {

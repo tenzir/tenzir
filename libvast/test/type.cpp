@@ -13,6 +13,7 @@
 #include "vast/data.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/legacy_type.hpp"
+#include "vast/logger.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
@@ -405,6 +406,159 @@ TEST(record_type flat index computation) {
   CHECK_EQUAL(x.flat_index(offset({0, 2})), 4u);
   CHECK_EQUAL(x.flat_index(offset({1, 0})), 5u);
 }
+
+TEST(record type transformation) {
+  const auto old = record_type{
+    {"x",
+     record_type{
+       {"y",
+        record_type{
+          {"z", integer_type{}},
+          {"k", bool_type{}},
+        }},
+       {"m",
+        record_type{
+          {"y",
+           record_type{
+             {"a", address_type{}},
+           }},
+          {"f", real_type{}},
+        }},
+       {"b", bool_type{}},
+     }},
+    {"y",
+     record_type{
+       {"b", bool_type{}},
+     }},
+  };
+  const auto expected = record_type{
+    {"x",
+     record_type{
+       {"y",
+        record_type{
+          {"z", integer_type{}},
+          {"t", none_type{}},
+          {"u", address_type{}},
+          {"k", bool_type{}},
+        }},
+       {"m",
+        record_type{
+          {"f", real_type{}},
+        }},
+       {"b", bool_type{}},
+     }},
+    {"y",
+     record_type{
+       {"b2", bool_type{}},
+     }},
+  };
+  const auto result = old.transform({
+    {{0, 0, 1},
+     record_type::insert_before({{"t", none_type{}}, {"u", address_type{}}})},
+    {{0, 1, 0, 0}, record_type::drop()},
+    {{1, 0}, record_type::assign({{"b2", bool_type{}}})},
+  });
+  REQUIRE(result);
+  CHECK_EQUAL(*result, expected);
+  CHECK_EQUAL(fmt::format("{}", *result), fmt::format("{}", expected));
+  const auto xyz = record_type{{
+    "x",
+    record_type{{
+      "y",
+      record_type{
+        {"z", integer_type{}},
+      },
+    }},
+  }};
+  CHECK_EQUAL(xyz.transform({{{0}, record_type::drop()}}), std::nullopt);
+  CHECK_EQUAL(xyz.transform({{{0, 0}, record_type::drop()}}), std::nullopt);
+  CHECK_EQUAL(xyz.transform({{{0, 0, 0}, record_type::drop()}}), std::nullopt);
+}
+
+TEST(record_type merging) {
+  const auto lhs = record_type{
+    {"x",
+     record_type{
+       {"u",
+        record_type{
+          {"a", integer_type{}},
+          {"b", bool_type{}},
+        }},
+     }},
+    {"y",
+     record_type{
+       {"b", bool_type{}},
+     }},
+  };
+  const auto rhs = record_type{
+    {"x",
+     record_type{
+       {"y",
+        record_type{
+          {"a", count_type{}},
+          {"b", real_type{}},
+          {"c", integer_type{}},
+        }},
+       {"b", bool_type{}},
+     }},
+    {"y", subnet_type{}},
+  };
+  const auto expected_result_prefer_left = record_type{
+    {"x",
+     record_type{
+       {"u",
+        record_type{
+          {"a", integer_type{}},
+          {"b", bool_type{}},
+        }},
+       {"y",
+        record_type{
+          {"a", count_type{}},
+          {"b", real_type{}},
+          {"c", integer_type{}},
+        }},
+       {"b", bool_type{}},
+     }},
+    {"y",
+     record_type{
+       {"b", bool_type{}},
+     }},
+  };
+  const auto expected_result_prefer_right = record_type{
+    {"x",
+     record_type{
+       {"u",
+        record_type{
+          {"a", integer_type{}},
+          {"b", bool_type{}},
+        }},
+       {"y",
+        record_type{
+          {"a", count_type{}},
+          {"b", real_type{}},
+          {"c", integer_type{}},
+        }},
+       {"b", bool_type{}},
+     }},
+    {"y", subnet_type{}},
+  };
+  const auto expected_result_fail = caf::make_error(
+    ec::logic_error,
+    fmt::format("conflicting field x; failed to merge {} and {}", lhs, rhs));
+  const auto result_prefer_right
+    = merge(lhs, rhs, record_type::merge_conflict::prefer_right);
+  const auto result_prefer_left
+    = merge(lhs, rhs, record_type::merge_conflict::prefer_left);
+  const auto result_fail = merge(lhs, rhs, record_type::merge_conflict::fail);
+  REQUIRE(result_prefer_right);
+  CHECK_EQUAL(fmt::format("{}", *result_prefer_right),
+              fmt::format("{}", expected_result_prefer_right));
+  REQUIRE(result_prefer_left);
+  CHECK_EQUAL(fmt::format("{}", *result_prefer_left),
+              fmt::format("{}", expected_result_prefer_left));
+  REQUIRE(!result_fail);
+  CHECK_EQUAL(result_fail.error(), expected_result_fail);
+};
 
 TEST(legacy_type conversion) {
   const auto rt = type{record_type{
