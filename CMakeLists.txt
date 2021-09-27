@@ -268,6 +268,7 @@ target_compile_options(
             $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>
             $<$<CONFIG:Debug>:-O0>
             $<$<CONFIG:CI>:-O2
+            -g1>
             $<$<BOOL:${VAST_ENABLE_SSE_INSTRUCTIONS}>:-msse>
             $<$<BOOL:${VAST_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
             $<$<BOOL:${VAST_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
@@ -275,8 +276,7 @@ target_compile_options(
             $<$<BOOL:${VAST_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
             $<$<BOOL:${VAST_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
             $<$<BOOL:${VAST_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
-            $<$<BOOL:${VAST_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>
-            -g1>)
+            $<$<BOOL:${VAST_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>)
 
 # -- warnings ------------------------------------------------------------------
 
