@@ -68,3 +68,8 @@ Files: scripts/clang-format-diff.py
 Copyright: (c) 2003-2017 University of Illinois at Urbana-Champaign
 License: Apache-2.0-with-LLVM-exceptions
 Comment: Taken from LLVM.
+
+Files: libvast/vast/blocked_bloom_filter.hpp
+Copyright: (c) Apache Software Foundation
+License: Apache-2.0
+Comment: The original implementation stems from Apache Impala
