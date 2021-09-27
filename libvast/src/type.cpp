@@ -75,7 +75,8 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
 template <class T>
   requires(std::is_same_v<T, struct enumeration_type::field> //
            || std::is_same_v<T, enumeration_type::field_view>)
-void construct_enumeration_type(type& self, const T* begin, const T* end) {
+void construct_enumeration_type(stateful_type_base& self, const T* begin,
+                                const T* end) {
   VAST_ASSERT(begin != end, "An enumeration type must not have zero "
                             "fields");
   // Unlike for other concrete types, we do not calculate the exact amount of
@@ -108,7 +109,8 @@ void construct_enumeration_type(type& self, const T* begin, const T* end) {
 }
 
 template <class T>
-void construct_record_type(type& self, const T& begin, const T& end) {
+void construct_record_type(stateful_type_base& self, const T& begin,
+                           const T& end) {
   VAST_ASSERT(begin != end, "A record type must not have zero fields.");
   const auto reserved_size = [&]() noexcept {
     // By default the builder allocates 1024 bytes, which is much more than
@@ -184,6 +186,14 @@ size_t flat_size(const fbs::Type* view) noexcept {
 
 } // namespace
 
+// -- stateful_type_base ------------------------------------------------------
+
+const fbs::Type&
+stateful_type_base::table(enum transparent transparent) const noexcept {
+  const auto& repr = as_bytes(static_cast<const type&>(*this));
+  return *resolve_transparent(fbs::GetType(repr.data()), transparent);
+}
+
 // -- type --------------------------------------------------------------------
 
 type::type() noexcept = default;
@@ -198,20 +208,21 @@ type& type::operator=(type&& other) noexcept = default;
 
 type::~type() noexcept = default;
 
-type::type(chunk_ptr&& table) noexcept : table_{std::move(table)} {
+type::type(chunk_ptr&& table) noexcept {
 #if VAST_ENABLE_ASSERTIONS
-  VAST_ASSERT(table_);
-  VAST_ASSERT(table_->size() > 0);
-  const auto* const data = reinterpret_cast<const uint8_t*>(table_->data());
-  auto verifier = flatbuffers::Verifier{data, table_->size()};
+  VAST_ASSERT(table);
+  VAST_ASSERT(table->size() > 0);
+  const auto* const data = reinterpret_cast<const uint8_t*>(table->data());
+  auto verifier = flatbuffers::Verifier{data, table->size()};
   VAST_ASSERT(fbs::GetType(data)->Verify(verifier),
               "Encountered invalid vast.fbs.Type FlatBuffers table.");
 #  if defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
-  VAST_ASSERT(verifier.GetComputedSize() == table_->size(),
+  VAST_ASSERT(verifier.GetComputedSize() == table->size(),
               "Encountered unexpected excess bytes in vast.fbs.Type "
               "FlatBuffers table.");
 #  endif // defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
 #endif   // VAST_ENABLE_ASSERTIONS
+  table_ = std::move(table);
 }
 
 type::type(std::string_view name, const type& nested,
@@ -464,11 +475,6 @@ std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
   return !lhs_bytes.empty()   ? std::strong_ordering::greater
          : !rhs_bytes.empty() ? std::strong_ordering::less
                               : std::strong_ordering::equivalent;
-}
-
-const fbs::Type& type::table(enum transparent transparent) const noexcept {
-  const auto& repr = as_bytes(*this);
-  return *resolve_transparent(fbs::GetType(repr.data()), transparent);
 }
 
 uint8_t type::type_index() const noexcept {
@@ -1309,8 +1315,7 @@ list_type::list_type(const type& value_type) noexcept {
   builder.Finish(type_offset);
   auto result = builder.Release();
   VAST_ASSERT(result.size() == reserved_size);
-  auto chunk = chunk::make(std::move(result));
-  static_cast<type&>(*this) = type{std::move(chunk)};
+  table_ = chunk::make(std::move(result));
 }
 
 uint8_t list_type::type_index() noexcept {
@@ -1362,8 +1367,7 @@ map_type::map_type(const type& key_type, const type& value_type) noexcept {
   builder.Finish(type_offset);
   auto result = builder.Release();
   VAST_ASSERT(result.size() == reserved_size);
-  auto chunk = chunk::make(std::move(result));
-  static_cast<type&>(*this) = type{std::move(chunk)};
+  table_ = chunk::make(std::move(result));
 }
 
 uint8_t map_type::type_index() noexcept {

@@ -32,6 +32,35 @@
 
 namespace vast {
 
+// -- stateful_type_base ------------------------------------------------------
+
+/// The base of type and all concrete complex types.
+/// @note This used to be part of `type` itself, and concrete complex types
+/// inherited privately from `type` itself. That did, however, cause ADL to
+/// sometimes prefer the forbidden conversion to a complex type's private base
+/// type `type` over the implicit `type` constructor from complex types.
+struct stateful_type_base {
+public:
+  /// Indiciates whether to skip over internal types when looking at the
+  /// underlying FlatBuffers representation.
+  enum class transparent : uint8_t {
+    yes, ///< Skip internal types.
+    no,  ///< Include internal types. Use with caution.
+  };
+
+  /// Returns the underlying FlatBuffers table representation.
+  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
+  /// @param transparent Whether to skip over alias and tag types
+  [[nodiscard]] const fbs::Type&
+  table(enum transparent transparent) const noexcept;
+
+protected:
+  /// The underlying representation of the type.
+  chunk_ptr table_ = {}; // NOLINT
+};
+
+// -- concepts ----------------------------------------------------------------
+
 /// The list of concrete types.
 using concrete_types
   = caf::detail::type_list<none_type, bool_type, integer_type, count_type,
@@ -42,10 +71,17 @@ using concrete_types
 /// A concept that models any concrete type.
 template <class T>
 concept concrete_type = requires(const T& value) {
+  // The type must be explicitly whitelisted above.
   requires caf::detail::tl_contains<concrete_types, T>::value;
+  // The type must not be inherited from to avoid slicing issues.
   requires std::is_final_v<T>;
+  // The type must offer a way to get a unique type index.
   { T::type_index() } -> concepts::same_as<uint8_t>;
+  // Values of the type must offer an `as_bytes` overload.
   { as_bytes(value) } -> concepts::same_as<std::span<const std::byte>>;
+  // Values of the type must be able to construct the corresponding data type.
+  // TODO: Consider including data.hpp and checking whether the returned value
+  // is convertible to data.
   { value.construct() };
 };
 
@@ -57,18 +93,25 @@ concept type_or_concrete_type = std::is_same_v<T, type> || concrete_type<T>;
 /// additional state.
 template <class T>
 concept basic_type = requires {
+  // The type must be a concrete type.
   requires concrete_type<T>;
+  // The type must not hold any state.
   requires std::is_empty_v<T>;
+  // The type must not define any constructors.
   requires std::is_trivial_v<T>;
 };
 
 /// A concept that models basic concrete types, i.e., types that hold
 /// additional state and extend the lifetime of the surrounding type.
 template <class T>
-concept complex_type = requires(const T& value) {
+concept complex_type = requires {
+  // The type must be a concrete type.
   requires concrete_type<T>;
-  requires std::is_base_of_v<type, T>;
-  requires sizeof(T) == sizeof(chunk_ptr);
+  // The type must inherit from the same base that `type` inherits from.
+  requires std::is_base_of_v<stateful_type_base, T>;
+  // The type must only inherit from the same stateful base that `type` inherits
+  // from to avoid slicing issues.
+  requires sizeof(T) == sizeof(stateful_type_base);
 };
 
 /// Maps type to corresponding data.
@@ -83,7 +126,7 @@ using type_to_data_t = typename type_to_data<T>::type;
 // -- type --------------------------------------------------------------------
 
 /// The sematic representation of data.
-class type {
+class type final : public stateful_type_base {
 public:
   /// An owned key-value type annotation.
   struct tag final {
@@ -95,13 +138,6 @@ public:
   struct tag_view final {
     std::string_view key;   ///< The key.
     std::string_view value; ///< The value (empty if unset).
-  };
-
-  /// Indiciates whether to skip over internal types when looking at the
-  /// underlying FlatBuffers representation.
-  enum class transparent : uint8_t {
-    yes, ///< Skip internal types.
-    no,  ///< Include internal types. Use with caution.
   };
 
   /// Default-constructs a type, which is semantically equivalent to the
@@ -138,23 +174,43 @@ public:
 
   /// Implicitly construct a type from a basic concrete type.
   template <basic_type T>
-  type(const T& other) noexcept
-    : type{chunk::make(as_bytes(other), []() noexcept {})} {
-    // nop
+  type(const T& other) noexcept {
+    table_ = chunk::make(as_bytes(other), []() noexcept {});
+  }
+
+  /// Implicitly assings a type from a basic concrete type.
+  template <basic_type T>
+  type& operator=(const T& rhs) noexcept {
+    table_ = chunk::make(as_bytes(rhs), []() noexcept {});
+    return *this;
   }
 
   /// Implicitly construct a type from a complex concrete type.
   template <complex_type T>
-  type(const T& other) noexcept : table_{other.table_} {
-    // nop
+  type(const T& other) noexcept {
+    table_ = other.table_;
   }
 
-  /// Implicitly construct a type from a complex concrete type.
+  /// Implicitly assign a type from a complex concrete type.
+  template <complex_type T>
+  type& operator=(const T& rhs) noexcept {
+    table_ = rhs.table_;
+    return *this;
+  }
+
+  /// Implicitly move-construct a type from a complex concrete type.
   template <complex_type T>
     requires(std::is_rvalue_reference_v<T>)
   type(T&& other) // NOLINT(bugprone-forwarding-reference-overload)
-  noexcept : table_{std::move(other.table_)} {
-    // nop
+  noexcept {
+    table_ = std::exchange(other.table_, {});
+  }
+
+  /// Implicitly move-assign a type from a complex concrete type.
+  template <complex_type T>
+    requires(std::is_rvalue_reference_v<T>)
+  type& operator=(T&& other) noexcept {
+    table_ = std::exchange(other.table_, {});
   }
 
   /// Constructs a named and tagged type.
@@ -198,12 +254,6 @@ public:
   /// Compares the underlying representation of two types lexicographically.
   friend std::strong_ordering
   operator<=>(const type& lhs, const type& rhs) noexcept;
-
-  /// Returns the underlying FlatBuffers table representation.
-  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
-  /// @param transparent Whether to skip over alias and tag types
-  [[nodiscard]] const fbs::Type&
-  table(enum transparent transparent) const noexcept;
 
   /// Returns the concrete type index of this type.
   [[nodiscard]] uint8_t type_index() const noexcept;
@@ -285,10 +335,6 @@ public:
   /// @param y The data to be checked against the type.
   /// @returns `true` if *x* is a valid type for *y*.
   friend bool type_check(const type& x, const data& y) noexcept;
-
-protected:
-  /// The underlying representation of the type.
-  chunk_ptr table_ = {}; // NOLINT
 };
 
 /// Compares the underlying representation of two types for equality.
@@ -483,7 +529,7 @@ public:
 
 /// An enumeration type that can have one specific value.
 /// @relates type
-class enumeration_type final : private type {
+class enumeration_type final : public stateful_type_base {
   friend class type;
   friend struct caf::sum_type_access<vast::type>;
 
@@ -552,7 +598,7 @@ public:
 
 /// An ordered sequence of values.
 /// @relates type
-class list_type final : private type {
+class list_type final : public stateful_type_base {
   friend class type;
   friend struct caf::sum_type_access<vast::type>;
 
@@ -598,7 +644,7 @@ public:
 
 /// An associative mapping from keys to values.
 /// @relates type
-class map_type final : private type {
+class map_type final : public stateful_type_base {
   friend class type;
   friend struct caf::sum_type_access<vast::type>;
 
@@ -647,7 +693,7 @@ public:
 
 /// A list of fields, each of which have a name and type.
 /// @relates type
-class record_type final : private type {
+class record_type final : public stateful_type_base {
   friend class type;
   friend struct caf::sum_type_access<vast::type>;
 
@@ -859,7 +905,8 @@ struct sum_type_access<vast::type> final {
 
   template <vast::complex_type T, int Index>
   static const T& get(const vast::type& x, sum_type_token<T, Index>) {
-    return static_cast<const T&>(x);
+    return static_cast<const T&>(
+      static_cast<const vast::stateful_type_base&>(x));
   }
 
   template <class T, int Index>
