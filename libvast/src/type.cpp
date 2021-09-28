@@ -1546,6 +1546,16 @@ record_type::leaf_iterable record_type::leaves() const noexcept {
   return leaf_iterable{*this};
 }
 
+size_t record_type::num_fields() const noexcept {
+  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  return record->fields()->size();
+}
+
+size_t record_type::num_leaves() const noexcept {
+  return flat_size(&table(transparent::yes));
+}
+
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
   for (const auto& [_, offset] : leaves())
     if (--flat_index == 0)

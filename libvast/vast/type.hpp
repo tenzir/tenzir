@@ -777,6 +777,12 @@ public:
   /// Returns an iterable view over the leaf fields of a record type.
   [[nodiscard]] leaf_iterable leaves() const noexcept;
 
+  /// Returns the numnber of fields in a record.
+  [[nodiscard]] size_t num_fields() const noexcept;
+
+  /// Returns the number of leaf fields in a record.
+  [[nodiscard]] size_t num_leaves() const noexcept;
+
   /// Resolves a flat index into an offset.
   [[nodiscard]] offset resolve_flat_index(size_t flat_index) const noexcept;
 
