@@ -40,6 +40,36 @@ constexpr size_t reserved_string_size(std::string_view str) {
   return str.empty() ? 0 : (((str.size() + 1 + 3) / 4) * 4);
 }
 
+std::string_view type_name(const fbs::Type* root) {
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
+        return "";
+      case fbs::type::Type::tagged_type_v0:
+        const auto* tagged_type = root->type_as_tagged_type_v0();
+        if (const auto* name = tagged_type->name())
+          return name->string_view();
+        root = tagged_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
+}
+
 const fbs::Type*
 resolve_transparent(const fbs::Type* root, enum type::transparent transparent
                                            = type::transparent::yes) {
@@ -495,34 +525,7 @@ data type::construct() const noexcept {
 }
 
 std::string_view type::name() const& noexcept {
-  const auto* root = &table(transparent::no);
-  while (true) {
-    switch (root->type_type()) {
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
-        return "";
-      case fbs::type::Type::tagged_type_v0:
-        const auto* tagged_type = root->type_as_tagged_type_v0();
-        if (const auto* name = tagged_type->name())
-          return name->string_view();
-        root = tagged_type->type_nested_root();
-        VAST_ASSERT(root);
-        break;
-    }
-  }
+  return type_name(&table(transparent::no));
 }
 
 std::optional<std::string_view> type::tag(const char* key) const& noexcept {
@@ -1447,41 +1450,52 @@ record_type::leaf_iterable record_type::leaves() const noexcept {
 
 std::optional<offset>
 record_type::resolve_prefix(std::string_view key) const noexcept {
-  if (key.empty())
-    return {};
-  auto index = static_cast<offset::size_type>(-1);
-  for (auto&& field : fields()) {
-    ++index;
-    VAST_ASSERT(!field.name.empty());
-    // Check whether the field name is a prefix of the key to resolve.
-    auto [name_mismatch, key_mismatch] = std::mismatch(
-      field.name.begin(), field.name.end(), key.begin(), key.end());
-    if (name_mismatch == field.name.end()) {
-      // If it's an exact match we already have our result.
-      if (key_mismatch == key.end())
-        return offset{index};
-      // Otherwise, if the remainder begings with the . separator and the
-      // nested type is a record type, we can recurse and try to match the
-      // remainder.
-      if (*key_mismatch++ != '.')
-        continue;
-      if (const auto* record = caf::get_if<record_type>(&field.type)) {
-        if (auto result
-            = record->resolve_prefix(key.substr(key_mismatch - key.begin()))) {
-          result->insert(result->begin(), index);
-          return result;
+  auto do_resolve_prefix = [](auto&& self, const record_type& record,
+                              std::string_view key) -> std::optional<offset> {
+    if (key.empty())
+      return {};
+    auto index = static_cast<offset::size_type>(-1);
+    for (auto&& field : record.fields()) {
+      ++index;
+      VAST_ASSERT(!field.name.empty());
+      // Check whether the field name is a prefix of the key to resolve.
+      auto [name_mismatch, key_mismatch] = std::mismatch(
+        field.name.begin(), field.name.end(), key.begin(), key.end());
+      if (name_mismatch == field.name.end()) {
+        // If it's an exact match we already have our result.
+        if (key_mismatch == key.end())
+          return offset{index};
+        // Otherwise, if the remainder begings with the . separator and the
+        // nested type is a record type, we can recurse and try to match the
+        // remainder.
+        if (*key_mismatch++ != '.')
+          continue;
+        if (const auto* nested = caf::get_if<record_type>(&field.type)) {
+          if (auto result
+              = self(self, *nested, key.substr(key_mismatch - key.begin()))) {
+            result->insert(result->begin(), index);
+            return result;
+          }
         }
       }
     }
-  }
-  return {};
+    return {};
+  };
+  if (const auto prefix
+      = fmt::format("{}.", type_name(&table(transparent::no)));
+      key.starts_with(prefix))
+    key = key.substr(prefix.size());
+  return do_resolve_prefix(do_resolve_prefix, *this, key);
 }
 
 std::vector<offset>
 record_type::resolve_suffix(std::string_view key) const noexcept {
   auto result = std::vector<offset>{};
+  const auto prefix = fmt::format("{}.", type_name(&table(transparent::no)));
+  // TODO: Once we support queries for nested records, we must not just iterate
+  // over leafs here, but rather include nested record types.
   for (auto&& [_, offset] : leaves()) {
-    auto name = this->key(offset);
+    auto name = prefix + this->key(offset);
     auto [name_mismatch, key_mismatch]
       = std::mismatch(name.rbegin(), name.rend(), key.rbegin(), key.rend());
     if (key_mismatch == key.rend()) {
