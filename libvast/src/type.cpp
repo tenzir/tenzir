@@ -1546,6 +1546,13 @@ record_type::leaf_iterable record_type::leaves() const noexcept {
   return leaf_iterable{*this};
 }
 
+offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
+  for (const auto& [_, offset] : leaves())
+    if (--flat_index == 0)
+      return offset;
+  die("index out of bounds");
+}
+
 std::optional<offset>
 record_type::resolve_prefix(std::string_view key) const noexcept {
   auto do_resolve_prefix = [](auto&& self, const record_type& record,

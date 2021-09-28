@@ -777,6 +777,9 @@ public:
   /// Returns an iterable view over the leaf fields of a record type.
   [[nodiscard]] leaf_iterable leaves() const noexcept;
 
+  /// Resolves a flat index into an offset.
+  [[nodiscard]] offset resolve_flat_index(size_t flat_index) const noexcept;
+
   /// Resolves a key into an offset.
   /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
   /// but not 'x.y_other.z' .
