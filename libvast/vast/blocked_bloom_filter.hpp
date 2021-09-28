@@ -69,6 +69,12 @@ allocate_aligned(size_t alignment, size_t size) {
 /// consists of a sequence of small Bloom filters, each of which fits into one
 /// cache line. This design allows for less than two cache misses on average,
 /// unlike standard Bloom filters performing *k* random memory accesses.
+///
+/// The implementation is a slightly tuned version by Jim Appl, per the
+/// following papers:
+/// - https://arxiv.org/pdf/2101.01719.pdf
+/// - https://arxiv.org/pdf/2109.01947.pdf
+///
 /// @tparam HashFunction The hash function to use.
 template <class HashFunction>
 class blocked_bloom_filter
@@ -84,7 +90,6 @@ public:
 
   /// Constructs a blocked Bloom filter with a fixed size and a hash function.
   /// @param size The number of cells/bits in the Bloom filter.
-  /// @param hash The hash function that generates the digest.
   explicit blocked_bloom_filter(size_t size = 0)
     : num_blocks_{num_blocks(size)} {
     auto buffer_size = num_blocks_ * block_size;
@@ -99,11 +104,11 @@ public:
   template <class T>
   [[gnu::always_inline]] inline void add(T&& x) {
     const uint64_t digest = hash{}(std::forward<T>(x));
-    const uint32_t idx = reduce(rotl64(digest, 32), num_blocks_);
-    const __m256i mask = make_mask(digest);
+    const uint32_t idx = block_index(digest, num_blocks_);
     auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
-    __m256i* const block = &blocks[idx];
-    _mm256_store_si256(block, _mm256_or_si256(*block, mask));
+    auto* block = &blocks[idx];
+    // Perform a bitwise OR into the chosen block.
+    _mm256_store_si256(block, _mm256_or_si256(*block, make_mask(digest)));
   }
 
   /// Test whether an element exists in the Bloom filter.
@@ -113,10 +118,11 @@ public:
   template <class T>
   [[gnu::always_inline]] inline bool lookup(T&& x) const {
     const uint64_t digest = hash{}(std::forward<T>(x));
-    const uint32_t idx = reduce(rotl64(digest, 32), num_blocks_);
-    const __m256i mask = make_mask(digest);
+    const uint32_t idx = block_index(digest, num_blocks_);
     auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
-    return _mm256_testc_si256(blocks[idx], mask);
+    auto* block = &blocks[idx];
+    // Check that all bits in the block are set.
+    return _mm256_testc_si256(*block, make_mask(digest));
   }
 
   // -- concepts --------------------------------------------------------------
@@ -139,14 +145,9 @@ public:
 private:
   /// Computes the number of blocks for a given number of bits.
   static constexpr size_t num_blocks(size_t bits) {
-    // bits / 16: fpp 0.1777%, 75.1%
-    // bits / 20: fpp 0.4384%, 63.4%
-    // bits / 22: fpp 0.6692%, 61.1%
-    // bits / 24: fpp 0.9765%, 59.7% <= seems to be best (1% fpp seems important)
-    // bits / 26: fpp 1.3769%, 59.3%
-    // bits / 28: fpp 1.9197%, 60.3%
-    // bits / 32: fpp 3.3280%, 63.0%
-    return std::max(size_t{1}, bits / 24);
+    constexpr auto c = 24; // taken from FastFilter benchmark
+    static_assert(c <= block_size);
+    return std::max(size_t{1}, bits / c);
   }
 
   // http://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction
@@ -161,15 +162,24 @@ private:
     return (n << c) | (n >> ((-c) & mask));
   }
 
+  static inline uint64_t block_index(uint64_t digest, size_t num_blocks) {
+    return reduce(rotl64(digest, 32), num_blocks);
+  }
+
+  // Computes a mask with 1-bits to be set/checked in each 32-bit lane.
   [[gnu::always_inline]] static inline __m256i
   make_mask(const uint32_t digest) noexcept {
     const __m256i ones = _mm256_set1_epi32(1);
+    // Set eight odd constants for multiply-shift hashing
     const __m256i rehash
       = _mm256_setr_epi32(0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU,
                           0x705495c7U, 0x2df1424bU, 0x9efc4947U, 0x5c6bfb31U);
     __m256i digest_data = _mm256_set1_epi32(digest);
     digest_data = _mm256_mullo_epi32(rehash, digest_data);
-    digest_data = _mm256_srli_epi32(digest_data, 27);
+    // Shift all data right, reducing the hash values from 32 bits to five bits.
+    // Those five bits represent an index in [0, 31).
+    digest_data = _mm256_srli_epi32(digest_data, 32 - 5);
+    // Set a bit in each lane based on using the [0, 32) data as shift values.
     return _mm256_sllv_epi32(ones, digest_data);
   }
 
