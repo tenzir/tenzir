@@ -172,8 +172,8 @@ public:
 
   /// Creates a typed view on a given set of columns of a table slice.
   /// @note This function is defined and documented in 'vast/project.hpp'.
-  template <class... Types, class... Hints>
-  friend projection<Types...> project(table_slice slice, Hints&&... hints);
+  template <class... Hints>
+  friend auto project(table_slice slice, Hints&&... hints);
 
   // -- concepts ---------------------------------------------------------------
 
