@@ -13,6 +13,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/msgpack_table_slice.hpp"
+#include "vast/type.hpp"
 
 #include <cstddef>
 #include <memory>
@@ -176,7 +177,7 @@ msgpack_table_slice_builder::msgpack_table_slice_builder(
 
 bool msgpack_table_slice_builder::add_impl(data_view x) {
   // Check whether input is valid.
-  if (!type_check(flat_layout_.fields[column_].type, x))
+  if (!type_check(type::from_legacy_type(flat_layout_.fields[column_].type), x))
     return false;
   if (column_ == 0)
     offset_table_.push_back(data_.size());

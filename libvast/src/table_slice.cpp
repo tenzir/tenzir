@@ -24,6 +24,7 @@
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
 #include <cstddef>
@@ -643,7 +644,8 @@ struct row_evaluator {
   bool operator()(const data_extractor& e, const data& d) {
     auto col = slice_.layout().flat_index_at(e.offset);
     VAST_ASSERT(col);
-    auto lhs = to_canonical(e.type, slice_.at(row_, *col, e.type));
+    auto lhs = to_canonical(type::from_legacy_type(e.type),
+                            slice_.at(row_, *col, e.type));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
   }

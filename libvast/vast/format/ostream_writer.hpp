@@ -15,6 +15,7 @@
 #include "vast/policy/include_field_names.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_row.hpp"
+#include "vast/type.hpp"
 
 #include <caf/error.hpp>
 
@@ -80,7 +81,7 @@ protected:
         else
           return x;
       };
-      auto x = to_canonical(f.type, row[column]);
+      auto x = to_canonical(type::from_legacy_type(f.type), row[column]);
       return printer.print(iter, rep(std::move(x)));
     };
     auto iter = std::back_inserter(buf_);

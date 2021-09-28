@@ -26,6 +26,7 @@
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 #include "vast/view.hpp"
@@ -104,7 +105,8 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
       VAST_DEBUG("{} got predicate: {}", *self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
-      auto rep = to_internal(idx.type(), make_view(pred.rhs));
+      auto rep
+        = to_internal(type::from_legacy_type(idx.type()), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },
     [self](atom::snapshot) {
@@ -151,7 +153,8 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
       VAST_DEBUG("{} got predicate: {}", *self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
-      auto rep = to_internal(idx.type(), make_view(pred.rhs));
+      auto rep
+        = to_internal(type::from_legacy_type(idx.type()), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },
     [self](atom::shutdown) {
