@@ -569,6 +569,59 @@ TEST(record_type merging) {
   CHECK_EQUAL(result_fail.error(), expected_result_fail);
 };
 
+TEST(type inference) {
+  CHECK_EQUAL(type::infer(caf::none), none_type{});
+  CHECK_EQUAL(type::infer(bool{}), bool_type{});
+  CHECK_EQUAL(type::infer(integer{}), integer_type{});
+  CHECK_EQUAL(type::infer(count{}), count_type{});
+  CHECK_EQUAL(type::infer(real{}), real_type{});
+  CHECK_EQUAL(type::infer(duration{}), duration_type{});
+  CHECK_EQUAL(type::infer(time{}), time_type{});
+  CHECK_EQUAL(type::infer(std::string{}), string_type{});
+  CHECK_EQUAL(type::infer(pattern{}), pattern_type{});
+  CHECK_EQUAL(type::infer(address{}), address_type{});
+  CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
+  // Enumeration types cannot be inferred.
+  CHECK_EQUAL(type::infer(enumeration{0}), none_type{});
+  // List and map types can only be inferred if the nested values can be inferred.
+  CHECK_EQUAL(type::infer(list{}), none_type{});
+  CHECK_EQUAL(type::infer(list{caf::none}), none_type{});
+  CHECK_EQUAL(type::infer(list{bool{}}), list_type{bool_type{}});
+  CHECK_EQUAL(type::infer(map{}), none_type{});
+  CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}), none_type{});
+  CHECK_EQUAL(type::infer(map{{caf::none, integer{}}}), none_type{});
+  CHECK_EQUAL(type::infer(map{{bool{}, caf::none}}), none_type{});
+  CHECK_EQUAL(type::infer(map{{bool{}, integer{}}}),
+              (map_type{bool_type{}, integer_type{}}));
+  // Record types can only be inferred when all fields can be inferred.
+  const auto r1 = record{
+    {"a", bool{}},
+    {"b", integer{}},
+    {"c",
+     record{
+       {"d", caf::none},
+     }},
+  };
+  CHECK_EQUAL(type::infer(r1), none_type{});
+  const auto r2 = record{
+    {"a", bool{}},
+    {"b", integer{}},
+    {"c",
+     record{
+       {"d", count{}},
+     }},
+  };
+  const auto rt = record_type{
+    {"a", bool_type{}},
+    {"b", integer_type{}},
+    {"c",
+     record_type{
+       {"d", count_type{}},
+     }},
+  };
+  CHECK_EQUAL(type::infer(r2), rt);
+}
+
 TEST(legacy_type conversion) {
   const auto rt = type{record_type{
     {"i", integer_type{}},
@@ -597,8 +650,8 @@ TEST(legacy_type conversion) {
      }},
   }};
   // Note that rt == type{lrt} fails because the types are semantically
-  // equivalent, but not exactly equivalent because of the inconsistent handling
-  // of naming in legacy types. As such, the following checks fail:
+  // equivalent, but not exactly equivalent because of the inconsistent
+  // handling of naming in legacy types. As such, the following checks fail:
   //   CHECK_EQUAL(rt, type{lrt});
   //   CHECK_EQUAL(legacy_type{rt}, lrt);
   // Instead, we instead compare the printed versions of the types for

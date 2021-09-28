@@ -233,6 +233,11 @@ public:
   /// @note Creates a copy of nested if the tags are empty.
   type(const type& nested, const std::vector<struct tag>& tags) noexcept;
 
+  /// Infers a type from a given data.
+  /// @note Returns a *none_type* if the type cannot be inferred.
+  /// @relates data
+  [[nodiscard]] static type infer(const data& value) noexcept;
+
   /// Constructs a type from a legacy_type.
   /// @relates legacy_type
   [[nodiscard]] static type from_legacy_type(const legacy_type& other) noexcept;

@@ -319,6 +319,104 @@ type::type(const type& nested, const std::vector<struct tag>& tags) noexcept
   // nop
 }
 
+type type::infer(const data& value) noexcept {
+  auto f = detail::overload{
+    [](caf::none_t) noexcept -> type {
+      return none_type{};
+    },
+    [](const bool&) noexcept -> type {
+      return bool_type{};
+    },
+    [](const integer&) noexcept -> type {
+      return integer_type{};
+    },
+    [](const count&) noexcept -> type {
+      return count_type{};
+    },
+    [](const real&) noexcept -> type {
+      return real_type{};
+    },
+    [](const duration&) noexcept -> type {
+      return duration_type{};
+    },
+    [](const time&) noexcept -> type {
+      return time_type{};
+    },
+    [](const std::string&) noexcept -> type {
+      return string_type{};
+    },
+    [](const pattern&) noexcept -> type {
+      return pattern_type{};
+    },
+    [](const address&) noexcept -> type {
+      return address_type{};
+    },
+    [](const subnet&) noexcept -> type {
+      return subnet_type{};
+    },
+    [](const enumeration&) noexcept -> type {
+      // Enumeration types cannot be inferred.
+      return none_type{};
+    },
+    [](const list& list) noexcept -> type {
+      // List types cannot be inferred from empty lists.
+      if (list.empty())
+        return none_type{};
+      // List types cannot be inferred when the value type cannot be inferred.
+      auto value_type = infer(*list.begin());
+      if (!value_type)
+        return none_type{};
+      // Technically lists can contain heterogenous data, but for optimization
+      // purposes we only check the first element when assertions are disabled.
+      VAST_ASSERT(std::all_of(list.begin() + 1, list.end(),
+                              [&](const auto& elem) noexcept {
+                                return value_type.type_index()
+                                       == infer(elem).type_index();
+                              }),
+                  "expected a homogenous list");
+      return list_type{value_type};
+    },
+    [](const map& map) noexcept -> type {
+      // Map types cannot be inferred from empty maps.
+      if (map.empty())
+        return none_type{};
+      // Map types cannot be inferred when the key or value type cannot be
+      // inferred.
+      auto key_type = infer(map.begin()->first);
+      auto value_type = infer(map.begin()->second);
+      if (!key_type || !value_type)
+        return none_type{};
+      // Technically maps can contain heterogenous data, but for optimization
+      // purposes we only check the first element when assertions are disabled.
+      VAST_ASSERT(std::all_of(map.begin() + 1, map.end(),
+                              [&](const auto& elem) noexcept {
+                                return key_type.type_index()
+                                         == infer(elem.first).type_index()
+                                       && value_type.type_index()
+                                            == infer(elem.second).type_index();
+                              }),
+                  "expected a homogenous map");
+      return map_type{key_type, value_type};
+    },
+    [](const record& record) noexcept -> type {
+      // Record types cannot be inferred from empty records.
+      if (record.empty())
+        return none_type{};
+      auto fields = std::vector<record_type::field_view>{};
+      fields.reserve(record.size());
+      for (const auto& field : record) {
+        // Record types cannot be inferred when any field cannot be inferred.
+        if (auto type = infer(field.second))
+          fields.push_back({field.first, std::move(type)});
+        else
+          return none_type{};
+      }
+      return record_type{fields};
+    },
+  };
+  return caf::visit(f, value);
+}
+
 type type::from_legacy_type(const legacy_type& other) noexcept {
   const auto tags = [&] {
     auto result = std::vector<struct tag>{};
