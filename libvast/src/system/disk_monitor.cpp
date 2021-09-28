@@ -106,14 +106,14 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
   self->state.index = index;
   self->send(self, atom::ping_v);
   return {
-    [self](atom::ping) {
-      self->delayed_send(self, self->state.config.scan_interval, atom::ping_v);
+    [self](atom::ping) -> caf::result<void> {
       if (self->state.purging) {
         VAST_DEBUG("{} ignores ping because a deletion is still in "
                    "progress",
                    *self);
-        return;
+        return caf::skip;
       }
+      self->delayed_send(self, self->state.config.scan_interval, atom::ping_v);
       auto size = self->state.compute_dbdir_size();
       // TODO: This is going to do one syscall per file in the database
       // directory. This feels a bit wasteful, but in practice we didn't
@@ -123,7 +123,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       if (!size) {
         VAST_WARN("{} failed to calculate recursive size of {}: {}", *self,
                   self->state.dbdir, size.error());
-        return;
+        return {};
       }
       VAST_VERBOSE("{} checks db-directory of size {}", *self, *size);
       if (*size > self->state.config.high_water_mark && !self->state.purging) {
@@ -133,20 +133,18 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
                     atom::erase_v)
           .then(
-            [] {
+            [=] {
+              self->state.purging = false;
               // nop
             },
             [=](const caf::error& err) {
+              self->state.purging = false;
               VAST_ERROR("{} failed to purge db-directory: {}", *self, err);
             });
       }
+      return {};
     },
     [self](atom::erase) -> caf::result<void> {
-      // Make sure the `purging` state will be reset once all continuations
-      // have finished or we encountered an error.
-      auto shared_guard = make_shared_guard([=] {
-        self->state.purging = false;
-      });
       auto err = std::error_code{};
       const auto index_dir
         = std::filesystem::directory_iterator(self->state.dbdir / "index", err);
@@ -198,7 +196,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           ->request(self->state.index, caf::infinite, atom::erase_v,
                     partition.id)
           .then(
-            [=, sg = shared_guard](atom::done) {
+            [=](atom::done) {
               if (const auto size = self->state.compute_dbdir_size(); !size) {
                 VAST_WARN("{} failed to calculate size of {}: {}", *self,
                           self->state.dbdir, size.error());
@@ -212,7 +210,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                 }
               }
             },
-            [=, sg = shared_guard](caf::error e) {
+            [=](caf::error e) {
               VAST_WARN("{} failed to erase from index: {}", *self, render(e));
             });
       }

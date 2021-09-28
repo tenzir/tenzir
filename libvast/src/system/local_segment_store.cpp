@@ -135,6 +135,8 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       [self](caf::error& err) {
         VAST_ERROR("{} could not map passive store segment into memory: {}",
                    *self, render(err));
+        for (auto&& [_, rp] : std::exchange(self->state.deferred_requests, {}))
+          rp.deliver(err);
         self->quit(std::move(err));
       });
   return {
@@ -161,7 +163,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       if (!self->state.segment) {
         // Treat this as an "erase" query for the purposes of storing it
         // until the segment is loaded.
-        auto rp = caf::typed_response_promise<atom::done>();
+        auto rp = self->make_response_promise<atom::done>();
         auto query = query::make_erase({});
         query.ids = std::move(xs);
         self->state.deferred_requests.emplace_back(query, rp);
