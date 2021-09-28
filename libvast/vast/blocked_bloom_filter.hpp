@@ -78,16 +78,18 @@ class blocked_bloom_filter
 public:
   using hash_function = HashFunction;
   using hash = uhash<hash_function>;
-  using bucket_type = std::array<uint32_t, 8>; // __m256i
+
+  using block_type = std::array<uint32_t, 8>; // __m256i
+  static constexpr size_t block_size = sizeof(block_type);
 
   /// Constructs a blocked Bloom filter with a fixed size and a hash function.
   /// @param size The number of cells/bits in the Bloom filter.
   /// @param hash The hash function that generates the digest.
   explicit blocked_bloom_filter(size_t size = 0)
-    : num_buckets_{num_buckets(size)} {
-    auto buffer_size = num_buckets_ * sizeof(bucket_type);
-    buckets_ = detail::allocate_aligned<bucket_type>(64, buffer_size);
-    std::memset(buckets_.get(), 0, buffer_size);
+    : num_blocks_{num_blocks(size)} {
+    auto buffer_size = num_blocks_ * block_size;
+    blocks_ = detail::allocate_aligned<block_type>(64, buffer_size);
+    std::memset(blocks_.get(), 0, buffer_size);
     // TODO: there's probably a better way to do this.
     VAST_ASSERT(__builtin_cpu_supports("avx2"));
   }
@@ -97,11 +99,11 @@ public:
   template <class T>
   [[gnu::always_inline]] inline void add(T&& x) {
     const uint64_t digest = hash{}(std::forward<T>(x));
-    const uint32_t idx = reduce(rotl64(digest, 32), num_buckets_);
+    const uint32_t idx = reduce(rotl64(digest, 32), num_blocks_);
     const __m256i mask = make_mask(digest);
-    auto buckets = reinterpret_cast<__m256i*>(buckets_.get());
-    __m256i* const bucket = &buckets[idx];
-    _mm256_store_si256(bucket, _mm256_or_si256(*bucket, mask));
+    auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
+    __m256i* const block = &blocks[idx];
+    _mm256_store_si256(block, _mm256_or_si256(*block, mask));
   }
 
   /// Test whether an element exists in the Bloom filter.
@@ -111,32 +113,32 @@ public:
   template <class T>
   [[gnu::always_inline]] inline bool lookup(T&& x) const {
     const uint64_t digest = hash{}(std::forward<T>(x));
-    const uint32_t idx = reduce(rotl64(digest, 32), num_buckets_);
+    const uint32_t idx = reduce(rotl64(digest, 32), num_blocks_);
     const __m256i mask = make_mask(digest);
-    auto buckets = reinterpret_cast<__m256i*>(buckets_.get());
-    return _mm256_testc_si256(buckets[idx], mask);
+    auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
+    return _mm256_testc_si256(blocks[idx], mask);
   }
 
   // -- concepts --------------------------------------------------------------
 
   friend bool
   operator==(const blocked_bloom_filter& x, const blocked_bloom_filter& y) {
-    VAST_ASSERT(x.buckets_ != nullptr);
-    VAST_ASSERT(y.buckets_ != nullptr);
-    return x.num_buckets_ == y.num_buckets_
-           && std::memcmp(x.buckets_.get(), y.buckets_.get(),
-                          x.num_buckets_ * sizeof(bucket_type));
+    VAST_ASSERT(x.blocks_ != nullptr);
+    VAST_ASSERT(y.blocks_ != nullptr);
+    return x.num_blocks_ == y.num_blocks_
+           && std::memcmp(x.blocks_.get(), y.blocks_.get(),
+                          x.num_blocks_ * block_size);
   }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, blocked_bloom_filter& x) {
-    return f(caf::meta::type_name("blocked_bloom_filter"), x.num_buckets_,
-             x.buckets_);
+    return f(caf::meta::type_name("blocked_bloom_filter"), x.num_blocks_,
+             x.blocks_);
   }
 
 private:
-  /// Computes the number of buckets for a given number of bits.
-  static constexpr size_t num_buckets(size_t bits) {
+  /// Computes the number of blocks for a given number of bits.
+  static constexpr size_t num_blocks(size_t bits) {
     // bits / 16: fpp 0.1777%, 75.1%
     // bits / 20: fpp 0.4384%, 63.4%
     // bits / 22: fpp 0.6692%, 61.1%
@@ -171,8 +173,8 @@ private:
     return _mm256_sllv_epi32(ones, digest_data);
   }
 
-  size_t num_buckets_;
-  std::unique_ptr<bucket_type[], detail::delete_aligned<bucket_type>> buckets_;
+  size_t num_blocks_;
+  std::unique_ptr<block_type[], detail::delete_aligned<block_type>> blocks_;
 };
 
 } // namespace vast
