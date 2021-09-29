@@ -189,6 +189,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                 });
       // Delete up to `step_size` partitions at once.
       auto idx = std::min(partitions.size(), self->state.config.step_size);
+      self->state.pending_partitions += idx;
       for (size_t i = 0; i < idx; ++i) {
         auto& partition = partitions.at(i);
         VAST_VERBOSE("{} erases partition {} from index", *self, partition.id);
@@ -197,21 +198,25 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                     partition.id)
           .then(
             [=](atom::done) {
-              if (const auto size = self->state.compute_dbdir_size(); !size) {
-                VAST_WARN("{} failed to calculate size of {}: {}", *self,
-                          self->state.dbdir, size.error());
-              } else {
-                VAST_VERBOSE("{} erased ids from index; leftover size is "
-                             "{}",
-                             *self, *size);
-                if (*size > self->state.config.low_water_mark) {
-                  // Repeat until we're below the low water mark
-                  self->send(self, atom::erase_v);
+              if (--self->state.pending_partitions == 0) {
+                if (const auto size = self->state.compute_dbdir_size(); !size) {
+                  VAST_WARN("{} failed to calculate size of {}: {}", *self,
+                            self->state.dbdir, size.error());
+                } else {
+                  VAST_VERBOSE("{} erased ids from index; leftover size is {}",
+                               *self, *size);
+                  if (*size > self->state.config.low_water_mark) {
+                    // Repeat until we're below the low water mark
+                    self->send(self, atom::erase_v);
+                  }
                 }
               }
             },
             [=](caf::error e) {
               VAST_WARN("{} failed to erase from index: {}", *self, render(e));
+              // TODO: Consider storing failed partitions so we don't retry them
+              // again and again.
+              self->state.pending_partitions--;
             });
       }
       return {};

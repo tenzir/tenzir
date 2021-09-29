@@ -49,6 +49,10 @@ struct disk_monitor_state {
   /// Whether an erasing run is currently in progress.
   bool purging;
 
+  /// The number of partitions that are scheduled for deletion and we expect to
+  /// receive a response from.
+  size_t pending_partitions = 0;
+
   /// Node handle of the INDEX.
   index_actor index;
 
