@@ -46,9 +46,6 @@ struct disk_monitor_state {
 
   disk_monitor_config config;
 
-  /// Whether an erasing run is currently in progress.
-  bool purging;
-
   /// The number of partitions that are scheduled for deletion and we expect to
   /// receive a response from.
   size_t pending_partitions = 0;
@@ -60,6 +57,8 @@ struct disk_monitor_state {
   /// Note that this function may spawn an external process to perform the
   /// computation.
   [[nodiscard]] caf::expected<size_t> compute_dbdir_size() const;
+
+  [[nodiscard]] bool purging() const;
 
   constexpr static const char* name = "disk-monitor";
 };

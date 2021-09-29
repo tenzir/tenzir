@@ -90,6 +90,10 @@ caf::expected<size_t> disk_monitor_state::compute_dbdir_size() const {
   return result;
 }
 
+bool disk_monitor_state::purging() const {
+  return pending_partitions != 0;
+}
+
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
@@ -106,14 +110,14 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
   self->state.index = index;
   self->send(self, atom::ping_v);
   return {
-    [self](atom::ping) -> caf::result<void> {
-      if (self->state.purging) {
+    [self](atom::ping) {
+      self->delayed_send(self, self->state.config.scan_interval, atom::ping_v);
+      if (self->state.purging()) {
         VAST_DEBUG("{} ignores ping because a deletion is still in "
                    "progress",
                    *self);
-        return caf::skip;
+        return;
       }
-      self->delayed_send(self, self->state.config.scan_interval, atom::ping_v);
       auto size = self->state.compute_dbdir_size();
       // TODO: This is going to do one syscall per file in the database
       // directory. This feels a bit wasteful, but in practice we didn't
@@ -123,26 +127,22 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       if (!size) {
         VAST_WARN("{} failed to calculate recursive size of {}: {}", *self,
                   self->state.dbdir, size.error());
-        return {};
+        return;
       }
       VAST_VERBOSE("{} checks db-directory of size {}", *self, *size);
-      if (*size > self->state.config.high_water_mark && !self->state.purging) {
-        self->state.purging = true;
+      if (*size > self->state.config.high_water_mark) {
         // TODO: Remove the static_cast when switching to CAF 0.18.
         self
-          ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
-                    atom::erase_v)
+          ->request(static_cast<disk_monitor_actor>(self),
+                    defaults::system::initial_request_timeout, atom::erase_v)
           .then(
             [=] {
-              self->state.purging = false;
               // nop
             },
             [=](const caf::error& err) {
-              self->state.purging = false;
               VAST_ERROR("{} failed to purge db-directory: {}", *self, err);
             });
       }
-      return {};
     },
     [self](atom::erase) -> caf::result<void> {
       auto err = std::error_code{};
@@ -194,7 +194,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         auto& partition = partitions.at(i);
         VAST_VERBOSE("{} erases partition {} from index", *self, partition.id);
         self
-          ->request(self->state.index, caf::infinite, atom::erase_v,
+          ->request(self->state.index,
+                    defaults::system::initial_request_timeout, atom::erase_v,
                     partition.id)
           .then(
             [=](atom::done) {
