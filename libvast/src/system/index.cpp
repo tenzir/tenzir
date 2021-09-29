@@ -1014,11 +1014,13 @@ index(index_actor::stateful_pointer<index_state> self,
                         path)
               .then(
                 [=](const chunk_ptr& chunk) mutable {
-                  if (!chunk)
+                  if (!chunk) {
                     rp.deliver(caf::make_error( //
                       ec::filesystem_error,
                       fmt::format("failed to load the state for partition {}",
                                   path)));
+                    return;
+                  }
                   // Adjust layout stats by subtracting the events of the
                   // removed partition.
                   const auto* partition = fbs::GetPartition(chunk->data());
@@ -1065,10 +1067,11 @@ index(index_actor::stateful_pointer<index_state> self,
                   rp.deliver(std::move(err));
                 });
           },
-          [partition_id](const caf::error& err) {
+          [partition_id, rp](caf::error& err) mutable {
             VAST_WARN("index encountered an error trying to erase "
                       "partition {} from the meta index: {}",
                       partition_id, err);
+            rp.deliver(std::move(err));
           });
       return rp;
     },

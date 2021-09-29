@@ -129,12 +129,17 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         VAST_DEBUG("{} delegates {} deferred evaluations", *self,
                    self->state.deferred_requests.size());
         for (auto&& [query, rp] :
-             std::exchange(self->state.deferred_requests, {}))
+             std::exchange(self->state.deferred_requests, {})) {
+          VAST_TRACE("{} delegates {} (pending: {})", *self, query,
+                     rp.pending());
           rp.delegate(static_cast<store_actor>(self), std::move(query));
+        }
       },
       [self](caf::error& err) {
         VAST_ERROR("{} could not map passive store segment into memory: {}",
                    *self, render(err));
+        for (auto&& [_, rp] : std::exchange(self->state.deferred_requests, {}))
+          rp.deliver(err);
         self->quit(std::move(err));
       });
   return {
@@ -161,13 +166,15 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       if (!self->state.segment) {
         // Treat this as an "erase" query for the purposes of storing it
         // until the segment is loaded.
-        auto rp = caf::typed_response_promise<atom::done>();
+        auto rp = self->make_response_promise<atom::done>();
         auto query = query::make_erase({});
         query.ids = std::move(xs);
         self->state.deferred_requests.emplace_back(query, rp);
         return rp;
       }
-      VAST_DEBUG("{} erases some ids");
+      VAST_DEBUG("{} erases {} of {} events", *self,
+                 rank(self->state.segment->ids() - xs),
+                 rank(self->state.segment->ids()));
       if (is_subset(self->state.segment->ids(), xs)) {
         VAST_VERBOSE("{} gets wholly erased from {}", *self, self->state.path);
         std::error_code err;

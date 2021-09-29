@@ -90,6 +90,10 @@ caf::expected<size_t> disk_monitor_state::compute_dbdir_size() const {
   return result;
 }
 
+bool disk_monitor_state::purging() const {
+  return pending_partitions != 0;
+}
+
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
@@ -108,7 +112,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
   return {
     [self](atom::ping) {
       self->delayed_send(self, self->state.config.scan_interval, atom::ping_v);
-      if (self->state.purging) {
+      if (self->state.purging()) {
         VAST_DEBUG("{} ignores ping because a deletion is still in "
                    "progress",
                    *self);
@@ -126,14 +130,13 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         return;
       }
       VAST_VERBOSE("{} checks db-directory of size {}", *self, *size);
-      if (*size > self->state.config.high_water_mark && !self->state.purging) {
-        self->state.purging = true;
+      if (*size > self->state.config.high_water_mark) {
         // TODO: Remove the static_cast when switching to CAF 0.18.
         self
-          ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
-                    atom::erase_v)
+          ->request(static_cast<disk_monitor_actor>(self),
+                    defaults::system::initial_request_timeout, atom::erase_v)
           .then(
-            [] {
+            [=] {
               // nop
             },
             [=](const caf::error& err) {
@@ -142,11 +145,6 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       }
     },
     [self](atom::erase) -> caf::result<void> {
-      // Make sure the `purging` state will be reset once all continuations
-      // have finished or we encountered an error.
-      auto shared_guard = make_shared_guard([=] {
-        self->state.purging = false;
-      });
       auto err = std::error_code{};
       const auto index_dir
         = std::filesystem::directory_iterator(self->state.dbdir / "index", err);
@@ -191,29 +189,35 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                 });
       // Delete up to `step_size` partitions at once.
       auto idx = std::min(partitions.size(), self->state.config.step_size);
+      self->state.pending_partitions += idx;
       for (size_t i = 0; i < idx; ++i) {
         auto& partition = partitions.at(i);
         VAST_VERBOSE("{} erases partition {} from index", *self, partition.id);
         self
-          ->request(self->state.index, caf::infinite, atom::erase_v,
+          ->request(self->state.index,
+                    defaults::system::initial_request_timeout, atom::erase_v,
                     partition.id)
           .then(
-            [=, sg = shared_guard](atom::done) {
-              if (const auto size = self->state.compute_dbdir_size(); !size) {
-                VAST_WARN("{} failed to calculate size of {}: {}", *self,
-                          self->state.dbdir, size.error());
-              } else {
-                VAST_VERBOSE("{} erased ids from index; leftover size is "
-                             "{}",
-                             *self, *size);
-                if (*size > self->state.config.low_water_mark) {
-                  // Repeat until we're below the low water mark
-                  self->send(self, atom::erase_v);
+            [=](atom::done) {
+              if (--self->state.pending_partitions == 0) {
+                if (const auto size = self->state.compute_dbdir_size(); !size) {
+                  VAST_WARN("{} failed to calculate size of {}: {}", *self,
+                            self->state.dbdir, size.error());
+                } else {
+                  VAST_VERBOSE("{} erased ids from index; leftover size is {}",
+                               *self, *size);
+                  if (*size > self->state.config.low_water_mark) {
+                    // Repeat until we're below the low water mark
+                    self->send(self, atom::erase_v);
+                  }
                 }
               }
             },
-            [=, sg = shared_guard](caf::error e) {
+            [=](caf::error e) {
               VAST_WARN("{} failed to erase from index: {}", *self, render(e));
+              // TODO: Consider storing failed partitions so we don't retry them
+              // again and again.
+              self->state.pending_partitions--;
             });
       }
       return {};

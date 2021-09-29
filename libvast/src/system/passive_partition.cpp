@@ -379,8 +379,6 @@ partition_actor::behavior_type passive_partition(
       for (const auto& kv : self->state.type_ids_) {
         all_ids |= kv.second;
       }
-      query q;
-      q.cmd = query::erase{};
       return self->delegate(self->state.store, atom::erase_v,
                             std::move(all_ids));
     },

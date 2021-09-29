@@ -22,6 +22,9 @@ struct query {
   query() = default;
   query(query&&) = default;
   query(const query&) = default;
+  query& operator=(query&&) = default;
+  query& operator=(const query&) = default;
+  ~query() = default;
 
   struct count {
     enum mode { estimate, exact };
