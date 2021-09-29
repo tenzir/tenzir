@@ -1032,6 +1032,19 @@ bool type_check(const type& x, const data& y) noexcept {
   return caf::visit(f, x, y);
 }
 
+caf::error
+replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
+  for (auto* x : xs)
+    if (const auto* lt = with.find(x->name())) {
+      auto t = type::from_legacy_type(*lt);
+      if (!congruent(*x, t))
+        return caf::make_error(ec::type_clash,
+                               fmt::format("incongruent type {}", x->name()));
+      *x = std::move(t);
+    }
+  return caf::none;
+}
+
 // -- none_type ---------------------------------------------------------------
 
 uint8_t none_type::type_index() noexcept {
