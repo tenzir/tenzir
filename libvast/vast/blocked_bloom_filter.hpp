@@ -150,20 +150,8 @@ private:
     return std::max(size_t{1}, bits / c);
   }
 
-  // http://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction
-  static inline uint32_t reduce(uint32_t hash, uint32_t n) {
-    return (uint32_t)(((uint64_t)hash * n) >> 32);
-  }
-
-  static inline uint64_t rotl64(uint64_t n, unsigned int c) {
-    auto char_bit = std::numeric_limits<unsigned char>::digits;
-    const unsigned int mask = (char_bit * sizeof(n) - 1);
-    c &= mask;
-    return (n << c) | (n >> ((-c) & mask));
-  }
-
   static inline uint64_t block_index(uint64_t digest, size_t num_blocks) {
-    return reduce(rotl64(digest, 32), num_blocks);
+    return ((digest >> 32) * (num_blocks)) >> 32;
   }
 
   // Computes a mask with 1-bits to be set/checked in each 32-bit lane.
