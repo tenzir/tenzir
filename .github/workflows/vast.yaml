@@ -381,6 +381,7 @@ jobs:
             libpcap \
             libunwind-headers \
             ninja \
+            openssl \
             pandoc \
             pkg-config \
             rsync \
