@@ -187,12 +187,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received exit from {} with reason: {}", *self, msg.source,
                msg.reason);
-    auto& st = self->state;
     if (msg.reason != caf::exit_reason::kill)
       report_statistics(self);
-    // Sending 0 to the index means dropping further results.
-    self->send<caf::message_priority::high>(st.index, st.id,
-                                            static_cast<uint32_t>(0));
     self->quit(msg.reason);
   });
   self->set_down_handler([=](const caf::down_msg& msg) {

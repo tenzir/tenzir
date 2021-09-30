@@ -791,14 +791,16 @@ index(index_actor::stateful_pointer<index_state> self,
       return;
     }
     const auto& [_, ids] = *it;
-    // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing views
-    // as lvalues is disallowed" when not formating the join view separately.
-    const auto ids_string = fmt::to_string(fmt::join(ids, ", "));
-    VAST_DEBUG("{} received DOWN for queries [{}] and drops remaining query "
-               "results",
-               *self, ids_string);
-    for (const auto& id : ids)
-      self->state.pending.erase(id);
+    if (!ids.empty()) {
+      // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing views
+      // as lvalues is disallowed" when not formating the join view separately.
+      const auto ids_string = fmt::to_string(fmt::join(ids, ", "));
+      VAST_DEBUG("{} received DOWN for queries [{}] and drops remaining "
+                 "query results",
+                 *self, ids_string);
+      for (const auto& id : ids)
+        self->state.pending.erase(id);
+    }
     self->state.monitored_queries.erase(it);
   });
   // Launch workers for resolving queries.
@@ -932,23 +934,11 @@ index(index_actor::stateful_pointer<index_state> self,
       auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
       // Sanity checks.
       if (!sender) {
-        VAST_ERROR("{} ignores an anonymous query", *self);
+        VAST_WARN("{} ignores query {} from anonymous sender", *self, query_id);
         return {};
       }
-      // A zero as second argument means the client drops further results.
       if (num_partitions == 0) {
-        VAST_DEBUG("{} drops remaining results for query id {}", *self,
-                   query_id);
-        if (auto it = self->state.monitored_queries.find(sender->address());
-            it != self->state.monitored_queries.end()) {
-          auto& [_, ids] = *it;
-          ids.erase(query_id);
-          if (ids.empty()) {
-            self->demonitor(sender->address());
-            self->state.monitored_queries.erase(it);
-          }
-        }
-        self->state.pending.erase(query_id);
+        VAST_WARN("{} ignores query {} for zero partitions", *self, query_id);
         return {};
       }
       auto iter = self->state.pending.find(query_id);
