@@ -787,7 +787,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->set_down_handler([=](const caf::down_msg& msg) {
     auto it = self->state.monitored_queries.find(msg.source);
     if (it == self->state.monitored_queries.end()) {
-      VAST_ERROR("{} received DOWN from unexpected sender", *self);
+      VAST_WARN("{} received DOWN from unexpected sender", *self);
       return;
     }
     const auto& [_, ids] = *it;
@@ -855,6 +855,16 @@ index(index_actor::stateful_pointer<index_state> self,
       while (self->state.pending.find(query_id) != self->state.pending.end()
              || query_id == uuid::nil())
         query_id = uuid::random();
+      // Monitor the sender so we can cancel the query in case it goes down.
+      if (const auto it = self->state.monitored_queries.find(sender->address());
+          it == self->state.monitored_queries.end()) {
+        self->state.monitored_queries.emplace_hint(
+          it, sender->address(), std::unordered_set{query_id});
+        self->monitor(sender);
+      } else {
+        auto& [_, ids] = *it;
+        ids.emplace(query_id);
+      }
       // Convenience function for dropping out without producing hits.
       // Makes sure that clients always receive a 'done' message.
       auto no_result = [=] {
@@ -946,16 +956,6 @@ index(index_actor::stateful_pointer<index_state> self,
         VAST_WARN("{} drops query for unknown query id {}", *self, query_id);
         self->send(client, atom::done_v);
         return {};
-      }
-      // Monitor the sender so we can cancel the query in case it goes down.
-      if (const auto it = self->state.monitored_queries.find(sender->address());
-          it == self->state.monitored_queries.end()) {
-        self->state.monitored_queries.emplace_hint(
-          it, sender->address(), std::unordered_set{query_id});
-        self->monitor(sender);
-      } else {
-        auto& [_, ids] = *it;
-        ids.emplace(query_id);
       }
       auto& query_state = iter->second;
       auto worker = self->state.next_worker();
