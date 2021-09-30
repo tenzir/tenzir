@@ -133,8 +133,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       if (*size > self->state.config.high_water_mark) {
         // TODO: Remove the static_cast when switching to CAF 0.18.
         self
-          ->request(static_cast<disk_monitor_actor>(self),
-                    defaults::system::initial_request_timeout, atom::erase_v)
+          ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
+                    atom::erase_v)
           .then(
             [=] {
               // nop
@@ -213,8 +213,9 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                 }
               }
             },
-            [=](caf::error e) {
-              VAST_WARN("{} failed to erase from index: {}", *self, render(e));
+            [=, id = partition.id](caf::error e) {
+              VAST_WARN("{} failed to erase partition {} within {}: {}", *self,
+                        id, defaults::system::initial_request_timeout, e);
               // TODO: Consider storing failed partitions so we don't retry them
               // again and again.
               self->state.pending_partitions--;

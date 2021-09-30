@@ -787,18 +787,20 @@ index(index_actor::stateful_pointer<index_state> self,
   self->set_down_handler([=](const caf::down_msg& msg) {
     auto it = self->state.monitored_queries.find(msg.source);
     if (it == self->state.monitored_queries.end()) {
-      VAST_ERROR("{} received DOWN from unexpected sender", *self);
+      VAST_WARN("{} received DOWN from unexpected sender", *self);
       return;
     }
     const auto& [_, ids] = *it;
-    // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing views
-    // as lvalues is disallowed" when not formating the join view separately.
-    const auto ids_string = fmt::to_string(fmt::join(ids, ", "));
-    VAST_DEBUG("{} received DOWN for queries [{}] and drops remaining query "
-               "results",
-               *self, ids_string);
-    for (const auto& id : ids)
-      self->state.pending.erase(id);
+    if (!ids.empty()) {
+      // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing views
+      // as lvalues is disallowed" when not formating the join view separately.
+      const auto ids_string = fmt::to_string(fmt::join(ids, ", "));
+      VAST_DEBUG("{} received DOWN for queries [{}] and drops remaining "
+                 "query results",
+                 *self, ids_string);
+      for (const auto& id : ids)
+        self->state.pending.erase(id);
+    }
     self->state.monitored_queries.erase(it);
   });
   // Launch workers for resolving queries.
@@ -855,6 +857,16 @@ index(index_actor::stateful_pointer<index_state> self,
       while (self->state.pending.find(query_id) != self->state.pending.end()
              || query_id == uuid::nil())
         query_id = uuid::random();
+      // Monitor the sender so we can cancel the query in case it goes down.
+      if (const auto it = self->state.monitored_queries.find(sender->address());
+          it == self->state.monitored_queries.end()) {
+        self->state.monitored_queries.emplace_hint(
+          it, sender->address(), std::unordered_set{query_id});
+        self->monitor(sender);
+      } else {
+        auto& [_, ids] = *it;
+        ids.emplace(query_id);
+      }
       // Convenience function for dropping out without producing hits.
       // Makes sure that clients always receive a 'done' message.
       auto no_result = [=] {
@@ -922,23 +934,11 @@ index(index_actor::stateful_pointer<index_state> self,
       auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
       // Sanity checks.
       if (!sender) {
-        VAST_ERROR("{} ignores an anonymous query", *self);
+        VAST_WARN("{} ignores query {} from anonymous sender", *self, query_id);
         return {};
       }
-      // A zero as second argument means the client drops further results.
       if (num_partitions == 0) {
-        VAST_DEBUG("{} drops remaining results for query id {}", *self,
-                   query_id);
-        if (auto it = self->state.monitored_queries.find(sender->address());
-            it != self->state.monitored_queries.end()) {
-          auto& [_, ids] = *it;
-          ids.erase(query_id);
-          if (ids.empty()) {
-            self->demonitor(sender->address());
-            self->state.monitored_queries.erase(it);
-          }
-        }
-        self->state.pending.erase(query_id);
+        VAST_WARN("{} ignores query {} for zero partitions", *self, query_id);
         return {};
       }
       auto iter = self->state.pending.find(query_id);
@@ -946,16 +946,6 @@ index(index_actor::stateful_pointer<index_state> self,
         VAST_WARN("{} drops query for unknown query id {}", *self, query_id);
         self->send(client, atom::done_v);
         return {};
-      }
-      // Monitor the sender so we can cancel the query in case it goes down.
-      if (const auto it = self->state.monitored_queries.find(sender->address());
-          it == self->state.monitored_queries.end()) {
-        self->state.monitored_queries.emplace_hint(
-          it, sender->address(), std::unordered_set{query_id});
-        self->monitor(sender);
-      } else {
-        auto& [_, ids] = *it;
-        ids.emplace(query_id);
       }
       auto& query_state = iter->second;
       auto worker = self->state.next_worker();
