@@ -83,7 +83,10 @@ TEST(json to data) {
   CHECK(el.error() == ::simdjson::error_code::SUCCESS);
   auto obj = el.value().get_object();
   CHECK(obj.error() == ::simdjson::error_code::SUCCESS);
-  format::json::add(*builder, obj.value(), layout);
+  auto values
+    = vast::format::json::extract(obj.value(), type::from_legacy_type(layout));
+  CHECK(caf::holds_alternative<list>(values));
+  CHECK(builder->recursive_add(values, layout));
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
@@ -115,13 +118,15 @@ TEST(json to data) {
   CHECK_EQUAL(materialize(slice.at(0, 17)), data{reference});
 }
 
-TEST_DISABLED(json suricata) {
+#if 0
+TEST(json suricata) {
   using reader_type = format::json::reader<format::json::suricata_selector>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
   reader_type reader{caf::settings{}, std::move(input)};
   std::vector<table_slice> slices;
-  auto add_slice
-    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
+  auto add_slice = [&](table_slice slice) {
+    slices.emplace_back(std::move(slice));
+  };
   auto [err, num] = reader.read(2, 5, add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(num, 2u);
@@ -129,6 +134,7 @@ TEST_DISABLED(json suricata) {
   CHECK_EQUAL(slices[0].rows(), 2u);
   CHECK(slices[0].at(0, 19) == data{count{4520}});
 }
+#endif
 
 TEST(json hex number parser) {
   using namespace parsers;

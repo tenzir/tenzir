@@ -32,6 +32,17 @@
 
 namespace vast::format::json {
 
+/// Extracts data from a given JSON object for a given type.
+/// @param value The simdjson DOM element of type object.
+/// @param type The type that determines how we extract he data.
+/// @note The result of this function is meant for use with
+/// `table_slice_buiilder::recursive_add`, and returns a `list` when given a
+/// record type iff successful.
+/// @note This function does intentionally not return an error on failure, but
+/// rather fills the unextractable fields with nils. This aligns better with the
+/// `table_slice_builder` API, which has no way of resetting in case of an error.
+data extract(const ::simdjson::dom::object& value, const type& type);
+
 class writer : public ostream_writer {
 public:
   using super = ostream_writer;
@@ -46,14 +57,6 @@ private:
   bool flatten_ = false;
   bool numeric_durations_ = false;
 };
-
-/// Adds a JSON object to a table slice builder according to a given layout.
-/// @param builder The builder to add the JSON object to.
-/// @param xs The JSON object to add to *builder.
-/// @param layout The record type describing *xs*.
-/// @returns An error iff the operation failed.
-caf::error add(table_slice_builder& bptr, const ::simdjson::dom::object& xs,
-               const legacy_record_type& layout);
 
 /// A reader for JSON data. It operates with a *selector* to determine the
 /// mapping of JSON object to the appropriate record type in the schema.
@@ -210,17 +213,22 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     bptr = builder(*layout);
     if (bptr == nullptr)
       return caf::make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(*bptr, get_object_result.value(), *layout)) {
-      if (err == ec::convert_error) {
-        if (num_invalid_lines_ == 0)
-          VAST_WARN("{} failed to convert value(s) in line {}: {}",
-                    detail::pretty_type_name(this), lines_->line_number(),
-                    render(err));
-        ++num_invalid_lines_;
-      } else {
-        err.context() += caf::make_message("line", lines_->line_number());
-        return finish(cons, err);
-      }
+    auto extracted
+      = extract(get_object_result.value(), type::from_legacy_type(*layout));
+    if (!caf::holds_alternative<list>(extracted)) {
+      if (num_invalid_lines_ == 0)
+        VAST_WARN("{} failed to extract value(s) in line {}",
+                  detail::pretty_type_name(this), lines_->line_number());
+      ++num_invalid_lines_;
+      continue;
+    }
+    if (!bptr->recursive_add(extracted, *layout)) {
+      auto err = caf::make_error( //
+        ec::logic_error,
+        fmt::format("failed to add extracted values {} of layout {} in line {} "
+                    "to builder",
+                    extracted, *layout, lines_->line_number()));
+      return finish(cons, std::move(err));
     }
     produced++;
     batch_events_++;

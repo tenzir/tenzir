@@ -40,6 +40,9 @@ bool table_slice_builder::recursive_add(const data& x, const legacy_type& t) {
       }
       return true;
     },
+    [&](const auto& xs, const legacy_alias_type& at) {
+      return recursive_add(xs, at.value_type);
+    },
     [&](const auto&, const auto&) {
       return add(make_view(x));
     },
