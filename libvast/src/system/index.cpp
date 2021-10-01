@@ -920,7 +920,7 @@ index(index_actor::stateful_pointer<index_state> self,
             VAST_TRACEPOINT(query_meta_index, query_id.as_u64().first, total,
                             delta.count());
             respond(query_id, detail::narrow<uint32_t>(total), scheduled);
-            rp.delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
+            rp.delegate(static_cast<index_actor>(self), query_id, scheduled);
           },
           [=](caf::error err) mutable {
             VAST_ERROR("{} failed to receive candidates from meta-index: {}",
