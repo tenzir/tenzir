@@ -829,6 +829,15 @@ index(index_actor::stateful_pointer<index_state> self,
                      *self, query);
         return caf::skip;
       }
+      if (auto worker = self->state.next_worker())
+        return self->delegate(static_cast<index_actor>(self), atom::internal_v,
+                              std::move(query), std::move(*worker));
+      auto rp = self->make_response_promise<void>();
+      self->state.backlog.emplace(std::move(query), rp);
+      return rp;
+    },
+    [self](atom::internal, vast::query query,
+           query_supervisor_actor worker) -> caf::result<void> {
       // Query handling
       auto mid = self->current_message_id();
       auto sender = self->current_sender();
@@ -846,11 +855,6 @@ index(index_actor::stateful_pointer<index_state> self,
         respond(caf::sec::invalid_argument);
         return {};
       }
-      // TODO: This check is not required technically, but we use the query
-      // supervisor availability to rate-limit meta-index lookups. Do we
-      // really need this?
-      if (!self->state.worker_available())
-        return caf::skip;
       // Allows the client to query further results after initial taste.
       auto query_id = uuid::random();
       // Ensure the query id is unique.
@@ -912,7 +916,8 @@ index(index_actor::stateful_pointer<index_state> self,
             auto total = candidates.size();
             auto scheduled = detail::narrow<uint32_t>(
               std::min(candidates.size(), self->state.taste_partitions));
-            auto lookup = query_state{query_id, query, std::move(candidates)};
+            auto lookup = query_state{query_id, query, std::move(candidates),
+                                      std::move(worker)};
             auto result
               = self->state.pending.emplace(query_id, std::move(lookup));
             VAST_ASSERT(result.second);
@@ -948,9 +953,6 @@ index(index_actor::stateful_pointer<index_state> self,
         return {};
       }
       auto& query_state = iter->second;
-      auto worker = self->state.next_worker();
-      if (!worker)
-        return caf::skip;
       auto now = std::chrono::steady_clock::now();
       // Get partition actors, spawning new ones if needed.
       auto actors
@@ -963,8 +965,8 @@ index(index_actor::stateful_pointer<index_state> self,
       auto delta = std::chrono::steady_clock::now() - now;
       VAST_TRACEPOINT(query_resume, query_id.as_u64().first, actors.size(),
                       delta.count());
-      self->send(*worker, atom::supervise_v, query_id, query_state.query,
-                 std::move(actors), client);
+      self->send(query_state.worker, atom::supervise_v, query_id,
+                 query_state.query, std::move(actors), client);
       // Cleanup if we exhausted all candidates.
       if (query_state.partitions.empty())
         self->state.pending.erase(iter);
@@ -1067,9 +1069,22 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     // -- query_supervisor_master_actor ----------------------------------------
     [self](atom::worker, query_supervisor_actor worker) {
+      for (const auto& [_, qs] : self->state.pending) {
+        if (worker == qs.worker) {
+          VAST_INFO("worker remains available for the query {}", qs.id);
+          return;
+        }
+      }
       if (!self->state.worker_available())
         VAST_DEBUG("{} delegates work to query supervisors", *self);
-      self->state.idle_workers.emplace_back(std::move(worker));
+      if (self->state.backlog.empty()) {
+        self->state.idle_workers.emplace_back(std::move(worker));
+      } else {
+        auto& [query, rp] = self->state.backlog.front();
+        rp.delegate(static_cast<index_actor>(self), atom::internal_v,
+                    std::move(query), std::move(worker));
+        self->state.backlog.pop();
+      }
     },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) { //
