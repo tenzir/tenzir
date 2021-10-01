@@ -2086,3 +2086,27 @@ record_type::leaf_iterable::get() const noexcept {
 }
 
 } // namespace vast
+
+// -- sum_type_access ---------------------------------------------------------
+
+namespace caf {
+
+uint8_t
+sum_type_access<vast::type>::index_from_type(const vast::type& x) noexcept {
+  static const auto table = []<vast::concrete_type... Ts, uint8_t... Indices>(
+    caf::detail::type_list<Ts...>,
+    std::integer_sequence<uint8_t, Indices...>) noexcept {
+    std::array<uint8_t, std::numeric_limits<uint8_t>::max()> tbl{};
+    tbl.fill(std::numeric_limits<uint8_t>::max());
+    (static_cast<void>(tbl[Ts::type_index()] = Indices), ...);
+    return tbl;
+  }
+  (types{},
+   std::make_integer_sequence<uint8_t, caf::detail::tl_size<types>::value>());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+  auto result = table[x.type_index()];
+  VAST_ASSERT(result != std::numeric_limits<uint8_t>::max());
+  return result;
+}
+
+} // namespace caf
