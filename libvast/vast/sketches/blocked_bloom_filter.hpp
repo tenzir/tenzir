@@ -25,6 +25,7 @@
 #include "vast/detail/allocate_aligned.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/digest.hpp"
 
 #include <caf/meta/type_name.hpp>
 
@@ -68,6 +69,7 @@ class blocked_bloom_filter
 public:
   using hash_function = HashFunction;
   using hash = uhash<hash_function>;
+  using digest_type = digest<sizeof(typename hash_function::result_type)>;
 
   using block_type = std::array<uint32_t, 8>; // __m256i
   static constexpr size_t block_size = sizeof(block_type);
@@ -83,11 +85,17 @@ public:
     VAST_ASSERT(__builtin_cpu_supports("avx2"));
   }
 
-  /// Adds an element to the Bloom filter.
+  /// Hashes and adds an element to the Bloom filter.
   /// @param x The element to add.
   template <class T>
   [[gnu::always_inline]] inline void add(T&& x) {
-    const uint64_t digest = hash{}(std::forward<T>(x));
+    add(digest_type{hash{}(std::forward<T>(x))});
+  }
+
+  /// Adds a hash digest to the Bloom filter.
+  /// @param x The digest to add.
+  [[gnu::always_inline]] inline void add(digest_type x) {
+    const auto digest = as<uint64_t>(x);
     const uint32_t idx = block_index(digest, num_blocks_);
     auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
     auto* block = &blocks[idx];
@@ -101,7 +109,15 @@ public:
   ///          according to the false-positive probability of the filter.
   template <class T>
   [[gnu::always_inline]] inline bool lookup(T&& x) const {
-    const uint64_t digest = hash{}(std::forward<T>(x));
+    return lookup(digest_type{hash{}(std::forward<T>(x))});
+  }
+
+  /// Test whether a hash digest exists in the Bloom filter.
+  /// @param x The digest to test.
+  /// @returns `false` if the *x* is not in the set and `true` if *x* may exist
+  ///          according to the false-positive probability of the filter.
+  [[gnu::always_inline]] inline bool lookup(digest_type x) const {
+    const auto digest = as<uint64_t>(x);
     const uint32_t idx = block_index(digest, num_blocks_);
     auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
     auto* block = &blocks[idx];
