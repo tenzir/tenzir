@@ -22,6 +22,7 @@
 
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/concept/hashable/uhash.hpp"
+#include "vast/detail/allocate_aligned.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 
@@ -45,32 +46,15 @@
 // - use a SIMD library to avoid architecture-dependent instructions, e.g.,
 //   xsimd, highway, or std::experimental::simd where available.
 // - support ARM
-namespace vast {
 
-namespace detail {
-
-template <class T>
-struct delete_aligned {
-  void operator()(T* x) const {
-    std::free(x);
-  }
-};
-
-template <class T>
-std::unique_ptr<T[], delete_aligned<T>>
-allocate_aligned(size_t alignment, size_t size) {
-  auto ptr = std::aligned_alloc(alignment, size);
-  return {static_cast<T*>(ptr), delete_aligned<T>{}};
-}
-
-} // namespace detail
+namespace vast::sketches {
 
 /// A cache-efficient Bloom filter implementation. A blocked Bloom filter
 /// consists of a sequence of small Bloom filters, each of which fits into one
 /// cache line. This design allows for less than two cache misses on average,
 /// unlike standard Bloom filters performing *k* random memory accesses.
 ///
-/// The implementation is a slightly tuned version by Jim Appl, per the
+/// The implementation is a slightly tuned version by Jim Apple, per the
 /// following papers:
 /// - https://arxiv.org/pdf/2101.01719.pdf
 /// - https://arxiv.org/pdf/2109.01947.pdf
@@ -172,7 +156,7 @@ private:
   }
 
   size_t num_blocks_;
-  std::unique_ptr<block_type[], detail::delete_aligned<block_type>> blocks_;
+  detail::aligned_unique_ptr<block_type> blocks_;
 };
 
-} // namespace vast
+} // namespace vast::sketches
