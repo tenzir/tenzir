@@ -37,16 +37,13 @@
 #include <limits>
 #include <utility>
 
-#ifdef __AVX2__
+#if defined(__AVX2__)
 #  include <x86intrin.h>
+#elif defined(__aarch64__)
+#  include <arm_neon.h>
 #else
-#  error "Platform does not support AVX2 instructions"
+#  error "Platform has no support for AVX2 or ARM"
 #endif
-
-// TODO:
-// - use a SIMD library to avoid architecture-dependent instructions, e.g.,
-//   xsimd, highway, or std::experimental::simd where available.
-// - support ARM
 
 namespace vast::sketches {
 
@@ -71,7 +68,12 @@ public:
   using hash = uhash<hash_function>;
   using digest_type = digest<sizeof(typename hash_function::result_type)>;
 
+#if defined(__AVX2__)
   using block_type = std::array<uint32_t, 8>; // __m256i
+#elif defined(__aarch64__)
+  using block_type = uint16x8_t;
+#endif
+
   static constexpr size_t block_size = sizeof(block_type);
 
   /// Constructs a blocked Bloom filter with a fixed size and a hash function.
@@ -97,10 +99,15 @@ public:
   [[gnu::always_inline]] inline void add(digest_type x) {
     const auto digest = as<uint64_t>(x);
     const uint32_t idx = block_index(digest, num_blocks_);
+#if defined(__AVX2__)
     auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
     auto* block = &blocks[idx];
     // Perform a bitwise OR into the chosen block.
     _mm256_store_si256(block, _mm256_or_si256(*block, make_mask(digest)));
+#elif defined(__aarch64__)
+    auto blocks = reinterpret_cast<uint16x8_t*>(blocks_.get());
+    blocks[idx] = vorrq_u16(make_mask(digest), blocks[idx]);
+#endif
   }
 
   /// Test whether an element exists in the Bloom filter.
@@ -119,10 +126,19 @@ public:
   [[gnu::always_inline]] inline bool lookup(digest_type x) const {
     const auto digest = as<uint64_t>(x);
     const uint32_t idx = block_index(digest, num_blocks_);
+#if defined(__AVX2__)
     auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
     auto* block = &blocks[idx];
     // Check that all bits in the block are set.
     return _mm256_testc_si256(*block, make_mask(digest));
+#elif defined(__aarch64__)
+    auto blocks = reinterpret_cast<uint16x8_t*>(blocks_.get());
+    uint16x8_t bits = vbicq_u16(make_mask(digest), blocks[idx]);
+    uint64x2_t v64 = vreinterpretq_u64_u16(bits);
+    uint32x2_t v32 = vqmovn_u64(v64);
+    uint64x1_t result = vreinterpret_u64_u32(v32);
+    return vget_lane_u64(result, 0) == 0;
+#endif
   }
 
   // -- concepts --------------------------------------------------------------
@@ -145,7 +161,12 @@ public:
 private:
   /// Computes the number of blocks for a given number of bits.
   static constexpr size_t num_blocks(size_t bits) {
-    constexpr auto c = 24; // taken from FastFilter benchmark
+    // See FastFilter implementation for choice of constant value.
+#if defined(__AVX2__)
+    constexpr auto c = 24;
+#elif defined(__aarch64__)
+    constexpr auto c = 10;
+#endif
     static_assert(c <= block_size);
     return std::max(size_t{1}, bits / c);
   }
@@ -155,6 +176,7 @@ private:
   }
 
   // Computes a mask with 1-bits to be set/checked in each 32-bit lane.
+#if defined(__AVX2__)
   [[gnu::always_inline]] static inline __m256i
   make_mask(const uint32_t digest) noexcept {
     const __m256i ones = _mm256_set1_epi32(1);
@@ -170,6 +192,20 @@ private:
     // Set a bit in each lane based on using the [0, 32) data as shift values.
     return _mm256_sllv_epi32(ones, digest_data);
   }
+#elif defined(__aarch64__)
+  [[gnu::always_inline]] static inline uint16x8_t
+  make_mask(const uint16_t digest) noexcept {
+    const uint16x8_t ones = {1, 1, 1, 1, 1, 1, 1, 1};
+    const uint16x8_t rehash
+      = {0x79d8, 0xe722, 0xf2fb, 0x21ec, 0x121b, 0x2302, 0x705a, 0x6e87};
+    uint16x8_t digest_data
+      = {digest, digest, digest, digest, digest, digest, digest, digest};
+    uint16x8_t result = vmulq_u16(digest_data, rehash);
+    result = vshrq_n_u16(result, 12);
+    result = vshlq_u16(ones, vreinterpretq_s16_u16(result));
+    return result;
+  }
+#endif
 
   size_t num_blocks_;
   detail::aligned_unique_ptr<block_type> blocks_;
