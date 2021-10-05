@@ -8,7 +8,7 @@
 
 #define SUITE blocked_bloom_filter
 
-#include "vast/blocked_bloom_filter.hpp"
+#include "vast/sketches/blocked_bloom_filter.hpp"
 
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
@@ -18,6 +18,7 @@
 #include <caf/test/dsl.hpp>
 
 using namespace vast;
+using namespace vast::sketches;
 using namespace si_literals;
 using namespace binary_byte_literals;
 using namespace decimal_byte_literals;
