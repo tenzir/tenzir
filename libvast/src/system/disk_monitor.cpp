@@ -190,12 +190,12 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // Delete up to `step_size` partitions at once.
       auto idx = std::min(partitions.size(), self->state.config.step_size);
       self->state.pending_partitions += idx;
+      constexpr auto erase_timeout = std::chrono::seconds{60};
       for (size_t i = 0; i < idx; ++i) {
         auto& partition = partitions.at(i);
         VAST_VERBOSE("{} erases partition {} from index", *self, partition.id);
         self
-          ->request(self->state.index,
-                    defaults::system::initial_request_timeout, atom::erase_v,
+          ->request(self->state.index, erase_timeout, atom::erase_v,
                     partition.id)
           .then(
             [=](atom::done) {
@@ -215,7 +215,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
             },
             [=, id = partition.id](caf::error e) {
               VAST_WARN("{} failed to erase partition {} within {}: {}", *self,
-                        id, defaults::system::initial_request_timeout, e);
+                        id, erase_timeout, e);
               // TODO: Consider storing failed partitions so we don't retry them
               // again and again.
               self->state.pending_partitions--;
