@@ -61,7 +61,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::apply, transform_ptr, uuid) -> atom::done {
       FAIL("no mock implementation available");
     },
-    [=](atom::importer, system::importer_actor) {
+    [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
     [=](vast::query&) {
