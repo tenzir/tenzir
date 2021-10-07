@@ -8,7 +8,7 @@
 
 #include "vast/concept/hashable/hash_append.hpp"
 
-#include "vast/detail/endian.hpp"
+#include "vast/detail/bit.hpp"
 
 #define SUITE hash_append
 #include "vast/test/test.hpp"
@@ -19,8 +19,9 @@
 using namespace vast;
 
 namespace {
+
 struct fake_hasher {
-  static constexpr detail::endianness endian = detail::host_endian;
+  static constexpr detail::endian endian = detail::endian::native;
 
   void operator()(const void*, size_t n) {
     num_bytes += n;
@@ -28,6 +29,7 @@ struct fake_hasher {
 
   std::uint64_t num_bytes{};
 };
+
 } // namespace
 
 TEST(lvalue tuple) {

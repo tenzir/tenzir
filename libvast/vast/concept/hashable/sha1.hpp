@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/endian.hpp"
+#include "vast/detail/bit.hpp"
 
 #include <array>
 #include <cstddef>
@@ -22,7 +22,7 @@ class sha1 {
 public:
   using result_type = std::array<uint32_t, 5>;
 
-  static constexpr detail::endianness endian = detail::host_endian;
+  static constexpr detail::endian endian = detail::endian::native;
 
   sha1() noexcept;
 

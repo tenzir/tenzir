@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/endian.hpp"
+#include "vast/detail/bit.hpp"
 
 namespace vast::detail {
 
@@ -35,10 +35,10 @@ inline uint64_t byte_swap(uint64_t x) {
 /// Converts the bytes of an unsigned integer from host order to network order.
 /// @param x The value to convert.
 /// @returns The value with bytes in network order.
-/// @see endianness byte_swap to_host_order to_little_endian to_big_endian
+/// @see byte_swap to_host_order
 template <class T>
 T to_network_order(T x) {
-  if constexpr (host_endian == little_endian)
+  if constexpr (endian::native == endian::little)
     return byte_swap(x);
   else
     return x;
@@ -47,24 +47,25 @@ T to_network_order(T x) {
 /// Converts the bytes of an unsigned integer from network order to host order.
 /// @param x The value to convert.
 /// @returns The value with bytes in host order.
-/// @see endianness byte_swap to_network_order to_little_endian to_big_endian
+/// @see byte_swap to_network_order
 template <class T>
 T to_host_order(T x) {
   return to_network_order(x);
 }
 
-/// Converts bytes from a given endianness to a given endianness.
-/// @tparam From The endianness of *x*.
-/// @tparam To The endianness of the result
+/// Converts bytes from a given endian to a given endian.
+/// @tparam From The endian of *x*.
+/// @tparam To The endian of the result
 /// @param x The value to convert.
-/// @returns The value in with `To` endianness.
-/// @see endianness byte_swap to_host_order to_network_order
-template <endianness From, endianness To, class T>
+/// @returns The value in with `To` endian.
+/// @see endian byte_swap to_host_order to_network_order
+template <endian From, endian To, class T>
 T swap(T x) {
-  constexpr auto noop =
-    (From == little_endian && To == little_endian)
-    || (From == big_endian && To == big_endian);
-  return noop ? x : byte_swap(x);
+  if constexpr ((From == endian::little && To == endian::little)
+                || (From == endian::big && To == endian::big))
+    return x;
+  else
+    return byte_swap(x);
 }
 
 } // namespace vast::detail

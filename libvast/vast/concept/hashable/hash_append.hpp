@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/endian.hpp"
+#include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
 
 #include <caf/detail/type_traits.hpp>
@@ -91,7 +91,7 @@ constexpr void reverse_bytes(T& x) {
 
 template <class T, class Hasher>
 void maybe_reverse_bytes(T& x, Hasher&) {
-  if constexpr (Hasher::endian != host_endian)
+  if constexpr (Hasher::endian != detail::endian::native)
     reverse_bytes(x);
 }
 
@@ -100,12 +100,14 @@ void maybe_reverse_bytes(T& x, Hasher&) {
 template <class T, class Hasher>
 struct is_contiguously_hashable
   : std::bool_constant<is_uniquely_represented<T>{}
-                       && (sizeof(T) == 1 || Hasher::endian == host_endian)> {};
+                       && (sizeof(T) == 1
+                           || Hasher::endian == detail::endian::native)> {};
 
 template <class T, size_t N, class Hasher>
 struct is_contiguously_hashable<T[N], Hasher>
   : std::bool_constant<is_uniquely_represented<T[N]>{}
-                       && (sizeof(T) == 1 || Hasher::endian == host_endian)> {};
+                       && (sizeof(T) == 1
+                           || Hasher::endian == detail::endian::native)> {};
 
 template <class T, class Hasher>
 concept contiguously_hashable = is_contiguously_hashable<T, Hasher>::value;
