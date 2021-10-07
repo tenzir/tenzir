@@ -78,4 +78,10 @@ constexpr T log2p1(T x) noexcept {
   return std::numeric_limits<T>::digits - countl_zero(x);
 }
 
+enum class endian {
+  little = __ORDER_LITTLE_ENDIAN__,
+  big = __ORDER_BIG_ENDIAN__,
+  native = __BYTE_ORDER__
+};
+
 } // namespace vast::detail

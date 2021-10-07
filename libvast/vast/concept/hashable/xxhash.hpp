@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/endian.hpp"
+#include "vast/detail/bit.hpp"
 
 #include <cstddef>
 #include <type_traits>
@@ -18,8 +18,8 @@ namespace vast {
 struct xxhash_base {
   using result_type = size_t;
 
-  // If XXH_FORCE_NATIVE_FORMAT == 1 in xxhash.c, then use host_endian.
-  static constexpr detail::endianness endian = detail::little_endian;
+  // If XXH_FORCE_NATIVE_FORMAT == 1 in xxhash.c, then use endian::native.
+  static constexpr detail::endian endian = detail::endian::little;
 };
 
 /// The 32-bit version of xxHash.
