@@ -13,19 +13,19 @@
 
 #include <type_traits>
 
-namespace vast::detail {
+namespace vast {
 
 template <class T, class HashAlgorithm>
 struct is_contiguously_hashable
   : std::bool_constant<
-      uniquely_represented<
+      detail::uniquely_represented<
         T> && (sizeof(T) == 1 || HashAlgorithm::endian == detail::endian::native)> {
 };
 
 template <class T, size_t N, class HashAlgorithm>
 struct is_contiguously_hashable<T[N], HashAlgorithm>
   : std::bool_constant<
-      uniquely_represented<
+      detail::uniquely_represented<
         T[N]> && (sizeof(T) == 1 || HashAlgorithm::endian == detail::endian::native)> {
 };
 
@@ -33,4 +33,4 @@ template <class T, class HashAlgorithm>
 concept contiguously_hashable
   = is_contiguously_hashable<T, HashAlgorithm>::value;
 
-} // namespace vast::detail
+} // namespace vast
