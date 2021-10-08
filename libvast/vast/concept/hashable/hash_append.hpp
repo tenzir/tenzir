@@ -33,6 +33,13 @@
 #include <vector>
 
 namespace vast {
+
+template <class HashAlgorithm, class T>
+  requires(detail::contiguously_hashable<T, HashAlgorithm>)
+void hash_append(HashAlgorithm& h, const T& x) noexcept {
+  h(std::addressof(x), sizeof(x));
+}
+
 namespace detail {
 
 template <class T>
@@ -49,15 +56,19 @@ void maybe_reverse_bytes(T& x, HashAlgorithm&) {
     reverse_bytes(x);
 }
 
-} // namespace detail
-
-// -- hash_append -------------------------------------------------------------
-
-template <class HashAlgorithm, class T>
-  requires(detail::contiguously_hashable<T, HashAlgorithm>)
-void hash_append(HashAlgorithm& h, const T& x) noexcept {
-  h(std::addressof(x), sizeof(x));
+template <class HashAlgorithm, class Container>
+void contiguous_container_hash_append(HashAlgorithm& h,
+                                      const Container& xs) noexcept {
+  using value_type = typename Container::value_type;
+  if constexpr (detail::contiguously_hashable<value_type, HashAlgorithm>)
+    h(std::data(xs), std::size(xs) * sizeof(value_type));
+  else
+    for (const auto& x : xs)
+      hash_append(h, x);
+  hash_append(h, std::size(xs));
 }
+
+} // namespace detail
 
 // -- Scalars -----------------------------------------------------------------
 
@@ -114,12 +125,6 @@ template <class HashAlgorithm, class T, size_t N>
 void hash_append(HashAlgorithm& h, T (&a)[N]) noexcept;
 
 template <class HashAlgorithm, class CharT, class Traits>
-  requires(!detail::contiguously_hashable<CharT, HashAlgorithm>)
-void hash_append(HashAlgorithm& h,
-                 std::basic_string_view<CharT, Traits> s) noexcept;
-
-template <class HashAlgorithm, class CharT, class Traits>
-  requires(detail::contiguously_hashable<CharT, HashAlgorithm>)
 void hash_append(HashAlgorithm& h,
                  std::basic_string_view<CharT, Traits> s) noexcept;
 
@@ -136,19 +141,9 @@ template <class HashAlgorithm, class T, size_t N>
 void hash_append(HashAlgorithm& h, const std::array<T, N>& a) noexcept;
 
 template <class HashAlgorithm, class T, class Alloc>
-  requires(!detail::contiguously_hashable<T, HashAlgorithm>)
-void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& v) noexcept;
-
-template <class HashAlgorithm, class T, class Alloc>
-  requires(detail::contiguously_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& v) noexcept;
 
 template <class HashAlgorithm, class T, size_t Extent>
-  requires(detail::contiguously_hashable<T, HashAlgorithm>)
-void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept;
-
-template <class HashAlgorithm, class T, size_t Extent>
-  requires(!detail::contiguously_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept;
 
 template <class HashAlgorithm, class Key, class Comp, class Alloc>
@@ -188,26 +183,15 @@ void hash_append(HashAlgorithm& h, T (&a)[N]) noexcept {
 // -- string ------------------------------------------------------------------
 
 template <class HashAlgorithm, class CharT, class Traits>
-  requires(!detail::contiguously_hashable<CharT, HashAlgorithm>)
 void hash_append(HashAlgorithm& h,
-                 std::basic_string_view<CharT, Traits> s) noexcept {
-  for (auto c : s)
-    hash_append(h, c);
-  hash_append(h, s.size());
-}
-
-template <class HashAlgorithm, class CharT, class Traits>
-  requires(detail::contiguously_hashable<CharT, HashAlgorithm>)
-void hash_append(HashAlgorithm& h,
-                 std::basic_string_view<CharT, Traits> s) noexcept {
-  h(s.data(), s.size() * sizeof(CharT));
-  hash_append(h, s.size());
+                 std::basic_string_view<CharT, Traits> xs) noexcept {
+  detail::contiguous_container_hash_append(h, xs);
 }
 
 template <class HashAlgorithm, class CharT, class Traits, class Alloc>
 void hash_append(HashAlgorithm& h,
-                 const std::basic_string<CharT, Traits, Alloc>& s) noexcept {
-  hash_append(h, std::basic_string_view<CharT, Traits>{s});
+                 const std::basic_string<CharT, Traits, Alloc>& xs) noexcept {
+  detail::contiguous_container_hash_append(h, xs);
 }
 
 // -- pair --------------------------------------------------------------------
@@ -230,35 +214,15 @@ void hash_append(HashAlgorithm& h, const std::array<T, N>& a) noexcept {
 // -- vector ------------------------------------------------------------------
 
 template <class HashAlgorithm, class T, class Alloc>
-  requires(detail::contiguously_hashable<T, HashAlgorithm>)
-void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& v) noexcept {
-  h(v.data(), v.size() * sizeof(T));
-  hash_append(h, v.size());
-}
-
-template <class HashAlgorithm, class T, class Alloc>
-  requires(!detail::contiguously_hashable<T, HashAlgorithm>)
-void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& v) noexcept {
-  for (const auto& t : v)
-    hash_append(h, t);
-  hash_append(h, v.size());
+void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& xs) noexcept {
+  detail::contiguous_container_hash_append(h, xs);
 }
 
 // -- span ------------------------------------------------------------------
 
 template <class HashAlgorithm, class T, size_t Extent>
-  requires(detail::contiguously_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept {
-  h(xs.data(), xs.size() * sizeof(T));
-  hash_append(h, xs.size());
-}
-
-template <class HashAlgorithm, class T, size_t Extent>
-  requires(!detail::contiguously_hashable<T, HashAlgorithm>)
-void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept {
-  for (const auto& x : xs)
-    hash_append(h, x);
-  hash_append(h, xs.size());
+  detail::contiguous_container_hash_append(h, xs);
 }
 
 // -- set ---------------------------------------------------------------------
@@ -383,4 +347,3 @@ void hash_append(HashAlgorithm& h, const T& x) noexcept {
 }
 
 } // namespace vast
-
