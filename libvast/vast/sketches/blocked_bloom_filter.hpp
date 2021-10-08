@@ -21,11 +21,9 @@
 #pragma once
 
 #include "vast/bloom_filter_parameters.hpp"
-#include "vast/concept/hashable/uhash.hpp"
 #include "vast/detail/allocate_aligned.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
-#include "vast/digest.hpp"
 
 #include <caf/meta/type_name.hpp>
 
@@ -45,28 +43,26 @@
 #  error "Platform has no support for AVX2 or ARM"
 #endif
 
-namespace vast::sketches {
+namespace vast {
 
-/// A cache-efficient Bloom filter implementation. A blocked Bloom filter
-/// consists of a sequence of small Bloom filters, each of which fits into one
-/// cache line. This design allows for less than two cache misses on average,
-/// unlike standard Bloom filters performing *k* random memory accesses.
+/// A cache-efficient Bloom filter implementation, also known as *split block
+/// Bloom filter* because it splits the given bit arry into a sequence of small
+/// blocks, each of which represents a standard Bloom filter that fits into one
+/// cache line.
+///
+/// A blocked Bloom filter is substantially faster, but has a higher
+/// false-positive rate than standard Bloom filters.
 ///
 /// The implementation is a slightly tuned version by Jim Apple, per the
 /// following papers:
+///
 /// - https://arxiv.org/pdf/2101.01719.pdf
 /// - https://arxiv.org/pdf/2109.01947.pdf
 ///
 /// @tparam HashFunction The hash function to use.
-template <class HashFunction>
-class blocked_bloom_filter
-  : detail::equality_comparable<blocked_bloom_filter<HashFunction>> {
-  static_assert(sizeof(typename HashFunction::result_type) == sizeof(uint64_t));
-
+class blocked_bloom_filter : detail::equality_comparable<blocked_bloom_filter> {
 public:
-  using hash_function = HashFunction;
-  using hash = uhash<hash_function>;
-  using digest_type = digest<sizeof(typename hash_function::result_type)>;
+  using digest_type = uint64_t;
 
 #if defined(__AVX2__)
   using block_type = std::array<uint32_t, 8>; // __m256i
@@ -76,64 +72,47 @@ public:
 
   static constexpr size_t block_size = sizeof(block_type);
 
-  /// Constructs a blocked Bloom filter with a fixed size and a hash function.
-  /// @param size The number of cells/bits in the Bloom filter.
+  /// Constructs a blocked filter with a fixed size.
+  /// @param size The number of space (in bits) the filter uses.
   explicit blocked_bloom_filter(size_t size = 0)
     : num_blocks_{num_blocks(size)} {
     auto buffer_size = num_blocks_ * block_size;
+    VAST_ASSERT(buffer_size % 64 == 0); // ensure alignment
     blocks_ = detail::allocate_aligned<block_type>(64, buffer_size);
     std::memset(blocks_.get(), 0, buffer_size);
     // TODO: there's probably a better way to do this.
     VAST_ASSERT(__builtin_cpu_supports("avx2"));
   }
 
-  /// Hashes and adds an element to the Bloom filter.
-  /// @param x The element to add.
-  template <class T>
-  [[gnu::always_inline]] inline void add(T&& x) {
-    add(digest_type{hash{}(std::forward<T>(x))});
-  }
-
-  /// Adds a hash digest to the Bloom filter.
+  /// Adds a hash digest.
   /// @param x The digest to add.
   [[gnu::always_inline]] inline void add(digest_type x) {
-    const auto digest = as<uint64_t>(x);
-    const uint32_t idx = block_index(digest, num_blocks_);
+    const uint32_t idx = block_index(x, num_blocks_);
 #if defined(__AVX2__)
     auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
     auto* block = &blocks[idx];
     // Perform a bitwise OR into the chosen block.
-    _mm256_store_si256(block, _mm256_or_si256(*block, make_mask(digest)));
+    _mm256_store_si256(block, _mm256_or_si256(*block, make_mask(x)));
 #elif defined(__aarch64__)
     auto blocks = reinterpret_cast<uint16x8_t*>(blocks_.get());
-    blocks[idx] = vorrq_u16(make_mask(digest), blocks[idx]);
+    blocks[idx] = vorrq_u16(make_mask(x), blocks[idx]);
 #endif
   }
 
-  /// Test whether an element exists in the Bloom filter.
-  /// @param x The element to test.
-  /// @returns `false` if the *x* is not in the set and `true` if *x* may exist
-  ///          according to the false-positive probability of the filter.
-  template <class T>
-  [[gnu::always_inline]] inline bool lookup(T&& x) const {
-    return lookup(digest_type{hash{}(std::forward<T>(x))});
-  }
-
-  /// Test whether a hash digest exists in the Bloom filter.
+  /// Test whether a hash digest exists in the filter.
   /// @param x The digest to test.
   /// @returns `false` if the *x* is not in the set and `true` if *x* may exist
   ///          according to the false-positive probability of the filter.
   [[gnu::always_inline]] inline bool lookup(digest_type x) const {
-    const auto digest = as<uint64_t>(x);
-    const uint32_t idx = block_index(digest, num_blocks_);
+    const uint32_t idx = block_index(x, num_blocks_);
 #if defined(__AVX2__)
     auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
     auto* block = &blocks[idx];
     // Check that all bits in the block are set.
-    return _mm256_testc_si256(*block, make_mask(digest));
+    return _mm256_testc_si256(*block, make_mask(x));
 #elif defined(__aarch64__)
     auto blocks = reinterpret_cast<uint16x8_t*>(blocks_.get());
-    uint16x8_t bits = vbicq_u16(make_mask(digest), blocks[idx]);
+    uint16x8_t bits = vbicq_u16(make_mask(x), blocks[idx]);
     uint64x2_t v64 = vreinterpretq_u64_u16(bits);
     uint32x2_t v32 = vqmovn_u64(v64);
     uint64x1_t result = vreinterpret_u64_u32(v32);
@@ -211,4 +190,4 @@ private:
   detail::aligned_unique_ptr<block_type> blocks_;
 };
 
-} // namespace vast::sketches
+} // namespace vast

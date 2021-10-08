@@ -10,26 +10,24 @@
 
 #include "vast/sketches/blocked_bloom_filter.hpp"
 
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/hashable/hash.hpp"
+#include "vast/concepts.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 
 using namespace vast;
-using namespace vast::sketches;
 using namespace si_literals;
-using namespace binary_byte_literals;
-using namespace decimal_byte_literals;
 
 TEST(basic add and lookup) {
-  blocked_bloom_filter<xxhash64> filter{1024};
-  filter.add(42);
-  filter.add(43);
-  filter.add(44);
-  CHECK(filter.lookup(42));
-  CHECK(filter.lookup(43));
-  CHECK(filter.lookup(44));
-  CHECK(!filter.lookup(1337));
+  blocked_bloom_filter filter{1_Ki};
+  filter.add(hash(42));
+  filter.add(hash(42));
+  filter.add(hash(43));
+  filter.add(hash(44));
+  CHECK(filter.lookup(hash(42)));
+  CHECK(filter.lookup(hash(43)));
+  CHECK(filter.lookup(hash(44)));
+  CHECK(!filter.lookup(hash(1337)));
 }
