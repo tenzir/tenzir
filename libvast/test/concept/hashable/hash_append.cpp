@@ -10,7 +10,7 @@
 
 #include "vast/detail/bit.hpp"
 
-#define SUITE hash_append
+#define SUITE hashable
 #include "vast/test/test.hpp"
 
 #include <cstdint>
