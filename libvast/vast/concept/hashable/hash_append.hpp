@@ -24,6 +24,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <span>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -142,6 +143,14 @@ template <class HashAlgorithm, class T, class Alloc>
   requires(detail::contiguously_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& v) noexcept;
 
+template <class HashAlgorithm, class T, size_t Extent>
+  requires(detail::contiguously_hashable<T, HashAlgorithm>)
+void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept;
+
+template <class HashAlgorithm, class T, size_t Extent>
+  requires(!detail::contiguously_hashable<T, HashAlgorithm>)
+void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept;
+
 template <class HashAlgorithm, class Key, class Comp, class Alloc>
 void hash_append(HashAlgorithm& h,
                  const std::set<Key, Comp, Alloc>& s) noexcept;
@@ -233,6 +242,23 @@ void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& v) noexcept {
   for (const auto& t : v)
     hash_append(h, t);
   hash_append(h, v.size());
+}
+
+// -- span ------------------------------------------------------------------
+
+template <class HashAlgorithm, class T, size_t Extent>
+  requires(detail::contiguously_hashable<T, HashAlgorithm>)
+void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept {
+  h(xs.data(), xs.size() * sizeof(T));
+  hash_append(h, xs.size());
+}
+
+template <class HashAlgorithm, class T, size_t Extent>
+  requires(!detail::contiguously_hashable<T, HashAlgorithm>)
+void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept {
+  for (const auto& x : xs)
+    hash_append(h, x);
+  hash_append(h, xs.size());
 }
 
 // -- set ---------------------------------------------------------------------
