@@ -434,6 +434,11 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 # This is broken for the bundled robin-map, so we special-case it above.
 # dependency_summary("robin-map" tsl::robin_map "Dependencies")
 
+# Link against libfilter.
+find_package(libfilter REQUIRED)
+target_link_libraries(libvast PRIVATE libfilter::cxx)
+dependency_summary("libfilter" libfilter::cxx "Dependencies")
+
 # Link against Apache Arrow.
 target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
