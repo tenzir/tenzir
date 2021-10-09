@@ -20,20 +20,17 @@
 
 #pragma once
 
-#include "vast/bloom_filter_parameters.hpp"
 #include "vast/detail/allocate_aligned.hpp"
-#include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 
 #include <caf/meta/type_name.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
-#include <limits>
-#include <utility>
+#include <span>
 
 #if defined(__AVX2__)
 #  include <x86intrin.h>
@@ -64,38 +61,36 @@ class blocked_bloom_filter : detail::equality_comparable<blocked_bloom_filter> {
 public:
   using digest_type = uint64_t;
 
+  /// The native type of a block representing a single Bloom filter.
 #if defined(__AVX2__)
-  using block_type = std::array<uint32_t, 8>; // __m256i
+  using block_type = __m256i;
 #elif defined(__aarch64__)
   using block_type = uint16x8_t;
 #endif
 
+  /// The size of a block.
   static constexpr size_t block_size = sizeof(block_type);
 
-  /// Constructs a blocked filter with a fixed size.
-  /// @param size The number of space (in bits) the filter uses.
-  explicit blocked_bloom_filter(size_t size = 0)
-    : num_blocks_{num_blocks(size)} {
-    auto buffer_size = num_blocks_ * block_size;
-    VAST_ASSERT(buffer_size % 64 == 0); // ensure alignment
-    blocks_ = detail::allocate_aligned<block_type>(64, buffer_size);
-    std::memset(blocks_.get(), 0, buffer_size);
-    // TODO: there's probably a better way to do this.
-    VAST_ASSERT(__builtin_cpu_supports("avx2"));
-  }
+  /// Constructs a filter with a fixed size.
+  /// @param size The number bytes the filter should use. The minimum size
+  /// is *block_size*. If *size* is not a multiple of *block_size*, the filter
+  /// rounds down *size* to the closest multiple of *block_size*.
+  explicit blocked_bloom_filter(size_t size = 0);
+
+  /// Constructs a filter with a capacity for a fixed number of items
+  /// and a desired false-positive probability
+  blocked_bloom_filter(size_t n, double p);
 
   /// Adds a hash digest.
   /// @param x The digest to add.
   [[gnu::always_inline]] inline void add(digest_type x) {
     const uint32_t idx = block_index(x, num_blocks_);
 #if defined(__AVX2__)
-    auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
-    auto* block = &blocks[idx];
+    auto* block = &blocks_.get()[idx];
     // Perform a bitwise OR into the chosen block.
     _mm256_store_si256(block, _mm256_or_si256(*block, make_mask(x)));
 #elif defined(__aarch64__)
-    auto blocks = reinterpret_cast<uint16x8_t*>(blocks_.get());
-    blocks[idx] = vorrq_u16(make_mask(x), blocks[idx]);
+    blocks_.get()[idx] = vorrq_u16(make_mask(x), blocks_.get()[idx]);
 #endif
   }
 
@@ -106,13 +101,11 @@ public:
   [[gnu::always_inline]] inline bool lookup(digest_type x) const {
     const uint32_t idx = block_index(x, num_blocks_);
 #if defined(__AVX2__)
-    auto blocks = reinterpret_cast<__m256i*>(blocks_.get());
-    auto* block = &blocks[idx];
+    auto* block = &blocks_.get()[idx];
     // Check that all bits in the block are set.
     return _mm256_testc_si256(*block, make_mask(x));
 #elif defined(__aarch64__)
-    auto blocks = reinterpret_cast<uint16x8_t*>(blocks_.get());
-    uint16x8_t bits = vbicq_u16(make_mask(x), blocks[idx]);
+    uint16x8_t bits = vbicq_u16(make_mask(x), blocks_.get()[idx]);
     uint64x2_t v64 = vreinterpretq_u64_u16(bits);
     uint32x2_t v32 = vqmovn_u64(v64);
     uint64x1_t result = vreinterpret_u64_u32(v32);
@@ -123,13 +116,7 @@ public:
   // -- concepts --------------------------------------------------------------
 
   friend bool
-  operator==(const blocked_bloom_filter& x, const blocked_bloom_filter& y) {
-    VAST_ASSERT(x.blocks_ != nullptr);
-    VAST_ASSERT(y.blocks_ != nullptr);
-    return x.num_blocks_ == y.num_blocks_
-           && std::memcmp(x.blocks_.get(), y.blocks_.get(),
-                          x.num_blocks_ * block_size);
-  }
+  operator==(const blocked_bloom_filter& x, const blocked_bloom_filter& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, blocked_bloom_filter& x) {
@@ -137,19 +124,9 @@ public:
              x.blocks_);
   }
 
-private:
-  /// Computes the number of blocks for a given number of bits.
-  static constexpr size_t num_blocks(size_t bits) {
-    // See FastFilter implementation for choice of constant value.
-#if defined(__AVX2__)
-    constexpr auto c = 24;
-#elif defined(__aarch64__)
-    constexpr auto c = 10;
-#endif
-    static_assert(c <= block_size);
-    return std::max(size_t{1}, bits / c);
-  }
+  friend std::span<const std::byte> as_bytes(const blocked_bloom_filter& x);
 
+private:
   static inline uint64_t block_index(uint64_t digest, size_t num_blocks) {
     return ((digest >> 32) * (num_blocks)) >> 32;
   }
