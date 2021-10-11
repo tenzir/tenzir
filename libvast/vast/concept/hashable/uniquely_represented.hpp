@@ -16,6 +16,10 @@
 
 namespace vast::detail {
 
+// The `is_uniquely_representable` trait is fulfilled when the hash of the
+// object is exactly the hash of the memory region of the object regarded as an
+// opaque byte array, with no holes or padding bytes.
+
 template <class T>
 struct is_uniquely_represented
   : std::bool_constant<std::is_integral<T>{} || std::is_enum<T>{}
