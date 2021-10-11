@@ -19,19 +19,19 @@ namespace vast {
 /// A hash algorithm that supports incremental computation of a hash digest
 /// in a construct-add-finish manner.
 template <class HashAlgorithm>
-concept incremental_hash = requires(HashAlgorithm h) {
+concept incremental_hash = requires(HashAlgorithm h, const void* p, size_t n) {
   typename HashAlgorithm::result_type;
-  h(std::declval<const void*>(), std::declval<size_t>());
+  h(p, n);
   static_cast<typename HashAlgorithm::result_type>(h);
 };
 
 /// A hash algorithm that exposes a one-shot computation of a hash digest over
 /// a byte sequence.
 template <class HashAlgorithm>
-concept oneshot_hash = requires(HashAlgorithm h) {
+concept oneshot_hash = requires(HashAlgorithm h, const void* p, size_t n) {
   // clang-format off
   typename HashAlgorithm::result_type;
-  { h.make(std::declval<const void*>(), std::declval<size_t>()) }
+  { h.make(p, n) }
     -> concepts::same_as<typename HashAlgorithm::result_type>;
   // clang-format on
 };
