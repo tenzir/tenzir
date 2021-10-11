@@ -12,8 +12,8 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/deserializer.hpp>
@@ -25,20 +25,20 @@
 
 namespace vast {
 
-list_index::list_index(vast::legacy_type t, caf::settings opts)
+list_index::list_index(vast::type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   max_size_ = caf::get_or(options(), "max-size",
                           defaults::index::max_container_elements);
   auto f = detail::overload{
     [](const auto&) {
-      return vast::legacy_type{};
+      return vast::type{};
     },
-    [](const legacy_list_type& x) {
-      return x.value_type;
+    [](const list_type& x) {
+      return x.value_type();
     },
   };
   value_type_ = caf::visit(f, value_index::type());
-  VAST_ASSERT(!caf::holds_alternative<legacy_none_type>(value_type_));
+  VAST_ASSERT(!caf::holds_alternative<none_type>(value_type_));
   size_t components = std::log10(max_size_);
   if (max_size_ % 10 != 0)
     ++components;

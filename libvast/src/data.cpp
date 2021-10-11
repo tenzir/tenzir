@@ -22,6 +22,7 @@
 #include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/type.hpp"
 
 #include <caf/config_value.hpp>
 #include <fmt/format.h>
@@ -46,7 +47,9 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   auto eval_string_and_pattern = [](const auto& x, const auto& y) {
     return caf::visit(
       detail::overload{
-        [](const auto&, const auto&) -> std::optional<bool> { return {}; },
+        [](const auto&, const auto&) -> std::optional<bool> {
+          return {};
+        },
         [](const std::string& lhs, const pattern& rhs) -> std::optional<bool> {
           return rhs.match(lhs);
         },
@@ -58,7 +61,9 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   };
   auto eval_match = [](const auto& x, const auto& y) {
     return caf::visit(detail::overload{
-                        [](const auto&, const auto&) { return false; },
+                        [](const auto&, const auto&) {
+                          return false;
+                        },
                         [](const std::string& lhs, const pattern& rhs) {
                           return rhs.match(lhs);
                         },
@@ -66,22 +71,28 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
                       x, y);
   };
   auto eval_in = [](const auto& x, const auto& y) {
-    return caf::visit(
-      detail::overload{
-        [](const auto&, const auto&) { return false; },
-        [](const std::string& lhs, const std::string& rhs) {
-          return rhs.find(lhs) != std::string::npos;
-        },
-        [](const std::string& lhs, const pattern& rhs) {
-          return rhs.search(lhs);
-        },
-        [](const address& lhs, const subnet& rhs) { return rhs.contains(lhs); },
-        [](const subnet& lhs, const subnet& rhs) { return rhs.contains(lhs); },
-        [](const auto& lhs, const list& rhs) {
-          return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
-        },
-      },
-      x, y);
+    return caf::visit(detail::overload{
+                        [](const auto&, const auto&) {
+                          return false;
+                        },
+                        [](const std::string& lhs, const std::string& rhs) {
+                          return rhs.find(lhs) != std::string::npos;
+                        },
+                        [](const std::string& lhs, const pattern& rhs) {
+                          return rhs.search(lhs);
+                        },
+                        [](const address& lhs, const subnet& rhs) {
+                          return rhs.contains(lhs);
+                        },
+                        [](const subnet& lhs, const subnet& rhs) {
+                          return rhs.contains(lhs);
+                        },
+                        [](const auto& lhs, const list& rhs) {
+                          return std::find(rhs.begin(), rhs.end(), lhs)
+                                 != rhs.end();
+                        },
+                      },
+                      x, y);
   };
   switch (op) {
     default:
@@ -118,22 +129,20 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   }
 }
 
-vast::legacy_type data::basic_type() const {
-  return caf::visit(
-    detail::overload{
-      [](const auto& x) -> vast::legacy_type {
-        return typename data_traits<std::decay_t<decltype(x)>>::type{};
-      },
-    },
-    *this);
-}
-
 bool is_basic(const data& x) {
   return caf::visit(detail::overload{
-                      [](const auto&) { return true; },
-                      [](const list&) { return false; },
-                      [](const map&) { return false; },
-                      [](const record&) { return false; },
+                      [](const auto&) {
+                        return true;
+                      },
+                      [](const list&) {
+                        return false;
+                      },
+                      [](const map&) {
+                        return false;
+                      },
+                      [](const record&) {
+                        return false;
+                      },
                     },
                     x);
 }
@@ -144,10 +153,18 @@ bool is_complex(const data& x) {
 
 bool is_recursive(const data& x) {
   return caf::visit(detail::overload{
-                      [](const auto&) { return false; },
-                      [](const list&) { return true; },
-                      [](const map&) { return true; },
-                      [](const record&) { return true; },
+                      [](const auto&) {
+                        return false;
+                      },
+                      [](const list&) {
+                        return true;
+                      },
+                      [](const map&) {
+                        return true;
+                      },
+                      [](const record&) {
+                        return true;
+                      },
                     },
                     x);
 }
@@ -180,42 +197,6 @@ size_t depth(const record& r) {
 
 namespace {
 
-template <class Iterator, class Sentinel>
-std::optional<record> make_record(const legacy_record_type& rt, Iterator& begin,
-                                  Sentinel end, size_t max_recursion) {
-  if (max_recursion == 0) {
-    VAST_WARN("partially discarding record: recursion limit of {} exceeded",
-              defaults::max_recursion);
-    return {};
-  }
-  record result;
-  for (const auto& field : rt.fields) {
-    if (begin == end)
-      return {};
-    if (const auto* nested = caf::get_if<legacy_record_type>(&field.type)) {
-      if (auto r = make_record(*nested, begin, end, --max_recursion))
-        result.emplace(field.name, std::move(*r));
-      else
-        return {};
-    } else {
-      result.emplace(field.name, std::move(*begin));
-      ++begin;
-    }
-  }
-  return result;
-}
-
-} // namespace
-
-std::optional<record>
-make_record(const legacy_record_type& rt, std::vector<data>&& xs) {
-  auto begin = xs.begin();
-  auto end = xs.end();
-  return make_record(rt, begin, end, defaults::max_recursion);
-}
-
-namespace {
-
 record flatten(const record& r, size_t max_recursion) {
   record result;
   if (max_recursion == 0) {
@@ -234,7 +215,7 @@ record flatten(const record& r, size_t max_recursion) {
 }
 
 std::optional<record>
-flatten(const record& r, const legacy_record_type& rt, size_t max_recursion) {
+flatten(const record& r, const record_type& rt, size_t max_recursion) {
   record result;
   if (max_recursion == 0) {
     VAST_WARN("partially discarding record: recursion limit of {} exceeded",
@@ -244,10 +225,11 @@ flatten(const record& r, const legacy_record_type& rt, size_t max_recursion) {
   for (const auto& [k, v] : r) {
     if (const auto* ir = caf::get_if<record>(&v)) {
       // Look for a matching field of type record.
-      const auto* field = rt.find(k);
-      if (field == nullptr)
+      const auto offset = rt.resolve_prefix(k);
+      if (!offset.has_value())
         return {};
-      const auto* irt = caf::get_if<legacy_record_type>(&field->type);
+      auto field = rt.field(*offset);
+      const auto* irt = caf::get_if<record_type>(&field.type);
       if (!irt)
         return {};
       // Recurse.
@@ -265,14 +247,14 @@ flatten(const record& r, const legacy_record_type& rt, size_t max_recursion) {
 }
 
 std::optional<data>
-flatten(const data& x, const legacy_type& t, size_t max_recursion) {
+flatten(const data& x, const type& t, size_t max_recursion) {
   if (max_recursion == 0) {
     VAST_WARN("partially discarding record: recursion limit of {} exceeded",
               defaults::max_recursion);
     return caf::none;
   }
   const auto* xs = caf::get_if<record>(&x);
-  const auto* rt = caf::get_if<legacy_record_type>(&t);
+  const auto* rt = caf::get_if<record_type>(&t);
   if (xs && rt)
     return flatten(*xs, *rt, --max_recursion);
   return caf::none;
@@ -280,11 +262,11 @@ flatten(const data& x, const legacy_type& t, size_t max_recursion) {
 
 } // namespace
 
-std::optional<data> flatten(const data& x, const legacy_type& t) {
+std::optional<data> flatten(const data& x, const type& t) {
   return flatten(x, t, defaults::max_recursion);
 }
 
-std::optional<record> flatten(const record& r, const legacy_record_type& rt) {
+std::optional<record> flatten(const record& r, const record_type& rt) {
   return flatten(r, rt, defaults::max_recursion);
 }
 
@@ -613,18 +595,42 @@ namespace {
 
 void print(YAML::Emitter& out, const data& x) {
   auto f = detail::overload{
-    [&out](caf::none_t) { out << YAML::Null; },
-    [&out](bool x) { out << (x ? "true" : "false"); },
-    [&out](integer x) { out << x.value; },
-    [&out](count x) { out << x; },
-    [&out](real x) { out << to_string(x); },
-    [&out](duration x) { out << to_string(x); },
-    [&out](time x) { out << to_string(x); },
-    [&out](const std::string& x) { out << x; },
-    [&out](const pattern& x) { out << to_string(x); },
-    [&out](const address& x) { out << to_string(x); },
-    [&out](const subnet& x) { out << to_string(x); },
-    [&out](const enumeration& x) { out << to_string(x); },
+    [&out](caf::none_t) {
+      out << YAML::Null;
+    },
+    [&out](bool x) {
+      out << (x ? "true" : "false");
+    },
+    [&out](integer x) {
+      out << x.value;
+    },
+    [&out](count x) {
+      out << x;
+    },
+    [&out](real x) {
+      out << to_string(x);
+    },
+    [&out](duration x) {
+      out << to_string(x);
+    },
+    [&out](time x) {
+      out << to_string(x);
+    },
+    [&out](const std::string& x) {
+      out << x;
+    },
+    [&out](const pattern& x) {
+      out << to_string(x);
+    },
+    [&out](const address& x) {
+      out << to_string(x);
+    },
+    [&out](const subnet& x) {
+      out << to_string(x);
+    },
+    [&out](const enumeration& x) {
+      out << to_string(x);
+    },
     [&out](const list& xs) {
       out << YAML::BeginSeq;
       for (const auto& x : xs)

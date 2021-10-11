@@ -711,7 +711,10 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
       VAST_ASSERT(x.encoding() != table_slice_encoding::none);
       auto&& layout = x.layout();
-      self->state.stats.layouts[layout.name()].count += x.rows();
+      // TODO: Consider switching layouts to a robin map to take advantage of
+      // transparent key lookup with string views, avoding the copy of the name
+      // here.
+      self->state.stats.layouts[std::string{layout.name}].count += x.rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
         self->state.create_active_partition();

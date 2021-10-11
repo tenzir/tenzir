@@ -16,8 +16,8 @@
 #include "vast/detail/fdoutbuf.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/type.hpp"
 
 #include <arrow/util/config.h>
 #include <caf/none.hpp>
@@ -47,7 +47,8 @@ writer::~writer() {
 caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
     return caf::make_error(ec::logic_error, "invalid arrow output stream");
-  if (!layout(slice.layout()))
+  auto [_, layout] = slice.layout();
+  if (!this->layout(layout))
     return caf::make_error(ec::logic_error, "failed to update layout");
   // Get the Record Batch and print it.
   auto batch = as_record_batch(slice);
@@ -63,7 +64,7 @@ const char* writer::name() const {
   return "arrow-writer";
 }
 
-bool writer::layout(const legacy_record_type& layout) {
+bool writer::layout(const record_type& layout) {
   if (current_layout_ == layout)
     return true;
   if (current_batch_writer_ != nullptr) {
@@ -71,10 +72,6 @@ bool writer::layout(const legacy_record_type& layout) {
       return false;
     current_batch_writer_ = nullptr;
   }
-  // As long as records cannot be empty, this check is faster than checking
-  // whether `layout.num_leaves() == 0`, so we use that instead.
-  if (layout.fields.empty())
-    return true;
   current_layout_ = layout;
   auto schema = make_arrow_schema(layout);
   current_builder_ = arrow_table_slice_builder::make(layout);

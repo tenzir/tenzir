@@ -29,9 +29,9 @@ using namespace std::string_literals;
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
 
 TEST(random integer slices) {
-  auto t = legacy_integer_type{}.attributes({{"default", "uniform(100,200)"}});
-  legacy_record_type layout{{"i", t}};
-  layout.name("test.integers");
+  auto t = type{integer_type{}, {{"default", "uniform(100,200)"}}};
+  record_type layout{{"i", t}};
+  layout.assign_metadata(type{"test.integers", none_type{}});
   auto slices = unbox(make_random_table_slices(10, 10, layout));
   CHECK_EQUAL(slices.size(), 10u);
   CHECK(std::all_of(slices.begin(), slices.end(), [](auto& slice) {
@@ -50,24 +50,22 @@ TEST(column view) {
   auto sut = zeek_conn_log[0];
   auto ts_cview = table_slice_column::make(sut, "ts");
   REQUIRE(ts_cview);
-  auto flat_layout = flatten(sut.layout());
+  auto flat_layout = flatten(sut.layout().type);
   CHECK_EQUAL(ts_cview->index(), 0u);
   for (size_t column = 0; column < sut.columns(); ++column) {
-    auto cview = table_slice_column{
-      sut, column,
-      qualified_record_field{flat_layout.name(), flat_layout.fields[column]}};
+    auto cview = table_slice_column{sut, column};
     REQUIRE_NOT_EQUAL(cview.size(), 0u);
     CHECK_EQUAL(cview.index(), column);
     CHECK_EQUAL(cview.size(), sut.rows());
     for (size_t row = 0; row < cview.size(); ++row)
       CHECK_EQUAL(cview[row],
-                  sut.at(row, column, flat_layout.fields[column].type));
+                  sut.at(row, column, flat_layout.field(column).type));
   }
 }
 
 TEST(row view) {
   auto sut = zeek_conn_log[0];
-  auto flat_layout = flatten(sut.layout());
+  auto flat_layout = flatten(sut.layout().type);
   for (size_t row = 0; row < sut.rows(); ++row) {
     auto rview = table_slice_row{sut, row};
     REQUIRE_NOT_EQUAL(rview.size(), 0u);
@@ -75,7 +73,7 @@ TEST(row view) {
     CHECK_EQUAL(rview.size(), sut.columns());
     for (size_t column = 0; column < rview.size(); ++column)
       CHECK_EQUAL(rview[column],
-                  sut.at(row, column, flat_layout.fields[column].type));
+                  sut.at(row, column, flat_layout.field(column).type));
   }
 }
 
@@ -193,7 +191,7 @@ TEST(filter - expression overload) {
   auto sut = zeek_conn_log[0];
   // sut.offset(0);
   auto check_eval = [&](std::string_view expr, size_t x) {
-    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.layout()));
+    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.layout().type));
     CHECK_EQUAL(filter(sut, exp)->rows(), x);
   };
   check_eval("id.orig_h != 192.168.1.102", 5);
@@ -214,7 +212,7 @@ TEST(filter - expression with hints) {
   // sut.offset(0);
   auto check_eval = [&](std::string_view expr,
                         std::initializer_list<id_range> id_init, size_t x) {
-    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.layout()));
+    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.layout().type));
     auto hints = make_ids(id_init, sut.offset() + sut.rows());
     CHECK_EQUAL(filter(sut, exp, hints)->rows(), x);
   };

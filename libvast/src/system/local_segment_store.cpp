@@ -43,7 +43,7 @@ caf::result<atom::done> handle_lookup(Actor& self, const vast::query& query,
     if (query.expr == expression{}) {
       checkers.emplace_back();
     } else {
-      auto c = tailor(query.expr, slice.layout());
+      auto c = tailor(query.expr, slice.layout().type);
       if (!c)
         return c.error();
       checkers.emplace_back(prune_meta_predicates(std::move(*c)));

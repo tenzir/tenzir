@@ -55,6 +55,18 @@ public:
   [[nodiscard]] const fbs::Type&
   table(enum transparent transparent) const noexcept;
 
+  /// Assigns the metadata of another type to this type.
+  /// @note I wish this function did not have to exist. However, there's a
+  /// serious need for it: The INDEX and its parts assume that a table slice's
+  /// layout is named, and falsely assume that name to be part of the layout
+  /// record type itself. But that is no longer true with the FlatBuffers-based
+  /// type-system, where only the sum-type of all concrete types contains
+  /// metadata like a nane or tags.
+  void assign_metadata(const stateful_type_base& other) noexcept;
+
+  /// Prunes the metadata of this type.
+  void prune_metadata() noexcept;
+
 protected:
   /// The underlying representation of the type.
   chunk_ptr table_ = {}; // NOLINT
@@ -83,7 +95,7 @@ concept concrete_type = requires(const T& value) {
   // Values of the type must be able to construct the corresponding data type.
   // TODO: Consider including data.hpp and checking whether the returned value
   // is convertible to data.
-  { value.construct() };
+  {value.construct()};
 };
 
 /// A concept that models any concrete type, or the abstract type class itself.
@@ -176,6 +188,10 @@ public:
   /// Implicitly construct a type from a basic concrete type.
   template <basic_type T>
   type(const T& other) noexcept {
+    // This creates a chunk that does not own anything, which at first sounds
+    // like an antipattern. It is safe for this particular case because the
+    // memory for basic types is guaranteed to have static lifetime that
+    // exceeds the lifetime of all types.
     table_ = chunk::make(as_bytes(other), []() noexcept {});
   }
 
@@ -190,6 +206,8 @@ public:
   template <complex_type T>
   type(const T& other) noexcept {
     table_ = other.table_;
+    // FIXME: consider using prune_metadata here.
+    // prune_metadata();
   }
 
   /// Implicitly assign a type from a complex concrete type.
@@ -272,7 +290,8 @@ public:
 
   /// Enables integration with CAF's type inspection.
   template <class Inspector>
-  friend typename Inspector::result_type inspect(Inspector& f, type& x) {
+  friend auto inspect(Inspector& f, type& x) ->
+    typename Inspector::result_type {
     return f(caf::meta::type_name("vast.type"), x.table_);
   }
 
@@ -288,11 +307,23 @@ public:
     return f(as_bytes(x));
   }
 
+  /// Integrates with the CAF stringification inspector.
+  /// TODO: Implement for all fmt::is_formattable<T, char>.
+  friend void inspect(caf::detail::stringification_inspector& f, type& x);
+
+  /// Explicitly forbid usage of the CAF binary serializer/deserializer.
+  friend auto inspect(caf::binary_serializer&, type&) = delete;
+  friend auto inspect(caf::binary_deserializer&, type&) = delete;
+
   /// Returns the name of this type.
   /// @note The result is empty if the contained type is unnammed. Built-in
   /// types have no name. Use the {fmt} API to render a type's signature.
   [[nodiscard]] std::string_view name() const& noexcept;
   [[nodiscard]] std::string_view name() && = delete;
+
+  /// Returns a view of all names of this type.
+  [[nodiscard]] std::vector<std::string_view> names() const& noexcept;
+  [[nodiscard]] std::vector<std::string_view> names() && = delete;
 
   /// Returns the value of a tag by name, if it exists.
   /// @param key The key of the tag.
@@ -914,6 +945,18 @@ private:
 
 } // namespace vast
 
+// -- misc --------------------------------------------------------------------
+
+namespace vast::fbs {
+
+/// Explicitly poison serialize_bytes for types and concrete types. This was
+/// used for the legacy type system, but must not be used for the new one, which
+/// has a well-defined contiguous binary representation by design.
+template <type_or_concrete_type Type, class Byte = uint8_t>
+auto serialize_bytes(flatbuffers::FlatBufferBuilder&, const Type&) = delete;
+
+} // namespace vast::fbs
+
 // -- sum_type_access ---------------------------------------------------------
 
 namespace caf {
@@ -1036,6 +1079,7 @@ template <>
 struct formatter<vast::type> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    // TODO: n = name_only
     return ctx.begin();
   }
 
@@ -1095,7 +1139,8 @@ struct formatter<T> {
   template <class FormatContext>
   auto format(const vast::integer_type&, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "integer");
+    // TODO: Rename to "integer" when switching to YAML schemas.
+    return format_to(ctx.out(), "int");
   }
 
   template <class FormatContext>
@@ -1137,7 +1182,8 @@ struct formatter<T> {
   template <class FormatContext>
   auto format(const vast::address_type&, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "address");
+    // TODO: Rename to "address" when switching to YAML schemas.
+    return format_to(ctx.out(), "addr");
   }
 
   template <class FormatContext>

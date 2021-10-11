@@ -71,26 +71,27 @@ protected:
   }
 
   template <class... Policies, class Printer>
-  caf::error print_record(Printer& printer, const line_elements& le,
-                          const legacy_record_type& layout, table_slice_row row,
-                          size_t& pos) {
-    auto print_field = [&](auto& iter, const record_field& f, size_t column) {
+  caf::error
+  print_record(Printer& printer, const line_elements& le,
+               const record_type& layout, table_slice_row row, size_t& pos) {
+    auto print_field = [&](auto& iter, const record_type::field_view& f,
+                           size_t column) {
       auto rep = [&](data_view x) {
         if constexpr (detail::is_any_v<policy::include_field_names, Policies...>)
           return std::pair{std::string_view{f.name}, x};
         else
           return x;
       };
-      auto x = to_canonical(type::from_legacy_type(f.type), row[column]);
+      auto x = to_canonical(f.type, row[column]);
       return printer.print(iter, rep(std::move(x)));
     };
     auto iter = std::back_inserter(buf_);
     append(le.begin_of_line);
     auto start = 0;
-    for (const auto& f : layout.fields) {
+    for (const auto& f : layout.fields()) {
       if (!!start++)
         append(le.separator);
-      if (const auto& r = caf::get_if<legacy_record_type>(&f.type)) {
+      if (const auto& r = caf::get_if<record_type>(&f.type)) {
         if constexpr (detail::is_any_v<policy::include_field_names,
                                        Policies...>) {
           if (!printer.print(iter, f.name))
@@ -130,9 +131,9 @@ protected:
   print(Printer& printer, const table_slice& xs, const line_elements& le) {
     auto&& layout = [&]() {
       if constexpr (detail::is_any_v<policy::flatten_layout, Policies...>)
-        return flatten(xs.layout());
+        return flatten(xs.layout().type);
       else
-        return xs.layout();
+        return xs.layout().type;
     }();
     for (size_t row = 0; row < xs.rows(); ++row) {
       size_t pos = 0;

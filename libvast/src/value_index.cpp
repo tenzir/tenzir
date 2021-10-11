@@ -15,7 +15,7 @@
 
 namespace vast {
 
-value_index::value_index(vast::legacy_type t, caf::settings opts)
+value_index::value_index(vast::type t, caf::settings opts)
   : type_{std::move(t)}, opts_{std::move(opts)} {
   // nop
 }
@@ -88,7 +88,7 @@ value_index::size_type value_index::offset() const {
   return std::max(none_.size(), mask_.size());
 }
 
-const legacy_type& value_index::type() const {
+const type& value_index::type() const {
   return type_;
 }
 
@@ -121,25 +121,31 @@ caf::error inspect(caf::deserializer& source, value_index& x) {
 }
 
 caf::error inspect(caf::serializer& sink, const value_index_ptr& x) {
-  static auto nullptr_type = legacy_type{};
+  auto lt = legacy_type{};
   if (x == nullptr)
-    return sink(nullptr_type);
-  return caf::error::eval([&] { return sink(x->type(), x->options()); },
-                          [&] { return x->serialize(sink); });
+    return sink(lt);
+  lt = x->type().to_legacy_type();
+  return caf::error::eval(
+    [&] {
+      return sink(lt, x->options());
+    },
+    [&] {
+      return x->serialize(sink);
+    });
 }
 
 caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
-  legacy_type t;
-  if (auto err = source(t))
+  legacy_type lt;
+  if (auto err = source(lt))
     return err;
-  if (caf::holds_alternative<legacy_none_type>(t)) {
+  if (caf::holds_alternative<legacy_none_type>(lt)) {
     x = nullptr;
     return caf::none;
   }
   caf::settings opts;
   if (auto err = source(opts))
     return err;
-  x = factory<value_index>::make(std::move(t), std::move(opts));
+  x = factory<value_index>::make(type::from_legacy_type(lt), std::move(opts));
   if (x == nullptr)
     return caf::make_error(ec::unspecified, "failed to construct value index");
   return x->deserialize(source);

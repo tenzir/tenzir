@@ -95,8 +95,7 @@ public:
             return std::nullopt;
           return data;
         } else {
-          auto data
-            = proj_.slice_.at(row_, column, vast::type{type}.to_legacy_type());
+          auto data = proj_.slice_.at(row_, column, type);
           if (caf::holds_alternative<caf::none_t>(data))
             return std::nullopt;
           return caf::get<view<type_to_data_t<Type>>>(data);
@@ -242,8 +241,7 @@ auto project(table_slice slice, Hints&&... hints) {
                       ->projection<Types...> {
     static_assert(sizeof...(Types) == sizeof...(Indices),
                   "project requires an equal number of types and hints");
-    const auto layout
-      = caf::get<record_type>(type::from_legacy_type(slice.layout()));
+    const auto layout = slice.layout().type;
     auto find_flat_index_for_hint
       = [&]<concrete_type Type>(
           auto&& self, const Type& type,

@@ -14,7 +14,6 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
@@ -52,9 +51,9 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
 
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               legacy_type index_type, caf::settings index_opts) {
-  self->state.name = "indexer-" + to_string(index_type);
-  self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
+               type index_type, caf::settings index_opts) {
+  self->state.name = fmt::format("indexer-{}", index_type);
+  self->state.has_skip_attribute = index_type.tag("skip").has_value();
   self->state.idx = factory<value_index>::make(index_type, index_opts);
   if (!self->state.idx) {
     VAST_ERROR("{} failed to construct value index", *self);
@@ -105,8 +104,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
       VAST_DEBUG("{} got predicate: {}", *self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
-      auto rep
-        = to_internal(type::from_legacy_type(idx.type()), make_view(pred.rhs));
+      auto rep = to_internal(idx.type(), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },
     [self](atom::snapshot) {
@@ -145,7 +143,7 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
                                                  "pointer"));
     return indexer_actor::behavior_type::make_empty_behavior();
   }
-  self->state.name = "indexer-" + to_string(idx->type());
+  self->state.name = fmt::format("indexer-{}", idx->type());
   self->state.partition_id = partition_id;
   self->state.idx = std::move(idx);
   return {
@@ -153,8 +151,7 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
       VAST_DEBUG("{} got predicate: {}", *self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
-      auto rep
-        = to_internal(type::from_legacy_type(idx.type()), make_view(pred.rhs));
+      auto rep = to_internal(idx.type(), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },
     [self](atom::shutdown) {

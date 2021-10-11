@@ -21,12 +21,14 @@
 
 using namespace std::literals;
 
-// clang-format off
-const auto testdata_layout = vast::legacy_record_type{
-  {"uid", vast::legacy_string_type{}},
-  {"desc", vast::legacy_string_type{}},
-  {"index", vast::legacy_integer_type{}}}.name("testdata");
-// clang-format on
+const auto testdata_layout = caf::get<vast::record_type>(vast::type{
+  "testdata",
+  vast::record_type{
+    {"uid", vast::string_type{}},
+    {"desc", vast::string_type{}},
+    {"index", vast::integer_type{}},
+  },
+});
 
 struct transforms_fixture {
   transforms_fixture() {
@@ -56,7 +58,7 @@ TEST(delete_ step) {
   vast::delete_step delete_step("uid");
   auto deleted = delete_step.apply(vast::table_slice{slice});
   REQUIRE_NOERROR(deleted);
-  CHECK_EQUAL(deleted->layout().fields.size(), 2ull);
+  CHECK_EQUAL(deleted->layout().type.num_fields(), 2ull);
   vast::delete_step invalid_delete_step("xxx");
   auto not_deleted = invalid_delete_step.apply(vast::table_slice{slice});
   // The default format is Arrow, so we do one more test where we force
@@ -65,7 +67,7 @@ TEST(delete_ step) {
     = make_transforms_testdata(vast::table_slice_encoding::msgpack);
   auto msgpack_deleted = delete_step.apply(vast::table_slice{msgpack_slice});
   REQUIRE(msgpack_deleted);
-  CHECK_EQUAL(msgpack_deleted->layout().fields.size(), 2ull);
+  CHECK_EQUAL(msgpack_deleted->layout().type.num_fields(), 2ull);
 }
 
 TEST(replace step) {
@@ -74,8 +76,8 @@ TEST(replace step) {
   auto replaced = replace_step.apply(vast::table_slice{slice});
   REQUIRE(replaced);
   REQUIRE_NOERROR(replaced);
-  REQUIRE_EQUAL(replaced->layout().fields.size(), 3ull);
-  CHECK_EQUAL(replaced->layout().fields[0].name, "uid");
+  REQUIRE_EQUAL(replaced->layout().type.num_fields(), 3ull);
+  CHECK_EQUAL(replaced->layout().type.field(0).name, "uid");
   CHECK_EQUAL((*replaced).at(0, 0), vast::data_view{"xxx"sv});
 }
 
@@ -84,8 +86,8 @@ TEST(anonymize step) {
   vast::hash_step hash_step("uid", "hashed_uid");
   auto anonymized = hash_step.apply(vast::table_slice{slice});
   REQUIRE_NOERROR(anonymized);
-  REQUIRE_EQUAL(anonymized->layout().fields.size(), 4ull);
-  REQUIRE_EQUAL(anonymized->layout().fields.back().name, "hashed_uid");
+  REQUIRE_EQUAL(anonymized->layout().type.num_fields(), 4ull);
+  REQUIRE_EQUAL(anonymized->layout().type.field(3).name, "hashed_uid");
   // TODO: Not sure how we can check that the data was correctly hashed.
 }
 
@@ -96,20 +98,21 @@ TEST(transform with multiple steps) {
   auto slice = make_transforms_testdata();
   auto transformed = transform.apply(std::move(slice));
   REQUIRE_NOERROR(transformed);
-  REQUIRE_EQUAL(transformed->layout().fields.size(), 2ull);
-  CHECK_EQUAL(transformed->layout().fields[0].name, "uid");
+  REQUIRE_EQUAL(transformed->layout().type.num_fields(), 2ull);
+  CHECK_EQUAL(transformed->layout().type.field(0).name, "uid");
   CHECK_EQUAL((*transformed).at(0, 0), vast::data_view{"xxx"sv});
-  auto wrong_layout = vast::legacy_record_type{testdata_layout}.name("foo");
+  auto wrong_layout = vast::record_type{testdata_layout};
+  wrong_layout.assign_metadata(vast::type{"foo", vast::none_type{}});
   auto builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, wrong_layout);
   REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));
   auto wrong_slice = builder->finish();
   auto not_transformed = transform.apply(std::move(wrong_slice));
   REQUIRE_NOERROR(not_transformed);
-  REQUIRE_EQUAL(not_transformed->layout().fields.size(), 3ull);
-  CHECK_EQUAL(not_transformed->layout().fields[0].name, "uid");
-  CHECK_EQUAL(not_transformed->layout().fields[1].name, "desc");
-  CHECK_EQUAL(not_transformed->layout().fields[2].name, "index");
+  REQUIRE_EQUAL(not_transformed->layout().type.num_fields(), 3ull);
+  CHECK_EQUAL(not_transformed->layout().type.field(0).name, "uid");
+  CHECK_EQUAL(not_transformed->layout().type.field(0).name, "desc");
+  CHECK_EQUAL(not_transformed->layout().type.field(0).name, "index");
   CHECK_EQUAL((*not_transformed).at(0, 0), vast::data_view{"asdf"sv});
   CHECK_EQUAL((*not_transformed).at(0, 1), vast::data_view{"jklo"sv});
   CHECK_EQUAL((*not_transformed).at(0, 2), vast::data{vast::integer{23}});
@@ -127,9 +130,9 @@ TEST(transformation engine - single matching transform) {
   auto slice = make_transforms_testdata();
   auto transformed = engine.apply(std::move(slice));
   // We expect that only one transformation has been applied.
-  REQUIRE_EQUAL(transformed->layout().fields.size(), 2ull);
-  CHECK_EQUAL(transformed->layout().fields[0].name, "desc");
-  CHECK_EQUAL(transformed->layout().fields[1].name, "index");
+  REQUIRE_EQUAL(transformed->layout().type.num_fields(), 2ull);
+  CHECK_EQUAL(transformed->layout().type.field(0).name, "desc");
+  CHECK_EQUAL(transformed->layout().type.field(0).name, "index");
 }
 
 TEST(transformation engine - multiple matching transforms) {
@@ -144,7 +147,7 @@ TEST(transformation engine - multiple matching transforms) {
   auto slice = make_transforms_testdata();
   auto transformed = engine.apply(std::move(slice));
   REQUIRE_NOERROR(transformed);
-  CHECK_EQUAL(transformed->layout().fields.size(), 1ull);
+  CHECK_EQUAL(transformed->layout().type.num_fields(), 1ull);
 }
 
 FIXTURE_SCOPE_END()

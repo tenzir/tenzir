@@ -17,11 +17,10 @@
 namespace vast {
 
 void factory_traits<synopsis>::initialize() {
-  factory<synopsis>::add(legacy_address_type{},
-                         make_address_synopsis<xxhash64>);
-  factory<synopsis>::add<legacy_bool_type, bool_synopsis>();
-  factory<synopsis>::add(legacy_string_type{}, make_string_synopsis<xxhash64>);
-  factory<synopsis>::add<legacy_time_type, time_synopsis>();
+  factory<synopsis>::add(address_type{}, make_address_synopsis<xxhash64>);
+  factory<synopsis>::add<bool_type, bool_synopsis>();
+  factory<synopsis>::add(string_type{}, make_string_synopsis<xxhash64>);
+  factory<synopsis>::add<time_type, time_synopsis>();
 }
 
 } // namespace vast

@@ -82,7 +82,7 @@ TEST(archiving and querying) {
   auto result = query(make_ids({{24, 56}, {1076, 1096}}));
   REQUIRE_EQUAL(rows(result), (52u - 24) + (1092 - 1076));
   // ID 20 is the first entry in the dns.log; then add 4 more.
-  auto id_type = unbox(zeek_conn_log[0].layout().at(offset{1})).type;
+  auto id_type = zeek_conn_log[0].layout().type.field(offset{1}).type;
   CHECK_EQUAL(result[0].at(3, 1, id_type), make_data_view("JoNZFZc3lJb"));
   // ID 1052 is the first entry in the http.log; then add 4 more.
   auto last = result[result.size() - 1];

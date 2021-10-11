@@ -18,7 +18,6 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
 #include "vast/policy/merge_lists.hpp"
@@ -172,12 +171,6 @@ public:
     return !is_equal(lhs, rhs);
   }
 
-  /// Returns the "basic type" of this datum. For basic data objects this is
-  /// just the regular type, for complex objects it is a default-constructed
-  /// type object without extended information. (eg. just "a record" with no
-  /// further information about the record fields)
-  vast::legacy_type basic_type() const;
-
   /// @cond PRIVATE
 
   [[nodiscard]] variant& get_data() {
@@ -212,55 +205,6 @@ namespace vast {
 
 // -- helpers -----------------------------------------------------------------
 
-/// Maps a concrete data type to a corresponding @ref type.
-/// @relates data type
-template <class>
-struct data_traits {
-  using type = std::false_type;
-};
-
-// NOLINTNEXTLINE
-#define VAST_DATA_TRAIT(name)                                                  \
-  template <>                                                                  \
-  struct data_traits<name> {                                                   \
-    using type = legacy_##name##_type;                                         \
-  }
-
-VAST_DATA_TRAIT(bool);
-VAST_DATA_TRAIT(integer);
-VAST_DATA_TRAIT(count);
-VAST_DATA_TRAIT(real);
-VAST_DATA_TRAIT(duration);
-VAST_DATA_TRAIT(time);
-VAST_DATA_TRAIT(pattern);
-VAST_DATA_TRAIT(address);
-VAST_DATA_TRAIT(subnet);
-VAST_DATA_TRAIT(enumeration);
-VAST_DATA_TRAIT(list);
-VAST_DATA_TRAIT(map);
-VAST_DATA_TRAIT(record);
-
-#undef VAST_DATA_TRAIT
-
-template <>
-struct data_traits<caf::none_t> {
-  using type = legacy_none_type;
-};
-
-template <>
-struct data_traits<std::string> {
-  using type = legacy_string_type;
-};
-
-template <>
-struct data_traits<data> {
-  using type = vast::legacy_type;
-};
-
-/// @relates data type
-template <class T>
-using data_to_type = typename data_traits<T>::type;
-
 /// @returns `true` if *x is a *basic* data.
 /// @relates data
 bool is_basic(const data& x);
@@ -280,15 +224,6 @@ bool is_container(const data& x);
 /// @returns The maximum nesting depth any field in the record `r`.
 size_t depth(const record& r);
 
-/// Creates a record instance for a given record type. The number of data
-/// instances must correspond to the number of fields in the flattened version
-/// of the record.
-/// @param rt The record type
-/// @param xs The record fields.
-/// @returns A record according to the fields as defined in *rt*.
-std::optional<record>
-make_record(const legacy_record_type& rt, std::vector<data>&& xs);
-
 /// Flattens a record recursively.
 record flatten(const record& r);
 
@@ -298,8 +233,8 @@ record flatten(const record& r);
 /// @param rt The record type according to which *r* should be flattened.
 /// @returns The flattened record if the nested structure of *r* is a valid
 ///          subset of *rt*.
-std::optional<record> flatten(const record& r, const legacy_record_type& rt);
-std::optional<data> flatten(const data& x, const legacy_type& t);
+std::optional<record> flatten(const record& r, const record_type& rt);
+std::optional<data> flatten(const data& x, const type& t);
 
 /// Merges one record into another such that the source overwrites potential
 /// keys in the destination.

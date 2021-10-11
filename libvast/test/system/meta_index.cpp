@@ -58,10 +58,7 @@ struct generator {
 
   explicit generator(std::string name, size_t first_event_id)
     : offset(first_event_id) {
-    layout
-      = legacy_record_type{{"timestamp", legacy_time_type{}.name("timestamp")},
-                           {"content", legacy_string_type{}}}
-          .name(std::move(name));
+    layout.assign_metadata(type{name, none_type{}});
   }
 
   table_slice operator()(size_t num) {
@@ -78,7 +75,10 @@ struct generator {
     return slice;
   }
 
-  legacy_record_type layout;
+  record_type layout = record_type{
+    {"timestamp", type{"timestamp", time_type{}}},
+    {"content", string_type{}},
+  };
 };
 
 // A closed interval of time.
@@ -91,10 +91,9 @@ struct mock_partition {
   mock_partition(std::string name, uuid uid, size_t num) : id(std::move(uid)) {
     generator g{std::move(name), num_events_per_parttion * num};
     slice = g(num_events_per_parttion);
-    range.from
-      = get_timestamp(slice.at(0, 0, legacy_time_type{}.name("timestamp")));
+    range.from = get_timestamp(slice.at(0, 0, type{"timestamp", time_type{}}));
     range.to = get_timestamp(
-      slice.at(slice.rows() - 1, 0, legacy_time_type{}.name("timestamp")));
+      slice.at(slice.rows() - 1, 0, type{"timestamp", time_type{}}));
   }
 
   uuid id;
@@ -167,8 +166,12 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             unbox(to<expression>(q)), vast::ids{});
     run();
     rp.receive(
-      [&](std::vector<uuid> candidates) { result = std::move(candidates); },
-      [=](caf::error e) { FAIL(render(e)); });
+      [&](std::vector<uuid> candidates) {
+        result = std::move(candidates);
+      },
+      [=](caf::error e) {
+        FAIL(render(e));
+      });
     return result;
   }
 
@@ -182,8 +185,12 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             unbox(to<expression>(expr)), vast::ids{});
     run();
     rp.receive(
-      [&](std::vector<uuid> candidates) { result = std::move(candidates); },
-      [=](caf::error e) { FAIL(render(e)); });
+      [&](std::vector<uuid> candidates) {
+        result = std::move(candidates);
+      },
+      [=](caf::error e) {
+        FAIL(render(e));
+      });
     std::sort(result.begin(), result.end());
     return result;
   }
@@ -196,7 +203,10 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
              std::shared_ptr<partition_synopsis> ps) {
     auto rp = self->request(meta_idx, caf::infinite, atom::merge_v, id, ps);
     run();
-    rp.receive([=](atom::ok) {}, [=](const caf::error& e) { FAIL(render(e)); });
+    rp.receive([=](atom::ok) {},
+               [=](const caf::error& e) {
+                 FAIL(render(e));
+               });
   }
 
   auto timestamp_type_query(std::string_view hhmmss_from,
@@ -254,7 +264,8 @@ TEST(meta index with bool synopsis) {
   // FIXME: do we have to replace the meta index from the fixture with a new
   // one for this test?
   auto meta_idx = self->spawn(meta_index);
-  auto layout = legacy_record_type{{"x", legacy_bool_type{}}}.name("test");
+  auto layout
+    = caf::get<record_type>(type{"test", record_type{{"x", bool_type{}}}});
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   REQUIRE(builder);
@@ -280,7 +291,9 @@ TEST(meta index with bool synopsis) {
   auto id3 = uuid::random();
   merge(meta_idx, id3, std::make_shared<partition_synopsis>(std::move(ps3)));
   MESSAGE("test custom synopsis");
-  auto lookup_ = [&](std::string_view expr) { return lookup(meta_idx, expr); };
+  auto lookup_ = [&](std::string_view expr) {
+    return lookup(meta_idx, expr);
+  };
   auto expected1 = std::vector<uuid>{id1};
   auto expected2 = std::vector<uuid>{id2};
   // Check by field name field.

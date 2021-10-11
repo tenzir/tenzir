@@ -43,46 +43,6 @@ TEST(maps) {
   CHECK(!ports.emplace("http", 8080u).second);
 }
 
-TEST(flatten) {
-  // clang-format off
-  auto rt = legacy_record_type{
-    {"a", legacy_string_type{}},
-    {"b", legacy_record_type{
-      {"c", legacy_integer_type{}},
-      {"d", legacy_list_type{legacy_integer_type{}}}
-    }},
-    {"e", legacy_record_type{
-      {"f", legacy_address_type{}},
-      {"g", legacy_count_type{}}
-    }},
-    {"h", legacy_bool_type{}}
-  };
-  auto xs = record{
-    {"a", "foo"},
-    {"b", record{
-      {"c", integer{-42}},
-      {"d", list{integer{1}, integer{2}, integer{3}}}
-    }},
-    {"e", record{
-      {"f", caf::none},
-      {"g", caf::none},
-    }},
-    {"h", true}
-  };
-  // clang-format on
-  auto values = std::vector<data>{
-    "foo",     integer{-42}, list{integer{1}, integer{2}, integer{3}},
-    caf::none, caf::none,    true};
-  auto r = vast::test::unbox(make_record(rt, std::vector<data>(values)));
-  REQUIRE_EQUAL(r, xs);
-  MESSAGE("flatten");
-  auto fr = flatten(r);
-  auto ftr = vast::test::unbox(flatten(r, rt));
-  CHECK_EQUAL(fr, ftr);
-  REQUIRE_EQUAL(fr.size(), values.size());
-  CHECK_EQUAL(fr["b.c"], integer{-42});
-}
-
 TEST(merge) {
   // clang-format off
   const auto xs = record{

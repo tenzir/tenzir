@@ -18,7 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
 
@@ -87,7 +87,7 @@ public:
   /// Constructs an arithmetic index.
   /// @param t An arithmetic type.
   /// @param opts Runtime context for index parameterization.
-  explicit arithmetic_index(vast::legacy_type t, caf::settings opts = {})
+  explicit arithmetic_index(vast::type t, caf::settings opts = {})
     : value_index{std::move(t), std::move(opts)} {
     if constexpr (std::is_same_v<coder_type, multi_level_range_coder>) {
       auto i = options().find("base");

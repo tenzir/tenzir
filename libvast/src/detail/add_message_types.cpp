@@ -18,7 +18,6 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/die.hpp"
 #include "vast/expression.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/operator.hpp"
 #include "vast/pattern.hpp"
 #include "vast/plugin.hpp"

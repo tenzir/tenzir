@@ -13,7 +13,6 @@
 #include "vast/aliases.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/query.hpp"
@@ -22,6 +21,7 @@
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice_column.hpp"
+#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
 
@@ -73,9 +73,6 @@ struct active_partition_state {
     /// Opaque blob that is passed to the store backend on reading.
     chunk_ptr store_header = {};
 
-    /// The combined type of all columns of this partition
-    vast::legacy_record_type combined_layout = {};
-
     /// Maps type names to IDs. Used the answer #type queries.
     std::unordered_map<std::string, ids> type_ids = {};
 
@@ -101,7 +98,7 @@ struct active_partition_state {
 
   void notify_flush_listeners();
 
-  const vast::legacy_record_type& combined_layout() const;
+  std::optional<vast::record_type> combined_layout() const;
 
   const std::unordered_map<std::string, ids>& type_ids() const;
 
@@ -170,7 +167,7 @@ struct active_partition_state {
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder,
-     const active_partition_state::serialization_data& x);
+     const active_partition_state& state);
 
 // -- behavior -----------------------------------------------------------------
 

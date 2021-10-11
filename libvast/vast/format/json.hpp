@@ -213,8 +213,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     bptr = builder(*layout);
     if (bptr == nullptr)
       return caf::make_error(ec::parse_error, "unable to get a builder");
-    auto extracted
-      = extract(get_object_result.value(), type::from_legacy_type(*layout));
+    auto extracted = extract(get_object_result.value(), *layout);
     if (!caf::holds_alternative<list>(extracted)) {
       if (num_invalid_lines_ == 0)
         VAST_WARN("{} failed to extract value(s) in line {}",

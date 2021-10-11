@@ -14,13 +14,14 @@
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/string/literal.hpp"
 #include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
 namespace vast {
 
 /// Parses a type into an intermediate representation.
 /// References to user defined types are mapped to `legacy_none_type` and
 /// need to be resolved later.
-struct type_parser : parser_base<type_parser> {
+struct legacy_type_parser : parser_base<legacy_type_parser> {
   using attribute = legacy_type;
 
   // Comments until the end of line.
@@ -36,12 +37,12 @@ struct type_parser : parser_base<type_parser> {
 
 template <>
 struct parser_registry<legacy_type> {
-  using type = type_parser;
+  using type = legacy_type_parser;
 };
 
 namespace parsers {
 
-inline const auto type = type_parser{};
+inline const auto legacy_type = legacy_type_parser{};
 
 } // namespace parsers
 } // namespace vast

@@ -114,6 +114,8 @@ public:
   /// Move-assigns a type.
   legacy_type& operator=(legacy_type&&) noexcept = default;
 
+  ~legacy_type() noexcept = default;
+
   /// Assigns a type from another instance
   template <class T>
     requires(detail::contains_type_v<legacy_concrete_types, T>)
@@ -594,6 +596,11 @@ struct legacy_map_type final : legacy_recursive_type<legacy_map_type> {
 /// @relates legacy_record_type
 struct record_field : detail::totally_ordered<record_field> {
   record_field() noexcept = default;
+  ~record_field() noexcept = default;
+  record_field(const record_field&) = default;
+  record_field(record_field&&) noexcept = default;
+  record_field& operator=(const record_field&) = default;
+  record_field& operator=(record_field&&) noexcept = default;
 
   explicit record_field(std::string name) noexcept : name{std::move(name)} {
     // nop
@@ -646,6 +653,11 @@ struct legacy_record_type final : legacy_recursive_type<legacy_record_type> {
   };
 
   legacy_record_type() = default;
+  legacy_record_type(const legacy_record_type&) = default;
+  legacy_record_type(legacy_record_type&&) = default;
+  legacy_record_type& operator=(const legacy_record_type&) = default;
+  legacy_record_type& operator=(legacy_record_type&&) = default;
+  ~legacy_record_type() noexcept = default;
 
   /// Constructs a record type from a list of fields.
   explicit legacy_record_type(std::vector<record_field> xs) noexcept;
@@ -871,14 +883,6 @@ bool congruent(const legacy_type& x, const data& y);
 
 /// @relates type data
 bool congruent(const data& x, const legacy_type& y);
-
-/// Replaces all types in `xs` that are congruent to a type in `with`.
-/// @param xs Pointers to the types that should get replaced.
-/// @param with Schema containing potentially congruent types.
-/// @returns an error if two types with the same name are not congruent.
-/// @relates type
-caf::error replace_if_congruent(std::initializer_list<legacy_type*> xs,
-                                const schema& with);
 
 /// Checks whether the types of two nodes in a predicate are compatible with
 /// each other, i.e., whether operator evaluation for the given types is

@@ -42,7 +42,7 @@ bool operator<(const field_extractor& x, const field_extractor& y) {
 
 // -- type_extractor -----------------------------------------------------------
 
-type_extractor::type_extractor(vast::legacy_type t) : type{std::move(t)} {
+type_extractor::type_extractor(vast::type t) : type{std::move(t)} {
 }
 
 bool operator==(const type_extractor& x, const type_extractor& y) {
@@ -55,7 +55,7 @@ bool operator<(const type_extractor& x, const type_extractor& y) {
 
 // -- data_extractor -----------------------------------------------------------
 
-data_extractor::data_extractor(vast::legacy_type t, vast::offset o)
+data_extractor::data_extractor(vast::type t, vast::offset o)
   : type{std::move(t)}, offset{std::move(o)} {
 }
 
@@ -194,7 +194,7 @@ caf::expected<expression> normalize_and_validate(expression expr) {
   return expr;
 }
 
-caf::expected<expression> tailor(expression expr, const legacy_type& t) {
+caf::expected<expression> tailor(expression expr, const type& t) {
   if (caf::holds_alternative<caf::none_t>(expr))
     return caf::make_error(
       ec::unspecified,
@@ -241,7 +241,7 @@ const expression* at(const expression& expr, const offset& o) {
 namespace {
 
 bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
-                  const expression& expr, const legacy_type& t, offset& o) {
+                  const expression& expr, const type& t, offset& o) {
   auto v = detail::overload{
     [&](const auto& xs) { // conjunction or disjunction
       o.emplace_back(0);
@@ -285,7 +285,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
 } // namespace
 
 std::vector<std::pair<offset, predicate>>
-resolve(const expression& expr, const legacy_type& t) {
+resolve(const expression& expr, const type& t) {
   std::vector<std::pair<offset, predicate>> result;
   offset o{0};
   if (resolve_impl(result, expr, t, o))

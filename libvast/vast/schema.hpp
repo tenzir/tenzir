@@ -12,22 +12,16 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/string/string.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/stable_set.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
 #include <caf/expected.hpp>
 
 #include <filesystem>
 #include <string>
 #include <vector>
-
-namespace caf {
-class serializer;
-class deserializer;
-} // namespace caf
 
 namespace vast {
 
@@ -36,7 +30,7 @@ class data;
 /// A sequence of types.
 class schema : detail::equality_comparable<schema> {
 public:
-  using value_type = legacy_type;
+  using value_type = type;
   using const_iterator = std::vector<value_type>::const_iterator;
   using iterator = std::vector<value_type>::iterator;
 
@@ -75,8 +69,13 @@ public:
   [[nodiscard]] bool empty() const;
   void clear();
 
-  friend void serialize(caf::serializer& sink, const schema& sch);
-  friend void serialize(caf::deserializer& source, schema& sch);
+  // -- CAF -------------------------------------------------------------------
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, schema& x) ->
+    typename Inspector::result_type {
+    return f(caf::meta::type_name("vast.schema"), x.types_);
+  }
 
 private:
   std::vector<value_type> types_;
@@ -118,8 +117,6 @@ caf::expected<vast::schema> load_schema(const caf::actor_system_config& cfg);
 
 } // namespace vast
 
-#include "vast/concept/printable/vast/schema.hpp"
-
 namespace fmt {
 
 template <>
@@ -132,7 +129,13 @@ struct formatter<vast::schema> {
   template <class FormatContext>
   auto format(const vast::schema& value, FormatContext& ctx) {
     auto out = ctx.out();
-    vast::print(out, value);
+    for (const auto& t : value) {
+      // FIXME: Instead of doing this, make it possible to always print a type's
+      // definition.
+      auto pruned = t;
+      pruned.prune_metadata();
+      out = format_to(out, "type {} = {}\n", t.name(), pruned);
+    }
     return out;
   }
 };

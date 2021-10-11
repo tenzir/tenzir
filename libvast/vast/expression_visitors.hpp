@@ -106,7 +106,7 @@ struct type_resolver {
   // TODO: This function still assumes that we can pass types that are no
   // records. This is an overly generic assumption and only adds complexity at
   // this point. We should condense the scope of this visitor to record types.
-  explicit type_resolver(const legacy_type& t);
+  explicit type_resolver(const type& t);
 
   caf::expected<expression> operator()(caf::none_t);
   caf::expected<expression> operator()(const conjunction& c);
@@ -130,14 +130,13 @@ struct type_resolver {
   template <class Function>
   [[nodiscard]] expression resolve_extractor(Function f, const data& x) const {
     std::vector<expression> connective;
-    auto make_predicate = [&](legacy_type t, offset off) {
+    auto make_predicate = [&](type t, offset off) {
       return predicate{data_extractor{std::move(t), off}, op_, x};
     };
-    if (auto r = caf::get_if<legacy_record_type>(&type_)) {
-      for (auto& i : legacy_record_type::each{*r})
-        if (f(i.trace.back()->type))
-          connective.emplace_back(
-            make_predicate(i.trace.back()->type, i.offset));
+    if (const auto* r = caf::get_if<record_type>(&type_)) {
+      for (const auto& [field, index] : r->leaves())
+        if (f(field.type))
+          connective.emplace_back(make_predicate(field.type, index));
     } else if (f(type_)) {
       connective.emplace_back(make_predicate(type_, offset{}));
     }
@@ -155,7 +154,7 @@ struct type_resolver {
   }
 
   relational_operator op_;
-  const legacy_type& type_;
+  const type& type_;
 };
 
 /// Checks whether a [resolved](@ref type_extractor) expression matches a given
@@ -163,7 +162,7 @@ struct type_resolver {
 /// viable set of predicates for a type. For conjunctions, all operands must
 /// match. For disjunctions, at least one operand must match.
 struct matcher {
-  matcher(const legacy_type& t);
+  matcher(const type& t);
 
   bool operator()(caf::none_t);
   bool operator()(const conjunction&);
@@ -183,7 +182,7 @@ struct matcher {
     return false;
   }
 
-  const legacy_type& type_;
+  const type& type_;
   relational_operator op_;
 };
 

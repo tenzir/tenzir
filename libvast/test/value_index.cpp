@@ -42,7 +42,7 @@ struct fixture : fixtures::events {
 FIXTURE_SCOPE(value_index_tests, fixture)
 
 TEST(bool) {
-  auto idx = factory<value_index>::make(legacy_bool_type{}, caf::settings{});
+  auto idx = factory<value_index>::make(bool_type{}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(true)));
@@ -73,7 +73,7 @@ TEST(bool) {
 TEST(integer) {
   caf::settings opts;
   opts["base"] = "uniform(10, 20)";
-  auto idx = factory<value_index>::make(legacy_integer_type{}, std::move(opts));
+  auto idx = factory<value_index>::make(integer_type{}, std::move(opts));
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(integer{-7})));

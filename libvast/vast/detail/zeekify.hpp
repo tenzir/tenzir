@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
 namespace vast::detail {
 
@@ -18,6 +18,6 @@ namespace vast::detail {
 /// the `timestamp` alias instead of just `time`.
 /// @param layout The layout to tune.
 /// @returns The lifted version of *layout* with stronger types.
-legacy_record_type zeekify(legacy_record_type layout);
+record_type zeekify(record_type layout);
 
 } // namespace vast::detail

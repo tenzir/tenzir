@@ -64,8 +64,9 @@ record type_registry_state::status(status_verbosity v) const {
       }
       // Sorted list of all keys.
       auto keys = std::vector<std::string>(data.size());
-      std::transform(data.begin(), data.end(), keys.begin(),
-                     [](const auto& x) { return x.first; });
+      std::transform(data.begin(), data.end(), keys.begin(), [](const auto& x) {
+        return x.first;
+      });
       std::sort(keys.begin(), keys.end());
       result["types"] = to_list(keys);
       // The usual per-component status.
@@ -82,7 +83,14 @@ std::filesystem::path type_registry_state::filename() const {
 caf::error type_registry_state::save_to_disk() const {
   std::vector<char> buffer;
   caf::binary_serializer sink{self->system(), buffer};
-  if (auto error = sink(data))
+  std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
+  for (const auto& [k, vs] : data) {
+    auto entry = detail::stable_set<legacy_type>{};
+    for (const auto& v : vs)
+      entry.emplace(v.to_legacy_type());
+    intermediate.emplace(k, entry);
+  }
+  if (auto error = sink(intermediate))
     return error;
   return io::save(filename(), as_bytes(buffer));
 }
@@ -110,15 +118,22 @@ caf::error type_registry_state::load_from_disk() {
     if (!buffer)
       return buffer.error();
     caf::binary_deserializer source{self->system(), *buffer};
-    if (auto error = source(data))
+    std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
+    if (auto error = source(intermediate))
       return error;
+    for (const auto& [k, vs] : intermediate) {
+      auto entry = type_set{};
+      for (const auto& v : vs)
+        entry.emplace(type::from_legacy_type(v));
+      data.emplace(k, entry);
+    }
     VAST_DEBUG("{} loaded state from disk", *self);
   }
   return caf::none;
 }
 
-void type_registry_state::insert(vast::legacy_type layout) {
-  auto& old_layouts = data[layout.name()];
+void type_registry_state::insert(vast::type layout) {
+  auto& old_layouts = data[std::string{layout.name()}];
   // Insert into the existing bucket.
   auto [hint, success] = old_layouts.insert(std::move(layout));
   if (success) {
@@ -191,7 +206,9 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
         [=](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, table_slice x) { self->state.insert(x.layout()); });
+        [=](caf::unit_t&, const table_slice& x) {
+          self->state.insert(x.layout().type);
+        });
       return result.inbound_slot();
     },
     [self](atom::get) {

@@ -48,7 +48,9 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     // noexcept-specified. When adding a new encoding, add it here as well.
     std::is_nothrow_invocable<Visitor>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>>) {
+    std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v1&>,
+    std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>,
+    std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v1&>>) {
   if (!x)
     return std::invoke(std::forward<Visitor>(visitor));
   switch (x->table_slice_type()) {
@@ -60,6 +62,12 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     case fbs::table_slice::TableSlice::msgpack_v0:
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_msgpack_v0());
+    case fbs::table_slice::TableSlice::arrow_v1:
+      return std::invoke(std::forward<Visitor>(visitor),
+                         *x->table_slice_as_arrow_v1());
+    case fbs::table_slice::TableSlice::msgpack_v1:
+      return std::invoke(std::forward<Visitor>(visitor),
+                         *x->table_slice_as_msgpack_v1());
   }
   // GCC-8 fails to recognize that this can never be reached, so we just call a
   // [[noreturn]] function.
@@ -109,6 +117,11 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
   } else if constexpr (std::is_same_v<slice_type,
                                       fbs::table_slice::msgpack::v0>) {
     return std::forward<State>(state).msgpack_v0;
+  } else if constexpr (std::is_same_v<slice_type, fbs::table_slice::arrow::v1>) {
+    return std::forward<State>(state).arrow_v1;
+  } else if constexpr (std::is_same_v<slice_type,
+                                      fbs::table_slice::msgpack::v1>) {
+    return std::forward<State>(state).msgpack_v1;
   } else {
     static_assert(detail::always_false_v<slice_type>, "cannot access table "
                                                       "slice state");
@@ -131,31 +144,8 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
       },
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
-        auto state
-          = std::make_unique<std::decay_t<decltype(*state_ptr)>>(encoded);
-        state_ptr = state.get();
-        chunk_->add_deletion_step([state = std::move(state)]() noexcept {
-          --num_instances_;
-        });
-      },
-    };
-    visit(f, as_flatbuffer(chunk_));
-  }
-}
-
-table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
-                         legacy_record_type layout) noexcept
-  : chunk_{verified_or_none(std::move(chunk), verify)} {
-  if (chunk_ && chunk_->unique()) {
-    ++num_instances_;
-    auto f = detail::overload{
-      []() noexcept {
-        die("invalid table slice encoding");
-      },
-      [&](const auto& encoded) noexcept {
-        auto& state_ptr = state(encoded, state_);
         auto state = std::make_unique<std::decay_t<decltype(*state_ptr)>>(
-          encoded, std::move(layout));
+          encoded, chunk_);
         state_ptr = state.get();
         chunk_->add_deletion_step([state = std::move(state)]() noexcept {
           --num_instances_;
@@ -182,7 +172,7 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                         const legacy_record_type& layout) {
+                         const record_type& layout) {
   *this = arrow_table_slice_builder::create(record_batch, layout);
 }
 
@@ -222,14 +212,14 @@ bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
     return true;
   // Check whether the slices have different sizes or layouts.
   if (lhs.rows() != rhs.rows() || lhs.columns() != rhs.columns()
-      || lhs.layout() != rhs.layout())
+      || lhs.layout().type != rhs.layout().type)
     return false;
   // Check whether the slices contain different data.
-  auto flat_layout = flatten(lhs.layout());
+  auto flat_layout = flatten(lhs.layout().type);
   for (size_t row = 0; row < lhs.rows(); ++row)
-    for (size_t col = 0; col < flat_layout.fields.size(); ++col)
-      if (lhs.at(row, col, flat_layout.fields[col].type)
-          != rhs.at(row, col, flat_layout.fields[col].type))
+    for (size_t col = 0; col < flat_layout.num_fields(); ++col)
+      if (lhs.at(row, col, flat_layout.field(col).type)
+          != rhs.at(row, col, flat_layout.field(col).type))
         return false;
   return true;
 }
@@ -252,17 +242,21 @@ enum table_slice_encoding table_slice::encoding() const noexcept {
   return visit(f, as_flatbuffer(chunk_));
 }
 
-const legacy_record_type& table_slice::layout() const noexcept {
+struct table_slice::layout table_slice::layout() const noexcept {
+  using result_type = struct layout;
   auto f = detail::overload{
-    []() noexcept {
-      static const auto empty_layout = legacy_record_type{};
-      return &empty_layout;
+    []() noexcept -> result_type {
+      die("unable to access layout of invalid table slice");
     },
-    [&](const auto& encoded) noexcept {
-      return &state(encoded, state_)->layout();
+    [&](const auto& encoded) noexcept -> result_type {
+      const auto t = type{state(encoded, state_)->layout()};
+      return {
+        t.name(),
+        caf::get<record_type>(t),
+      };
     },
   };
-  return *visit(f, as_flatbuffer(chunk_));
+  return visit(f, as_flatbuffer(chunk_));
 }
 
 table_slice::size_type table_slice::rows() const noexcept {
@@ -333,11 +327,8 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
-data_view
-table_slice::at(table_slice::size_type row, table_slice::size_type column,
-                const legacy_type& t) const {
-  if (const auto* alias = caf::get_if<legacy_alias_type>(&t))
-    return at(row, column, alias->value_type);
+data_view table_slice::at(table_slice::size_type row,
+                          table_slice::size_type column, const type& t) const {
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
   auto f = detail::overload{
@@ -406,15 +397,15 @@ rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
           && state(encoded, slice.state_)->is_latest_version)
         return std::move(slice);
       auto builder = factory<table_slice_builder>::make(builder_id(encoding),
-                                                        slice.layout());
+                                                        slice.layout().type);
       if (!builder)
         return table_slice{};
-      auto flat_layout = flatten(slice.layout());
+      auto flat_layout = flatten(slice.layout().type);
       for (table_slice::size_type row = 0; row < slice.rows(); ++row)
         for (table_slice::size_type column = 0;
-             column < flat_layout.fields.size(); ++column)
+             column < flat_layout.num_fields(); ++column)
           if (!builder->add(
-                slice.at(row, column, flat_layout.fields[column].type)))
+                slice.at(row, column, flat_layout.field(column).type)))
             return {};
       auto result = builder->finish();
       result.offset(slice.offset());
@@ -440,24 +431,18 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
-    []() noexcept
-    -> std::pair<table_slice_encoding, std::span<const std::byte>> {
+    []() noexcept -> table_slice_encoding {
       die("cannot select from an invalid table slice");
     },
     [&](const auto& encoded) noexcept {
-      return std::pair{
-        builder_id(state(encoded, slice.state_)->encoding),
-        std::span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
-                  encoded.layout()->size()}};
+      return builder_id(state(encoded, slice.state_)->encoding);
     },
   };
-  table_slice_encoding implementation_id;
-  std::span<const std::byte> serialized_layout = {};
-  std::tie(implementation_id, serialized_layout)
+  table_slice_encoding implementation_id
     = visit(f, as_flatbuffer(slice.chunk_));
   // Start slicing and dicing.
-  auto builder
-    = factory<table_slice_builder>::make(implementation_id, slice.layout());
+  auto builder = factory<table_slice_builder>::make(implementation_id,
+                                                    slice.layout().type);
   if (builder == nullptr) {
     VAST_ERROR("{} failed to get a table slice builder for {}", __func__,
                implementation_id);
@@ -467,7 +452,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   auto push_slice = [&] {
     if (builder->rows() == 0)
       return;
-    auto new_slice = builder->finish(serialized_layout);
+    auto new_slice = builder->finish();
     if (new_slice.encoding() == table_slice_encoding::none) {
       VAST_WARN("{} got an empty slice", __func__);
       return;
@@ -475,7 +460,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     new_slice.offset(last_offset);
     result.emplace_back(std::move(new_slice));
   };
-  auto flat_layout = flatten(slice.layout());
+  auto flat_layout = flatten(slice.layout().type);
   auto last_id = last_offset - 1;
   for (auto id : select(intersection)) {
     // Finish last slice when hitting non-consecutive IDs.
@@ -489,8 +474,8 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     VAST_ASSERT(id >= slice.offset());
     auto row = id - slice.offset();
     VAST_ASSERT(row < slice.rows());
-    for (size_t column = 0; column < flat_layout.fields.size(); ++column) {
-      auto cell_value = slice.at(row, column, flat_layout.fields[column].type);
+    for (size_t column = 0; column < flat_layout.num_fields(); ++column) {
+      auto cell_value = slice.at(row, column, flat_layout.field(column).type);
       if (!builder->add(cell_value)) {
         VAST_ERROR("{} failed to add data at column {} in row {} to the "
                    "builder: {}",
@@ -607,11 +592,11 @@ struct row_evaluator {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for
     // every row; this should happen upfront.
-    auto&& layout = slice_.layout();
+    const auto layout = slice_.layout();
     // TODO: type and field queries don't produce false positives in the
     // partition. Is there actually any reason to do the check here?
     if (e.kind == meta_extractor::type)
-      return evaluate(layout.name(), op_, d);
+      return evaluate(std::string{layout.name}, op_, d);
     if (e.kind == meta_extractor::field) {
       const auto* s = caf::get_if<std::string>(&d);
       if (!s) {
@@ -621,9 +606,18 @@ struct row_evaluator {
       auto result = false;
       auto neg = is_negated(op_);
       // auto abs_op = neg ? negate(op_) : op_;
-      for (const auto& field : legacy_record_type::each{layout}) {
-        if (const auto fqn = layout.name() + "." + field.key();
-            fqn.ends_with(*s)) {
+      // FIXME: The #field meta extractor does not match the dot separator
+      // correctly on prefix matching, and should be rewritten to use
+      // resolve_suffix instead.
+      for (const auto& [field, index] : layout.type.leaves()) {
+        const auto fqn
+          = fmt::format("{}.{}", layout.name, layout.type.key(index));
+        // This is essentially s->ends_with(fqn), except that it also checks the
+        // dot separators correctly (modulo quoting).
+        const auto [fqn_mismatch, s_mismatch]
+          = std::mismatch(fqn.rbegin(), fqn.rend(), s->rbegin(), s->rend());
+        if (s_mismatch == s->rend()
+            && (fqn_mismatch == fqn.rend() || *fqn_mismatch == '.')) {
           result = true;
           break;
         }
@@ -642,10 +636,8 @@ struct row_evaluator {
   }
 
   bool operator()(const data_extractor& e, const data& d) {
-    auto col = slice_.layout().flat_index_at(e.offset);
-    VAST_ASSERT(col);
-    auto lhs = to_canonical(type::from_legacy_type(e.type),
-                            slice_.at(row_, *col, e.type));
+    auto col = slice_.layout().type.flat_index(e.offset);
+    auto lhs = to_canonical(e.type, slice_.at(row_, col, e.type));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
   }
@@ -689,33 +681,28 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
     // Tailor the expression to the type; this is required for using the
     // row_evaluator, which expects field and type extractors to be resolved
     // already.
-    auto tailored_expr = tailor(expr, slice.layout());
+    auto tailored_expr = tailor(expr, slice.layout().type);
     if (!tailored_expr)
       return {};
     expr = std::move(*tailored_expr);
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
-    []() noexcept
-    -> std::pair<table_slice_encoding, std::span<const std::byte>> {
+    []() noexcept -> table_slice_encoding {
       die("cannot filter an invalid table slice");
     },
     [&](const auto& encoded) noexcept {
-      return std::pair{
-        builder_id(state(encoded, slice.state_)->encoding),
-        std::span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
-                  encoded.layout()->size()}};
+      return builder_id(state(encoded, slice.state_)->encoding);
     },
   };
-  table_slice_encoding implementation_id;
-  std::span<const std::byte> serialized_layout = {};
-  std::tie(implementation_id, serialized_layout)
+  table_slice_encoding implementation_id
     = visit(f, as_flatbuffer(slice.chunk_));
+  ;
   // Start slicing and dicing.
-  auto builder
-    = factory<table_slice_builder>::make(implementation_id, slice.layout());
+  auto builder = factory<table_slice_builder>::make(implementation_id,
+                                                    slice.layout().type);
   VAST_ASSERT(builder);
-  auto flat_layout = flatten(slice.layout());
+  auto flat_layout = flatten(slice.layout().type);
   auto check = [&](row_evaluator eval) {
     // If no expression was provided, we rely on the provided hints only.
     if (!has_expr)
@@ -730,9 +717,8 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
     auto row = id - offset;
     VAST_ASSERT(row < slice.rows());
     if (check(row_evaluator{slice, row})) {
-      for (size_t column = 0; column < flat_layout.fields.size(); ++column) {
-        auto cell_value
-          = slice.at(row, column, flat_layout.fields[column].type);
+      for (size_t column = 0; column < flat_layout.num_fields(); ++column) {
+        auto cell_value = slice.at(row, column, flat_layout.field(column).type);
         auto ret = builder->add(cell_value);
         VAST_ASSERT(ret);
       }
@@ -742,7 +728,7 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
     return std::nullopt;
   if (builder->rows() == slice.rows())
     return slice;
-  auto new_slice = builder->finish(serialized_layout);
+  auto new_slice = builder->finish();
   VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
   return new_slice;
 }
@@ -773,23 +759,6 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
     if (rank(slice_ids) == selection_rank)
       return slice.rows();
   }
-  // Get the desired encoding, and the already serialized layout.
-  auto f = detail::overload{
-    []() noexcept
-    -> std::pair<table_slice_encoding, std::span<const std::byte>> {
-      die("cannot filter an invalid table slice");
-    },
-    [&](const auto& encoded) noexcept {
-      return std::pair{
-        builder_id(state(encoded, slice.state_)->encoding),
-        std::span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
-                  encoded.layout()->size()}};
-    },
-  };
-  table_slice_encoding implementation_id;
-  std::span<const std::byte> serialized_layout = {};
-  std::tie(implementation_id, serialized_layout)
-    = visit(f, as_flatbuffer(slice.chunk_));
   auto check = [&](row_evaluator eval) -> uint64_t {
     if (expr == expression{})
       return 1u;

@@ -10,7 +10,6 @@
 
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/type.hpp"
 
 #include <algorithm>

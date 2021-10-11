@@ -10,6 +10,7 @@
 
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -25,18 +26,20 @@ replace_step::replace_step(const std::string& fieldname,
 }
 
 caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
-  const auto& layout = slice.layout();
-  auto offset = layout.resolve(field_);
+  const auto& layout = slice.layout().type;
+  auto offset = layout.resolve_prefix(field_);
   if (!offset)
     return std::move(slice);
   // We just got the offset from `layout`, so we can safely dereference.
-  auto column_index = *layout.flat_index_at(*offset);
-  auto new_layout
-    = layout.assign(*offset, record_field{field_, value_.basic_type()});
-  if (!new_layout)
-    return std::move(new_layout.error());
+  auto column_index = layout.flat_index(*offset);
+  const auto inferred_type = type::infer(value_);
+  auto field = layout.field(*offset);
+  auto adjusted_layout = layout.transform(
+    {{*offset,
+      record_type::assign({{std::string{field.name}, inferred_type}})}});
+  VAST_ASSERT(adjusted_layout); // cannot fail
   auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), *new_layout);
+    = factory<table_slice_builder>::make(slice.encoding(), *adjusted_layout);
   for (size_t i = 0; i < slice.rows(); ++i) {
     for (size_t j = 0; j < slice.columns(); ++j) {
       const auto& item = slice.at(i, j);
@@ -50,38 +53,47 @@ caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-[[nodiscard]] std::pair<vast::legacy_record_type,
-                        std::shared_ptr<arrow::RecordBatch>>
-replace_step::operator()(vast::legacy_record_type layout,
+caf::expected<std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
+replace_step::operator()(record_type layout,
                          std::shared_ptr<arrow::RecordBatch> batch) const {
-  auto offset = layout.resolve(field_);
+  auto offset = layout.resolve_prefix(field_);
   if (!offset)
     return std::make_pair(std::move(layout), std::move(batch));
-  auto flat_index = layout.flat_index_at(*offset);
-  VAST_ASSERT(flat_index); // We just got this from `layout`.
-  auto column_index = static_cast<int>(*flat_index);
+  auto column_index = layout.flat_index(*offset);
   // Compute the hash values.
+  // TODO: Consider making this strongly typed so we don't need to infer the
+  // type at this point.
+  const auto inferred_type = type::infer(value_);
   auto cb = arrow_table_slice_builder::column_builder::make(
-    value_.basic_type(), arrow::default_memory_pool());
+    inferred_type, arrow::default_memory_pool());
   for (int i = 0; i < batch->num_rows(); ++i) {
     cb->add(make_view(value_));
   }
   auto values_column = cb->finish();
-  auto removed = batch->RemoveColumn(column_index);
+  auto removed = batch->RemoveColumn(detail::narrow_cast<int>(column_index));
   if (!removed.ok())
-    return {};
+    return caf::make_error(
+      ec::unspecified, fmt::format("failed to remove field from record "
+                                   "batch schema at index {}: {}",
+                                   column_index, removed.status().ToString()));
   batch = removed.ValueOrDie();
   // SetColumn inserts *before* the element at the given index.
-  auto added = batch->AddColumn(column_index, field_, values_column);
+  auto added = batch->AddColumn(detail::narrow_cast<int>(column_index), field_,
+                                values_column);
   if (!added.ok())
-    return {};
+    return caf::make_error(ec::unspecified,
+                           fmt::format("failed to add field {} to record batch "
+                                       "schema at index {}: {}",
+                                       field_, column_index,
+                                       added.status().ToString()));
   batch = added.ValueOrDie();
   // Adjust layout.
-  auto new_layout
-    = layout.assign(*offset, record_field{field_, value_.basic_type()});
-  if (!new_layout)
-    return {};
-  return std::make_pair(std::move(*new_layout), std::move(batch));
+  auto field = layout.field(*offset);
+  auto adjusted_layout = layout.transform(
+    {{*offset,
+      record_type::assign({{std::string{field.name}, inferred_type}})}});
+  VAST_ASSERT(adjusted_layout); // replacing a field cannot fail.
+  return std::make_pair(std::move(*adjusted_layout), std::move(batch));
 }
 
 class replace_step_plugin final : public virtual transform_plugin {

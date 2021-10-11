@@ -224,6 +224,85 @@ stateful_type_base::table(enum transparent transparent) const noexcept {
   return *resolve_transparent(fbs::GetType(repr.data()), transparent);
 }
 
+void stateful_type_base::assign_metadata(
+  const stateful_type_base& other) noexcept {
+  const auto& rhs = static_cast<const type&>(other);
+  const auto name = rhs.name();
+  const auto tags = rhs.tags();
+  if (name.empty() && tags.empty())
+    return;
+  const auto nested_bytes = as_bytes(table_);
+  const auto reserved_size = [&]() noexcept {
+    // The total length is made up from the following terms:
+    // - 52 bytes FlatBuffers table framing
+    // - Nested type FlatBuffers table size
+    // - All contained string lengths, rounded up to four each
+    // Note that this cannot account for tags, since they are stored in hash
+    // map which makes calculating the space requirements non-trivial.
+    size_t size = 52;
+    size += nested_bytes.size();
+    size += reserved_string_size(name);
+    return size;
+  };
+  auto builder = tags.empty() ? flatbuffers::FlatBufferBuilder{reserved_size()}
+                              : flatbuffers::FlatBufferBuilder{};
+  const auto nested_type_offset = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(nested_bytes.data()), nested_bytes.size());
+  const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
+  const auto tags_offset
+    = [&]() noexcept -> flatbuffers::Offset<flatbuffers::Vector<
+                       flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>> {
+    if (tags.empty())
+      return 0;
+    auto tags_offsets
+      = std::vector<flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>{};
+    tags_offsets.reserve(tags.size());
+    for (const auto& tag : tags) {
+      const auto key_offset = builder.CreateString(tag.key);
+      const auto value_offset
+        = tag.value.empty() ? 0 : builder.CreateString(tag.value);
+      tags_offsets.emplace_back(fbs::type::tagged_type::tag::Createv0(
+        builder, key_offset, value_offset));
+    }
+    return builder.CreateVectorOfSortedTables(&tags_offsets);
+  }();
+  const auto tagged_type_offset = fbs::type::tagged_type::Createv0(
+    builder, nested_type_offset, name_offset, tags_offset);
+  const auto type_offset = fbs::CreateType(
+    builder, fbs::type::Type::tagged_type_v0, tagged_type_offset.Union());
+  builder.Finish(type_offset);
+  auto result = builder.Release();
+  table_ = chunk::make(std::move(result));
+}
+
+void stateful_type_base::prune_metadata() noexcept {
+  while (true) {
+    const auto& view = table(transparent::no);
+    switch (view.type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
+        return;
+      case fbs::type::Type::tagged_type_v0:
+        table_
+          = table_->slice(as_bytes(*view.type_as_tagged_type_v0()->type()));
+        break;
+    }
+  }
+}
+
 // -- type --------------------------------------------------------------------
 
 type::type() noexcept = default;
@@ -361,13 +440,10 @@ type type::infer(const data& value) noexcept {
     [](const list& list) noexcept -> type {
       // List types cannot be inferred from empty lists.
       if (list.empty())
-        return none_type{};
-      // List types cannot be inferred when the value type cannot be inferred.
-      auto value_type = infer(*list.begin());
-      if (!value_type)
-        return none_type{};
+        return list_type{none_type{}};
       // Technically lists can contain heterogenous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
+      auto value_type = infer(*list.begin());
       VAST_ASSERT(std::all_of(list.begin() + 1, list.end(),
                               [&](const auto& elem) noexcept {
                                 return value_type.type_index()
@@ -379,15 +455,11 @@ type type::infer(const data& value) noexcept {
     [](const map& map) noexcept -> type {
       // Map types cannot be inferred from empty maps.
       if (map.empty())
-        return none_type{};
-      // Map types cannot be inferred when the key or value type cannot be
-      // inferred.
-      auto key_type = infer(map.begin()->first);
-      auto value_type = infer(map.begin()->second);
-      if (!key_type || !value_type)
-        return none_type{};
+        return map_type{none_type{}, none_type{}};
       // Technically maps can contain heterogenous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
+      auto key_type = infer(map.begin()->first);
+      auto value_type = infer(map.begin()->second);
       VAST_ASSERT(std::all_of(map.begin() + 1, map.end(),
                               [&](const auto& elem) noexcept {
                                 return key_type.type_index()
@@ -404,13 +476,11 @@ type type::infer(const data& value) noexcept {
         return none_type{};
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(record.size());
-      for (const auto& field : record) {
-        // Record types cannot be inferred when any field cannot be inferred.
-        if (auto type = infer(field.second))
-          fields.push_back({field.first, std::move(type)});
-        else
-          return none_type{};
-      }
+      for (const auto& field : record)
+        fields.push_back({
+          field.first,
+          infer(field.second),
+        });
       return record_type{fields};
     },
   };
@@ -622,8 +692,48 @@ data type::construct() const noexcept {
   return caf::visit(f, *this);
 }
 
+void inspect(caf::detail::stringification_inspector& f, type& x) {
+  static_assert(
+    std::is_same_v<caf::detail::stringification_inspector::result_type, void>);
+  static_assert(caf::detail::stringification_inspector::reads_state);
+  auto str = fmt::to_string(x);
+  f(str);
+}
+
 std::string_view type::name() const& noexcept {
   return type_name(&table(transparent::no));
+}
+
+std::vector<std::string_view> type::names() const& noexcept {
+  auto result = std::vector<std::string_view>{};
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
+        return result;
+      case fbs::type::Type::tagged_type_v0:
+        const auto* tagged_type = root->type_as_tagged_type_v0();
+        if (const auto* name = tagged_type->name())
+          result.push_back(name->string_view());
+        root = tagged_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
 }
 
 std::optional<std::string_view> type::tag(const char* key) const& noexcept {
@@ -828,6 +938,20 @@ bool congruent(const type& x, const data& y) noexcept {
       for (size_t i = 0; i < xf.size(); ++i)
         if (!congruent(xf[i].type, y[i]))
           return false;
+      return true;
+    },
+    [](const record_type& x, const record& y) noexcept {
+      const auto xf = x.fields();
+      if (xf.size() != y.size())
+        return false;
+      for (const auto& field : xf) {
+        if (auto it = y.find(field.name); it != y.end()) {
+          if (!congruent(field.type, it->second))
+            return false;
+        } else {
+          return false;
+        }
+      }
       return true;
     },
   };
@@ -1035,12 +1159,11 @@ bool type_check(const type& x, const data& y) noexcept {
 caf::error
 replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
   for (auto* x : xs)
-    if (const auto* lt = with.find(x->name())) {
-      auto t = type::from_legacy_type(*lt);
-      if (!congruent(*x, t))
+    if (const auto* t = with.find(x->name())) {
+      if (!congruent(*x, *t))
         return caf::make_error(ec::type_clash,
                                fmt::format("incongruent type {}", x->name()));
-      *x = std::move(t);
+      *x = *t;
     }
   return caf::none;
 }
@@ -1108,7 +1231,6 @@ std::span<const std::byte> as_bytes(const integer_type&) noexcept {
                                       integer_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-
     VAST_ASSERT(result.size() == reserved_size);
     return result;
   }();
@@ -1543,12 +1665,19 @@ std::span<const std::byte> as_bytes(const record_type& x) noexcept {
 }
 
 record record_type::construct() const noexcept {
-  auto fs = fields();
-  auto result = record{};
-  result.reserve(fs.size());
-  for (const auto& field : fs)
-    result.emplace(field.name, field.type.construct());
-  return result;
+  // A record is a stable map under the hood, and we construct its underlying
+  // vector directly here as that is slightly more efficient, and as an added
+  // benefit(?) allows for creating records with duplicate fields, so if this
+  // record type happens to break its contract we can still create a fitting
+  // record from it. Known occurences of such record types are:
+  // - test.full blueprint record type for the test generator.
+  // - Combined layout of the partition v0.
+  // We should consider getting rid of vector_map::make_unsafe in the future.
+  auto result = record::vector_type{};
+  result.reserve(num_fields());
+  for (const auto& field : fields())
+    result.emplace_back(field.name, field.type.construct());
+  return record::make_unsafe(std::move(result));
 }
 
 record_type::iterable record_type::fields() const noexcept {
@@ -1571,7 +1700,7 @@ size_t record_type::num_leaves() const noexcept {
 
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
   for (const auto& [_, offset] : leaves())
-    if (--flat_index == 0)
+    if (flat_index-- == 0)
       return offset;
   die("index out of bounds");
 }
@@ -1609,6 +1738,9 @@ record_type::resolve_prefix(std::string_view key) const noexcept {
     }
     return {};
   };
+  // TODO: We currently strip the type name when resolving prefixes, which is
+  // not something we should be doing, because this is an operation on record
+  // types which only know their surrounding type's name because of a workaround.
   if (const auto prefix
       = fmt::format("{}.", type_name(&table(transparent::no)));
       key.starts_with(prefix))
@@ -1653,7 +1785,8 @@ std::string record_type::key(const offset& index) const noexcept {
     VAST_ASSERT(field);
     fmt::format_to(std::back_inserter(result), "{}.",
                    field->name()->string_view());
-    record = field->type_nested_root()->type_as_record_type_v0();
+    record
+      = resolve_transparent(field->type_nested_root())->type_as_record_type_v0();
     VAST_ASSERT(record);
   }
   VAST_ASSERT(index.back() < record->fields()->size());
@@ -1670,6 +1803,7 @@ record_type::field_view record_type::field(size_t index) const noexcept {
   VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
   const auto* field = record->fields()->Get(index);
   VAST_ASSERT(field);
+  VAST_ASSERT(field->type());
   return {
     field->name()->string_view(),
     type{table_->slice(as_bytes(*field->type()))},
@@ -1682,10 +1816,9 @@ record_type::field_view record_type::field(const offset& index) const noexcept {
   VAST_ASSERT(record);
   for (size_t i = 0; i < index.size() - 1; ++i) {
     VAST_ASSERT(index[i] < record->fields()->size(), "index out of bounds");
-    record = record->fields()
-               ->Get(index[i])
-               ->type_nested_root()
-               ->type_as_record_type_v0();
+    record
+      = resolve_transparent(record->fields()->Get(index[i])->type_nested_root())
+          ->type_as_record_type_v0();
     VAST_ASSERT(record, "offset contains excess indices");
   }
   VAST_ASSERT(index.back() < record->fields()->size(), "index out of bounds");
@@ -1821,6 +1954,8 @@ std::optional<record_type> record_type::transform(
       return std::nullopt;
     type result{};
     construct_record_type(result, new_fields.rbegin(), new_fields.rend());
+    // Re-assign the name of any surrounding tagged type.
+    result.assign_metadata(self);
     return caf::get<record_type>(result);
   };
   // Sort transformations by offsets in reverse order.
@@ -1947,7 +2082,9 @@ record_type flatten(const record_type& type) noexcept {
       type.key(offset),
       field.type,
     });
-  return record_type{fields};
+  auto result = record_type{fields};
+  result.assign_metadata(type);
+  return result;
 }
 
 /// Access a field by index.
@@ -1991,7 +2128,14 @@ record_type::field_view record_type::iterable::get() const noexcept {
 
 record_type::leaf_iterable::leaf_iterable(record_type type) noexcept
   : index_(), type_{std::move(type)} {
-  index_.push_back(0);
+  // Set the index of the first leaf.
+  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  VAST_ASSERT(record);
+  do {
+    index_.push_back(0);
+    record = resolve_transparent(record->fields()->begin()->type_nested_root())
+               ->type_as_record_type_v0();
+  } while (record != nullptr);
 }
 
 void record_type::leaf_iterable::next() noexcept {
@@ -2075,7 +2219,9 @@ record_type::leaf_iterable::get() const noexcept {
   VAST_ASSERT(index_.back() < record->fields()->size());
   const auto* field = record->fields()->Get(index_.back());
   VAST_ASSERT(field);
-  VAST_ASSERT(!field->type_nested_root()->type_as_record_type_v0());
+  VAST_ASSERT(
+    !resolve_transparent(field->type_nested_root())->type_as_record_type_v0(),
+    "leaf field must not be a record type");
   return {
     {
       field->name()->string_view(),

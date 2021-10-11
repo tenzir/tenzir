@@ -36,18 +36,18 @@ void partition_synopsis::shrink() {
 
 void partition_synopsis::add(const table_slice& slice,
                              const caf::settings& synopsis_options) {
-  auto make_synopsis = [&](const legacy_type& t) -> synopsis_ptr {
-    return has_skip_attribute(t) ? nullptr
-                                 : factory<synopsis>::make(t, synopsis_options);
+  auto make_synopsis = [&](const type& t) -> synopsis_ptr {
+    if (t.tag("skip"))
+      return nullptr;
+    return factory<synopsis>::make(t, synopsis_options);
   };
-  auto& layout = slice.layout();
-  auto each = legacy_record_type::each(layout);
+  const auto& layout = slice.layout();
+  auto each = layout.type.leaves();
   auto field_it = each.begin();
   for (size_t col = 0; col < slice.columns(); ++col, ++field_it) {
-    auto& type = field_it->type();
     auto add_column = [&](const synopsis_ptr& syn) {
       for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col, type);
+        auto view = slice.at(row, col, field_it->first.type);
         // TODO: It would probably make sense to allow `nil` in the
         // synopsis API, so we can treat queries like `x == nil` just
         // like normal queries.
@@ -55,13 +55,15 @@ void partition_synopsis::add(const table_slice& slice,
           syn->add(std::move(view));
       }
     };
-    auto key = qualified_record_field{layout.name(), *field_it};
-    if (!caf::holds_alternative<legacy_string_type>(type)) {
+    auto key = qualified_record_field{layout.type, field_it->second};
+    if (!caf::holds_alternative<string_type>(field_it->first.type)) {
       // Locate the relevant synopsis.
       auto it = field_synopses_.find(key);
       if (it == field_synopses_.end()) {
         // Attempt to create a synopsis if we have never seen this key before.
-        it = field_synopses_.emplace(std::move(key), make_synopsis(type)).first;
+        it = field_synopses_
+               .emplace(std::move(key), make_synopsis(field_it->first.type))
+               .first;
       }
       // If there exists a synopsis for a field, add the entire column.
       if (auto& syn = it->second)
@@ -71,10 +73,13 @@ void partition_synopsis::add(const table_slice& slice,
       // NOTE: if this is made configurable or removed, the pruning step from
       // the meta index lookup must be adjusted acordingly.
       field_synopses_[key] = nullptr;
-      auto cleaned_type = vast::legacy_type{field_it->type()}.attributes({});
+      auto cleaned_type = field_it->first.type;
+      cleaned_type.prune_metadata();
       auto tt = type_synopses_.find(cleaned_type);
       if (tt == type_synopses_.end())
-        tt = type_synopses_.emplace(cleaned_type, make_synopsis(type)).first;
+        tt = type_synopses_
+               .emplace(cleaned_type, make_synopsis(field_it->first.type))
+               .first;
       if (auto& syn = tt->second)
         add_column(syn);
     }
@@ -83,7 +88,7 @@ void partition_synopsis::add(const table_slice& slice,
 
 size_t partition_synopsis::memusage() const {
   size_t result = 0;
-  for (auto& [field, synopsis] : field_synopses_)
+  for (const auto& [field, synopsis] : field_synopses_)
     result += synopsis ? synopsis->memusage() : 0ull;
   return result;
 }
@@ -91,15 +96,14 @@ size_t partition_synopsis::memusage() const {
 caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   std::vector<flatbuffers::Offset<fbs::synopsis::v0>> synopses;
-  for (auto& [fqf, synopsis] : x.field_synopses_) {
+  for (const auto& [fqf, synopsis] : x.field_synopses_) {
     auto maybe_synopsis = pack(builder, synopsis, fqf);
     if (!maybe_synopsis)
       return maybe_synopsis.error();
     synopses.push_back(*maybe_synopsis);
   }
-  for (auto& [type, synopsis] : x.type_synopses_) {
-    qualified_record_field fqf;
-    fqf.type = type;
+  for (const auto& [type, synopsis] : x.type_synopses_) {
+    auto fqf = qualified_record_field{"", "", type};
     auto maybe_synopsis = pack(builder, synopsis, fqf);
     if (!maybe_synopsis)
       return maybe_synopsis.error();
@@ -119,7 +123,7 @@ namespace {
 caf::error unpack_(
   const flatbuffers::Vector<flatbuffers::Offset<fbs::synopsis::v0>>& synopses,
   partition_synopsis& ps) {
-  for (auto synopsis : synopses) {
+  for (const auto* synopsis : synopses) {
     if (!synopsis)
       return caf::make_error(ec::format_error, "synopsis is null");
     qualified_record_field qf;
@@ -129,10 +133,10 @@ caf::error unpack_(
     synopsis_ptr ptr;
     if (auto error = unpack(*synopsis, ptr))
       return error;
-    if (!qf.field_name.empty())
-      ps.field_synopses_[qf] = std::move(ptr);
+    if (qf.is_standalone_type())
+      ps.type_synopses_[qf.type()] = std::move(ptr);
     else
-      ps.type_synopses_[qf.type] = std::move(ptr);
+      ps.field_synopses_[qf] = std::move(ptr);
   }
   return caf::none;
 }

@@ -134,16 +134,16 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
   VAST_ASSERT(start < size());
   if (length > size() - start)
     length = size() - start;
-  this->ref();
-  return make(view_.subspan(start, length), [this]() noexcept {
-    this->deref();
-  });
+  return slice(view_.subspan(start, length));
 }
 
 chunk_ptr chunk::slice(view_type view) const {
   VAST_ASSERT(view.begin() >= begin());
   VAST_ASSERT(view.end() <= end());
-  return slice(view.begin() - begin(), view.size());
+  this->ref();
+  return make(view, [this]() noexcept {
+    this->deref();
+  });
 }
 
 // -- concepts -----------------------------------------------------------------

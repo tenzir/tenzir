@@ -12,7 +12,7 @@
 #include <vast/fbs/partition.hpp>
 #include <vast/fbs/utils.hpp>
 #include <vast/index/hash_index.hpp>
-#include <vast/qualified_record_field.hpp>
+#include <vast/legacy_qualified_record_field.hpp>
 #include <vast/value_index_factory.hpp>
 
 #include <iostream>
@@ -110,9 +110,9 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
   if (auto partition_synopsis = partition->partition_synopsis()) {
     indented_scope _(indent);
     for (auto column_synopsis : *partition_synopsis->synopses()) {
-      vast::qualified_record_field fqf;
+      vast::legacy_qualified_record_field fqf;
       auto name = vast::fbs::deserialize_bytes(
-        column_synopsis->qualified_record_field(), fqf);
+        column_synopsis->legacy_qualified_record_field(), fqf);
       std::cout << indent << fqf.fqn() << ": ";
       if (auto opaque = column_synopsis->opaque_synopsis()) {
         std::cout << "opaque_synopsis";

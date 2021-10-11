@@ -11,6 +11,7 @@
 #include "vast/msgpack_builder.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/type.hpp"
 
 #include <flatbuffers/flatbuffers.h>
 
@@ -39,8 +40,7 @@ public:
   /// @param initial_buffer_size The buffer size the builder starts with.
   /// @returns A table_slice_builder instance.
   static table_slice_builder_ptr
-  make(legacy_record_type layout, size_t initial_buffer_size
-                                  = default_buffer_size);
+  make(record_type layout, size_t initial_buffer_size = default_buffer_size);
 
   /// Destroys a MessagePack table slice builder.
   ~msgpack_table_slice_builder() override;
@@ -48,12 +48,8 @@ public:
   // -- properties -------------------------------------------------------------
 
   /// Constructs a MessagePack-encoded table slice.
-  /// @param serialized_layout An optional buffer that contains the
-  /// CAF-serialized layout; TODO: remove this when switching the type system to
-  /// be FlatBuffers-based.
   /// @returns A table slice from the accumulated calls to add.
-  [[nodiscard]] table_slice
-  finish(std::span<const std::byte> serialized_layout = {}) override;
+  [[nodiscard]] table_slice finish() override;
 
   /// @returns The number of columns in the table slice.
   size_t columns() const noexcept;
@@ -82,7 +78,7 @@ private:
   /// Constructs a MessagePack table slice builder.
   /// @param layout The layout of the slice.
   /// @param initial_buffer_size The buffer size the builder starts with.
-  explicit msgpack_table_slice_builder(legacy_record_type layout,
+  explicit msgpack_table_slice_builder(record_type layout,
                                        size_t initial_buffer_size
                                        = default_buffer_size);
 
@@ -94,12 +90,8 @@ private:
   /// Current column index.
   size_t column_ = 0;
 
-  /// A flattened representation of the layout.
-  legacy_record_type flat_layout_;
-
-  /// The serialized layout can be cached because every builder instance only
-  /// produces slices of a single layout.
-  mutable std::vector<char> serialized_layout_cache_;
+  /// The flattened layout.
+  record_type flat_layout_;
 
   /// Offsets from the beginning of the buffer to each row.
   std::vector<uint64_t> offset_table_ = {};

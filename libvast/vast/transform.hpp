@@ -33,9 +33,8 @@ public:
   [[nodiscard]] const std::string& name() const;
 
 private:
-  [[nodiscard]] std::pair<vast::legacy_record_type,
-                          std::shared_ptr<arrow::RecordBatch>>
-  apply(vast::legacy_record_type layout,
+  [[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
+  apply(vast::record_type layout,
         std::shared_ptr<arrow::RecordBatch> batch) const;
 
   // Grant access to the transformation engine so it can check the fast path.

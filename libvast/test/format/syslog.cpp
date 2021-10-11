@@ -37,7 +37,7 @@ TEST(syslog reader) {
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   REQUIRE_EQUAL(produced, 5u);
   auto&& layout = slice.layout();
-  CHECK_EQUAL(layout.name(), "syslog.rfc5424");
+  CHECK_EQUAL(layout.name, "syslog.rfc5424");
 }
 
 TEST(syslog header parser) {

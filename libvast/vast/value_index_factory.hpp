@@ -20,12 +20,12 @@ namespace vast {
 template <>
 struct factory_traits<value_index> {
   using result_type = value_index_ptr;
-  using key_type = legacy_type;
-  using signature = result_type (*)(legacy_type, caf::settings);
+  using key_type = uint8_t;
+  using signature = result_type (*)(type, caf::settings);
 
   static void initialize();
 
-  static key_type key(const legacy_type& x);
+  static key_type key(const type& x);
 };
 
 } // namespace vast

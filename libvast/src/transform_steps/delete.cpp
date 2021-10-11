@@ -21,23 +21,21 @@ delete_step::delete_step(const std::string& fieldname) : fieldname_(fieldname) {
 }
 
 caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
-  const auto& layout = slice.layout();
-  auto offset = layout.resolve(fieldname_);
+  const auto& layout = slice.layout().type;
+  auto offset = layout.resolve_prefix(fieldname_);
   if (!offset)
     return std::move(slice);
-  auto flat_index = layout.flat_index_at(*offset);
-  // We just got the offset from `layout`, so it should be valid.
-  VAST_ASSERT(flat_index);
-  auto new_layout = remove_field(layout, *offset);
-  if (!new_layout)
+  auto columnn_index = layout.flat_index(*offset);
+  auto adjusted_layout = layout.transform({{*offset, record_type::drop()}});
+  if (!adjusted_layout)
     return caf::make_error(ec::unspecified, "failed to remove field from "
                                             "layout");
   auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), *new_layout);
+    = factory<table_slice_builder>::make(slice.encoding(), *adjusted_layout);
   builder_ptr->reserve(slice.rows());
   for (size_t i = 0; i < slice.rows(); ++i) {
     for (size_t j = 0; j < slice.columns(); ++j) {
-      if (j == flat_index)
+      if (j == columnn_index)
         continue;
       if (!builder_ptr->add(slice.at(i, j)))
         return caf::make_error(ec::unspecified, "delete step: unknown error "
@@ -47,23 +45,25 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-std::pair<vast::legacy_record_type, std::shared_ptr<arrow::RecordBatch>>
-delete_step::operator()(vast::legacy_record_type layout,
+caf::expected<std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
+delete_step::operator()(record_type layout,
                         std::shared_ptr<arrow::RecordBatch> batch) const {
-  auto offset = layout.resolve(fieldname_);
+  auto offset = layout.resolve_prefix(fieldname_);
   if (!offset)
     return std::make_pair(std::move(layout), std::move(batch));
-  auto flat_index = layout.flat_index_at(*offset);
-  VAST_ASSERT(flat_index); // We just got this from `layout`.
-  auto column_index = static_cast<int>(*flat_index);
-  auto maybe_transformed = batch->RemoveColumn(column_index);
-  if (!maybe_transformed.ok())
-    return {};
-  auto transformed = maybe_transformed.ValueOrDie();
-  auto new_layout = remove_field(layout, *offset);
-  if (!new_layout)
-    return {};
-  return std::make_pair(std::move(*new_layout), std::move(transformed));
+  auto column_index = layout.flat_index(*offset);
+  auto removed = batch->RemoveColumn(column_index);
+  if (!removed.ok())
+    return caf::make_error(
+      ec::unspecified, fmt::format("failed to remove field from record "
+                                   "batch schema at index {}: {}",
+                                   column_index, removed.status().ToString()));
+  auto adjusted_layout = layout.transform({{*offset, record_type::drop()}});
+  if (!adjusted_layout)
+    return caf::make_error(ec::unspecified, "failed to remove field from "
+                                            "layout");
+  return std::make_pair(std::move(*adjusted_layout),
+                        std::move(removed.ValueOrDie()));
 }
 
 class delete_step_plugin final : public virtual transform_plugin {

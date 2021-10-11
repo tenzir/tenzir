@@ -122,6 +122,7 @@ data extract_impl(const ::simdjson::dom::array& values, const type& type) {
   };
   return caf::visit(f, type);
 }
+
 data extract_impl(int64_t value, const type& type) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
@@ -258,10 +259,11 @@ data extract_impl(const ::simdjson::dom::object& value, const type& type) {
             // find flattened representations, or add nil values as required for
             // the given field's type.
             auto recurse = [&]<concrete_type T>(const T& type) -> data {
-              if constexpr (std::is_same_v<T, record_type>)
+              if constexpr (std::is_same_v<T, record_type>) {
                 return self(self, type, next_prefix);
-              else
+              } else {
                 return caf::none;
+              }
             };
             result.emplace_back(caf::visit(recurse, field.type));
           } else {

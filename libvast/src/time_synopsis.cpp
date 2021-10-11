@@ -10,13 +10,13 @@
 
 namespace vast {
 
-time_synopsis::time_synopsis(vast::legacy_type x)
+time_synopsis::time_synopsis(vast::type x)
   : min_max_synopsis<time>{std::move(x), time::max(), time::min()} {
   // nop
 }
 
 time_synopsis::time_synopsis(time start, time end)
-  : min_max_synopsis<time>{legacy_time_type{}, start, end} {
+  : min_max_synopsis<time>{time_type{}, start, end} {
 }
 
 bool time_synopsis::equals(const synopsis& other) const noexcept {

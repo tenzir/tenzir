@@ -12,12 +12,12 @@
 
 #include "vast/aliases.hpp"
 #include "vast/atoms.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -46,8 +46,7 @@ namespace vast {
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
 make_random_table_slices(size_t num_slices, size_t slice_size,
-                         legacy_record_type layout, id offset = 0,
-                         size_t seed = 0);
+                         record_type layout, id offset = 0, size_t seed = 0);
 
 /// Converts the table slice into a 2-D matrix in row-major order such that
 /// each row represents an event.
@@ -122,7 +121,61 @@ private:
 
   void test_append_column_to_index();
 
-  vast::legacy_record_type layout;
+  vast::record_type layout = caf::get<record_type>(type{
+    "test",
+    record_type{
+      {"a", bool_type{}},
+      {"b", integer_type{}},
+      {"c", count_type{}},
+      {"d", real_type{}},
+      {"e", duration_type{}},
+      {"f", time_type{}},
+      {"g", string_type{}},
+      {"h", pattern_type{}},
+      {"i", address_type{}},
+      {"j", subnet_type{}},
+      {"l", list_type{count_type{}}},
+      {"n", map_type{count_type{}, bool_type{}}},
+      // test_lists
+      {"va", list_type{bool_type{}}},
+      {"vb", list_type{integer_type{}}},
+      {"vc", list_type{count_type{}}},
+      {"vd", list_type{real_type{}}},
+      {"ve", list_type{duration_type{}}},
+      {"vf", list_type{time_type{}}},
+      {"vg", list_type{string_type{}}},
+      {"vh", list_type{pattern_type{}}},
+      {"vi", list_type{address_type{}}},
+      {"vj", list_type{subnet_type{}}},
+      // {"vl", list_type{list_type{count_type{}}}},
+      // {"vm", list_type{map_type{count_type{}, bool_type{}}}},
+      // -- test_maps_left
+      {"maa", map_type{bool_type{}, bool_type{}}},
+      {"mba", map_type{integer_type{}, bool_type{}}},
+      {"mca", map_type{count_type{}, bool_type{}}},
+      {"mda", map_type{real_type{}, bool_type{}}},
+      {"mea", map_type{duration_type{}, bool_type{}}},
+      {"mfa", map_type{time_type{}, bool_type{}}},
+      {"mga", map_type{string_type{}, bool_type{}}},
+      {"mha", map_type{pattern_type{}, bool_type{}}},
+      {"mia", map_type{address_type{}, bool_type{}}},
+      {"mja", map_type{subnet_type{}, bool_type{}}},
+      // {"mla", map_type{list_type{count_type{}}, bool_type{}}},
+      // {"mna", map_type{map_type{count_type{}, bool_type{}}, bool_type{}}},
+      // -- test_maps_right (intentionally no maa)
+      {"mab", map_type{bool_type{}, integer_type{}}},
+      {"mac", map_type{bool_type{}, count_type{}}},
+      {"mad", map_type{bool_type{}, real_type{}}},
+      {"mae", map_type{bool_type{}, duration_type{}}},
+      {"maf", map_type{bool_type{}, time_type{}}},
+      {"mag", map_type{bool_type{}, string_type{}}},
+      {"mah", map_type{bool_type{}, pattern_type{}}},
+      {"mai", map_type{bool_type{}, address_type{}}},
+      {"maj", map_type{bool_type{}, subnet_type{}}},
+      // {"mal", map_type{bool_type{}, list_type{count_type{}}}},
+      // {"man", map_type{bool_type{}, map_type{count_type{}, bool_type{}}}},
+      {"aas", {"aas", {"as", string_type{}}}},
+    }});
 
   vast::table_slice_builder_ptr builder;
 

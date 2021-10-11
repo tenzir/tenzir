@@ -37,6 +37,14 @@ class Schema;
 
 } // namespace arrow
 
+// -- flatbuffers -------------------------------------------------------------
+
+namespace flatbuffers {
+
+class FlatBufferBuilder;
+
+} // namespace flatbuffers
+
 // -- caf ----------------------------------------------------------------------
 
 // These are missing from <caf/fwd.hpp>.
@@ -48,6 +56,12 @@ class inbound_stream_slot;
 
 template <class, class...>
 class outbound_stream_slot;
+
+namespace detail {
+
+class stringification_inspector;
+
+} // namespace detail
 
 } // namespace caf
 
@@ -205,12 +219,14 @@ namespace table_slice {
 namespace msgpack {
 
 struct v0;
+struct v1;
 
 } // namespace msgpack
 
 namespace arrow {
 
 struct v0;
+struct v1;
 
 } // namespace arrow
 
@@ -219,6 +235,9 @@ struct v0;
 } // namespace fbs
 
 namespace detail {
+
+template <class Hasher>
+struct hash_inspector;
 
 struct stable_map_policy;
 
@@ -306,7 +325,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::taxonomies))
-  VAST_ADD_TYPE_ID((vast::legacy_type))
   VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))

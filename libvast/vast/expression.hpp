@@ -15,9 +15,9 @@
 #include "vast/data.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
+#include "vast/type.hpp"
 
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
@@ -76,9 +76,9 @@ auto inspect(Inspector& f, field_extractor& x) {
 
 /// Extracts one or more values according to a given type.
 struct type_extractor : detail::totally_ordered<type_extractor> {
-  type_extractor(vast::legacy_type t = {});
+  explicit type_extractor(vast::type t = {});
 
-  vast::legacy_type type;
+  vast::type type;
 };
 
 /// @relates type_extractor
@@ -99,9 +99,9 @@ auto inspect(Inspector& f, type_extractor& x) {
 struct data_extractor : detail::totally_ordered<data_extractor> {
   data_extractor() = default;
 
-  data_extractor(vast::legacy_type t, vast::offset o);
+  data_extractor(vast::type t, vast::offset o);
 
-  vast::legacy_type type;
+  vast::type type;
   vast::offset offset;
 };
 
@@ -359,7 +359,7 @@ caf::expected<expression> normalize_and_validate(expression expr);
 /// @param t The type to tailor *expr* to.
 /// @returns An optimized version of *expr* specifically for evaluating events
 ///          of type *t*.
-caf::expected<expression> tailor(expression expr, const legacy_type& t);
+caf::expected<expression> tailor(expression expr, const type& t);
 
 /// Retrieves an expression node at a given [offset](@ref offset).
 /// @param expr The expression to lookup.
@@ -377,7 +377,7 @@ const expression* at(const expression& expr, const offset& o);
 ///          identifies a predicate in *expr* and the mapped values represent
 ///          the new predicates.
 std::vector<std::pair<offset, predicate>>
-resolve(const expression& expr, const legacy_type& t);
+resolve(const expression& expr, const type& t);
 
 } // namespace vast
 

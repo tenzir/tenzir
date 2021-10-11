@@ -15,12 +15,12 @@
 
 namespace vast {
 
-bool_synopsis::bool_synopsis(vast::legacy_type x) : synopsis{std::move(x)} {
-  VAST_ASSERT(caf::holds_alternative<legacy_bool_type>(type()));
+bool_synopsis::bool_synopsis(vast::type x) : synopsis{std::move(x)} {
+  VAST_ASSERT(caf::holds_alternative<bool_type>(type()));
 }
 
 bool_synopsis::bool_synopsis(bool true_, bool false_)
-  : synopsis{legacy_bool_type{}}, true_(true_), false_(false_) {
+  : synopsis{bool_type{}}, true_(true_), false_(false_) {
 }
 
 void bool_synopsis::add(data_view x) {

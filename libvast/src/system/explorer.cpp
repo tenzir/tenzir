@@ -131,21 +131,18 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       if (st.num_sent >= st.limits.total)
         return;
       auto&& layout = slice.layout();
-      auto is_timestamp = [](const record_field& field) {
-        const legacy_type* t = &field.type;
-        if (t->name() == "timestamp")
-          return true;
-        while (auto x = caf::get_if<legacy_alias_type>(t)) {
-          t = &x->value_type;
-          if (t->name() == "timestamp")
+      auto is_timestamp = [](const auto& leaf) {
+        const auto& [field, _] = leaf;
+        for (const auto& name : field.type.names())
+          if (name == "timestamp")
             return true;
-        }
         return false;
       };
-      auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
-                             is_timestamp);
-      if (it == layout.fields.end()) {
-        VAST_DEBUG("{} could not find timestamp field in {}", *self, layout);
+      auto leaves = layout.type.leaves();
+      auto it = std::find_if(leaves.begin(), leaves.end(), is_timestamp);
+      if (it == leaves.end()) {
+        VAST_DEBUG("{} could not find timestamp field in {}", *self,
+                   layout.name);
         return;
       }
       std::optional<table_slice_column> by_column;
@@ -154,12 +151,12 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
           by_column.emplace(std::move(*col));
         if (!by_column) {
           VAST_TRACE_SCOPE("skipping slice with {} because it has no column {}",
-                           layout, *st.by);
+                           layout.name, *st.by);
           return;
         }
       }
-      VAST_DEBUG("{} uses {} to construct timebox", *self, it->name);
-      auto column = table_slice_column::make(slice, it->name);
+      VAST_DEBUG("{} uses {} to construct timebox", *self, it->first.name);
+      auto column = table_slice_column::make(slice, it->first.name);
       VAST_ASSERT(column);
       for (size_t i = 0; i < column->size(); ++i) {
         auto data_view = (*column)[i];
@@ -168,16 +165,15 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         if (!x)
           continue;
         std::optional<vast::expression> before_expr;
+        const auto timestamp_type = type{"timestamp", time_type{}};
         if (st.before)
-          before_expr
-            = predicate{type_extractor{legacy_time_type{}.name("timestamp")},
-                        relational_operator::greater_equal,
-                        data{*x - *st.before}};
-
+          before_expr = predicate{type_extractor{timestamp_type},
+                                  relational_operator::greater_equal,
+                                  data{*x - *st.before}};
         std::optional<vast::expression> after_expr;
         if (st.after)
           after_expr
-            = predicate{type_extractor{legacy_time_type{}.name("timestamp")},
+            = predicate{type_extractor{timestamp_type},
                         relational_operator::less_equal, data{*x + *st.after}};
         std::optional<vast::expression> by_expr;
         if (st.by) {

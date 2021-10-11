@@ -30,13 +30,15 @@ namespace {
 
 /// Returns the field that shall be used to extract values from for
 /// the pivot membership query.
-std::optional<record_field>
-common_field(const pivoter_state& st, const legacy_record_type& indicator) {
+std::optional<record_type::field_view>
+common_field(const pivoter_state& st, const type& t) {
+  VAST_ASSERT(caf::holds_alternative<record_type>(t));
+  const auto& indicator = caf::get<record_type>(t);
   auto f = st.cache.find(indicator);
   if (f != st.cache.end())
     return f->second;
     // TODO: This algorithm can be enabled once we have a live updated
-    //       type registry. (Switch the type of target to legacy_record_type.)
+    //       type registry. (Switch the type of target to record_type.)
 #if 0
   for (auto& t : target.fields) {
     for (auto& i : indicator.fields) {
@@ -51,12 +53,12 @@ common_field(const pivoter_state& st, const legacy_record_type& indicator) {
   // updated type registry is available to feed the algorithm above.
   std::string edge;
   VAST_TRACE_SCOPE("{} {} {}", *st.self, VAST_ARG(st.target),
-                   VAST_ARG(indicator.name()));
-  if (st.target.starts_with("zeek") && indicator.name().starts_with("zeek"))
+                   VAST_ARG(indicator));
+  if (st.target.starts_with("zeek") && t.name().starts_with("zeek"))
     edge = "uid";
   else
     edge = "community_id";
-  for (auto& i : indicator.fields) {
+  for (auto i : indicator.fields()) {
     if (i.name == edge) {
       st.cache.insert({indicator, i});
       return i;
@@ -64,8 +66,7 @@ common_field(const pivoter_state& st, const legacy_record_type& indicator) {
   }
 #endif
   st.cache.insert({indicator, std::nullopt});
-  VAST_WARN("{} got slice without shared column: {}", *st.self,
-            indicator.name());
+  VAST_WARN("{} got slice without shared column: {}", *st.self, t.name());
   return {};
 }
 
@@ -98,7 +99,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
   return {
     [=](vast::table_slice slice) {
       auto& st = self->state;
-      auto pivot_field = common_field(st, slice.layout());
+      auto pivot_field = common_field(st, slice.layout().type);
       if (!pivot_field)
         return;
       VAST_DEBUG("{} uses {} to extract {} events", *self, *pivot_field,
@@ -125,7 +126,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
       auto expr
         = conjunction{predicate{meta_extractor{meta_extractor::type},
                                 relational_operator::equal, data{st.target}},
-                      predicate{field_extractor{pivot_field->name},
+                      predicate{field_extractor{std::string{pivot_field->name}},
                                 relational_operator::in, data{xs}}};
       // TODO(ch9411): Drop the conversion to a string when node actors can
       //               be spawned without going through an invocation.

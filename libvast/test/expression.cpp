@@ -53,7 +53,7 @@ struct fixture {
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
     // expr0 || :real > 4.2
-    auto p2 = predicate{type_extractor{legacy_real_type{}},
+    auto p2 = predicate{type_extractor{real_type{}},
                         relational_operator::greater_equal, data{4.2}};
     expr1 = disjunction{expr0, p2};
   }
@@ -180,19 +180,18 @@ TEST(normalization) {
 }
 
 TEST(extractors) {
-  auto port = legacy_alias_type{legacy_count_type{}}.name("port");
-  auto subport = legacy_alias_type{legacy_type{port}}.name("subport");
-  auto s = legacy_record_type{{"real", legacy_real_type{}},
-                              {"bool", legacy_bool_type{}},
-                              {"host", legacy_address_type{}},
-                              {"port", port},
-                              {"subport", subport}};
-  auto r = flatten(legacy_record_type{{"orig", s}, {"resp", s}});
+  auto port = type{"port", count_type{}};
+  auto subport = type{"subport", port};
+  auto s = record_type{
+    {"real", real_type{}}, {"bool", bool_type{}}, {"host", address_type{}},
+    {"port", port},        {"subport", subport},
+  };
+  auto r = flatten(record_type{{"orig", s}, {"resp", s}});
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
-    auto pred0 = predicate{data_extractor{legacy_address_type{}, offset{2}},
+    auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
                            relational_operator::in, data{sn}};
-    auto pred1 = predicate{data_extractor{legacy_address_type{}, offset{7}},
+    auto pred1 = predicate{data_extractor{address_type{}, offset{7}},
                            relational_operator::in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
@@ -205,9 +204,9 @@ TEST(extractors) {
     CHECK_EQUAL(resolved, normalized);
   }
   {
-    auto pred0 = predicate{data_extractor{legacy_address_type{}, offset{2}},
+    auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
                            relational_operator::not_in, data{sn}};
-    auto pred1 = predicate{data_extractor{legacy_address_type{}, offset{7}},
+    auto pred1 = predicate{data_extractor{address_type{}, offset{7}},
                            relational_operator::not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
@@ -296,13 +295,15 @@ TEST(matcher) {
     return caf::visit(matcher{t}, *resolved);
   };
   MESSAGE("type extractors");
-  CHECK(match(":real < 4.2", legacy_real_type{}));
-  CHECK(!match(":int == -42", legacy_real_type{}));
-  CHECK(!match(":count == 42 && :real < 4.2", legacy_real_type{}));
-  CHECK(match(":count == 42 || :real < 4.2", legacy_real_type{}));
-  auto r = legacy_record_type{{"x", legacy_real_type{}},
-                              {"y", legacy_bool_type{}},
-                              {"z", legacy_address_type{}}};
+  CHECK(match(":real < 4.2", real_type{}));
+  CHECK(!match(":int == -42", real_type{}));
+  CHECK(!match(":count == 42 && :real < 4.2", real_type{}));
+  CHECK(match(":count == 42 || :real < 4.2", real_type{}));
+  auto r = record_type{
+    {"x", real_type{}},
+    {"y", bool_type{}},
+    {"z", address_type{}},
+  };
   CHECK(match(":count == 42 || :real < 4.2", r));
   CHECK(match(":bool == T && :real < 4.2", r));
   MESSAGE("field extractors");
@@ -311,7 +312,7 @@ TEST(matcher) {
   CHECK(!match("x < 4.2 && a == T", r));
   MESSAGE("attribute extractors");
   CHECK(!match("#type == \"foo\"", r));
-  r = r.name("foo");
+  r.assign_metadata(type{"foo", none_type{}});
   CHECK(match("#type == \"foo\"", r));
   CHECK(match("#type != \"bar\"", r));
 }
@@ -322,8 +323,9 @@ TEST(labeler) {
   auto expr = to_expr(str);
   // Create a visitor that records all offsets in order.
   detail::stable_map<expression, offset> offset_map;
-  auto visitor = labeler{
-    [&](const auto& x, const offset& o) { offset_map.emplace(x, o); }};
+  auto visitor = labeler{[&](const auto& x, const offset& o) {
+    offset_map.emplace(x, o);
+  }};
   caf::visit(visitor, expr);
   decltype(offset_map) expected_offset_map{
     {to_expr(str), {0}},
@@ -355,7 +357,7 @@ TEST(at) {
 
 TEST(resolve) {
   using result_type = std::vector<std::pair<offset, predicate>>;
-  auto resolve_pred = [](auto&& x, offset o, legacy_type t) -> result_type {
+  auto resolve_pred = [](auto&& x, offset o, type t) -> result_type {
     result_type result;
     auto pred = to<predicate>(x);
     auto resolved = type_resolver{t}(unbox(pred));
@@ -364,9 +366,13 @@ TEST(resolve) {
     return result;
   };
   auto expr = to_expr("(x == 5 && y == T) || (x == 5 && y == F)"); // tautology
-  auto t
-    = legacy_record_type{{"x", legacy_count_type{}}, {"y", legacy_bool_type{}}}
-        .name("foo");
+  auto t = type{
+    "foo",
+    record_type{
+      {"x", count_type{}},
+      {"y", bool_type{}},
+    },
+  };
   auto xs = resolve(expr, t);
   decltype(xs) expected;
   auto concat = [](auto&& xs, auto&& ys) {

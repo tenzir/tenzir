@@ -20,11 +20,7 @@ namespace vast::format::json {
 
 template <class Specification>
 struct field_selector {
-  field_selector() {
-    // nop
-  }
-
-  std::optional<vast::legacy_record_type>
+  std::optional<vast::record_type>
   operator()(const ::simdjson::dom::object& j) {
     auto el = j.at_key(Specification::field);
     if (el.error())
@@ -48,24 +44,25 @@ struct field_selector {
   }
 
   caf::error schema(const vast::schema& s) {
-    for (auto& t : s) {
+    for (const auto& t : s) {
       auto sn = detail::split(t.name(), ".");
       if (sn.size() != 2)
         continue;
-      auto r = caf::get_if<legacy_record_type>(&t);
+      const auto* r = caf::get_if<record_type>(&t);
       if (!r)
         continue;
-      if (sn[0] == Specification::prefix)
+      if (sn[0] == Specification::prefix) {
         // The temporary string can be dropped with c++20.
         // See https://wg21.link/p0919.
-        types[std::string{sn[1]}] = *r;
+        types.emplace(sn[1], *r);
+      }
     }
     return caf::none;
   }
 
-  vast::schema schema() const {
+  [[nodiscard]] vast::schema schema() const {
     vast::schema result;
-    for (auto& [key, value] : types)
+    for (const auto& [key, value] : types)
       result.add(value);
     return result;
   }
@@ -75,7 +72,7 @@ struct field_selector {
   }
 
   /// A map of all seen types.
-  std::unordered_map<std::string, legacy_record_type> types;
+  std::unordered_map<std::string, record_type> types;
 
   /// A set of all unknown types; used to avoid printing duplicate warnings.
   std::unordered_set<std::string> unknown_types;

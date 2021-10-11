@@ -16,6 +16,7 @@
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
 #include <vast/schema.hpp>
+#include <vast/type.hpp>
 
 #include <caf/settings.hpp>
 #include <netinet/in.h>
@@ -72,26 +73,34 @@ struct pcap {
 namespace vast::plugins::pcap {
 
 template <class... RecordFields>
-legacy_record_type make_packet_type(RecordFields&&... record_fields) {
+record_type make_packet_type(RecordFields&&... record_fields) {
   // FIXME: once we ship with builtin type aliases, we should reference the
   // port alias type here. Until then, we create the alias manually.
   // See also:
   // - src/format/zeek.cpp
-  auto port_type = legacy_count_type{}.name("port");
-  return legacy_record_type{{"time", legacy_time_type{}.name("timestamp")},
-                            {"src", legacy_address_type{}},
-                            {"dst", legacy_address_type{}},
-                            {"sport", port_type},
-                            {"dport", port_type},
-                            std::forward<RecordFields>(record_fields)...,
-                            {"payload",
-                             legacy_string_type{}.attributes({{"skip"}})}}
-    .name("pcap.packet");
+  const auto port_type = type{"port", count_type{}};
+  const auto timestamp_type = type{"timestamp", time_type{}};
+  auto result = type{
+    "pcap.packet",
+    record_type{
+      {"time", timestamp_type},
+      {"src", address_type{}},
+      {"dst", address_type{}},
+      {"sport", port_type},
+      {"dport", port_type},
+      std::forward<RecordFields>(record_fields)...,
+      {"payload", type{string_type{}, {{"skip"}}}},
+    },
+  };
+  return caf::get<record_type>(result);
 }
 
 const auto pcap_packet_type = make_packet_type();
-const auto pcap_packet_type_community_id = make_packet_type(record_field{
-  "community_id", legacy_string_type{}.attributes({{"index", "hash"}})});
+const auto pcap_packet_type_community_id
+  = make_packet_type(record_type::field_view{
+    "community_id",
+    type{string_type{}, {{"index", "hash"}}},
+  });
 
 struct pcap_close_wrapper {
   void operator()(struct pcap* handle) const noexcept {
@@ -255,9 +264,9 @@ protected:
     VAST_ASSERT(max_events > 0);
     VAST_ASSERT(max_slice_size > 0);
     if (builder_ == nullptr) {
-      if (!caf::holds_alternative<legacy_record_type>(packet_type_))
+      if (!caf::holds_alternative<record_type>(packet_type_))
         return caf::make_error(ec::parse_error, "illegal packet type");
-      if (!reset_builder(caf::get<legacy_record_type>(packet_type_)))
+      if (!reset_builder(caf::get<record_type>(packet_type_)))
         return caf::make_error(ec::parse_error, "unable to create builder for "
                                                 "packet type");
     }
@@ -565,7 +574,7 @@ private:
   int64_t pseudo_realtime_;
   size_t snaplen_;
   bool community_id_;
-  legacy_type packet_type_;
+  type packet_type_;
   double drop_rate_threshold_;
   mutable pcap_stat last_stats_;
   mutable size_t discard_count_;
@@ -604,17 +613,22 @@ public:
         return caf::make_error(ec::format_error, "failed to open pcap dumper");
     }
     auto&& layout = slice.layout();
-    if (!congruent(layout, pcap_packet_type)
-        && !congruent(layout, pcap_packet_type_community_id))
+    if (!congruent(layout.type, type{pcap_packet_type})
+        && !congruent(layout.type, type{pcap_packet_type_community_id}))
       return caf::make_error(ec::format_error, "invalid pcap packet type");
     // TODO: consider iterating in natural order for the slice.
     for (size_t row = 0; row < slice.rows(); ++row) {
+      const auto payload_offset = pcap_packet_type.resolve_prefix("payload");
+      VAST_ASSERT(payload_offset);
       auto payload_field
-        = slice.at(row, 6, pcap_packet_type.at("payload")->type);
+        = slice.at(row, 6, pcap_packet_type.field(*payload_offset).type);
       auto& payload = caf::get<view<std::string>>(payload_field);
       // Make PCAP header.
       ::pcap_pkthdr header{};
-      auto ns_field = slice.at(row, 0, pcap_packet_type.at("time")->type);
+      const auto time_offset = pcap_packet_type.resolve_prefix("time");
+      VAST_ASSERT(time_offset);
+      auto ns_field
+        = slice.at(row, 0, pcap_packet_type.field(*time_offset).type);
       auto ns = caf::get<view<time>>(ns_field).time_since_epoch().count();
       header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO

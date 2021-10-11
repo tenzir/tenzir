@@ -804,17 +804,6 @@ bool congruent(const data& x, const legacy_type& y) {
   return visit(data_congruence_checker{}, y, x);
 }
 
-caf::error replace_if_congruent(std::initializer_list<legacy_type*> xs,
-                                const schema& with) {
-  for (auto x : xs)
-    if (auto t = with.find(x->name()); t != nullptr) {
-      if (!congruent(*x, *t))
-        return caf::make_error(ec::type_clash, "incongruent type:", x->name());
-      *x = *t;
-    }
-  return caf::none;
-}
-
 bool compatible(const legacy_type& lhs, relational_operator op,
                 const legacy_type& rhs) {
   auto string_and_pattern = [](auto& x, auto& y) {

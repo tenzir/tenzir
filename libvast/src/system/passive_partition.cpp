@@ -28,7 +28,6 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/ids.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -41,6 +40,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/time.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>
@@ -79,7 +79,7 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
   return indexer;
 }
 
-const vast::legacy_record_type&
+const std::optional<vast::record_type>&
 passive_partition_state::combined_layout() const {
   return combined_layout_;
 }
@@ -133,15 +133,16 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   state.events = partition.events();
   state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
-  if (auto error
-      = fbs::deserialize_bytes(combined_layout, state.combined_layout_))
+  legacy_record_type lrt{};
+  if (auto error = fbs::deserialize_bytes(combined_layout, lrt))
     return error;
+  state.combined_layout_ = caf::get<record_type>(type::from_legacy_type(lrt));
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
-  if (state.combined_layout_.fields.size() < indexes->size()) {
+  if (state.combined_layout_->num_fields() < indexes->size()) {
     VAST_ERROR("{} found incoherent number of indexers in deserialized state; "
                "{} fields for {} indexes",
-               state.name, state.combined_layout_.fields.size(),
+               state.name, state.combined_layout_->num_fields(),
                indexes->size());
     return caf::make_error(ec::format_error, "incoherent number of indexers");
   }

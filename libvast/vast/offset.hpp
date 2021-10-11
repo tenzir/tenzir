@@ -14,6 +14,7 @@
 
 #include <compare>
 #include <cstddef>
+#include <span>
 
 namespace vast {
 

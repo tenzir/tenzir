@@ -22,8 +22,6 @@
 
 #include <caf/test/dsl.hpp>
 
-#include "type_test.hpp"
-
 using namespace vast;
 
 using caf::get;
@@ -39,24 +37,25 @@ TEST(offset finding) {
     type foo = record{ a: int, b: real, c: outer, d: middle }
   )__";
   auto sch = unbox(to<schema>(str));
-  auto foo_type = sch.find("foo");
+  auto* foo_type = sch.find("foo");
   REQUIRE_NOT_EQUAL(foo_type, nullptr);
-  REQUIRE(holds_alternative<legacy_record_type>(*foo_type));
-  auto& foo_record = get<legacy_record_type>(*foo_type);
-  CHECK_EQUAL(foo_record.name(), "foo");
-  CHECK_EQUAL(foo_record.fields.size(), 4u);
-  CHECK_EQUAL(at(foo_record, 0), legacy_integer_type{});
-  CHECK_EQUAL(at(foo_record, 1), legacy_real_type{});
-  CHECK_EQUAL(at(foo_record, 2).name(), "outer");
-  CHECK_EQUAL(rec_at(foo_record, 2).fields.size(), 3u);
-  CHECK_EQUAL(at(foo_record, 2, 0).name(), "middle");
-  CHECK_EQUAL(at(foo_record, 2, 1, 0), legacy_string_type{});
-  CHECK_EQUAL(at(foo_record, 2, 2), legacy_integer_type{});
-  CHECK_EQUAL(at(foo_record, 3).name(), "middle");
-  CHECK_EQUAL(at(foo_record, 3, 0), legacy_integer_type{});
-  CHECK_EQUAL(at(foo_record, 3, 1).name(), "inner");
-  CHECK_EQUAL(at(foo_record, 3, 1, 0), legacy_integer_type{});
-  CHECK_EQUAL(at(foo_record, 3, 1, 1), legacy_real_type{});
+  REQUIRE(holds_alternative<record_type>(*foo_type));
+  const auto& foo_record = get<record_type>(*foo_type);
+  CHECK_EQUAL(foo_record.num_fields(), 4u);
+  CHECK_EQUAL(foo_record.field(offset{0}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{1}).type, real_type{});
+  CHECK_EQUAL(foo_record.field(offset{2}).name, "c");
+  CHECK(caf::holds_alternative<record_type>(foo_record.field(offset{2}).type));
+  CHECK_EQUAL(
+    caf::get<record_type>(foo_record.field(offset{2}).type).num_fields(), 3u);
+  CHECK_EQUAL(foo_record.field(offset{2, 0}).name, "a");
+  CHECK_EQUAL(foo_record.field(offset{2, 1, 0}).type, string_type{});
+  CHECK_EQUAL(foo_record.field(offset{2, 2}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{3}).name, "d");
+  CHECK_EQUAL(foo_record.field(offset{3, 0}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{3, 1}).name, "b");
+  CHECK_EQUAL(foo_record.field(offset{3, 1, 0}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{3, 1, 1}).type, real_type{});
 }
 
 TEST(combining) {
@@ -70,14 +69,13 @@ TEST(combining) {
     type d = pattern
   )__"));
   auto z = schema::combine(x, y);
-  CHECK_EQUAL(
-    unbox(z.find("a")),
-    legacy_alias_type{legacy_integer_type{}.name("int_custom")}.name("a"));
-  CHECK_EQUAL(unbox(z.find("b")), legacy_real_type{}.name("b"));
-  CHECK_EQUAL(unbox(z.find("c")), legacy_address_type{}.name("c"));
-  CHECK_EQUAL(unbox(z.find("d")), legacy_pattern_type{}.name("d"));
+  CHECK_EQUAL(unbox(z.find("a")),
+              (type{"a", type{"int_custom", integer_type{}}}));
+  CHECK_EQUAL(unbox(z.find("b")), (type{"b", real_type{}}));
+  CHECK_EQUAL(unbox(z.find("c")), (type{"c", address_type{}}));
+  CHECK_EQUAL(unbox(z.find("d")), (type{"d", pattern_type{}}));
   CHECK_EQUAL(unbox(z.find("int_custom")),
-              legacy_integer_type{}.name("int_custom"));
+              (type{"int_custom", integer_type{}}));
 }
 
 TEST(merging) {
@@ -100,15 +98,15 @@ TEST(merging) {
 
 TEST(serialization) {
   schema sch;
-  auto t = legacy_record_type{
-    {"s1", legacy_string_type{}},
-    {"d1", legacy_real_type{}},
-    {"c", legacy_count_type{}.attributes({{"skip"}})},
-    {"i", legacy_integer_type{}},
-    {"s2", legacy_string_type{}},
-    {"d2", legacy_real_type{}},
+  auto t = record_type{
+    {"s1", string_type{}},
+    {"d1", real_type{}},
+    {"c", type{count_type{}, {{"skip"}}}},
+    {"i", integer_type{}},
+    {"s2", string_type{}},
+    {"d2", real_type{}},
   };
-  t = t.name("foo");
+  t.assign_metadata(type{"foo", none_type{}});
   sch.add(t);
   // Save & load
   std::vector<char> buf;
@@ -179,11 +177,11 @@ TEST(schema : zeek - style) {
   CHECK(parsers::schema(str, sch));
   auto ssl = sch.find("zeek.ssl");
   REQUIRE(ssl);
-  auto r = get_if<legacy_record_type>(ssl);
+  auto r = get_if<record_type>(ssl);
   REQUIRE(r);
-  auto id = r->at("id");
+  auto id = r->resolve_prefix("id");
   REQUIRE(id);
-  CHECK(holds_alternative<legacy_record_type>(id->type));
+  CHECK(holds_alternative<record_type>(r->field(*id).type));
 }
 
 TEST(schema : aliases) {
@@ -197,7 +195,7 @@ TEST(schema : aliases) {
   CHECK(parsers::schema(std::string{str}, sch));
   auto foo = sch.find("foo");
   REQUIRE(foo);
-  CHECK(holds_alternative<legacy_address_type>(*foo));
+  CHECK(holds_alternative<address_type>(*foo));
   CHECK(sch.find("bar"));
   CHECK(sch.find("baz"));
   CHECK(sch.find("x"));
@@ -234,11 +232,11 @@ TEST(parseable - basic types global) {
   CHECK(sch.find("t10"));
   auto foo = sch.find("foo");
   REQUIRE(foo);
-  auto r = get_if<legacy_record_type>(foo);
+  auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto t8 = r->at("a8");
+  auto t8 = r->resolve_prefix("a8");
   REQUIRE(t8);
-  CHECK(holds_alternative<legacy_pattern_type>(t8->type));
+  CHECK(holds_alternative<pattern_type>(r->field(*t8).type));
 }
 
 TEST(parseable - basic types local) {
@@ -260,11 +258,11 @@ TEST(parseable - basic types local) {
   CHECK(parsers::schema(std::string{str}, sch));
   auto foo = sch.find("foo");
   REQUIRE(foo);
-  auto r = get_if<legacy_record_type>(foo);
+  auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto p = r->at("a10");
+  auto p = r->resolve_prefix("a10");
   REQUIRE(p);
-  CHECK(holds_alternative<legacy_subnet_type>(p->type));
+  CHECK(holds_alternative<subnet_type>(r->field(*p).type));
 }
 
 TEST(parseable - complex types global) {
@@ -286,11 +284,11 @@ TEST(parseable - complex types global) {
   CHECK(sch.find("map_t"));
   auto foo = sch.find("foo");
   REQUIRE(foo);
-  auto r = get_if<legacy_record_type>(foo);
+  auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto e = r->at("e");
+  auto e = r->resolve_prefix("e");
   REQUIRE(e);
-  CHECK(e->type == *enum_t);
+  CHECK(r->field(*e).type == *enum_t);
 }
 
 TEST(parseable - out of order definitions) {
@@ -305,15 +303,17 @@ TEST(parseable - out of order definitions) {
   schema sch;
   CHECK(parsers::schema(str, sch));
   auto baz = unbox(sch.find("baz"));
-  // clang-format off
-  auto expected = legacy_type{
-    legacy_list_type{
-      legacy_record_type{
-        {"x", legacy_integer_type{}.name("foo")}
-      }.name("bar")
-    }.name("baz")
+  auto expected = type{
+    "baz",
+    list_type{
+      type{
+        "bar",
+        record_type{
+          {"x", type{"foo", integer_type{}}},
+        },
+      },
+    },
   };
-  // clang-format on
   CHECK_EQUAL(baz, expected);
 }
 
@@ -340,13 +340,15 @@ TEST(parseable - with context) {
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
-    // clang-format off
-    auto expected = legacy_type{
-      legacy_record_type{
-        {"x", legacy_record_type{{"y", legacy_count_type{}.name("foo")}}}
-      }.name("bar")
+    auto expected = type{
+      "bar",
+      record_type{
+        {"x",
+         record_type{
+           {"y", type{"foo", count_type{}}},
+         }},
+      },
     };
-    // clang-format on
     CHECK_EQUAL(bar, expected);
   }
   {
@@ -363,13 +365,15 @@ TEST(parseable - with context) {
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
-    // clang-format off
-    auto expected = legacy_type{
-      legacy_record_type{
-        {"x", legacy_record_type{{"y", legacy_integer_type{}.name("foo")}}}
-      }.name("bar")
+    auto expected = type{
+      "bar",
+      record_type{
+        {"x",
+         record_type{
+           {"y", type{"foo", integer_type{}}},
+         }},
+      },
     };
-    // clang-format on
     CHECK_EQUAL(bar, expected);
   }
   {
@@ -386,13 +390,15 @@ TEST(parseable - with context) {
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
-    // clang-format off
-    auto expected = legacy_type{
-      legacy_record_type{
-        {"x", legacy_record_type{{"y", legacy_integer_type{}.name("foo")}}}
-      }.name("bar")
+    auto expected = type{
+      "bar",
+      record_type{
+        {"x",
+         record_type{
+           {"y", type{"foo", integer_type{}}},
+         }},
+      },
     };
-    // clang-format on
     CHECK_EQUAL(bar, expected);
   }
   {
@@ -435,15 +441,14 @@ TEST(parseable - with context) {
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto gob = unbox(sch.find("gob"));
-    // clang-format off
-    auto expected = legacy_type{
-      legacy_record_type{
-        {"x", legacy_integer_type{}},
-        {"y", legacy_integer_type{}},
-        {"z", legacy_integer_type{}},
-      }.name("gob")
+    auto expected = type{
+      "gob",
+      record_type{
+        {"x", integer_type{}},
+        {"y", integer_type{}},
+        {"z", integer_type{}},
+      },
     };
-    // clang-format on
     CHECK_EQUAL(gob, expected);
   }
   {
@@ -480,22 +485,30 @@ TEST(parseable - with context) {
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
-    // clang-format off
-    auto expected_lplus = legacy_type{
-      legacy_record_type{
-        {"a", legacy_integer_type{}},
-        {"b", legacy_integer_type{}},
-        {"c", legacy_real_type{}},
-      }.name("lplus").attributes({{"attr_one"}, {"attr_two", "val"}})
+    auto expected_lplus = type{
+      "lplus",
+      record_type{
+        {"a", integer_type{}},
+        {"b", integer_type{}},
+        {"c", real_type{}},
+      },
+      {
+        {"attr_one"},
+        {"attr_two", "val"},
+      },
     };
-    auto expected_rplus = legacy_type{
-      legacy_record_type{
-        {"a", legacy_real_type{}},
-        {"b", legacy_integer_type{}},
-        {"c", legacy_real_type{}},
-      }.name("rplus").attributes({{"attr_one", "val"}, {"attr_two"}})
+    auto expected_rplus = type{
+      "rplus",
+      record_type{
+        {"a", real_type{}},
+        {"b", integer_type{}},
+        {"c", real_type{}},
+      },
+      {
+        {"attr_one", "val"},
+        {"attr_two"},
+      },
     };
-    // clang-format on
     auto lplus = unbox(sch.find("lplus"));
     CHECK_EQUAL(lplus, expected_lplus);
     auto rplus = unbox(sch.find("rplus"));
@@ -525,18 +538,19 @@ TEST(parseable - with context) {
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
-    // clang-format off
-    auto expected = legacy_type{
-      legacy_record_type{
-        {"a", legacy_record_type{
-          {"x", legacy_count_type{}}
-        }},
-        {"b.c", legacy_record_type{
-          {"e", legacy_count_type{}}
-        }}
-      }.name("bar")
+    auto expected = type{
+      "bar",
+      record_type{
+        {"a",
+         record_type{
+           {"x", count_type{}},
+         }},
+        {"b.c",
+         record_type{
+           {"e", count_type{}},
+         }},
+      },
     };
-    // clang-format on
     CHECK_EQUAL(bar, expected);
   }
   {
@@ -570,20 +584,21 @@ TEST(parseable - with context) {
     auto sch = unbox(r.resolve());
     auto derived1 = unbox(sch.find("derived1"));
     auto derived2 = unbox(sch.find("derived2"));
-    // clang-format off
-    auto expected = legacy_type{
-      legacy_record_type{
-        {"a", legacy_record_type{
-          {"x", legacy_count_type{}},
-          {"y", legacy_address_type{}}
-        }},
-        {"b", legacy_real_type{}},
-        {"d", legacy_time_type{}},
-      }.name("derived1")
+    auto expected = type{
+      "derived1",
+      record_type{
+        {"a",
+         record_type{
+           {"x", count_type{}},
+           {"y", address_type{}},
+         }},
+        {"b", real_type{}},
+        {"d", time_type{}},
+      },
     };
-    // clang-format on
     CHECK_EQUAL(derived1, expected);
-    expected.name("derived2");
+    expected.prune_metadata();
+    expected.assign_metadata(type{"derived2", none_type{}});
     CHECK_EQUAL(derived2, expected);
   }
 }
@@ -608,17 +623,16 @@ TEST(parseable - overwriting with self reference) {
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto foo = unbox(sch.find("foo"));
-    // clang-format off
-    auto expected = legacy_type{
-      legacy_record_type{
-        {"x", legacy_count_type{}},
-        {"y", legacy_string_type{}}
-      }.name("foo")
+    auto expected = type{
+      "foo",
+      record_type{
+        {"x", count_type{}},
+        {"y", string_type{}},
+      },
     };
-    // clang-format on
     CHECK_EQUAL(foo, expected);
     auto bar = unbox(sch.find("bar"));
-    expected = legacy_alias_type{expected}.name("bar");
+    expected.assign_metadata(type{"bar", none_type{}});
     CHECK_EQUAL(bar, expected);
   }
 }

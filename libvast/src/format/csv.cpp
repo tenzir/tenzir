@@ -13,7 +13,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -127,13 +126,13 @@ writer::writer(ostream_ptr out, const caf::settings&) : super{std::move(out)} {
 caf::error writer::write(const table_slice& x) {
   constexpr char separator = writer::defaults::separator;
   // Print a new header each time we encounter a new layout.
-  auto&& layout = x.layout();
-  if (last_layout_ != layout.name()) {
-    last_layout_ = layout.name();
+  auto [name, layout] = x.layout();
+  if (last_layout_ != name) {
+    last_layout_ = name;
     append("type");
-    for (auto& field : legacy_record_type::each(layout)) {
+    for (const auto& [_, index] : layout.leaves()) {
       append(separator);
-      append(field.key());
+      append(layout.key(index));
     }
     append('\n');
     write_buf();
@@ -143,9 +142,9 @@ caf::error writer::write(const table_slice& x) {
   for (size_t row = 0; row < x.rows(); ++row) {
     append(last_layout_);
     size_t column = 0;
-    for (const auto& field : legacy_record_type::each{layout}) {
+    for (const auto& [field, _] : layout.leaves()) {
       append(separator);
-      if (auto err = render(iter, x.at(row, column, field.type())))
+      if (auto err = render(iter, x.at(row, column, field.type)))
         return err;
       ++column;
     }
@@ -182,8 +181,8 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 }
 
 caf::error reader::schema(vast::schema s) {
-  for (auto& t : s) {
-    if (auto r = caf::get_if<legacy_record_type>(&t))
+  for (const auto& t : s) {
+    if (const auto* r = caf::get_if<record_type>(&t))
       schema_.add(*r);
     else
       schema_.add(t);
@@ -199,28 +198,32 @@ const char* reader::name() const {
   return "csv-reader";
 }
 
-caf::optional<legacy_record_type>
+caf::optional<record_type>
 reader::make_layout(const std::vector<std::string>& names) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(names));
-  for (auto& t : schema_) {
-    if (auto r = caf::get_if<legacy_record_type>(&t)) {
-      auto select_fields = [&]() -> caf::optional<legacy_record_type> {
-        std::vector<record_field> result_raw;
-        for (auto& name : names) {
-          if (auto field = r->at(name))
-            result_raw.emplace_back(name, field->type);
+  for (const auto& t : schema_) {
+    if (const auto* r = caf::get_if<record_type>(&t)) {
+      auto select_fields = [&]() -> caf::optional<record_type> {
+        std::vector<record_type::field_view> result_raw;
+        result_raw.reserve(names.size());
+        for (const auto& name : names) {
+          if (auto index = r->resolve_prefix(name))
+            result_raw.push_back({
+              name,
+              r->field(*index).type,
+            });
           else
             return caf::none;
         }
-        return legacy_record_type{std::move(result_raw)}
-          .name(r->name())
-          .attributes(r->attributes());
+        auto result = record_type{result_raw};
+        result.assign_metadata(t);
+        return result;
       };
       if (auto result = select_fields())
         return result;
     } else if (names.size() == 1 && names[0] == t.name()) {
       // Hoist naked type into record.
-      return legacy_record_type{{t.name(), t}}.name(t.name());
+      return caf::get<record_type>(type{t.name(), record_type{{t.name(), t}}});
     } // else skip
   }
   return caf::none;
@@ -242,39 +245,34 @@ struct container_parser_builder {
 
   template <class T>
   result_type operator()(const T& t) const {
-    if constexpr (std::is_same_v<T, legacy_alias_type>) {
-      return caf::visit(*this, t.value_type);
-    } else if constexpr (std::is_same_v<T, legacy_string_type>) {
+    if constexpr (std::is_same_v<T, string_type>) {
       // clang-format off
       return +(parsers::any - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
         return data{std::move(x)};
       };
-    } else if constexpr (std::is_same_v<T, legacy_pattern_type>) {
+    } else if constexpr (std::is_same_v<T, pattern_type>) {
       return +(parsers::any - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
         return data{pattern{std::move(x)}};
       };
       // clang-format on
-    } else if constexpr (std::is_same_v<T, legacy_enumeration_type>) {
+    } else if constexpr (std::is_same_v<T, enumeration_type>) {
       auto to_enumeration = [t](std::string s) -> caf::optional<Attribute> {
-        auto i = std::find(t.fields.begin(), t.fields.end(), s);
-        if (i == t.fields.end()) {
-          VAST_WARN("csv reader failed to parse unexpected enum value {}", s);
-          return caf::none;
-        }
-        return detail::narrow_cast<enumeration>(
-          std::distance(t.fields.begin(), i));
+        for (const auto& [canonical, internal] : t.fields())
+          if (s == canonical)
+            return detail::narrow_cast<enumeration>(internal);
+        return caf::none;
       };
       return (+(parsers::any - opt_.set_separator - opt_.kvp_separator))
         .with(to_enumeration);
-    } else if constexpr (std::is_same_v<T, legacy_list_type>) {
+    } else if constexpr (std::is_same_v<T, list_type>) {
       auto list_insert = [](std::vector<Attribute> xs) {
         return xs;
       };
-      return ('[' >> ~(caf::visit(*this, t.value_type) % opt_.set_separator)
+      return ('[' >> ~(caf::visit(*this, t.value_type()) % opt_.set_separator)
               >> ']')
                ->*list_insert;
       // clang-format on
-    } else if constexpr (std::is_same_v<T, legacy_map_type>) {
+    } else if constexpr (std::is_same_v<T, map_type>) {
       auto ws = ignore(*parsers::space);
       auto map_insert = [](std::vector<std::pair<Attribute, Attribute>> xs) {
         return map(std::make_move_iterator(xs.begin()),
@@ -282,10 +280,10 @@ struct container_parser_builder {
       };
       // clang-format off
       auto kvp =
-        caf::visit(*this, t.key_type) >> ws >> opt_.kvp_separator >> ws >> caf::visit(*this, t.value_type);
+        caf::visit(*this, t.key_type()) >> ws >> opt_.kvp_separator >> ws >> caf::visit(*this, t.value_type());
       return (ws >> '{' >> ws >> (kvp % (ws >> opt_.set_separator >> ws)) >> ws >> '}' >> ws) ->* map_insert;
-    } else if constexpr (registered_parser_type<legacy_type_to_data<T>>) {
-      using value_type = legacy_type_to_data<T>;
+    } else if constexpr (registered_parser_type<type_to_data_t<T>>) {
+      using value_type = type_to_data_t<T>;
       auto ws = ignore(*parsers::space);
       return (ws >> make_parser<value_type>{} >> ws) ->* [](value_type x) {
         return x;
@@ -319,24 +317,21 @@ struct csv_parser_factory {
     table_slice_builder_ptr bptr_;
   };
 
-  template <class T>
-  result_type operator()(const T& t) const {
-    [[maybe_unused]] const auto field
-      = parsers::qqstr | +(parsers::any - opt_.set_separator);
-    if constexpr (std::is_same_v<T, legacy_alias_type>) {
-      return caf::visit(*this, t.value_type);
-    } else if constexpr (std::is_same_v<T, legacy_duration_type>) {
-      auto make_duration_parser = [&](auto period) {
-        // clang-format off
+  result_type operator()(const type& t) const {
+    auto f = [&]<concrete_type U>(const U& u) -> result_type {
+      [[maybe_unused]] const auto field
+        = parsers::qqstr | +(parsers::any - opt_.set_separator);
+      if constexpr (std::is_same_v<U, duration_type>) {
+        auto make_duration_parser = [&](auto period) {
+          // clang-format off
         return (-parsers::real_opt_dot ->* [](double x) {
           using period_type = decltype(period);
           using double_duration = std::chrono::duration<double, period_type>;
           return std::chrono::duration_cast<duration>(double_duration{x});
         }).with(add_t<duration>{bptr_});
-        // clang-format on
-      };
-      if (auto attr = find_attribute(t, "unit")) {
-        if (auto unit = attr->value) {
+          // clang-format on
+        };
+        if (auto unit = t.tag("unit")) {
           if (*unit == "ns")
             return make_duration_parser(std::nano{});
           if (*unit == "us")
@@ -352,40 +347,39 @@ struct csv_parser_factory {
           if (*unit == "d")
             return make_duration_parser(std::ratio<86400>{});
         }
-      }
-      // If we do not have an explicit unit given, we require the unit suffix.
-      return (-(quoted_parser{parsers::duration} | parsers::duration))
-        .with(add_t<duration>{bptr_});
-    } else if constexpr (std::is_same_v<T, legacy_string_type>) {
-      return (-field).with(add_t<std::string>{bptr_});
-    } else if constexpr (std::is_same_v<T, legacy_pattern_type>) {
-      return (-as<pattern>(as<std::string>(field))).with(add_t<pattern>{bptr_});
-    } else if constexpr (std::is_same_v<T, legacy_enumeration_type>) {
-      auto to_enumeration = [t](std::string s) -> caf::optional<enumeration> {
-        auto i = std::find(t.fields.begin(), t.fields.end(), s);
-        if (i == t.fields.end()) {
-          VAST_WARN("csv reader failed to parse unexpected enum value {}", s);
+        // If we do not have an explicit unit given, we require the unit suffix.
+        return (-(quoted_parser{parsers::duration} | parsers::duration))
+          .with(add_t<duration>{bptr_});
+      } else if constexpr (std::is_same_v<U, string_type>) {
+        return (-field).with(add_t<std::string>{bptr_});
+      } else if constexpr (std::is_same_v<U, pattern_type>) {
+        return (-as<pattern>(as<std::string>(field)))
+          .with(add_t<pattern>{bptr_});
+      } else if constexpr (std::is_same_v<U, enumeration_type>) {
+        auto to_enumeration = [u](std::string s) -> caf::optional<enumeration> {
+          for (const auto& [canonical, internal] : u.fields())
+            if (s == canonical)
+              return detail::narrow_cast<enumeration>(internal);
           return caf::none;
-        }
-        return detail::narrow_cast<enumeration>(
-          std::distance(t.fields.begin(), i));
-      };
-      // clang-format off
+        };
+        // clang-format off
       return (field ->* to_enumeration).with(add_t<enumeration>{bptr_});
-      // clang-format on
-    } else if constexpr (detail::is_any_v<T, legacy_list_type, legacy_map_type>) {
-      auto pb = container_parser_builder<Iterator, data>{opt_};
-      return (-pb(t)).with(add_t<data>{bptr_});
-    } else if constexpr (registered_parser_type<legacy_type_to_data<T>>) {
-      using value_type = legacy_type_to_data<T>;
-      auto p = make_parser<value_type>{};
-      return (-(quoted_parser{p} | p)).with(add_t<value_type>{bptr_});
-    } else {
-      VAST_ERROR("csv parser builder failed to fetch a parser for type "
-                 "{}",
-                 caf::detail::pretty_type_name(typeid(T)));
-      return {};
-    }
+        // clang-format on
+      } else if constexpr (detail::is_any_v<U, list_type, map_type>) {
+        auto pb = container_parser_builder<Iterator, data>{opt_};
+        return (-pb(t)).with(add_t<data>{bptr_});
+      } else if constexpr (registered_parser_type<type_to_data_t<U>>) {
+        using value_type = type_to_data_t<U>;
+        auto p = make_parser<value_type>{};
+        return (-(quoted_parser{p} | p)).with(add_t<value_type>{bptr_});
+      } else {
+        VAST_ERROR("csv parser builder failed to fetch a parser for type "
+                   "{}",
+                   caf::detail::pretty_type_name(typeid(U)));
+        return {};
+      }
+    };
+    return caf::visit(f, t);
   }
 
   options opt_;
@@ -394,14 +388,14 @@ struct csv_parser_factory {
 
 template <class Iterator>
 caf::optional<reader::parser_type>
-make_csv_parser(const legacy_record_type& layout,
-                table_slice_builder_ptr builder, const options& opt) {
-  auto num_fields = layout.fields.size();
+make_csv_parser(const record_type& layout, table_slice_builder_ptr builder,
+                const options& opt) {
+  auto num_fields = layout.num_fields();
   VAST_ASSERT(num_fields > 0);
   auto factory = csv_parser_factory<Iterator>{opt, builder};
-  auto result = caf::visit(factory, layout.fields[0].type);
+  auto result = factory(layout.field(0).type);
   for (size_t i = 1; i < num_fields; ++i) {
-    auto p = caf::visit(factory, layout.fields[i].type);
+    auto p = factory(layout.field(i).type);
     result = result >> opt.separator >> std::move(p);
   }
   return result;
@@ -429,14 +423,14 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto column_name = parsers::qqstr | +(parsers::printable - opt_.separator);
   auto p = (ws >> column_name >> ws) % opt_.separator;
   std::vector<std::string> columns;
-  auto b = line.begin();
-  auto f = b;
+  const auto* b = line.begin();
+  const auto* f = b;
   if (!p(f, line.end(), columns))
     return caf::make_error(ec::parse_error, "unable to parse csv header");
-  auto&& layout = make_layout(columns);
+  auto layout = make_layout(columns);
   if (!layout)
     return caf::make_error(ec::parse_error, "unable to derive a layout");
-  VAST_DEBUG("csv_reader derived layout {}", to_string(*layout));
+  VAST_DEBUG("csv_reader derived layout {}", *layout);
   if (!reset_builder(*layout))
     return caf::make_error(ec::parse_error, "unable to create a builder for "
                                             "layout");

@@ -77,8 +77,8 @@ TEST(integer_type) {
   CHECK(t != it);
   CHECK(t < it);
   CHECK(t <= it);
-  CHECK_EQUAL(fmt::format("{}", it), "integer");
-  CHECK_EQUAL(fmt::format("{}", integer_type{}), "integer");
+  CHECK_EQUAL(fmt::format("{}", it), "int");
+  CHECK_EQUAL(fmt::format("{}", integer_type{}), "int");
   CHECK(!caf::holds_alternative<integer_type>(t));
   CHECK(caf::holds_alternative<integer_type>(it));
   const auto lit = type::from_legacy_type(legacy_integer_type{});
@@ -210,8 +210,8 @@ TEST(address_type) {
   CHECK(t != at);
   CHECK(t < at);
   CHECK(t <= at);
-  CHECK_EQUAL(fmt::format("{}", at), "address");
-  CHECK_EQUAL(fmt::format("{}", address_type{}), "address");
+  CHECK_EQUAL(fmt::format("{}", at), "addr");
+  CHECK_EQUAL(fmt::format("{}", address_type{}), "addr");
   CHECK(!caf::holds_alternative<address_type>(t));
   CHECK(caf::holds_alternative<address_type>(at));
   const auto lat = type::from_legacy_type(legacy_address_type{});
@@ -274,7 +274,7 @@ TEST(list_type) {
   CHECK(t != lit);
   CHECK(t < lit);
   CHECK(t <= lit);
-  CHECK_EQUAL(fmt::format("{}", lit), "list<integer>");
+  CHECK_EQUAL(fmt::format("{}", lit), "list<int>");
   CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<none>");
   CHECK(!caf::holds_alternative<list_type>(t));
   CHECK(caf::holds_alternative<list_type>(lit));
@@ -297,7 +297,7 @@ TEST(map_type) {
   CHECK(t != msit);
   CHECK(t < msit);
   CHECK(t <= msit);
-  CHECK_EQUAL(fmt::format("{}", msit), "map<string, integer>");
+  CHECK_EQUAL(fmt::format("{}", msit), "map<string, int>");
   CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<none, none>");
   CHECK(!caf::holds_alternative<map_type>(t));
   CHECK(caf::holds_alternative<map_type>(msit));
@@ -328,18 +328,18 @@ TEST(record_type) {
        {"s", subnet_type{}},
      }},
   }};
-  CHECK_EQUAL(fmt::format("{}", rt), "record {i: integer, r1: record {p: port, "
-                                     "a: address}, b: bool, r2: record {s: "
+  CHECK_EQUAL(fmt::format("{}", rt), "record {i: int, r1: record {p: port, "
+                                     "a: addr}, b: bool, r2: record {s: "
                                      "subnet}}");
   const auto& r = caf::get<record_type>(rt);
   CHECK_EQUAL(r.field(2).type, bool_type{});
   CHECK_EQUAL(r.field({1, 1}).type, address_type{});
   CHECK_EQUAL(r.field({3, 0}).name, "s");
   CHECK_EQUAL(fmt::format("{}", fmt::join(r.fields(), ", ")),
-              "i: integer, r1: record {p: port, a: address}, b: bool, r2: "
+              "i: int, r1: record {p: port, a: addr}, b: bool, r2: "
               "record {s: subnet}");
   CHECK_EQUAL(fmt::format("{}", fmt::join(flatten(r).fields(), ", ")),
-              "i: integer, r1.p: port, r1.a: address, b: bool, r2.s: subnet");
+              "i: int, r1.p: port, r1.a: addr, b: bool, r2.s: subnet");
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
 }
 
@@ -584,26 +584,19 @@ TEST(type inference) {
   // Enumeration types cannot be inferred.
   CHECK_EQUAL(type::infer(enumeration{0}), none_type{});
   // List and map types can only be inferred if the nested values can be inferred.
-  CHECK_EQUAL(type::infer(list{}), none_type{});
-  CHECK_EQUAL(type::infer(list{caf::none}), none_type{});
+  CHECK_EQUAL(type::infer(list{}), list_type{none_type{}});
+  CHECK_EQUAL(type::infer(list{caf::none}), list_type{none_type{}});
   CHECK_EQUAL(type::infer(list{bool{}}), list_type{bool_type{}});
-  CHECK_EQUAL(type::infer(map{}), none_type{});
-  CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}), none_type{});
-  CHECK_EQUAL(type::infer(map{{caf::none, integer{}}}), none_type{});
-  CHECK_EQUAL(type::infer(map{{bool{}, caf::none}}), none_type{});
+  CHECK_EQUAL(type::infer(map{}), (map_type{none_type{}, none_type{}}));
+  CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}),
+              (map_type{none_type{}, none_type{}}));
+  CHECK_EQUAL(type::infer(map{{caf::none, integer{}}}),
+              (map_type{none_type{}, integer_type{}}));
+  CHECK_EQUAL(type::infer(map{{bool{}, caf::none}}),
+              (map_type{bool_type{}, none_type{}}));
   CHECK_EQUAL(type::infer(map{{bool{}, integer{}}}),
               (map_type{bool_type{}, integer_type{}}));
-  // Record types can only be inferred when all fields can be inferred.
-  const auto r1 = record{
-    {"a", bool{}},
-    {"b", integer{}},
-    {"c",
-     record{
-       {"d", caf::none},
-     }},
-  };
-  CHECK_EQUAL(type::infer(r1), none_type{});
-  const auto r2 = record{
+  const auto r = record{
     {"a", bool{}},
     {"b", integer{}},
     {"c",
@@ -619,7 +612,7 @@ TEST(type inference) {
        {"d", count_type{}},
      }},
   };
-  CHECK_EQUAL(type::infer(r2), rt);
+  CHECK_EQUAL(type::infer(r), rt);
 }
 
 TEST(legacy_type conversion) {
@@ -710,9 +703,40 @@ TEST(sorting) {
   };
   std::shuffle(ts.begin(), ts.end(), std::random_device());
   std::sort(ts.begin(), ts.end());
-  const char* expected
-    = "none bool integer custom_bool custom_none custom_integer";
+  const char* expected = "none bool int custom_bool custom_none custom_integer";
   CHECK_EQUAL(fmt::format("{}", fmt::join(ts, " ")), expected);
+}
+
+TEST(construct) {
+  // This type is taking from the "vast import test" generator feature. The
+  // default blueprint record type contains the duplicate field name "s", for
+  // which we must still be able to correctly create a record. This is achieved
+  // by internally using record::make_unsafe to allow for duplicates.
+  // TODO: This test will once we replace record with a better-suited data
+  // structure that more clearly enforces its contract. The
+  // `record::make_unsafe` functionality should not exist.
+  const auto t = type{
+    "test.full",
+    record_type{
+      {"n", list_type{integer_type{}}},
+      {"b", type{bool_type{}, {{"default", "uniform(0,1)"}}}},
+      {"i", type{integer_type{}, {{"default", "uniform(-42000,1337)"}}}},
+      {"c", type{count_type{}, {{"default", "pareto(0,1)"}}}},
+      {"r", type{real_type{}, {{"default", "normal(0,1)"}}}},
+      {"s", type{string_type{}, {{"default", "uniform(0,100)"}}}},
+      {"t", type{time_type{}, {{"default", "uniform(0,10)"}}}},
+      {"d", type{duration_type{}, {{"default", "uniform(100,200)"}}}},
+      {"a", type{address_type{}, {{"default", "uniform(0,2000000)"}}}},
+      {"s", type{subnet_type{}, {{"default", "uniform(1000,2000)"}}}},
+    },
+  };
+  const auto expected = record::vector_type{
+    {"n", data{list{}}},   {"b", data{bool{}}},     {"i", data{integer{}}},
+    {"c", data{count{}}},  {"r", data{real{}}},     {"s", data{std::string{}}},
+    {"t", data{time{}}},   {"d", data{duration{}}}, {"a", data{address{}}},
+    {"s", data{subnet{}}},
+  };
+  CHECK_EQUAL(t.construct(), record::make_unsafe(expected));
 }
 
 TEST(sum type) {
@@ -735,23 +759,32 @@ TEST(hashes) {
     auto hasher = std::hash<T>{};
     return hasher(value);
   };
-  CHECK_EQUAL(hash(none_type{}), 0x5DF28E92BCCA4531ul);
-  CHECK_EQUAL(hash(bool_type{}), 0xBFF0C79D40554449ul);
-  CHECK_EQUAL(hash(integer_type{}), 0xD8C66D08F868662Bul);
-  CHECK_EQUAL(hash(count_type{}), 0x2F80823CB9D60C3Bul);
-  CHECK_EQUAL(hash(real_type{}), 0x8AC3473B0C9FDB7Aul);
-  CHECK_EQUAL(hash(duration_type{}), 0x9FB2CA5D9CDF512Aul);
-  CHECK_EQUAL(hash(time_type{}), 0x379DC79C15D4FC1Aul);
-  CHECK_EQUAL(hash(string_type{}), 0x3F92527B5CA01E46ul);
-  CHECK_EQUAL(hash(pattern_type{}), 0xB58A4DFCBCAB3AA0ul);
-  CHECK_EQUAL(hash(address_type{}), 0xB195BC7644771465ul);
-  CHECK_EQUAL(hash(subnet_type{}), 0xCF652DBCCA4AAED5ul);
-  CHECK_EQUAL(hash(enumeration_type{{"a"}, {"b"}, {"c"}}),
-              0x624171C602B39999ul);
-  CHECK_EQUAL(hash(list_type{integer_type{}}), 0xFAE238FED25FDCD0ul);
-  CHECK_EQUAL(hash(map_type{time_type{}, string_type{}}), 0xF6694A1437D5D288ul);
-  CHECK_EQUAL(hash(record_type{{"a", address_type{}}, {"b", bool_type{}}}),
-              0x4BB2B1174A8B3788ul);
+  // We're comparing strings here because that is easier to change from the log
+  // output in failed unit tests. :-)
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(none_type{})), "0xD98ED04EF02580D");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(bool_type{})), "0x2AEF7F8C54823CAE");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(integer_type{})), "0xF1809CF3015A370");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(count_type{})), "0x5DC9B5CD591D8946");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0xF19D708E7A55F3B9");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(duration_type{})), "0x2E589BA58C507BF"
+                                                            "5");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(time_type{})), "0xCDE3F4CA1B2E0AA8");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(string_type{})), "0xACFC2D0BCAAB0A5");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(pattern_type{})), "0x24308780C759CA5"
+                                                           "1");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(address_type{})), "0xB2AA3D764D09152"
+                                                           "B");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(subnet_type{})), "0x30C095E09815B975");
+  CHECK_EQUAL(fmt::format("0x{:X}",
+                          hash(enumeration_type{{"a"}, {"b"}, {"c"}})),
+              "0xEBD7A329C280F159");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(list_type{integer_type{}})),
+              "0x668E71A23FFCB6B9");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(map_type{time_type{}, string_type{}})),
+              "0x81326B2AFF9E6CF2");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(record_type{{"a", address_type{}},
+                                                     {"b", bool_type{}}})),
+              "0xED57C299AF1D1E40");
 }
 
 TEST(congruence) {

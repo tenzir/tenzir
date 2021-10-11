@@ -24,42 +24,53 @@ using namespace std::string_literals;
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
-  const legacy_record_type l0 = legacy_record_type{
-    {"ts", legacy_time_type{}},
-    {"addr", legacy_address_type{}},
-    {"port", legacy_count_type{}}}.name("l0");
+  const record_type l0 = caf::get<record_type>(type{
+    "l0",
+    record_type{
+      {"ts", time_type{}},
+      {"addr", address_type{}},
+      {"port", count_type{}},
+    },
+  });
 
-  const legacy_record_type l1
-    = legacy_record_type{{"s", legacy_string_type{}},
-                         {"ptn", legacy_pattern_type{}},
-                         {"lis", legacy_list_type{legacy_count_type{}}}}
-        .name("l1");
+  const record_type l1 = caf::get<record_type>(type{
+    "l1",
+    record_type{
+      {"s", string_type{}},
+      {"ptn", pattern_type{}},
+      {"lis", list_type{count_type{}}},
+    },
+  });
 
-  const legacy_record_type l2 = legacy_record_type{
-    {"b", legacy_bool_type{}},
-    {"c", legacy_count_type{}},
-    {"r", legacy_real_type{}},
-    {"i", legacy_integer_type{}},
-    {"s", legacy_string_type{}},
-    {"a", legacy_address_type{}},
-    {"sn", legacy_subnet_type{}},
-    {"t", legacy_time_type{}},
-    {"d", legacy_duration_type{}},
-    {"d2", legacy_duration_type{}},
-    {"e", legacy_enumeration_type{{"FOO", "BAR", "BAZ"}}},
-    {"lc", legacy_list_type{legacy_count_type{}}},
-    {"lt", legacy_list_type{legacy_time_type{}}},
-    {"msa", legacy_map_type{legacy_string_type{}, legacy_address_type{}}},
-    {"mcs",
-     legacy_map_type{
-       legacy_count_type{},
-       legacy_string_type{}}}}.name("l2");
+  const record_type l2 = caf::get<record_type>(type{
+    "l2",
+    record_type{
+      {"b", bool_type{}},
+      {"c", count_type{}},
+      {"r", real_type{}},
+      {"i", integer_type{}},
+      {"s", string_type{}},
+      {"a", address_type{}},
+      {"sn", subnet_type{}},
+      {"t", time_type{}},
+      {"d", duration_type{}},
+      {"d2", duration_type{}},
+      {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},
+      {"lc", list_type{count_type{}}},
+      {"lt", list_type{time_type{}}},
+      {"msa", map_type{string_type{}, address_type{}}},
+      {"mcs", map_type{count_type{}, string_type{}}},
+    },
+  });
 
-  const legacy_record_type l3 = legacy_record_type{
-    {"s1", legacy_string_type{}},
-    {"s2", legacy_string_type{}},
-    {"s2,3",
-     legacy_string_type{}}}.name("l3");
+  const record_type l3 = caf::get<record_type>(type{
+    "l3",
+    record_type{
+      {"s1", string_type{}},
+      {"s2", string_type{}},
+      {"s2,3", string_type{}},
+    },
+  });
 
   schema s;
 
@@ -78,8 +89,9 @@ struct fixture : fixtures::deterministic_actor_system {
     format::csv::reader reader{options, std::move(in)};
     reader.schema(s);
     std::vector<table_slice> slices;
-    auto add_slice
-      = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
+    auto add_slice = [&](table_slice slice) {
+      slices.emplace_back(std::move(slice));
+    };
     auto [err, num] = reader.read(max_events, max_slice_size, add_slice);
     REQUIRE_EQUAL(err, caf::none);
     size_t lines = std::count(data.begin(), data.end(), '\n');
@@ -104,10 +116,10 @@ std::string_view l0_log0 = R"__(ts,addr,port
 
 TEST(csv reader - simple) {
   auto slices = run(l0_log0, 8, 5);
-  REQUIRE_EQUAL(slices[0].layout(), l0);
-  CHECK(slices[1].at(0, 0, legacy_time_type{})
+  REQUIRE_EQUAL(slices[0].layout().type, l0);
+  CHECK(slices[1].at(0, 0)
         == data{unbox(to<vast::time>("2011-08-12T14:59:11.994970Z"))});
-  CHECK(slices[1].at(1, 2, legacy_count_type{}) == data{count{1047}});
+  CHECK(slices[1].at(1, 2) == data{count{1047}});
 }
 
 std::string_view l0_log1 = R"__(ts,addr,port
@@ -122,10 +134,10 @@ std::string_view l0_log1 = R"__(ts,addr,port
 
 TEST(csv reader - empty fields) {
   auto slices = run(l0_log1, 8, 5);
-  REQUIRE_EQUAL(slices[0].layout(), l0);
-  CHECK(slices[1].at(0, 1, legacy_address_type{})
+  REQUIRE_EQUAL(slices[0].layout().type, l0);
+  CHECK(slices[1].at(0, 1, address_type{})
         == data{unbox(to<address>("147.32.84.165"))});
-  CHECK(slices[1].at(1, 2, legacy_count_type{}) == data{caf::none});
+  CHECK(slices[1].at(1, 2, count_type{}) == data{caf::none});
 }
 
 std::string_view l1_log_string = R"__(s
@@ -134,9 +146,9 @@ hello
 
 TEST(csv reader - string) {
   auto slices = run(l1_log_string, 1, 1);
-  auto l1_string = legacy_record_type{{"s", legacy_string_type{}}}.name("l1");
-  REQUIRE_EQUAL(slices[0].layout(), l1_string);
-  CHECK(slices[0].at(0, 0, legacy_string_type{}) == data{"hello"});
+  auto l1_string = type{"l1", record_type{{"s", string_type{}}}};
+  REQUIRE_EQUAL(slices[0].layout().type, l1_string);
+  CHECK(slices[0].at(0, 0) == data{"hello"});
 }
 
 std::string_view l1_log_pattern = R"__(ptn
@@ -145,10 +157,9 @@ hello
 
 TEST(csv reader - pattern) {
   auto slices = run(l1_log_pattern, 1, 1);
-  auto l1_pattern
-    = legacy_record_type{{"ptn", legacy_pattern_type{}}}.name("l1");
-  REQUIRE_EQUAL(slices[0].layout(), l1_pattern);
-  CHECK(slices[0].at(0, 0, legacy_pattern_type{}) == data{pattern{"hello"}});
+  auto l1_pattern = type{"l1", record_type{{"ptn", pattern_type{}}}};
+  REQUIRE_EQUAL(slices[0].layout().type, l1_pattern);
+  CHECK(slices[0].at(0, 0) == data{pattern{"hello"}});
 }
 
 std::string_view l1_log0 = R"__(s,ptn,lis
@@ -182,13 +193,12 @@ burden,Sighing,[42,1337]
 
 TEST(csv reader - layout with container) {
   auto slices = run(l1_log0, 20, 20);
-  REQUIRE_EQUAL(slices[0].layout(), l1);
-  CHECK(slices[0].at(10, 1, legacy_pattern_type{})
-        == data{pattern{"gladness"}});
+  REQUIRE_EQUAL(slices[0].layout().type, l1);
+  CHECK(slices[0].at(10, 1) == data{pattern{"gladness"}});
   auto xs = vast::list{};
   xs.emplace_back(data{count{42}});
   xs.emplace_back(data{count{1337}});
-  CHECK(slices[0].at(19, 2, legacy_list_type{legacy_count_type{}}) == data{xs});
+  CHECK(slices[0].at(19, 2, list_type{count_type{}}) == data{xs});
 }
 
 std::string_view l1_log1 = R"__(s,ptn
@@ -221,13 +231,16 @@ burden,Sighing
 ,,)__";
 
 TEST(csv reader - sublayout construction) {
-  auto l1_sub = legacy_record_type{{"s", legacy_string_type{}},
-                                   {"ptn", legacy_pattern_type{}}}
-                  .name("l1");
+  auto l1_sub = type{
+    "l1",
+    record_type{
+      {"s", string_type{}},
+      {"ptn", pattern_type{}},
+    },
+  };
   auto slices = run(l1_log1, 20, 20);
-  REQUIRE_EQUAL(slices[0].layout(), l1_sub);
-  CHECK(slices[0].at(10, 1, legacy_pattern_type{})
-        == data{pattern{"gladness"}});
+  REQUIRE_EQUAL(slices[0].layout().type, l1_sub);
+  CHECK(slices[0].at(10, 1) == data{pattern{"gladness"}});
 }
 
 std::string_view l2_log_msa = R"__(msa
@@ -235,13 +248,13 @@ std::string_view l2_log_msa = R"__(msa
 
 TEST(csv reader - map string->address) {
   auto slices = run(l2_log_msa, 1, 1);
-  auto t = legacy_map_type{legacy_string_type{}, legacy_address_type{}};
-  auto l2_msa = legacy_record_type{{"msa", t}}.name("l2");
-  REQUIRE_EQUAL(slices[0].layout(), l2_msa);
+  auto t = map_type{string_type{}, address_type{}};
+  auto l2_msa = type{"l2", record_type{{"msa", t}}};
+  REQUIRE_EQUAL(slices[0].layout().type, l2_msa);
   auto m = vast::map{};
   m.emplace(data{"foo"}, unbox(to<address>("1.2.3.4")));
   m.emplace(data{"bar"}, unbox(to<address>("2001:db8::")));
-  CHECK_EQUAL(materialize(slices[0].at(0, 0, t)), data{m});
+  CHECK_EQUAL(materialize(slices[0].at(0, 0)), data{m});
 }
 
 std::string_view l2_log_vp = R"__(lc
@@ -250,9 +263,9 @@ std::string_view l2_log_vp = R"__(lc
 
 TEST(csv reader - list of count) {
   auto slices = run(l2_log_vp, 2, 100);
-  auto t = legacy_list_type{legacy_count_type{}};
-  auto l2_vp = legacy_record_type{{"lc", t}}.name("l2");
-  REQUIRE_EQUAL(slices[0].layout(), l2_vp);
+  auto t = list_type{count_type{}};
+  auto l2_vp = type{"l2", record_type{{"lc", t}}};
+  REQUIRE_EQUAL(slices[0].layout().type, l2_vp);
   CHECK(slices[0].at(0, 0, t) == data{list{1u, 2u, 3u, 4u, 5u}});
   CHECK(slices[0].at(1, 0, t) == data{list{}});
 }
@@ -263,12 +276,10 @@ std::string_view l2_log_subnet = R"__(sn
 
 TEST(csv reader - subnet) {
   auto slices = run(l2_log_subnet, 2, 2);
-  auto l2_subnet = legacy_record_type{{"sn", legacy_subnet_type{}}}.name("l2");
-  REQUIRE_EQUAL(slices[0].layout(), l2_subnet);
-  CHECK(slices[0].at(0, 0, legacy_subnet_type{})
-        == data{unbox(to<subnet>("1.2.3.4/20"))});
-  CHECK(slices[0].at(1, 0, legacy_subnet_type{})
-        == data{unbox(to<subnet>("2001:db8::/125"))});
+  auto l2_subnet = type{"l2", record_type{{"sn", subnet_type{}}}};
+  REQUIRE_EQUAL(slices[0].layout().type, l2_subnet);
+  CHECK(slices[0].at(0, 0) == data{unbox(to<subnet>("1.2.3.4/20"))});
+  CHECK(slices[0].at(1, 0) == data{unbox(to<subnet>("2001:db8::/125"))});
 }
 
 std::string_view l2_log_duration = R"__(d,d2
@@ -276,11 +287,15 @@ std::string_view l2_log_duration = R"__(d,d2
 
 TEST(csv reader - duration) {
   auto slices = run(l2_log_duration, 1, 1);
-  auto l2_duration = legacy_record_type{{"d", legacy_duration_type{}},
-                                        {"d2", legacy_duration_type{}}}
-                       .name("l2");
-  REQUIRE_EQUAL(slices[0].layout(), l2_duration);
-  CHECK(slices[0].at(0, 0, legacy_duration_type{})
+  auto l2_duration = type{
+    "l2",
+    record_type{
+      {"d", duration_type{}},
+      {"d2", duration_type{}},
+    },
+  };
+  REQUIRE_EQUAL(slices[0].layout().type, l2_duration);
+  CHECK(slices[0].at(0, 0, duration_type{})
         == data{unbox(to<duration>("42s"))});
 }
 
@@ -294,41 +309,41 @@ std::string_view l2_log_reord = R"__(msa, c, r, i, b,  a,  sn, d,  e,  t, lc, lt
 
 TEST(csv reader - reordered layout) {
   auto slices = run(l2_log_reord, 1, 1);
-  auto l2_sub = legacy_record_type{{"msa", legacy_map_type{legacy_string_type{}, legacy_address_type{}}},
-                            {"c", legacy_count_type{}},
-                            {"r", legacy_real_type{}},
-                            {"i", legacy_integer_type{}},
-                            {"b", legacy_bool_type{}},
-                            {"a", legacy_address_type{}},
-                            {"sn", legacy_subnet_type{}},
-                            {"d", legacy_duration_type{}},
-                            {"e", legacy_enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                            {"t", legacy_time_type{}},
-                            {"lc", legacy_list_type{legacy_count_type{}}},
-                            {"lt", legacy_list_type{legacy_time_type{}}},
-                            // FIXME: Parsing maps in csv is broken, see ch12358.
-                            // {"mcs", legacy_map_type{legacy_count_type{}, legacy_string_type{}}}
-                            }
-                  .name("l2");
-  REQUIRE_EQUAL(slices[0].layout(), l2_sub);
-  CHECK(slices[0].at(0, 0, l2_sub.at("msa")->type)
+  auto l2_sub = caf::get<record_type>(type{
+    "l2",
+    record_type{
+      {"msa", map_type{string_type{}, address_type{}}},
+      {"c", count_type{}},
+      {"r", real_type{}},
+      {"i", integer_type{}},
+      {"b", bool_type{}},
+      {"a", address_type{}},
+      {"sn", subnet_type{}},
+      {"d", duration_type{}},
+      {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},
+      {"t", time_type{}},
+      {"lc", list_type{count_type{}}},
+      {"lt", list_type{time_type{}}},
+      // FIXME: Parsing maps in csv is broken, see ch12358.
+      // {"mcs", map_type{count_type{}, string_type{}}}
+    },
+  });
+  REQUIRE_EQUAL(slices[0].layout().type, l2_sub);
+  CHECK(slices[0].at(0, 0)
         == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
                     {data{"bar"}, unbox(to<address>("2001:db8::"))}}});
-  CHECK(slices[0].at(0, 1, l2_sub.at("c")->type) == data{count{424242}});
-  CHECK(slices[0].at(0, 2, l2_sub.at("r")->type) == data{real{4.2}});
-  CHECK(slices[0].at(0, 3, l2_sub.at("i")->type) == data{integer{-1337}});
-  CHECK(slices[0].at(0, 4, l2_sub.at("b")->type) == data{true});
-  CHECK(slices[0].at(0, 5, l2_sub.at("a")->type)
-        == data{unbox(to<address>("147.32.84.165"))});
-  CHECK(slices[0].at(0, 6, l2_sub.at("sn")->type)
-        == data{unbox(to<subnet>("192.168.0.1/24"))});
-  CHECK(slices[0].at(0, 7, l2_sub.at("d")->type)
-        == data{unbox(to<duration>("42s"))});
-  CHECK(slices[0].at(0, 8, l2_sub.at("e")->type) == data{enumeration{2}});
-  CHECK(slices[0].at(0, 9, l2_sub.at("t")->type)
+  CHECK(slices[0].at(0, 1) == data{count{424242}});
+  CHECK(slices[0].at(0, 2) == data{real{4.2}});
+  CHECK(slices[0].at(0, 3) == data{integer{-1337}});
+  CHECK(slices[0].at(0, 4) == data{true});
+  CHECK(slices[0].at(0, 5) == data{unbox(to<address>("147.32.84.165"))});
+  CHECK(slices[0].at(0, 6) == data{unbox(to<subnet>("192.168.0.1/24"))});
+  CHECK(slices[0].at(0, 7) == data{unbox(to<duration>("42s"))});
+  CHECK(slices[0].at(0, 8) == data{enumeration{2}});
+  CHECK(slices[0].at(0, 9)
         == data{unbox(to<vast::time>("2011-08-12+14:59:11.994970"))});
-  CHECK(slices[0].at(0, 10, l2_sub.at("lc")->type) == data{list{5555u, 0u}});
-  CHECK(slices[0].at(0, 11, l2_sub.at("lt")->type)
+  CHECK(slices[0].at(0, 10) == data{list{5555u, 0u}});
+  CHECK(slices[0].at(0, 11)
         == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
   auto m = map{};
   m[1u] = data{"FOO"};
@@ -341,18 +356,18 @@ std::string_view l2_line_endings = "d,d2\r\n42s,5days\n10s,1days\r\n";
 
 TEST(csv reader - line endings) {
   auto slices = run(l2_line_endings, 2, 2);
-  auto l2_duration = legacy_record_type{{"d", legacy_duration_type{}},
-                                        {"d2", legacy_duration_type{}}}
-                       .name("l2");
-  REQUIRE_EQUAL(slices[0].layout(), l2_duration);
-  CHECK(slices[0].at(0, 0, legacy_duration_type{})
-        == data{unbox(to<duration>("42s"))});
-  CHECK(slices[0].at(0, 1, legacy_duration_type{})
-        == data{unbox(to<duration>("5days"))});
-  CHECK(slices[0].at(1, 0, legacy_duration_type{})
-        == data{unbox(to<duration>("10s"))});
-  CHECK(slices[0].at(1, 1, legacy_duration_type{})
-        == data{unbox(to<duration>("1days"))});
+  auto l2_duration = caf::get<record_type>(type{
+    "l2",
+    record_type{
+      {"d", duration_type{}},
+      {"d2", duration_type{}},
+    },
+  });
+  REQUIRE_EQUAL(slices[0].layout().type, l2_duration);
+  CHECK(slices[0].at(0, 0) == data{unbox(to<duration>("42s"))});
+  CHECK(slices[0].at(0, 1) == data{unbox(to<duration>("5days"))});
+  CHECK(slices[0].at(1, 0) == data{unbox(to<duration>("10s"))});
+  CHECK(slices[0].at(1, 1) == data{unbox(to<duration>("1days"))});
 }
 
 // Below are strings that extensively test quoting and escaping for string
@@ -365,14 +380,18 @@ c,d)__";
 
 TEST(csv reader - quoted strings in header) {
   auto slices = run(l3_quoted_strings_header, 2, 2);
-  auto l3_strings = legacy_record_type{{"s1", legacy_string_type{}},
-                                       {"s2,3", legacy_string_type{}}}
-                      .name("l3");
-  REQUIRE_EQUAL(slices[0].layout(), l3_strings);
-  CHECK(slices[0].at(0, 0, legacy_string_type{}) == data{"a"});
-  CHECK(slices[0].at(0, 1, legacy_string_type{}) == data{"b"});
-  CHECK(slices[0].at(1, 0, legacy_string_type{}) == data{"c"});
-  CHECK(slices[0].at(1, 1, legacy_string_type{}) == data{"d"});
+  auto l3_strings = type{
+    "l3",
+    record_type{
+      {"s1", string_type{}},
+      {"s2,3", string_type{}},
+    },
+  };
+  REQUIRE_EQUAL(slices[0].layout().type, l3_strings);
+  CHECK(slices[0].at(0, 0) == data{"a"});
+  CHECK(slices[0].at(0, 1) == data{"b"});
+  CHECK(slices[0].at(1, 0) == data{"c"});
+  CHECK(slices[0].at(1, 1) == data{"d"});
 }
 
 std::string_view l3_quoted_strings_1 = R"__(s1
@@ -385,21 +404,29 @@ a,"b,c"
 TEST(csv reader - quoted string) {
   {
     auto slices = run(l3_quoted_strings_1, 1, 1);
-    auto l3_strings
-      = legacy_record_type{{"s1", legacy_string_type{}}}.name("l3");
-    REQUIRE_EQUAL(slices[0].layout(), l3_strings);
-    CHECK(slices[0].at(0, 0, legacy_string_type{}) == data{"hello, world"});
+    auto l3_strings = type{
+      "l3",
+      record_type{
+        {"s1", string_type{}},
+      },
+    };
+    REQUIRE_EQUAL(slices[0].layout().type, l3_strings);
+    CHECK(slices[0].at(0, 0) == data{"hello, world"});
   }
   {
     auto slices = run(l3_quoted_strings_2, 2, 2);
-    auto l3_strings = legacy_record_type{{"s1", legacy_string_type{}},
-                                         {"s2", legacy_string_type{}}}
-                        .name("l3");
-    REQUIRE_EQUAL(slices[0].layout(), l3_strings);
-    CHECK(slices[0].at(0, 0, legacy_string_type{}) == data{"a"});
-    CHECK(slices[0].at(0, 1, legacy_string_type{}) == data{"b,c"});
-    CHECK(slices[0].at(1, 0, legacy_string_type{}) == data{"d,e,\"f"});
-    CHECK(slices[0].at(1, 1, legacy_string_type{}) == data{"\\\"g"});
+    auto l3_strings = type{
+      "l3",
+      record_type{
+        {"s1", string_type{}},
+        {"s2", string_type{}},
+      },
+    };
+    REQUIRE_EQUAL(slices[0].layout().type, l3_strings);
+    CHECK(slices[0].at(0, 0) == data{"a"});
+    CHECK(slices[0].at(0, 1) == data{"b,c"});
+    CHECK(slices[0].at(1, 0) == data{"d,e,\"f"});
+    CHECK(slices[0].at(1, 1) == data{"\\\"g"});
   }
 }
 

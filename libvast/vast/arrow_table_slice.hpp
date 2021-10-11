@@ -27,7 +27,16 @@ struct arrow_table_slice_state;
 template <>
 struct arrow_table_slice_state<fbs::table_slice::arrow::v0> {
   /// The deserialized table layout.
-  legacy_record_type layout;
+  type layout;
+
+  /// The deserialized Arrow Record Batch.
+  std::shared_ptr<arrow::RecordBatch> record_batch;
+};
+
+template <>
+struct arrow_table_slice_state<fbs::table_slice::arrow::v1> {
+  /// The deserialized table layout.
+  type layout;
 
   /// The deserialized Arrow Record Batch.
   std::shared_ptr<arrow::RecordBatch> record_batch;
@@ -42,14 +51,8 @@ public:
 
   /// Constructs an Arrow-encoded table slice from a FlatBuffers table.
   /// @param slice The encoding-specific FlatBuffers table.
-  explicit arrow_table_slice(const FlatBuffer& slice) noexcept;
-
-  /// Constructs an Arrow-encoded table slice from a FlatBuffers table and
-  /// a known layout.
-  /// @param slice The encoding-specific FlatBuffers table.
-  /// @param layout The table layout.
-  arrow_table_slice(const FlatBuffer& slice,
-                    legacy_record_type layout) noexcept;
+  /// @param parent The surrounding chunk.
+  arrow_table_slice(const FlatBuffer& slice, const chunk_ptr& parent) noexcept;
 
   /// Destroys a Arrow-encoded table slice.
   ~arrow_table_slice() noexcept;
@@ -58,14 +61,14 @@ public:
 
   /// Whether the most recent version of the encoding is used.
   inline static constexpr bool is_latest_version
-    = std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>;
+    = std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v1>;
 
   /// The encoding of the slice.
   inline static constexpr enum table_slice_encoding encoding
     = table_slice_encoding::arrow;
 
   /// @returns The table layout.
-  [[nodiscard]] const legacy_record_type& layout() const noexcept;
+  [[nodiscard]] const record_type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] table_slice::size_type rows() const noexcept;
@@ -96,7 +99,7 @@ public:
   /// @pre `row < rows() && column < columns()`
   [[nodiscard]] data_view
   at(table_slice::size_type row, table_slice::size_type column,
-     const legacy_type& t) const;
+     const type& t) const;
 
   /// @returns A shared pointer to the underlying Arrow Record Batch.
   [[nodiscard]] std::shared_ptr<arrow::RecordBatch>
@@ -120,5 +123,6 @@ arrow_table_slice(const FlatBuffer&) -> arrow_table_slice<FlatBuffer>;
 
 /// Extern template declarations for all Arrow encoding versions.
 extern template class arrow_table_slice<fbs::table_slice::arrow::v0>;
+extern template class arrow_table_slice<fbs::table_slice::arrow::v1>;
 
 } // namespace vast

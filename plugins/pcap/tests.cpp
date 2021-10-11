@@ -93,8 +93,8 @@ TEST(PCAP read 1) {
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(events_produced, 44u);
   auto&& layout = slice.layout();
-  CHECK_EQUAL(layout.name(), "pcap.packet");
-  auto src_field = slice.at(43, 1, legacy_address_type{});
+  CHECK_EQUAL(layout.name, "pcap.packet");
+  auto src_field = slice.at(43, 1, address_type{});
   auto src = unbox(caf::get_if<view<address>>(&src_field));
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
   auto community_id_column = table_slice_column::make(slice, "community_id");
@@ -138,7 +138,7 @@ TEST(PCAP read 2) {
   REQUIRE_EQUAL(produced, 36u);
   CHECK_EQUAL(slice.rows(), 36u);
   auto&& layout = slice.layout();
-  CHECK_EQUAL(layout.name(), "pcap.packet");
+  CHECK_EQUAL(layout.name, "pcap.packet");
   MESSAGE("write out read packets");
   const auto file
     = std::filesystem::path{"vast-unit-test-workshop-2011-browse.pcap"};

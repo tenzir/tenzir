@@ -20,7 +20,7 @@ using namespace vast;
 using namespace std::string_literals;
 
 TEST(enumeration) {
-  auto e = legacy_enumeration_type{{"foo", "bar"}};
+  auto e = enumeration_type{{{"foo"}, {"bar"}}};
   auto idx = enumeration_index(e);
   REQUIRE(idx.append(enumeration{0}));
   REQUIRE(idx.append(enumeration{0}));

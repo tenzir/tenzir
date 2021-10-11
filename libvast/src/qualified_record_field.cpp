@@ -8,25 +8,107 @@
 
 #include "vast/qualified_record_field.hpp"
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/data.hpp"
+#include "vast/legacy_type.hpp"
+
+#include <caf/deserializer.hpp>
+#include <caf/serializer.hpp>
 
 namespace vast {
 
+qualified_record_field::qualified_record_field(const class type& layout,
+                                               const offset& index) noexcept {
+  VAST_ASSERT(!layout.name().empty());
+  VAST_ASSERT(caf::holds_alternative<record_type>(layout));
+  VAST_ASSERT(!index.empty());
+  layout_name_ = layout.name();
+  field_ = caf::get<record_type>(layout).field(index);
+}
+
+qualified_record_field::qualified_record_field(
+  std::string_view layout_name, std::string_view field_name,
+  const class type& field_type) noexcept {
+  if (field_name.empty()) {
+    // backwards compat with partition v0
+    field_.type = {layout_name, field_type};
+    layout_name_ = field_.type.name();
+  } else if (layout_name.empty()) {
+    field_.type = {field_name, field_type};
+    field_.name = field_.type.name();
+  } else {
+    const class type intermediate = {
+      layout_name,
+      record_type{
+        {field_name, field_type},
+      },
+    };
+    // This works because the field shares the lifetime of the intermediate
+    // record type, keeping the references alive.
+    *this = qualified_record_field(intermediate, {0});
+  }
+}
+
+/// Retrieves the layout name.
+std::string_view qualified_record_field::layout_name() const noexcept {
+  return layout_name_;
+}
+
+std::string qualified_record_field::name() const noexcept {
+  if (layout_name_.empty())
+    return std::string{field_.name};
+  if (field_.name.empty())
+    return std::string{layout_name_};
+  return fmt::format("{}.{}", layout_name_, field_.name);
+}
+
+bool qualified_record_field::is_standalone_type() const noexcept {
+  return field_.name.empty();
+}
+
+class type qualified_record_field::type() const noexcept {
+  return field_.type;
+}
+
 bool operator==(const qualified_record_field& x,
-                const qualified_record_field& y) {
-  return x.layout_name == y.layout_name && x.field_name == y.field_name
-         && x.type == y.type;
+                const qualified_record_field& y) noexcept {
+  return std::tie(x.layout_name_, x.field_.name, x.field_.type)
+         == std::tie(y.layout_name_, y.field_.name, y.field_.type);
 }
 
 bool operator<(const qualified_record_field& x,
-               const qualified_record_field& y) {
-  return std::tie(x.layout_name, x.field_name, x.type)
-         < std::tie(y.layout_name, y.field_name, y.type);
+               const qualified_record_field& y) noexcept {
+  return std::tie(x.layout_name_, x.field_.name, x.field_.type)
+         < std::tie(y.layout_name_, y.field_.name, y.field_.type);
 }
 
-record_field as_record_field(const qualified_record_field& qf) {
-  return {qf.fqn(), qf.type};
+caf::error inspect(caf::serializer& f, qualified_record_field& x) {
+  static_assert(std::is_same_v<caf::serializer::result_type, caf::error>);
+  static_assert(caf::serializer::reads_state);
+  std::string layout_name = std::string{x.layout_name_};
+  std::string field_name = std::string{x.field_.name};
+  legacy_type field_type = x.field_.type.to_legacy_type();
+  return f(layout_name, field_name, field_type);
+}
+
+caf::error inspect(caf::deserializer& f, qualified_record_field& x) {
+  static_assert(std::is_same_v<caf::deserializer::result_type, caf::error>);
+  static_assert(caf::deserializer::writes_state);
+  // Need to switch logic below when this changes to bool with CAF 0.18.
+  // This overload exists for backwards compatibility. In some cases, we used
+  // to serialize qualified record fields using CAF. Back then, the qualified
+  // record field had these three members:
+  // - std::string layout_name
+  // - std::string field_name
+  // - legacy_type field_type
+  std::string layout_name = {};
+  std::string field_name = {};
+  legacy_type field_type = {};
+  auto result = f(layout_name, field_name, field_type);
+  if (result == caf::none)
+    x = qualified_record_field{layout_name, field_name,
+                               type::from_legacy_type(field_type)};
+  return result;
 }
 
 } // namespace vast
@@ -34,8 +116,12 @@ record_field as_record_field(const qualified_record_field& qf) {
 namespace std {
 
 size_t hash<vast::qualified_record_field>::operator()(
-  const vast::qualified_record_field& x) const {
-  return vast::uhash<vast::xxhash64>{}(x);
+  const vast::qualified_record_field& f) const noexcept {
+  using hash_algorithm = vast::default_hash;
+  hash_algorithm h{};
+  hash_append(h, f.name());
+  hash_append(h, f.type());
+  return static_cast<hash_algorithm::result_type>(h);
 }
 
 } // namespace std

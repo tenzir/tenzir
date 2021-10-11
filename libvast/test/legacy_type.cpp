@@ -25,14 +25,36 @@
 
 #include <string_view>
 
-#include "type_test.hpp"
-
 using caf::get_if;
 using caf::holds_alternative;
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 using namespace vast;
+
+namespace {
+
+/// Returns the type at `offset{xs...}`.
+template <class... Offsets>
+const vast::legacy_type&
+at(const vast::legacy_record_type& rec, Offsets... xs) {
+  auto ptr = rec.at(vast::offset{static_cast<size_t>(xs)...});
+  if (!ptr)
+    FAIL("offset lookup failed at " << std::vector<int>{xs...});
+  return ptr->type;
+}
+
+/// Returns the record type at `offset{xs...}`.
+template <class... Offsets>
+const vast::legacy_record_type&
+rec_at(const vast::legacy_record_type& rec, Offsets... xs) {
+  auto& t = at(rec, xs...);
+  if (!caf::holds_alternative<vast::legacy_record_type>(t))
+    FAIL("expected a record type at offset " << std::vector<int>{xs...});
+  return caf::get<vast::legacy_record_type>(t);
+}
+
+} // namespace
 
 TEST(default construction) {
   legacy_type t;
@@ -581,27 +603,27 @@ TEST(printable) {
 TEST(parseable) {
   legacy_type t;
   MESSAGE("basic");
-  CHECK(parsers::type("bool", t));
+  CHECK(parsers::legacy_type("bool", t));
   CHECK(t == legacy_bool_type{});
-  CHECK(parsers::type("string", t));
+  CHECK(parsers::legacy_type("string", t));
   CHECK(t == legacy_string_type{});
-  CHECK(parsers::type("addr", t));
+  CHECK(parsers::legacy_type("addr", t));
   CHECK(t == legacy_address_type{});
   MESSAGE("alias");
-  CHECK(parsers::type("timestamp", t));
+  CHECK(parsers::legacy_type("timestamp", t));
   CHECK_EQUAL(t, legacy_none_type{}.name("timestamp"));
   MESSAGE("enum");
-  CHECK(parsers::type("enum{foo, bar, baz}", t));
+  CHECK(parsers::legacy_type("enum{foo, bar, baz}", t));
   CHECK(t == legacy_enumeration_type{{"foo", "bar", "baz"}});
   MESSAGE("container");
-  CHECK(parsers::type("list<real>", t));
+  CHECK(parsers::legacy_type("list<real>", t));
   CHECK(t == legacy_type{legacy_list_type{legacy_real_type{}}});
-  CHECK(parsers::type("map<count, bool>", t));
+  CHECK(parsers::legacy_type("map<count, bool>", t));
   CHECK(
     t == legacy_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}});
   MESSAGE("record");
   auto str = R"__(record{"a b": addr, b: bool})__"sv;
-  CHECK(parsers::type(str, t));
+  CHECK(parsers::legacy_type(str, t));
   // clang-format off
   auto r = legacy_record_type{
     {"a b", legacy_address_type{}},
@@ -611,7 +633,7 @@ TEST(parseable) {
   CHECK_EQUAL(t, r);
   MESSAGE("recursive");
   str = "record{r: record{a: addr, i: record{b: bool}}}"sv;
-  CHECK(parsers::type(str, t));
+  CHECK(parsers::legacy_type(str, t));
   // clang-format off
   r = legacy_record_type{
     {"r", legacy_record_type{

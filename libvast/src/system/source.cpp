@@ -45,20 +45,17 @@ void source_state::initialize(const type_registry_actor& type_registry,
     blocking->request(type_registry, caf::infinite, atom::get_v)
       .receive(
         [=, this](type_set types) {
-          const auto is_valid = [&](const auto& layout) {
-            return layout.name().starts_with(type_filter);
-          };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
           auto merged_schema = schema{};
           for (const auto& type : local_schema)
-            if (auto&& layout = caf::get_if<vast::legacy_record_type>(&type))
-              if (is_valid(*layout))
+            if (type.name().starts_with(type_filter))
+              if (const auto* layout = caf::get_if<vast::record_type>(&type))
                 merged_schema.add(*layout);
           // Second, filter valid types from all available record types.
           for (auto& type : types)
-            if (auto&& layout = caf::get_if<vast::legacy_record_type>(&type))
-              if (is_valid(*layout))
+            if (type.name().starts_with(type_filter))
+              if (auto&& layout = caf::get_if<vast::record_type>(&type))
                 merged_schema.add(*layout);
           // Third, try to set the new schema.
           if (auto err = reader->schema(std::move(merged_schema));
@@ -119,15 +116,15 @@ void source_state::filter_and_push(
     if (auto filtered_slice = vast::filter(std::move(slice), *filter)) {
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
-                 slice.layout().name());
+                 slice.layout().name);
       push_to_out(std::move(*filtered_slice));
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
-                 reader->name(), unfiltered_rows, slice.layout().name());
+                 reader->name(), unfiltered_rows, slice.layout().name);
     }
   } else {
     VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
-               unfiltered_rows, slice.layout().name());
+               unfiltered_rows, slice.layout().name);
     push_to_out(std::move(slice));
   }
 }
@@ -218,7 +215,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
         self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
-          self->state.event_counters[slice.layout().name()] += slice.rows();
+          self->state.event_counters[std::string{slice.layout().name}]
+            += slice.rows();
           self->state.mgr->out().push(std::move(slice));
         });
       };

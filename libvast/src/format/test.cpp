@@ -31,28 +31,26 @@ namespace vast::format::test {
 
 namespace {
 
-caf::expected<distribution> make_distribution(const legacy_type& t) {
+caf::expected<distribution> make_distribution(const type& t) {
   using parsers::alpha;
   using parsers::real_opt_dot;
-  auto i = std::find_if(t.attributes().begin(), t.attributes().end(),
-                        [](auto& attr) { return attr.key == "default"; });
-  if (i == t.attributes().end() || !i->value)
+  auto tag = t.tag("default");
+  if (!tag || tag->empty())
     return caf::no_error;
   auto parser = +alpha >> '(' >> real_opt_dot >> ',' >> real_opt_dot >> ')';
   std::string name;
   double p0, p1;
   auto tie = std::tie(name, p0, p1);
-  if (!parser(*i->value, tie))
+  if (!parser(*tag, tie))
     return caf::make_error(ec::parse_error, "invalid distribution "
                                             "specification");
   if (name == "uniform") {
-    if (holds_alternative<legacy_integer_type>(t))
+    if (holds_alternative<integer_type>(t))
       return {std::uniform_int_distribution<vast::integer::value_type>{
         static_cast<vast::integer::value_type>(p0),
         static_cast<vast::integer::value_type>(p1)}};
-    else if (holds_alternative<legacy_bool_type>(t)
-             || holds_alternative<legacy_count_type>(t)
-             || holds_alternative<legacy_string_type>(t))
+    else if (holds_alternative<bool_type>(t) || holds_alternative<count_type>(t)
+             || holds_alternative<string_type>(t))
       return {std::uniform_int_distribution<count>{static_cast<count>(p0),
                                                    static_cast<count>(p1)}};
     else
@@ -82,12 +80,16 @@ struct initializer {
     return caf::no_error;
   }
 
-  caf::expected<void> operator()(const legacy_record_type& r) {
-    auto& xs = caf::get<list>(*data_);
-    VAST_ASSERT(xs.size() == r.fields.size());
-    for (auto i = 0u; i < r.fields.size(); ++i) {
-      data_ = &xs[i];
-      auto result = visit(*this, r.fields[i].type);
+  caf::expected<void> operator()(const record_type& r) {
+    auto& xs = caf::get<record>(*data_);
+    if (xs.size() != r.num_fields()) {
+      fmt::print(stderr, "{} != {}\n", xs.size(), r.num_fields());
+      fmt::print(stderr, "{} != {}\n", *data_, r);
+    }
+    VAST_ASSERT(xs.size() == r.num_fields());
+    for (size_t i = 0; auto& [_, v] : xs) {
+      data_ = &v;
+      auto result = visit(*this, r.field(i++).type);
       if (!result)
         return result;
     }
@@ -98,9 +100,9 @@ struct initializer {
   data* data_ = nullptr;
 };
 
-caf::expected<blueprint> make_blueprint(const legacy_type& t) {
+caf::expected<blueprint> make_blueprint(const type& t) {
   blueprint bp;
-  bp.data = construct(t);
+  bp.data = t.construct();
   auto result = visit(initializer{bp}, t);
   if (!result)
     return result.error();
@@ -133,33 +135,33 @@ struct randomizer {
     // Do nothing.
   }
 
-  void operator()(const legacy_integer_type&, integer& x) {
+  void operator()(const integer_type&, integer& x) {
     x.value = static_cast<integer::value_type>(sample());
   }
 
-  void operator()(const legacy_count_type&, count& x) {
+  void operator()(const count_type&, count& x) {
     x = sample();
   }
 
-  void operator()(const legacy_real_type&, real& x) {
+  void operator()(const real_type&, real& x) {
     x = sample();
   }
 
-  auto operator()(const legacy_time_type&, time& x) {
+  auto operator()(const time_type&, time& x) {
     x += std::chrono::duration_cast<duration>(double_seconds(sample()));
   }
 
-  auto operator()(const legacy_duration_type&, duration& x) {
+  auto operator()(const duration_type&, duration& x) {
     x += std::chrono::duration_cast<duration>(double_seconds(sample()));
   }
 
-  void operator()(const legacy_bool_type&, bool& b) {
+  void operator()(const bool_type&, bool& b) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<count> unif{0, 1};
     b = unif(gen);
   }
 
-  void operator()(const legacy_string_type&, std::string& str) {
+  void operator()(const string_type&, std::string& str) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<size_t> unif_size{0, 256};
     std::uniform_int_distribution<char> unif_char{32, 126}; // Printable ASCII
@@ -168,7 +170,7 @@ struct randomizer {
       c = unif_char(gen);
   }
 
-  void operator()(const legacy_address_type&, address& addr) {
+  void operator()(const address_type&, address& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.
     lcg gen{static_cast<lcg::result_type>(sample())};
@@ -182,18 +184,18 @@ struct randomizer {
     addr = {bytes, version, address::network};
   }
 
-  void operator()(const legacy_subnet_type&, subnet& sn) {
-    static legacy_type addr_type = legacy_address_type{};
+  void operator()(const subnet_type&, subnet& sn) {
+    static type addr_type = address_type{};
     address addr;
     (*this)(addr_type, addr);
     std::uniform_int_distribution<uint8_t> unif{0, 128};
-    sn = {std::move(addr), unif(gen_)};
+    sn = {addr, unif(gen_)};
   }
 
   // Can only be a record, because we don't support randomizing containers.
-  void operator()(const legacy_record_type& r, list& xs) {
+  void operator()(const record_type& r, list& xs) {
     for (auto i = 0u; i < xs.size(); ++i)
-      visit(*this, r.fields[i].type, xs[i]);
+      visit(*this, r.field(i).type, xs[i]);
   }
 
   auto sample() {
@@ -252,9 +254,9 @@ void reader::reset(std::unique_ptr<std::istream>) {
 caf::error reader::schema(vast::schema sch) {
   if (sch.empty())
     return caf::make_error(ec::format_error, "empty schema");
-  std::unordered_map<legacy_type, blueprint> blueprints;
+  std::unordered_map<type, blueprint> blueprints;
   auto subset = vast::schema{};
-  for (auto& t : sch) {
+  for (const auto& t : sch) {
     auto sn = detail::split(t.name(), ".");
     if (sn.size() != 2 || sn[0] != "test")
       continue;
