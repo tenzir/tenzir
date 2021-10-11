@@ -84,7 +84,7 @@ void hash_append(HashAlgorithm& h, T x) noexcept {
     if (x == 0)
       x = 0;
     detail::maybe_reverse_bytes(x, h);
-    h(&x, sizeof(x));
+    h(std::addressof(x), sizeof(x));
   } else {
     static_assert(std::is_same_v<T, T>, "T is neither integral nor a float");
   }
@@ -94,7 +94,7 @@ template <class HashAlgorithm>
 void hash_append(HashAlgorithm& h, std::nullptr_t) noexcept {
   const void* p = nullptr;
   detail::maybe_reverse_bytes(p, h);
-  h(&p, sizeof(p));
+  h(std::addressof(p), sizeof(p));
 }
 
 // -- chrono ------------------------------------------------------------------
