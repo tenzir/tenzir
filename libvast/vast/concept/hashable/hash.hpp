@@ -23,14 +23,14 @@ namespace vast {
 /// @returns A hash digest of *bytes* using `HashAlgorithm`.
 template <incremental_hash HashAlgorithm = default_hash, class T, class... Args>
   requires(
-    !contiguously_hashable<T, HashAlgorithm> || !one_shot_hash<HashAlgorithm>)
+    !contiguously_hashable<T, HashAlgorithm> || !oneshot_hash<HashAlgorithm>)
 [[nodiscard]] auto hash(T&& x, Args&&... args) noexcept {
   HashAlgorithm h{std::forward<Args>(args)...};
   hash_append(h, x);
   return static_cast<typename HashAlgorithm::result_type>(h);
 }
 
-template <one_shot_hash HashAlgorithm = default_hash, class T, class... Args>
+template <oneshot_hash HashAlgorithm = default_hash, class T, class... Args>
   requires(contiguously_hashable<T, HashAlgorithm>)
 [[nodiscard]] auto hash(T&& x, Args&&... args) noexcept {
   HashAlgorithm h{std::forward<Args>(args)...};

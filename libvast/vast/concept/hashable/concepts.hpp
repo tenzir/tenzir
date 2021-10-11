@@ -28,7 +28,7 @@ concept incremental_hash = requires(HashAlgorithm h) {
 /// A hash algorithm that exposes a one-shot computation of a hash digest over
 /// a byte sequence.
 template <class HashAlgorithm>
-concept one_shot_hash = requires(HashAlgorithm h) {
+concept oneshot_hash = requires(HashAlgorithm h) {
   // clang-format off
   typename HashAlgorithm::result_type;
   { h.make(std::declval<const void*>(), std::declval<size_t>()) }
