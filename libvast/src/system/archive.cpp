@@ -93,9 +93,15 @@ archive_state::file_request(vast::query query) {
     // work.
     // TODO: Figure out a way to avoid this.
     caf::visit(detail::overload{
-                 [&](query::count& count) { self->monitor(count.sink); },
-                 [&](query::extract& extract) { self->monitor(extract.sink); },
-                 [](query::erase&) { die("erase requests don't get filed"); },
+                 [&](query::count& count) {
+                   self->monitor(count.sink);
+                 },
+                 [&](query::extract& extract) {
+                   self->monitor(extract.sink);
+                 },
+                 [](query::erase&) {
+                   die("erase requests don't get filed");
+                 },
                },
                query.cmd);
     auto xs = query.ids;
@@ -227,7 +233,9 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                            self->send(extract.sink, *final_slice);
                        }
                      },
-                     [&](query::erase) { die("logic error detected"); },
+                     [&](query::erase) {
+                       die("logic error detected");
+                     },
                    },
                    request.query.cmd);
       } else {
