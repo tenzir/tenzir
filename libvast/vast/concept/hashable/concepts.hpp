@@ -19,7 +19,7 @@ namespace vast {
 /// A hash algorithm that supports incremental computation of a hash digest
 /// in a construct-add-finish manner.
 template <class HashAlgorithm>
-concept incremental_hash = requires(HashAlgorithm h, const void* p, size_t n) {
+concept incremental_hash = requires(HashAlgorithm& h, const void* p, size_t n) {
   // clang-format off
   typename HashAlgorithm::result_type;
   { h(p, n) } noexcept -> concepts::same_as<void>;
@@ -30,7 +30,7 @@ concept incremental_hash = requires(HashAlgorithm h, const void* p, size_t n) {
 /// A hash algorithm that exposes a one-shot computation of a hash digest over
 /// a byte sequence.
 template <class HashAlgorithm>
-concept oneshot_hash = requires(HashAlgorithm h, const void* p, size_t n) {
+concept oneshot_hash = requires(HashAlgorithm& h, const void* p, size_t n) {
   // clang-format off
   typename HashAlgorithm::result_type;
   { h.make(p, n) } noexcept
