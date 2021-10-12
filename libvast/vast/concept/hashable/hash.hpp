@@ -17,23 +17,27 @@
 
 namespace vast {
 
-/// Generic function to compute a hash over a byte sequence.
+/// Generic function to compute an incremental hash over an instance of a
+/// hashable type.
 /// @param x The value to hash.
-/// @param args Optional arguments to seed `HashAlgorithm`.
-/// @returns A hash digest of *bytes* using `HashAlgorithm`.
-template <incremental_hash HashAlgorithm = default_hash, class T, class... Args>
+/// @returns A hash digest of *x* using `HashAlgorithm`.
+template <incremental_hash HashAlgorithm = default_hash, class T>
   requires(
     !contiguously_hashable<T, HashAlgorithm> || !oneshot_hash<HashAlgorithm>)
-[[nodiscard]] auto hash(T&& x, Args&&... args) noexcept {
-  HashAlgorithm h{std::forward<Args>(args)...};
+[[nodiscard]] auto hash(T&& x) noexcept {
+  HashAlgorithm h;
   hash_append(h, x);
   return static_cast<typename HashAlgorithm::result_type>(h);
 }
 
-template <oneshot_hash HashAlgorithm = default_hash, class T, class... Args>
+/// Generic function to compute a one-shot hash over an instance of a hashable
+/// type.
+/// @param x The value to hash.
+/// @returns A hash digest of *x* using `HashAlgorithm`.
+template <oneshot_hash HashAlgorithm = default_hash, class T>
   requires(contiguously_hashable<T, HashAlgorithm>)
-[[nodiscard]] auto hash(T&& x, Args&&... args) noexcept {
-  HashAlgorithm h{std::forward<Args>(args)...};
+[[nodiscard]] auto hash(T&& x) noexcept {
+  HashAlgorithm h;
   return h.make(std::addressof(x), sizeof(x));
 }
 
