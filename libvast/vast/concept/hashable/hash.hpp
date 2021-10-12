@@ -25,7 +25,7 @@ template <incremental_hash HashAlgorithm = default_hash, class T>
   requires(
     !contiguously_hashable<T, HashAlgorithm> || !oneshot_hash<HashAlgorithm>)
 [[nodiscard]] auto hash(T&& x) noexcept {
-  HashAlgorithm h;
+  HashAlgorithm h{};
   hash_append(h, x);
   return static_cast<typename HashAlgorithm::result_type>(h);
 }
@@ -37,7 +37,7 @@ template <incremental_hash HashAlgorithm = default_hash, class T>
 template <oneshot_hash HashAlgorithm = default_hash, class T>
   requires(contiguously_hashable<T, HashAlgorithm>)
 [[nodiscard]] auto hash(T&& x) noexcept {
-  HashAlgorithm h;
+  HashAlgorithm h{};
   return h.make(std::addressof(x), sizeof(x));
 }
 
