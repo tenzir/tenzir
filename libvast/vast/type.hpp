@@ -12,6 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
+#include "vast/concept/hashable/default_hash.hpp"
 #include "vast/concepts.hpp"
 #include "vast/detail/function.hpp"
 #include "vast/detail/range.hpp"
@@ -273,6 +274,18 @@ public:
   template <class Inspector>
   friend typename Inspector::result_type inspect(Inspector& f, type& x) {
     return f(caf::meta::type_name("vast.type"), x.table_);
+  }
+
+  /// Integrates with hash_append.
+  template <class Hasher>
+  friend auto inspect(detail::hash_inspector<Hasher>& f, type& x) ->
+    typename detail::hash_inspector<Hasher>::result_type {
+    static_assert(detail::hash_inspector<Hasher>::reads_state,
+                  "this inspect overload is read-only");
+    // Because the underlying table is a chunk_ptr, which cannot be hashed
+    // directly, we instead forward the unique representation of it to the hash
+    // inspector.
+    return f(as_bytes(x));
   }
 
   /// Returns the name of this type.
@@ -988,15 +1001,16 @@ struct sum_type_access<vast::type> final {
 namespace std {
 
 /// Byte-wise hashing for types.
-/// @note The implementation is from Boost.hash_combine.
 template <vast::type_or_concrete_type T>
 struct hash<T> {
-  auto operator()(const T& type) const noexcept {
+  size_t operator()(const T& type) const noexcept {
+    static_assert(std::is_same_v<size_t, vast::default_hash::result_type>,
+                  "mismatching result type");
     const auto bytes = as_bytes(type);
-    auto seed = bytes.size();
-    for (const auto i : bytes)
-      seed ^= static_cast<uint8_t>(i) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    return seed;
+    VAST_ASSERT(!bytes.empty());
+    auto h = vast::default_hash{};
+    h(bytes.data(), bytes.size());
+    return static_cast<vast::default_hash::result_type>(h);
   }
 };
 
