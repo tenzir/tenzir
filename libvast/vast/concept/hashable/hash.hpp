@@ -9,9 +9,9 @@
 #pragma once
 
 #include "vast/concept/hashable/concepts.hpp"
-#include "vast/concept/hashable/contiguously_hashable.hpp"
 #include "vast/concept/hashable/default_hash.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/portable_hash.hpp"
 
 #include <utility>
 
@@ -22,8 +22,7 @@ namespace vast {
 /// @param x The value to hash.
 /// @returns A hash digest of *x* using `HashAlgorithm`.
 template <incremental_hash HashAlgorithm = default_hash, class T>
-  requires(
-    !contiguously_hashable<T, HashAlgorithm> || !oneshot_hash<HashAlgorithm>)
+  requires(!portable_hash<T, HashAlgorithm> || !oneshot_hash<HashAlgorithm>)
 [[nodiscard]] auto hash(T&& x) noexcept {
   HashAlgorithm h{};
   hash_append(h, x);
@@ -35,7 +34,7 @@ template <incremental_hash HashAlgorithm = default_hash, class T>
 /// @param x The value to hash.
 /// @returns A hash digest of *x* using `HashAlgorithm`.
 template <oneshot_hash HashAlgorithm = default_hash, class T>
-  requires(contiguously_hashable<T, HashAlgorithm>)
+  requires(portable_hash<T, HashAlgorithm>)
 [[nodiscard]] auto hash(T&& x) noexcept {
   HashAlgorithm h{};
   return h.make(std::addressof(x), sizeof(x));

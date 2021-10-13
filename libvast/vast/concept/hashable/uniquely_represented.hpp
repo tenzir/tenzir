@@ -12,10 +12,10 @@
 #include <tuple>
 #include <type_traits>
 
-namespace vast::detail {
+namespace vast {
 
-// The `is_uniquely_representable` trait is fulfilled when the hash of the
-// object is exactly the hash of the memory region of the object regarded as an
+// A type is *uniquely representable* if and only if the hash digest of the
+// object is equal to the memory region of the object when interpreted as
 // opaque byte array, with no holes or padding bytes.
 
 template <class T>
@@ -49,4 +49,4 @@ struct is_uniquely_represented<std::array<T, N>>
 template <class T>
 concept uniquely_represented = is_uniquely_represented<T>::value;
 
-} // namespace vast::detail
+} // namespace vast

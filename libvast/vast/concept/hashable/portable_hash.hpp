@@ -15,22 +15,25 @@
 
 namespace vast {
 
+// A type `T` produces a platform-independent (portable) hash digest under a
+// hash algorithm `H` if (i) it fulfils the concept `uniquely_represented<T>`
+// and (ii) the endianness of `H` equals to the host endian.
+
 template <class T, class HashAlgorithm>
-struct is_contiguously_hashable
+struct has_portable_hash
   : std::bool_constant<
-      detail::uniquely_represented<
+      uniquely_represented<
         T> && (sizeof(T) == 1 || HashAlgorithm::endian == detail::endian::native)> {
 };
 
 template <class T, size_t N, class HashAlgorithm>
-struct is_contiguously_hashable<T[N], HashAlgorithm>
+struct has_portable_hash<T[N], HashAlgorithm>
   : std::bool_constant<
-      detail::uniquely_represented<
+      uniquely_represented<
         T[N]> && (sizeof(T) == 1 || HashAlgorithm::endian == detail::endian::native)> {
 };
 
 template <class T, class HashAlgorithm>
-concept contiguously_hashable
-  = is_contiguously_hashable<T, HashAlgorithm>::value;
+concept portable_hash = has_portable_hash<T, HashAlgorithm>::value;
 
 } // namespace vast
