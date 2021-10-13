@@ -13,10 +13,10 @@
 namespace vast {
 
 /// The universal hash function.
-template <class Hasher>
+template <class HashAlgorithm>
 class uhash {
 public:
-  using result_type = typename Hasher::result_type;
+  using result_type = typename HashAlgorithm::result_type;
 
   template <class... Ts>
   uhash(Ts&&... xs) : h_(std::forward<Ts>(xs)...) {
@@ -29,7 +29,7 @@ public:
   }
 
 private:
-  Hasher h_;
+  HashAlgorithm h_;
 };
 
 } // namespace vast

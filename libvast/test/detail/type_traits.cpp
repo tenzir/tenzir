@@ -16,12 +16,6 @@
 
 #include <variant>
 
-TEST(sum) {
-  static_assert(vast::detail::sum<> == 0);
-  static_assert(vast::detail::sum<1, 2, 3> == 6);
-  static_assert(vast::detail::sum<42, 58> == 100);
-}
-
 namespace {
 template <class... Ts>
 struct fake_list {};

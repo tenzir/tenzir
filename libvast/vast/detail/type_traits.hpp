@@ -113,10 +113,6 @@ struct remove_optional<std::optional<T>> {
 template <class T>
 using remove_optional_t = typename remove_optional<T>::type;
 
-// -- compile time computation of sum -----------------------------------------
-template <auto... Values>
-constexpr auto sum = (0 + ... + Values);
-
 template <class T, template <class...> class TList, class... Ts>
 constexpr auto contains_type_impl(TList<Ts...>) {
   return std::bool_constant<is_any_v<T, Ts...>>{};
