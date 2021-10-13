@@ -41,13 +41,16 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
   for (size_t i = 0; i < slice.columns(); ++i) {
     const auto& field = layout.fields[i];
     auto qf = qualified_record_field{layout.name(), field};
-    auto& [idx, skip] = indexers[qf];
-    if (!idx) {
-      skip = vast::has_skip_attribute(field.type);
-      idx = factory<value_index>::make(field.type, index_opts);
+    auto it = indexers.find(qf);
+    if (it == indexers.end()) {
+      auto skip = vast::has_skip_attribute(field.type);
+      auto idx
+        = skip ? nullptr : factory<value_index>::make(field.type, index_opts);
       data.combined_layout.fields.push_back(as_record_field(qf));
+      it = indexers.emplace(qf, std::move(idx)).first;
     }
-    if (!skip) {
+    auto& idx = it->second;
+    if (idx != nullptr) {
       auto column = table_slice_column{slice, i, qf};
       auto offset = column.slice().offset();
       for (size_t i = 0; i < column.size(); ++i)
@@ -58,8 +61,7 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
 
 void partition_transformer_state::finalize_data() {
   // Serialize the finished indexers.
-  for (auto& [qf, value] : indexers) {
-    auto& [idx, skip] = value;
+  for (auto& [qf, idx] : indexers) {
     data.indexer_chunks.emplace_back(qf.field_name, chunkify(idx));
   }
   data.synopsis->shrink();
@@ -69,33 +71,37 @@ void partition_transformer_state::finalize_data() {
   data.synopsis->events = data.events;
 }
 
-// Pre: `self->state.promise` is valid and both chunks or an error are present
-// in the state.
 void partition_transformer_state::fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
-    self) {
-  VAST_ASSERT(self->state.promise.pending());
-  if (self->state.error) {
-    self->state.promise.deliver(self->state.error);
+    self,
+  persist_eagerly&& eager_data, persist_lazily&& lazy_data) const {
+  if (self->state.stream_error) {
+    lazy_data.promise.deliver(self->state.stream_error);
+    self->quit();
     return;
   }
   // The meta index data can always be regenerated on restart, so we don't need
-  // real error handling for it.
-  self->request(fs, caf::infinite, atom::write_v, synopsis_path, synopsis_chunk)
-    .then([](atom::ok) { /* nop */ },
-          [](const caf::error& e) {
-            VAST_WARN("bulk_partition could not persist "
-                      "partition synopsis: {}",
-                      render(e));
-          });
+  // strict error handling for it.
   self
-    ->request(fs, caf::infinite, atom::write_v, partition_path, partition_chunk)
+    ->request(fs, caf::infinite, atom::write_v, lazy_data.synopsis_path,
+              eager_data.synopsis_chunk)
+    .then([](atom::ok) { /* nop */ },
+          [path = lazy_data.synopsis_path](const caf::error& e) {
+            VAST_WARN("could not write transformed synopsis to {}: {}", path,
+                      e);
+          });
+  auto promise = lazy_data.promise;
+  self
+    ->request(fs, caf::infinite, atom::write_v, lazy_data.partition_path,
+              eager_data.partition_chunk)
     .then(
-      [self](atom::ok) {
-        self->state.promise.deliver(self->state.data.synopsis);
+      [self, promise](atom::ok) mutable {
+        promise.deliver(self->state.data.synopsis);
+        self->quit();
       },
-      [self](caf::error& e) {
-        self->state.promise.deliver(std::move(e));
+      [self, promise](caf::error& e) mutable {
+        promise.deliver(std::move(e));
+        self->quit();
       });
 }
 
@@ -105,6 +111,8 @@ partition_transformer_actor::behavior_type partition_transformer(
   uuid id, std::string store_id, const caf::settings& synopsis_opts,
   const caf::settings& index_opts, idspace_distributor_actor importer,
   filesystem_actor fs, transform_ptr transform) {
+  using persist_lazily = partition_transformer_state::persist_lazily;
+  using persist_eagerly = partition_transformer_state::persist_eagerly;
   const auto* store_plugin = plugins::find<vast::store_plugin>(store_id);
   if (!store_plugin) {
     self->quit(caf::make_error(ec::invalid_argument,
@@ -161,7 +169,7 @@ partition_transformer_actor::behavior_type partition_transformer(
                        id);
           },
           [self](const caf::error& e) {
-            self->state.error = e;
+            self->state.stream_error = e;
           });
     },
     [self](atom::internal, atom::resume, atom::done, vast::id offset) {
@@ -177,21 +185,22 @@ partition_transformer_actor::behavior_type partition_transformer(
       self->state.stage->out().fan_out_flush();
       self->state.stage->out().close();
       self->state.stage->out().force_emit_batches();
+      auto eager_data = partition_transformer_state::persist_eagerly{};
       [&] {
         { // Pack partition
           flatbuffers::FlatBufferBuilder builder;
           auto partition = pack(builder, self->state.data);
           if (!partition) {
-            self->state.error = partition.error();
+            eager_data.error = partition.error();
             return;
           }
-          self->state.partition_chunk = fbs::release(builder);
+          eager_data.partition_chunk = fbs::release(builder);
         }
         { // Pack partition synopsis
           flatbuffers::FlatBufferBuilder builder;
           auto synopsis = pack(builder, *self->state.data.synopsis);
           if (!synopsis) {
-            self->state.error = synopsis.error();
+            eager_data.error = synopsis.error();
             return;
           }
           fbs::PartitionSynopsisBuilder ps_builder(builder);
@@ -200,27 +209,38 @@ partition_transformer_actor::behavior_type partition_transformer(
           ps_builder.add_partition_synopsis(synopsis->Union());
           auto ps_offset = ps_builder.Finish();
           fbs::FinishPartitionSynopsisBuffer(builder, ps_offset);
-          self->state.synopsis_chunk = fbs::release(builder);
+          eager_data.synopsis_chunk = fbs::release(builder);
         }
       }();
-      if (self->state.promise.pending())
-        self->state.fulfill(self);
+      if (std::holds_alternative<std::monostate>(self->state.persist)) {
+        self->state.persist = std::move(eager_data);
+      } else {
+        auto* lazy_data = std::get_if<persist_lazily>(&self->state.persist);
+        VAST_ASSERT(lazy_data != nullptr, "unexpected variant content");
+        self->state.fulfill(self, std::move(eager_data), std::move(*lazy_data));
+      }
     },
     [self](atom::persist, std::filesystem::path partition_path,
            std::filesystem::path synopsis_path)
       -> caf::result<std::shared_ptr<partition_synopsis>> {
       VAST_DEBUG("partition-transformer will persist itself to {}",
                  partition_path);
-      self->state.promise
+      auto lazy_data = partition_transformer_state::persist_lazily{};
+      lazy_data.partition_path = std::move(partition_path);
+      lazy_data.synopsis_path = std::move(synopsis_path);
+      auto promise
         = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
-      self->state.partition_path = std::move(partition_path);
-      self->state.synopsis_path = std::move(synopsis_path);
+      lazy_data.promise = promise;
       // Immediately fulfill the promise if we are already done
       // with the serialization.
-      if (self->state.partition_chunk != nullptr
-          || self->state.error != caf::none)
-        self->state.fulfill(self);
-      return self->state.promise;
+      if (std::holds_alternative<std::monostate>(self->state.persist)) {
+        self->state.persist = std::move(lazy_data);
+      } else {
+        auto* eager_data = std::get_if<persist_eagerly>(&self->state.persist);
+        VAST_ASSERT(eager_data != nullptr, "unexpected variant content");
+        self->state.fulfill(self, std::move(*eager_data), std::move(lazy_data));
+      }
+      return promise;
     }};
 }
 

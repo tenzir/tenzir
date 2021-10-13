@@ -398,9 +398,6 @@ using analyzer_plugin_actor = typed_actor_fwd<>
   // Conform to the protocol of the COMPONENT PLUGIN actor.
   ::extend_with<component_plugin_actor>::unwrap;
 
-/// The interface of an COMPACTOR actor.
-using compactor_actor = typed_actor_fwd<caf::reacts_to<atom::ping>>::unwrap;
-
 /// The interface of a SOURCE actor.
 using source_actor = typed_actor_fwd<
   // INTERNAL: Progress.

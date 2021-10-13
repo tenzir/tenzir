@@ -1123,7 +1123,7 @@ index(index_actor::stateful_pointer<index_state> self,
                         partition_id, new_partition_id, std::move(synopsis))
               .then(
                 [self, rp, partition_id](atom::ok) mutable {
-                  rp.delegate(caf::actor_cast<caf::actor>(self), atom::erase_v,
+                  rp.delegate(static_cast<index_actor>(self), atom::erase_v,
                               partition_id);
                 },
                 [rp](const caf::error& e) mutable {
