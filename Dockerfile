@@ -29,6 +29,7 @@ RUN apt-get update && \
       libssl-dev \
       libunwind-dev \
       libyaml-cpp-dev \
+      libxxhash-dev \
       lsb-release \
       ninja-build \
       pkg-config \
@@ -132,6 +133,7 @@ RUN apt-get update && \
       libspdlog1 \
       libunwind8 \
       libyaml-cpp0.6 \
+      libxxhash-dev \
       lsb-release \
       openssl \
       robin-map-dev \
