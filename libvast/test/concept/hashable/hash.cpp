@@ -26,7 +26,7 @@ struct algorithm_base {
 };
 
 struct oneshot : algorithm_base {
-  result_type make(const void*, size_t) noexcept {
+  static result_type make(const void*, size_t) noexcept {
     return true;
   }
 };
@@ -41,7 +41,7 @@ struct incremental : algorithm_base {
 };
 
 struct oneshot_and_incremental : algorithm_base {
-  result_type make(const void*, size_t) noexcept {
+  static result_type make(const void*, size_t) noexcept {
     return true;
   }
 
