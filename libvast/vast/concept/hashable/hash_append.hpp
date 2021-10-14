@@ -221,7 +221,18 @@ void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& xs) noexcept {
 
 template <class HashAlgorithm, class T, size_t Extent>
 void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept {
-  detail::contiguous_container_hash_append(h, xs);
+  if constexpr (Extent == std::dynamic_extent) {
+    detail::contiguous_container_hash_append(h, xs);
+  } else if constexpr (Extent > 0) {
+    // Just hash the data because the size is part of the type.
+    if constexpr (portable_hash<T, HashAlgorithm>)
+      h(xs.data(), Extent * sizeof(T));
+    else
+      for (const auto& x : xs)
+        hash_append(h, x);
+  } else {
+    // Do nothing for static empty spans, i.e., when Extent == 0.
+  }
 }
 
 // -- set ---------------------------------------------------------------------
