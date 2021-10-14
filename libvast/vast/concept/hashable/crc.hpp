@@ -19,13 +19,14 @@ namespace vast {
 class crc32 {
 public:
   static constexpr detail::endian endian = detail::endian::native;
+
   using result_type = uint32_t;
 
-  crc32(uint32_t seed = 0);
+  crc32(uint32_t seed = 0) noexcept;
 
-  void operator()(const void* x, size_t n);
+  void operator()(const void* x, size_t n) noexcept;
 
-  operator result_type() const;
+  explicit operator result_type() const noexcept;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, crc32& crc) {

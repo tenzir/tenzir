@@ -11,8 +11,8 @@
 #include "vast/address_synopsis.hpp"
 
 #include "vast/address.hpp"
+#include "vast/concept/hashable/default_hash.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/legacy_type.hpp"
@@ -35,8 +35,8 @@ using namespace vast::si_literals;
 TEST(failed construction) {
   // If there's no type attribute with Bloom filter parameters present,
   // construction fails.
-  auto x
-    = make_address_synopsis<xxhash64>(legacy_address_type{}, caf::settings{});
+  auto x = make_address_synopsis<default_hash>(legacy_address_type{},
+                                               caf::settings{});
   CHECK_EQUAL(x, nullptr);
 }
 
@@ -45,7 +45,7 @@ namespace {
 struct fixture : fixtures::deterministic_actor_system {
   fixture() {
     factory<synopsis>::add(legacy_address_type{},
-                           make_address_synopsis<xxhash64>);
+                           make_address_synopsis<default_hash>);
   }
   caf::settings opts;
 };

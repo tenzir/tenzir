@@ -44,6 +44,12 @@ if (NOT tsl-robin-map_FOUND)
   add_dependencies(robin_map tsl-robin-map-targets-link)
 endif ()
 
+# -- xxHash --------------------------------------------------------------------
+
+#find_package(xxHash 0.8 REQUIRED CONFIG)
+#target_link_libraries(libvast PRIVATE xxHash::xxhash)
+#dependency_summary("xxHash" xxHash::xxhash "Dependencies")
+
 # -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
