@@ -36,8 +36,7 @@ template <incremental_hash HashAlgorithm = default_hash, class T>
 template <oneshot_hash HashAlgorithm = default_hash, class T>
   requires(portable_hash<T, HashAlgorithm>)
 [[nodiscard]] auto hash(T&& x) noexcept {
-  HashAlgorithm h{};
-  return h.make(std::addressof(x), sizeof(x));
+  return HashAlgorithm::make(std::addressof(x), sizeof(x));
 }
 
 } // namespace vast
