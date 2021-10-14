@@ -11,6 +11,7 @@
 #include "vast/detail/bit.hpp"
 
 #include <cstddef>
+#include <cstring>
 #include <type_traits>
 #include <xxhash.h>
 
