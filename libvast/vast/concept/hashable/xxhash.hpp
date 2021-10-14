@@ -12,7 +12,6 @@
 
 #include <cstddef>
 #include <type_traits>
-
 #include <xxhash.h>
 
 namespace vast {
