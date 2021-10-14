@@ -13,12 +13,6 @@
 #include <cstddef>
 #include <type_traits>
 
-// From xxhash.h:
-// Inlining improves performance on small inputs, especially when the length is
-// expressed as a compile-time constant. [..]. It also keeps xxHash symbols
-// private to the unit, so they are not exported.
-#define XXH_INLINE_ALL
-
 #include <xxhash.h>
 
 namespace vast {
