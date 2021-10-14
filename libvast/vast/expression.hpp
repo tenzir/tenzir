@@ -9,8 +9,7 @@
 #pragma once
 
 #include "vast/atoms.hpp"
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/hashable/hash.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/operators.hpp"
@@ -396,42 +395,42 @@ namespace std {
 template <>
 struct hash<vast::meta_extractor> {
   size_t operator()(const vast::meta_extractor& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x);
   }
 };
 
 template <>
 struct hash<vast::field_extractor> {
   size_t operator()(const vast::field_extractor& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x);
   }
 };
 
 template <>
 struct hash<vast::type_extractor> {
   size_t operator()(const vast::type_extractor& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x);
   }
 };
 
 template <>
 struct hash<vast::data_extractor> {
   size_t operator()(const vast::data_extractor& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x);
   }
 };
 
 template <>
 struct hash<vast::predicate> {
   size_t operator()(const vast::predicate& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x);
   }
 };
 
 template <>
 struct hash<vast::expression> {
   size_t operator()(const vast::expression& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x);
   }
 };
 

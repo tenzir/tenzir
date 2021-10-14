@@ -12,7 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/attribute.hpp"
-#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/hash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/detail/assert.hpp"
@@ -1132,7 +1132,7 @@ namespace std {
   template <>                                                                  \
   struct hash<vast::type> {                                                    \
     size_t operator()(const vast::type& x) const {                             \
-      return vast::uhash<vast::xxhash64>{}(x);                                 \
+      return vast::hash<vast::xxh64>(x);                                       \
     }                                                                          \
   }
 

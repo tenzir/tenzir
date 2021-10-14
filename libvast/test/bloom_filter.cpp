@@ -132,7 +132,7 @@ TEST(bloom filter parameters : from string) {
 }
 
 TEST(simple_hasher) {
-  auto h = simple_hasher<xxhash64>{2, {0, 1}};
+  auto h = simple_hasher<xxh64>{2, {0, 1}};
   auto& xs = h(42);
   REQUIRE_EQUAL(h.size(), 2u);
   REQUIRE_EQUAL(xs.size(), 2u);
@@ -142,14 +142,14 @@ TEST(simple_hasher) {
   std::vector<char> buf;
   auto err = detail::serialize(buf, h);
   REQUIRE_EQUAL(err, caf::none);
-  simple_hasher<xxhash64> g;
+  simple_hasher<xxh64> g;
   err = detail::deserialize(buf, g);
   REQUIRE_EQUAL(err, caf::none);
   CHECK(h == g);
 }
 
 TEST(double_hasher) {
-  auto h = double_hasher<xxhash64>{4, {1337, 4711}};
+  auto h = double_hasher<xxh64>{4, {1337, 4711}};
   auto& xs = h(42);
   REQUIRE_EQUAL(h.size(), 4u);
   REQUIRE_EQUAL(xs.size(), 4u);
@@ -161,14 +161,14 @@ TEST(double_hasher) {
   std::vector<char> buf;
   auto err = detail::serialize(buf, h);
   REQUIRE_EQUAL(err, caf::none);
-  double_hasher<xxhash64> g;
+  double_hasher<xxh64> g;
   err = detail::deserialize(buf, g);
   REQUIRE_EQUAL(err, caf::none);
   CHECK(h == g);
 }
 
 TEST(bloom filter - default - constructed) {
-  bloom_filter<xxhash64> x;
+  bloom_filter<xxh64> x;
   CHECK(x.size() == 0u);
 }
 
@@ -176,7 +176,7 @@ TEST(bloom filter - constructed from parameters) {
   bloom_filter_parameters xs;
   xs.m = 10_M;
   xs.p = 0.001;
-  auto x = vast::test::unbox(make_bloom_filter<xxhash>(xs));
+  auto x = vast::test::unbox(make_bloom_filter<xxh64>(xs));
   CHECK_EQUAL(x.size(), 10_M);
   x.add(42);
   x.add("foo");
@@ -191,7 +191,7 @@ TEST(bloom filter - simple hasher and partitioning) {
   xs.m = 10_M;
   xs.p = 0.001;
   auto x = vast::test::unbox(
-    make_bloom_filter<xxhash, simple_hasher, policy::partitioning::yes>(xs));
+    make_bloom_filter<xxh64, simple_hasher, policy::partitioning::yes>(xs));
   CHECK_EQUAL(x.size(), 10_M);
   CHECK_EQUAL(x.num_hash_functions(), 10u);
   x.add(42);
@@ -204,7 +204,7 @@ TEST(bloom filter - simple hasher and partitioning) {
   std::vector<char> buf;
   auto err = detail::serialize(buf, x);
   REQUIRE_EQUAL(err, caf::none);
-  bloom_filter<xxhash, simple_hasher, policy::partitioning::yes> y;
+  bloom_filter<xxh64, simple_hasher, policy::partitioning::yes> y;
   err = detail::deserialize(buf, y);
   REQUIRE_EQUAL(err, caf::none);
   CHECK(x == y);
@@ -215,7 +215,7 @@ TEST(bloom filter - duplicate tracking) {
   xs.m = 1_M;
   xs.p = 0.1;
   auto x = vast::test::unbox(
-    make_bloom_filter<xxhash, double_hasher, policy::partitioning::no>(xs));
+    make_bloom_filter<xxh64, double_hasher, policy::partitioning::no>(xs));
   CHECK(!x.lookup(42));
   CHECK(x.add(42));
   CHECK(x.lookup(42));

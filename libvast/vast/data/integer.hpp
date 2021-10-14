@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/hashable/hash.hpp"
+#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/detail/operators.hpp"
 
 #include <caf/meta/type_name.hpp>
@@ -40,12 +40,10 @@ struct integer : detail::totally_ordered<integer> {
   friend typename Inspector::result_type inspect(Inspector& f, integer& x) {
     return f(caf::meta::type_name("vast.integer"), x.value);
   }
-
-  template <class Hasher>
-  friend void hash_append(Hasher& h, const integer& x) {
-    hash_append(h, x.value);
-  }
 };
+
+template <>
+struct is_uniquely_represented<integer> : std::true_type {};
 
 } // namespace vast
 
@@ -54,7 +52,7 @@ namespace std {
 template <>
 struct hash<vast::integer> {
   size_t operator()(const vast::integer& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x);
   }
 };
 

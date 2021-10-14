@@ -13,6 +13,6 @@
 namespace vast {
 
 /// The default hash algorithm.
-using default_hash = xxhash64;
+using default_hash = xxh3_64;
 
 } // namespace vast

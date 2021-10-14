@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
@@ -62,10 +63,10 @@ class hash_index : public value_index {
   static constexpr size_t max_hash_rounds = 32;
 
 public:
-  using hasher_type = xxhash64;
+  using hash_algorithm = xxh64; // TODO: switch to xxh3_64
   using digest_type = std::array<std::byte, Bytes>;
 
-  static_assert(sizeof(hasher_type::result_type) >= Bytes,
+  static_assert(sizeof(hash_algorithm::result_type) >= Bytes,
                 "number of chosen bytes exceeds underlying digest size");
 
   /// Computes a chopped digest from arbitrary data.
@@ -74,7 +75,7 @@ public:
   /// @returns The chopped digest.
   static digest_type hash(data_view x, size_t seed = 0) {
     digest_type result;
-    auto digest = uhash<hasher_type>{seed}(x);
+    auto digest = uhash<hash_algorithm>{seed}(x);
     std::memcpy(result.data(), &digest, Bytes);
     return result;
   }

@@ -9,6 +9,8 @@
 #pragma once
 
 #include "vast/address.hpp"
+#include "vast/concept/hashable/hash.hpp"
+#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/port.hpp"
 
 #include <functional>
@@ -24,7 +26,10 @@ struct flow {
   address dst_addr;
   port src_port;
   port dst_port;
-};
+} __attribute__((__packed__));
+
+template <>
+struct is_uniquely_represented<flow> : std::true_type {};
 
 /// Factory function to construct a flow.
 /// @param src_addr The IP address of the flow source.
@@ -83,11 +88,6 @@ auto make_flow(std::string_view src_addr, std::string_view dst_addr,
 /// @relates flow
 port_type protocol(const flow& x);
 
-/// @returns a hash value for a flow tuple.
-/// @param x The flow to compute the hash value from.
-/// @relates flow
-size_t hash(const flow& x);
-
 /// @relates flow
 bool operator==(const flow& x, const flow& y);
 
@@ -100,12 +100,6 @@ inline bool operator!=(const flow& x, const flow& y) {
 template <class Inspector>
 auto inspect(Inspector& f, flow& x) {
   return f(x.src_addr, x.dst_addr, x.src_port, x.dst_port);
-}
-
-/// @relates flow
-template <class Hasher>
-void hash_append(Hasher& h, const flow& x) {
-  hash_append(h, x.src_addr, x.dst_addr, x.src_port, x.dst_port);
 }
 
 } // namespace vast

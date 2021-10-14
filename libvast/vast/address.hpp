@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/hashable/hash.hpp"
 #include "vast/detail/operators.hpp"
 
 #include <array>
@@ -133,16 +132,6 @@ private:
   std::array<uint8_t, 16> bytes_;
 };
 
-/// @relates address
-template <class Hasher>
-void hash_append(Hasher& h, const address& x) {
-  auto bytes = x.data().data();
-  if (x.is_v4())
-    h(bytes + 12, 4);
-  else
-    h(bytes, 16);
-}
-
 } // namespace vast
 
 namespace std {
@@ -150,7 +139,7 @@ namespace std {
 template <>
 struct hash<vast::address> {
   size_t operator()(const vast::address& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x.data());
   }
 };
 

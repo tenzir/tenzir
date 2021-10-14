@@ -694,22 +694,21 @@ TEST(parseable) {
 }
 
 TEST(hashable) {
-  auto hash = [&](auto&& x) {
-    return uhash<xxhash64>{}(x);
+  auto h = [&](auto&& x) {
+    return vast::hash<xxh64>(x);
   };
-  CHECK_EQUAL(hash(legacy_type{}), 16682473723366582157ul);
-  CHECK_EQUAL(hash(legacy_bool_type{}), 8019551906396149776ul);
-  CHECK_EQUAL(hash(legacy_type{legacy_bool_type{}}), 693889673218214406ul);
-  CHECK_NOT_EQUAL(hash(legacy_type{legacy_bool_type{}}),
-                  hash(legacy_bool_type{}));
-  CHECK_NOT_EQUAL(hash(legacy_bool_type{}), hash(legacy_address_type{}));
-  CHECK_NOT_EQUAL(hash(legacy_type{legacy_bool_type{}}),
-                  hash(legacy_type{legacy_address_type{}}));
+  CHECK_EQUAL(h(legacy_type{}), 16682473723366582157ul);
+  CHECK_EQUAL(h(legacy_bool_type{}), 8019551906396149776ul);
+  CHECK_EQUAL(h(legacy_type{legacy_bool_type{}}), 693889673218214406ul);
+  CHECK_NOT_EQUAL(h(legacy_type{legacy_bool_type{}}), h(legacy_bool_type{}));
+  CHECK_NOT_EQUAL(h(legacy_bool_type{}), h(legacy_address_type{}));
+  CHECK_NOT_EQUAL(h(legacy_type{legacy_bool_type{}}),
+                  h(legacy_type{legacy_address_type{}}));
   auto x = legacy_record_type{{"x", legacy_integer_type{}},
                               {"y", legacy_string_type{}},
                               {"z", legacy_list_type{legacy_real_type{}}}};
-  CHECK_EQUAL(hash(x), 14779728178683051124ul);
-  CHECK_EQUAL(to_digest(x), std::to_string(hash(legacy_type{x})));
+  CHECK_EQUAL(h(x), 14779728178683051124ul);
+  CHECK_EQUAL(to_digest(x), std::to_string(h(legacy_type{x})));
 }
 
 TEST(json) {
