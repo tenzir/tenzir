@@ -44,7 +44,7 @@ if (NOT tsl-robin-map_FOUND)
   add_dependencies(robin_map tsl-robin-map-targets-link)
 endif ()
 
-# -- flattbuffers ---------------------------------------------------------------
+# -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs"
