@@ -19,6 +19,7 @@
 #include <cstring>
 #include <span>
 #include <string>
+#include <type_traits>
 
 namespace vast {
 
@@ -163,8 +164,18 @@ public:
   friend bool operator<(const address& x, const address& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, address& a) {
-    return f(a.bytes_);
+  friend auto inspect(Inspector& f, address& x) {
+    auto data = x.bytes_;
+    if constexpr (std::is_void_v<typename Inspector::result_type>) {
+      f(data);
+      if constexpr (requires { requires Inspector::writes_state == true; })
+        x.bytes_ = data;
+    } else {
+      auto result = f(data);
+      if constexpr (requires { requires Inspector::writes_state == true; })
+        x.bytes_ = data;
+      return result;
+    }
   }
 
   template <class Byte = std::byte>
