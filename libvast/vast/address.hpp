@@ -9,56 +9,95 @@
 #pragma once
 
 #include "vast/concept/hashable/hash.hpp"
+#include "vast/concept/hashable/uniquely_represented.hpp"
+#include "vast/detail/bit.hpp"
+#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/operators.hpp"
 
 #include <array>
+#include <cstddef>
+#include <cstring>
+#include <span>
 #include <string>
 
 namespace vast {
 
-struct access;
-class data;
-
 /// An IP address.
 class address : detail::totally_ordered<address>, detail::bitwise<address> {
-  friend access;
+public:
+  using byte_type = uint8_t;
+  using byte_array = std::array<byte_type, 16>;
 
   /// Top 96 bits of v4-mapped-addr.
-  static std::array<uint8_t, 12> const v4_mapped_prefix;
-
-public:
-  /// Array for storing 128-bit IPv6 addresses.
-  using array_type = std::array<uint8_t, 16>;
+  static constexpr std::array<byte_type, 12> v4_mapped_prefix
+    = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
 
   /// Address family.
   enum family { ipv4, ipv6 };
 
-  /// Address byte order.
-  enum byte_order { host, network };
-
-  /// Constructs an IPv4 address from raw bytes.
+  /// Constructs an IPv4 address from raw bytes in network byte order.
   /// @param bytes A pointer to 4 bytes.
-  /// @param order The byte order of *bytes*.
   /// @returns An IPv4 address constructed from *bytes*.
-  static address v4(const void* bytes, byte_order order = host);
+  template <class Byte>
+    requires(sizeof(Byte) == 1)
+  static address v4(std::span<Byte, 4> bytes) {
+    address result;
+    std::memcpy(&result.bytes_[0], v4_mapped_prefix.data(), 12);
+    std::memcpy(&result.bytes_[12], bytes.data(), 4);
+    return result;
+  }
 
-  /// Constructs an IPv6 address from raw bytes.
-  /// @param bytes A pointer to 16 bytes.
-  /// @param order The byte order of *bytes*.
+  /// Constructs an IPv4 address from a 32-bit unsigned integer.
+  /// @tparam Endian the address byte order.
+  /// @param bytes The 32-bit integer representing an IPv4 address.
+  /// @returns The IP address.
+  template <detail::endian Endian = detail::endian::native>
+  static address v4(uint32_t bytes) {
+    if constexpr (Endian == detail::endian::little)
+      bytes = detail::byte_swap(bytes);
+    auto ptr = reinterpret_cast<const byte_type*>(&bytes);
+    return v4(std::span<const byte_type, 4>{ptr, 4});
+  }
+
+  /// Constructs an IPv6 address from 16 raw bytes.
+  /// @param bytes A span of 16 bytes.
   /// @returns An IPv6 address constructed from *bytes*.
-  static address v6(const void* bytes, byte_order order = host);
+  template <class Byte>
+    requires(sizeof(Byte) == 1)
+  static address v6(std::span<Byte, 16> bytes) {
+    address result;
+    std::memcpy(result.bytes_.data(), bytes.data(), 16);
+    return result;
+  }
+
+  template <detail::endian Endian = detail::endian::native>
+  static address v6(std::span<uint32_t, 4> bytes) {
+    address result;
+    std::memcpy(result.bytes_.data(), bytes.data(), 16);
+    if constexpr (Endian == detail::endian::little) {
+      auto ptr = reinterpret_cast<uint32_t*>(result.bytes_.data());
+      auto span = std::span<uint32_t, 4>{ptr, 4};
+      for (auto& block : span)
+        block = detail::byte_swap(block);
+    }
+    return result;
+  }
 
   /// Default-constructs an (invalid) address.
-  address();
+  constexpr address() {
+    bytes_.fill(0);
+  }
 
-  /// Constructs an address from raw bytes.
-  /// @param bytes A pointer to the raw byte representation. This must point
-  ///              to 4 bytes if *fam* is `ipv4`, and to 16 bytes if *fam* is
-  ///              `ipv6`.
-  /// @param fam The address family.
-  /// @param order The byte order in which the address pointed to by *bytes*
-  ///              is stored in.
-  address(const void* bytes, family fam, byte_order order);
+  /// Constructs an IP address from 16 bytes in network byte order.
+  /// @param bytes The 16 bytes representing the IP address.
+  constexpr explicit address(byte_array bytes) : bytes_{bytes} {
+  }
+
+  template <class Byte>
+    requires(sizeof(Byte) == 1)
+  explicit address(std::span<Byte, 16> bytes) {
+    std::memcpy(bytes_.data(), bytes.data(), 16);
+  }
 
   /// Determines whether the address is IPv4.
   /// @returns @c true iff the address is an IPv4 address.
@@ -109,16 +148,16 @@ public:
   /// @returns A reference to `*this`.
   address& operator^=(const address& other);
 
-  /// Retrieves the underlying byte array.
-  /// @returns A reference to an array of 16 bytes.
-  [[nodiscard]] const std::array<uint8_t, 16>& data() const;
-
   /// Compares the top-k bits of this address with another one.
   /// @param other The other address.
   /// @param k The number of bits to compare, starting from the top.
   /// @returns `true` if the first *k* bits of both addresses are equal
   /// @pre `k > 0 && k <= 128`
   [[nodiscard]] bool compare(const address& other, size_t k) const;
+
+  explicit constexpr operator byte_array() const {
+    return bytes_;
+  }
 
   friend bool operator==(const address& x, const address& y);
   friend bool operator<(const address& x, const address& y);
@@ -128,9 +167,18 @@ public:
     return f(a.bytes_);
   }
 
+  template <class Byte = std::byte>
+  friend std::span<const Byte, 16> as_bytes(const address& x) {
+    auto ptr = reinterpret_cast<const Byte*>(x.bytes_.data());
+    return std::span<const Byte, 16>{ptr, 16};
+  }
+
 private:
-  std::array<uint8_t, 16> bytes_;
-};
+  byte_array bytes_;
+} __attribute__((__packed__));
+
+template <>
+struct is_uniquely_represented<address> : std::true_type {};
 
 } // namespace vast
 
@@ -139,7 +187,7 @@ namespace std {
 template <>
 struct hash<vast::address> {
   size_t operator()(const vast::address& x) const {
-    return vast::hash(x.data());
+    return vast::hash(x);
   }
 };
 

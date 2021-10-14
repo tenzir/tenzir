@@ -8,10 +8,10 @@
 
 #include "vast/address.hpp"
 
+#include "vast/as_bytes.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/address.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/byte_swap.hpp"
 #include "vast/word.hpp"
 
 #include <arpa/inet.h>
@@ -19,42 +19,9 @@
 #include <sys/socket.h>
 
 #include <cstdlib>
-#include <cstring>
 #include <utility>
 
-std::array<uint8_t, 12> const vast::address::v4_mapped_prefix
-  = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
-
 namespace vast {
-
-address address::v4(const void* bytes, byte_order order) {
-  return address{bytes, ipv4, order};
-}
-
-address address::v6(const void* bytes, byte_order order) {
-  return address{bytes, ipv6, order};
-}
-
-address::address() {
-  bytes_.fill(0);
-}
-
-address::address(const void* bytes, family fam, byte_order order) {
-  auto b = reinterpret_cast<const uint32_t*>(bytes);
-  if (fam == ipv4) {
-    std::copy(v4_mapped_prefix.begin(), v4_mapped_prefix.end(), bytes_.begin());
-    auto p = reinterpret_cast<uint32_t*>(&bytes_[12]);
-    *p = (order == host) ? detail::to_network_order(*b) : *b;
-  } else if (order == host) {
-    for (auto i = 0u; i < 4u; ++i) {
-      auto p = reinterpret_cast<uint32_t*>(&bytes_[i * 4]);
-      *p = detail::to_network_order(*(b + i));
-    }
-  } else {
-    std::copy_n(reinterpret_cast<const uint64_t*>(b), 2,
-                reinterpret_cast<uint64_t*>(bytes_.data()));
-  }
-}
 
 bool address::is_v4() const {
   return std::memcmp(&bytes_, &v4_mapped_prefix, 12) == 0;
@@ -86,6 +53,7 @@ bool address::is_multicast() const {
 }
 
 namespace {
+
 inline uint32_t bitmask32(size_t bottom_bits) {
   return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
 }
@@ -129,10 +97,6 @@ address& address::operator^=(const address& other) {
   return *this;
 }
 
-const std::array<uint8_t, 16>& address::data() const {
-  return bytes_;
-}
-
 bool address::compare(const address& other, size_t k) const {
   VAST_ASSERT(k > 0 && k <= 128);
   auto x = bytes_.data();
@@ -140,7 +104,7 @@ bool address::compare(const address& other, size_t k) const {
   for (; k > 8; k -= 8)
     if (*x++ != *y++)
       return false;
-  auto mask = word<uint8_t>::msb_fill(k);
+  auto mask = word<byte_type>::msb_fill(k);
   return (*x & mask) == (*y & mask);
 }
 

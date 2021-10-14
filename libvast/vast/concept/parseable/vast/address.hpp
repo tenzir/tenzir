@@ -44,7 +44,7 @@ namespace vast {
 ///                    / "1" 2DIGIT            ; 100-199
 ///                    / "2" %x30-34 DIGIT     ; 200-249
 ///                    / "25" %x30-35          ; 250-255
-struct address_parser : vast::parser_base<address_parser> {
+struct ip_address_parser : vast::parser_base<ip_address_parser> {
   using attribute = address;
 
   static auto make_v4() {
@@ -105,27 +105,25 @@ struct address_parser : vast::parser_base<address_parser> {
   }
 };
 
-template <>
-struct access::parser_base<address>
-  : vast::parser_base<access::parser_base<address>> {
+struct address_parser : vast::parser_base<address_parser> {
   using attribute = address;
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    static auto const p = address_parser{};
+    static auto const p = ip_address_parser{};
     return p(f, l, unused);
   }
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, address& a) const {
-    static auto const v4 = address_parser::make_v4();
+    static auto const v4 = ip_address_parser::make_v4();
+    static auto const v6 = ip_address_parser::make_v6();
+    std::array<uint8_t, 16> bytes;
     auto begin = f;
-    if (v4(f, l, a.bytes_[12], a.bytes_[13], a.bytes_[14], a.bytes_[15])) {
-      std::copy(address::v4_mapped_prefix.begin(),
-                address::v4_mapped_prefix.end(), a.bytes_.begin());
+    if (v4(f, l, bytes[12], bytes[13], bytes[14], bytes[15])) {
+      a = address::v4(std::span<const uint8_t, 4>{bytes.data() + 12, 4});
       return true;
     }
-    static auto const v6 = address_parser::make_v6();
     if (v6(f, l, unused)) {
       // We still need to enhance the parseable concept with a few more tools
       // so that we can transparently parse into 16-byte sequence. Until
@@ -136,7 +134,10 @@ struct access::parser_base<address>
       std::memset(buf, 0, sizeof(buf));
       VAST_ASSERT(f - begin < INET6_ADDRSTRLEN);
       std::copy(begin, f, buf);
-      return ::inet_pton(AF_INET6, buf, &a.bytes_) == 1;
+      auto okay = ::inet_pton(AF_INET6, buf, bytes.data()) == 1;
+      if (okay)
+        a = address{bytes};
+      return okay;
     }
     return false;
   }
@@ -144,7 +145,7 @@ struct access::parser_base<address>
 
 template <>
 struct parser_registry<address> {
-  using type = access::parser_base<address>;
+  using type = address_parser;
 };
 
 namespace parsers {
@@ -154,4 +155,3 @@ static auto const addr = make_parser<vast::address>();
 } // namespace parsers
 
 } // namespace vast
-

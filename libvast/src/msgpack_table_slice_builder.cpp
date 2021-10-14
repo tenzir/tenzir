@@ -27,12 +27,21 @@ template <class Builder, class View>
 size_t encode(Builder& builder, View v) {
   using namespace msgpack;
   auto f = detail::overload{
-    [&](auto x) { return put(builder, x); },
-    [&](view<duration> x) { return put(builder, x.count()); },
-    [&](view<time> x) { return put(builder, x.time_since_epoch().count()); },
-    [&](view<pattern> x) { return put(builder, x.string()); },
+    [&](auto x) {
+      return put(builder, x);
+    },
+    [&](view<duration> x) {
+      return put(builder, x.count());
+    },
+    [&](view<time> x) {
+      return put(builder, x.time_since_epoch().count());
+    },
+    [&](view<pattern> x) {
+      return put(builder, x.string());
+    },
     [&](view<address> x) {
-      auto ptr = reinterpret_cast<const char*>(x.data().data());
+      auto bytes = as_bytes(x);
+      auto ptr = reinterpret_cast<const char*>(bytes.data());
       if (x.is_v4()) {
         auto str = std::string_view{ptr + 12, 4};
         return builder.template add<fixstr>(str);
@@ -55,8 +64,12 @@ size_t encode(Builder& builder, View v) {
       // The noop cast exists only to communicate the MsgPack type.
       return put(builder, static_cast<uint8_t>(x));
     },
-    [&](view<list> xs) { return put_array(builder, *xs); },
-    [&](view<map> xs) { return put_map(builder, *xs); },
+    [&](view<list> xs) {
+      return put_array(builder, *xs);
+    },
+    [&](view<map> xs) {
+      return put_map(builder, *xs);
+    },
     [&](view<record> xs) -> size_t {
       // We store records flattened, so we just append all values sequentially.
       size_t result = 0;

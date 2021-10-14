@@ -59,15 +59,11 @@ TEST(IPv4) {
   CHECK(broadcast.is_broadcast());
 
   uint32_t n = 3232235691;
-  address b{&n, address::ipv4, address::host};
+  auto b = address::v4(n);
   CHECK(to_string(b) == "192.168.0.171");
 
-  std::array<uint8_t, 4> n8h{ {0xAB, 0x00, 0xA8, 0xC0} };
-  address b8h{n8h.data(), address::ipv4, address::host};
-  CHECK(to_string(b8h) == "192.168.0.171");
-
-  std::array<uint8_t, 4> n8n{ {0xC0, 0xA8, 0x00, 0xAB} };
-  address b8n{n8n.data(), address::ipv4, address::network};
+  auto n8n = std::array<uint8_t, 4>{{0xC0, 0xA8, 0x00, 0xAB}};
+  auto b8n = address::v4(std::span{n8n});
   CHECK(to_string(b8n) == "192.168.0.171");
 }
 
@@ -93,19 +89,13 @@ TEST(IPv6) {
 
   uint8_t raw8[16] = {0xdf, 0x00, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
                       0x02, 0x02, 0xb3, 0xff, 0xfe, 0x1e, 0x83, 0x28};
-  auto p = reinterpret_cast<const uint32_t*>(raw8);
-  address e(p, address::ipv6, address::network);
+  auto e = address::v6(std::span{raw8});
   CHECK(e == (a ^ d));
 
   uint32_t raw32[4] = {0xdf000db8, 0x00000000, 0x0202b3ff, 0xfe1e8328};
-  p = reinterpret_cast<const uint32_t*>(raw32);
-  address f(p, address::ipv6, address::host);
+  auto f = address::v6(std::span{raw32});
   CHECK(f == (a ^ d));
   CHECK(f == e);
-
-  address g{raw8, address::ipv6, address::network};
-  CHECK(g == (a ^ d));
-  CHECK(g == e);
 
   CHECK(!a.mask(129));
   CHECK(a.mask(128)); // No modification

@@ -367,12 +367,8 @@ protected:
             return caf::make_error(ec::format_error,
                                    "IPv4 header too short: ", header_size,
                                    " bytes");
-          const auto* orig_h = reinterpret_cast<const uint32_t*>(
-            std::launder(layer3.data() + 12));
-          const auto* resp_h = reinterpret_cast<const uint32_t*>(
-            std::launder(layer3.data() + 16));
-          conn.src_addr = {orig_h, address::ipv4, address::network};
-          conn.dst_addr = {resp_h, address::ipv4, address::network};
+          conn.src_addr = address::v4(layer3.subspan<12, 4>());
+          conn.dst_addr = address::v4(layer3.subspan<16, 4>());
           layer4_proto = std::to_integer<uint8_t>(layer3[9]);
           layer4 = layer3.subspan(header_size);
           break;
@@ -380,12 +376,8 @@ protected:
         case ether_type::ipv6: {
           if (header->len < ethernet_header_size + 40)
             return caf::make_error(ec::format_error, "IPv6 header too short");
-          const auto* orig_h = reinterpret_cast<const uint32_t*>(
-            std::launder(layer3.data() + 8));
-          const auto* resp_h = reinterpret_cast<const uint32_t*>(
-            std::launder(layer3.data() + 24));
-          conn.src_addr = {orig_h, address::ipv4, address::network};
-          conn.dst_addr = {resp_h, address::ipv4, address::network};
+          conn.src_addr = address::v6(layer3.subspan<8, 16>());
+          conn.dst_addr = address::v6(layer3.subspan<24, 16>());
           layer4_proto = std::to_integer<uint8_t>(layer3[6]);
           layer4 = layer3.subspan(40);
           break;

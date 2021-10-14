@@ -27,9 +27,10 @@ struct address_printer : printer_base<address_printer> {
   bool print(Iterator& out, const address& a) const {
     char buf[INET6_ADDRSTRLEN];
     std::memset(buf, 0, sizeof(buf));
+    auto bytes = as_bytes(a);
     auto result = a.is_v4()
-      ? inet_ntop(AF_INET, &a.data()[12], buf, INET_ADDRSTRLEN)
-      : inet_ntop(AF_INET6, &a.data(), buf, INET6_ADDRSTRLEN);
+                    ? inet_ntop(AF_INET, &bytes[12], buf, INET_ADDRSTRLEN)
+                    : inet_ntop(AF_INET6, bytes.data(), buf, INET6_ADDRSTRLEN);
     return result != nullptr && printers::str.print(out, result);
   }
 };
