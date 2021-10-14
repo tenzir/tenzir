@@ -188,9 +188,10 @@ index_state::index_state(index_actor::pointer self)
   : self{self}, inmem_partitions{0, partition_factory{*this}} {
 }
 
-caf::error index_state::load_from_disk() {
-  // We dont use the filesystem actor here because this function is only
-  // called once during startup, when no other actors exist yet.
+caf::error index_state::load_from_disk(filesystem_actor fs) {
+  // We use a blocking actor because this function is called during startup
+  // and should .
+  caf::scoped_actor blocking{fs.home_system()};
   std::error_code err{};
   const auto file_exists = std::filesystem::exists(dir, err);
   if (!file_exists) {
@@ -237,7 +238,20 @@ caf::error index_state::load_from_disk() {
           return error;
       }
     retry:
-      auto chunk = chunk::mmap(synopsis_path);
+      caf::expected<vast::chunk_ptr> chunk = caf::no_error;
+      // In large databases this loop can go on for several decaminutes and can
+      // delay a shutdown caused by errors elsewhere. We use the filesystem
+      // actor as a crude proxy to detect if the system is shutting down.
+      blocking->request(fs, caf::infinite, atom::mmap_v, synopsis_path)
+        .receive(
+          [&chunk](vast::chunk_ptr& c) {
+            chunk = std::move(c);
+          },
+          [&chunk](caf::error& e) {
+            chunk = std::move(e);
+          });
+      if (!chunk && chunk.error() == caf::sec::request_receiver_down)
+        return caf::make_error(ec::unspecified, "aborted during startup");
       if (!chunk) {
         VAST_WARN("{} could not mmap partition at {}", *self, part_path);
         continue;
@@ -695,7 +709,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.meta_index_fp_rate = meta_index_fp_rate;
   self->state.meta_index_bytes = 0;
   // Read persistent state.
-  if (auto err = self->state.load_from_disk()) {
+  if (auto err = self->state.load_from_disk(self->state.filesystem)) {
     VAST_ERROR("{} failed to load index state from disk: {}", *self,
                render(err));
     self->quit(err);
