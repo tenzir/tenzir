@@ -46,12 +46,20 @@ namespace community_id {
 /// The Community ID version.
 constexpr char version = '1';
 
+template <incremental_hash HashAlgorithm>
+void community_id_hash_append(HashAlgorithm& h, const address& x) {
+  if (x.is_v4())
+    hash_append(h, as_bytes(x).subspan<12, 4>());
+  else
+    hash_append(h, as_bytes(x).subspan<0, 16>());
+}
+
 /// Computes a hash of a flow according to the community ID specification.
-/// @param hasher The hash algorithm to use.
+/// @param h The hash algorithm to use.
 /// @param x The flow to hash.
 /// @relates flow
-template <class Hasher>
-void community_id_hash_append(Hasher& hasher, const flow& x) {
+template <incremental_hash HashAlgorithm>
+void community_id_hash_append(HashAlgorithm& h, const flow& x) {
   VAST_ASSERT(x.src_port.type() == x.dst_port.type());
   auto src_port_num = x.src_port.number();
   auto dst_port_num = x.dst_port.number();
@@ -77,19 +85,19 @@ void community_id_hash_append(Hasher& hasher, const flow& x) {
   dst_port_num = detail::to_network_order(dst_port_num);
   static constexpr auto padding = uint8_t{0};
   if (is_ordered) {
-    hash_append(hasher, x.src_addr);
-    hash_append(hasher, x.dst_addr);
-    hash_append(hasher, protocol(x));
-    hash_append(hasher, padding);
-    hash_append(hasher, src_port_num);
-    hash_append(hasher, dst_port_num);
+    community_id_hash_append(h, x.src_addr);
+    community_id_hash_append(h, x.dst_addr);
+    hash_append(h, protocol(x));
+    hash_append(h, padding);
+    hash_append(h, src_port_num);
+    hash_append(h, dst_port_num);
   } else {
-    hash_append(hasher, x.dst_addr);
-    hash_append(hasher, x.src_addr);
-    hash_append(hasher, protocol(x));
-    hash_append(hasher, padding);
-    hash_append(hasher, dst_port_num);
-    hash_append(hasher, src_port_num);
+    community_id_hash_append(h, x.dst_addr);
+    community_id_hash_append(h, x.src_addr);
+    hash_append(h, protocol(x));
+    hash_append(h, padding);
+    hash_append(h, dst_port_num);
+    hash_append(h, src_port_num);
   }
 }
 
@@ -113,7 +121,7 @@ constexpr size_t max_length() {
   else if constexpr (std::is_same_v<Policy, policy::ascii>)
     return prefix + hex_size;
   else
-    static_assert(detail::always_false_v<Policy>, "unsupported plicy");
+    static_assert(detail::always_false_v<Policy>, "unsupported policy");
 }
 
 /// Calculates the Community ID for a given flow.
@@ -147,7 +155,7 @@ std::string compute(const flow& x, uint16_t seed = 0) {
     auto bytes = as_bytes(std::span{digest.data(), digest.size()});
     detail::hexify<policy::lowercase>(bytes, result);
   } else {
-    static_assert(detail::always_false_v<Policy>, "unsupported plicy");
+    static_assert(detail::always_false_v<Policy>, "unsupported policy");
   }
   return result;
 }
