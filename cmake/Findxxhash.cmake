@@ -29,7 +29,7 @@ if (PkgConfig_FOUND)
                    INTERFACE_LINK_LIBRARIES "${XXHASH_LIBRARIES}")
     endif ()
     if (NOT TARGET xxhash::xxhash_header_only)
-      add_library(xxhash::xxhash_header_only INTERFACE IMPORTED)
+      add_library(xxhash::xxhash_header_only UNKNOWN IMPORTED)
       set_target_properties(
         xxhash::xxhash_header_only
         PROPERTIES IMPORTED_LOCATION "${XXHASH_LIBRARIES}"
