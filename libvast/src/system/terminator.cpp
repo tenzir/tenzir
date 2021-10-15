@@ -25,6 +25,8 @@ template <class Policy>
 caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
                          std::chrono::milliseconds grace_period,
                          std::chrono::milliseconds kill_timeout) {
+  VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(self->address().id()),
+                   VAST_ARG(grace_period), VAST_ARG(kill_timeout));
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
     VAST_DEBUG("{} received DOWN from actor {}", *self, msg.source);

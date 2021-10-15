@@ -138,7 +138,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        const type_registry_actor& type_registry, vast::schema local_schema,
        std::string type_filter, accountant_actor accountant,
        std::vector<transform>&& transforms) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(*self));
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(*self), VAST_ARG(self->address().id()));
   // Initialize state.
   self->state.self = self;
   self->state.name = reader->name();

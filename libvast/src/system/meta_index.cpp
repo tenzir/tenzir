@@ -356,6 +356,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
 
 meta_index_actor::behavior_type
 meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
+  VAST_TRACE_SCOPE("{}", VAST_ARG(self->address().id()));
   self->state.self = self;
   return {
     [=](atom::merge,

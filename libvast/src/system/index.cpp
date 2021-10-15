@@ -652,7 +652,8 @@ index(index_actor::stateful_pointer<index_state> self,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
-  VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
+  VAST_TRACE_SCOPE("{} {} {} {} {} {} {} {}", VAST_ARG(self->address().id()),
+                   VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
                    VAST_ARG(taste_partitions), VAST_ARG(num_workers),
                    VAST_ARG(meta_index_dir), VAST_ARG(meta_index_fp_rate));

@@ -247,7 +247,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, const store_builder_actor& store,
          index_actor index, const type_registry_actor& type_registry,
          std::vector<transform>&& input_transformations) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(dir));
+  VAST_TRACE_SCOPE("{}", VAST_ARG(dir), VAST_ARG(self->address().id()));
   for (const auto& x : input_transformations)
     VAST_VERBOSE("{} loaded import transformation {}", *self, x.name());
   self->state.dir = dir;
@@ -273,7 +273,11 @@ importer(importer_actor::stateful_pointer<importer_state> self,
         ->request(self->state.transformer, caf::infinite,
                   static_cast<stream_sink_actor<table_slice>>(dummy))
         .then([](caf::outbound_stream_slot<table_slice>) {},
-              [](const caf::error&) {});
+              [](const caf::error& e) {
+                // We're in the shutdown path anyways, so no need to loudly
+                // `VAST_ERROR()` here.
+                VAST_DEBUG("could not attach dummy sink: {}", e);
+              });
     }
     self->quit(msg.reason);
   });
