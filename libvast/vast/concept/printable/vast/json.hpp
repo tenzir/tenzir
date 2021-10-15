@@ -56,6 +56,11 @@ struct json_printer
       return printers::str.print(out_, std::to_string(x.value));
     }
 
+    bool operator()(const address& x) {
+      static auto p = '"' << make_printer<address>{} << '"';
+      return p.print(out_, x);
+    }
+
     bool operator()(const data& x) {
       return caf::visit(*this, x);
     }
