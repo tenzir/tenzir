@@ -29,6 +29,7 @@
 #include <caf/meta/type_name.hpp>
 #include <caf/response_promise.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <caf/typed_response_promise.hpp>
 
 #include <queue>
 #include <unordered_map>
@@ -229,7 +230,22 @@ struct index_state {
   // The number of partitions initially returned for a query.
   size_t taste_partitions = {};
 
-  std::queue<std::pair<query, caf::typed_response_promise<void>>> backlog;
+  struct backlog {
+    struct job {
+      vast::query query;
+      caf::typed_response_promise<void> rp;
+    };
+
+    // Emplace a job.
+    void emplace(vast::query query, caf::typed_response_promise<void> rp);
+
+    [[nodiscard]] std::optional<job> take_next();
+
+    std::queue<job> normal;
+    std::queue<job> low;
+  };
+
+  struct backlog backlog = {};
 
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};

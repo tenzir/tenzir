@@ -54,7 +54,6 @@
 #include <caf/error.hpp>
 #include <caf/response_promise.hpp>
 #include <caf/typed_event_based_actor.hpp>
-#include <caf/typed_response_promise.hpp>
 #include <flatbuffers/flatbuffers.h>
 
 #include <algorithm>
@@ -331,6 +330,26 @@ std::optional<query_supervisor_actor> index_state::next_worker() {
   auto result = std::move(idle_workers.back());
   idle_workers.pop_back();
   return result;
+}
+
+void index_state::backlog::emplace(vast::query query,
+                                   caf::typed_response_promise<void> rp) {
+  auto& q = query.priority == query::priority::normal ? normal : low;
+  q.emplace(query, rp);
+}
+
+std::optional<index_state::backlog::job> index_state::backlog::take_next() {
+  if (!normal.empty()) {
+    auto result = normal.front();
+    normal.pop();
+    return result;
+  }
+  if (!low.empty()) {
+    auto result = low.front();
+    low.pop();
+    return result;
+  }
+  return std::nullopt;
 }
 
 void index_state::add_flush_listener(flush_listener_actor listener) {
@@ -1149,16 +1168,15 @@ index(index_actor::stateful_pointer<index_state> self,
           return;
         }
       }
-      if (self->state.backlog.empty()) {
+      if (auto job = self->state.backlog.take_next()) {
+        VAST_VERBOSE("{} starts executing {} from the backlog", *self,
+                     job->query);
+        job->rp.delegate(static_cast<index_actor>(self), atom::internal_v,
+                         std::move(job->query), std::move(worker));
+      } else {
         VAST_VERBOSE(
           "{} finished work on a query and has no jobs in the backlog", *self);
         self->state.idle_workers.emplace_back(std::move(worker));
-      } else {
-        auto& [query, rp] = self->state.backlog.front();
-        VAST_VERBOSE("{} starts executing {} from the backlog", *self, query);
-        rp.delegate(static_cast<index_actor>(self), atom::internal_v,
-                    std::move(query), std::move(worker));
-        self->state.backlog.pop();
       }
     },
     // -- status_client_actor --------------------------------------------------
