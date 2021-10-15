@@ -36,7 +36,13 @@ transformer_stream_stage_ptr attach_transform_stage(
       if (x.header == detail::stream_control_header::eof) {
         VAST_DEBUG("{} quits after receiving EOF control message in stream",
                    *self);
-        self->send_exit(self, caf::make_error(ec::end_of_input));
+        // If the index had an error during startup, we may still have a
+        // pending handshake that will never be answered, so we need to
+        // explicitly `close()` the stream.
+        self->state.stage->out().force_emit_batches();
+        self->state.stage->out().close();
+        self->state.stage->out().fan_out_flush();
+        self->send_exit(self, caf::exit_reason::user_shutdown);
         return;
       }
       auto transformed = self->state.transforms.apply(std::move(x.body));
