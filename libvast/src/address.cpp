@@ -152,9 +152,4 @@ bool operator<(const address& x, const address& y) {
   return x.bytes_ < y.bytes_;
 }
 
-bool convert(const address& a, data& d) {
-  d = to_string(a);
-  return true;
-}
-
 } // namespace vast
