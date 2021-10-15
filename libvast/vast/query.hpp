@@ -69,11 +69,15 @@ struct query {
 
   using command = caf::variant<erase, count, extract>;
 
+  enum class priority { normal, low };
+
   command cmd;
 
   expression expr = {};
 
   vast::ids ids = {};
+
+  priority priority = priority::normal;
 
   query(const command& cmd, const expression& expr) : cmd(cmd), expr(expr) {
   }
