@@ -3,60 +3,30 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/concept/hashable/hash.hpp"
 
 #include "vast/as_bytes.hpp"
 #include "vast/concept/hashable/crc.hpp"
-#include "vast/concept/hashable/default_hash.hpp"
 #include "vast/concept/hashable/sha1.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/coding.hpp"
 
-#include <iomanip>
-
-#define SUITE hash
+#define SUITE hashable
 #include "vast/test/test.hpp"
 
 using namespace vast;
 using vast::detail::hexify;
 
-namespace {
-
-struct foo {
-  int a = 42;
-  int b = 1337;
-};
-
-template <class Inspector>
-auto inspect(Inspector& f, foo& x) {
-  return f(x.a, x.b);
-}
-
-} // namespace
-
-TEST(hashing an inspectable type) {
-  // Manual hashing two values...
-  auto a = 42;
-  auto b = 1337;
-  default_hash h;
-  hash_append(h, a);
-  hash_append(h, b);
-  auto manual_digest = static_cast<default_hash::result_type>(h);
-  // ...and hashing them through the inspection API...
-  auto digest = uhash<default_hash>{}(foo{});
-  // ...must yield the same value.
-  CHECK_EQUAL(manual_digest, digest);
-}
-
-TEST(crc32) {
-  // one-shot
+TEST(crc32 oneshot) {
   CHECK_EQUAL(hash<crc32>('f'), 1993550816u);
   CHECK_EQUAL(hash<crc32>('o'), 252678980u);
-  // incremental
+}
+
+TEST(crc32 incremental) {
   crc32 crc;
   crc("foo", 3);
   CHECK(static_cast<crc32::result_type>(crc) == 2356372769);
@@ -90,14 +60,14 @@ TEST(xxh64 zero bytes) {
   h(nullptr, 0);
 }
 
-TEST(sha1 use) {
+TEST(sha1 validity) {
   std::array<char, 2> forty_two = {'4', '2'};
   auto digest = hash<sha1>(forty_two);
   auto bytes = as_bytes(digest);
   CHECK_EQUAL(hexify(bytes), "92cfceb39d57d914ed8b14d0e37643de0797ae56");
 }
 
-TEST(sha1 algorithm) {
+TEST(sha1 incremental) {
   sha1 sha;
   sha("foo", 3);
   sha("bar", 3);
