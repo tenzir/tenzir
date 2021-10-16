@@ -69,9 +69,9 @@ TEST(crc32) {
   CHECK(static_cast<crc32::result_type>(foo) == 2356372769);
 }
 
-TEST(xxh64 oneshot) {
-  auto forty_two = "42";
-  CHECK(xxh64::make(forty_two, sizeof(forty_two), 42) == 7873697032674743835);
+TEST(xxh64 oneshot with seed) {
+  auto forty_two = "42"; // incl. NUL byte
+  CHECK_EQUAL(xxh64::make(forty_two, 3, 42), 7873697032674743835ul);
 }
 
 TEST(xxh64 incremental) {
