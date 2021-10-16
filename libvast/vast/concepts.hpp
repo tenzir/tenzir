@@ -56,9 +56,8 @@ concept container = requires(T t) {
 /// Contiguous byte buffers
 template <class T>
 concept byte_container = requires(T t) {
-  std::data(t);
-  std::size(t);
-  sizeof(decltype(*std::data(t))) == 1;
+  container<T>;
+  requires sizeof(decltype(*std::data(t))) == 1;
 };
 
 template <class T>

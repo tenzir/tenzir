@@ -41,8 +41,10 @@ TEST(container) {
 }
 
 TEST(byte_container) {
-  using fake_byte_container_t = std::array<std::uint8_t, 2>;
-  static_assert(vast::concepts::byte_container<fake_byte_container_t>);
+  using byte_array = std::array<std::uint8_t, 2>;
+  static_assert(vast::concepts::byte_container<byte_array>);
+  using u32_array = std::array<std::uint32_t, 2>;
+  static_assert(!vast::concepts::byte_container<u32_array>);
   struct not_byte_container {};
   static_assert(!vast::concepts::byte_container<not_byte_container>);
 }
