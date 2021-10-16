@@ -67,10 +67,14 @@ TEST(construction via custom factory) {
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(to_addr_view("192.168.0.1"));
   auto verify = verifier{x.get()};
+  MESSAGE("true positives");
   verify(to_addr_view("192.168.0.1"), {N, N, N, N, N, N, T, N, N, N, N, N});
-  MESSAGE("collisions");
+  MESSAGE("true negatives");
   verify(to_addr_view("192.168.0.6"), {N, N, N, N, N, N, F, N, N, N, N, N});
-  verify(to_addr_view("192.168.0.11"), {N, N, N, N, N, N, T, N, N, N, N, N});
+  MESSAGE("false positives / collisions");
+  verify(to_addr_view("192.168.0.12"), {N, N, N, N, N, N, T, N, N, N, N, N});
+  verify(to_addr_view("192.168.0.100"), {N, N, N, N, N, N, T, N, N, N, N, N});
+  verify(to_addr_view("192.168.0.251"), {N, N, N, N, N, N, T, N, N, N, N, N});
 }
 
 TEST(serialization with custom attribute type) {
