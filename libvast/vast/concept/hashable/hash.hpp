@@ -11,7 +11,7 @@
 #include "vast/concept/hashable/concepts.hpp"
 #include "vast/concept/hashable/default_hash.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/portable_hash.hpp"
+#include "vast/concept/hashable/uniquely_hashable.hpp"
 #include "vast/concepts.hpp"
 
 #include <utility>
@@ -26,7 +26,7 @@ namespace vast {
 template <hash_algorithm HashAlgorithm = default_hash, class T>
 [[nodiscard]] auto hash(const T& x) noexcept {
   constexpr auto is_oneshot = oneshot_hash<HashAlgorithm>;
-  if constexpr (is_oneshot && portable_hash<T, HashAlgorithm>) {
+  if constexpr (is_oneshot && uniquely_hashable<T, HashAlgorithm>) {
     return HashAlgorithm::make(std::addressof(x), sizeof(x));
   } else if constexpr (is_oneshot && concepts::fixed_byte_sequence<T>) {
     auto bytes = as_bytes(x);

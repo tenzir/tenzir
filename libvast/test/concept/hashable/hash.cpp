@@ -81,8 +81,8 @@ struct is_uniquely_represented<fixed_and_unique> : std::true_type {};
 
 TEST(hash via oneshot hashing) {
   uint16_t u16 = 0;
-  static_assert(portable_hash<decltype(u16), oneshot>);
-  static_assert(portable_hash<decltype(u16), incremental>);
+  static_assert(uniquely_hashable<decltype(u16), oneshot>);
+  static_assert(uniquely_hashable<decltype(u16), incremental>);
   CHECK_EQUAL(hash<oneshot>(u16), sizeof(u16));
   CHECK_EQUAL(hash<incremental>(u16), 0u);
 }
@@ -90,8 +90,8 @@ TEST(hash via oneshot hashing) {
 TEST(prefer fast path when both is available) {
   auto u16 = uint16_t{0};
   auto f64 = double{4.2};
-  static_assert(portable_hash<decltype(u16), oneshot_and_incremental>);
-  static_assert(!portable_hash<decltype(f64), oneshot_and_incremental>);
+  static_assert(uniquely_hashable<decltype(u16), oneshot_and_incremental>);
+  static_assert(!uniquely_hashable<decltype(f64), oneshot_and_incremental>);
   CHECK_EQUAL(hash<oneshot_and_incremental>(u16), sizeof(u16)); // oneshot
   CHECK_EQUAL(hash<oneshot_and_incremental>(f64), 0u);          // incremental
 }
