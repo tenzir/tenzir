@@ -38,4 +38,10 @@ concept oneshot_hash = requires(const void* p, size_t n) {
   // clang-format on
 };
 
+/// The hash algorithm concept. A hash algorithm can be *oneshot*,
+/// *incremental*, or both.
+template <class HashAlgorithm>
+concept hash_algorithm
+  = incremental_hash<HashAlgorithm> || oneshot_hash<HashAlgorithm>;
+
 } // namespace vast
