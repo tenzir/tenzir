@@ -59,15 +59,16 @@ struct oneshot_and_incremental : algorithm_base {
 // A type that models a fixed-size byte sequence by exposing an as_bytes
 // function with a non-dynamic extent.
 struct fixed {
-  friend std::span<const std::byte, 42> as_bytes(fixed) {
-    return std::span<const std::byte, 42>{nullptr, 42};
+  friend std::span<const std::byte, 1> as_bytes(const fixed& x) {
+    return std::span<const std::byte, 1>{x.bytes, 1};
   }
-};
+
+  std::byte bytes[64];
+} __attribute__((__packed__));
 
 // A type that can be hashed by either (1) taking its memory address and size,
 // or (2) accessing it as fixed byte sequence.
 struct fixed_and_unique : fixed {
-  uint64_t member;
 } __attribute__((__packed__));
 
 } // namespace
@@ -97,12 +98,12 @@ TEST(prefer fast path when both is available) {
 }
 
 TEST(hash fixed byte sequences in one shot) {
-  CHECK_EQUAL(as_bytes(fixed{}).size(), 42u);
-  CHECK_EQUAL(hash<oneshot_and_incremental>(fixed{}), 42u);
+  CHECK_EQUAL(as_bytes(fixed{}).size(), 1u);
+  CHECK_EQUAL(hash<oneshot_and_incremental>(fixed{}), 1u);
 }
 
 TEST(hash byte sequence that is fixed and unique) {
   // Make sure we're not going via as_bytes when we can take the address.
-  static_assert(sizeof(fixed_and_unique) == 8);
-  CHECK_EQUAL(hash<oneshot_and_incremental>(fixed_and_unique{}), 8u);
+  static_assert(sizeof(fixed_and_unique) == 64u);
+  CHECK_EQUAL(hash<oneshot_and_incremental>(fixed_and_unique{}), 64u);
 }
