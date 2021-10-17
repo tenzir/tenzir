@@ -50,12 +50,6 @@ constexpr void reverse_bytes(T& x) {
     std::swap(bytes[i], bytes[sizeof(T) - 1 - i]);
 }
 
-template <class T, class HashAlgorithm>
-void maybe_reverse_bytes(T& x, HashAlgorithm&) {
-  if constexpr (HashAlgorithm::endian != detail::endian::native)
-    reverse_bytes(x);
-}
-
 template <class HashAlgorithm, class Container>
 void contiguous_container_hash_append(HashAlgorithm& h,
                                       const Container& xs) noexcept {
@@ -83,7 +77,8 @@ void hash_append(HashAlgorithm& h, T x) noexcept {
     // When hashing, we treat -0 and 0 the same.
     if (x == 0)
       x = 0;
-    detail::maybe_reverse_bytes(x, h);
+    if constexpr (HashAlgorithm::endian != detail::endian::native)
+      detail::reverse_bytes(x);
     h(std::addressof(x), sizeof(x));
   } else {
     static_assert(std::is_same_v<T, T>, "T is neither integral nor a float");
@@ -93,7 +88,8 @@ void hash_append(HashAlgorithm& h, T x) noexcept {
 template <class HashAlgorithm>
 void hash_append(HashAlgorithm& h, std::nullptr_t) noexcept {
   const void* p = nullptr;
-  detail::maybe_reverse_bytes(p, h);
+  if constexpr (HashAlgorithm::endian != detail::endian::native)
+    detail::reverse_bytes(p);
   h(std::addressof(p), sizeof(p));
 }
 
