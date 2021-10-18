@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/detail/operators.hpp"
 
 #include <cstdint>
@@ -76,6 +77,10 @@ public:
 private:
   uint32_t data_ = 0;
 } __attribute__((__packed__));
+
+template <>
+struct is_uniquely_represented<port>
+  : std::bool_constant<sizeof(port) == sizeof(uint32_t)> {};
 
 bool convert(const port& p, data& d);
 

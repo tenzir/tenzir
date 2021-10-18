@@ -29,7 +29,9 @@ struct flow {
 } __attribute__((__packed__));
 
 template <>
-struct is_uniquely_represented<flow> : std::true_type {};
+struct is_uniquely_represented<flow>
+  : std::bool_constant<sizeof(flow)
+                       == (2 * sizeof(address)) + (2 * sizeof(port))> {};
 
 /// Factory function to construct a flow.
 /// @param src_addr The IP address of the flow source.

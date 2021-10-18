@@ -40,10 +40,11 @@ struct integer : detail::totally_ordered<integer> {
   friend typename Inspector::result_type inspect(Inspector& f, integer& x) {
     return f(caf::meta::type_name("vast.integer"), x.value);
   }
-};
+} __attribute__((__packed__));
 
 template <>
-struct is_uniquely_represented<integer> : std::true_type {};
+struct is_uniquely_represented<integer>
+  : std::bool_constant<sizeof(integer) == sizeof(integer::value_type)> {};
 
 } // namespace vast
 

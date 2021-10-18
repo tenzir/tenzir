@@ -79,7 +79,8 @@ private:
 };
 
 template <>
-struct is_uniquely_represented<uuid> : std::true_type {};
+struct is_uniquely_represented<uuid>
+  : std::bool_constant<sizeof(uuid) == uuid::num_bytes> {};
 
 // flatbuffer support
 [[nodiscard]] caf::expected<flatbuffers::Offset<fbs::uuid::v0>>

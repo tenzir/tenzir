@@ -189,7 +189,8 @@ private:
 } __attribute__((__packed__));
 
 template <>
-struct is_uniquely_represented<address> : std::true_type {};
+struct is_uniquely_represented<address>
+  : std::bool_constant<sizeof(address) == sizeof(address::byte_array)> {};
 
 } // namespace vast
 
