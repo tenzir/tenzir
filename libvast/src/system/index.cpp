@@ -300,10 +300,10 @@ caf::error index_state::load_from_disk() {
         = layout_statistics{stat->count()};
     }
   } else {
-    VAST_INFO("{} found existing database dir {} without index "
-              "statefile, "
-              "will start with fresh state",
-              *self, dir);
+    VAST_DEBUG("{} found existing database dir {} without index "
+               "statefile, "
+               "will start with fresh state",
+               *self, dir);
   }
   return caf::none;
 }
@@ -829,9 +829,12 @@ index(index_actor::stateful_pointer<index_state> self,
                      *self, query);
         return caf::skip;
       }
-      if (auto worker = self->state.next_worker())
+      if (auto worker = self->state.next_worker()) {
+        VAST_VERBOSE("{} starts executing {} from a new request", *self, query);
         return self->delegate(static_cast<index_actor>(self), atom::internal_v,
                               std::move(query), std::move(*worker));
+      }
+      VAST_VERBOSE("{} pushes query {} to the backlog", *self, query);
       auto rp = self->make_response_promise<void>();
       self->state.backlog.emplace(std::move(query), rp);
       return rp;
@@ -1078,9 +1081,12 @@ index(index_actor::stateful_pointer<index_state> self,
       if (!self->state.worker_available())
         VAST_DEBUG("{} delegates work to query supervisors", *self);
       if (self->state.backlog.empty()) {
+        VAST_VERBOSE(
+          "{} finished work on a query and has no jobs in the backlog", *self);
         self->state.idle_workers.emplace_back(std::move(worker));
       } else {
         auto& [query, rp] = self->state.backlog.front();
+        VAST_VERBOSE("{} starts executing {} from the backlog", *self, query);
         rp.delegate(static_cast<index_actor>(self), atom::internal_v,
                     std::move(query), std::move(worker));
         self->state.backlog.pop();
