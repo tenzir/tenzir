@@ -13,6 +13,7 @@
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/uniquely_hashable.hpp"
 #include "vast/concepts.hpp"
+#include "vast/detail/type_traits.hpp"
 
 #include <utility>
 
@@ -24,7 +25,7 @@ namespace vast {
 /// @param x The value to hash.
 /// @returns A hash digest of *x* using `HashAlgorithm`.
 template <hash_algorithm HashAlgorithm = default_hash, class T>
-[[nodiscard]] auto hash(const T& x) noexcept {
+[[nodiscard]] typename HashAlgorithm::result_type hash(const T& x) noexcept {
   constexpr auto is_oneshot = oneshot_hash<HashAlgorithm>;
   if constexpr (is_oneshot && uniquely_hashable<T, HashAlgorithm>) {
     return HashAlgorithm::make(std::addressof(x), sizeof(x));
@@ -35,6 +36,8 @@ template <hash_algorithm HashAlgorithm = default_hash, class T>
     HashAlgorithm h{};
     hash_append(h, x);
     return static_cast<typename HashAlgorithm::result_type>(h);
+  } else {
+    static_assert(detail::always_false_v<T>, "T is not hashable");
   }
 }
 
