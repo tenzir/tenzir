@@ -61,22 +61,12 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, port& x) {
-    auto data = x.data_;
-    if constexpr (std::is_void_v<typename Inspector::result_type>) {
-      f(data);
-      if constexpr (requires { requires Inspector::writes_state == true; })
-        x.data_ = data;
-    } else {
-      auto result = f(data);
-      if constexpr (requires { requires Inspector::writes_state == true; })
-        x.data_ = data;
-      return result;
-    }
+    return f(x.data_);
   }
 
 private:
   uint32_t data_ = 0;
-} __attribute__((__packed__));
+};
 
 template <>
 struct is_uniquely_represented<port>

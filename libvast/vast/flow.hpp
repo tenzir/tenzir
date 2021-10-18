@@ -26,7 +26,7 @@ struct flow {
   address dst_addr;
   port src_port;
   port dst_port;
-} __attribute__((__packed__));
+};
 
 template <>
 struct is_uniquely_represented<flow>

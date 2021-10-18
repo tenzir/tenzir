@@ -165,17 +165,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, address& x) {
-    auto data = x.bytes_;
-    if constexpr (std::is_void_v<typename Inspector::result_type>) {
-      f(data);
-      if constexpr (requires { requires Inspector::writes_state == true; })
-        x.bytes_ = data;
-    } else {
-      auto result = f(data);
-      if constexpr (requires { requires Inspector::writes_state == true; })
-        x.bytes_ = data;
-      return result;
-    }
+    return f(x.bytes_);
   }
 
   template <class Byte = std::byte>
@@ -186,7 +176,7 @@ public:
 
 private:
   byte_array bytes_;
-} __attribute__((__packed__));
+};
 
 template <>
 struct is_uniquely_represented<address>
