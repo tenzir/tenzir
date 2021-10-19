@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
 #include "vast/detail/bit.hpp"
 
 #include <cstddef>
@@ -16,6 +17,22 @@
 #include <xxhash.h>
 
 namespace vast {
+
+// Exposed xxHash tuning parameters.
+
+/// Use special path for aligned inputs (XXH32 and XXH64 only).
+static constexpr bool xxh_force_align_check = XXH_FORCE_ALIGN_CHECK;
+
+/// Use fast-path for aligned read at the cost of one branch per hash.
+#ifdef XXH_FORCE_MEMORY_ACCESS
+static constexpr int xxh_force_memory_access = XXH_FORCE_MEMORY_ACCESS;
+#else
+static constexpr int xxh_force_memory_access = 0;
+#endif
+
+/// Allow null pointer input when hashing data of length greater 0.
+static constexpr bool xxh_accept_null_input_pointer
+  = XXH_ACCEPT_NULL_INPUT_POINTER;
 
 class xxh64 {
 public:
@@ -27,6 +44,8 @@ public:
 
   static result_type
   make(const void* data, size_t size, seed_type seed = 0) noexcept {
+    VAST_ASSERT(xxh_accept_null_input_pointer
+                || !(data == nullptr && size > 0));
     return XXH64(data, size, seed);
   }
 
@@ -35,6 +54,8 @@ public:
   }
 
   void operator()(const void* data, size_t size) noexcept {
+    VAST_ASSERT(xxh_accept_null_input_pointer
+                || !(data == nullptr && size > 0));
     XXH64_update(&state_, data, size);
   }
 
@@ -64,6 +85,8 @@ public:
 
   static result_type
   make(const void* data, size_t size, seed_type seed) noexcept {
+    VAST_ASSERT(xxh_accept_null_input_pointer
+                || !(data == nullptr && size > 0));
     return XXH3_64bits_withSeed(data, size, seed);
   }
 
@@ -78,6 +101,8 @@ public:
   }
 
   void operator()(const void* data, size_t size) noexcept {
+    VAST_ASSERT(xxh_accept_null_input_pointer
+                || !(data == nullptr && size > 0));
     XXH3_64bits_update(&state_, data, size);
   }
 
@@ -102,6 +127,8 @@ public:
   using seed_type = XXH64_hash_t;
 
   static result_type make(const void* data, size_t size) noexcept {
+    VAST_ASSERT(xxh_accept_null_input_pointer
+                || !(data == nullptr && size > 0));
     return XXH3_128bits(data, size);
   }
 
@@ -121,6 +148,8 @@ public:
   }
 
   void operator()(const void* data, size_t size) noexcept {
+    VAST_ASSERT(xxh_accept_null_input_pointer
+                || !(data == nullptr && size > 0));
     XXH3_128bits_update(&state_, data, size);
   }
 
