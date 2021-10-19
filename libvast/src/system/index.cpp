@@ -1074,12 +1074,10 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::worker, query_supervisor_actor worker) {
       for (const auto& [_, qs] : self->state.pending) {
         if (worker == qs.worker) {
-          VAST_INFO("worker remains available for the query {}", qs.id);
+          VAST_DEBUG("worker remains available for the query {}", qs.id);
           return;
         }
       }
-      if (!self->state.worker_available())
-        VAST_DEBUG("{} delegates work to query supervisors", *self);
       if (self->state.backlog.empty()) {
         VAST_VERBOSE(
           "{} finished work on a query and has no jobs in the backlog", *self);
