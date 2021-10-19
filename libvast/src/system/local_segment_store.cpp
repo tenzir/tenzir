@@ -8,6 +8,7 @@
 
 #include "vast/system/local_segment_store.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/fbs/partition.hpp"
@@ -177,16 +178,12 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                  rank(self->state.segment->ids()));
       if (is_subset(self->state.segment->ids(), xs)) {
         VAST_VERBOSE("{} gets wholly erased from {}", *self, self->state.path);
-        std::error_code err;
-        std::filesystem::remove_all(self->state.path, err);
-        if (err)
-          return caf::make_error(ec::system_error, err.message());
         // There is a (small) chance one or more lookups are currently still in
         // progress, so we dont call `self->quit()` here but instead rely on
         // ref-counting. The lookups can still finish normally because the
         // `mmap()` is still valid even after the underlying segment file was
         // removed.
-        return atom::done_v;
+        return self->delegate(self->state.fs, atom::erase_v, self->state.path);
       }
       auto new_segment = segment::copy_without(*self->state.segment, xs);
       if (!new_segment) {

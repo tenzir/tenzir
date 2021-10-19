@@ -82,6 +82,16 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         return chk.error();
       }
     },
+    [self](atom::erase,
+           const std::filesystem::path& filename) -> caf::result<atom::done> {
+      const auto path
+        = filename.is_absolute() ? filename : self->state.root / filename;
+      std::error_code err;
+      std::filesystem::remove_all(path, err);
+      if (err)
+        return caf::make_error(ec::system_error, err.message());
+      return atom::done_v;
+    },
     [self](atom::status, status_verbosity v) {
       auto result = record{};
       if (v >= status_verbosity::info)

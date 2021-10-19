@@ -287,7 +287,10 @@ using filesystem_actor = typed_actor_fwd<
     chunk_ptr>,
   // Memory-maps a file.
   caf::replies_to<atom::mmap, std::filesystem::path>::with< //
-    chunk_ptr>>
+    chunk_ptr>,
+  // Deletes a file.
+  caf::replies_to<atom::erase, std::filesystem::path>::with< //
+    atom::done>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
