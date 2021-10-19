@@ -197,7 +197,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       VAST_ASSERT(self->state.path.has_filename());
       auto old_path = self->state.path;
       auto new_path = self->state.path.replace_extension("next");
-      auto rp = caf::typed_response_promise<atom::done>{};
+      auto rp = self->make_response_promise<atom::done>();
       self
         ->request(self->state.fs, caf::infinite, atom::write_v, new_path,
                   new_segment->chunk())
