@@ -207,7 +207,7 @@ def run_step(
         info_string = " ".join(map(str, cmd))
         client = spawn(
             basecmd + step.command,
-            stdin=subprocess.PIPE,
+            stdin=(subprocess.PIPE if step.input else None),
             stdout=open(stdout, "w+"),
             stderr=open(stderr, "w"),
             cwd=work_dir,
