@@ -38,7 +38,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         return err;
       } else {
         ++self->state.stats.writes.successful;
-        ++self->state.stats.writes.bytes += chk->size();
+        self->state.stats.writes.bytes += chk->size();
         return atom::ok_v;
       }
     },
@@ -55,7 +55,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       }
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
-        ++self->state.stats.reads.bytes += bytes->size();
+        self->state.stats.reads.bytes += bytes->size();
         return chunk::make(std::move(*bytes));
       } else {
         ++self->state.stats.reads.failed;
@@ -75,7 +75,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       }
       if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
-        ++self->state.stats.mmaps.bytes += chk->get()->size();
+        self->state.stats.mmaps.bytes += chk->get()->size();
         return chk;
       } else {
         ++self->state.stats.mmaps.failed;
