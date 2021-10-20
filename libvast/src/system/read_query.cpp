@@ -85,9 +85,6 @@ caf::expected<std::string>
 read_query(const invocation& inv, std::string_view file_option,
            enum must_provide_query must_provide_query, size_t argument_offset) {
   VAST_TRACE_SCOPE("{} {}", inv, file_option);
-  auto ambiguous
-    = caf::make_error(ec::invalid_argument, "got a query on the command line "
-                                            "but --read option is defined");
   // The below logic matches the following behavior:
   // vast export -r ... <format> <query>
   //   errors.
@@ -101,54 +98,62 @@ read_query(const invocation& inv, std::string_view file_option,
   const auto fname = caf::get_if<std::string>(&inv.options, file_option);
   const bool has_query_cli = inv.arguments.size() > argument_offset;
   const bool has_query_stdin = ::isatty(::fileno(stdin)) == 0;
-  //      |r
-  // f   s|e
-  // n   t|s
-  // a c d|u
-  // m l i|l
-  // e i n|t
-  // -----|-
+  // We use a binary table below; the 0/1 values reflect fname, cli, and stdin
+  // in that order. We have a total of 12 options, given that we must
+  // special-case fname equals dash.
   // -- read option unused ----------------------------------------------------
-  // clang-format off
   if (!fname) {
-  // 0 0 0|match all
+    // 0 0 0|match all
     if (!has_query_cli && !has_query_stdin)
       return make_all_query(must_provide_query);
-  // 0 0 1|query from stdin
+    // 0 0 1|query from stdin
     if (!has_query_cli && has_query_stdin)
       return read_query(std::cin);
-  // 0 1 0|query from command line
+    // 0 1 0|query from command line
     if (has_query_cli && !has_query_stdin)
       return read_query(inv.arguments, argument_offset);
-  // 0 1 1|error
+    // 0 1 1|error
     VAST_ASSERT(has_query_cli && has_query_stdin);
-    return ambiguous;
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("got query '{}' on stdin and '{}' on the command line",
+                  read_query(std::cin),
+                  read_query(inv.arguments, argument_offset)));
   }
   // -- explicitly read from stdin --------------------------------------------
   if (*fname == "-") {
-  // - 0 0|query from stdin
-  // - 0 1|query from stdin
+    // - 0 0|query from stdin
+    // - 0 1|query from stdin
     if (!has_query_cli)
       return read_query(std::cin);
-  // - 1 0|error
-  // - 1 1|error
-    return ambiguous;
+    // - 1 0|error
+    // - 1 1|error
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("got query '{}' on stdin and '{}' on the command line",
+                  read_query(std::cin),
+                  read_query(inv.arguments, argument_offset)));
   }
-  // clang-format on
   // -- read from file --------------------------------------------------------
   // 1 0 0|query from file
   if (!has_query_cli && !has_query_stdin)
     return read_query(*fname);
   // 1 0 1|error
   if (!has_query_cli && has_query_stdin)
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("got a query on stdin, but --read "
-                                       "option is set to '{}'",
-                                       *fname));
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("got query '{}' on stdin and '{}' from file '{}' specified "
+                  "via '--read' option",
+                  read_query(std::cin), read_query(*fname), *fname));
   // 1 1 0|error
   // 1 1 1|error
   VAST_ASSERT(has_query_cli);
-  return ambiguous;
+  return caf::make_error(ec::invalid_argument,
+                         fmt::format("got query '{}' on the command line and "
+                                     "'{}' from file '{}' specified via "
+                                     "'--read' option",
+                                     read_query(inv.arguments, argument_offset),
+                                     read_query(*fname), *fname));
 }
 
 } // namespace vast::system
