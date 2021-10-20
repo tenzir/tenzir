@@ -337,7 +337,10 @@ target_compile_definitions(libvast_native_plugins
                            PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 add_library(vast::native_plugins ALIAS libvast_native_plugins)
 
-if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.16")
+# Configure precompiled headers, except for ARM macOS because of this CMake bug:
+# https://gitlab.kitware.com/cmake/cmake/-/issues/21825
+if (NOT (CMAKE_SYSTEM_NAME MATCHES "Darwin" AND CMAKE_SYSTEM_PROCESSOR MATCHES
+                                                "arm"))
   target_precompile_headers(libvast PUBLIC [["vast/fwd.hpp"]] <caf/fwd.hpp>)
 endif ()
 
