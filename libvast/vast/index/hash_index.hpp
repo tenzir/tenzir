@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/concept/hashable/hash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
@@ -63,7 +64,9 @@ class hash_index : public value_index {
   static constexpr size_t max_hash_rounds = 32;
 
 public:
-  using hash_algorithm = xxh64; // TODO: switch to xxh3_64
+  // TODO: switch to XXH3 once the persistent index layout is versioned and
+  // upgradable. Until then we have to support existing state that uses XXH64.
+  using hash_algorithm = xxh64;
   using digest_type = std::array<std::byte, Bytes>;
 
   static_assert(sizeof(hash_algorithm::result_type) >= Bytes,
@@ -75,7 +78,7 @@ public:
   /// @returns The chopped digest.
   static digest_type hash(data_view x, size_t seed = 0) {
     digest_type result;
-    auto digest = uhash<hash_algorithm>{seed}(x);
+    auto digest = seeded_hash<hash_algorithm>{seed}(x);
     std::memcpy(result.data(), &digest, Bytes);
     return result;
   }
