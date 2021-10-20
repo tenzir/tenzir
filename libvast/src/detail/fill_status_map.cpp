@@ -59,13 +59,14 @@ pid_t pthread_id() {
 
 namespace vast::detail {
 
-void fill_status_map(record& xs, caf::stream_manager& mgr) {
+record fill_status_map(caf::stream_manager& mgr) {
+  auto xs = record{};
   // Manager status.
   xs["idle"] = mgr.idle();
   xs["congested"] = mgr.congested();
   // Downstream status.
   auto& out = mgr.out();
-  auto& downstream = insert_record(xs, "downstream");
+  auto downstream = record{};
   downstream["buffered"] = count{out.buffered()};
   downstream["max-capacity"] = integer{out.max_capacity()};
   downstream["paths"] = count{out.num_paths()};
@@ -73,7 +74,7 @@ void fill_status_map(record& xs, caf::stream_manager& mgr) {
   downstream["clean"] = out.clean();
   out.for_each_path([&](auto& opath) {
     auto name = "slot-" + std::to_string(opath.slots.sender);
-    auto& slot = insert_record(downstream, name);
+    auto slot = record{};
     slot["pending"] = opath.pending();
     slot["clean"] = opath.clean();
     slot["closing"] = opath.closing;
@@ -81,19 +82,24 @@ void fill_status_map(record& xs, caf::stream_manager& mgr) {
     slot["open-credit"] = integer{opath.open_credit};
     slot["desired-batch-size"] = integer{opath.desired_batch_size};
     slot["max-capacity"] = integer{opath.max_capacity};
+    downstream[name] = std::move(slot);
   });
+  xs["downstream"] = std::move(downstream);
   // Upstream status.
-  auto& upstream = insert_record(xs, "upstream");
+  auto upstream = record{};
   auto& ipaths = mgr.inbound_paths();
   if (!ipaths.empty())
     xs["inbound-paths-idle"] = mgr.inbound_paths_idle();
   for (auto ipath : ipaths) {
     auto name = "slot-" + std::to_string(ipath->slots.receiver);
-    auto& slot = insert_record(upstream, name);
+    auto slot = record{};
     slot["priority"] = to_string(ipath->prio);
     slot["assigned-credit"] = integer{ipath->assigned_credit};
     slot["last-acked-batch-id"] = integer{ipath->last_acked_batch_id};
+    upstream[name] = std::move(slot);
   }
+  xs["upstream"] = std::move(upstream);
+  return xs;
 }
 
 void fill_status_map(record& xs, caf::scheduled_actor* self) {
@@ -109,7 +115,7 @@ void fill_status_map(record& xs, caf::scheduled_actor* self) {
   for (auto& mgr : unique_values(self->stream_managers())) {
     name = "stream-";
     name += std::to_string(counter++);
-    fill_status_map(insert_record(xs, name), *mgr);
+    xs[name] = fill_status_map(*mgr);
   }
 }
 
