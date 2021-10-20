@@ -64,19 +64,19 @@ struct passive_partition_state {
   /// Path of the underlying file for this partition.
   std::filesystem::path path;
 
-  /// Legacy archive
+  /// Actor handle of the legacy archive.
   store_actor archive = {};
 
   /// Uniquely identifies this partition.
   uuid id = {};
 
-  /// The combined type of all columns of this partition
+  /// The combined type of all columns of this partition.
   legacy_record_type combined_layout_ = {};
 
   /// Maps type names to ids. Used the answer #type queries.
   std::unordered_map<std::string, ids> type_ids_ = {};
 
-  /// A readable name for this partition
+  /// A readable name for this partition.
   std::string name = {};
 
   /// The first ID in the partition.
@@ -98,11 +98,14 @@ struct passive_partition_state {
   std::vector<std::tuple<query, caf::typed_response_promise<atom::done>>>
     deferred_evaluations = {};
 
+  /// Actor handle of the filesystem.
+  filesystem_actor filesystem = {};
+
   /// The store to retrieve the data from. Either the legacy global archive or a
   /// local component that holds the data for this partition.
   store_actor store = {};
 
-  /// Actor handle of the node
+  /// Actor handle of the node.
   node_actor::pointer node = {};
 
   /// A typed view into the `partition_chunk`.

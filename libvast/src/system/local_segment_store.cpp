@@ -109,6 +109,7 @@ std::filesystem::path store_path_for_partition(const uuid& partition_id) {
 store_actor::behavior_type
 passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                     filesystem_actor fs, const std::filesystem::path& path) {
+  self->state.fs = std::move(fs);
   self->state.path = path;
   self->set_exit_handler([self](const caf::exit_msg&) {
     for (auto&& [expr, rp] : std::exchange(self->state.deferred_requests, {}))
@@ -116,7 +117,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                                                    "down"));
   });
   VAST_DEBUG("loading passive store from path {}", path);
-  self->request(fs, caf::infinite, atom::mmap_v, path)
+  self->request(self->state.fs, caf::infinite, atom::mmap_v, path)
     .then(
       [self](chunk_ptr chunk) {
         auto seg = segment::make(std::move(chunk));
@@ -224,7 +225,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
                    filesystem_actor fs, const std::filesystem::path& path) {
   VAST_DEBUG("spawning active local store");
   self->state.self = self;
-  self->state.fs = fs;
+  self->state.fs = std::move(fs);
   self->state.path = path;
   self->state.builder
     = std::make_unique<segment_builder>(defaults::system::max_segment_size);
