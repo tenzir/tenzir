@@ -87,9 +87,19 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
       std::error_code err;
+      auto size = std::filesystem::file_size(path, err);
+      if (err) {
+        ++self->state.stats.checks.failed;
+        return caf::make_error(ec::no_such_file, err.message());
+      }
+      ++self->state.stats.checks.successful;
       std::filesystem::remove_all(path, err);
-      if (err)
+      if (err) {
+        ++self->state.stats.erases.failed;
         return caf::make_error(ec::system_error, err.message());
+      }
+      ++self->state.stats.erases.successful;
+      self->state.stats.erases.bytes += size;
       return atom::done_v;
     },
     [self](atom::status, status_verbosity v) {
@@ -108,6 +118,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         add_stats("writes", self->state.stats.writes);
         add_stats("reads", self->state.stats.reads);
         add_stats("mmaps", self->state.stats.mmaps);
+        add_stats("erases", self->state.stats.erases);
       }
       return result;
     },

@@ -35,6 +35,7 @@ struct filesystem_statistics {
   ops writes;
   ops reads;
   ops mmaps;
+  ops erases;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, filesystem_statistics& x) ->
