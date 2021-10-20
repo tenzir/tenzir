@@ -1077,8 +1077,9 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.importer = std::move(importer);
     },
     [self](atom::apply, transform_ptr transform,
-           vast::uuid partition_id) -> caf::result<atom::done> {
-      VAST_DEBUG("{} applies a transform to partition {}", *self, partition_id);
+           vast::uuid old_partition_id) -> caf::result<atom::done> {
+      VAST_DEBUG("{} applies a transform to partition {}", *self,
+                 old_partition_id);
       if (!self->state.store_plugin)
         return caf::make_error(ec::invalid_configuration,
                                "partition transforms are not supported for the "
@@ -1100,8 +1101,8 @@ index(index_actor::stateful_pointer<index_state> self,
       auto query
         = query::make_extract(sink, query::extract::drop_ids, match_everything);
       auto query_id = self->state.create_query_id();
-      auto lookup
-        = query_state{query_id, query, std::vector<vast::uuid>{partition_id}};
+      auto lookup = query_state{query_id, query,
+                                std::vector<vast::uuid>{old_partition_id}};
       auto actors
         = self->state.collect_query_actors(lookup, /* num_partitions = */ 1);
       self->send(*worker, atom::supervise_v, query_id, lookup.query,
@@ -1110,21 +1111,21 @@ index(index_actor::stateful_pointer<index_state> self,
       auto rp = self->make_response_promise<atom::done>();
       self
         ->request(sink, caf::infinite, atom::persist_v,
-                  self->state.partition_path(partition_id),
-                  self->state.partition_synopsis_path(partition_id))
+                  self->state.partition_path(new_partition_id),
+                  self->state.partition_synopsis_path(new_partition_id))
         .then(
-          [self, rp, partition_id, new_partition_id](
+          [self, rp, old_partition_id, new_partition_id](
             std::shared_ptr<partition_synopsis>& synopsis) mutable {
             // TODO: We eventually want to allow transforms that delete
             // whole events, at that point we also need to update the index
             // statistics here.
             self
               ->request(self->state.meta_index, caf::infinite, atom::replace_v,
-                        partition_id, new_partition_id, std::move(synopsis))
+                        old_partition_id, new_partition_id, std::move(synopsis))
               .then(
-                [self, rp, partition_id](atom::ok) mutable {
+                [self, rp, old_partition_id](atom::ok) mutable {
                   rp.delegate(static_cast<index_actor>(self), atom::erase_v,
-                              partition_id);
+                              old_partition_id);
                 },
                 [rp](const caf::error& e) mutable {
                   rp.deliver(e);
