@@ -46,7 +46,7 @@ read_query(const std::vector<std::string>& args, size_t offset) {
                                                  "allowed; please pass it as a "
                                                  "single string instead.");
   return args[offset];
-};
+}
 
 caf::expected<std::string> read_query(std::istream& in) {
   auto result = std::string{};
@@ -76,6 +76,7 @@ make_all_query(enum must_provide_query must_provide_query) {
                    "expensive.");
       return R"__(#type != "this expression matches everything")__";
   }
+  die("unreachable");
 }
 
 } // namespace
