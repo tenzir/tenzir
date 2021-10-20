@@ -90,13 +90,17 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       auto size = std::filesystem::file_size(path, err);
       if (err) {
         ++self->state.stats.checks.failed;
-        return caf::make_error(ec::no_such_file, err.message());
+        return caf::make_error(ec::no_such_file,
+                               fmt::format("{} failed to erase {}: {}", *self,
+                                           path, err.message()));
       }
       ++self->state.stats.checks.successful;
       std::filesystem::remove_all(path, err);
       if (err) {
         ++self->state.stats.erases.failed;
-        return caf::make_error(ec::system_error, err.message());
+        return caf::make_error(ec::system_error,
+                               fmt::format("{} failed to erase {}: {}", *self,
+                                           path, err.message()));
       }
       ++self->state.stats.erases.successful;
       self->state.stats.erases.bytes += size;
