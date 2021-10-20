@@ -45,26 +45,56 @@ read_query(const invocation& inv, std::string_view file_option,
     result.assign(std::istreambuf_iterator<char>{in},
                   std::istreambuf_iterator<char>{});
   };
-  if (auto fname = caf::get_if<std::string>(&inv.options, file_option)) {
-    // Sanity check.
-    if (!inv.arguments.empty())
-      return caf::make_error(ec::parse_error, "got a query on the command line "
-                                              "but --read option is defined");
-    // Read query from STDIN if file name is '-'.
-    if (*fname == "-")
+  // The below logic matches the following behavior:
+  // vast export -r ... <format> <query>
+  //   errors.
+  // vast export <format> <query>
+  //   takes the query from the command line, and errors if a query is also
+  //   present on stdin.
+  // vast export -r - <format>
+  //   reads the query from stdin.
+  // vast export <format>
+  //   reads the query from stdin, and if none is present, it exports everything
+  const auto fname = caf::get_if<std::string>(&inv.options, file_option);
+  const bool has_query_cli = inv.arguments.size() > argument_offset;
+  const bool has_excess_cli = inv.arguments.size() > argument_offset + 1;
+  const bool has_query_stdin = ::isatty(::fileno(stdin)) == 0;
+  if (has_excess_cli) {
+    VAST_ERROR("spreading a query over multiple arguments is "
+               "not allowed; please pass it as a single string "
+               "instead.");
+  } else if (has_query_cli) {
+    if (fname)
+      return caf::make_error(ec::invalid_argument,
+                             "got a query on the command line "
+                             "but --read option is defined");
+    if (has_query_stdin)
+      return caf::make_error(ec::invalid_argument, "got a query on stdin and "
+                                                   "the command line");
+    result = inv.arguments[argument_offset];
+  } else if (fname) {
+    if (*fname == "-") {
       assign_query(std::cin);
-    else {
+    } else {
+      if (has_query_stdin)
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("got a query on stdin, but "
+                                           "--read option is set to '{}'",
+                                           *fname));
       std::ifstream f{*fname};
       if (!f)
         return caf::make_error(ec::no_such_file,
-                               "unable to read from " + *fname);
+                               fmt::format("unable to read from '{}'", *fname));
       assign_query(f);
     }
-  } else if (inv.arguments.size() <= argument_offset) {
+  } else if (has_query_stdin) {
+    assign_query(std::cin);
+  } else {
     switch (must_provide_query) {
       case must_provide_query::yes:
-        VAST_ERROR("no query provided, but command requires a query argument");
-        break;
+        return caf::make_error(ec::invalid_argument, "no query provided, but "
+                                                     "command requires a query "
+                                                     "argument");
       case must_provide_query::no:
         VAST_VERBOSE("not providing a query causes everything to be exported; "
                      "please be aware that this operation may be very "
@@ -72,12 +102,6 @@ read_query(const invocation& inv, std::string_view file_option,
         result = "#type != \"this expression matches everything\"";
         break;
     }
-  } else if (inv.arguments.size() == argument_offset + 1) {
-    result = inv.arguments[argument_offset];
-  } else {
-    VAST_ERROR("spreading a query over multiple arguments is "
-               "not allowed; please pass it as a single string "
-               "instead.");
   }
   return result;
 }

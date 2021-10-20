@@ -485,7 +485,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: export -r - json
+      - command: export json
         input: data/sigma/zeek-conn.yaml
   Transforms:
     tags: [server, client, import-export, transforms, suricata]
