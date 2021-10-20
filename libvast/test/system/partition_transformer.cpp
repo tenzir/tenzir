@@ -148,9 +148,9 @@ TEST(delete transform / persist before done) {
   plugin_opts["field"] = "uid";
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
-  auto identity_step = vast::make_transform_step("delete", plugin_opts);
-  REQUIRE_NOERROR(identity_step);
-  transform->add_step(std::move(*identity_step));
+  auto delete_step = vast::make_transform_step("delete", plugin_opts);
+  REQUIRE_NOERROR(delete_step);
+  transform->add_step(std::move(*delete_step));
   auto transformer = self->spawn(vast::system::partition_transformer, uuid,
                                  store_id, synopsis_opts, index_opts, importer,
                                  filesystem, std::move(transform));
