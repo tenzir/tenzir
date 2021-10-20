@@ -10,7 +10,8 @@
 
 #include "vast/address_synopsis.hpp"
 #include "vast/bool_synopsis.hpp"
-#include "vast/concept/hashable/default_hash.hpp"
+#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/legacy_hash.hpp"
 #include "vast/string_synopsis.hpp"
 #include "vast/time_synopsis.hpp"
 
@@ -18,10 +19,10 @@ namespace vast {
 
 void factory_traits<synopsis>::initialize() {
   factory<synopsis>::add(legacy_address_type{},
-                         make_address_synopsis<default_hash>);
+                         make_address_synopsis<legacy_hash>);
   factory<synopsis>::add<legacy_bool_type, bool_synopsis>();
   factory<synopsis>::add(legacy_string_type{},
-                         make_string_synopsis<default_hash>);
+                         make_string_synopsis<legacy_hash>);
   factory<synopsis>::add<legacy_time_type, time_synopsis>();
 }
 

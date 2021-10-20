@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/concept/hashable/hash.hpp"
+#include "vast/concept/hashable/legacy_hash.hpp"
 #include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/detail/bit.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -181,6 +182,18 @@ private:
 template <>
 struct is_uniquely_represented<address>
   : std::bool_constant<sizeof(address) == sizeof(address::byte_array)> {};
+
+// TODO: remove after we have introduced versioned flatbuffer state and all our
+// users have no more lingering persistent data. This hash_append overload
+// brings back the old hashing behavior that hashes a different number of bytes
+// based on the IP address version, at the cost of an extra branch. The new
+// version unconditionally hashes all 16 bytes.
+inline auto hash_append(legacy_hash& h, const address& x) {
+  if (x.is_v4())
+    hash_append(h, as_bytes(x).subspan<12, 4>());
+  else
+    hash_append(h, as_bytes(x).subspan<0, 16>());
+}
 
 } // namespace vast
 

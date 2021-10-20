@@ -11,8 +11,8 @@
 #include "vast/address_synopsis.hpp"
 
 #include "vast/address.hpp"
-#include "vast/concept/hashable/default_hash.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/legacy_hash.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/legacy_type.hpp"
@@ -35,8 +35,8 @@ using namespace vast::si_literals;
 TEST(failed construction) {
   // If there's no type attribute with Bloom filter parameters present,
   // construction fails.
-  auto x = make_address_synopsis<default_hash>(legacy_address_type{},
-                                               caf::settings{});
+  auto x = make_address_synopsis<legacy_hash>(legacy_address_type{},
+                                              caf::settings{});
   CHECK_EQUAL(x, nullptr);
 }
 
@@ -45,7 +45,7 @@ namespace {
 struct fixture : fixtures::deterministic_actor_system {
   fixture() {
     factory<synopsis>::add(legacy_address_type{},
-                           make_address_synopsis<default_hash>);
+                           make_address_synopsis<legacy_hash>);
   }
   caf::settings opts;
 };
@@ -67,14 +67,10 @@ TEST(construction via custom factory) {
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(to_addr_view("192.168.0.1"));
   auto verify = verifier{x.get()};
-  MESSAGE("true positives");
   verify(to_addr_view("192.168.0.1"), {N, N, N, N, N, N, T, N, N, N, N, N});
-  MESSAGE("true negatives");
+  MESSAGE("collisions");
   verify(to_addr_view("192.168.0.6"), {N, N, N, N, N, N, F, N, N, N, N, N});
-  MESSAGE("false positives / collisions");
-  verify(to_addr_view("192.168.0.12"), {N, N, N, N, N, N, T, N, N, N, N, N});
-  verify(to_addr_view("192.168.0.100"), {N, N, N, N, N, N, T, N, N, N, N, N});
-  verify(to_addr_view("192.168.0.251"), {N, N, N, N, N, N, T, N, N, N, N, N});
+  verify(to_addr_view("192.168.0.11"), {N, N, N, N, N, N, T, N, N, N, N, N});
 }
 
 TEST(serialization with custom attribute type) {

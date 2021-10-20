@@ -9,7 +9,7 @@
 #pragma once
 
 #include "vast/concept/hashable/hash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/hashable/legacy_hash.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
@@ -65,8 +65,8 @@ class hash_index : public value_index {
 
 public:
   // TODO: switch to XXH3 once the persistent index layout is versioned and
-  // upgradable. Until then we have to support existing state that uses XXH64.
-  using hash_algorithm = xxh64;
+  // upgradable. Until then we have to support existing state produced by XXH64.
+  using hash_algorithm = legacy_hash;
   using digest_type = std::array<std::byte, Bytes>;
 
   static_assert(sizeof(hash_algorithm::result_type) >= Bytes,
