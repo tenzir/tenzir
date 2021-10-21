@@ -1,0 +1,2 @@
+The `suricata.dns` schema has been updated  to match the currently used
+EVE-JSON structure output by recent Suricata versions.

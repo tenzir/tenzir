@@ -135,6 +135,39 @@ type suricata.dhcp = suricata.component.common + record {
   }
 }
 
+type suricata.soa_record = record {
+  mname: string,
+  rname: string,
+  serial: count,
+  refresh: count,
+  retry: count,
+  expire: count,
+  minimum: count
+}
+
+type suricata.srv_record = record {
+  priority: count,
+  weight: count,
+  port: count,
+  name: string
+}
+
+type suricata.sshfp_record = record {
+  fingerprint: string,
+  algo: count,
+  type: count
+}
+
+type suricata.dns_answer_detail = record {
+  rrname: string,
+  rrtype: string,
+  ttl: count,
+  rdata: string,
+  soa: suricata.soa_record,
+  sshfp: suricata.sshfp_record,
+  srv: suricata.srv_record
+}
+
 type suricata.dns = suricata.component.common + record {
   dns: record {
     version: count,
@@ -144,15 +177,29 @@ type suricata.dns = suricata.component.common + record {
     },
     id: count #index=hash,
     flags: string,
+    qr: bool,
+    rd: bool,
+    ra: bool,
+    aa: bool,
+    tc: bool,
     rrname: string,
     rrtype: string,
     rcode: string,
-    rdata: string,
     ttl: count,
     tx_id: count #index=hash,
     grouped: record{
-      A: list<addr>
-    }
+      A: list<addr>,
+      NS: list<string>,
+      AAAA: list<addr>,
+      CNAME: list<string>,
+      TXT: list<string>,
+      MX: list<string>,
+      PTR: list<string>,
+      SOA: list<suricata.soa_record>,
+      SSHFP: list<suricata.sshfp_record>,
+      SRV: list<suricata.srv_record>
+    },
+    answers: list<suricata.dns_answer_detail>
   }
 }
 
