@@ -48,6 +48,9 @@ vast::system::filesystem_actor::behavior_type memory_filesystem() {
         return caf::make_error(vast::ec::filesystem_error, "unknown file");
       return chunk->second;
     },
+    [](vast::atom::erase, std::filesystem::path&) {
+      return vast::atom::done_v;
+    },
     [](vast::atom::status, vast::system::status_verbosity) -> vast::record {
       return {};
     },
