@@ -286,6 +286,14 @@ tests:
       - command: -N export csv '#type ~ /suricata.*/'
       - command: -N export zeek '#type ~ /suricata.alert/'
 
+  Node suricata rrdata:
+    tags: [node, import-export, suricata, eve]
+    steps:
+      - command: -N import suricata
+        input: data/suricata/rrdata-eve.json
+      - command: -N export ascii
+      - command: -N export json
+
   Node argus csv:
     tags: [node, import-export, argus, csv]
     steps:
