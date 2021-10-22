@@ -1,6 +1,6 @@
 name: Story
 description: Create a story
-title: ""
+title: "Story Title"
 body:
   - type: checkboxes
     attributes:

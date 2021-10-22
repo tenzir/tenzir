@@ -1,6 +1,6 @@
 name: Feature Request
 description: Request a new feature
-title: ""
+title: "Feature Request Title"
 body:
   - type: checkboxes
     attributes:
