@@ -1,18 +1,19 @@
-name: Feature Request
-description: Request a new feature
-title: "Feature Request Title"
+name: Issue
+description: File an issue with a definition of done
+title: "Story Title"
 body:
   - type: textarea
     attributes:
-      label: Use Case
-      description: A concise description of the problem to be addressed by this feature request.
+      label: Description
+      description: A detailed user-facing description of the story.
       render: markdown
     validations:
       required: true
   - type: textarea
     attributes:
-      label: Feature Description
-      description: A concise description of your preferred solution.
+      label: Definition of Done
+      description: |
+        A concise list of tasks that must be addressed before this story can be considered done.
       render: markdown
     validations:
       required: true

@@ -1,8 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
   - name: Usage Question
     url: https://github.com/tenzir/vast/discussions/new?category=q-a
-    about: Just want to ask a question? Go on.
-  - name: Documentation
-    url: https://docs.tenzir.com/vast
-    about: Read up on VAST.
+    about: Just want to ask a question? Go on
+  - name: Tenzir Community Slack
+    url: http://slack.tenzir.com
+    about: Chat with us on Slack
+  - name: VAST Documentation
+    url: https://docs.tenzir.com
+    about: Read up on VAST
