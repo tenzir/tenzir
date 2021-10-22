@@ -6,14 +6,12 @@ body:
     attributes:
       label: Use Case
       description: A concise description of the problem to be addressed by this feature request.
-      render: markdown
     validations:
       required: true
   - type: textarea
     attributes:
       label: Feature Description
       description: A concise description of your preferred solution.
-      render: markdown
     validations:
       required: true
   - type: textarea
@@ -23,6 +21,5 @@ body:
         Links? References? Anything that will give us more context about the issue you are encountering!
 
         Tip: You can attach images, recordings, or log files by clicking this area to highlight it and then dragging files in.
-      render: markdown
     validations:
       required: false

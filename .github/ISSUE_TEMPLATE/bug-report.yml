@@ -6,21 +6,18 @@ body:
     attributes:
       label: Current Behavior
       description: A concise description of what you're experiencing.
-      render: markdown
     validations:
       required: true
   - type: textarea
     attributes:
       label: Expected Behavior
       description: A concise description of what you expected to happen.
-      render: markdown
     validations:
       required: true
   - type: textarea
     attributes:
       label: Steps To Reproduce
       description: Steps to reproduce the behavior.
-      render: markdown
     validations:
       required: true
   - type: textarea
@@ -28,7 +25,6 @@ body:
       label: Environment
       description: |
         Describe the environment you've encountered the bug in, e.g., the operating system and the VAST version used. If customized, please attach the VAST configuration file.
-      render: markdown
     validations:
       required: true
   - type: textarea
@@ -38,6 +34,5 @@ body:
         Links? References? Anything that will give us more context about the issue you are encountering!
 
         Tip: You can attach images, recordings, or log files by clicking this area to highlight it and then dragging files in.
-      render: markdown
     validations:
       required: false
