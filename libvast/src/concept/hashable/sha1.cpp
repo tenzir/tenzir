@@ -14,7 +14,7 @@
 // - Commit:     92dc9b33a63da76b088ac2471fbb350177d04c2f
 // - Path:       algorithm/detail/sha1_provider.hpp
 // - Author:     kerukuro
-// - License:    Public Domain
+// - License:    The Unlicense
 
 #include "vast/concept/hashable/sha1.hpp"
 

@@ -35,7 +35,7 @@ License: BSD-2-clause
 
 Files: libvast/src/concept/hashable/sha1.cpp
 Copyright: (none)
-License: public-domain
+License: Unlicense
 Comment: https://github.com/kerukuro/digestpp
 
 Files: libvast/vast/detail/zip_iterator.hpp
