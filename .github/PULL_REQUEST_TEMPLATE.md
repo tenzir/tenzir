@@ -1,5 +1,3 @@
-### :notebook_with_decorative_cover: Description
-
 <!-- Describe the change you've made in this section. -->
 
 ### :memo: Checklist

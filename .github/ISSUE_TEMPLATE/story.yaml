@@ -1,0 +1,41 @@
+name: Story
+description: Create a story
+title:
+labels:
+assignees:
+body:
+  - type: checkboxes
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search to see if an issue already exists for this story.
+      options:
+        - label: I have searched the existing issues
+          required: true
+  - type: textarea
+    attributes:
+      label: Description
+      description: A detailed user-facing description of the story.
+      render: markdown
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Definition of Done
+      description: |
+        A concise list of tasks that must be addressed before this story can be
+        considered done.
+      render: markdown
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Anything else?
+      description: |
+        Links? References? Anything that will give us more context about the
+        issue you are encountering!
+
+        Tip: You can attach images, recordings, or log files by clicking this
+        area to highlight it and then dragging files in.
+      render: markdown
+    validations:
+      required: false

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Usage Question
+    url: https://github.com/tenzir/vast/discussions/new?category=q-a
+    about: Just want to ask a question? Go on.
+  - name: Documentation
+    url: https://docs.tenzir.com/vast
+    about: Read up on VAST.
