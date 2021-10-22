@@ -6,18 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+// TODO: remove this entire header after all persistent state has been made
+// upgradeable and converted to our new default hash function.
+
 #pragma once
 
-#include "vast/concept/hashable/concepts.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 
 namespace vast {
 
-/// The default hash algorithm.
-using default_hash = xxh3_64;
-
-// To avoid performance regression, the default hash algorithm in VAST must
-// support both incremental and oneshot hashing.
-static_assert(oneshot_hash<default_hash> && incremental_hash<default_hash>);
+/// The hash algorithm that we use in data structures where the choice of hash
+/// function changes persistent state.
+using legacy_hash = xxh64;
 
 } // namespace vast

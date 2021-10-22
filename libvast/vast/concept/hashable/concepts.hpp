@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/concept/hashable/uniquely_hashable.hpp"
 #include "vast/concepts.hpp"
 
 #include <cstddef>
@@ -30,12 +31,18 @@ concept incremental_hash = requires(HashAlgorithm& h, const void* p, size_t n) {
 /// A hash algorithm that exposes a one-shot computation of a hash digest over
 /// a byte sequence.
 template <class HashAlgorithm>
-concept oneshot_hash = requires(HashAlgorithm& h, const void* p, size_t n) {
+concept oneshot_hash = requires(const void* p, size_t n) {
   // clang-format off
   typename HashAlgorithm::result_type;
-  { h.make(p, n) } noexcept
+  { HashAlgorithm::make(p, n) } noexcept
     -> concepts::same_as<typename HashAlgorithm::result_type>;
   // clang-format on
 };
+
+/// The hash algorithm concept. A hash algorithm can be *oneshot*,
+/// *incremental*, or both.
+template <class HashAlgorithm>
+concept hash_algorithm
+  = incremental_hash<HashAlgorithm> || oneshot_hash<HashAlgorithm>;
 
 } // namespace vast

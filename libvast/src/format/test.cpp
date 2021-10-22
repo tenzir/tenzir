@@ -176,10 +176,9 @@ struct randomizer {
     uint32_t bytes[4];
     for (auto& byte : bytes)
       byte = unif0(gen);
-    // P[ip == v6] = 0.5
-    std::uniform_int_distribution<uint8_t> unif1{0, 1};
-    auto version = unif1(gen_) == 0 ? address::ipv4 : address::ipv6;
-    addr = {bytes, version, address::network};
+    auto ptr = reinterpret_cast<const uint8_t*>(bytes);
+    auto span = std::span<const uint8_t, 16>{ptr, 16};
+    addr = address{span};
   }
 
   void operator()(const legacy_subnet_type&, subnet& sn) {

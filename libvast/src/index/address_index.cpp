@@ -39,9 +39,9 @@ bool address_index::append_impl(data_view x, id pos) {
   auto addr = caf::get_if<view<address>>(&x);
   if (!addr)
     return false;
-  auto& bytes = addr->data();
   for (auto i = 0u; i < 16; ++i) {
     bytes_[i].skip(pos - bytes_[i].size());
+    auto bytes = static_cast<address::byte_array>(*addr);
     bytes_[i].append(bytes[i]);
   }
   v4_.skip(pos - v4_.size());
@@ -62,7 +62,8 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
           return caf::make_error(ec::unsupported_operator, op);
         auto result = x.is_v4() ? v4_.coder().storage() : ids{offset(), true};
         for (auto i = x.is_v4() ? 12u : 0u; i < 16; ++i) {
-          auto bm = bytes_[i].lookup(relational_operator::equal, x.data()[i]);
+          auto bytes = static_cast<address::byte_array>(x);
+          auto bm = bytes_[i].lookup(relational_operator::equal, bytes[i]);
           result &= bm;
           if (all<0>(result))
             return ids{offset(), op == relational_operator::not_equal};
@@ -88,14 +89,14 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
                                : relational_operator::not_equal,
                              x.network());
         auto result = is_v4 ? v4_.coder().storage() : ids{offset(), true};
-        auto& bytes = x.network().data();
+        auto network = static_cast<address::byte_array>(x.network());
         size_t i = is_v4 ? 12 : 0;
         for (; i < 16 && topk >= 8; ++i, topk -= 8)
-          result &= bytes_[i].lookup(relational_operator::equal, bytes[i]);
+          result &= bytes_[i].lookup(relational_operator::equal, network[i]);
         for (auto j = 0u; j < topk; ++j) {
           auto bit = 7 - j;
           auto& bm = bytes_[i].coder().storage()[bit];
-          result &= (bytes[i] >> bit) & 1 ? ~bm : bm;
+          result &= (network[i] >> bit) & 1 ? ~bm : bm;
         }
         if (op == relational_operator::not_in)
           result.flip();

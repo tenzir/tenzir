@@ -16,6 +16,8 @@
 
 #include <broker/data.hh>
 
+#include <new>
+
 namespace vast::plugins::broker {
 
 namespace {
@@ -75,16 +77,16 @@ convert(view<data> in, ::broker::data& out, const legacy_type& field_type) {
       return {};
     },
     [&](view<address> x, const legacy_address_type&) -> caf::error {
-      auto bytes
-        = reinterpret_cast<const uint32_t*>(std::launder(x.data().data()));
-      out = ::broker::address{bytes, ::broker::address::family::ipv6,
+      auto bytes = as_bytes(x);
+      auto ptr = std::launder(reinterpret_cast<const uint32_t*>(bytes.data()));
+      out = ::broker::address{ptr, ::broker::address::family::ipv6,
                               ::broker::address::byte_order::network};
       return {};
     },
     [&](view<subnet> x, const legacy_subnet_type&) -> caf::error {
-      auto bytes = reinterpret_cast<const uint32_t*>(
-        std::launder(x.network().data().data()));
-      auto addr = ::broker::address{bytes, ::broker::address::family::ipv6,
+      auto bytes = as_bytes(x.network());
+      auto ptr = std::launder(reinterpret_cast<const uint32_t*>(bytes.data()));
+      auto addr = ::broker::address{ptr, ::broker::address::family::ipv6,
                                     ::broker::address::byte_order::network};
       out = ::broker::subnet(addr, x.length());
       return {};

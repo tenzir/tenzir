@@ -10,16 +10,31 @@
 
 #include "vast/concepts.hpp"
 
+#include <array>
 #include <cstddef>
 #include <span>
 #include <type_traits>
 
 namespace vast {
 
+template <concepts::integral T, size_t N>
+constexpr std::span<const std::byte, N * sizeof(T)>
+as_bytes(const std::array<T, N>& xs) noexcept {
+  const auto data = reinterpret_cast<const std::byte*>(xs.data());
+  return std::span<const std::byte, N * sizeof(T)>{data, N * sizeof(T)};
+}
+
 template <concepts::byte_container Buffer>
 constexpr std::span<const std::byte> as_bytes(const Buffer& xs) noexcept {
   const auto data = reinterpret_cast<const std::byte*>(std::data(xs));
   return {data, std::size(xs)};
+}
+
+template <concepts::integral T, size_t N>
+constexpr std::span<std::byte, N * sizeof(T)>
+as_writeable_bytes(std::array<T, N>& xs) noexcept {
+  const auto data = reinterpret_cast<std::byte*>(xs.data());
+  return std::span<std::byte, N * sizeof(T)>{data, N * sizeof(T)};
 }
 
 template <concepts::byte_container Buffer>

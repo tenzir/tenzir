@@ -44,7 +44,7 @@ if (NOT tsl-robin-map_FOUND)
   add_dependencies(robin_map tsl-robin-map-targets-link)
 endif ()
 
-# -- flattbuffers ---------------------------------------------------------------
+# -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs"
@@ -390,6 +390,13 @@ target_link_libraries(libvast PUBLIC libvast-fbs)
 find_package(yaml-cpp 0.6.2 REQUIRED)
 target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
+
+# Link against xxhash.
+find_package(xxhash REQUIRED)
+provide_find_module(xxhash)
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(xxhash REQUIRED)")
+target_link_libraries(libvast PUBLIC xxhash::xxhash_header_only)
+dependency_summary("xxHash" xxhash::xxhash_header_only "Dependencies")
 
 # Link against libsystemd.
 if (VAST_ENABLE_JOURNALD_LOGGING)

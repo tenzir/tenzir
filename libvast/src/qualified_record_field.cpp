@@ -8,8 +8,7 @@
 
 #include "vast/qualified_record_field.hpp"
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/hashable/hash.hpp"
 
 namespace vast {
 
@@ -35,7 +34,7 @@ namespace std {
 
 size_t hash<vast::qualified_record_field>::operator()(
   const vast::qualified_record_field& x) const {
-  return vast::uhash<vast::xxhash64>{}(x);
+  return vast::hash(x);
 }
 
 } // namespace std

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/concept/hashable/portable_hash.hpp"
+#include "vast/concept/hashable/uniquely_hashable.hpp"
 #include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
 
@@ -35,7 +35,7 @@
 namespace vast {
 
 template <class HashAlgorithm, class T>
-  requires(portable_hash<T, HashAlgorithm>)
+  requires(uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const T& x) noexcept {
   h(std::addressof(x), sizeof(x));
 }
@@ -50,17 +50,11 @@ constexpr void reverse_bytes(T& x) {
     std::swap(bytes[i], bytes[sizeof(T) - 1 - i]);
 }
 
-template <class T, class HashAlgorithm>
-void maybe_reverse_bytes(T& x, HashAlgorithm&) {
-  if constexpr (HashAlgorithm::endian != detail::endian::native)
-    reverse_bytes(x);
-}
-
 template <class HashAlgorithm, class Container>
 void contiguous_container_hash_append(HashAlgorithm& h,
                                       const Container& xs) noexcept {
   using value_type = typename Container::value_type;
-  if constexpr (portable_hash<value_type, HashAlgorithm>)
+  if constexpr (uniquely_hashable<value_type, HashAlgorithm>)
     h(std::data(xs), std::size(xs) * sizeof(value_type));
   else
     for (const auto& x : xs)
@@ -73,7 +67,7 @@ void contiguous_container_hash_append(HashAlgorithm& h,
 // -- Scalars -----------------------------------------------------------------
 
 template <class HashAlgorithm, class T>
-  requires(!portable_hash<T, HashAlgorithm> && std::is_scalar_v<T>)
+  requires(!uniquely_hashable<T, HashAlgorithm> && std::is_scalar_v<T>)
 void hash_append(HashAlgorithm& h, T x) noexcept {
   if constexpr (std::is_integral_v<
                   T> || std::is_pointer_v<T> || std::is_enum_v<T>) {
@@ -83,7 +77,8 @@ void hash_append(HashAlgorithm& h, T x) noexcept {
     // When hashing, we treat -0 and 0 the same.
     if (x == 0)
       x = 0;
-    detail::maybe_reverse_bytes(x, h);
+    if constexpr (HashAlgorithm::endian != detail::endian::native)
+      detail::reverse_bytes(x);
     h(std::addressof(x), sizeof(x));
   } else {
     static_assert(std::is_same_v<T, T>, "T is neither integral nor a float");
@@ -93,7 +88,8 @@ void hash_append(HashAlgorithm& h, T x) noexcept {
 template <class HashAlgorithm>
 void hash_append(HashAlgorithm& h, std::nullptr_t) noexcept {
   const void* p = nullptr;
-  detail::maybe_reverse_bytes(p, h);
+  if constexpr (HashAlgorithm::endian != detail::endian::native)
+    detail::reverse_bytes(p);
   h(std::addressof(p), sizeof(p));
 }
 
@@ -120,7 +116,7 @@ void hash_append(HashAlgorithm& h, T) noexcept {
 // -- forward declarations to enable ADL --------------------------------------
 
 template <class HashAlgorithm, class T, size_t N>
-  requires(!portable_hash<T, HashAlgorithm>)
+  requires(!uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, T (&a)[N]) noexcept;
 
 template <class HashAlgorithm, class CharT, class Traits>
@@ -132,11 +128,11 @@ void hash_append(HashAlgorithm& h,
                  const std::basic_string<CharT, Traits, Alloc>& s) noexcept;
 
 template <class HashAlgorithm, class T, class U>
-  requires(!portable_hash<std::pair<T, U>, HashAlgorithm>)
+  requires(!uniquely_hashable<std::pair<T, U>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::pair<T, U>& p) noexcept;
 
 template <class HashAlgorithm, class T, size_t N>
-  requires(!portable_hash<std::array<T, N>, HashAlgorithm>)
+  requires(!uniquely_hashable<std::array<T, N>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::array<T, N>& a) noexcept;
 
 template <class HashAlgorithm, class T, class Alloc>
@@ -163,7 +159,7 @@ void hash_append(HashAlgorithm& h,
                  const std::unordered_map<K, T, Hash, Eq, Alloc>& m) noexcept;
 
 template <class HashAlgorithm, class... T>
-  requires(!portable_hash<std::tuple<T...>, HashAlgorithm>)
+  requires(!uniquely_hashable<std::tuple<T...>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::tuple<T...>& t) noexcept;
 
 template <class HashAlgorithm, class T0, class T1, class... T>
@@ -173,7 +169,7 @@ void hash_append(HashAlgorithm& h, const T0& t0, const T1& t1,
 // -- C array -----------------------------------------------------------------
 
 template <class HashAlgorithm, class T, size_t N>
-  requires(!portable_hash<T, HashAlgorithm>)
+  requires(!uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, T (&a)[N]) noexcept {
   for (const auto& x : a)
     hash_append(h, x);
@@ -196,7 +192,7 @@ void hash_append(HashAlgorithm& h,
 // -- pair --------------------------------------------------------------------
 
 template <class HashAlgorithm, class T, class U>
-  requires(!portable_hash<std::pair<T, U>, HashAlgorithm>)
+  requires(!uniquely_hashable<std::pair<T, U>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::pair<T, U>& p) noexcept {
   hash_append(h, p.first, p.second);
 }
@@ -204,7 +200,7 @@ void hash_append(HashAlgorithm& h, const std::pair<T, U>& p) noexcept {
 // -- array -------------------------------------------------------------------
 
 template <class HashAlgorithm, class T, size_t N>
-  requires(!portable_hash<std::array<T, N>, HashAlgorithm>)
+  requires(!uniquely_hashable<std::array<T, N>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::array<T, N>& a) noexcept {
   for (const auto& t : a)
     hash_append(h, t);
@@ -221,7 +217,18 @@ void hash_append(HashAlgorithm& h, const std::vector<T, Alloc>& xs) noexcept {
 
 template <class HashAlgorithm, class T, size_t Extent>
 void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept {
-  detail::contiguous_container_hash_append(h, xs);
+  if constexpr (Extent == std::dynamic_extent) {
+    detail::contiguous_container_hash_append(h, xs);
+  } else if constexpr (Extent > 0) {
+    // Just hash the data because the size is part of the type.
+    if constexpr (uniquely_hashable<T, HashAlgorithm>)
+      h(xs.data(), Extent * sizeof(T));
+    else
+      for (const auto& x : xs)
+        hash_append(h, x);
+  } else {
+    // Do nothing for static empty spans, i.e., when Extent == 0.
+  }
 }
 
 // -- set ---------------------------------------------------------------------
@@ -268,7 +275,7 @@ void hash_append(HashAlgorithm& h,
 // -- tuple -------------------------------------------------------------------
 
 template <class HashAlgorithm, class... T>
-  requires(!portable_hash<std::tuple<T...>, HashAlgorithm>)
+  requires(!uniquely_hashable<std::tuple<T...>, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const std::tuple<T...>& t) noexcept {
   std::apply(
     [&h](auto&&... xs) {
@@ -339,7 +346,8 @@ struct hash_inspector {
 
 template <class HashAlgorithm, class T>
   requires(
-    caf::detail::is_inspectable<detail::hash_inspector<HashAlgorithm>, T>::value)
+    caf::detail::is_inspectable<detail::hash_inspector<HashAlgorithm>, T>::value
+    && !uniquely_represented<T>)
 void hash_append(HashAlgorithm& h, const T& x) noexcept {
   detail::hash_inspector<HashAlgorithm> f{h};
   inspect(f, const_cast<T&>(x));

@@ -8,8 +8,6 @@
 
 #include "vast/flow.hpp"
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/detail/assert.hpp"
 
@@ -37,11 +35,6 @@ bool operator==(const flow& x, const flow& y) {
 port_type protocol(const flow& x) {
   VAST_ASSERT(x.src_port.type() == x.dst_port.type());
   return x.src_port.type();
-}
-
-size_t hash(const flow& x) {
-  vast::uhash<vast::xxhash> f;
-  return f(x);
 }
 
 } // namespace vast

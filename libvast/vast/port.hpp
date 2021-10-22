@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/detail/operators.hpp"
 
 #include <cstdint>
@@ -59,13 +60,17 @@ public:
   friend bool operator<(const port& x, const port& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, port& p) {
-    return f(p.data_);
+  friend auto inspect(Inspector& f, port& x) {
+    return f(x.data_);
   }
 
 private:
   uint32_t data_ = 0;
 };
+
+template <>
+struct is_uniquely_represented<port>
+  : std::bool_constant<sizeof(port) == sizeof(uint32_t)> {};
 
 bool convert(const port& p, data& d);
 

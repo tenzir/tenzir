@@ -165,14 +165,14 @@ caf::error extract(T& x, std::span<const std::byte>& bytes) {
       case 4: {
         if (bytes.size() < 4)
           return caf::make_error(ec::parse_error, "input exhausted");
-        x = address::v4(bytes.data(), address::byte_order::network);
+        x = address::v4(bytes.subspan<0, 4>());
         bytes = bytes.subspan(4);
         break;
       }
       case 6:
         if (bytes.size() < 16)
           return caf::make_error(ec::parse_error, "input exhausted");
-        x = address::v6(bytes.data(), address::byte_order::network);
+        x = address::v6(bytes.subspan<0, 16>());
         bytes = bytes.subspan(16);
         break;
     }

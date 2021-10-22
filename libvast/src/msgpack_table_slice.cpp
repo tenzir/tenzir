@@ -174,8 +174,9 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   } else if constexpr (std::is_same_v<T, legacy_address_type>) {
     if (auto x = get<std::string_view>(o)) {
       VAST_ASSERT(x->size() == 4 || x->size() == 16);
-      auto family = x->size() == 4 ? address::ipv4 : address::ipv6;
-      auto addr = address{x->data(), family, address::byte_order::network};
+      auto addr = x->size() == 4
+                    ? address::v4(std::span<const char, 4>{x->data(), 4})
+                    : address::v6(std::span<const char, 16>{x->data(), 16});
       return make_data_view(addr);
     }
   } else if constexpr (std::is_same_v<T, legacy_subnet_type>) {
@@ -183,8 +184,9 @@ data_view decode(msgpack::overlay& objects, const T& t) {
       VAST_ASSERT(xs->size() == 2);
       auto inner = xs->data();
       auto str = *get<std::string_view>(inner.get());
-      auto family = str.size() == 4 ? address::ipv4 : address::ipv6;
-      auto addr = address{str.data(), family, address::byte_order::network};
+      auto addr = str.size() == 4
+                    ? address::v4(std::span<const char, 4>{str.data(), 4})
+                    : address::v6(std::span<const char, 16>{str.data(), 16});
       inner.next();
       auto length = *get<uint8_t>(inner.get());
       return data_view{view<subnet>{make_view(addr), length}};

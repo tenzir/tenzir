@@ -141,7 +141,8 @@ TEST(regression - manual address bitmap index from bitmaps) {
       // Column 2 is orig_h.
       auto x = caf::get<view<address>>(slice.at(row, 2, legacy_address_type{}));
       for (auto i = 0u; i < 4; ++i) {
-        auto byte = x.data()[i + 12];
+        auto bytes = static_cast<address::byte_array>(x);
+        auto byte = bytes[i + 12];
         for (auto j = 0u; j < 8; ++j)
           idx[(i * 8) + j].append_bits((byte >> j) & 1, 1);
       }
@@ -150,7 +151,8 @@ TEST(regression - manual address bitmap index from bitmaps) {
         auto result = ewah_bitmap{idx[0].size(), true};
         REQUIRE_EQUAL(result.size(), 6464u);
         for (auto i = 0u; i < 4; ++i) {
-          auto byte = addr.data()[i + 12];
+          auto bytes = static_cast<address::byte_array>(addr);
+          auto byte = bytes[i + 12];
           for (auto j = 0u; j < 8; ++j) {
             auto& bm = idx[(i * 8) + j];
             result &= ((byte >> j) & 1) ? bm : ~bm;
@@ -176,7 +178,8 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
       // Column 2 is orig_h.
       auto x = caf::get<view<address>>(slice.at(row, 2, legacy_address_type{}));
       for (auto i = 0u; i < 4; ++i) {
-        auto byte = x.data()[i + 12];
+        auto bytes = static_cast<address::byte_array>(x);
+        auto byte = bytes[i + 12];
         idx[i].append(byte);
       }
       if (++row_id == 6464) {
@@ -185,7 +188,8 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
         auto result = ewah_bitmap{idx[0].size(), true};
         REQUIRE_EQUAL(result.size(), 6464u);
         for (auto i = 0u; i < 4; ++i) {
-          auto byte = x.data()[i + 12];
+          auto bytes = static_cast<address::byte_array>(x);
+          auto byte = bytes[i + 12];
           result &= idx[i].lookup(relational_operator::equal, byte);
         }
         CHECK_EQUAL(rank(result), 4u);

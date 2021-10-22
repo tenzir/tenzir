@@ -13,6 +13,7 @@
 
 #include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -42,6 +43,17 @@ struct is_pair<std::pair<T, U>> : std::true_type {};
 
 template <class T>
 constexpr bool is_pair_v = is_pair<T>::value;
+
+// std::span<T, Extent>
+
+template <class>
+struct is_span : std::false_type {};
+
+template <class T, size_t Extent>
+struct is_span<std::span<T, Extent>> : std::true_type {};
+
+template <class T>
+constexpr bool is_span_v = is_span<T>::value;
 
 // deref - generic version of std::remove_pointer
 
