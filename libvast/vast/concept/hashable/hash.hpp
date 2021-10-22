@@ -12,6 +12,7 @@
 #include "vast/concept/hashable/default_hash.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/uniquely_hashable.hpp"
+#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/concepts.hpp"
 #include "vast/detail/type_traits.hpp"
 
@@ -33,8 +34,9 @@ struct hash_algorithm_proxy {
   }
 
   template <class T>
+    requires(uniquely_hashable<T, HashAlgorithm>)
   static auto sequentialize(const T& x) noexcept {
-    if constexpr (uniquely_hashable<T, HashAlgorithm>) {
+    if constexpr (uniquely_represented<T>) {
       auto ptr = reinterpret_cast<const std::byte*>(std::addressof(x));
       return std::span<const std::byte, sizeof(T)>{ptr, sizeof(x)};
     } else if constexpr (concepts::fixed_byte_sequence<T>) {
@@ -46,14 +48,20 @@ struct hash_algorithm_proxy {
 
   template <class T>
   typename HashAlgorithm::result_type operator()(const T& x) const noexcept {
-    if constexpr (oneshot_hashable<T, HashAlgorithm>) {
+    if constexpr (uniquely_hashable<T, HashAlgorithm>) {
       auto bytes = sequentialize(x);
       auto input = std::make_tuple(bytes.data(), bytes.size());
-      auto args = std::tuple_cat(input, seeds);
-      auto make = [](const auto&... xs) noexcept {
-        return HashAlgorithm::make(xs...);
-      };
-      return std::apply(make, args);
+      if constexpr (oneshot_hash<HashAlgorithm>) {
+        auto args = std::tuple_cat(input, seeds);
+        auto make = [](const auto&... xs) noexcept {
+          return HashAlgorithm::make(xs...);
+        };
+        return std::apply(make, args);
+      } else {
+        auto h = std::make_from_tuple<HashAlgorithm>(seeds);
+        h(bytes.data(), bytes.size());
+        return static_cast<typename HashAlgorithm::result_type>(h);
+      }
     } else if constexpr (incremental_hash<HashAlgorithm>) {
       auto h = std::make_from_tuple<HashAlgorithm>(seeds);
       hash_append(h, x);

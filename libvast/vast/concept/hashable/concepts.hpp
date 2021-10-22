@@ -45,9 +45,4 @@ template <class HashAlgorithm>
 concept hash_algorithm
   = incremental_hash<HashAlgorithm> || oneshot_hash<HashAlgorithm>;
 
-/// Checks whether a type is oneshot hashable with a given hash algorithm.
-template <class T, class HashAlgorithm>
-concept oneshot_hashable = oneshot_hash<HashAlgorithm> &&(
-  uniquely_hashable<T, HashAlgorithm> || concepts::fixed_byte_sequence<T>);
-
 } // namespace vast
