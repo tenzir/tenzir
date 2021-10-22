@@ -109,8 +109,9 @@ partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   uuid id, std::string store_id, const caf::settings& synopsis_opts,
-  const caf::settings& index_opts, idspace_distributor_actor importer,
-  filesystem_actor fs, transform_ptr transform) {
+  const caf::settings& index_opts,
+  idspace_distributor_actor idspace_distributor, filesystem_actor fs,
+  transform_ptr transform) {
   using persist_lazily = partition_transformer_state::persist_lazily;
   using persist_eagerly = partition_transformer_state::persist_eagerly;
   const auto* store_plugin = plugins::find<vast::store_plugin>(store_id);
@@ -134,7 +135,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.data.store_header = builder_and_header->second;
   self->state.synopsis_opts = synopsis_opts;
   self->state.index_opts = index_opts;
-  self->state.importer = std::move(importer);
+  self->state.idspace_distributor = std::move(idspace_distributor);
   self->state.store_builder = builder_and_header->first;
   VAST_ASSERT(self->state.store_builder);
   self->state.stage = caf::attach_continuous_stream_stage(
@@ -161,8 +162,8 @@ partition_transformer_actor::behavior_type partition_transformer(
     [self](atom::done) {
       VAST_DEBUG("partition-transformer received all table slices");
       self
-        ->request(self->state.importer, caf::infinite, atom::reserve_v,
-                  self->state.events)
+        ->request(self->state.idspace_distributor, caf::infinite,
+                  atom::reserve_v, self->state.events)
         .then(
           [self](vast::id id) {
             self->send(self, atom::internal_v, atom::resume_v, atom::done_v,

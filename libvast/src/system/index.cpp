@@ -1077,8 +1077,8 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     // We can't pass this as spawn argument since the importer already
     // needs to know the index actor when spawning.
-    [self](atom::importer, idspace_distributor_actor importer) {
-      self->state.importer = std::move(importer);
+    [self](atom::importer, idspace_distributor_actor idspace_distributor) {
+      self->state.importer = std::move(idspace_distributor);
     },
     [self](atom::apply, transform_ptr transform,
            vast::uuid old_partition_id) -> caf::result<atom::done> {
@@ -1106,10 +1106,11 @@ index(index_actor::stateful_pointer<index_state> self,
         = query::make_extract(sink, query::extract::drop_ids, match_everything);
       auto query_id = self->state.create_query_id();
       auto lookup = query_state{query_id, query,
-                                std::vector<vast::uuid>{old_partition_id}};
+                                std::vector<vast::uuid>{old_partition_id},
+                                std::move(*worker)};
       auto actors
         = self->state.collect_query_actors(lookup, /* num_partitions = */ 1);
-      self->send(*worker, atom::supervise_v, query_id, lookup.query,
+      self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
                  std::move(actors),
                  caf::actor_cast<receiver_actor<atom::done>>(sink));
       auto rp = self->make_response_promise<atom::done>();

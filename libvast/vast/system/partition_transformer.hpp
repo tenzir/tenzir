@@ -47,9 +47,9 @@ struct partition_transformer_state {
       self,
     persist_eagerly&&, persist_lazily&&) const;
 
-  /// Actor handle of the importer to be able to reserve new ids
+  /// Actor handle of the actor (usually the importer) where we reserve new ids
   /// for the transformed data.
-  idspace_distributor_actor importer = {};
+  idspace_distributor_actor idspace_distributor = {};
 
   /// Actor handle of the store builder for this partition.
   store_builder_actor store_builder = {};
@@ -96,7 +96,8 @@ struct partition_transformer_state {
 partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   uuid id, std::string store_id, const caf::settings& synopsis_opts,
-  const caf::settings& index_opts, idspace_distributor_actor importer,
-  filesystem_actor fs, transform_ptr transform);
+  const caf::settings& index_opts,
+  idspace_distributor_actor idspace_distributor, filesystem_actor fs,
+  transform_ptr transform);
 
 } // namespace vast::system
