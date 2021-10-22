@@ -1,8 +1,6 @@
 name: Story
 description: Create a story
-title:
-labels:
-assignees:
+title: ""
 body:
   - type: checkboxes
     attributes:
