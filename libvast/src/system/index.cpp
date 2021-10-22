@@ -1048,11 +1048,15 @@ index(index_actor::stateful_pointer<index_state> self,
                   // Note that mmap's will increase the reference count of a
                   // file, so unlinking should not affect indexers that are
                   // currently loaded and answering a query.
-                  std::error_code err{};
-                  std::filesystem::remove_all(synopsis_path, err);
-                  if (err)
-                    VAST_WARN("{} could not unlink partition synopsis at",
-                              *self, synopsis_path);
+                  self
+                    ->request(self->state.filesystem, caf::infinite,
+                              atom::erase_v, synopsis_path)
+                    .then([](atom::done) { /* nop */ },
+                          [synopsis_path](const caf::error& err) {
+                            VAST_WARN("index could not unlink partition "
+                                      "synopsis at {}: {}",
+                                      synopsis_path, err);
+                          });
                   // TODO: We could send `all_ids` as the second argument
                   // here, which doesn't really make sense from an interface
                   // perspective but would save the partition from recomputing
