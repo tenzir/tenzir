@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/hashable/hash.hpp"
+#include "vast/hash/hash.hpp"
 
 #include "vast/detail/bit.hpp"
 

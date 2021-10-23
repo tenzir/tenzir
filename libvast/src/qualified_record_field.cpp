@@ -8,7 +8,7 @@
 
 #include "vast/qualified_record_field.hpp"
 
-#include "vast/concept/hashable/hash.hpp"
+#include "vast/hash/hash.hpp"
 
 namespace vast {
 

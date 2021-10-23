@@ -9,8 +9,6 @@
 #pragma once
 
 #include "vast/address.hpp"
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/sha1.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/base64.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -18,6 +16,8 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/flow.hpp"
+#include "vast/hash/hash_append.hpp"
+#include "vast/hash/sha1.hpp"
 #include "vast/icmp.hpp"
 #include "vast/port.hpp"
 

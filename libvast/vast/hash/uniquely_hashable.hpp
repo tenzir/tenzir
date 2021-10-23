@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/concepts.hpp"
 #include "vast/detail/bit.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 
 #include <type_traits>
 

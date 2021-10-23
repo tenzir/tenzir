@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include "vast/concept/hashable/hash.hpp"
-#include "vast/concept/hashable/legacy_hash.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash/hash.hpp"
+#include "vast/hash/legacy_hash.hpp"
 #include "vast/logger.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"

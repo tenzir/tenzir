@@ -9,11 +9,11 @@
 #pragma once
 
 #include "vast/atoms.hpp"
-#include "vast/concept/hashable/hash.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash/hash.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"

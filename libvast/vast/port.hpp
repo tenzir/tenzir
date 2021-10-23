@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 
 #include <cstdint>
 

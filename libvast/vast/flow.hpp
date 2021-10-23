@@ -9,8 +9,8 @@
 #pragma once
 
 #include "vast/address.hpp"
-#include "vast/concept/hashable/hash.hpp"
-#include "vast/concept/hashable/uniquely_represented.hpp"
+#include "vast/hash/hash.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 #include "vast/port.hpp"
 
 #include <functional>

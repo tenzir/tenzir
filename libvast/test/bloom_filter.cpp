@@ -11,10 +11,10 @@
 #include "vast/bloom_filter.hpp"
 
 #include "vast/bloom_filter_parameters.hpp"
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/hash/hash_append.hpp"
+#include "vast/hash/xxhash.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/test/test.hpp"
 

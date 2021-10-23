@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "vast/concept/hashable/concepts.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/hash/concepts.hpp"
+#include "vast/hash/xxhash.hpp"
 
 namespace vast {
 

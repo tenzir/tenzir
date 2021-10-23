@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "vast/concept/hashable/hash.hpp"
-#include "vast/concept/hashable/legacy_hash.hpp"
-#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/detail/bit.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/hash/hash.hpp"
+#include "vast/hash/legacy_hash.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 
 #include <array>
 #include <cstddef>

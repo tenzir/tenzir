@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/hash/xxhash.hpp"
 
 namespace vast {
 

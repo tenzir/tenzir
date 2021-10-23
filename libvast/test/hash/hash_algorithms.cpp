@@ -7,12 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/as_bytes.hpp"
-#include "vast/concept/hashable/crc.hpp"
-#include "vast/concept/hashable/hash.hpp"
-#include "vast/concept/hashable/sha1.hpp"
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/coding.hpp"
+#include "vast/hash/crc.hpp"
+#include "vast/hash/hash.hpp"
+#include "vast/hash/sha1.hpp"
+#include "vast/hash/uhash.hpp"
+#include "vast/hash/xxhash.hpp"
 
 #define SUITE hashable
 #include "vast/test/test.hpp"

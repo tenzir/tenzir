@@ -16,7 +16,7 @@
 // - Author:     kerukuro
 // - License:    The Unlicense
 
-#include "vast/concept/hashable/sha1.hpp"
+#include "vast/hash/sha1.hpp"
 
 #include "vast/detail/byte_swap.hpp"
 

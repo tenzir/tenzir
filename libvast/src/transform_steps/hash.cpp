@@ -9,9 +9,9 @@
 #include "vast/transform_steps/hash.hpp"
 
 #include "vast/arrow_table_slice_builder.hpp"
-#include "vast/concept/hashable/default_hash.hpp"
-#include "vast/concept/hashable/hash_append.hpp"
 #include "vast/error.hpp"
+#include "vast/hash/default_hash.hpp"
+#include "vast/hash/hash_append.hpp"
 #include "vast/optional.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"

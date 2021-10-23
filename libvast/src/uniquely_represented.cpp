@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/hashable/uniquely_represented.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 
 #include "vast/address.hpp"
 #include "vast/data/integer.hpp"
