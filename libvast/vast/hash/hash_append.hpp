@@ -350,7 +350,7 @@ struct hash_inspector {
 template <class HashAlgorithm, class T>
   requires(
     caf::detail::is_inspectable<detail::hash_inspector<HashAlgorithm>, T>::value
-    && !uniquely_represented<T>)
+    && !uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const T& x) noexcept {
   detail::hash_inspector<HashAlgorithm> f{h};
   inspect(f, const_cast<T&>(x));
