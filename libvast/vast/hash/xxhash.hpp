@@ -43,23 +43,23 @@ public:
   using seed_type = XXH64_hash_t;
 
   static result_type
-  make(const void* data, size_t size, seed_type seed = 0) noexcept {
+  make(std::span<const std::byte> bytes, seed_type seed = 0) noexcept {
     VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(data == nullptr && size > 0));
-    return XXH64(data, size, seed);
+                || !(bytes.data() == nullptr && bytes.size() > 0));
+    return XXH64(bytes.data(), bytes.size(), seed);
   }
 
   explicit xxh64(seed_type seed = 0) noexcept {
     XXH64_reset(&state_, seed);
   }
 
-  void operator()(const void* data, size_t size) noexcept {
+  void add(std::span<const std::byte> bytes) noexcept {
     VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(data == nullptr && size > 0));
-    XXH64_update(&state_, data, size);
+                || !(bytes.data() == nullptr && bytes.size() > 0));
+    XXH64_update(&state_, bytes.data(), bytes.size());
   }
 
-  explicit operator result_type() noexcept {
+  result_type finish() noexcept {
     return XXH64_digest(&state_);
   }
 
@@ -79,15 +79,17 @@ public:
   using result_type = XXH64_hash_t;
   using seed_type = XXH64_hash_t;
 
-  static result_type make(const void* data, size_t size) noexcept {
-    return XXH3_64bits(data, size);
+  static result_type make(std::span<const std::byte> bytes) noexcept {
+    VAST_ASSERT(xxh_accept_null_input_pointer
+                || !(bytes.data() == nullptr && bytes.size() > 0));
+    return XXH3_64bits(bytes.data(), bytes.size());
   }
 
   static result_type
-  make(const void* data, size_t size, seed_type seed) noexcept {
+  make(std::span<const std::byte> bytes, seed_type seed) noexcept {
     VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(data == nullptr && size > 0));
-    return XXH3_64bits_withSeed(data, size, seed);
+                || !(bytes.data() == nullptr && bytes.size() > 0));
+    return XXH3_64bits_withSeed(bytes.data(), bytes.size(), seed);
   }
 
   xxh3_64() noexcept {
@@ -100,13 +102,13 @@ public:
     XXH3_64bits_reset_withSeed(&state_, seed);
   }
 
-  void operator()(const void* data, size_t size) noexcept {
+  void add(std::span<const std::byte> bytes) noexcept {
     VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(data == nullptr && size > 0));
-    XXH3_64bits_update(&state_, data, size);
+                || !(bytes.data() == nullptr && bytes.size() > 0));
+    XXH3_64bits_update(&state_, bytes.data(), bytes.size());
   }
 
-  explicit operator result_type() noexcept {
+  result_type finish() noexcept {
     return XXH3_64bits_digest(&state_);
   }
 
@@ -126,15 +128,17 @@ public:
   using result_type = XXH128_hash_t;
   using seed_type = XXH64_hash_t;
 
-  static result_type make(const void* data, size_t size) noexcept {
+  static result_type make(std::span<const std::byte> bytes) noexcept {
     VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(data == nullptr && size > 0));
-    return XXH3_128bits(data, size);
+                || !(bytes.data() == nullptr && bytes.size() > 0));
+    return XXH3_128bits(bytes.data(), bytes.size());
   }
 
   static result_type
-  make(const void* data, size_t size, seed_type seed) noexcept {
-    return XXH3_128bits_withSeed(data, size, seed);
+  make(std::span<const std::byte> bytes, seed_type seed) noexcept {
+    VAST_ASSERT(xxh_accept_null_input_pointer
+                || !(bytes.data() == nullptr && bytes.size() > 0));
+    return XXH3_128bits_withSeed(bytes.data(), bytes.size(), seed);
   }
 
   xxh3_128() noexcept {
@@ -147,13 +151,13 @@ public:
     XXH3_128bits_reset_withSeed(&state_, seed);
   }
 
-  void operator()(const void* data, size_t size) noexcept {
+  void add(std::span<const std::byte> bytes) noexcept {
     VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(data == nullptr && size > 0));
-    XXH3_128bits_update(&state_, data, size);
+                || !(bytes.data() == nullptr && bytes.size() > 0));
+    XXH3_128bits_update(&state_, bytes.data(), bytes.size());
   }
 
-  explicit operator result_type() noexcept {
+  result_type finish() noexcept {
     return XXH3_128bits_digest(&state_);
   }
 

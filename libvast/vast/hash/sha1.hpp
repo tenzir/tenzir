@@ -13,6 +13,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace vast {
 
@@ -26,9 +27,9 @@ public:
 
   sha1() noexcept;
 
-  void operator()(const void* xs, size_t n) noexcept;
+  void add(std::span<const std::byte> bytes) noexcept;
 
-  operator result_type() noexcept;
+  result_type finish() noexcept;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, sha1& x) {

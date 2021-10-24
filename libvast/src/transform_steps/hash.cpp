@@ -49,7 +49,7 @@ caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
         hash_append(h, item);
         if (salt_)
           hash_append(h, *salt_);
-        auto digest = static_cast<default_hash::result_type>(h);
+        auto digest = h.finish();
         out_hash = fmt::format("{:x}", digest);
       }
       if (!builder_ptr->add(item))
@@ -82,7 +82,7 @@ hash_step::operator()(vast::legacy_record_type layout,
     hash_append(h, item.ValueOrDie()->ToString());
     if (salt_)
       hash_append(h, *salt_);
-    auto digest = static_cast<default_hash::result_type>(h);
+    auto digest = h.finish();
     auto x = fmt::format("{:x}", digest);
     cb->add(std::string_view{x});
   }

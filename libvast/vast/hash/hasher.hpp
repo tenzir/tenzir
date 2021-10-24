@@ -33,7 +33,7 @@ struct seeded_hash {
   auto operator()(const T& x) const noexcept {
     HashFunction h{seed_};
     hash_append(h, x);
-    return static_cast<result_type>(h);
+    return h.finish();
   }
 
   size_t seed_;

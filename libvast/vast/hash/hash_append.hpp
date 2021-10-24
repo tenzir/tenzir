@@ -37,7 +37,7 @@ namespace vast {
 template <class HashAlgorithm, class T>
   requires(uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const T& x) noexcept {
-  h(std::addressof(x), sizeof(x));
+  h.add({reinterpret_cast<const std::byte*>(std::addressof(x)), sizeof(x)});
 }
 
 namespace detail {
@@ -55,7 +55,8 @@ void contiguous_container_hash_append(HashAlgorithm& h,
                                       const Container& xs) noexcept {
   using value_type = typename Container::value_type;
   if constexpr (uniquely_hashable<value_type, HashAlgorithm>)
-    h(std::data(xs), std::size(xs) * sizeof(value_type));
+    h.add({reinterpret_cast<const std::byte*>(std::data(xs)),
+           std::size(xs) * sizeof(value_type)});
   else
     for (const auto& x : xs)
       hash_append(h, x);
@@ -72,14 +73,14 @@ void hash_append(HashAlgorithm& h, T x) noexcept {
   if constexpr (std::is_integral_v<
                   T> || std::is_pointer_v<T> || std::is_enum_v<T>) {
     detail::reverse_bytes(x);
-    h(std::addressof(x), sizeof(x));
+    h.add({reinterpret_cast<const std::byte*>(std::addressof(x)), sizeof(x)});
   } else if constexpr (std::is_floating_point_v<T>) {
     // When hashing, we treat -0 and 0 the same.
     if (x == 0)
       x = 0;
     if constexpr (HashAlgorithm::endian != detail::endian::native)
       detail::reverse_bytes(x);
-    h(std::addressof(x), sizeof(x));
+    h.add({reinterpret_cast<const std::byte*>(std::addressof(x)), sizeof(x)});
   } else {
     static_assert(std::is_same_v<T, T>, "T is neither integral nor a float");
   }
@@ -90,7 +91,7 @@ void hash_append(HashAlgorithm& h, std::nullptr_t) noexcept {
   const void* p = nullptr;
   if constexpr (HashAlgorithm::endian != detail::endian::native)
     detail::reverse_bytes(p);
-  h(std::addressof(p), sizeof(p));
+  h.add({reinterpret_cast<const std::byte*>(std::addressof(p)), sizeof(p)});
 }
 
 // -- chrono ------------------------------------------------------------------
@@ -222,7 +223,8 @@ void hash_append(HashAlgorithm& h, std::span<T, Extent> xs) noexcept {
   } else if constexpr (Extent > 0) {
     // Just hash the data because the size is part of the type.
     if constexpr (uniquely_hashable<T, HashAlgorithm>)
-      h(xs.data(), Extent * sizeof(T));
+      h.add(
+        {reinterpret_cast<const std::byte*>(xs.data()), Extent * sizeof(T)});
     else
       for (const auto& x : xs)
         hash_append(h, x);
@@ -316,7 +318,8 @@ struct hash_inspector {
     auto ptr = x.value;
     while (*ptr != '\0')
       ++ptr;
-    h_(x.value, ptr - x.value);
+    h_.add({reinterpret_cast<const std::byte*>(x.value),
+            static_cast<size_t>(ptr - x.value)});
     (*this)(std::forward<Ts>(xs)...);
   }
 

@@ -20,6 +20,15 @@
 using namespace vast;
 using vast::detail::hexify;
 
+namespace {
+
+template <size_t N>
+auto chop(const char (&xs)[N]) {
+  return as_bytes(xs).template first<(N - 1)>();
+}
+
+} // namespace
+
 TEST(crc32 oneshot) {
   CHECK_EQUAL(hash<crc32>('f'), 1993550816u);
   CHECK_EQUAL(hash<crc32>('o'), 252678980u);
@@ -27,36 +36,40 @@ TEST(crc32 oneshot) {
 
 TEST(crc32 incremental) {
   crc32 crc;
-  crc("foo", 3);
-  CHECK(static_cast<crc32::result_type>(crc) == 2356372769);
+  crc.add(chop("foo"));
+  CHECK_EQUAL(crc.finish(), 2356372769u);
+}
+
+TEST(crc32 hash_append) {
   crc32 foo;
   hash_append(foo, 'f');
-  CHECK(static_cast<crc32::result_type>(foo) == 1993550816);
+  CHECK_EQUAL(foo.finish(), 1993550816u);
   hash_append(foo, 'o');
-  CHECK(static_cast<crc32::result_type>(foo) == 2943590935);
+  CHECK_EQUAL(foo.finish(), 2943590935u);
   hash_append(foo, 'o');
-  CHECK(static_cast<crc32::result_type>(foo) == 2356372769);
+  CHECK_EQUAL(foo.finish(), 2356372769u);
 }
 
 TEST(xxh64 oneshot with seed) {
-  auto forty_two = "42"; // incl. NUL byte
-  CHECK_EQUAL(xxh64::make(forty_two, 3, 42), 7873697032674743835ul);
+  char forty_two[3] = "42"; // incl. NUL byte
+  CHECK_EQUAL(xxh64::make(as_bytes(forty_two), 42), 7873697032674743835ul);
 }
 
 TEST(xxh64 incremental) {
   xxh64 h;
-  h("foo", 3);
-  CHECK_EQUAL(static_cast<uint64_t>(h), 3728699739546630719ul);
-  h("bar", 3);
-  CHECK_EQUAL(static_cast<uint64_t>(h), 11721187498075204345ul);
-  h("baz", 3);
-  CHECK_EQUAL(static_cast<uint64_t>(h), 6505385152087097371ul);
+  h.add(chop("foo"));
+  CHECK_EQUAL(h.finish(), 3728699739546630719ul);
+  h.add(chop("bar"));
+  CHECK_EQUAL(h.finish(), 11721187498075204345ul);
+  h.add(chop("baz"));
+  CHECK_EQUAL(h.finish(), 6505385152087097371ul);
 }
 
 TEST(xxh64 zero bytes) {
   // Should not segfault or trigger assertions.
+  auto bytes = std::span<const std::byte>{nullptr, size_t{0u}};
   xxh64 h;
-  h(nullptr, 0);
+  h.add(bytes);
 }
 
 TEST(sha1 validity) {
@@ -68,11 +81,11 @@ TEST(sha1 validity) {
 
 TEST(sha1 incremental) {
   sha1 sha;
-  sha("foo", 3);
-  sha("bar", 3);
-  sha("baz", 3);
-  sha("42", 2);
-  auto digest = static_cast<sha1::result_type>(sha);
+  sha.add(chop("foo"));
+  sha.add(chop("bar"));
+  sha.add(chop("baz"));
+  sha.add(chop("42"));
+  auto digest = sha.finish();
   auto bytes = as_bytes(digest);
   CHECK_EQUAL(hexify(bytes), "4cbfb91f23be76f0836c3007c1b3c8d8c2eacdd1");
 }

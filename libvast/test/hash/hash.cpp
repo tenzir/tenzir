@@ -27,31 +27,31 @@ struct algorithm_base {
 
 // A hash algorithm that only operates in a one-shot fasion.
 struct oneshot : algorithm_base {
-  static result_type make(const void*, size_t n) noexcept {
-    return n;
+  static result_type make(std::span<const std::byte> bytes) noexcept {
+    return bytes.size();
   }
 };
 
 // A hash algorithm that only operates incrementally.
 struct incremental : algorithm_base {
-  void operator()(const void*, size_t) noexcept {
+  void add(std::span<const std::byte>) noexcept {
   }
 
-  explicit operator result_type() noexcept {
+  result_type finish() noexcept {
     return 0;
   }
 };
 
 // A hash algorithm that is both oneshot and incremental.
 struct oneshot_and_incremental : algorithm_base {
-  static result_type make(const void*, size_t n) noexcept {
-    return n;
+  static result_type make(std::span<const std::byte> bytes) noexcept {
+    return bytes.size();
   }
 
-  void operator()(const void*, size_t) noexcept {
+  void add(std::span<const std::byte>) noexcept {
   }
 
-  explicit operator result_type() noexcept {
+  result_type finish() noexcept {
     return 0;
   }
 };

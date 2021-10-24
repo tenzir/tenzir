@@ -50,22 +50,21 @@ struct hash_algorithm_proxy {
   typename HashAlgorithm::result_type operator()(const T& x) const noexcept {
     if constexpr (uniquely_hashable<T, HashAlgorithm>) {
       auto bytes = sequentialize(x);
-      auto input = std::make_tuple(bytes.data(), bytes.size());
       if constexpr (oneshot_hash<HashAlgorithm>) {
-        auto args = std::tuple_cat(input, seeds);
         auto make = [](const auto&... xs) noexcept {
           return HashAlgorithm::make(xs...);
         };
+        auto args = std::tuple_cat(std::tuple(bytes), seeds);
         return std::apply(make, args);
       } else {
         auto h = std::make_from_tuple<HashAlgorithm>(seeds);
-        h(bytes.data(), bytes.size());
-        return static_cast<typename HashAlgorithm::result_type>(h);
+        h.add(bytes);
+        return h.finish();
       }
     } else if constexpr (incremental_hash<HashAlgorithm>) {
       auto h = std::make_from_tuple<HashAlgorithm>(seeds);
       hash_append(h, x);
-      return static_cast<typename HashAlgorithm::result_type>(h);
+      return h.finish();
     } else {
       static_assert(always_false_v<T>, "T is not hashable");
     }
@@ -76,7 +75,7 @@ struct hash_algorithm_proxy {
   operator()(const Ts&... xs) const noexcept {
     auto h = std::make_from_tuple<HashAlgorithm>(seeds);
     hash_append(h, xs...);
-    return static_cast<typename HashAlgorithm::result_type>(h);
+    return h.finish();
   }
 
   std::tuple<Seeds...> seeds;
