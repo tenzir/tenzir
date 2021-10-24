@@ -10,6 +10,7 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/hash/hash.hpp"
 
 #include <caf/sec.hpp>
 
@@ -18,28 +19,6 @@
 #include <vector>
 
 namespace vast {
-
-namespace detail {
-
-template <class HashFunction>
-struct seeded_hash {
-  using result_type = typename HashFunction::result_type;
-
-  explicit seeded_hash(size_t seed) : seed_{seed} {
-    // nop
-  }
-
-  template <class T>
-  auto operator()(const T& x) const noexcept {
-    HashFunction h{seed_};
-    hash_append(h, x);
-    return h.finish();
-  }
-
-  size_t seed_;
-};
-
-} // namespace detail
 
 /// The CRTP base class for hashers.
 template <class Derived, class DigestType>
@@ -120,7 +99,7 @@ public:
   void hash(const T& x, Ts& xs) {
     VAST_ASSERT(xs.size() == seeds_.size());
     for (size_t i = 0; i < xs.size(); ++i)
-      xs[i] = detail::seeded_hash<HashFunction>{seeds_[i]}(x);
+      xs[i] = seeded_hash<HashFunction>{seeds_[i]}(x);
   }
 
   // -- concepts -------------------------------------------------------------
@@ -164,8 +143,8 @@ public:
   /// @param Ts xs The sequence to write the digests into.
   template <class T, class Ts>
   void hash(const T& x, Ts& xs) {
-    auto d1 = detail::seeded_hash<HashFunction>{seed1_}(x);
-    auto d2 = detail::seeded_hash<HashFunction>{seed2_}(x);
+    auto d1 = seeded_hash<HashFunction>{seed1_}(x);
+    auto d2 = seeded_hash<HashFunction>{seed2_}(x);
     for (size_t i = 0; i < xs.size(); ++i)
       xs[i] = d1 + i * d2;
   }

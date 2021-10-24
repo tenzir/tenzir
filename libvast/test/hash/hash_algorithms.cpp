@@ -66,9 +66,10 @@ TEST(xxh64 incremental) {
 }
 
 TEST(xxh64 zero bytes) {
-  // Should not segfault or trigger assertions.
-  auto bytes = std::span<const std::byte>{nullptr, size_t{0u}};
+  const std::byte* ptr = nullptr;
+  auto bytes = std::span<const std::byte, 0>{ptr, ptr};
   xxh64 h;
+  // Should not segfault or trigger assertions.
   h.add(bytes);
 }
 
