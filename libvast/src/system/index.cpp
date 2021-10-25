@@ -335,7 +335,9 @@ std::optional<query_supervisor_actor> index_state::next_worker() {
 void index_state::backlog::emplace(vast::query query,
                                    caf::typed_response_promise<void> rp) {
   auto& q = query.priority == query::priority::normal ? normal : low;
-  q.emplace(query, rp);
+  // TODO: emplace does not work with libc++ <= 12.0. Switch to it once
+  // we updated to LLVM 13.
+  q.push(job{std::move(query), std::move(rp)});
 }
 
 std::optional<index_state::backlog::job> index_state::backlog::take_next() {
