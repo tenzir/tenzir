@@ -10,8 +10,8 @@
 
 #include "vast/address_synopsis.hpp"
 #include "vast/bool_synopsis.hpp"
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/legacy_hash.hpp"
+#include "vast/hash/hash_append.hpp"
+#include "vast/hash/legacy_hash.hpp"
 #include "vast/string_synopsis.hpp"
 #include "vast/time_synopsis.hpp"
 

@@ -11,12 +11,12 @@
 #include "vast/fwd.hpp"
 
 #include "vast/aliases.hpp"
-#include "vast/concept/hashable/hash.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash/hash.hpp"
 #include "vast/time.hpp"
 
 #include <caf/intrusive_ptr.hpp>

@@ -11,10 +11,10 @@
 #include "vast/address_synopsis.hpp"
 
 #include "vast/address.hpp"
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/legacy_hash.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/hash/hash_append.hpp"
+#include "vast/hash/legacy_hash.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/synopsis.hpp"

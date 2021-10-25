@@ -11,7 +11,7 @@
 #include "vast/bitvector.hpp"
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/detail/operators.hpp"
-#include "vast/hasher.hpp"
+#include "vast/hash/hasher.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 

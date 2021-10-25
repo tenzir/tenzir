@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/hash/hash_append.hpp"
 
 namespace vast {
 

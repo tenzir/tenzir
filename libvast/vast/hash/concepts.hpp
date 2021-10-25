@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "vast/concept/hashable/uniquely_hashable.hpp"
 #include "vast/concepts.hpp"
+#include "vast/hash/uniquely_hashable.hpp"
 
 #include <cstddef>
 #include <span>

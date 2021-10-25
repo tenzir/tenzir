@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "vast/concept/hashable/concepts.hpp"
-#include "vast/concept/hashable/default_hash.hpp"
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/uniquely_hashable.hpp"
-#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/concepts.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash/concepts.hpp"
+#include "vast/hash/default_hash.hpp"
+#include "vast/hash/hash_append.hpp"
+#include "vast/hash/uniquely_hashable.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 
 #include <cstddef>
 #include <span>

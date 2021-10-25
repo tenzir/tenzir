@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/hashable/crc.hpp"
+#include "vast/hash/crc.hpp"
 
 #include "vast/detail/assert.hpp"
 

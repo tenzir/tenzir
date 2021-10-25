@@ -10,8 +10,6 @@
 
 #include "vast/legacy_type.hpp"
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -20,6 +18,8 @@
 #include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/data.hpp"
+#include "vast/hash/uhash.hpp"
+#include "vast/hash/xxhash.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 

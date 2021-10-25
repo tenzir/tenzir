@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "vast/concept/hashable/hash.hpp"
-#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/hash/hash.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>

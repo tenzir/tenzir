@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/hash/hash_append.hpp"
 
-#include "vast/concept/hashable/default_hash.hpp"
-#include "vast/concept/hashable/uhash.hpp"
 #include "vast/detail/bit.hpp"
+#include "vast/hash/default_hash.hpp"
+#include "vast/hash/uhash.hpp"
 
 #define SUITE hashable
 #include "vast/test/test.hpp"

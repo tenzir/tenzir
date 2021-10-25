@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "vast/concept/hashable/hash.hpp"
-#include "vast/concept/hashable/uniquely_represented.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/hash/hash.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 
 #include <caf/meta/type_name.hpp>
 

@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "vast/concept/hashable/uniquely_hashable.hpp"
 #include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash/uniquely_hashable.hpp"
 
 #include <caf/detail/type_traits.hpp>
 #include <caf/meta/save_callback.hpp>
