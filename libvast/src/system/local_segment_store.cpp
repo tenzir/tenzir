@@ -229,7 +229,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   self->state.path = path;
   self->state.builder
     = std::make_unique<segment_builder>(defaults::system::max_segment_size);
-  self->set_exit_handler([self /*, path, fs*/](const caf::exit_msg&) {
+  self->set_exit_handler([self](const caf::exit_msg&) {
     VAST_DEBUG("active local store exits");
     // TODO: We should save the finished segment in the state, so we can
     //       answer queries that arrive after the stream has ended.
@@ -340,7 +340,7 @@ public:
                               std::move(header)};
   }
 
-  [[nodiscard]] virtual caf::expected<system::store_actor>
+  [[nodiscard]] caf::expected<system::store_actor>
   make_store(filesystem_actor fs,
              std::span<const std::byte> header) const override {
     auto path = store_path_from_header(header);

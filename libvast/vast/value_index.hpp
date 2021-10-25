@@ -110,4 +110,7 @@ caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
 /// @relates value_index
 caf::error inspect(caf::deserializer& source, value_index_ptr& x);
 
+/// Serialize the value index into a chunk.
+vast::chunk_ptr chunkify(const value_index_ptr& idx);
+
 } // namespace vast

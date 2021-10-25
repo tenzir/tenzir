@@ -18,6 +18,7 @@
 #include "vast/system/accountant.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/importer.hpp"
 #include "vast/system/meta_index.hpp"
 #include "vast/uuid.hpp"
 
@@ -51,6 +52,7 @@ struct active_partition_info {
   // do the streaming.
   store_builder_actor store = {};
 
+  // The slot ID that identifies the store in the stream.
   caf::stream_slot store_slot = {};
 
   /// The remaining free capacity of the partition.
@@ -180,6 +182,9 @@ struct index_state {
   /// Decommissions the active partition.
   void decomission_active_partition();
 
+  /// Generates a unique query id.
+  vast::uuid create_query_id();
+
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
@@ -264,14 +269,24 @@ struct index_state {
   /// Actor handle of the store actor.
   archive_actor global_store = {};
 
+  /// Actor handle of the importer actor to reserve additional
+  /// parts of the id space.
+  idspace_distributor_actor importer = {};
+
   /// Plugin responsible for spawning new partition-local stores.
   const vast::store_plugin* store_plugin = {};
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
 
-  // The false positive rate for the meta index.
+  /// The false positive rate for the meta index.
   double meta_index_fp_rate = {};
+
+  /// Config options to be used for new synopses; passed to active partitions.
+  caf::settings synopsis_opts;
+
+  /// Config options for the index.
+  caf::settings index_opts;
 
   constexpr static inline auto name = "index";
 };

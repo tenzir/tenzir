@@ -373,6 +373,16 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
       self->state.erase(partition);
       return atom::ok_v;
     },
+    [=](atom::replace, uuid old_partition, uuid new_partition,
+        std::shared_ptr<partition_synopsis>& synopsis) -> atom::ok {
+      // There's technically no need for this assertion, at some point
+      // we probably want to remove it or add a new `atom::update` handler
+      // for in-place replacements.
+      VAST_ASSERT(old_partition != new_partition);
+      self->state.merge(new_partition, std::move(*synopsis));
+      self->state.erase(old_partition);
+      return atom::ok_v;
+    },
     [=](atom::candidates, const vast::expression& expression,
         const vast::ids& ids) -> caf::result<std::vector<vast::uuid>> {
       VAST_TRACE_SCOPE("{} {} {}", *self, VAST_ARG(expression), VAST_ARG(ids));

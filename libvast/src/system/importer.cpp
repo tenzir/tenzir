@@ -257,6 +257,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit(std::move(err));
     return importer_actor::behavior_type::make_empty_behavior();
   }
+  self->send(index, atom::importer_v,
+             static_cast<idspace_distributor_actor>(self));
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
@@ -334,6 +336,12 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       VAST_ASSERT(self->state.stage != nullptr);
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
+    },
+    // Reserve a part of the id space.
+    [self](atom::reserve, uint64_t n) {
+      VAST_ASSERT(n <= static_cast<size_t>(self->state.available_ids()),
+                  "id space overflow");
+      return self->state.next_id(n);
     },
     // The internal telemetry loop of the IMPORTER.
     [self](atom::telemetry) {

@@ -102,6 +102,10 @@ using status_client_actor = typed_actor_fwd<
 /// The STORE actor interface.
 using store_actor = typed_actor_fwd<
   // Handles an extraction for the given expression.
+  // TODO: It's a bit weird that the store plugin implementation needs to
+  // implement query handling. It may be better to have an API that exposes
+  // an mmapped view of the contained table slices; or to provide an opaque
+  // callback that the store can use for that.
   caf::replies_to<query>::with<atom::done>,
   // TODO: Replace usage of `atom::erase` with `query::erase` in call sites.
   caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
@@ -198,10 +202,39 @@ using meta_index_actor = typed_actor_fwd<
     atom::ok>,
   // Erase a single partition synopsis.
   caf::replies_to<atom::erase, uuid>::with<atom::ok>,
+  // Atomically remove one and merge another partition synopsis
+  caf::replies_to<atom::replace, uuid, uuid,
+                  std::shared_ptr<partition_synopsis>>::with<atom::ok>,
   // Evaluate the expression.
   caf::replies_to<atom::candidates, vast::expression,
                   vast::ids>::with<std::vector<vast::uuid>>>
   // Conform to the procotol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
+
+/// The IDSPACE DISTRIBUTOR actor interface.
+using idspace_distributor_actor = typed_actor_fwd<
+  // Request a part of the id space.
+  caf::replies_to<atom::reserve, uint64_t>::with<vast::id>>::unwrap;
+
+/// The interface of an IMPORTER actor.
+using importer_actor = typed_actor_fwd<
+  // Register the ACCOUNTANT actor.
+  caf::reacts_to<accountant_actor>,
+  // Add a new sink.
+  caf::replies_to<stream_sink_actor<table_slice>>::with< //
+    caf::outbound_stream_slot<table_slice>>,
+  // Register a FLUSH LISTENER actor.
+  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
+  // The internal telemetry loop of the IMPORTER.
+  caf::reacts_to<atom::telemetry>>
+  // Conform to the protocol of the IDSPACE DISTRIBUTOR actor.
+  ::extend_with<idspace_distributor_actor>
+  // Conform to the protocol of the STREAM SINK actor for table slices.
+  ::extend_with<stream_sink_actor<table_slice>>
+  // Conform to the protocol of the STREAM SINK actor for table slices with a
+  // description.
+  ::extend_with<stream_sink_actor<table_slice, std::string>>
+  // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
 /// The INDEX actor interface.
@@ -221,7 +254,15 @@ using index_actor = typed_actor_fwd<
   // partitions.
   caf::reacts_to<atom::internal, query, query_supervisor_actor>,
   // Erases the given events from the INDEX, and returns their ids.
-  caf::replies_to<atom::erase, uuid>::with<atom::done>>
+  caf::replies_to<atom::erase, uuid>::with<atom::done>,
+  // Applies the given transformation to the partition.
+  // Erases the existing partition and returns the uuid of the new
+  // partition.
+  // TODO: Add options to do an in-place transform keeping the old ids,
+  // and to make a new partition preserving the old one.
+  caf::replies_to<atom::apply, transform_ptr, uuid>::with<atom::done>,
+  // Makes the identity of the importer known to the index.
+  caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the QUERY SUPERVISOR MASTER actor.
@@ -294,6 +335,18 @@ using filesystem_actor = typed_actor_fwd<
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
+/// The interface of an BULK PARTITION actor.
+using partition_transformer_actor = typed_actor_fwd<
+  // Persist transformed partition to given path.
+  caf::replies_to<atom::persist, std::filesystem::path, std::filesystem::path>::
+    with<std::shared_ptr<partition_synopsis>>,
+  // INTERNAL: Continuation handler for `atom::done`.
+  caf::reacts_to<atom::internal, atom::resume, atom::done, vast::id>>
+  // query::extract API
+  ::extend_with<receiver_actor<table_slice>>
+  // query_supervisor API
+  ::extend_with<receiver_actor<atom::done>>::unwrap;
+
 /// The interface of an ACTIVE PARTITION actor.
 using active_partition_actor = typed_actor_fwd<
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
@@ -344,25 +397,6 @@ using analyzer_plugin_actor = typed_actor_fwd<>
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the COMPONENT PLUGIN actor.
   ::extend_with<component_plugin_actor>::unwrap;
-
-/// The interface of an IMPORTER actor.
-using importer_actor = typed_actor_fwd<
-  // Register the ACCOUNTANT actor.
-  caf::reacts_to<accountant_actor>,
-  // Add a new sink.
-  caf::replies_to<stream_sink_actor<table_slice>>::with< //
-    caf::outbound_stream_slot<table_slice>>,
-  // Register a FLUSH LISTENER actor.
-  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
-  // The internal telemetry loop of the IMPORTER.
-  caf::reacts_to<atom::telemetry>>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the STREAM SINK actor for table slices with a
-  // description.
-  ::extend_with<stream_sink_actor<table_slice, std::string>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of a SOURCE actor.
 using source_actor = typed_actor_fwd<
@@ -449,6 +483,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::exporter_actor))
   VAST_ADD_TYPE_ID((vast::system::filesystem_actor))
   VAST_ADD_TYPE_ID((vast::system::flush_listener_actor))
+  VAST_ADD_TYPE_ID((vast::system::idspace_distributor_actor))
   VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::index_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))
@@ -473,6 +508,7 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 #define vast_uuid_synopsis_map std::map<vast::uuid, vast::partition_synopsis>
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::transform_ptr)
 #undef vast_uuid_synopsis_map
 
 #undef VAST_ADD_TYPE_ID

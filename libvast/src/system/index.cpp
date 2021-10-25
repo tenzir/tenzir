@@ -42,6 +42,7 @@
 #include "vast/system/evaluator.hpp"
 #include "vast/system/local_segment_store.hpp"
 #include "vast/system/meta_index.hpp"
+#include "vast/system/partition_transformer.hpp"
 #include "vast/system/passive_partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/system/shutdown.hpp"
@@ -186,6 +187,14 @@ partition_factory::partition_factory(index_state& state) : state_{state} {
 
 index_state::index_state(index_actor::pointer self)
   : self{self}, inmem_partitions{0, partition_factory{*this}} {
+}
+
+vast::uuid index_state::create_query_id() {
+  auto query_id = uuid::random();
+  // Ensure the query id is unique.
+  while (pending.find(query_id) != pending.end() || query_id == uuid::nil())
+    query_id = uuid::random();
+  return query_id;
 }
 
 caf::error index_state::load_from_disk() {
@@ -353,14 +362,6 @@ void index_state::notify_flush_listeners() {
 
 void index_state::create_active_partition() {
   auto id = uuid::random();
-  caf::settings index_opts;
-  index_opts["cardinality"] = partition_capacity;
-  // These options must be kept in sync with vast/address_synopsis.hpp and
-  // vast/string_synopsis.hpp respectively.
-  auto synopsis_options = caf::settings{};
-  synopsis_options["max-partition-size"] = partition_capacity;
-  synopsis_options["address-synopsis-fp-rate"] = meta_index_fp_rate;
-  synopsis_options["string-synopsis-fp-rate"] = meta_index_fp_rate;
   // If we're using the global store, the importer already sends the table
   // slices. (In the long run, this should probably be streamlined so that all
   // data moves through the index. However, that requires some refactoring of
@@ -386,11 +387,9 @@ void index_state::create_active_partition() {
     store_name = "legacy_archive";
     active_partition.store = global_store;
   }
-  active_partition.actor
-    = self->spawn(::vast::system::active_partition, id, filesystem, index_opts,
-                  synopsis_options,
-                  static_cast<store_actor>(active_partition.store), store_name,
-                  store_header);
+  active_partition.actor = self->spawn(
+    ::vast::system::active_partition, id, filesystem, index_opts, synopsis_opts,
+    static_cast<store_actor>(active_partition.store), store_name, store_header);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
   active_partition.capacity = partition_capacity;
@@ -659,6 +658,12 @@ index(index_actor::stateful_pointer<index_state> self,
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                *self, dir, partition_capacity, max_inmem_partitions);
+  self->state.index_opts["cardinality"] = partition_capacity;
+  // These options must be kept in sync with vast/address_synopsis.hpp and
+  // vast/string_synopsis.hpp respectively.
+  self->state.synopsis_opts["max-partition-size"] = partition_capacity;
+  self->state.synopsis_opts["address-synopsis-fp-rate"] = meta_index_fp_rate;
+  self->state.synopsis_opts["string-synopsis-fp-rate"] = meta_index_fp_rate;
   // The global archive gets hard-coded special treatment for backwards
   // compatibility.
   self->state.partition_local_stores = store_backend != "archive";
@@ -859,11 +864,7 @@ index(index_actor::stateful_pointer<index_state> self,
         return {};
       }
       // Allows the client to query further results after initial taste.
-      auto query_id = uuid::random();
-      // Ensure the query id is unique.
-      while (self->state.pending.find(query_id) != self->state.pending.end()
-             || query_id == uuid::nil())
-        query_id = uuid::random();
+      auto query_id = self->state.create_query_id();
       // Monitor the sender so we can cancel the query in case it goes down.
       if (const auto it = self->state.monitored_queries.find(sender->address());
           it == self->state.monitored_queries.end()) {
@@ -1047,11 +1048,15 @@ index(index_actor::stateful_pointer<index_state> self,
                   // Note that mmap's will increase the reference count of a
                   // file, so unlinking should not affect indexers that are
                   // currently loaded and answering a query.
-                  std::error_code err{};
-                  std::filesystem::remove_all(synopsis_path, err);
-                  if (err)
-                    VAST_WARN("{} could not unlink partition synopsis at",
-                              *self, synopsis_path);
+                  self
+                    ->request(self->state.filesystem, caf::infinite,
+                              atom::erase_v, synopsis_path)
+                    .then([](atom::done) { /* nop */ },
+                          [synopsis_path](const caf::error& err) {
+                            VAST_WARN("index could not unlink partition "
+                                      "synopsis at {}: {}",
+                                      synopsis_path, err);
+                          });
                   // TODO: We could send `all_ids` as the second argument
                   // here, which doesn't really make sense from an interface
                   // perspective but would save the partition from recomputing
@@ -1067,6 +1072,72 @@ index(index_actor::stateful_pointer<index_state> self,
                       "partition {} from the meta index: {}",
                       partition_id, err);
             rp.deliver(std::move(err));
+          });
+      return rp;
+    },
+    // We can't pass this as spawn argument since the importer already
+    // needs to know the index actor when spawning.
+    [self](atom::importer, idspace_distributor_actor idspace_distributor) {
+      self->state.importer = std::move(idspace_distributor);
+    },
+    [self](atom::apply, transform_ptr transform,
+           vast::uuid old_partition_id) -> caf::result<atom::done> {
+      VAST_DEBUG("{} applies a transform to partition {}", *self,
+                 old_partition_id);
+      if (!self->state.store_plugin)
+        return caf::make_error(ec::invalid_configuration,
+                               "partition transforms are not supported for the "
+                               "global archive");
+      auto worker = self->state.next_worker();
+      if (!worker)
+        return caf::skip;
+      auto new_partition_id = vast::uuid::random();
+      auto store_id = std::string{self->state.store_plugin->name()};
+      partition_transformer_actor sink = self->spawn(
+        partition_transformer, new_partition_id, store_id,
+        self->state.synopsis_opts, self->state.index_opts,
+        static_cast<idspace_distributor_actor>(self->state.importer),
+        self->state.filesystem, transform);
+      // match_everything == '"" in #type'
+      static const auto match_everything
+        = vast::predicate{meta_extractor{meta_extractor::type},
+                          relational_operator::ni, data{""}};
+      auto query
+        = query::make_extract(sink, query::extract::drop_ids, match_everything);
+      auto query_id = self->state.create_query_id();
+      auto lookup = query_state{query_id, query,
+                                std::vector<vast::uuid>{old_partition_id},
+                                std::move(*worker)};
+      auto actors
+        = self->state.collect_query_actors(lookup, /* num_partitions = */ 1);
+      self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
+                 std::move(actors),
+                 caf::actor_cast<receiver_actor<atom::done>>(sink));
+      auto rp = self->make_response_promise<atom::done>();
+      self
+        ->request(sink, caf::infinite, atom::persist_v,
+                  self->state.partition_path(new_partition_id),
+                  self->state.partition_synopsis_path(new_partition_id))
+        .then(
+          [self, rp, old_partition_id, new_partition_id](
+            std::shared_ptr<partition_synopsis>& synopsis) mutable {
+            // TODO: We eventually want to allow transforms that delete
+            // whole events, at that point we also need to update the index
+            // statistics here.
+            self
+              ->request(self->state.meta_index, caf::infinite, atom::replace_v,
+                        old_partition_id, new_partition_id, std::move(synopsis))
+              .then(
+                [self, rp, old_partition_id](atom::ok) mutable {
+                  rp.delegate(static_cast<index_actor>(self), atom::erase_v,
+                              old_partition_id);
+                },
+                [rp](const caf::error& e) mutable {
+                  rp.deliver(e);
+                });
+          },
+          [rp](const caf::error& e) mutable {
+            rp.deliver(e);
           });
       return rp;
     },

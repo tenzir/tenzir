@@ -36,19 +36,6 @@
 
 namespace vast::system {
 
-namespace {
-
-vast::chunk_ptr chunkify(const value_index_ptr& idx) {
-  std::vector<char> buf;
-  caf::binary_serializer sink{nullptr, buf};
-  auto error = sink(idx);
-  if (error)
-    return nullptr;
-  return chunk::make(std::move(buf));
-}
-
-} // namespace
-
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
                legacy_type index_type, caf::settings index_opts) {

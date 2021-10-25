@@ -58,6 +58,12 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::internal, vast::query&, system::query_supervisor_actor&) {
       FAIL("no mock implementation available");
     },
+    [=](atom::apply, transform_ptr, uuid) -> atom::done {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::importer, system::idspace_distributor_actor) {
+      FAIL("no mock implementation available");
+    },
     [=](vast::query&) {
       auto query_id = unbox(to<uuid>(uuid_str));
       auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);

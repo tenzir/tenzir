@@ -18,44 +18,12 @@
 #include "vast/query.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/memory_filesystem.hpp"
 #include "vast/test/test.hpp"
 
 #include <map>
 
 namespace {
-
-// An in-memory implementation of the filesystem actor.
-vast::system::filesystem_actor::behavior_type memory_filesystem() {
-  auto chunks
-    = std::make_shared<std::map<std::filesystem::path, vast::chunk_ptr>>();
-  return {
-    [chunks](vast::atom::write, std::filesystem::path path,
-             vast::chunk_ptr chunk) {
-      (*chunks)[path] = chunk;
-      return vast::atom::ok_v;
-    },
-    [chunks](vast::atom::read,
-             std::filesystem::path path) -> caf::result<vast::chunk_ptr> {
-      auto chunk = chunks->find(path);
-      if (chunk == chunks->end())
-        return caf::make_error(vast::ec::filesystem_error, "unknown file");
-      return chunk->second;
-    },
-    [chunks](vast::atom::mmap,
-             std::filesystem::path path) -> caf::result<vast::chunk_ptr> {
-      auto chunk = chunks->find(path);
-      if (chunk == chunks->end())
-        return caf::make_error(vast::ec::filesystem_error, "unknown file");
-      return chunk->second;
-    },
-    [](vast::atom::erase, std::filesystem::path&) {
-      return vast::atom::done_v;
-    },
-    [](vast::atom::status, vast::system::status_verbosity) -> vast::record {
-      return {};
-    },
-  };
-}
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {

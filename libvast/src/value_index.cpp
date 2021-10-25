@@ -8,10 +8,11 @@
 
 #include "vast/value_index.hpp"
 
+#include "vast/chunk.hpp"
 #include "vast/value_index_factory.hpp"
 
+#include <caf/binary_serializer.hpp>
 #include <caf/deserializer.hpp>
-#include <caf/serializer.hpp>
 
 namespace vast {
 
@@ -143,6 +144,15 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
   if (x == nullptr)
     return caf::make_error(ec::unspecified, "failed to construct value index");
   return x->deserialize(source);
+}
+
+vast::chunk_ptr chunkify(const value_index_ptr& idx) {
+  std::vector<char> buf;
+  caf::binary_serializer sink{nullptr, buf};
+  auto error = sink(idx);
+  if (error)
+    return nullptr;
+  return chunk::make(std::move(buf));
 }
 
 } // namespace vast
