@@ -25,13 +25,12 @@ namespace vast::system {
 /// stream, a transform is applied and no queries need to be answered
 /// while the partition is constructed.
 struct partition_transformer_state {
-  struct persist_eagerly {
-    chunk_ptr partition_chunk = {};
-    chunk_ptr synopsis_chunk = {};
-    caf::error error = {};
+  struct stream_data {
+    caf::expected<chunk_ptr> partition_chunk = caf::no_error;
+    caf::expected<chunk_ptr> synopsis_chunk = caf::no_error;
   };
 
-  struct persist_lazily {
+  struct path_data {
     std::filesystem::path partition_path = {};
     std::filesystem::path synopsis_path = {};
     caf::typed_response_promise<std::shared_ptr<partition_synopsis>> promise
@@ -45,7 +44,7 @@ struct partition_transformer_state {
   void fulfill(
     partition_transformer_actor::stateful_pointer<partition_transformer_state>
       self,
-    persist_eagerly&&, persist_lazily&&) const;
+    stream_data&&, path_data&&) const;
 
   /// Actor handle of the actor (usually the importer) where we reserve new ids
   /// for the transformed data.
@@ -88,9 +87,9 @@ struct partition_transformer_state {
   caf::settings index_opts = {};
 
   /// The actor waits until both the stream is finished and an `atom::persist`
-  /// has arrived. Depending on which one arrives first, a different set of
-  /// variables need to be remembered in the meantime.
-  std::variant<std::monostate, persist_eagerly, persist_lazily> persist;
+  /// has arrived. Depending on what happens first, a different set of
+  /// variables need to be stored in the meantime.
+  std::variant<std::monostate, stream_data, path_data> persist;
 };
 
 partition_transformer_actor::behavior_type partition_transformer(

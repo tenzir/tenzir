@@ -74,26 +74,36 @@ void partition_transformer_state::finalize_data() {
 void partition_transformer_state::fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
-  persist_eagerly&& eager_data, persist_lazily&& lazy_data) const {
+  stream_data&& stream_data, path_data&& path_data) const {
   if (self->state.stream_error) {
-    lazy_data.promise.deliver(self->state.stream_error);
+    path_data.promise.deliver(self->state.stream_error);
+    self->quit();
+    return;
+  }
+  if (!stream_data.partition_chunk) {
+    path_data.promise.deliver(stream_data.partition_chunk.error());
+    self->quit();
+    return;
+  }
+  if (!stream_data.partition_chunk) {
+    path_data.promise.deliver(stream_data.synopsis_chunk.error());
     self->quit();
     return;
   }
   // The meta index data can always be regenerated on restart, so we don't need
   // strict error handling for it.
   self
-    ->request(fs, caf::infinite, atom::write_v, lazy_data.synopsis_path,
-              eager_data.synopsis_chunk)
+    ->request(fs, caf::infinite, atom::write_v, path_data.synopsis_path,
+              *stream_data.synopsis_chunk)
     .then([](atom::ok) { /* nop */ },
-          [path = lazy_data.synopsis_path](const caf::error& e) {
+          [path = path_data.synopsis_path](const caf::error& e) {
             VAST_WARN("could not write transformed synopsis to {}: {}", path,
                       e);
           });
-  auto promise = lazy_data.promise;
+  auto promise = path_data.promise;
   self
-    ->request(fs, caf::infinite, atom::write_v, lazy_data.partition_path,
-              eager_data.partition_chunk)
+    ->request(fs, caf::infinite, atom::write_v, path_data.partition_path,
+              *stream_data.partition_chunk)
     .then(
       [self, promise](atom::ok) mutable {
         promise.deliver(self->state.data.synopsis);
@@ -112,8 +122,6 @@ partition_transformer_actor::behavior_type partition_transformer(
   const caf::settings& index_opts,
   idspace_distributor_actor idspace_distributor, filesystem_actor fs,
   transform_ptr transform) {
-  using persist_lazily = partition_transformer_state::persist_lazily;
-  using persist_eagerly = partition_transformer_state::persist_eagerly;
   const auto* store_plugin = plugins::find<vast::store_plugin>(store_id);
   if (!store_plugin) {
     self->quit(caf::make_error(ec::invalid_argument,
@@ -186,22 +194,22 @@ partition_transformer_actor::behavior_type partition_transformer(
       self->state.stage->out().fan_out_flush();
       self->state.stage->out().close();
       self->state.stage->out().force_emit_batches();
-      auto eager_data = partition_transformer_state::persist_eagerly{};
+      auto stream_data = partition_transformer_state::stream_data{};
       [&] {
         { // Pack partition
           flatbuffers::FlatBufferBuilder builder;
           auto partition = pack(builder, self->state.data);
           if (!partition) {
-            eager_data.error = partition.error();
+            stream_data.partition_chunk = partition.error();
             return;
           }
-          eager_data.partition_chunk = fbs::release(builder);
+          stream_data.partition_chunk = fbs::release(builder);
         }
         { // Pack partition synopsis
           flatbuffers::FlatBufferBuilder builder;
           auto synopsis = pack(builder, *self->state.data.synopsis);
           if (!synopsis) {
-            eager_data.error = synopsis.error();
+            stream_data.synopsis_chunk = synopsis.error();
             return;
           }
           fbs::PartitionSynopsisBuilder ps_builder(builder);
@@ -210,15 +218,17 @@ partition_transformer_actor::behavior_type partition_transformer(
           ps_builder.add_partition_synopsis(synopsis->Union());
           auto ps_offset = ps_builder.Finish();
           fbs::FinishPartitionSynopsisBuffer(builder, ps_offset);
-          eager_data.synopsis_chunk = fbs::release(builder);
+          stream_data.synopsis_chunk = fbs::release(builder);
         }
       }();
       if (std::holds_alternative<std::monostate>(self->state.persist)) {
-        self->state.persist = std::move(eager_data);
+        self->state.persist = std::move(stream_data);
       } else {
-        auto* lazy_data = std::get_if<persist_lazily>(&self->state.persist);
-        VAST_ASSERT(lazy_data != nullptr, "unexpected variant content");
-        self->state.fulfill(self, std::move(eager_data), std::move(*lazy_data));
+        auto* path_data = std::get_if<partition_transformer_state::path_data>(
+          &self->state.persist);
+        VAST_ASSERT(path_data != nullptr, "unexpected variant content");
+        self->state.fulfill(self, std::move(stream_data),
+                            std::move(*path_data));
       }
     },
     [self](atom::persist, std::filesystem::path partition_path,
@@ -226,20 +236,23 @@ partition_transformer_actor::behavior_type partition_transformer(
       -> caf::result<std::shared_ptr<partition_synopsis>> {
       VAST_DEBUG("partition-transformer will persist itself to {}",
                  partition_path);
-      auto lazy_data = partition_transformer_state::persist_lazily{};
-      lazy_data.partition_path = std::move(partition_path);
-      lazy_data.synopsis_path = std::move(synopsis_path);
+      auto path_data = partition_transformer_state::path_data{};
+      path_data.partition_path = std::move(partition_path);
+      path_data.synopsis_path = std::move(synopsis_path);
       auto promise
         = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
-      lazy_data.promise = promise;
+      path_data.promise = promise;
       // Immediately fulfill the promise if we are already done
       // with the serialization.
       if (std::holds_alternative<std::monostate>(self->state.persist)) {
-        self->state.persist = std::move(lazy_data);
+        self->state.persist = std::move(path_data);
       } else {
-        auto* eager_data = std::get_if<persist_eagerly>(&self->state.persist);
-        VAST_ASSERT(eager_data != nullptr, "unexpected variant content");
-        self->state.fulfill(self, std::move(*eager_data), std::move(lazy_data));
+        auto* stream_data
+          = std::get_if<partition_transformer_state::stream_data>(
+            &self->state.persist);
+        VAST_ASSERT(stream_data != nullptr, "unexpected variant content");
+        self->state.fulfill(self, std::move(*stream_data),
+                            std::move(path_data));
       }
       return promise;
     }};
