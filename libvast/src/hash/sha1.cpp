@@ -81,15 +81,15 @@ sha1::sha1() noexcept {
   H_[4] = 0xc3d2e1f0;
 }
 
-void sha1::operator()(const void* xs, size_t n) noexcept {
+void sha1::add(std::span<const std::byte> bytes) noexcept {
   auto f = [this](const unsigned char* data, size_t len) {
     transform(data, len);
   };
-  auto ptr = reinterpret_cast<const unsigned char*>(xs);
-  absorb_bytes(ptr, n, 64, 64, m_.data(), pos_, total_, f);
+  auto ptr = reinterpret_cast<const unsigned char*>(bytes.data());
+  absorb_bytes(ptr, bytes.size(), 64, 64, m_.data(), pos_, total_, f);
 }
 
-sha1::operator sha1::result_type() noexcept {
+sha1::result_type sha1::finish() noexcept {
   finalize();
   return H_;
 }

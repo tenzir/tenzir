@@ -116,15 +116,15 @@ void crc(const void * key, int len, uint32_t seed, void * out) {
 
 } // namespace <anonymous>
 
-crc32::crc32(uint32_t seed) noexcept : digest_{seed} {
+crc32::crc32(seed_type seed) noexcept : digest_{seed} {
 }
 
-void crc32::operator()(const void* x, size_t n) noexcept {
-  VAST_ASSERT(n <= (1u << 31) - 1);
-  crc(x, static_cast<int>(n), digest_, &digest_);
+void crc32::add(std::span<const std::byte> bytes) noexcept {
+  VAST_ASSERT(bytes.size() <= (1u << 31) - 1);
+  crc(bytes.data(), static_cast<int>(bytes.size()), digest_, &digest_);
 }
 
-crc32::operator result_type() const noexcept {
+crc32::result_type crc32::finish() const noexcept {
   return digest_;
 }
 

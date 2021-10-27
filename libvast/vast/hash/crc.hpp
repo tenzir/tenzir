@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace vast {
 
@@ -21,12 +22,13 @@ public:
   static constexpr detail::endian endian = detail::endian::native;
 
   using result_type = uint32_t;
+  using seed_type = result_type;
 
-  crc32(uint32_t seed = 0) noexcept;
+  explicit crc32(seed_type seed = 0) noexcept;
 
-  void operator()(const void* x, size_t n) noexcept;
+  void add(std::span<const std::byte> bytes) noexcept;
 
-  explicit operator result_type() const noexcept;
+  result_type finish() const noexcept;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, crc32& crc) {

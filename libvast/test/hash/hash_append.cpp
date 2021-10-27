@@ -25,13 +25,17 @@ namespace {
 struct fake_hasher {
   static constexpr detail::endian endian = detail::endian::native;
 
-  using result_type = void;
+  using result_type = size_t;
 
-  result_type operator()(const void*, size_t n) {
-    num_bytes += n;
+  void add(std::span<const std::byte> bytes) noexcept {
+    num_bytes += bytes.size();
   }
 
-  std::uint64_t num_bytes{};
+  result_type finish() const noexcept {
+    return num_bytes;
+  }
+
+  size_t num_bytes = 0;
 };
 
 struct foo {
@@ -50,13 +54,13 @@ TEST(lvalue tuple) {
   fake_hasher h{};
   const auto t = std::tuple{42, 'A'};
   hash_append(h, t);
-  CHECK(h.num_bytes == sizeof(int) + sizeof(char));
+  CHECK(h.finish() == sizeof(int) + sizeof(char));
 }
 
 TEST(rvalue tuple) {
   fake_hasher h{};
   hash_append(h, std::tuple{42, 'A'});
-  CHECK(h.num_bytes == sizeof(int) + sizeof(char));
+  CHECK(h.finish() == sizeof(int) + sizeof(char));
 }
 
 TEST(hashing an inspectable type) {
@@ -66,7 +70,7 @@ TEST(hashing an inspectable type) {
   default_hash h;
   hash_append(h, a);
   hash_append(h, b);
-  auto manual_digest = static_cast<default_hash::result_type>(h);
+  auto manual_digest = h.finish();
   // ...and hashing them through the inspection API...
   auto inspect_digest = uhash<default_hash>{}(foo{});
   // ...must yield the same value.

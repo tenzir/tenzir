@@ -13,6 +13,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/hash/legacy_hash.hpp"
+#include "vast/hash/uniquely_hashable.hpp"
 #include "vast/hash/uniquely_represented.hpp"
 
 #include <array>
@@ -183,11 +184,15 @@ template <>
 struct is_uniquely_represented<address>
   : std::bool_constant<sizeof(address) == sizeof(address::byte_array)> {};
 
-// TODO: remove after we have introduced versioned flatbuffer state and all our
-// users have no more lingering persistent data. This hash_append overload
-// brings back the old hashing behavior that hashes a different number of bytes
-// based on the IP address version, at the cost of an extra branch. The new
-// version unconditionally hashes all 16 bytes.
+// TODO: this specialization disables oneshot hashing for addresses to force
+// hashing of addresses via hash_append when using the legacy hash function.
+// Remove this, along with the hash_append overload, after we have introduced
+// versioned flatbuffer state and all our users have no more lingering
+// persistent data.
+
+template <>
+struct is_uniquely_hashable<address, legacy_hash> : std::false_type {};
+
 inline auto hash_append(legacy_hash& h, const address& x) {
   if (x.is_v4())
     hash_append(h, as_bytes(x).subspan<12, 4>());

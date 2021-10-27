@@ -25,7 +25,7 @@ public:
   template <class T>
   result_type operator()(const T& x) noexcept {
     hash_append(h_, x);
-    return static_cast<result_type>(h_);
+    return h_.finish();
   }
 
 private:

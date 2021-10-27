@@ -141,7 +141,7 @@ std::string compute(const flow& x, uint16_t seed = 0) {
   sha1 hasher;
   hash_append(hasher, detail::to_network_order(seed));
   community_id_hash_append(hasher, x);
-  auto digest = static_cast<sha1::result_type>(hasher);
+  auto digest = hasher.finish();
   // Convert the binary digest to plain hex ASCII or to Base64.
   if constexpr (std::is_same_v<Policy, policy::base64>) {
     constexpr auto element_size = sizeof(sha1::result_type::value_type);
