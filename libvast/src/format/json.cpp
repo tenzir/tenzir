@@ -302,16 +302,17 @@ caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, record>(
   ::simdjson::dom::object o, const legacy_type& t) {
   const auto& r = dynamic_cast<const legacy_record_type&>(*t);
   record xs;
-  xs.reserve(o.size());
-  for (auto [k, v] : o) {
-    if (const auto* rf = r.find(k); !rf) {
-      return caf::make_error(ec::type_clash,
-                             fmt::format("unexpected field: {}", k));
+  xs.reserve(r.fields.size());
+  for (const auto& field : r.fields) {
+    auto v = o.at_key(field.name);
+    if (v.error() != ::simdjson::error_code::SUCCESS) {
+      // The field is not present, so we simply add nil to the record.
+      xs.emplace(field.name, caf::none);
     } else {
-      auto val = convert(v, rf->type);
+      auto val = convert(v.value(), field.type);
       if (!val)
         return val.error();
-      xs.emplace(rf->name, *val);
+      xs.emplace(field.name, *val);
     }
   }
   return xs;
