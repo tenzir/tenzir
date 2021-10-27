@@ -48,15 +48,7 @@ struct hash_algorithm_proxy {
 
   template <class T>
   typename HashAlgorithm::result_type operator()(const T& x) const noexcept {
-    if constexpr (std::is_same_v<T, address>) {
-      // TODO: remove after we have versioned our sketch data structures.
-      auto h = std::make_from_tuple<HashAlgorithm>(seeds);
-      if (x.is_v4())
-        hash_append(h, as_bytes(x).template last<4>());
-      else
-        hash_append(h, as_bytes(x));
-      return h.finish();
-    } else if constexpr (uniquely_hashable<T, HashAlgorithm>) {
+    if constexpr (uniquely_hashable<T, HashAlgorithm>) {
       auto bytes = sequentialize(x);
       if constexpr (oneshot_hash<HashAlgorithm>) {
         auto make = [](const auto&... xs) noexcept {
