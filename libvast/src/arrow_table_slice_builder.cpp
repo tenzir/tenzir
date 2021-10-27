@@ -433,9 +433,13 @@ public:
     if (auto status = struct_builder_->Append(); !status.ok())
       return false;
     const auto& r = **xptr;
-    for (size_t i = 0; i < r.size(); ++i)
+    VAST_ASSERT(r.size() == field_builders_.size(), "record size mismatch");
+    for (size_t i = 0; i < r.size(); ++i) {
+      VAST_ASSERT(struct_builder_->type()->field(i)->name() == r.at(i).first,
+                  "field name mismatch");
       if (!field_builders_[i]->add(r.at(i).second))
         return false;
+    }
     return true;
   }
 
