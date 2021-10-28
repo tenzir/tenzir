@@ -111,7 +111,8 @@ list_index::lookup_impl(relational_operator op, data_view x) const {
 size_t list_index::memusage_impl() const {
   size_t acc = 0;
   for (const auto& element : elements_)
-    acc += element->memusage();
+    if (element)
+      acc += element->memusage();
   acc += size_.memusage();
   return acc;
 }
