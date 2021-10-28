@@ -24,6 +24,7 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
+#include <sys/stat.h>
 
 #include <chrono>
 #include <cstdio>
@@ -63,20 +64,10 @@ caf::expected<std::string> read_query(const std::string& path) {
   return read_query(f);
 }
 
-caf::expected<std::string>
-make_all_query(enum must_provide_query must_provide_query) {
-  switch (must_provide_query) {
-    case must_provide_query::yes:
-      return caf::make_error(ec::invalid_argument, "no query provided, but "
-                                                   "command requires a query "
-                                                   "argument");
-    case must_provide_query::no:
-      VAST_VERBOSE("not providing a query causes everything to be exported; "
-                   "please be aware that this operation may be very "
-                   "expensive.");
-      return R"__(#type != "this expression matches everything")__";
-  }
-  die("unreachable");
+std::string make_all_query() {
+  VAST_VERBOSE("not providing a query causes everything to be exported; please "
+               "be aware that this operation may be very expensive.");
+  return R"__(#type != "this expression matches everything")__";
 }
 
 } // namespace
@@ -97,63 +88,30 @@ read_query(const invocation& inv, std::string_view file_option,
   //   reads the query from stdin, and if none is present, it exports everything
   const auto fname = caf::get_if<std::string>(&inv.options, file_option);
   const bool has_query_cli = inv.arguments.size() > argument_offset;
-  const bool has_query_stdin = ::isatty(::fileno(stdin)) == 0;
-  // We use a binary table below; the 0/1 values reflect fname, cli, and stdin
-  // in that order. We have a total of 12 options, given that we must
-  // special-case fname equals dash.
-  // -- read option unused ----------------------------------------------------
-  if (!fname) {
-    // 0 0 0|match all
-    if (!has_query_cli && !has_query_stdin)
-      return make_all_query(must_provide_query);
-    // 0 0 1|query from stdin
-    if (!has_query_cli && has_query_stdin)
+  if (fname) {
+    if (has_query_cli)
+      return caf::make_error(
+        ec::invalid_argument,
+        fmt::format("got query '{}' on the command line and '{}' from file "
+                    "'{}' specified via '--read' option",
+                    read_query(inv.arguments, argument_offset),
+                    read_query(*fname), *fname));
+    if (*fname == "-")
       return read_query(std::cin);
-    // 0 1 0|query from command line
-    if (has_query_cli && !has_query_stdin)
-      return read_query(inv.arguments, argument_offset);
-    // 0 1 1|error
-    VAST_ASSERT(has_query_cli && has_query_stdin);
-    return caf::make_error(
-      ec::invalid_argument,
-      fmt::format("got query '{}' on stdin and '{}' on the command line",
-                  read_query(std::cin),
-                  read_query(inv.arguments, argument_offset)));
-  }
-  // -- explicitly read from stdin --------------------------------------------
-  if (*fname == "-") {
-    // - 0 0|query from stdin
-    // - 0 1|query from stdin
-    if (!has_query_cli)
-      return read_query(std::cin);
-    // - 1 0|error
-    // - 1 1|error
-    return caf::make_error(
-      ec::invalid_argument,
-      fmt::format("got query '{}' on stdin and '{}' on the command line",
-                  read_query(std::cin),
-                  read_query(inv.arguments, argument_offset)));
-  }
-  // -- read from file --------------------------------------------------------
-  // 1 0 0|query from file
-  if (!has_query_cli && !has_query_stdin)
     return read_query(*fname);
-  // 1 0 1|error
-  if (!has_query_cli && has_query_stdin)
-    return caf::make_error(
-      ec::invalid_argument,
-      fmt::format("got query '{}' on stdin and '{}' from file '{}' specified "
-                  "via '--read' option",
-                  read_query(std::cin), read_query(*fname), *fname));
-  // 1 1 0|error
-  // 1 1 1|error
-  VAST_ASSERT(has_query_cli);
-  return caf::make_error(ec::invalid_argument,
-                         fmt::format("got query '{}' on the command line and "
-                                     "'{}' from file '{}' specified via "
-                                     "'--read' option",
-                                     read_query(inv.arguments, argument_offset),
-                                     read_query(*fname), *fname));
+  }
+  if (has_query_cli)
+    return read_query(inv.arguments, argument_offset);
+  struct stat stats = {};
+  fstat(0, &stats);
+  if (S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode))
+    return read_query(std::cin);
+  if (must_provide_query == must_provide_query::yes)
+    return caf::make_error(ec::invalid_argument, "no query provided, but "
+                                                 "command requires a query "
+                                                 "argument");
+  // No query provided, make a query that finds everything.
+  return make_all_query();
 }
 
 } // namespace vast::system
