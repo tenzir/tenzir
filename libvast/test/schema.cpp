@@ -309,9 +309,9 @@ TEST(parseable - out of order definitions) {
   auto expected = legacy_type{
     legacy_list_type{
       legacy_record_type{
-        {"x", legacy_integer_type{}.name("foo")}
+        {"x", legacy_integer_type{}.name("foo")},
       }.name("bar")
-    }.name("baz")
+    }.name("baz").attributes({{"skip", caf::none}})
   };
   // clang-format on
   CHECK_EQUAL(baz, expected);
