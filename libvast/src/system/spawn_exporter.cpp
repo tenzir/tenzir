@@ -51,6 +51,9 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   // Check if we need to preserve ids during export.
   if (get_or(args.inv.options, "vast.export.preserve-ids", false))
     query_opts = query_opts + preserve_ids;
+  // Mark the query as low priority if explicitly requested.
+  if (get_or(args.inv.options, "vast.export.low-priority", false))
+    query_opts = query_opts + low_priority;
   auto handle
     = self->spawn(exporter, *expr, query_opts, std::move(*transforms));
   VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(*expr));

@@ -263,6 +263,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                             ? query::extract::preserve_ids
                             : query::extract::drop_ids;
       auto q = vast::query::make_extract(self, perserve_ids, self->state.expr);
+      q.priority = has_low_priority_option(self->state.options)
+                     ? query::priority::low
+                     : query::priority::normal;
       self
         ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
                   std::move(q))
