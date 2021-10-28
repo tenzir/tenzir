@@ -110,12 +110,14 @@ struct query {
   // -- Helper functions to make query creation less boiler-platey.
 
   friend bool operator==(const query& lhs, const query& rhs) {
-    return lhs.cmd == rhs.cmd && lhs.expr == rhs.expr;
+    return lhs.cmd == rhs.cmd && lhs.expr == rhs.expr
+           && lhs.priority == rhs.priority;
   }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query& q) {
-    return f(caf::meta::type_name("vast.query"), q.cmd, q.expr, q.ids);
+    return f(caf::meta::type_name("vast.query"), q.cmd, q.expr, q.ids,
+             q.priority);
   }
 };
 
@@ -162,7 +164,10 @@ struct formatter<vast::query> {
       },
     };
     caf::visit(f, value.cmd);
-    return format_to(out, "{}, [{}])", value.expr, value.ids);
+    return format_to(out, "{} (priority::{}), [{}])", value.expr,
+                     value.priority == vast::query::priority::normal ? "normal"
+                                                                     : "low",
+                     value.ids);
   }
 };
 
