@@ -484,6 +484,10 @@ index_state::status(status_verbosity v) const {
       layout_object[name] = xs;
     }
     rs->content["meta-index-bytes"] = meta_index_bytes;
+    auto backlog_status = record{};
+    backlog_status["num-normal-priority"] = backlog.normal.size();
+    backlog_status["num-low-priority"] = backlog.low.size();
+    rs->content["backlog"] = std::move(backlog_status);
     auto& worker_status = insert_record(rs->content, "workers");
     worker_status["count"] = workers;
     worker_status["idle"] = idle_workers.size();
