@@ -28,6 +28,12 @@ The default mode of operation for the `export` command is historical queries,
 which exports data that was already archived and indexed by the node. The
 `--unified` flag can be used to export both historical and continuous data.
 
+The `--low-priority` option reduces the likelyhood that the query will be
+selected for execution from the backlog. This will only have an effect when
+there are more queries than query workers (configured with the `max-queries`
+option), otherwise all queries are executed immediately and the backlog remains
+empty.
+
 For more information on the query expression, see the [query language
 documentation](https://docs.tenzir.com/vast/query-language/overview).
 
