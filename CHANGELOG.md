@@ -21,7 +21,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :gift: Features
 
-- Added the ability to apply transformations to a specific partition in the database.
+- It is now possible to apply transforms over entire partitions. Previously, transforms were only limited to streams of table slice during import or export.
   [#1887](https://github.com/tenzir/vast/pull/1887)
 
 - The export command now has a `--low-priority` option to reduce the priority of the request while query backlogs are being worked down.
@@ -41,7 +41,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Debug builds of VAST no longer segfault on a status request with the `--debug` option.
   [#1915](https://github.com/tenzir/vast/pull/1915)
 
-- The `suricata.dns` schema has been updated  to match the currently used EVE-JSON structure output by recent Suricata versions.
+- The `suricata.dns` schema has been updated to match the currently used EVE-JSON structure output by recent Suricata versions.
   [#1919](https://github.com/tenzir/vast/pull/1919)
 
 - VAST no longer tries to create indexes for fields of type `list<record{...}>` as that wasn't supported in the first place.
