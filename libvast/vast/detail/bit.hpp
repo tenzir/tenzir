@@ -47,12 +47,12 @@ constexpr int countl_zero(T x) noexcept {
 }
 
 template <class T>
-constexpr bool ispow2(T x) noexcept {
+constexpr bool has_single_bit(T x) noexcept {
   return x && ((x & (x - 1)) == 0);
 }
 
 template <class T>
-constexpr T ceil2(T x) noexcept {
+constexpr T bit_ceil(T x) noexcept {
   constexpr auto d = std::numeric_limits<T>::digits;
   if (x == 0 || x == 1)
     return 1;
@@ -66,7 +66,7 @@ constexpr T ceil2(T x) noexcept {
 }
 
 template <class T>
-constexpr T floor2(T x) noexcept {
+constexpr T bit_floor(T x) noexcept {
   constexpr auto digits = std::numeric_limits<T>::digits;
   if (x == 0)
     return 0;
@@ -74,7 +74,7 @@ constexpr T floor2(T x) noexcept {
 }
 
 template <class T>
-constexpr T log2p1(T x) noexcept {
+constexpr T bit_width(T x) noexcept {
   return std::numeric_limits<T>::digits - countl_zero(x);
 }
 

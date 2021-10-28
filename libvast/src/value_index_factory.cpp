@@ -74,13 +74,13 @@ value_index_ptr make(legacy_type x, caf::settings opts) {
                     __func__);
           return std::make_unique<hash_index<8>>(std::move(x));
         }
-        if (!detail::ispow2(*cardinality))
+        if (!detail::has_single_bit(*cardinality))
           VAST_WARN("{} cardinality not a power of 2", __func__);
         // For 2^n unique values, we expect collisions after sqrt(2^n).
         // Thus, we use 2n bits as digest size.
-        size_t digest_bits = detail::ispow2(*cardinality)
-                               ? (detail::log2p1(*cardinality) - 1) * 2
-                               : detail::log2p1(*cardinality) * 2;
+        size_t digest_bits = detail::has_single_bit(*cardinality)
+                               ? (detail::bit_width(*cardinality) - 1) * 2
+                               : detail::bit_width(*cardinality) * 2;
         auto digest_bytes = digest_bits / 8;
         if (digest_bits % 8 > 0)
           ++digest_bytes;
