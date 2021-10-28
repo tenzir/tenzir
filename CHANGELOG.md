@@ -6,6 +6,47 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [2021.10.35-rc1]
+
+### :warning: Changes
+
+- The `max-queries` configuration option now works at a coarser granularity. It used to limit the number of queries that could simultaneously retrieve data, but it now sets the number of queries that can be processed at the same time.
+  [#1896](https://github.com/tenzir/vast/pull/1896)
+
+- VAST no longer vendors [xxHash](https://github.com/Cyan4973/xxHash), which is now a regular required dependency. Internally, VAST switched its default hash function to XXH3, providing a speedup of up to 3x.
+  [#1905](https://github.com/tenzir/vast/pull/1905)
+
+- Building VAST from source now requires CMake 3.18+.
+  [#1914](https://github.com/tenzir/vast/pull/1914)
+
+### :gift: Features
+
+- Added the ability to apply transformations to a specific partition in the database.
+  [#1887](https://github.com/tenzir/vast/pull/1887)
+
+- The export command now has a `--low-priority` option to reduce the priority of the request while query backlogs are being worked down.
+  [#1929](https://github.com/tenzir/vast/pull/1929)
+
+### :beetle: Bug Fixes
+
+- The timeout duration to delete partitions has been increased to one minute, reducing the frequency of warnings for hitting this timeout significantly.
+  [#1897](https://github.com/tenzir/vast/pull/1897)
+
+- When reading IPv6 addresses from PCAP data, only the first 4 bytes have been considered. VAST now stores all 16 bytes.
+  [#1905](https://github.com/tenzir/vast/pull/1905)
+
+- Store files now get deleted correctly if the database directory differs from the working directory.
+  [#1912](https://github.com/tenzir/vast/pull/1912)
+
+- Debug builds of VAST no longer segfault on a status request with the `--debug` option.
+  [#1915](https://github.com/tenzir/vast/pull/1915)
+
+- The `suricata.dns` schema has been updated  to match the currently used EVE-JSON structure output by recent Suricata versions.
+  [#1919](https://github.com/tenzir/vast/pull/1919)
+
+- VAST no longer tries to create indexes for fields of type `list<record{...}>` as that wasn't supported in the first place.
+  [#1933](https://github.com/tenzir/vast/pull/1933)
+
 ## [2021.09.30]
 
 ### :warning: Changes
@@ -1404,6 +1445,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[2021.10.35-rc1]: https://github.com/tenzir/vast/releases/tag/2021.10.35-rc1
 [2021.09.30]: https://github.com/tenzir/vast/releases/tag/2021.09.30
 [2021.08.26]: https://github.com/tenzir/vast/releases/tag/2021.08.26
 [2021.07.29]: https://github.com/tenzir/vast/releases/tag/2021.07.29
