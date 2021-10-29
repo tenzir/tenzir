@@ -48,11 +48,6 @@ caf::expected<bloom_filter> bloom_filter::make(bloom_filter_parameters xs) {
       return caf::make_error(ec::invalid_argument, "need >= 1 hash functions");
     if (*ys->m == 0)
       return caf::make_error(ec::invalid_argument, "size cannot be 0");
-    // Make m odd for worm hashing to be regenerative.
-    // TODO: move this into evaluate.
-    auto m = *ys->m;
-    m = m - ~(m & 1);
-    *ys->m = m;
     return bloom_filter{*ys};
   }
   return caf::make_error(ec::invalid_argument, "failed to evaluate parameters");
@@ -101,6 +96,8 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
 }
 
 bloom_filter::bloom_filter(bloom_filter_parameters params) : params_{params} {
+  // Make m odd for worm hashing to be regenerative.
+  *params_.m -= ~(*params_.m & 1);
   bits_.resize((*params.m + 63) / 64); // integer ceiling
   std::fill(bits_.begin(), bits_.end(), 0);
 }
