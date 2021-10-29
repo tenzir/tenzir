@@ -114,3 +114,6 @@ extern const char* build_tree_hash;
 #  define VAST_POSIX 0
 #endif
 
+#if !__SIZEOF_INT128__
+#error VAST requires support for __int128.
+#endif
