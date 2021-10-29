@@ -8,10 +8,37 @@
 
 #include "vast/sketch/bloom_filter.hpp"
 
+#include "vast/detail/assert.hpp"
 #include "vast/detail/worm.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/bloom_filter.hpp"
 
-namespace vast::sketch {
+namespace vast {
+namespace detail {
+namespace {
+
+void add(uint64_t digest, std::span<uint64_t> bits, size_t k,
+         size_t m) noexcept {
+  for (size_t i = 0; i < k; ++i) {
+    auto idx = worm64(m, digest);
+    bits[idx >> 6] |= (uint64_t{1} << (idx & 63));
+  }
+}
+
+bool lookup(uint64_t digest, std::span<const uint64_t> bits, size_t k,
+            size_t m) noexcept {
+  for (size_t i = 0; i < k; ++i) {
+    auto idx = worm64(m, digest);
+    if ((bits[idx >> 6] & (uint64_t{1} << (idx & 63))) == 0)
+      return false;
+  }
+  return true;
+}
+
+} // namespace
+} // namespace detail
+
+namespace sketch {
 
 caf::expected<bloom_filter> bloom_filter::make(bloom_filter_parameters xs) {
   if (auto ys = evaluate(xs)) {
@@ -20,6 +47,7 @@ caf::expected<bloom_filter> bloom_filter::make(bloom_filter_parameters xs) {
     if (*ys->m == 0)
       return caf::make_error(ec::invalid_argument, "size cannot be 0");
     // Make m odd for worm hashing to be regenerative.
+    // TODO: move this into evaluate.
     auto m = *ys->m;
     m = m - ~(m & 1);
     *ys->m = m;
@@ -29,19 +57,11 @@ caf::expected<bloom_filter> bloom_filter::make(bloom_filter_parameters xs) {
 }
 
 void bloom_filter::add(uint64_t digest) noexcept {
-  for (size_t i = 0; i < *params_.k; ++i) {
-    auto idx = detail::worm64(*params_.m, digest);
-    bits_[idx >> 6] |= (uint64_t{1} << (idx & 63));
-  }
+  detail::add(digest, bits_, *params_.k, *params_.m);
 }
 
 bool bloom_filter::lookup(uint64_t digest) const noexcept {
-  for (size_t i = 0; i < *params_.k; ++i) {
-    auto idx = detail::worm64(*params_.m, digest);
-    if ((bits_[idx >> 6] & (uint64_t{1} << (idx & 63))) == 0)
-      return false;
-  }
-  return true;
+  return detail::lookup(digest, bits_, *params_.k, *params_.m);
 }
 
 const bloom_filter_parameters& bloom_filter::parameters() const noexcept {
@@ -52,22 +72,52 @@ size_t mem_usage(const bloom_filter& x) {
   return sizeof(x.params_) + sizeof(x.bits_) + x.bits_.size() * 8;
 }
 
-// caf::expected<frozen_bloom_filter> freeze(const bloom_filter const& x) {
-//   // TODO: make sure the Bloom filter fits in the Flatbuffer.
-//   flatbuffers::FlatBufferBuilder builder;
-//   auto parameters_offset = fbs::bloom_filter::CreateParameters(
-//     builder, params.m, params.n, params.k, params.p);
-//   auto bits_offset = builder.CreateVector(bits_.data(), bits_.size());
-//   auto bloom_filter_offset
-//     = fbs::bloom_filter::Createv0(builder, parameters_offset, bits_offset);
-//   builder.Finish(bloom_filter_offset);
-//   auto result = builder.Release();
-//   flatbuffer_ = chunk::make(std::move(result));
-// }
+caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
+  // TODO: make sure the Bloom filter fits in the Flatbuffer.
+  flatbuffers::FlatBufferBuilder builder;
+  auto params = x.parameters();
+  auto flat_params
+    = fbs::bloom_filter::Parameters{*params.m, *params.n, *params.k, *params.p};
+  auto bits_offset = builder.CreateVector(x.bits_);
+  auto bloom_filter_offset
+    = fbs::bloom_filter::Createv0(builder, &flat_params, bits_offset);
+  builder.Finish(bloom_filter_offset);
+  auto result = builder.Release();
+  auto table = chunk::make(std::move(result));
+  return frozen_bloom_filter{std::move(table)};
+}
 
 bloom_filter::bloom_filter(bloom_filter_parameters params) : params_{params} {
   bits_.resize((*params.m + 63) / 64); // integer ceiling
   std::fill(bits_.begin(), bits_.end(), 0);
 }
 
-} // namespace vast::sketch
+frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
+  : table_{std::move(table)} {
+  VAST_ASSERT(table_ != nullptr);
+}
+
+bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
+  // TODO: measure potential overhead of pointer chasing.
+  auto table = fbs::bloom_filter::Getv0(table_->data());
+  auto bits = std::span{table->bits()->data(), table->bits()->size()};
+  return detail::lookup(digest, bits, table->parameters()->k(),
+                        table->parameters()->m());
+}
+
+bloom_filter_parameters frozen_bloom_filter::parameters() const noexcept {
+  bloom_filter_parameters result;
+  auto table = fbs::bloom_filter::Getv0(table_->data());
+  result.m = table->parameters()->m();
+  result.n = table->parameters()->n();
+  result.k = table->parameters()->k();
+  result.p = table->parameters()->p();
+  return result;
+}
+
+size_t mem_usage(const frozen_bloom_filter& x) noexcept {
+  return x.table_->size();
+}
+
+} // namespace sketch
+} // namespace vast

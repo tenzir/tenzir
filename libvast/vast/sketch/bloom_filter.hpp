@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/bloom_filter_parameters.hpp"
+#include "vast/chunk.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/meta/type_name.hpp>
@@ -59,6 +60,22 @@ private:
 
   bloom_filter_parameters params_;
   std::vector<uint64_t> bits_;
+};
+
+/// An immutable Bloom filter wrapped in a contiguous chunk of memory.
+class frozen_bloom_filter {
+public:
+  explicit frozen_bloom_filter(chunk_ptr table) noexcept;
+
+  bool lookup(uint64_t digest) const noexcept;
+
+  /// Retrieves the parameters of the filter.
+  bloom_filter_parameters parameters() const noexcept;
+
+  friend size_t mem_usage(const frozen_bloom_filter& x) noexcept;
+
+private:
+  chunk_ptr table_;
 };
 
 } // namespace vast::sketch
