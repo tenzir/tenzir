@@ -21,7 +21,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :gift: Features
 
-- It is now possible to apply transforms over entire partitions. Previously, transforms were only limited to streams of table slice during import or export.
+- A new 'apply' handler in the index gives plugin authors the ability to apply transforms over entire partitions. Previously, transforms were limited to streams of table slice during import or export.
   [#1887](https://github.com/tenzir/vast/pull/1887)
 
 - The export command now has a `--low-priority` option to reduce the priority of the request while query backlogs are being worked down.
