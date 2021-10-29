@@ -1,0 +1,29 @@
+namespace vast.fbs.bloom_filter;
+
+struct Parameters {
+  /// The number of bits in the underlying bitvector.
+  m: uint64;
+
+  /// The cardinality of the set to represent, aka. as the capacity of the
+  /// Bloom filter because it represents the number of unique items for which
+  /// the false positive rate can be guaranteed.
+  n: uint64;
+
+  /// The number of hash functions to use.
+  k: double;
+
+  /// The false positive probability.
+  p: double;
+}
+
+table v0 {
+  /// The Bloom filter parameters.
+  parameters: Parameters (required);
+
+  /// The underlying bits.
+  bits: [uint64] (required);
+}
+
+root_type v0;
+
+file_identifier "vBLF";
