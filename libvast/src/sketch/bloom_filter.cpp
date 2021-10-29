@@ -13,6 +13,8 @@
 #include "vast/error.hpp"
 #include "vast/fbs/bloom_filter.hpp"
 
+#include <fmt/format.h>
+
 namespace vast {
 namespace detail {
 namespace {
@@ -73,8 +75,18 @@ size_t mem_usage(const bloom_filter& x) {
 }
 
 caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
-  // TODO: make sure the Bloom filter fits in the Flatbuffer.
-  flatbuffers::FlatBufferBuilder builder;
+  constexpr auto fixed_size = 56;
+  const auto expected_size = fixed_size + x.bits_.size() * sizeof(uint64_t);
+  // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t' over
+  // 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
+  using ::flatbuffers::soffset_t;
+  if (expected_size >= FLATBUFFERS_MAX_BUFFER_SIZE)
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("frozen size {} exceeds max flatbuffer size of {} bytes",
+                  expected_size, FLATBUFFERS_MAX_BUFFER_SIZE));
+  // We know the exact size, so we reserve it to avoid re-allocations.
+  flatbuffers::FlatBufferBuilder builder{expected_size};
   auto params = x.parameters();
   auto flat_params
     = fbs::bloom_filter::Parameters{*params.m, *params.n, *params.k, *params.p};
@@ -83,6 +95,7 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
     = fbs::bloom_filter::Createv0(builder, &flat_params, bits_offset);
   builder.Finish(bloom_filter_offset);
   auto result = builder.Release();
+  VAST_ASSERT(result.size() == expected_size);
   auto table = chunk::make(std::move(result));
   return frozen_bloom_filter{std::move(table)};
 }
