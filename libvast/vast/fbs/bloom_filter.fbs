@@ -10,7 +10,7 @@ struct Parameters {
   n: uint64;
 
   /// The number of hash functions to use.
-  k: double;
+  k: uint64;
 
   /// The false positive probability.
   p: double;

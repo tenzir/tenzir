@@ -25,14 +25,21 @@ using namespace vast;
 using namespace si_literals;
 using namespace decimal_byte_literals;
 
-TEST(bloom filter api and memory usage) {
+TEST(bloom filter api) {
   bloom_filter_parameters xs;
-  xs.m = 1_kB;
+  xs.n = 1_k;
   xs.p = 0.1;
   auto filter = unbox(sketch::bloom_filter::make(xs));
   filter.add(hash("foo"));
   CHECK(filter.lookup(hash("foo")));
   CHECK(!filter.lookup(hash("bar")));
+}
+
+TEST(bloom filter memory usage) {
+  bloom_filter_parameters xs;
+  xs.m = 1_kB;
+  xs.p = 0.1;
+  auto filter = unbox(sketch::bloom_filter::make(xs));
   auto m = *filter.parameters().m;
   auto mem = sizeof(bloom_filter_parameters) + sizeof(std::vector<uint64_t>)
              + ((m + 63) / 64 * sizeof(uint64_t));
@@ -59,4 +66,16 @@ TEST(bloom filter fp test) {
   auto p_hat = static_cast<double>(num_fps) / num_queries;
   auto epsilon = 0.001;
   CHECK_LESS(std::abs(p_hat - p), epsilon);
+}
+
+TEST(frozen bloom filter) {
+  bloom_filter_parameters xs;
+  xs.m = 1_kB;
+  xs.p = 0.1;
+  auto filter = unbox(sketch::bloom_filter::make(xs));
+  filter.add(hash("foo"));
+  CHECK(filter.lookup(hash("foo")));
+  auto frozen = unbox(freeze(filter));
+  CHECK(frozen.lookup(hash("foo")));
+  CHECK_EQUAL(filter.parameters(), frozen.parameters());
 }
