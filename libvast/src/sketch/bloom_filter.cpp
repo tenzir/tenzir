@@ -19,20 +19,24 @@ namespace vast {
 namespace detail {
 namespace {
 
-void add(uint64_t digest, std::span<uint64_t> bits, size_t k,
-         size_t m) noexcept {
+void worm_add(uint64_t digest, std::span<uint64_t> bits, size_t k,
+              size_t m) noexcept {
+  VAST_ASSERT(m & 1, "worm hashing requires odd m");
   for (size_t i = 0; i < k; ++i) {
-    auto idx = worm64(m, digest);
-    bits[idx >> 6] |= (uint64_t{1} << (idx & 63));
+    auto [upper, lower] = wide_mul(m, digest);
+    bits[upper >> 6] |= (uint64_t{1} << (upper & 63));
+    digest = lower;
   }
 }
 
-bool lookup(uint64_t digest, std::span<const uint64_t> bits, size_t k,
-            size_t m) noexcept {
+bool worm_lookup(uint64_t digest, std::span<const uint64_t> bits, size_t k,
+                 size_t m) noexcept {
+  VAST_ASSERT(m & 1, "worm hashing requires odd m");
   for (size_t i = 0; i < k; ++i) {
-    auto idx = worm64(m, digest);
-    if ((bits[idx >> 6] & (uint64_t{1} << (idx & 63))) == 0)
+    auto [upper, lower] = wide_mul(m, digest);
+    if ((bits[upper >> 6] & (uint64_t{1} << (upper & 63))) == 0)
       return false;
+    digest = lower;
   }
   return true;
 }
@@ -54,11 +58,11 @@ caf::expected<bloom_filter> bloom_filter::make(bloom_filter_parameters xs) {
 }
 
 void bloom_filter::add(uint64_t digest) noexcept {
-  detail::add(digest, bits_, *params_.k, *params_.m);
+  detail::worm_add(digest, bits_, *params_.k, *params_.m);
 }
 
 bool bloom_filter::lookup(uint64_t digest) const noexcept {
-  return detail::lookup(digest, bits_, *params_.k, *params_.m);
+  return detail::worm_lookup(digest, bits_, *params_.k, *params_.m);
 }
 
 const bloom_filter_parameters& bloom_filter::parameters() const noexcept {
@@ -111,8 +115,8 @@ bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
   // TODO: measure potential overhead of pointer chasing.
   auto table = fbs::bloom_filter::Getv0(table_->data());
   auto bits = std::span{table->bits()->data(), table->bits()->size()};
-  return detail::lookup(digest, bits, table->parameters()->k(),
-                        table->parameters()->m());
+  return detail::worm_lookup(digest, bits, table->parameters()->k(),
+                             table->parameters()->m());
 }
 
 bloom_filter_parameters frozen_bloom_filter::parameters() const noexcept {

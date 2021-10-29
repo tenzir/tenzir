@@ -23,7 +23,7 @@
 namespace vast::detail {
 
 inline std::pair<uint64_t, uint64_t> wide_mul(uint64_t a, uint64_t h) {
-  __uint128_t wide = static_cast<__uint128_t>(a) * h;
+  auto wide = static_cast<__uint128_t>(a) * h;
   return {static_cast<uint64_t>(wide >> 64), static_cast<uint64_t>(wide)};
 }
 
