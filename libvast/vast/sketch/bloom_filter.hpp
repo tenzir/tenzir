@@ -5,11 +5,19 @@
 //
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
-
+//
+// This Bloom filter takes as input an existing hash digests and remixes it k
+// times using worm hashing. Promoted by Peter Dillinger, worm hashing stands
+// in contrast to standard Bloom filter implementations that hash a value k
+// times or use double hashing. Worm hashing is superior becase it never wastes
+// hash entropy.
+//
 #pragma once
 
-#include "vast/bloom_filter_parameters.hpp"
 #include "vast/chunk.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/worm.hpp"
+#include "vast/sketch/bloom_filter_config.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/meta/type_name.hpp>
@@ -18,17 +26,68 @@
 #include <vector>
 
 namespace vast::sketch {
+namespace detail {
 
-class frozen_bloom_filter;
+/// A Bloom filter view.
+template <class Word>
+struct bloom_filter_view {
+  static_assert(
+    std::is_same_v<Word, uint64_t> || std::is_same_v<Word, const uint64_t>);
 
-/// A Bloom filter that operates on 64-bit hash digests and uses *worm hashing*
-/// to perform k-fold rehashing.
+  void add(uint64_t digest) noexcept {
+    VAST_ASSERT(params.m & 1, "worm hashing requires odd m");
+    for (size_t i = 0; i < params.k; ++i) {
+      auto [upper, lower] = vast::detail::wide_mul(params.m, digest);
+      bits[upper >> 6] |= (uint64_t{1} << (upper & 63));
+      digest = lower;
+    }
+  }
+
+  bool lookup(uint64_t digest) const noexcept {
+    VAST_ASSERT(params.m & 1, "worm hashing requires odd m");
+    for (size_t i = 0; i < params.k; ++i) {
+      auto [upper, lower] = vast::detail::wide_mul(params.m, digest);
+      if ((bits[upper >> 6] & (uint64_t{1} << (upper & 63))) == 0)
+        return false;
+      digest = lower;
+    }
+    return true;
+  }
+
+  friend size_t mem_usage(const bloom_filter_view& x) noexcept {
+    return sizeof(x.params) + sizeof(x.bits);
+  }
+
+  bloom_filter_params params;
+  std::span<Word> bits;
+};
+
+} // namespace detail
+
+/// An immutable Bloom filter wrapped in a contiguous chunk of memory.
+class frozen_bloom_filter {
+public:
+  explicit frozen_bloom_filter(chunk_ptr table) noexcept;
+
+  bool lookup(uint64_t digest) const noexcept;
+
+  /// Retrieves the parameters of the filter.
+  bloom_filter_params parameters() const noexcept;
+
+  friend size_t mem_usage(const frozen_bloom_filter& x) noexcept;
+
+private:
+  detail::bloom_filter_view<const uint64_t> view_;
+  chunk_ptr table_;
+};
+
+/// A mutable Bloom filter.
 class bloom_filter {
 public:
   /// Constructs a Bloom filter from a set of evaluated parameters.
-  /// @param *xs* The desired Bloom filter parameters.
-  /// @returns The Bloom filter for *xs* iff the parameterization is valid.
-  static caf::expected<bloom_filter> make(bloom_filter_parameters xs);
+  /// @param *cfg* The desired Bloom filter configuration.
+  /// @returns The Bloom filter for *cfg* iff the parameterization is valid.
+  static caf::expected<bloom_filter> make(bloom_filter_config cfg);
 
   /// Adds a hash digest to the Bloom filter.
   /// @param digest The digest to add.
@@ -41,7 +100,7 @@ public:
   bool lookup(uint64_t digest) const noexcept;
 
   /// Retrieves the parameters of the filter.
-  const bloom_filter_parameters& parameters() const noexcept;
+  const bloom_filter_params& parameters() const noexcept;
 
   // -- concepts --------------------------------------------------------------
 
@@ -50,32 +109,16 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bloom_filter& x) {
-    return f(caf::meta::type_name("bloom_filter"), x.params_, x.bits_);
+    return f(caf::meta::type_name("bloom_filter"), x.view_, x.bits_);
   }
 
   friend caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x);
 
 private:
-  explicit bloom_filter(bloom_filter_parameters params);
+  explicit bloom_filter(bloom_filter_params params);
 
-  bloom_filter_parameters params_;
+  detail::bloom_filter_view<uint64_t> view_;
   std::vector<uint64_t> bits_;
-};
-
-/// An immutable Bloom filter wrapped in a contiguous chunk of memory.
-class frozen_bloom_filter {
-public:
-  explicit frozen_bloom_filter(chunk_ptr table) noexcept;
-
-  bool lookup(uint64_t digest) const noexcept;
-
-  /// Retrieves the parameters of the filter.
-  bloom_filter_parameters parameters() const noexcept;
-
-  friend size_t mem_usage(const frozen_bloom_filter& x) noexcept;
-
-private:
-  chunk_ptr table_;
 };
 
 } // namespace vast::sketch

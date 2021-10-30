@@ -16,6 +16,8 @@
 // - Copyright:  (c) Peter C. Dillinger, (c) Facebook, Inc. and its affiliates.
 // - License:    MIT
 
+#pragma once
+
 #include <cstddef>
 #include <cstdint>
 #include <utility>

@@ -8,69 +8,61 @@
 
 #include "vast/sketch/bloom_filter.hpp"
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/worm.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/bloom_filter.hpp"
 
 #include <fmt/format.h>
 
-namespace vast {
-namespace detail {
-namespace {
+namespace vast::sketch {
 
-void worm_add(uint64_t digest, std::span<uint64_t> bits, size_t k,
-              size_t m) noexcept {
-  VAST_ASSERT(m & 1, "worm hashing requires odd m");
-  for (size_t i = 0; i < k; ++i) {
-    auto [upper, lower] = wide_mul(m, digest);
-    bits[upper >> 6] |= (uint64_t{1} << (upper & 63));
-    digest = lower;
-  }
+frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
+  : table_{std::move(table)} {
+  VAST_ASSERT(table_ != nullptr);
+  auto root = fbs::bloom_filter::Getv0(table_->data());
+  view_.params.m = root->parameters()->m();
+  view_.params.n = root->parameters()->n();
+  view_.params.k = root->parameters()->k();
+  view_.params.p = root->parameters()->p();
+  view_.bits = std::span{root->bits()->data(), root->bits()->size()};
 }
 
-bool worm_lookup(uint64_t digest, std::span<const uint64_t> bits, size_t k,
-                 size_t m) noexcept {
-  VAST_ASSERT(m & 1, "worm hashing requires odd m");
-  for (size_t i = 0; i < k; ++i) {
-    auto [upper, lower] = wide_mul(m, digest);
-    if ((bits[upper >> 6] & (uint64_t{1} << (upper & 63))) == 0)
-      return false;
-    digest = lower;
-  }
-  return true;
+bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
+  return view_.lookup(digest);
 }
 
-} // namespace
-} // namespace detail
+bloom_filter_params frozen_bloom_filter::parameters() const noexcept {
+  return view_.params;
+}
 
-namespace sketch {
+size_t mem_usage(const frozen_bloom_filter& x) noexcept {
+  return mem_usage(x.view_), x.table_->size();
+}
 
-caf::expected<bloom_filter> bloom_filter::make(bloom_filter_parameters xs) {
-  if (auto ys = evaluate(xs)) {
-    if (*ys->k == 0)
+caf::expected<bloom_filter> bloom_filter::make(bloom_filter_config cfg) {
+  if (auto params = evaluate(cfg)) {
+    if (params->k == 0)
       return caf::make_error(ec::invalid_argument, "need >= 1 hash functions");
-    if (*ys->m == 0)
+    if (params->m == 0)
       return caf::make_error(ec::invalid_argument, "size cannot be 0");
-    return bloom_filter{*ys};
+    return bloom_filter{*params};
   }
   return caf::make_error(ec::invalid_argument, "failed to evaluate parameters");
 }
 
 void bloom_filter::add(uint64_t digest) noexcept {
-  detail::worm_add(digest, bits_, *params_.k, *params_.m);
+  view_.add(digest);
 }
 
 bool bloom_filter::lookup(uint64_t digest) const noexcept {
-  return detail::worm_lookup(digest, bits_, *params_.k, *params_.m);
+  return view_.lookup(digest);
 }
 
-const bloom_filter_parameters& bloom_filter::parameters() const noexcept {
-  return params_;
+const bloom_filter_params& bloom_filter::parameters() const noexcept {
+  return view_.params;
 }
 
 size_t mem_usage(const bloom_filter& x) {
-  return sizeof(x.params_) + sizeof(x.bits_) + x.bits_.size() * 8;
+  return mem_usage(x.view_) + sizeof(x.bits_) + x.bits_.size() * 8;
 }
 
 caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
@@ -86,9 +78,9 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
                   expected_size, FLATBUFFERS_MAX_BUFFER_SIZE));
   // We know the exact size, so we reserve it to avoid re-allocations.
   flatbuffers::FlatBufferBuilder builder{expected_size};
-  auto params = x.parameters();
+  auto params = x.view_.params;
   auto flat_params
-    = fbs::bloom_filter::Parameters{*params.m, *params.n, *params.k, *params.p};
+    = fbs::bloom_filter::Parameters{params.m, params.n, params.k, params.p};
   auto bits_offset = builder.CreateVector(x.bits_);
   auto bloom_filter_offset
     = fbs::bloom_filter::Createv0(builder, &flat_params, bits_offset);
@@ -99,39 +91,13 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
   return frozen_bloom_filter{std::move(table)};
 }
 
-bloom_filter::bloom_filter(bloom_filter_parameters params) : params_{params} {
+bloom_filter::bloom_filter(bloom_filter_params params) {
   // Make m odd for worm hashing to be regenerative.
-  *params_.m -= ~(*params_.m & 1);
-  bits_.resize((*params.m + 63) / 64); // integer ceiling
+  params.m -= ~(params.m & 1);
+  bits_.resize((params.m + 63) / 64); // integer ceiling
   std::fill(bits_.begin(), bits_.end(), 0);
+  view_.params = params;
+  view_.bits = std::span{bits_.data(), bits_.size()};
 }
 
-frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
-  : table_{std::move(table)} {
-  VAST_ASSERT(table_ != nullptr);
-}
-
-bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
-  // TODO: measure potential overhead of pointer chasing.
-  auto table = fbs::bloom_filter::Getv0(table_->data());
-  auto bits = std::span{table->bits()->data(), table->bits()->size()};
-  return detail::worm_lookup(digest, bits, table->parameters()->k(),
-                             table->parameters()->m());
-}
-
-bloom_filter_parameters frozen_bloom_filter::parameters() const noexcept {
-  bloom_filter_parameters result;
-  auto table = fbs::bloom_filter::Getv0(table_->data());
-  result.m = table->parameters()->m();
-  result.n = table->parameters()->n();
-  result.k = table->parameters()->k();
-  result.p = table->parameters()->p();
-  return result;
-}
-
-size_t mem_usage(const frozen_bloom_filter& x) noexcept {
-  return x.table_->size();
-}
-
-} // namespace sketch
-} // namespace vast
+} // namespace vast::sketch

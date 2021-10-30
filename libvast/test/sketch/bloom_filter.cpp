@@ -22,57 +22,55 @@
 #include <vector>
 
 using namespace vast;
+using namespace vast::sketch;
 using namespace si_literals;
 using namespace decimal_byte_literals;
 
 TEST(bloom filter api) {
-  bloom_filter_parameters xs;
-  xs.n = 1_k;
-  xs.p = 0.1;
-  auto filter = unbox(sketch::bloom_filter::make(xs));
+  bloom_filter_config cfg;
+  cfg.n = 1_k;
+  cfg.p = 0.1;
+  auto filter = unbox(bloom_filter::make(cfg));
   filter.add(hash("foo"));
   CHECK(filter.lookup(hash("foo")));
   CHECK(!filter.lookup(hash("bar")));
 }
 
-TEST(bloom filter memory usage) {
-  bloom_filter_parameters xs;
-  xs.m = 1_kB;
-  xs.p = 0.1;
-  auto filter = unbox(sketch::bloom_filter::make(xs));
-  auto m = *filter.parameters().m;
-  auto mem = sizeof(bloom_filter_parameters) + sizeof(std::vector<uint64_t>)
-             + ((m + 63) / 64 * sizeof(uint64_t));
-  CHECK_EQUAL(mem_usage(filter), mem);
+TEST(bloom filter odd m) {
+  bloom_filter_config cfg;
+  cfg.m = 1'024;
+  cfg.p = 0.1;
+  auto filter = unbox(bloom_filter::make(cfg));
+  CHECK(filter.parameters().m & 1);
 }
 
 TEST(bloom filter fp test) {
-  bloom_filter_parameters xs;
-  xs.n = 10_k;
-  xs.p = 0.1;
-  auto filter = unbox(sketch::bloom_filter::make(xs));
+  bloom_filter_config cfg;
+  cfg.n = 10_k;
+  cfg.p = 0.1;
+  auto filter = unbox(bloom_filter::make(cfg));
   auto params = filter.parameters();
   std::mt19937_64 r{0};
   auto num_fps = 0u;
   auto num_queries = 1_M;
   // Load filter to full capacity.
-  for (size_t i = 0; i < *params.n; ++i)
+  for (size_t i = 0; i < params.n; ++i)
     filter.add(hash(r()));
-  // Sample.
+  // Sample true negatives.
   for (size_t i = 0; i < num_queries; ++i)
     if (filter.lookup(hash(r())))
       ++num_fps;
-  auto p = *params.p;
+  auto p = params.p;
   auto p_hat = static_cast<double>(num_fps) / num_queries;
   auto epsilon = 0.001;
   CHECK_LESS(std::abs(p_hat - p), epsilon);
 }
 
 TEST(frozen bloom filter) {
-  bloom_filter_parameters xs;
-  xs.m = 1_kB;
-  xs.p = 0.1;
-  auto filter = unbox(sketch::bloom_filter::make(xs));
+  bloom_filter_config cfg;
+  cfg.m = 1_kB;
+  cfg.p = 0.1;
+  auto filter = unbox(bloom_filter::make(cfg));
   filter.add(hash("foo"));
   CHECK(filter.lookup(hash("foo")));
   auto frozen = unbox(freeze(filter));
