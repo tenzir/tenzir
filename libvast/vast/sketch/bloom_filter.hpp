@@ -20,7 +20,6 @@
 #include "vast/sketch/bloom_filter_config.hpp"
 
 #include <caf/expected.hpp>
-#include <caf/meta/type_name.hpp>
 
 #include <cstddef>
 #include <vector>
@@ -106,11 +105,6 @@ public:
 
   /// @returns An estimate for amount of memory (in bytes) used by this filter.
   friend size_t mem_usage(const bloom_filter& x);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, bloom_filter& x) {
-    return f(caf::meta::type_name("bloom_filter"), x.view_, x.bits_);
-  }
 
   friend caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x);
 
