@@ -27,7 +27,7 @@
 namespace vast::sketch {
 namespace detail {
 
-/// A Bloom filter view.
+/// A Bloom filter view, used by mutable and frozen Bloom filter.
 template <class Word>
 struct bloom_filter_view {
   static_assert(
@@ -66,12 +66,20 @@ struct bloom_filter_view {
 /// An immutable Bloom filter wrapped in a contiguous chunk of memory.
 class frozen_bloom_filter {
 public:
+  /// Constructs a frozen Bloom filter from a flatbuffer.
+  /// @pre *table* must be a valid Bloom filter flatbuffer.
   explicit frozen_bloom_filter(chunk_ptr table) noexcept;
 
+  /// Test whether a hash digest is in the Bloom filter.
+  /// @param digest The digest to test.
+  /// @returns `false` if the *digest* is not in the set and `true` if *digest*
+  /// may exist according to the false-positive probability of the filter.
   bool lookup(uint64_t digest) const noexcept;
 
   /// Retrieves the parameters of the filter.
   bloom_filter_params parameters() const noexcept;
+
+  // -- concepts --------------------------------------------------------------
 
   friend size_t mem_usage(const frozen_bloom_filter& x) noexcept;
 
@@ -103,7 +111,6 @@ public:
 
   // -- concepts --------------------------------------------------------------
 
-  /// @returns An estimate for amount of memory (in bytes) used by this filter.
   friend size_t mem_usage(const bloom_filter& x);
 
   friend caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x);
