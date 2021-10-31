@@ -36,9 +36,9 @@ inline uint64_t fastrange64(uint64_t a, uint64_t h) {
 
 /// Dillinger's wide odd regenerative multiplication.
 inline uint64_t worm64(uint64_t a, uint64_t& h) {
-  auto result = wide_mul(a, h);
-  h = result.second;
-  return result.first;
+  auto [upper, lower] = wide_mul(a, h);
+  h = lower;
+  return upper;
 }
 
 } // namespace vast::detail
