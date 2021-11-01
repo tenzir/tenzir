@@ -151,7 +151,7 @@ make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
   using result_type = bloom_filter<HashFunction, Hasher, Partitioning>;
   using hasher_type = typename result_type::hasher_type;
   if (auto ys = evaluate(xs)) {
-    VAST_DEBUG("evaluated bloom filter parameters: {} {} {} {}",
+    VAST_TRACE("evaluated bloom filter parameters: {} {} {} {}",
                VAST_ARG(ys->k), VAST_ARG(ys->m), VAST_ARG(ys->n),
                VAST_ARG(ys->p));
     if (*ys->m == 0 || *ys->k == 0)
