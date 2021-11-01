@@ -88,6 +88,11 @@ read_query(const invocation& inv, std::string_view file_option,
   //   reads the query from stdin, and if none is present, it exports everything
   const auto fname = caf::get_if<std::string>(&inv.options, file_option);
   const bool has_query_cli = inv.arguments.size() > argument_offset;
+  const bool has_query_stdin = [] {
+    struct stat stats = {};
+    ::fstat(::fileno(stdin), &stats);
+    return S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode);
+  }();
   if (fname) {
     if (has_query_cli)
       return caf::make_error(
@@ -98,13 +103,24 @@ read_query(const invocation& inv, std::string_view file_option,
                     read_query(*fname), *fname));
     if (*fname == "-")
       return read_query(std::cin);
+    if (has_query_stdin)
+      return caf::make_error(
+        ec::invalid_argument,
+        fmt::format("got query '{}' on the command line and '{}' via stdin",
+                    read_query(inv.arguments, argument_offset),
+                    read_query(std::cin)));
     return read_query(*fname);
   }
-  if (has_query_cli)
+  if (has_query_cli) {
+    if (has_query_stdin)
+      return caf::make_error(
+        ec::invalid_argument,
+        fmt::format("got query '{}' on the command line and '{}' via stdin",
+                    read_query(inv.arguments, argument_offset),
+                    read_query(std::cin)));
     return read_query(inv.arguments, argument_offset);
-  struct stat stats = {};
-  fstat(0, &stats);
-  if (S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode))
+  }
+  if (has_query_stdin)
     return read_query(std::cin);
   if (must_provide_query == must_provide_query::yes)
     return caf::make_error(ec::invalid_argument, "no query provided, but "
