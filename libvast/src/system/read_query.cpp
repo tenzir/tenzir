@@ -77,15 +77,18 @@ read_query(const invocation& inv, std::string_view file_option,
            enum must_provide_query must_provide_query, size_t argument_offset) {
   VAST_TRACE_SCOPE("{} {}", inv, file_option);
   // The below logic matches the following behavior:
-  // vast export -r ... <format> <query>
-  //   errors.
   // vast export <format> <query>
-  //   takes the query from the command line, and errors if a query is also
-  //   present on stdin.
+  //   takes the query from the command line
   // vast export -r - <format>
   //   reads the query from stdin.
+  // echo "query" | vast export <format>
+  //   reads the query from stdin
+  // vast <query.txt export <format>
+  //   reads the query from `query.txt`
   // vast export <format>
-  //   reads the query from stdin, and if none is present, it exports everything
+  //   export everything
+  // Specifying any two conflicting ways of reading the query
+  // results in an error.
   const auto fname = caf::get_if<std::string>(&inv.options, file_option);
   const bool has_query_cli = inv.arguments.size() > argument_offset;
   const bool has_query_stdin = [] {
@@ -97,18 +100,17 @@ read_query(const invocation& inv, std::string_view file_option,
     if (has_query_cli)
       return caf::make_error(
         ec::invalid_argument,
-        fmt::format("got query '{}' on the command line and '{}' from file "
-                    "'{}' specified via '--read' option",
-                    read_query(inv.arguments, argument_offset),
-                    read_query(*fname), *fname));
+        fmt::format("got query '{}' on the command line and query file"
+                    " '{}' specified via '--read' option",
+                    read_query(inv.arguments, argument_offset), *fname));
     if (*fname == "-")
       return read_query(std::cin);
     if (has_query_stdin)
-      return caf::make_error(
-        ec::invalid_argument,
-        fmt::format("got query '{}' on the command line and '{}' via stdin",
-                    read_query(inv.arguments, argument_offset),
-                    read_query(std::cin)));
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("stdin is connected to a pipe or "
+                                         "regular file and query file '{}'",
+                                         " specified via '--read' option",
+                                         *fname));
     return read_query(*fname);
   }
   if (has_query_cli) {
