@@ -239,6 +239,7 @@ caf::error index_state::load_from_disk() {
                   *self, partition_uuid);
         continue;
       }
+      VAST_DEBUG("{} unpacks partition {}", *self, partition_uuid);
       // Generate external partition synopsis file if it doesn't exist.
       if (!exists(synopsis_path)) {
         if (auto error = extract_partition_synopsis(part_path, synopsis_path))
