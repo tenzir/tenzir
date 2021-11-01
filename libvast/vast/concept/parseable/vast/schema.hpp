@@ -71,12 +71,8 @@ struct symbol_resolver {
       return y.error();
     x.value_type = *y;
     if (caf::holds_alternative<legacy_record_type>(x.value_type)
-        && !has_skip_attribute(x)) {
-      VAST_WARN("records in lists are currently not supported in the index, "
-                "adding the #skip attribute: {}",
-                x);
+        && !has_skip_attribute(x))
       x.update_attributes({{"skip", caf::none}});
-    }
     return std::move(x);
   }
 
