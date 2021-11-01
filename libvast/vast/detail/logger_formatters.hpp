@@ -147,8 +147,8 @@ struct formatter<caf::optional<T>> {
   template <class FormatContext>
   auto format(const caf::optional<T>& value, FormatContext& ctx) {
     if (!value)
-      return format_to(ctx.out(), "*nullopt");
-    return format_to(ctx.out(), "*{}", *value);
+      return format_to(ctx.out(), "none");
+    return format_to(ctx.out(), "{}", *value);
   }
 };
 
@@ -162,8 +162,8 @@ struct formatter<std::optional<T>> {
   template <class FormatContext>
   auto format(const std::optional<T>& value, FormatContext& ctx) {
     if (!value)
-      return format_to(ctx.out(), "*nullopt");
-    return format_to(ctx.out(), "*{}", *value);
+      return format_to(ctx.out(), "nullopt");
+    return format_to(ctx.out(), "{}", *value);
   }
 };
 
@@ -177,8 +177,8 @@ struct formatter<caf::expected<T>> {
   template <class FormatContext>
   auto format(const caf::expected<T>& value, FormatContext& ctx) {
     if (!value)
-      return format_to(ctx.out(), "*{}", value.error());
-    return format_to(ctx.out(), "*{}", *value);
+      return format_to(ctx.out(), "{}", value.error());
+    return format_to(ctx.out(), "{}", *value);
   }
 };
 
