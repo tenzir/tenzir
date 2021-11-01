@@ -93,7 +93,8 @@ read_query(const invocation& inv, std::string_view file_option,
   const bool has_query_cli = inv.arguments.size() > argument_offset;
   const bool has_query_stdin = [] {
     struct stat stats = {};
-    ::fstat(::fileno(stdin), &stats);
+    if (::fstat(::fileno(stdin), &stats) != 0)
+      return false;
     return S_ISFIFO(stats.st_mode) || S_ISREG(stats.st_mode);
   }();
   if (fname) {
