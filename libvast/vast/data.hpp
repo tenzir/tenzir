@@ -333,14 +333,6 @@ bool convert(const caf::dictionary<caf::config_value>& xs, record& ys);
 bool convert(const caf::dictionary<caf::config_value>& xs, data& y);
 bool convert(const caf::config_value& x, data& y);
 
-// -- manual creation ----------------------------------------------------------
-
-record& insert_record(record& r, std::string_view key);
-
-record& insert_record(list& l);
-
-list& insert_list(record& r, std::string_view key);
-
 // -- strip ------------------------------------------------------------
 
 /// Remove empty sub-records from the tree.

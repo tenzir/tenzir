@@ -111,18 +111,20 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       if (v >= status_verbosity::info)
         result["type"] = "POSIX";
       if (v >= status_verbosity::debug) {
-        auto& ops = insert_record(result, "operations");
+        auto ops = record{};
         auto add_stats = [&](auto& name, auto& stats) {
-          auto& dict = insert_record(ops, name);
+          auto dict = record{};
           dict["successful"] = count{stats.successful};
           dict["failed"] = count{stats.failed};
           dict["bytes"] = count{stats.bytes};
+          ops[name] = std::move(dict);
         };
         add_stats("checks", self->state.stats.checks);
         add_stats("writes", self->state.stats.writes);
         add_stats("reads", self->state.stats.reads);
         add_stats("mmaps", self->state.stats.mmaps);
         add_stats("erases", self->state.stats.erases);
+        result["operations"] = std::move(ops);
       }
       return result;
     },

@@ -477,41 +477,46 @@ index_state::status(status_verbosity v) const {
   };
   auto rs = make_status_request_state<extra_state>(self);
   if (v >= status_verbosity::detailed) {
-    auto& stats_object = insert_record(rs->content, "statistics");
-    auto& layout_object = insert_record(stats_object, "layouts");
+    auto stats_object = record{};
+    auto layout_object = record{};
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = record{};
       xs["count"] = count{layout_stats.count};
       layout_object[name] = xs;
     }
+    stats_object["layouts"] = std::move(layout_object);
+    rs->content["statistics"] = std::move(stats_object);
     rs->content["meta-index-bytes"] = meta_index_bytes;
     auto backlog_status = record{};
     backlog_status["num-normal-priority"] = backlog.normal.size();
     backlog_status["num-low-priority"] = backlog.low.size();
     rs->content["backlog"] = std::move(backlog_status);
-    auto& worker_status = insert_record(rs->content, "workers");
+    auto worker_status = record{};
     worker_status["count"] = workers;
     worker_status["idle"] = idle_workers.size();
     worker_status["busy"] = workers - idle_workers.size();
-    auto& pending_status = insert_list(rs->content, "pending");
+    rs->content["workers"] = std::move(worker_status);
+    auto pending_status = list{};
     for (auto& [u, qs] : pending) {
-      auto& q = insert_record(pending_status);
+      auto q = record{};
       q["id"] = fmt::to_string(u);
       q["query"] = fmt::to_string(qs);
+      pending_status.emplace_back(std::move(q));
     }
+    rs->content["pending"] = std::move(pending_status);
     rs->content["num-active-partitions"]
       = count{active_partition.actor == nullptr ? 0u : 1u};
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
     collect_status(rs, timeout, v, meta_index, rs->content, "meta-index");
-    auto& partitions = insert_record(rs->content, "partitions");
+    auto partitions = record{};
     auto partition_status
       = [&](const uuid& id, const partition_actor& pa, list& xs) {
           collect_status(
             rs, timeout, v, pa,
             [=, &xs](const record& part_status) {
-              auto& ps = caf::get<record>(xs.emplace_back(record{}));
+              auto ps = record{};
               ps["id"] = to_string(id);
               auto it = part_status.find("memory-usage");
               if (it != part_status.end()) {
@@ -520,29 +525,38 @@ index_state::status(status_verbosity v) const {
               }
               if (v >= status_verbosity::debug)
                 merge(part_status, ps, policy::merge_lists::no);
+              xs.push_back(std::move(ps));
             },
             [=, this, &xs](const caf::error& err) {
               VAST_WARN("{} failed to retrieve status from {} : {}", *self, id,
                         render(err));
-              auto& ps = caf::get<record>(xs.emplace_back(record{}));
+              auto ps = record{};
               ps["id"] = to_string(id);
               ps["error"] = render(err);
+              xs.push_back(std::move(ps));
             });
         };
     // Resident partitions.
+    // We emplace subrecords directly because we need to give the
+    // right pointer to the collect_status callback.
+    // Otherwise we would assign to a moved from object.
     partitions.reserve(3u);
-    auto& active = insert_list(partitions, "active");
+    auto& active
+      = caf::get<list>(partitions.emplace("active", list{}).first->second);
     active.reserve(1);
     if (active_partition.actor != nullptr)
       partition_status(active_partition.id, active_partition.actor, active);
-    auto& cached = insert_list(partitions, "cached");
+    auto& cached
+      = caf::get<list>(partitions.emplace("cached", list{}).first->second);
     cached.reserve(inmem_partitions.size());
     for (const auto& [id, actor] : inmem_partitions)
       partition_status(id, actor, cached);
-    auto& unpersisted = insert_list(partitions, "unpersisted");
+    auto& unpersisted
+      = caf::get<list>(partitions.emplace("unpersisted", list{}).first->second);
     unpersisted.reserve(this->unpersisted.size());
     for (const auto& [id, actor] : this->unpersisted)
       partition_status(id, actor, unpersisted);
+    rs->content["partitions"] = std::move(partitions);
     // General state such as open streams.
   }
   if (v >= status_verbosity::debug)

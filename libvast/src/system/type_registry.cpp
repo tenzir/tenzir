@@ -46,22 +46,25 @@ record type_registry_state::status(status_verbosity v) const {
           l.emplace_back(x);
         return l;
       };
-      auto& concepts_status = insert_list(result, "concepts");
+      auto concepts_status = list{};
       for (const auto& [name, definition] : taxonomies.concepts) {
-        auto& concept_status
-          = caf::get<record>(concepts_status.emplace_back(record{}));
+        auto concept_status = record{};
         concept_status["name"] = name;
         concept_status["description"] = definition.description;
         concept_status["fields"] = to_list(definition.fields);
         concept_status["concepts"] = to_list(definition.concepts);
+        concepts_status.push_back(std::move(concept_status));
       }
-      auto& models_status = insert_list(result, "models");
+      result["concepts"] = std::move(concepts_status);
+      auto models_status = list{};
       for (const auto& [name, definition] : taxonomies.models) {
-        auto& model_status = insert_record(models_status);
+        auto model_status = record{};
         model_status["name"] = name;
         model_status["description"] = definition.description;
         model_status["definition"] = to_list(definition.definition);
+        models_status.emplace_back(std::move(model_status));
       }
+      result["models"] = std::move(models_status);
       // Sorted list of all keys.
       auto keys = std::vector<std::string>(data.size());
       std::transform(data.begin(), data.end(), keys.begin(),

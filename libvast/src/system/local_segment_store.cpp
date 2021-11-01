@@ -290,9 +290,10 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
     // Conform to the protocol of the STATUS CLIENT actor.
     [self](atom::status, status_verbosity) -> record {
       auto result = record{};
-      auto& store = insert_record(result, "segment-store");
+      auto store = record{};
       store["events"] = count{self->state.events};
       store["path"] = self->state.path.string();
+      result["segment-store"] = std::move(store);
       return result;
     },
     // internal handlers

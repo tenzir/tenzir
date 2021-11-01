@@ -197,15 +197,18 @@ importer_state::status(status_verbosity v) const {
   record result;
   result["ids.available"] = count{available_ids()};
   if (v >= status_verbosity::detailed) {
-    auto& ids = insert_record(rs->content, "ids");
+    auto ids = record{};
     ids["available"] = count{available_ids()};
-    auto& block = insert_record(ids, "block");
+    auto block = record{};
     block["next"] = count{current.next};
     block["end"] = count{current.end};
-    auto& sources_status = insert_list(rs->content, "sources");
+    ids["block"] = std::move(block);
+    rs->content["ids"] = std::move(ids);
+    auto sources_status = list{};
     sources_status.reserve(inbound_descriptions.size());
     for (const auto& kv : inbound_descriptions)
       sources_status.emplace_back(kv.second);
+    rs->content["sources"] = std::move(sources_status);
   }
   // General state such as open streams.
   if (v >= status_verbosity::debug)
