@@ -91,7 +91,7 @@ read_query(const invocation& inv, std::string_view file_option,
   // results in an error.
   const auto fname = caf::get_if<std::string>(&inv.options, file_option);
   const bool has_query_cli = inv.arguments.size() > argument_offset;
-  const bool has_query_stdin = [] {
+  bool has_query_stdin = [] {
     struct stat stats = {};
     if (::fstat(::fileno(stdin), &stats) != 0)
       return false;
@@ -114,13 +114,21 @@ read_query(const invocation& inv, std::string_view file_option,
                                          *fname));
     return read_query(*fname);
   }
-  if (has_query_cli) {
-    if (has_query_stdin)
+  if (has_query_stdin && has_query_cli) {
+    auto query = read_query(std::cin);
+    // As a special case we ignore stdin unless we get an actual query
+    // from it, since empirically this is often connected to the remnants
+    // of some long-forgotten file descriptor by some distant parent
+    // process when running in any kind of automated environment, e.g. CI.
+    if (!query || query->empty())
+      has_query_stdin = false;
+    else
       return caf::make_error(
         ec::invalid_argument,
         fmt::format("got query '{}' on the command line and '{}' via stdin",
-                    read_query(inv.arguments, argument_offset),
-                    read_query(std::cin)));
+                    read_query(inv.arguments, argument_offset), *query));
+  }
+  if (has_query_cli) {
     return read_query(inv.arguments, argument_offset);
   }
   if (has_query_stdin)
