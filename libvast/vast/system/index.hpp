@@ -44,6 +44,13 @@ caf::error
 extract_partition_synopsis(const std::filesystem::path& partition_path,
                            const std::filesystem::path& partition_synopsis_path);
 
+/// Flatbuffer integration. Note that this is only one-way, restoring
+/// the index state needs additional runtime information.
+// TODO: Pull out the persisted part of the state into a separate struct
+// that can be packed and unpacked.
+caf::expected<flatbuffers::Offset<fbs::Index>>
+pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
+
 /// The state of the active partition.
 struct active_partition_info {
   /// The partition actor.
@@ -316,13 +323,6 @@ struct index_state {
 
   constexpr static inline auto name = "index";
 };
-
-/// Flatbuffer integration. Note that this is only one-way, restoring
-/// the index state needs additional runtime information.
-// TODO: Pull out the persisted part of the state into a separate struct
-// that can be packed and unpacked.
-caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// Indexes events in horizontal partitions.
 /// @param filesystem The filesystem actor. Not used by the index itself but

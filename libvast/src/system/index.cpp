@@ -155,6 +155,51 @@ caf::error extract_partition_synopsis(
                   std::span{chunk_out->data(), chunk_out->size()});
 }
 
+caf::expected<flatbuffers::Offset<fbs::Index>>
+pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
+  VAST_DEBUG("index persists {} uuids of definitely persisted and {}"
+             "uuids of maybe persisted partitions",
+             state.persisted_partitions.size(), state.unpersisted.size());
+  std::vector<flatbuffers::Offset<fbs::uuid::v0>> partition_offsets;
+  for (auto uuid : state.persisted_partitions) {
+    if (auto uuid_fb = pack(builder, uuid))
+      partition_offsets.push_back(*uuid_fb);
+    else
+      return uuid_fb.error();
+  }
+  // We don't know if these will make it to disk before the index and the rest
+  // of the system is shut down (in case of a hard/dirty shutdown), so we just
+  // store everything and throw out the missing partitions when loading the
+  // index.
+  for (const auto& kv : state.unpersisted) {
+    if (auto uuid_fb = pack(builder, kv.first))
+      partition_offsets.push_back(*uuid_fb);
+    else
+      return uuid_fb.error();
+  }
+  auto partitions = builder.CreateVector(partition_offsets);
+  std::vector<flatbuffers::Offset<fbs::layout_statistics::v0>> stats_offsets;
+  for (const auto& [name, layout_stats] : state.stats.layouts) {
+    auto name_fb = builder.CreateString(name);
+    fbs::layout_statistics::v0Builder stats_builder(builder);
+    stats_builder.add_name(name_fb);
+    stats_builder.add_count(layout_stats.count);
+    auto offset = stats_builder.Finish();
+    stats_offsets.push_back(offset);
+  }
+  auto stats = builder.CreateVector(stats_offsets);
+  fbs::index::v0Builder v0_builder(builder);
+  v0_builder.add_partitions(partitions);
+  v0_builder.add_stats(stats);
+  auto index_v0 = v0_builder.Finish();
+  fbs::IndexBuilder index_builder(builder);
+  index_builder.add_index_type(vast::fbs::index::Index::v0);
+  index_builder.add_index(index_v0.Union());
+  auto index = index_builder.Finish();
+  fbs::FinishIndexBuffer(builder, index);
+  return index;
+}
+
 // -- partition_factory --------------------------------------------------------
 
 partition_factory::partition_factory(index_state& state) : state_{state} {
@@ -653,51 +698,6 @@ index_state::status(status_verbosity v) const {
   if (v >= status_verbosity::debug)
     detail::fill_status_map(rs->content, self);
   return rs->promise;
-}
-
-caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
-  VAST_DEBUG("index persists {} uuids of definitely persisted and {}"
-             "uuids of maybe persisted partitions",
-             state.persisted_partitions.size(), state.unpersisted.size());
-  std::vector<flatbuffers::Offset<fbs::uuid::v0>> partition_offsets;
-  for (auto uuid : state.persisted_partitions) {
-    if (auto uuid_fb = pack(builder, uuid))
-      partition_offsets.push_back(*uuid_fb);
-    else
-      return uuid_fb.error();
-  }
-  // We don't know if these will make it to disk before the index and the rest
-  // of the system is shut down (in case of a hard/dirty shutdown), so we just
-  // store everything and throw out the missing partitions when loading the
-  // index.
-  for (const auto& kv : state.unpersisted) {
-    if (auto uuid_fb = pack(builder, kv.first))
-      partition_offsets.push_back(*uuid_fb);
-    else
-      return uuid_fb.error();
-  }
-  auto partitions = builder.CreateVector(partition_offsets);
-  std::vector<flatbuffers::Offset<fbs::layout_statistics::v0>> stats_offsets;
-  for (const auto& [name, layout_stats] : state.stats.layouts) {
-    auto name_fb = builder.CreateString(name);
-    fbs::layout_statistics::v0Builder stats_builder(builder);
-    stats_builder.add_name(name_fb);
-    stats_builder.add_count(layout_stats.count);
-    auto offset = stats_builder.Finish();
-    stats_offsets.push_back(offset);
-  }
-  auto stats = builder.CreateVector(stats_offsets);
-  fbs::index::v0Builder v0_builder(builder);
-  v0_builder.add_partitions(partitions);
-  v0_builder.add_stats(stats);
-  auto index_v0 = v0_builder.Finish();
-  fbs::IndexBuilder index_builder(builder);
-  index_builder.add_index_type(vast::fbs::index::Index::v0);
-  index_builder.add_index(index_v0.Union());
-  auto index = index_builder.Finish();
-  fbs::FinishIndexBuffer(builder, index);
-  return index;
 }
 
 index_actor::behavior_type
