@@ -155,13 +155,14 @@ caf::error extract_partition_synopsis(
                   std::span{chunk_out->data(), chunk_out->size()});
 }
 
-std::filesystem::path index_state::partition_path(const uuid& id) const {
-  return dir / to_string(id);
+// -- partition_factory --------------------------------------------------------
+
+partition_factory::partition_factory(index_state& state) : state_{state} {
+  // nop
 }
 
-std::filesystem::path
-index_state::partition_synopsis_path(const uuid& id) const {
-  return synopsisdir / (to_string(id) + ".mdx");
+filesystem_actor& partition_factory::filesystem() {
+  return filesystem_;
 }
 
 partition_actor partition_factory::operator()(const uuid& id) const {
@@ -176,24 +177,26 @@ partition_actor partition_factory::operator()(const uuid& id) const {
                             filesystem_, path);
 }
 
-filesystem_actor& partition_factory::filesystem() {
-  return filesystem_;
-}
-
-partition_factory::partition_factory(index_state& state) : state_{state} {
-  // nop
-}
+// -- index_state --------------------------------------------------------------
 
 index_state::index_state(index_actor::pointer self)
   : self{self}, inmem_partitions{0, partition_factory{*this}} {
 }
 
-vast::uuid index_state::create_query_id() {
-  auto query_id = uuid::random();
-  // Ensure the query id is unique.
-  while (pending.find(query_id) != pending.end() || query_id == uuid::nil())
-    query_id = uuid::random();
-  return query_id;
+// -- persistence --------------------------------------------------------------
+
+std::filesystem::path
+index_state::index_filename(const std::filesystem::path& basename) const {
+  return basename / dir / "index.bin";
+}
+
+std::filesystem::path index_state::partition_path(const uuid& id) const {
+  return dir / to_string(id);
+}
+
+std::filesystem::path
+index_state::partition_synopsis_path(const uuid& id) const {
+  return synopsisdir / (to_string(id) + ".mdx");
 }
 
 caf::error index_state::load_from_disk() {
@@ -317,21 +320,27 @@ caf::error index_state::load_from_disk() {
   return caf::none;
 }
 
-bool index_state::worker_available() const {
-  return !idle_workers.empty();
+/// Persists the state to disk.
+void index_state::flush_to_disk() {
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  auto index = pack(builder, *this);
+  if (!index) {
+    VAST_WARN("{} failed to pack index: {}", *self, index.error());
+    return;
+  }
+  auto chunk = fbs::release(builder);
+  self
+    ->request(filesystem, caf::infinite, atom::write_v, index_filename(), chunk)
+    .then(
+      [this](atom::ok) {
+        VAST_DEBUG("{} successfully persisted index state", *self);
+      },
+      [this](const caf::error& err) {
+        VAST_WARN("{} failed to persist index state: {}", *self, render(err));
+      });
 }
 
-std::optional<query_supervisor_actor> index_state::next_worker() {
-  if (!worker_available()) {
-    VAST_VERBOSE("{} waits for query supervisors to become available to "
-                 "delegate work; consider increasing 'vast.max-queries'",
-                 *self);
-    return std::nullopt;
-  }
-  auto result = std::move(idle_workers.back());
-  idle_workers.pop_back();
-  return result;
-}
+// -- query handling ---------------------------------------------------------
 
 void index_state::backlog::emplace(vast::query query,
                                    caf::typed_response_promise<void> rp) {
@@ -354,6 +363,74 @@ std::optional<index_state::backlog::job> index_state::backlog::take_next() {
   }
   return std::nullopt;
 }
+
+bool index_state::worker_available() const {
+  return !idle_workers.empty();
+}
+
+std::optional<query_supervisor_actor> index_state::next_worker() {
+  if (!worker_available()) {
+    VAST_VERBOSE("{} waits for query supervisors to become available to "
+                 "delegate work; consider increasing 'vast.max-queries'",
+                 *self);
+    return std::nullopt;
+  }
+  auto result = std::move(idle_workers.back());
+  idle_workers.pop_back();
+  return result;
+}
+
+std::vector<std::pair<uuid, partition_actor>>
+index_state::collect_query_actors(query_state& lookup,
+                                  uint32_t num_partitions) {
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(lookup), VAST_ARG(num_partitions));
+  std::vector<std::pair<uuid, partition_actor>> result;
+  if (num_partitions == 0 || lookup.partitions.empty())
+    return result;
+  // Prefer partitions that are already available in RAM.
+  auto partition_is_loaded = [&](const uuid& candidate) {
+    return (active_partition.actor != nullptr
+            && active_partition.id == candidate)
+           || (unpersisted.count(candidate) != 0u)
+           || inmem_partitions.contains(candidate);
+  };
+  std::partition(lookup.partitions.begin(), lookup.partitions.end(),
+                 partition_is_loaded);
+  // Helper function to spin up EVALUATOR actors for a single partition.
+  auto spin_up = [&](const uuid& partition_id) -> partition_actor {
+    // We need to first check whether the ID is the active partition or one
+    // of our unpersisted ones. Only then can we dispatch to our LRU cache.
+    partition_actor part;
+    if (active_partition.actor != nullptr
+        && active_partition.id == partition_id)
+      part = active_partition.actor;
+    else if (auto it = unpersisted.find(partition_id); it != unpersisted.end())
+      part = it->second;
+    else if (auto it = persisted_partitions.find(partition_id);
+             it != persisted_partitions.end())
+      part = inmem_partitions.get_or_load(partition_id);
+    if (!part)
+      VAST_ERROR("{} could not load partition {} that was part of a "
+                 "query",
+                 *self, partition_id);
+    return part;
+  };
+  // Loop over the candidate set until we either successfully scheduled
+  // num_partitions partitions or run out of candidates.
+  auto it = lookup.partitions.begin();
+  auto last = lookup.partitions.end();
+  while (it != last && result.size() < num_partitions) {
+    auto partition_id = *it++;
+    if (auto partition_actor = spin_up(partition_id))
+      result.emplace_back(partition_id, partition_actor);
+  }
+  lookup.partitions.erase(lookup.partitions.begin(), it);
+  VAST_DEBUG("{} launched {} partition actors to evaluate query", *self,
+             result.size());
+  return result;
+}
+
+// -- flush handling -----------------------------------------------------------
 
 void index_state::add_flush_listener(flush_listener_actor listener) {
   VAST_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
@@ -380,6 +457,16 @@ void index_state::notify_flush_listeners() {
       self->send(listener, atom::flush_v);
   }
   flush_listeners.clear();
+}
+
+// -- partition handling -----------------------------------------------------
+
+vast::uuid index_state::create_query_id() {
+  auto query_id = uuid::random();
+  // Ensure the query id is unique.
+  while (pending.find(query_id) != pending.end() || query_id == uuid::nil())
+    query_id = uuid::random();
+  return query_id;
 }
 
 void index_state::create_active_partition() {
@@ -464,6 +551,8 @@ void index_state::decomission_active_partition() {
         self->quit(std::move(err));
       });
 }
+
+// -- introspection ----------------------------------------------------------
 
 caf::typed_response_promise<record>
 index_state::status(status_verbosity v) const {
@@ -564,61 +653,6 @@ index_state::status(status_verbosity v) const {
   return rs->promise;
 }
 
-std::vector<std::pair<uuid, partition_actor>>
-index_state::collect_query_actors(query_state& lookup,
-                                  uint32_t num_partitions) {
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(lookup), VAST_ARG(num_partitions));
-  std::vector<std::pair<uuid, partition_actor>> result;
-  if (num_partitions == 0 || lookup.partitions.empty())
-    return result;
-  // Prefer partitions that are already available in RAM.
-  auto partition_is_loaded = [&](const uuid& candidate) {
-    return (active_partition.actor != nullptr
-            && active_partition.id == candidate)
-           || (unpersisted.count(candidate) != 0u)
-           || inmem_partitions.contains(candidate);
-  };
-  std::partition(lookup.partitions.begin(), lookup.partitions.end(),
-                 partition_is_loaded);
-  // Helper function to spin up EVALUATOR actors for a single partition.
-  auto spin_up = [&](const uuid& partition_id) -> partition_actor {
-    // We need to first check whether the ID is the active partition or one
-    // of our unpersisted ones. Only then can we dispatch to our LRU cache.
-    partition_actor part;
-    if (active_partition.actor != nullptr
-        && active_partition.id == partition_id)
-      part = active_partition.actor;
-    else if (auto it = unpersisted.find(partition_id); it != unpersisted.end())
-      part = it->second;
-    else if (auto it = persisted_partitions.find(partition_id);
-             it != persisted_partitions.end())
-      part = inmem_partitions.get_or_load(partition_id);
-    if (!part)
-      VAST_ERROR("{} could not load partition {} that was part of a "
-                 "query",
-                 *self, partition_id);
-    return part;
-  };
-  // Loop over the candidate set until we either successfully scheduled
-  // num_partitions partitions or run out of candidates.
-  auto it = lookup.partitions.begin();
-  auto last = lookup.partitions.end();
-  while (it != last && result.size() < num_partitions) {
-    auto partition_id = *it++;
-    if (auto partition_actor = spin_up(partition_id))
-      result.emplace_back(partition_id, partition_actor);
-  }
-  lookup.partitions.erase(lookup.partitions.begin(), it);
-  VAST_DEBUG("{} launched {} partition actors to evaluate query", *self,
-             result.size());
-  return result;
-}
-
-std::filesystem::path
-index_state::index_filename(const std::filesystem::path& basename) const {
-  return basename / dir / "index.bin";
-}
-
 caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   VAST_DEBUG("index persists {} uuids of definitely persisted and {}"
@@ -662,26 +696,6 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   auto index = index_builder.Finish();
   fbs::FinishIndexBuffer(builder, index);
   return index;
-}
-
-/// Persists the state to disk.
-void index_state::flush_to_disk() {
-  auto builder = flatbuffers::FlatBufferBuilder{};
-  auto index = pack(builder, *this);
-  if (!index) {
-    VAST_WARN("{} failed to pack index: {}", *self, index.error());
-    return;
-  }
-  auto chunk = fbs::release(builder);
-  self
-    ->request(filesystem, caf::infinite, atom::write_v, index_filename(), chunk)
-    .then(
-      [this](atom::ok) {
-        VAST_DEBUG("{} successfully persisted index state", *self);
-      },
-      [this](const caf::error& err) {
-        VAST_WARN("{} failed to persist index state: {}", *self, render(err));
-      });
 }
 
 index_actor::behavior_type
