@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.10.35-rc2]
+## [2021.10.35-rc3]
 
 ### :warning: Changes
 
@@ -1448,7 +1448,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.10.35-rc2]: https://github.com/tenzir/vast/releases/tag/2021.10.35-rc2
+[2021.10.35-rc3]: https://github.com/tenzir/vast/releases/tag/2021.10.35-rc3
 [2021.09.30]: https://github.com/tenzir/vast/releases/tag/2021.09.30
 [2021.08.26]: https://github.com/tenzir/vast/releases/tag/2021.08.26
 [2021.07.29]: https://github.com/tenzir/vast/releases/tag/2021.07.29
