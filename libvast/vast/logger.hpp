@@ -147,11 +147,10 @@
 
 namespace vast {
 
-/// Converts a verbosity atom to its integer counterpart. For unknown atoms,
+/// Converts a verbosity to its integer counterpart. For unknown values,
 /// the `default_value` parameter will be returned.
-/// Used to make log level strings from config, like 'debug', to a log level int
-int loglevel_to_int(caf::atom_value ll, int default_value
-                                        = VAST_LOG_LEVEL_QUIET);
+/// Used to make log level strings from config, like 'debug', to a log level int.
+int loglevel_to_int(std::string c, int default_value = VAST_LOG_LEVEL_QUIET);
 
 [[nodiscard]] caf::expected<caf::detail::scope_guard<void (*)()>>
 create_log_context(const vast::invocation& cmd_invocation,

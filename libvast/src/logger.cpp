@@ -8,7 +8,6 @@
 
 #include "vast/logger.hpp"
 
-#include "vast/atoms.hpp"
 #include "vast/command.hpp"
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
@@ -26,6 +25,8 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/syslog_sink.h>
+
+#include <cctype>
 
 #if VAST_ENABLE_JOURNALD_LOGGING
 #  include <spdlog/sinks/systemd_sink.h>
@@ -45,25 +46,24 @@ create_log_context(const vast::invocation& cmd_invocation,
     std::addressof(vast::detail::shutdown_spdlog))};
 }
 
-int loglevel_to_int(caf::atom_value x, int default_value) {
-  switch (caf::atom_uint(to_lowercase(x))) {
-    case caf::atom_uint("quiet"):
-      return VAST_LOG_LEVEL_QUIET;
-    case caf::atom_uint("error"):
-      return VAST_LOG_LEVEL_ERROR;
-    case caf::atom_uint("warning"):
-      return VAST_LOG_LEVEL_WARNING;
-    case caf::atom_uint("info"):
-      return VAST_LOG_LEVEL_INFO;
-    case caf::atom_uint("verbose"):
-      return VAST_LOG_LEVEL_VERBOSE;
-    case caf::atom_uint("debug"):
-      return VAST_LOG_LEVEL_DEBUG;
-    case caf::atom_uint("trace"):
-      return VAST_LOG_LEVEL_TRACE;
-    default:
-      return default_value;
-  }
+int loglevel_to_int(std::string x, int default_value) {
+  for (auto& ch : x)
+    ch = std::tolower(ch);
+  if (x == "quiet")
+    return VAST_LOG_LEVEL_QUIET;
+  if (x == "error")
+    return VAST_LOG_LEVEL_ERROR;
+  if (x == "warning")
+    return VAST_LOG_LEVEL_WARNING;
+  if (x == "info")
+    return VAST_LOG_LEVEL_INFO;
+  if (x == "verbose")
+    return VAST_LOG_LEVEL_VERBOSE;
+  if (x == "debug")
+    return VAST_LOG_LEVEL_DEBUG;
+  if (x == "trace")
+    return VAST_LOG_LEVEL_TRACE;
+  return default_value;
 }
 
 namespace {
@@ -124,24 +124,23 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   bool is_server = cmd_invocation.full_name == "start"
                    || caf::get_or(cmd_invocation.options, "vast.node", false);
   const auto& cfg_cmd = cmd_invocation.options;
-  auto console_verbosity = vast::defaults::logger::console_verbosity;
+  std::string console_verbosity = vast::defaults::logger::console_verbosity;
   auto cfg_console_verbosity
     = caf::get_if<std::string>(&cfg_file, "vast.console-verbosity");
   if (cfg_console_verbosity) {
-    auto atom_cv = caf::atom_from_string(*cfg_console_verbosity);
-    if (loglevel_to_int(atom_cv, -1) < 0) {
+    if (loglevel_to_int(*cfg_console_verbosity, -1) < 0) {
       fmt::print(stderr,
                  "failed to start logger; vast.console-verbosity '{}' is "
                  "invalid\n",
                  *cfg_console_verbosity);
       return false;
     } else {
-      console_verbosity = atom_cv;
+      console_verbosity = *cfg_console_verbosity;
     }
   }
   // Allow `vast.verbosity` from the command-line to overwrite
   // the `vast.console-verbosity` setting from the config file.
-  auto verbosity = caf::get_if<caf::atom_value>(&cfg_cmd, "vast.verbosity");
+  auto verbosity = caf::get_if<std::string>(&cfg_cmd, "vast.verbosity");
   if (verbosity) {
     if (loglevel_to_int(*verbosity, -1) < 0) {
       fmt::print(stderr,
@@ -151,18 +150,17 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     }
     console_verbosity = *verbosity;
   }
-  auto file_verbosity = vast::defaults::logger::file_verbosity;
+  std::string file_verbosity = vast::defaults::logger::file_verbosity;
   auto cfg_file_verbosity
     = caf::get_if<std::string>(&cfg_file, "vast.file-verbosity");
   if (cfg_file_verbosity) {
-    auto atom_cv = caf::atom_from_string(*cfg_file_verbosity);
-    if (loglevel_to_int(atom_cv, -1) < 0) {
+    if (loglevel_to_int(*cfg_file_verbosity, -1) < 0) {
       fmt::print(
         stderr, "failed to start logger; vast.file-verbosity '{}' is invalid\n",
         *cfg_file_verbosity);
       return false;
     } else {
-      file_verbosity = atom_cv;
+      file_verbosity = *cfg_file_verbosity;
     }
   }
   auto vast_file_verbosity = loglevel_to_int(file_verbosity);
