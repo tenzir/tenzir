@@ -161,14 +161,14 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   auto version = retrieve_versions();
   rs->content["version"] = version;
   // Pre-fill our result with system stats.
-  auto& system = insert_record(rs->content, "system");
+  auto system = record{};
   if (v >= status_verbosity::info) {
     system["in-memory-table-slices"] = count{table_slice::instances()};
     system["database-path"] = self->state.dir.string();
     merge(detail::get_status(), system, policy::merge_lists::no);
   }
   if (v >= status_verbosity::detailed) {
-    auto& config_files = insert_list(system, "config-files");
+    auto config_files = list{};
     std::transform(system::loaded_config_files().begin(),
                    system::loaded_config_files().end(),
                    std::back_inserter(config_files),
@@ -181,6 +181,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
                    [](const std::filesystem::path& x) {
                      return x.string();
                    });
+    system["config-files"] = std::move(config_files);
   }
   if (v >= status_verbosity::debug) {
     auto& sys = self->system();
@@ -188,6 +189,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     system["detached-actors"] = count{sys.detached_actors()};
     system["worker-threads"] = count{sys.scheduler().num_workers()};
   }
+  rs->content["system"] = std::move(system);
   const auto timeout = defaults::system::initial_request_timeout;
   // Send out requests and collects answers.
   for (const auto& [label, component] : self->state.registry.components()) {

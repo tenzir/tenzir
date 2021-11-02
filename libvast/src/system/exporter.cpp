@@ -316,14 +316,16 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         exp["expression"] = to_string(self->state.expr);
         if (v >= status_verbosity::detailed) {
           exp["start"] = caf::deep_to_string(self->state.start);
-          auto& transform_names = insert_list(exp, "transforms");
+          auto transform_names = list{};
           for (const auto& t : self->state.transformer.transforms())
             transform_names.emplace_back(t.name());
+          exp["transforms"] = std::move(transform_names);
           if (v >= status_verbosity::debug)
             detail::fill_status_map(exp, self);
         }
-        auto& xs = insert_list(result, "queries");
+        auto xs = list{};
         xs.emplace_back(std::move(exp));
+        result["queries"] = std::move(xs);
       }
       return result;
     },
