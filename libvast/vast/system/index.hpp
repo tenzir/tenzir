@@ -213,6 +213,9 @@ struct index_state {
 
   // -- introspection ----------------------------------------------------------
 
+  /// Flushes collected metrics to the accountant.
+  void send_report();
+
   /// @returns various status metrics.
   [[nodiscard]] caf::typed_response_promise<record>
   status(status_verbosity v) const;

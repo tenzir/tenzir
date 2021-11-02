@@ -45,6 +45,7 @@
 #include "vast/system/partition_transformer.hpp"
 #include "vast/system/passive_partition.hpp"
 #include "vast/system/query_supervisor.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
@@ -601,6 +602,14 @@ void index_state::decomission_active_partition() {
 
 // -- introspection ----------------------------------------------------------
 
+void index_state::send_report() {
+  auto msg = report{
+    {"query.backlog.normal", backlog.normal.size()},
+    {"query.backlog.low", backlog.low.size()},
+  };
+  self->send(accountant, msg);
+}
+
 caf::typed_response_promise<record>
 index_state::status(status_verbosity v) const {
   struct extra_state {
@@ -878,7 +887,15 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->state.stage->add_inbound_path(in);
     },
     [self](accountant_actor accountant) {
+      namespace defs = defaults::system;
       self->state.accountant = std::move(accountant);
+      self->send(self->state.accountant, atom::announce_v, self->name());
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
+    },
+    [self](atom::telemetry) {
+      namespace defs = defaults::system;
+      self->state.send_report();
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_DEBUG("{} adds flush listener", *self);
