@@ -114,25 +114,27 @@ read_query(const invocation& inv, std::string_view file_option,
                                          *fname));
     return read_query(*fname);
   }
-  if (has_query_stdin && has_query_cli) {
+  // As a special case we ignore stdin unless we get an actual query
+  // from it, since empirically this is often connected to the remnants
+  // of a long-forgotten file descriptor by some distant parent process
+  // when running in any kind of automated environment like a CI runner.
+  std::string cin_query;
+  if (has_query_stdin) {
     auto query = read_query(std::cin);
-    // As a special case we ignore stdin unless we get an actual query
-    // from it, since empirically this is often connected to the remnants
-    // of some long-forgotten file descriptor by some distant parent
-    // process when running in any kind of automated environment, e.g. CI.
     if (!query || query->empty())
       has_query_stdin = false;
     else
-      return caf::make_error(
-        ec::invalid_argument,
-        fmt::format("got query '{}' on the command line and '{}' via stdin",
-                    read_query(inv.arguments, argument_offset), *query));
+      cin_query = *query;
   }
-  if (has_query_cli) {
+  if (has_query_stdin && has_query_cli)
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("got query '{}' on the command line and '{}' via stdin",
+                  read_query(inv.arguments, argument_offset), cin_query));
+  if (has_query_cli)
     return read_query(inv.arguments, argument_offset);
-  }
   if (has_query_stdin)
-    return read_query(std::cin);
+    return cin_query;
   if (must_provide_query == must_provide_query::yes)
     return caf::make_error(ec::invalid_argument, "no query provided, but "
                                                  "command requires a query "
