@@ -203,6 +203,9 @@ vast:
     # Mark a query as unified.
     unified: false
 
+    # Mark a query as low priority.
+    low-priority: false
+
     # Dont substitute taxonomy identifiers.
     disable-taxonomies: false
 
