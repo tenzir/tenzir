@@ -111,6 +111,21 @@ private:
   const index_state& state_;
 };
 
+struct query_backlog {
+  struct job {
+    vast::query query;
+    caf::typed_response_promise<void> rp;
+  };
+
+  // Emplace a job.
+  void emplace(vast::query query, caf::typed_response_promise<void> rp);
+
+  [[nodiscard]] std::optional<job> take_next();
+
+  std::queue<job> normal;
+  std::queue<job> low;
+};
+
 struct query_state {
   /// The UUID of the query.
   vast::uuid id;
@@ -160,21 +175,6 @@ struct index_state {
   void flush_to_disk();
 
   // -- query handling ---------------------------------------------------------
-
-  struct backlog {
-    struct job {
-      vast::query query;
-      caf::typed_response_promise<void> rp;
-    };
-
-    // Emplace a job.
-    void emplace(vast::query query, caf::typed_response_promise<void> rp);
-
-    [[nodiscard]] std::optional<job> take_next();
-
-    std::queue<job> normal;
-    std::queue<job> low;
-  };
 
   [[nodiscard]] bool worker_available() const;
 
@@ -247,14 +247,15 @@ struct index_state {
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
-  // The maximum size of the partition LRU cache (or the maximum number of
-  // read-only partition loaded to memory).
+  /// The maximum size of the partition LRU cache (or the maximum number of
+  /// read-only partition loaded to memory).
   size_t max_inmem_partitions = {};
 
-  // The number of partitions initially returned for a query.
+  /// The number of partitions initially returned for a query.
   size_t taste_partitions = {};
 
-  struct backlog backlog = {};
+  /// The set of received but unprocessed queries.
+  query_backlog backlog = {};
 
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};

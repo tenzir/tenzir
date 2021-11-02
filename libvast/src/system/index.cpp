@@ -177,6 +177,30 @@ partition_actor partition_factory::operator()(const uuid& id) const {
                             filesystem_, path);
 }
 
+// -- query_backlog ------------------------------------------------------------
+
+void query_backlog::emplace(vast::query query,
+                            caf::typed_response_promise<void> rp) {
+  auto& q = query.priority == query::priority::normal ? normal : low;
+  // TODO: emplace does not work with libc++ <= 12.0. Switch to it once
+  // we updated to LLVM 13.
+  q.push(job{std::move(query), std::move(rp)});
+}
+
+std::optional<query_backlog::job> query_backlog::take_next() {
+  if (!normal.empty()) {
+    auto result = normal.front();
+    normal.pop();
+    return result;
+  }
+  if (!low.empty()) {
+    auto result = low.front();
+    low.pop();
+    return result;
+  }
+  return std::nullopt;
+}
+
 // -- index_state --------------------------------------------------------------
 
 index_state::index_state(index_actor::pointer self)
@@ -341,28 +365,6 @@ void index_state::flush_to_disk() {
 }
 
 // -- query handling ---------------------------------------------------------
-
-void index_state::backlog::emplace(vast::query query,
-                                   caf::typed_response_promise<void> rp) {
-  auto& q = query.priority == query::priority::normal ? normal : low;
-  // TODO: emplace does not work with libc++ <= 12.0. Switch to it once
-  // we updated to LLVM 13.
-  q.push(job{std::move(query), std::move(rp)});
-}
-
-std::optional<index_state::backlog::job> index_state::backlog::take_next() {
-  if (!normal.empty()) {
-    auto result = normal.front();
-    normal.pop();
-    return result;
-  }
-  if (!low.empty()) {
-    auto result = low.front();
-    low.pop();
-    return result;
-  }
-  return std::nullopt;
-}
 
 bool index_state::worker_available() const {
   return !idle_workers.empty();
