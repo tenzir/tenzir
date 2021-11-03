@@ -901,6 +901,7 @@ index(index_actor::stateful_pointer<index_state> self,
       if (!sender) {
         VAST_WARN("{} ignores an anonymous query", *self);
         respond(caf::sec::invalid_argument);
+        self->send(self, atom::worker_v, worker);
         return {};
       }
       // Allows the client to query further results after initial taste.
@@ -918,6 +919,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // Convenience function for dropping out without producing hits.
       // Makes sure that clients always receive a 'done' message.
       auto no_result = [=] {
+        self->send(self, atom::worker_v, worker);
         respond(query_id, uint32_t{0}, uint32_t{0});
         caf::anon_send(client, atom::done_v);
       };
