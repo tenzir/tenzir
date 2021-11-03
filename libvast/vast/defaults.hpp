@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/atoms.hpp"
 #include "vast/table_slice_encoding.hpp"
 
 #include <caf/fwd.hpp>
