@@ -243,6 +243,8 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<atom::done, uuid>,
   // Registers the INDEX with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
+  // INTERNAL: Telemetry loop handler.
+  caf::reacts_to<atom::telemetry>,
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // Evaluates a query.

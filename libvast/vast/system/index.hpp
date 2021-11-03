@@ -11,7 +11,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/lru_cache.hpp"
-#include "vast/detail/stable_map.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
@@ -27,7 +26,6 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/meta/omittable_if_empty.hpp>
 #include <caf/meta/type_name.hpp>
-#include <caf/response_promise.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
@@ -36,6 +34,20 @@
 #include <vector>
 
 namespace vast::system {
+
+/// Extract a partition synopsis from the partition at `partition_path`
+/// and write it to `partition_synopsis_path`.
+//  TODO: Move into separate header.
+caf::error
+extract_partition_synopsis(const std::filesystem::path& partition_path,
+                           const std::filesystem::path& partition_synopsis_path);
+
+/// Flatbuffer integration. Note that this is only one-way, restoring
+/// the index state needs additional runtime information.
+// TODO: Pull out the persisted part of the state into a separate struct
+// that can be packed and unpacked.
+caf::expected<flatbuffers::Offset<fbs::Index>>
+pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// The state of the active partition.
 struct active_partition_info {
@@ -104,6 +116,21 @@ private:
   const index_state& state_;
 };
 
+struct query_backlog {
+  struct job {
+    vast::query query;
+    caf::typed_response_promise<void> rp;
+  };
+
+  // Emplace a job.
+  void emplace(vast::query query, caf::typed_response_promise<void> rp);
+
+  [[nodiscard]] std::optional<job> take_next();
+
+  std::queue<job> normal;
+  std::queue<job> low;
+};
+
 struct query_state {
   /// The UUID of the query.
   vast::uuid id;
@@ -138,14 +165,6 @@ struct index_state {
 
   // -- persistence ------------------------------------------------------------
 
-  caf::error load_from_disk();
-
-  /// @returns various status metrics.
-  [[nodiscard]] caf::typed_response_promise<record>
-  status(status_verbosity v) const;
-
-  void flush_to_disk();
-
   [[nodiscard]] std::filesystem::path
   index_filename(const std::filesystem::path& basename = {}) const;
 
@@ -155,6 +174,10 @@ struct index_state {
   // Maps partition synopses to their expected location on the file system.
   [[nodiscard]] std::filesystem::path
   partition_synopsis_path(const uuid& id) const;
+
+  caf::error load_from_disk();
+
+  void flush_to_disk();
 
   // -- query handling ---------------------------------------------------------
 
@@ -177,14 +200,23 @@ struct index_state {
 
   // -- partition handling -----------------------------------------------------
 
+  /// Generates a unique query id.
+  vast::uuid create_query_id();
+
   /// Creates a new active partition.
   void create_active_partition();
 
   /// Decommissions the active partition.
   void decomission_active_partition();
 
-  /// Generates a unique query id.
-  vast::uuid create_query_id();
+  // -- introspection ----------------------------------------------------------
+
+  /// Flushes collected metrics to the accountant.
+  void send_report();
+
+  /// @returns various status metrics.
+  [[nodiscard]] caf::typed_response_promise<record>
+  status(status_verbosity v) const;
 
   // -- data members -----------------------------------------------------------
 
@@ -223,29 +255,15 @@ struct index_state {
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
-  // The maximum size of the partition LRU cache (or the maximum number of
-  // read-only partition loaded to memory).
+  /// The maximum size of the partition LRU cache (or the maximum number of
+  /// read-only partition loaded to memory).
   size_t max_inmem_partitions = {};
 
-  // The number of partitions initially returned for a query.
+  /// The number of partitions initially returned for a query.
   size_t taste_partitions = {};
 
-  struct backlog {
-    struct job {
-      vast::query query;
-      caf::typed_response_promise<void> rp;
-    };
-
-    // Emplace a job.
-    void emplace(vast::query query, caf::typed_response_promise<void> rp);
-
-    [[nodiscard]] std::optional<job> take_next();
-
-    std::queue<job> normal;
-    std::queue<job> low;
-  };
-
-  struct backlog backlog = {};
+  /// The set of received but unprocessed queries.
+  query_backlog backlog = {};
 
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};
@@ -306,20 +324,6 @@ struct index_state {
 
   constexpr static inline auto name = "index";
 };
-
-/// Extract a partition synopsis from the partition at `partition_path`
-/// and write it to `partition_synopsis_path`.
-//  TODO: Move into separate header.
-caf::error
-extract_partition_synopsis(const std::filesystem::path& partition_path,
-                           const std::filesystem::path& partition_synopsis_path);
-
-/// Flatbuffer integration. Note that this is only one-way, restoring
-/// the index state needs additional runtime information.
-// TODO: Pull out the persisted part of the state into a separate struct
-// that can be packed and unpacked.
-caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// Indexes events in horizontal partitions.
 /// @param filesystem The filesystem actor. Not used by the index itself but
