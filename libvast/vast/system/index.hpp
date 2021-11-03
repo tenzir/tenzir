@@ -11,7 +11,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/lru_cache.hpp"
-#include "vast/detail/stable_map.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
@@ -27,7 +26,6 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/meta/omittable_if_empty.hpp>
 #include <caf/meta/type_name.hpp>
-#include <caf/response_promise.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 

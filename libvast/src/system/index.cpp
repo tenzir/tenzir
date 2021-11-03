@@ -21,14 +21,11 @@
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/cache.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
-#include "vast/detail/settings.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
-#include "vast/expression_visitors.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
@@ -39,8 +36,6 @@
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/active_partition.hpp"
-#include "vast/system/evaluator.hpp"
-#include "vast/system/local_segment_store.hpp"
 #include "vast/system/meta_index.hpp"
 #include "vast/system/partition_transformer.hpp"
 #include "vast/system/passive_partition.hpp"
@@ -50,11 +45,9 @@
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
-#include "vast/value_index.hpp"
 
 #include <caf/error.hpp>
 #include <caf/response_promise.hpp>
-#include <caf/typed_event_based_actor.hpp>
 #include <flatbuffers/flatbuffers.h>
 
 #include <algorithm>
@@ -64,8 +57,6 @@
 #include <memory>
 #include <span>
 #include <unistd.h>
-
-using namespace std::chrono;
 
 // clang-format off
 //
