@@ -284,7 +284,7 @@ jobs:
           export_default_credentials: true
 
       - name: Upload Artifact to GCS
-        if: github.event_name == 'push'
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
           gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
 
