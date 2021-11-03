@@ -9,6 +9,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <tuple>
 #include <type_traits>
 
@@ -38,10 +39,10 @@ struct is_uniquely_represented<std::tuple<Ts...>>
                        && ((0 + ... + sizeof(Ts)) == sizeof(std::tuple<Ts...>))> {
 };
 
-template <class T, size_t N>
+template <class T, std::size_t N>
 struct is_uniquely_represented<T[N]> : is_uniquely_represented<T> {};
 
-template <class T, size_t N>
+template <class T, std::size_t N>
 struct is_uniquely_represented<std::array<T, N>>
   : std::bool_constant<is_uniquely_represented<T>{}
                        && sizeof(T) * N == sizeof(std::array<T, N>)> {};
