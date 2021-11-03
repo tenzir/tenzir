@@ -46,6 +46,8 @@ create_log_context(const vast::invocation& cmd_invocation,
     std::addressof(vast::detail::shutdown_spdlog))};
 }
 
+/// Convert a log level to an int.
+/// @note x is passed by value because it is modified.
 int loglevel_to_int(std::string x, int default_value) {
   for (auto& ch : x)
     ch = std::tolower(ch);
