@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/accountant/config.hpp"
+#include "vast/atoms.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
@@ -131,10 +132,16 @@ caf::message send_command(const invocation& inv, caf::actor_system&) {
                           "registry contains no actor named " + *first);
   // Dispatch to destination.
   auto f = caf::make_function_view(caf::actor_cast<caf::actor>(dst));
-  if (auto res = f(caf::atom_from_string(*(first + 1))))
-    return std::move(*res);
-  else
-    return caf::make_message(std::move(res.error()));
+  auto send = [&](auto atom_value) {
+    if (auto res = f(atom_value))
+      return std::move(*res);
+    else
+      return caf::make_message(std::move(res.error()));
+  };
+  if (*(first + 1) == "run")
+    return send(atom::run_v);
+  return make_error_msg(ec::unimplemented,
+                        "trying to send unsupported atom: " + *(first + 1));
 }
 
 void collect_component_status(node_actor::stateful_pointer<node_state> self,
