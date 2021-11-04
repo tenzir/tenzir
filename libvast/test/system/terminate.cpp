@@ -10,6 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/atoms.hpp"
+
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
 

@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/atoms.hpp"
 #include "vast/table_slice_encoding.hpp"
 
 #include <caf/fwd.hpp>
@@ -156,10 +155,10 @@ constexpr const char* file_format = "[%Y-%m-%dT%T.%e%z] [%n] [%l] [%s:%#] %v";
 constexpr const char* console_format = "%^[%T.%e] %v%$";
 
 /// Verbosity for writing to console.
-constexpr const caf::atom_value console_verbosity = caf::atom("info");
+constexpr const char* console_verbosity = "info";
 
 /// Verbosity for writing to file.
-constexpr const caf::atom_value file_verbosity = caf::atom("debug");
+constexpr const char* file_verbosity = "debug";
 
 /// Maximum number of log messages in the logger queue.
 constexpr const size_t queue_size = 1'000'000;

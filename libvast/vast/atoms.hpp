@@ -10,8 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/atoms.hpp"
-
 #define VAST_CAF_ATOM_ALIAS(name)                                              \
   using name = caf::name##_atom;                                               \
   [[maybe_unused]] constexpr inline auto name##_v = caf::name##_atom_v;
