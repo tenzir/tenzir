@@ -414,9 +414,10 @@ std::optional<query_supervisor_actor> index_state::next_worker() {
                  *self);
     return std::nullopt;
   }
-  auto it = idle_workers.rbegin();
+  VAST_ASSERT(!idle_workers.empty());
+  auto it = idle_workers.begin() + (idle_workers.size() - 1);
   auto result = *it;
-  idle_workers.erase(it.base());
+  idle_workers.erase(it);
   return result;
 }
 
