@@ -414,8 +414,9 @@ std::optional<query_supervisor_actor> index_state::next_worker() {
                  *self);
     return std::nullopt;
   }
-  auto result = std::move(idle_workers.back());
-  idle_workers.pop_back();
+  auto it = idle_workers.rbegin();
+  auto result = *it;
+  idle_workers.erase(it.base());
   return result;
 }
 
@@ -1231,7 +1232,7 @@ index(index_actor::stateful_pointer<index_state> self,
       } else {
         VAST_VERBOSE(
           "{} finished work on a query and has no jobs in the backlog", *self);
-        self->state.idle_workers.emplace_back(std::move(worker));
+        self->state.idle_workers.insert(std::move(worker));
       }
     },
     // -- status_client_actor --------------------------------------------------

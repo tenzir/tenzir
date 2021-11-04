@@ -277,7 +277,7 @@ struct index_state {
   size_t workers = 0;
 
   /// Caches idle workers.
-  std::vector<query_supervisor_actor> idle_workers = {};
+  detail::stable_set<query_supervisor_actor> idle_workers = {};
 
   /// The META INDEX actor.
   meta_index_actor meta_index = {};
