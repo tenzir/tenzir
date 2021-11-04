@@ -21,6 +21,7 @@
 #include "vast/detail/raise_error.hpp"
 
 #include <type_traits>
+#include <utility>
 
 namespace vast::detail {
 
