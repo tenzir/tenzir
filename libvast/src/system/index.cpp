@@ -286,7 +286,9 @@ caf::error index_state::load_from_disk() {
     const auto* partition_uuids = index_v0->partitions();
     VAST_ASSERT(partition_uuids);
     auto synopses = std::make_shared<std::map<uuid, partition_synopsis>>();
-    for (const auto* uuid_fb : *partition_uuids) {
+    const size_t total = partition_uuids->size();
+    for (size_t idx = 0; idx < total; ++idx) {
+      const auto* uuid_fb = partition_uuids->Get(idx);
       VAST_ASSERT(uuid_fb);
       vast::uuid partition_uuid{};
       if (auto error = unpack(*uuid_fb, partition_uuid))
@@ -303,7 +305,8 @@ caf::error index_state::load_from_disk() {
                   *self, partition_uuid);
         continue;
       }
-      VAST_DEBUG("{} unpacks partition {}", *self, partition_uuid);
+      VAST_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid, idx,
+                 total);
       // Generate external partition synopsis file if it doesn't exist.
       if (!exists(synopsis_path)) {
         if (auto error = extract_partition_synopsis(part_path, synopsis_path))
