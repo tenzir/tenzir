@@ -34,21 +34,7 @@ let
   inherit (stdenv.hostPlatform) isStatic;
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
 
-  py3 = (let
-    python = let
-      packageOverrides = final: prev: {
-        # See https://github.com/NixOS/nixpkgs/pull/96037
-        coloredlogs = prev.coloredlogs.overridePythonAttrs (old: rec {
-          doCheck = !stdenv.isDarwin;
-          checkInputs = with prev; [ pytest mock utillinux verboselogs capturer ];
-          pythonImportsCheck = [ "coloredlogs" ];
-
-          propagatedBuildInputs = [ prev.humanfriendly ];
-        });
-      };
-    in python3.override {inherit packageOverrides; self = python;};
-
-  in python.withPackages(ps: with ps; [
+  py3 = (python3.withPackages(ps: with ps; [
     coloredlogs
     jsondiff
     pyarrow
