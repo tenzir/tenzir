@@ -31,19 +31,29 @@ namespace vast::system {
 
 namespace {
 
+// An example of a transform with two steps:
+//
+// remove_action:
+//   - delete:
+//       field: alert.action
+//   - replace:
+//       field: dns.rrname
+//       value: "foobar.net"
+//
 caf::error parse_transform_steps(transform& transform,
                                  const caf::config_value::list& steps) {
   for (auto config_step : steps) {
-    auto dict = caf::get_if<caf::config_value::dictionary>(&config_step);
+    auto* dict = caf::get_if<caf::config_value::dictionary>(&config_step);
     if (!dict)
       return caf::make_error(ec::invalid_configuration, "step is not a dict");
     if (dict->size() != 1)
       return caf::make_error(ec::invalid_configuration, "step has more than 1 "
                                                         "entry");
     auto& [name, value] = *dict->begin();
-    auto opts = caf::get_if<caf::config_value::dictionary>(&value);
+    auto* opts = caf::get_if<caf::config_value::dictionary>(&value);
     if (!opts)
-      return caf::make_error(ec::invalid_configuration, "asdf");
+      return caf::make_error(ec::invalid_configuration,
+                             "expected step configuration to be a dict");
     auto step = make_transform_step(name, *opts);
     if (!step)
       return step.error();
@@ -139,7 +149,7 @@ make_transforms(transforms_location loc, const caf::settings& opts) {
     transforms[name] = *transform_steps;
   }
   for (auto [name, event_types] : transform_triggers) {
-    if (!transforms.count(name)) {
+    if (!transforms.contains(name)) {
       return caf::make_error(ec::invalid_configuration,
                              fmt::format("unknown transform '{}'", name));
     }
@@ -148,6 +158,21 @@ make_transforms(transforms_location loc, const caf::settings& opts) {
       return err;
   }
   return result;
+}
+
+caf::expected<transform_ptr>
+make_transform(const std::string& name,
+               const std::vector<std::string>& event_types,
+               const caf::settings& transforms) {
+  if (!transforms.contains(name))
+    return caf::make_error(ec::invalid_configuration,
+                           fmt::format("unknown transform '{}'", name));
+  auto transform = std::make_shared<vast::transform>(
+    name, std::vector<std::string>{event_types});
+  if (auto err = parse_transform_steps(
+        *transform, caf::get<caf::config_value::list>(transforms, name)))
+    return err;
+  return transform;
 }
 
 } // namespace vast::system
