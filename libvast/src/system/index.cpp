@@ -861,8 +861,10 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} received DOWN for queries [{}] and drops remaining "
                  "query results",
                  *self, ids_string);
-      for (const auto& id : ids)
+      for (const auto& id : ids) {
+        self->send(self, atom::worker_v, self->state.pending[id].worker);
         self->state.pending.erase(id);
+      }
     }
     self->state.monitored_queries.erase(it);
   });
