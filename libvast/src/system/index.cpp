@@ -863,7 +863,8 @@ index(index_actor::stateful_pointer<index_state> self,
                  "query results",
                  *self, ids_string);
       for (const auto& id : ids) {
-        self->send(self, atom::worker_v, self->state.pending[id].worker);
+        if (self->state.pending[id].worker)
+          self->send(self, atom::worker_v, self->state.pending[id].worker);
         self->state.pending.erase(id);
       }
     }

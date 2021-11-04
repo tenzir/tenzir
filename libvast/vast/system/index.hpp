@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/lru_cache.hpp"
+#include "vast/detail/stable_set.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
