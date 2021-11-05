@@ -864,9 +864,13 @@ index(index_actor::stateful_pointer<index_state> self,
                  "query results",
                  *self, ids_string);
       for (const auto& id : ids) {
-        if (self->state.pending[id].worker)
-          self->send(self, atom::worker_v, self->state.pending[id].worker);
+        auto worker = self->state.pending[id].worker;
         self->state.pending.erase(id);
+        // We might have already received the `atom::worker` from this worker,
+        // but discarded it because the query still had pending work. In this
+        // case, `atom::shutdown` should cause it to send another one.
+        if (worker)
+          self->send(worker, atom::shutdown_v, atom::sink_v);
       }
     }
     self->state.monitored_queries.erase(it);

@@ -135,7 +135,10 @@ using query_supervisor_actor = typed_actor_fwd<
   /// Reacts to a query and a set of relevant partitions by sending several
   /// `vast::ids` to the index_client_actor, followed by a final `atom::done`.
   caf::reacts_to<atom::supervise, uuid, query, query_map,
-                 receiver_actor<atom::done>>>::unwrap;
+                 receiver_actor<atom::done>>,
+  /// Tells the supervisor that the sink for this query has exited and
+  /// Further work is unnecessary.
+  caf::reacts_to<atom::shutdown, atom::sink>>::unwrap;
 
 /// The EVALUATOR actor interface.
 using evaluator_actor = typed_actor_fwd<
