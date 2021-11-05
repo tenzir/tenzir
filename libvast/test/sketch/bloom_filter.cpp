@@ -10,12 +10,12 @@
 
 #include "vast/sketch/bloom_filter.hpp"
 
-#include "vast/bloom_filter_parameters.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
+#include <fmt/format.h>
 
 #include <cmath>
 #include <random>
@@ -76,4 +76,18 @@ TEST(frozen bloom filter) {
   auto frozen = unbox(freeze(filter));
   CHECK(frozen.lookup(hash("foo")));
   CHECK_EQUAL(filter.parameters(), frozen.parameters());
+}
+
+TEST(frozen bloom filter - bulk add) {
+  auto i = int64_t{0};
+  auto xs = std::vector<int64_t>(1024);
+  std::generate(xs.begin(), xs.end(), [&] {
+    return hash(i++);
+  });
+  auto filter = unbox(frozen_bloom_filter::make(xs, 0.1));
+  CHECK_EQUAL(filter.parameters().m, 4'909u);
+  CHECK_EQUAL(filter.parameters().n, xs.size());
+  CHECK_EQUAL(filter.parameters().k, 3u);
+  CHECK(filter.lookup(xs[42]));
+  CHECK(!filter.lookup(hash("foo")));
 }
