@@ -120,11 +120,12 @@ private:
 struct query_backlog {
   struct job {
     vast::query query;
-    caf::typed_response_promise<void> rp;
+    caf::typed_response_promise<uuid, uint32_t, uint32_t> rp;
   };
 
   // Emplace a job.
-  void emplace(vast::query query, caf::typed_response_promise<void> rp);
+  void emplace(vast::query query,
+               caf::typed_response_promise<uuid, uint32_t, uint32_t> rp);
 
   [[nodiscard]] std::optional<job> take_next();
 

@@ -48,6 +48,7 @@
 
 #include <caf/error.hpp>
 #include <caf/response_promise.hpp>
+#include <caf/send.hpp>
 #include <flatbuffers/flatbuffers.h>
 
 #include <algorithm>
@@ -216,8 +217,8 @@ partition_actor partition_factory::operator()(const uuid& id) const {
 
 // -- query_backlog ------------------------------------------------------------
 
-void query_backlog::emplace(vast::query query,
-                            caf::typed_response_promise<void> rp) {
+void query_backlog::emplace(
+  vast::query query, caf::typed_response_promise<uuid, uint32_t, uint32_t> rp) {
   auto& q = query.priority == query::priority::normal ? normal : low;
   // TODO: emplace does not work with libc++ <= 12.0. Switch to it once
   // we updated to LLVM 13.
@@ -908,7 +909,7 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} adds flush listener", *self);
       self->state.add_flush_listener(std::move(listener));
     },
-    [self](vast::query query) -> caf::result<void> {
+    [self](vast::query query) -> caf::result<uuid, uint32_t, uint32_t> {
       if (!self->state.accept_queries) {
         VAST_VERBOSE("{} delays query {} because it is still starting up",
                      *self, query);
@@ -920,29 +921,20 @@ index(index_actor::stateful_pointer<index_state> self,
                               std::move(query), std::move(*worker));
       }
       VAST_VERBOSE("{} pushes query {} to the backlog", *self, query);
-      auto rp = self->make_response_promise<void>();
+      auto rp = self->make_response_promise<uuid, uint32_t, uint32_t>();
       self->state.backlog.emplace(std::move(query), rp);
       return rp;
     },
-    [self](atom::internal, vast::query query,
-           query_supervisor_actor worker) -> caf::result<void> {
+    [self](atom::internal, vast::query query, query_supervisor_actor worker)
+      -> caf::result<uuid, uint32_t, uint32_t> {
       // Query handling
-      auto mid = self->current_message_id();
       auto sender = self->current_sender();
       auto client = caf::actor_cast<caf::actor>(sender);
-      // TODO: This is used in order to "respond" to the message and to still
-      // continue with the function afterwards. At some point this should be
-      // changed to a proper solution for that problem, e.g., streaming.
-      auto respond = [=](auto&&... xs) {
-        unsafe_response(self, sender, {}, mid.response_id(),
-                        std::forward<decltype(xs)>(xs)...);
-      };
       // Sanity check.
       if (!sender) {
         VAST_WARN("{} ignores an anonymous query", *self);
-        respond(caf::sec::invalid_argument);
         self->send(self, atom::worker_v, worker);
-        return {};
+        return caf::sec::invalid_argument;
       }
       // Allows the client to query further results after initial taste.
       auto query_id = self->state.create_query_id();
@@ -956,13 +948,6 @@ index(index_actor::stateful_pointer<index_state> self,
         auto& [_, ids] = *it;
         ids.emplace(query_id);
       }
-      // Convenience function for dropping out without producing hits.
-      // Makes sure that clients always receive a 'done' message.
-      auto no_result = [=] {
-        self->send(self, atom::worker_v, worker);
-        respond(query_id, uint32_t{0}, uint32_t{0});
-        caf::anon_send(client, atom::done_v);
-      };
       auto query_string = to_string(query.expr);
       // We only use the first 64 bit of the id as key to avoid every
       // probe having to read a user-space pointer, and 64 bit should
@@ -973,7 +958,7 @@ index(index_actor::stateful_pointer<index_state> self,
         candidates.push_back(self->state.active_partition.id);
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
-      auto rp = self->make_response_promise<void>();
+      auto rp = self->make_response_promise<uuid, uint32_t, uint32_t>();
       // Get all potentially matching partitions.
       auto start = std::chrono::steady_clock::now();
       self
@@ -992,11 +977,9 @@ index(index_actor::stateful_pointer<index_state> self,
             if (candidates.empty()) {
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          *self);
-              no_result();
-              // TODO: When updating to CAF 0.18, remove the use of the
-              // untyped response promise and call deliver without arguments.
-              auto& untyped_rp = static_cast<caf::response_promise&>(rp);
-              untyped_rp.deliver(caf::unit);
+              self->send(self, atom::worker_v, worker);
+              rp.deliver(query_id, 0u, 0u);
+              caf::anon_send(client, atom::done_v);
               return;
             }
             auto total = candidates.size();
@@ -1010,8 +993,9 @@ index(index_actor::stateful_pointer<index_state> self,
             auto delta = std::chrono::steady_clock::now() - start;
             VAST_TRACEPOINT(query_meta_index, query_id.as_u64().first, total,
                             delta.count());
-            respond(query_id, detail::narrow<uint32_t>(total), scheduled);
-            rp.delegate(static_cast<index_actor>(self), query_id, scheduled);
+            rp.deliver(query_id, detail::narrow<uint32_t>(total), scheduled);
+            caf::send_as(client, static_cast<index_actor>(self), query_id,
+                         scheduled);
           },
           [=](caf::error err) mutable {
             VAST_ERROR("{} failed to receive candidates from meta-index: {}",
@@ -1028,9 +1012,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto iter = self->state.pending.find(query_id);
       if (iter == self->state.pending.end()) {
         VAST_WARN("{} drops query for unknown query id {}", *self, query_id);
-        if (client)
-          self->send(client, atom::done_v);
-        return {};
+        return caf::make_error(ec::lookup_error, "unknown query id");
       }
       auto& query_state = iter->second;
       if (!sender) {
