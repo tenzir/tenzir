@@ -414,8 +414,10 @@ std::optional<query_supervisor_actor> index_state::next_worker() {
                  *self);
     return std::nullopt;
   }
-  auto result = std::move(idle_workers.back());
-  idle_workers.pop_back();
+  VAST_ASSERT(!idle_workers.empty());
+  auto it = idle_workers.begin() + (idle_workers.size() - 1);
+  auto result = *it;
+  idle_workers.erase(it);
   return result;
 }
 
@@ -597,6 +599,8 @@ void index_state::send_report() {
   auto msg = report{
     {"query.backlog.normal", backlog.normal.size()},
     {"query.backlog.low", backlog.low.size()},
+    {"query.workers.idle", idle_workers.size()},
+    {"query.workers.busy", workers - idle_workers.size()},
   };
   self->send(accountant, msg);
 }
@@ -859,8 +863,15 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} received DOWN for queries [{}] and drops remaining "
                  "query results",
                  *self, ids_string);
-      for (const auto& id : ids)
+      for (const auto& id : ids) {
+        auto worker = self->state.pending[id].worker;
         self->state.pending.erase(id);
+        // We might have already received the `atom::worker` from this worker,
+        // but discarded it because the query still had pending work. In this
+        // case, `atom::shutdown` should cause it to send another one.
+        if (worker)
+          self->send(worker, atom::shutdown_v, atom::sink_v);
+      }
     }
     self->state.monitored_queries.erase(it);
   });
@@ -1000,6 +1011,7 @@ index(index_actor::stateful_pointer<index_state> self,
           [=](caf::error err) mutable {
             VAST_ERROR("{} failed to receive candidates from meta-index: {}",
                        *self, render(err));
+            self->send(self, atom::worker_v, worker);
             rp.deliver(std::move(err));
           });
       return rp;
@@ -1008,21 +1020,24 @@ index(index_actor::stateful_pointer<index_state> self,
       auto sender = self->current_sender();
       auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
       // Sanity checks.
+      auto iter = self->state.pending.find(query_id);
+      if (iter == self->state.pending.end()) {
+        VAST_WARN("{} drops query for unknown query id {}", *self, query_id);
+        if (client)
+          self->send(client, atom::done_v);
+        return {};
+      }
+      auto& query_state = iter->second;
       if (!sender) {
         VAST_WARN("{} ignores query {} from anonymous sender", *self, query_id);
+        self->send(self, atom::worker_v, query_state.worker);
         return {};
       }
       if (num_partitions == 0) {
         VAST_WARN("{} ignores query {} for zero partitions", *self, query_id);
+        self->send(self, atom::worker_v, query_state.worker);
         return {};
       }
-      auto iter = self->state.pending.find(query_id);
-      if (iter == self->state.pending.end()) {
-        VAST_WARN("{} drops query for unknown query id {}", *self, query_id);
-        self->send(client, atom::done_v);
-        return {};
-      }
-      auto& query_state = iter->second;
       auto now = std::chrono::steady_clock::now();
       // Get partition actors, spawning new ones if needed.
       auto actors
@@ -1223,7 +1238,7 @@ index(index_actor::stateful_pointer<index_state> self,
       } else {
         VAST_VERBOSE(
           "{} finished work on a query and has no jobs in the backlog", *self);
-        self->state.idle_workers.emplace_back(std::move(worker));
+        self->state.idle_workers.insert(std::move(worker));
       }
     },
     // -- status_client_actor --------------------------------------------------

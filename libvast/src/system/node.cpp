@@ -208,8 +208,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     // a different `node_id` from the one we actually want to compare.
     if (component.actor.node() != self->node())
       continue;
-    collect_status(rs, timeout, v, component.actor, rs->content,
-                   component.type);
+    collect_status(rs, timeout, v, component.actor, rs->content, label);
   }
 }
 
