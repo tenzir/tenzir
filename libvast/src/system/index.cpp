@@ -354,10 +354,10 @@ caf::error index_state::load_from_disk() {
         = layout_statistics{stat->count()};
     }
   } else {
-    VAST_DEBUG("{} found existing database dir {} without index "
-               "statefile, "
-               "will start with fresh state",
-               *self, dir);
+    VAST_INFO("{} found existing database dir {} without index "
+              "statefile, "
+              "will start with fresh state",
+              *self, dir);
   }
   return caf::none;
 }
@@ -873,18 +873,6 @@ index(index_actor::stateful_pointer<index_state> self,
                      *self, query);
         return caf::skip;
       }
-      if (auto worker = self->state.next_worker()) {
-        VAST_VERBOSE("{} starts executing {} from a new request", *self, query);
-        return self->delegate(static_cast<index_actor>(self), atom::internal_v,
-                              std::move(query), std::move(*worker));
-      }
-      VAST_VERBOSE("{} pushes query {} to the backlog", *self, query);
-      auto rp = self->make_response_promise<void>();
-      self->state.backlog.emplace(std::move(query), rp);
-      return rp;
-    },
-    [self](atom::internal, vast::query query,
-           query_supervisor_actor worker) -> caf::result<void> {
       // Query handling
       auto mid = self->current_message_id();
       auto sender = self->current_sender();
@@ -902,6 +890,11 @@ index(index_actor::stateful_pointer<index_state> self,
         respond(caf::sec::invalid_argument);
         return {};
       }
+      // TODO: This check is not required technically, but we use the query
+      // supervisor availability to rate-limit meta-index lookups. Do we
+      // really need this?
+      if (!self->state.worker_available())
+        return caf::skip;
       // Allows the client to query further results after initial taste.
       auto query_id = self->state.create_query_id();
       // Monitor the sender so we can cancel the query in case it goes down.
@@ -959,8 +952,7 @@ index(index_actor::stateful_pointer<index_state> self,
             auto total = candidates.size();
             auto scheduled = detail::narrow<uint32_t>(
               std::min(candidates.size(), self->state.taste_partitions));
-            auto lookup = query_state{query_id, query, std::move(candidates),
-                                      std::move(worker)};
+            auto lookup = query_state{query_id, query, std::move(candidates)};
             auto result
               = self->state.pending.emplace(query_id, std::move(lookup));
             VAST_ASSERT(result.second);
@@ -968,7 +960,7 @@ index(index_actor::stateful_pointer<index_state> self,
             VAST_TRACEPOINT(query_meta_index, query_id.as_u64().first, total,
                             delta.count());
             respond(query_id, detail::narrow<uint32_t>(total), scheduled);
-            rp.delegate(static_cast<index_actor>(self), query_id, scheduled);
+            rp.delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
           },
           [=](caf::error err) mutable {
             VAST_ERROR("{} failed to receive candidates from meta-index: {}",
@@ -996,6 +988,9 @@ index(index_actor::stateful_pointer<index_state> self,
         return {};
       }
       auto& query_state = iter->second;
+      auto worker = self->state.next_worker();
+      if (!worker)
+        return caf::skip;
       auto now = std::chrono::steady_clock::now();
       // Get partition actors, spawning new ones if needed.
       auto actors
@@ -1008,8 +1003,8 @@ index(index_actor::stateful_pointer<index_state> self,
       auto delta = std::chrono::steady_clock::now() - now;
       VAST_TRACEPOINT(query_resume, query_id.as_u64().first, actors.size(),
                       delta.count());
-      self->send(query_state.worker, atom::supervise_v, query_id,
-                 query_state.query, std::move(actors), client);
+      self->send(*worker, atom::supervise_v, query_id, query_state.query,
+                 std::move(actors), client);
       // Cleanup if we exhausted all candidates.
       if (query_state.partitions.empty())
         self->state.pending.erase(iter);
@@ -1145,11 +1140,10 @@ index(index_actor::stateful_pointer<index_state> self,
         = query::make_extract(sink, query::extract::drop_ids, match_everything);
       auto query_id = self->state.create_query_id();
       auto lookup = query_state{query_id, query,
-                                std::vector<vast::uuid>{old_partition_id},
-                                std::move(*worker)};
+                                std::vector<vast::uuid>{old_partition_id}};
       auto actors
         = self->state.collect_query_actors(lookup, /* num_partitions = */ 1);
-      self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
+      self->send(*worker, atom::supervise_v, query_id, lookup.query,
                  std::move(actors),
                  caf::actor_cast<receiver_actor<atom::done>>(sink));
       auto rp = self->make_response_promise<atom::done>();
@@ -1182,23 +1176,9 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     // -- query_supervisor_master_actor ----------------------------------------
     [self](atom::worker, query_supervisor_actor worker) {
-      for (const auto& [_, qs] : self->state.pending) {
-        if (worker == qs.worker) {
-          VAST_DEBUG("worker remains available for the query {}", qs.id);
-          return;
-        }
-      }
-      if (self->state.backlog.empty()) {
-        VAST_VERBOSE(
-          "{} finished work on a query and has no jobs in the backlog", *self);
-        self->state.idle_workers.emplace_back(std::move(worker));
-      } else {
-        auto& [query, rp] = self->state.backlog.front();
-        VAST_VERBOSE("{} starts executing {} from the backlog", *self, query);
-        rp.delegate(static_cast<index_actor>(self), atom::internal_v,
-                    std::move(query), std::move(worker));
-        self->state.backlog.pop();
-      }
+      if (!self->state.worker_available())
+        VAST_DEBUG("{} delegates work to query supervisors", *self);
+      self->state.idle_workers.emplace_back(std::move(worker));
     },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) { //

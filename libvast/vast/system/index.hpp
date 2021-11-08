@@ -28,7 +28,6 @@
 #include <caf/meta/type_name.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
-#include <queue>
 #include <unordered_map>
 #include <vector>
 
@@ -125,13 +124,10 @@ struct query_state {
   /// Unscheduled partitions.
   std::vector<uuid> partitions;
 
-  /// The assigned query worker.
-  query_supervisor_actor worker;
-
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
     return f(caf::meta::type_name("query_state"), x.id, x.query,
-             caf::meta::omittable_if_empty(), x.partitions, x.worker);
+             caf::meta::omittable_if_empty(), x.partitions);
   }
 };
 
@@ -245,8 +241,6 @@ struct index_state {
 
   // The number of partitions initially returned for a query.
   size_t taste_partitions = {};
-
-  std::queue<std::pair<query, caf::typed_response_promise<void>>> backlog;
 
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};

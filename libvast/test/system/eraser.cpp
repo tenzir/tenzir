@@ -79,9 +79,6 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::subscribe, atom::flush, system::flush_listener_actor&) {
       FAIL("no mock implementation available");
     },
-    [=](atom::internal, vast::query&, system::query_supervisor_actor&) {
-      FAIL("no mock implementation available");
-    },
     [=](atom::apply, transform_ptr, uuid) -> atom::done {
       FAIL("no mock implementation available");
     },
