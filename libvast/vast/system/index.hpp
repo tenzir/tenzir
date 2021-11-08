@@ -27,7 +27,6 @@
 #include <caf/meta/omittable_if_empty.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/typed_event_based_actor.hpp>
-#include <caf/typed_response_promise.hpp>
 
 #include <queue>
 #include <unordered_map>
@@ -166,21 +165,6 @@ struct index_state {
 
   // -- query handling ---------------------------------------------------------
 
-  struct backlog {
-    struct job {
-      vast::query query;
-      caf::typed_response_promise<void> rp;
-    };
-
-    // Emplace a job.
-    void emplace(vast::query query, caf::typed_response_promise<void> rp);
-
-    [[nodiscard]] std::optional<job> take_next();
-
-    std::queue<job> normal;
-    std::queue<job> low;
-  };
-
   [[nodiscard]] bool worker_available() const;
 
   [[nodiscard]] std::optional<query_supervisor_actor> next_worker();
@@ -262,7 +246,7 @@ struct index_state {
   // The number of partitions initially returned for a query.
   size_t taste_partitions = {};
 
-  struct backlog backlog = {};
+  std::queue<std::pair<query, caf::typed_response_promise<void>>> backlog;
 
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};
