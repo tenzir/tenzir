@@ -33,15 +33,15 @@ make_uninitialized(bloom_filter_params params) {
   // We know the exact size, so we reserve it to avoid re-allocations.
   flatbuffers::FlatBufferBuilder builder{expected_size};
   auto flat_params
-    = fbs::bloom_filter::Parameters{params.m, params.n, params.k, params.p};
+    = fbs::BloomFilterParameters{params.m, params.n, params.k, params.p};
   uint64_t* buf;
   auto bits_offset = builder.CreateUninitializedVector(bitvector_size, &buf);
   auto bloom_filter_offset
-    = fbs::bloom_filter::Createv0(builder, &flat_params, bits_offset);
+    = fbs::CreateBloomFilter(builder, &flat_params, bits_offset);
   builder.Finish(bloom_filter_offset);
   auto buffer = builder.Release();
   VAST_ASSERT(buffer.size() == expected_size);
-  auto root = fbs::bloom_filter::GetMutablev0(buffer.data());
+  auto root = fbs::GetMutableBloomFilter(buffer.data());
   bloom_filter_view<uint64_t> view;
   view.params = params;
   auto bits = root->mutable_bits();
@@ -54,7 +54,7 @@ make_uninitialized(bloom_filter_params params) {
 frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
   : table_{std::move(table)} {
   VAST_ASSERT(table_ != nullptr);
-  auto root = fbs::bloom_filter::Getv0(table_->data());
+  auto root = fbs::GetBloomFilter(table_->data());
   view_.params.m = root->parameters()->m();
   view_.params.n = root->parameters()->n();
   view_.params.k = root->parameters()->k();
