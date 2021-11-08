@@ -1,6 +1,6 @@
-namespace vast.fbs.bloom_filter;
+namespace vast.fbs;
 
-struct Parameters {
+struct BloomFilterParameters {
   /// The number of bits in the underlying bitvector.
   m: uint64;
 
@@ -16,14 +16,12 @@ struct Parameters {
   p: double;
 }
 
-table v0 {
+table BloomFilter {
   /// The Bloom filter parameters.
-  parameters: Parameters (required);
+  parameters: BloomFilterParameters (required);
 
   /// The underlying bits.
   bits: [uint64] (required);
 }
 
-root_type v0;
-
-file_identifier "vBLF";
+root_type BloomFilter;
