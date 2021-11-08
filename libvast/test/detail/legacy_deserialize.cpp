@@ -22,7 +22,7 @@
 using namespace vast;
 
 TEST(deserialize_string) {
-  const std::string str = "test string";
+  const auto str = std::string{"test string"};
 
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, str), caf::none);
@@ -30,7 +30,7 @@ TEST(deserialize_string) {
 }
 
 TEST(deserialize_bytes) {
-  const std::array bytes = {std::byte{'a'}, std::byte{'c'}};
+  const std::array bytes{std::byte{'a'}, std::byte{'c'}};
 
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, bytes), caf::none);

@@ -1086,6 +1086,7 @@ auto make_inspect_fun() {
 
 /// @private
 template <class Inspector, class... Ts>
+  requires(std::is_same<typename Inspector::result_type, caf::error>::value)
 auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> caf::error {
     using result_type = typename Inspector::result_type;
@@ -1101,6 +1102,46 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
         return tbl[x.type_tag](f, x.x);
       x.x = legacy_type{};
       return caf::none;
+    }
+  };
+}
+
+template <class Inspector, class... Ts>
+  requires(std::is_same<typename Inspector::result_type, bool>::value)
+auto make_inspect(caf::detail::type_list<Ts...>) {
+  return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
+    using result_type = typename Inspector::result_type;
+    if constexpr (Inspector::reads_state) {
+      if (x.type_tag != invalid_type_id)
+        caf::visit(f, x.x);
+      return true;
+    } else {
+      using reference = legacy_type&;
+      using fun = result_type (*)(Inspector&, reference);
+      static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
+      if (x.type_tag != invalid_type_id)
+        return tbl[x.type_tag](f, x.x);
+      x.x = legacy_type{};
+      return true;
+    }
+  };
+}
+
+template <class Inspector, class... Ts>
+  requires(std::is_same<typename Inspector::result_type, void>::value)
+auto make_inspect(caf::detail::type_list<Ts...>) {
+  return [](Inspector& f, legacy_type::inspect_helper& x) -> void {
+    using result_type = typename Inspector::result_type;
+    if constexpr (Inspector::reads_state) {
+      if (x.type_tag != invalid_type_id)
+        caf::visit(f, x.x);
+    } else {
+      using reference = legacy_type&;
+      using fun = result_type (*)(Inspector&, reference);
+      static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
+      if (x.type_tag != invalid_type_id)
+        return tbl[x.type_tag](f, x.x);
+      x.x = legacy_type{};
     }
   };
 }
