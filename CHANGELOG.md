@@ -10,9 +10,6 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :warning: Changes
 
-- The `max-queries` configuration option now works at a coarser granularity. It used to limit the number of queries that could simultaneously retrieve data, but it now sets the number of queries that can be processed at the same time.
-  [#1896](https://github.com/tenzir/vast/pull/1896)
-
 - VAST no longer vendors [xxHash](https://github.com/Cyan4973/xxHash), which is now a regular required dependency. Internally, VAST switched its default hash function to XXH3, providing a speedup of up to 3x.
   [#1905](https://github.com/tenzir/vast/pull/1905)
 
@@ -26,9 +23,6 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - A new 'apply' handler in the index gives plugin authors the ability to apply transforms over entire partitions. Previously, transforms were limited to streams of table slice during import or export.
   [#1887](https://github.com/tenzir/vast/pull/1887)
-
-- The export command now has a `--low-priority` option to reduce the priority of the request while query backlogs are being worked down.
-  [#1929](https://github.com/tenzir/vast/pull/1929)
 
 ### :beetle: Bug Fixes
 
