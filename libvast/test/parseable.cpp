@@ -120,7 +120,9 @@ TEST(container attribute folding) {
 
 TEST(action) {
   using namespace parsers;
-  auto make_v4 = [](uint32_t a) { return address::v4(&a); };
+  auto make_v4 = [](uint32_t a) {
+    return address::v4(a);
+  };
   auto ipv4_addr = b32be->*make_v4;
   address x;
   CHECK(ipv4_addr("\x0A\x00\x00\x01", x));

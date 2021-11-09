@@ -60,6 +60,7 @@ jobs:
             libssl-dev \
             libunwind-dev \
             libyaml-cpp-dev \
+            libxxhash-dev \
             lsb-release \
             ninja-build \
             pkg-config \
@@ -159,6 +160,7 @@ jobs:
             libssl-dev \
             libunwind-dev \
             libyaml-cpp-dev \
+            libxxhash-dev \
             lsb-release \
             ninja-build \
             pkg-config \
@@ -282,7 +284,7 @@ jobs:
           export_default_credentials: true
 
       - name: Upload Artifact to GCS
-        if: github.event_name == 'push'
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
           gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
 
@@ -362,7 +364,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2.2.2
         with:
-          python-version: '3.7'
+          python-version: '3.9'
 
       - name: Install Dependencies
         env:
@@ -389,7 +391,8 @@ jobs:
             simdjson \
             spdlog \
             tcpdump \
-            yaml-cpp
+            yaml-cpp \
+            xxhash
 
       - name: Configure Environment
         run: |
@@ -571,6 +574,7 @@ jobs:
             libssl-dev \
             libunwind-dev \
             libyaml-cpp-dev \
+            libxxhash-dev \
             lsb-release \
             ninja-build \
             python3-dev \
@@ -784,7 +788,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2.2.2
         with:
-          python-version: '3.7'
+          python-version: '3.9'
 
       - name: Configure GCS Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}

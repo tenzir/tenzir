@@ -15,9 +15,7 @@
 
 namespace vast {
 
-template <>
-struct access::parser_base<subnet>
-  : vast::parser_base<access::parser_base<subnet>> {
+struct subnet_parser : vast::parser_base<subnet_parser> {
   using attribute = subnet;
 
   static auto make() {
@@ -36,16 +34,18 @@ struct access::parser_base<subnet>
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, subnet& a) const {
     static auto p = make();
-    if (!p(f, l, a.network_, a.length_))
+    address network;
+    uint8_t length;
+    if (!p(f, l, network, length))
       return false;
-    a.initialize();
+    a = {network, length};
     return true;
   }
 };
 
 template <>
 struct parser_registry<subnet> {
-  using type = access::parser_base<subnet>;
+  using type = subnet_parser;
 };
 
 namespace parsers {

@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/die.hpp"

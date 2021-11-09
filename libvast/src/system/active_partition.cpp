@@ -13,7 +13,6 @@
 #include "vast/address_synopsis.hpp"
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/table_slice.hpp"
@@ -28,6 +27,7 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/hash/xxhash.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -58,13 +58,9 @@
 
 namespace vast::system {
 
-/// Gets the ACTIVE INDEXER at a certain position.
-active_indexer_actor active_partition_state::indexer_at(size_t position) const {
-  VAST_ASSERT(position < indexers.size());
-  return as_vector(indexers)[position].second;
-}
+namespace {
 
-std::optional<record_type> active_partition_state::combined_layout() const {
+std::optional<record_type> create_combined_layout(const auto& indexers) {
   if (indexers.empty())
     return {};
   auto fields = std::vector<struct record_type::field>{};
@@ -72,6 +68,18 @@ std::optional<record_type> active_partition_state::combined_layout() const {
   for (const auto& [qf, _] : indexers)
     fields.push_back({std::string{qf.name()}, qf.type()});
   return record_type{fields};
+}
+
+} // namespace
+
+/// Gets the ACTIVE INDEXER at a certain position.
+active_indexer_actor active_partition_state::indexer_at(size_t position) const {
+  VAST_ASSERT(position < data.indexers.size());
+  return as_vector(data.indexers)[position].second;
+}
+
+std::optional<record_type> active_partition_state::combined_layout() const {
+  return create_combined_layout(data.indexers);
 }
 
 const std::unordered_map<std::string, ids>&
@@ -110,8 +118,7 @@ bool partition_selector::operator()(const qualified_record_field& filter,
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder,
-     const active_partition_state& state) {
-  const auto& x = state.data;
+     const active_partition_state::serialization_data& x) {
   auto uuid = pack(builder, x.id);
   if (!uuid)
     return uuid.error();
@@ -133,7 +140,7 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   }
   auto indexes = builder.CreateVector(indices);
   // Serialize layout.
-  auto combined_layout = state.combined_layout();
+  auto combined_layout = create_combined_layout(x.indexers);
   if (!combined_layout)
     return caf::make_error(ec::logic_error, "cannot serialize partition with "
                                             "empty combined layout");
@@ -242,7 +249,7 @@ active_partition_actor::behavior_type active_partition(
       size_t col = 0;
       for (const auto& [field, offset] : layout_type.leaves()) {
         auto qf = qualified_record_field{layout_type, offset};
-        auto& idx = self->state.indexers[qf];
+        auto& idx = self->state.data.indexers[qf];
         if (!idx) {
           idx = self->spawn(active_indexer, field.type, index_opts);
           auto slot = self->state.stage->add_outbound_path(idx);
@@ -308,8 +315,8 @@ active_partition_actor::behavior_type active_partition(
     // on 'std::vector<caf::actor>' only. That should probably be generalized
     // in the future.
     auto indexers = std::vector<caf::actor>{};
-    indexers.reserve(self->state.indexers.size());
-    auto copy = std::exchange(self->state.indexers, {});
+    indexers.reserve(self->state.data.indexers.size());
+    auto copy = std::exchange(self->state.data.indexers, {});
     for ([[maybe_unused]] auto&& [qf, indexer] : std::move(copy))
       indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
     shutdown<policy::parallel>(self, std::move(indexers));
@@ -347,7 +354,7 @@ active_partition_actor::behavior_type active_partition(
     },
     [self](atom::internal, atom::persist, atom::resume) {
       VAST_TRACE("{} resumes persist atom {}", *self,
-                 self->state.indexers.size());
+                 self->state.data.indexers.size());
       if (self->state.streaming_initiated
           && self->state.stage->inbound_paths().empty()) {
         self->state.stage->out().fan_out_flush();
@@ -359,14 +366,14 @@ active_partition_actor::behavior_type active_partition(
                            atom::resume_v);
         return;
       }
-      if (self->state.indexers.empty()) {
+      if (self->state.data.indexers.empty()) {
         self->state.persistence_promise.deliver(
           caf::make_error(ec::logic_error, "partition has no indexers"));
         return;
       }
       VAST_DEBUG("{} sends 'snapshot' to {} indexers", *self,
-                 self->state.indexers.size());
-      for (auto& kv : self->state.indexers) {
+                 self->state.data.indexers.size());
+      for (auto& kv : self->state.data.indexers) {
         self->request(kv.second, caf::infinite, atom::snapshot_v)
           .then(
             [=](chunk_ptr chunk) {
@@ -387,11 +394,11 @@ active_partition_actor::behavior_type active_partition(
               VAST_DEBUG("{} got chunk from {}", *self, sender);
               self->state.chunks.emplace(sender, chunk);
               if (self->state.persisted_indexers
-                  < self->state.indexers.size()) {
+                  < self->state.data.indexers.size()) {
                 VAST_DEBUG("{} waits for more chunks after receiving {} out of "
                            "{}",
                            *self, self->state.persisted_indexers,
-                           self->state.indexers.size());
+                           self->state.data.indexers.size());
                 return;
               }
               // Shrink synopses for addr fields to optimal size.
@@ -400,7 +407,7 @@ active_partition_actor::behavior_type active_partition(
               // synopsis keeps track of offset/events internally.
               self->state.data.synopsis->offset = self->state.data.offset;
               self->state.data.synopsis->events = self->state.data.events;
-              for (auto& [qf, actor] : self->state.indexers) {
+              for (auto& [qf, actor] : self->state.data.indexers) {
                 auto actor_id = actor.id();
                 auto chunk_it = self->state.chunks.find(actor_id);
                 if (chunk_it == self->state.chunks.end()) {
@@ -422,7 +429,7 @@ active_partition_actor::behavior_type active_partition(
               }
               // Create the partition flatbuffer.
               flatbuffers::FlatBufferBuilder builder;
-              auto partition = pack(builder, self->state);
+              auto partition = pack(builder, self->state.data);
               if (!partition) {
                 VAST_ERROR("{} failed to serialize {} with error: {}", *self,
                            self->state.name, partition.error());
@@ -540,13 +547,13 @@ active_partition_actor::behavior_type active_partition(
         }
       };
       auto rs = make_status_request_state<extra_state>(self);
-      auto& indexer_states = insert_list(rs->content, "indexers");
+      auto indexer_states = list{};
       // Reservation is necessary to make sure the entries don't get relocated
       // as the underlying vector grows - `ps` would refer to the wrong memory
       // otherwise.
       const auto timeout = defaults::system::initial_request_timeout / 5 * 3;
-      indexer_states.reserve(self->state.indexers.size());
-      for (auto& i : self->state.indexers) {
+      indexer_states.reserve(self->state.data.indexers.size());
+      for (auto& i : self->state.data.indexers) {
         auto& ps = caf::get<record>(indexer_states.emplace_back(record{}));
         collect_status(
           rs, timeout, v, i.second,
@@ -567,6 +574,7 @@ active_partition_actor::behavior_type active_partition(
             ps["error"] = fmt::to_string(err);
           });
       }
+      rs->content["indexers"] = std::move(indexer_states);
       if (v >= status_verbosity::debug)
         detail::fill_status_map(rs->content, self);
       return rs->promise;

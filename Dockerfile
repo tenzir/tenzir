@@ -29,6 +29,7 @@ RUN apt-get update && \
       libssl-dev \
       libunwind-dev \
       libyaml-cpp-dev \
+      libxxhash-dev \
       lsb-release \
       ninja-build \
       pkg-config \
@@ -132,6 +133,7 @@ RUN apt-get update && \
       libspdlog1 \
       libunwind8 \
       libyaml-cpp0.6 \
+      libxxhash-dev \
       lsb-release \
       openssl \
       robin-map-dev \
@@ -140,7 +142,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow500 && \
+    apt-get -y --no-install-recommends install libarrow600 && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast

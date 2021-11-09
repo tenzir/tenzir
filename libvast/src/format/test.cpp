@@ -44,6 +44,7 @@ caf::expected<distribution> make_distribution(const type& t) {
   if (!parser(*tag, tie))
     return caf::make_error(ec::parse_error, "invalid distribution "
                                             "specification");
+  VAST_DEBUG("generating distribution {}={} in [{}, {})", *tag, name, p0, p1);
   if (name == "uniform") {
     if (holds_alternative<integer_type>(t))
       return {std::uniform_int_distribution<vast::integer::value_type>{
@@ -65,7 +66,7 @@ caf::expected<distribution> make_distribution(const type& t) {
 
 struct initializer {
   initializer(blueprint& bp)
-    : distributions_{bp.distributions}, data_{&bp.data} {
+    : distributions_{bp.distributions}, data_{bp.data.get()} {
   }
 
   template <class T>
@@ -102,7 +103,8 @@ struct initializer {
 
 caf::expected<blueprint> make_blueprint(const type& t) {
   blueprint bp;
-  bp.data = t.construct();
+  bp.data = std::make_unique<data>(t.construct());
+  VAST_DEBUG("making test blueprint for type {} with data {}", t, *bp.data);
   auto result = visit(initializer{bp}, t);
   if (!result)
     return result.error();
@@ -178,10 +180,9 @@ struct randomizer {
     uint32_t bytes[4];
     for (auto& byte : bytes)
       byte = unif0(gen);
-    // P[ip == v6] = 0.5
-    std::uniform_int_distribution<uint8_t> unif1{0, 1};
-    auto version = unif1(gen_) == 0 ? address::ipv4 : address::ipv6;
-    addr = {bytes, version, address::network};
+    auto ptr = reinterpret_cast<const uint8_t*>(bytes);
+    auto span = std::span<const uint8_t, 16>{ptr, 16};
+    addr = address{span};
   }
 
   void operator()(const subnet_type&, subnet& sn) {
@@ -196,6 +197,11 @@ struct randomizer {
   void operator()(const record_type& r, list& xs) {
     for (auto i = 0u; i < xs.size(); ++i)
       visit(*this, r.field(i).type, xs[i]);
+  }
+
+  void operator()(const record_type& r, record& xs) {
+    for (auto i = 0u; i < xs.size(); ++i)
+      visit(*this, r.field(i).type, as_vector(xs)[i].second);
   }
 
   auto sample() {
@@ -218,7 +224,8 @@ std::string_view builtin_schema = R"__(
     t: time #default="uniform(0,10)",
     d: duration #default="uniform(100,200)",
     a: addr #default="uniform(0,2000000)",
-    s: subnet #default="uniform(1000,2000)",
+    u: subnet #default="uniform(1000,2000)",
+    n: list<int>,
   }
 )__";
 
@@ -308,13 +315,14 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     auto rows = std::min({num_events_, max_events - produced, max_slice_size});
     VAST_ASSERT(rows > 0);
     for (size_t i = 0; i < rows; ++i) {
-      visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
-      if (!ptr->recursive_add(bp.data, t)) {
+      visit(default_randomizer{bp.distributions, generator_}, t, *bp.data);
+      if (!ptr->recursive_add(*bp.data, t)) {
         VAST_ERROR("{} failed to add blueprint data to slice builder",
                    detail::pretty_type_name(this));
         return caf::make_error(ec::format_error, "failed to add blueprint data "
                                                  "to slice builder");
       }
+      ++batch_events_;
     }
     // Emit table slice.
     if (auto err = finish(f, ptr))

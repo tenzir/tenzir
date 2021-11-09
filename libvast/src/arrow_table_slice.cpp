@@ -307,13 +307,14 @@ auto pattern_at(const arrow::StringArray& arr, int64_t row) {
 
 auto address_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
   auto bytes = arr.raw_values() + (row * 16);
-  return address::v6(static_cast<const void*>(bytes), address::network);
+  auto span = std::span<const uint8_t, 16>{bytes, 16};
+  return address::v6(span);
 }
 
 auto subnet_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
   auto bytes = arr.raw_values() + (row * 17);
-  auto addr = address::v6(static_cast<const void*>(bytes), address::network);
-  return subnet{addr, bytes[16]};
+  auto span = std::span<const uint8_t, 16>{bytes, 16};
+  return subnet{address::v6(span), bytes[16]};
 }
 
 auto timestamp_at(const arrow::TimestampArray& arr, int64_t row) {

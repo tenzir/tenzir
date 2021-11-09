@@ -1,0 +1,26 @@
+name: Issue
+description: File an issue with a definition of done
+title: "Story Title"
+body:
+  - type: textarea
+    attributes:
+      label: Description
+      description: A detailed user-facing description of the story.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Definition of Done
+      description: |
+        A concise list of tasks that must be addressed before this story can be considered done.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Anything else?
+      description: |
+        Links? References? Anything that will give us more context about the issue you are encountering!
+
+        Tip: You can attach images, recordings, or log files by clicking this area to highlight it and then dragging files in.
+    validations:
+      required: false

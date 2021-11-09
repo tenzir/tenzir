@@ -10,8 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/atoms.hpp"
-
 #define VAST_CAF_ATOM_ALIAS(name)                                              \
   using name = caf::name##_atom;                                               \
   [[maybe_unused]] constexpr inline auto name##_v = caf::name##_atom_v;
@@ -39,6 +37,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_atoms, caf::id_block::vast_types::end)
 
   // Generic atoms.
   VAST_ADD_ATOM(announce, "announce")
+  VAST_ADD_ATOM(apply, "apply")
   VAST_ADD_ATOM(candidates, "candidates")
   VAST_ADD_ATOM(config, "config")
   VAST_ADD_ATOM(done, "done")
@@ -56,8 +55,10 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_atoms, caf::id_block::vast_types::end)
   VAST_ADD_ATOM(plugin, "plugin")
   VAST_ADD_ATOM(provision, "provision")
   VAST_ADD_ATOM(read, "read")
+  VAST_ADD_ATOM(reserve, "reserve")
   VAST_ADD_ATOM(resolve, "resolve")
   VAST_ADD_ATOM(resume, "resume")
+  VAST_ADD_ATOM(replace, "replace")
   VAST_ADD_ATOM(run, "run")
   VAST_ADD_ATOM(schema, "schema")
   VAST_ADD_ATOM(shutdown, "shutdown")
@@ -75,6 +76,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_atoms, caf::id_block::vast_types::end)
   VAST_ADD_ATOM(write, "write")
 
   // Actor role atoms.
+  VAST_ADD_ATOM(importer, "importer")
   VAST_ADD_ATOM(sink, "sink")
   VAST_ADD_ATOM(worker, "worker")
 

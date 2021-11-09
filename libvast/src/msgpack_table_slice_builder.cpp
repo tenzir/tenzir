@@ -41,7 +41,8 @@ size_t encode(Builder& builder, View v) {
       return put(builder, x.string());
     },
     [&](view<address> x) {
-      auto ptr = reinterpret_cast<const char*>(x.data().data());
+      auto bytes = as_bytes(x);
+      auto ptr = reinterpret_cast<const char*>(bytes.data());
       if (x.is_v4()) {
         auto str = std::string_view{ptr + 12, 4};
         return builder.template add<fixstr>(str);

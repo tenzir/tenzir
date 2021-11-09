@@ -1,0 +1,38 @@
+name: Bug Report
+description: File a bug report to help us improve
+title: "Bug Report Title"
+body:
+  - type: textarea
+    attributes:
+      label: Current Behavior
+      description: A concise description of what you're experiencing.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+      description: A concise description of what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps To Reproduce
+      description: Steps to reproduce the behavior.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Environment
+      description: |
+        Describe the environment you've encountered the bug in, e.g., the operating system and the VAST version used. If customized, please attach the VAST configuration file.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Anything else?
+      description: |
+        Links? References? Anything that will give us more context about the issue you are encountering!
+
+        Tip: You can attach images, recordings, or log files by clicking this area to highlight it and then dragging files in.
+    validations:
+      required: false

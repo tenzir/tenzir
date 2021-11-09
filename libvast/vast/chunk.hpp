@@ -79,14 +79,14 @@ public:
   template <class Buffer>
     requires(!std::is_lvalue_reference_v<Buffer> && //
              requires(const Buffer& buffer) {
-               { as_bytes(buffer) } -> concepts::same_as<view_type>;
+               { as_bytes(buffer) } -> concepts::convertible_to<view_type>;
              })
   static auto make(Buffer&& buffer) -> chunk_ptr {
     // Move the buffer into a unique pointer; otherwise, we might run into
     // issues when moving the buffer invalidates the span, e.g., for strings
     // with small buffer optimizations.
     auto movable_buffer = std::make_unique<Buffer>(std::exchange(buffer, {}));
-    const auto view = as_bytes(*movable_buffer);
+    const auto view = static_cast<view_type>(as_bytes(*movable_buffer));
     return make(view, [buffer = std::move(movable_buffer)]() noexcept {
       static_cast<void>(buffer);
     });
@@ -104,10 +104,10 @@ public:
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
     requires requires(const Buffer& buffer) {
-      { as_bytes(buffer) } -> concepts::same_as<view_type>;
+      { as_bytes(buffer) } -> concepts::convertible_to<view_type>;
     }
   static auto copy(const Buffer& buffer) -> chunk_ptr {
-    const auto view = as_bytes(buffer);
+    const auto view = static_cast<view_type>(as_bytes(buffer));
     auto copy = std::make_unique<value_type[]>(view.size());
     const auto data = copy.get();
     std::memcpy(data, view.data(), view.size());

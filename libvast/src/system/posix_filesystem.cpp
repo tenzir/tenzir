@@ -29,7 +29,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
   self->state.root = root;
   return {
     [self](atom::write, const std::filesystem::path& filename,
-           chunk_ptr chk) -> caf::result<atom::ok> {
+           const chunk_ptr& chk) -> caf::result<atom::ok> {
       VAST_ASSERT(chk != nullptr);
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
@@ -38,7 +38,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         return err;
       } else {
         ++self->state.stats.writes.successful;
-        ++self->state.stats.writes.bytes += chk->size();
+        self->state.stats.writes.bytes += chk->size();
         return atom::ok_v;
       }
     },
@@ -55,7 +55,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       }
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
-        ++self->state.stats.reads.bytes += bytes->size();
+        self->state.stats.reads.bytes += bytes->size();
         return chunk::make(std::move(*bytes));
       } else {
         ++self->state.stats.reads.failed;
@@ -75,29 +75,56 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       }
       if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
-        ++self->state.stats.mmaps.bytes += chk->get()->size();
+        self->state.stats.mmaps.bytes += chk->get()->size();
         return chk;
       } else {
         ++self->state.stats.mmaps.failed;
         return chk.error();
       }
     },
+    [self](atom::erase,
+           const std::filesystem::path& filename) -> caf::result<atom::done> {
+      const auto path
+        = filename.is_absolute() ? filename : self->state.root / filename;
+      std::error_code err;
+      auto size = std::filesystem::file_size(path, err);
+      if (err) {
+        ++self->state.stats.checks.failed;
+        return caf::make_error(ec::no_such_file,
+                               fmt::format("{} failed to erase {}: {}", *self,
+                                           path, err.message()));
+      }
+      ++self->state.stats.checks.successful;
+      std::filesystem::remove_all(path, err);
+      if (err) {
+        ++self->state.stats.erases.failed;
+        return caf::make_error(ec::system_error,
+                               fmt::format("{} failed to erase {}: {}", *self,
+                                           path, err.message()));
+      }
+      ++self->state.stats.erases.successful;
+      self->state.stats.erases.bytes += size;
+      return atom::done_v;
+    },
     [self](atom::status, status_verbosity v) {
       auto result = record{};
       if (v >= status_verbosity::info)
         result["type"] = "POSIX";
       if (v >= status_verbosity::debug) {
-        auto& ops = insert_record(result, "operations");
+        auto ops = record{};
         auto add_stats = [&](auto& name, auto& stats) {
-          auto& dict = insert_record(ops, name);
+          auto dict = record{};
           dict["successful"] = count{stats.successful};
           dict["failed"] = count{stats.failed};
           dict["bytes"] = count{stats.bytes};
+          ops[name] = std::move(dict);
         };
         add_stats("checks", self->state.stats.checks);
         add_stats("writes", self->state.stats.writes);
         add_stats("reads", self->state.stats.reads);
         add_stats("mmaps", self->state.stats.mmaps);
+        add_stats("erases", self->state.stats.erases);
+        result["operations"] = std::move(ops);
       }
       return result;
     },

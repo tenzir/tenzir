@@ -149,7 +149,7 @@ TEST(empty partition roundtrip) {
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {
-    auto partition = pack(builder, state);
+    auto partition = pack(builder, state.data);
     REQUIRE(partition);
     vast::fbs::FinishPartitionBuffer(builder, *partition);
   }

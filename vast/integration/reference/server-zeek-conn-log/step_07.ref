@@ -6,6 +6,8 @@
 {"path":["importer","ids","available"],"type":"number"}
 {"path":["importer","ids","block","end"],"type":"number"}
 {"path":["importer","ids","block","next"],"type":"number"}
+{"path":["index","backlog","num-low-priority"],"type":"number"}
+{"path":["index","backlog","num-normal-priority"],"type":"number"}
 {"path":["index","memory-usage"],"type":"number"}
 {"path":["index","meta-index","memory-usage"],"type":"number"}
 {"path":["index","meta-index","num-partitions"],"type":"number"}

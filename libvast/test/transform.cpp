@@ -111,8 +111,8 @@ TEST(transform with multiple steps) {
   REQUIRE_NOERROR(not_transformed);
   REQUIRE_EQUAL(not_transformed->layout().type.num_fields(), 3ull);
   CHECK_EQUAL(not_transformed->layout().type.field(0).name, "uid");
-  CHECK_EQUAL(not_transformed->layout().type.field(0).name, "desc");
-  CHECK_EQUAL(not_transformed->layout().type.field(0).name, "index");
+  CHECK_EQUAL(not_transformed->layout().type.field(1).name, "desc");
+  CHECK_EQUAL(not_transformed->layout().type.field(2).name, "index");
   CHECK_EQUAL((*not_transformed).at(0, 0), vast::data_view{"asdf"sv});
   CHECK_EQUAL((*not_transformed).at(0, 1), vast::data_view{"jklo"sv});
   CHECK_EQUAL((*not_transformed).at(0, 2), vast::data{vast::integer{23}});
@@ -132,7 +132,7 @@ TEST(transformation engine - single matching transform) {
   // We expect that only one transformation has been applied.
   REQUIRE_EQUAL(transformed->layout().type.num_fields(), 2ull);
   CHECK_EQUAL(transformed->layout().type.field(0).name, "desc");
-  CHECK_EQUAL(transformed->layout().type.field(0).name, "index");
+  CHECK_EQUAL(transformed->layout().type.field(1).name, "index");
 }
 
 TEST(transformation engine - multiple matching transforms) {

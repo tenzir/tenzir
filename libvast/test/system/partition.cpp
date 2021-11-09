@@ -37,6 +37,9 @@ system::filesystem_actor::behavior_type mock_filesystem(
     [self](atom::mmap, const std::filesystem::path&) -> caf::result<chunk_ptr> {
       return self->make_response_promise<chunk_ptr>();
     },
+    [](vast::atom::erase, std::filesystem::path&) {
+      return vast::atom::done_v;
+    },
     [](atom::status, system::status_verbosity) {
       return record{};
     },

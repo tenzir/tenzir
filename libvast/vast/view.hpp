@@ -11,13 +11,12 @@
 #include "vast/fwd.hpp"
 
 #include "vast/aliases.hpp"
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash/hash.hpp"
 #include "vast/time.hpp"
 
 #include <caf/intrusive_ptr.hpp>
@@ -536,7 +535,7 @@ namespace std {
 template <>
 struct hash<vast::data_view> {
   auto operator()(const vast::data_view& x) const {
-    return vast::uhash<vast::xxhash>{}(x);
+    return vast::hash(x);
   }
 
   auto operator()(const vast::data& x) const {

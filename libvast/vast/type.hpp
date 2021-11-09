@@ -12,12 +12,12 @@
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
-#include "vast/concept/hashable/default_hash.hpp"
 #include "vast/concepts.hpp"
 #include "vast/detail/function.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash/hash.hpp"
 #include "vast/offset.hpp"
 
 #include <caf/detail/apply_args.hpp>
@@ -1047,13 +1047,8 @@ namespace std {
 template <vast::type_or_concrete_type T>
 struct hash<T> {
   size_t operator()(const T& type) const noexcept {
-    static_assert(std::is_same_v<size_t, vast::default_hash::result_type>,
-                  "mismatching result type");
     const auto bytes = as_bytes(type);
-    VAST_ASSERT(!bytes.empty());
-    auto h = vast::default_hash{};
-    h(bytes.data(), bytes.size());
-    return static_cast<vast::default_hash::result_type>(h);
+    return vast::hash(bytes);
   }
 };
 

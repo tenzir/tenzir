@@ -46,7 +46,7 @@ using lcg = lcg64;
 
 // An event data template to be filled with randomness.
 struct blueprint {
-  vast::data data;
+  std::unique_ptr<vast::data> data;
   std::vector<distribution> distributions;
 };
 

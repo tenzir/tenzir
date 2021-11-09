@@ -761,30 +761,31 @@ TEST(hashes) {
   };
   // We're comparing strings here because that is easier to change from the log
   // output in failed unit tests. :-)
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(none_type{})), "0xD98ED04EF02580D");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(bool_type{})), "0x2AEF7F8C54823CAE");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(integer_type{})), "0xF1809CF3015A370");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(count_type{})), "0x5DC9B5CD591D8946");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0xF19D708E7A55F3B9");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(duration_type{})), "0x2E589BA58C507BF"
-                                                            "5");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(time_type{})), "0xCDE3F4CA1B2E0AA8");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(string_type{})), "0xACFC2D0BCAAB0A5");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(pattern_type{})), "0x24308780C759CA5"
-                                                           "1");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(address_type{})), "0xB2AA3D764D09152"
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(none_type{})), "0xB51ACBDD64EF56FF");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(bool_type{})), "0x295A1E349D71CC23");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(integer_type{})), "0x5B0D4F0B0B16740"
+                                                           "4");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(count_type{})), "0x529C2667783DB09D");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0x41615FDB30A38AAF");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(duration_type{})), "0x6C3BE97C5D5B269"
+                                                            "A");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(time_type{})), "0xAD8E364A7A3BFE79");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(string_type{})), "0x2476398993549B5");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(pattern_type{})), "0xE5A24AB16469BBD"
                                                            "B");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(subnet_type{})), "0x30C095E09815B975");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(address_type{})), "0xD1678F8D9318E8B"
+                                                           "2");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(subnet_type{})), "0xA927755C10035193");
   CHECK_EQUAL(fmt::format("0x{:X}",
                           hash(enumeration_type{{"a"}, {"b"}, {"c"}})),
-              "0xEBD7A329C280F159");
+              "0xFFF139D14A6FFAA4");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(list_type{integer_type{}})),
-              "0x668E71A23FFCB6B9");
+              "0x2F697BD2223CA310");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(map_type{time_type{}, string_type{}})),
-              "0x81326B2AFF9E6CF2");
+              "0x355D5293D16CC7CD");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(record_type{{"a", address_type{}},
                                                      {"b", bool_type{}}})),
-              "0xED57C299AF1D1E40");
+              "0xC262CE1B00968C16");
 }
 
 TEST(congruence) {

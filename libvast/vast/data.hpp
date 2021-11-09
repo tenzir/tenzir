@@ -10,14 +10,14 @@
 
 #include "vast/address.hpp"
 #include "vast/aliases.hpp"
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data/integer.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash/uhash.hpp"
+#include "vast/hash/xxhash.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
 #include "vast/policy/merge_lists.hpp"
@@ -267,14 +267,6 @@ caf::error convert(const data& d, caf::config_value& cv);
 bool convert(const caf::dictionary<caf::config_value>& xs, record& ys);
 bool convert(const caf::dictionary<caf::config_value>& xs, data& y);
 bool convert(const caf::config_value& x, data& y);
-
-// -- manual creation ----------------------------------------------------------
-
-record& insert_record(record& r, std::string_view key);
-
-record& insert_record(list& l);
-
-list& insert_list(record& r, std::string_view key);
 
 // -- strip ------------------------------------------------------------
 

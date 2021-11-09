@@ -106,6 +106,7 @@ auto make_export_command() {
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
+      .add<bool>("low-priority", "respond to other queries first")
       .add<std::string>("timeout", "timeout to stop the export after")
       // We don't expose the `preserve-ids` option to the user because it
       // doesnt' affect the formatted output.
@@ -442,8 +443,8 @@ auto make_root_command(std::string_view path) {
                    "disable user and system configuration, schema and plugin "
                    "directories lookup and static and dynamic plugin "
                    "autoloading (this may only be used on the command line)")
-        .add<caf::atom_value>("verbosity", "output verbosity level on the "
-                                           "console")
+        .add<std::string>("verbosity", "output verbosity level on the "
+                                       "console")
         .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")

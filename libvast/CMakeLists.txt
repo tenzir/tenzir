@@ -44,7 +44,7 @@ if (NOT tsl-robin-map_FOUND)
   add_dependencies(robin_map tsl-robin-map-targets-link)
 endif ()
 
-# -- flattbuffers ---------------------------------------------------------------
+# -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs"
@@ -319,6 +319,7 @@ set(libvast_native_plugin_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/src/system/local_segment_store.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/delete.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/hash.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/identity.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/replace.cpp")
 
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
@@ -336,10 +337,6 @@ VASTTargetEnableTooling(libvast_native_plugins)
 target_compile_definitions(libvast_native_plugins
                            PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 add_library(vast::native_plugins ALIAS libvast_native_plugins)
-
-if ("${CMAKE_VERSION}" VERSION_GREATER_EQUAL "3.16")
-  target_precompile_headers(libvast PUBLIC [["vast/fwd.hpp"]] <caf/fwd.hpp>)
-endif ()
 
 target_link_libraries(libvast PRIVATE libvast_internal)
 target_link_libraries(libvast_native_plugins PRIVATE libvast libvast_internal)
@@ -387,6 +384,13 @@ target_link_libraries(libvast PUBLIC libvast-fbs)
 find_package(yaml-cpp 0.6.2 REQUIRED)
 target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
+
+# Link against xxhash.
+find_package(xxhash REQUIRED)
+provide_find_module(xxhash)
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(xxhash REQUIRED)")
+target_link_libraries(libvast PUBLIC xxhash::xxhash_header_only)
+dependency_summary("xxHash" xxhash::xxhash_header_only "Dependencies")
 
 # Link against libsystemd.
 if (VAST_ENABLE_JOURNALD_LOGGING)

@@ -157,23 +157,25 @@ TEST(container comparison) {
 TEST(hashing views) {
   data i = integer{1};
   data c = "chars";
-  data st = "string"s;
+  data s = "string"s;
   data p = pattern{"x"};
   data v = list{integer{42}, true, "foo", 4.2};
   data m = map{{integer{42}, true}, {integer{84}, false}};
   data r = record{{"foo", integer{42}}, {"bar", true}};
-  using xxhash = vast::uhash<vast::xxhash>;
-  CHECK_EQUAL(xxhash{}(i), xxhash{}(make_view(i)));
-  CHECK_EQUAL(xxhash{}(c), xxhash{}(make_view(c)));
-  CHECK_EQUAL(xxhash{}(st), xxhash{}(make_view(st)));
-  CHECK_EQUAL(xxhash{}(p), xxhash{}(make_view(p)));
-  CHECK_EQUAL(xxhash{}(v), xxhash{}(make_view(v)));
-  CHECK_EQUAL(xxhash{}(m), xxhash{}(make_view(m)));
-  CHECK_EQUAL(xxhash{}(r), xxhash{}(make_view(r)));
+  auto h = [](auto&& x) {
+    return hash<xxh64>(x);
+  };
+  CHECK_EQUAL(h(i), h(make_view(i)));
+  CHECK_EQUAL(h(c), h(make_view(c)));
+  CHECK_EQUAL(h(s), h(make_view(s)));
+  CHECK_EQUAL(h(p), h(make_view(p)));
+  CHECK_EQUAL(h(v), h(make_view(v)));
+  CHECK_EQUAL(h(m), h(make_view(m)));
+  CHECK_EQUAL(h(r), h(make_view(r)));
   using stdhash = std::hash<data>;
   CHECK_EQUAL(stdhash{}(i), stdhash{}(make_view(i)));
   CHECK_EQUAL(stdhash{}(c), stdhash{}(make_view(c)));
-  CHECK_EQUAL(stdhash{}(st), stdhash{}(make_view(st)));
+  CHECK_EQUAL(stdhash{}(s), stdhash{}(make_view(s)));
   CHECK_EQUAL(stdhash{}(p), stdhash{}(make_view(p)));
   CHECK_EQUAL(stdhash{}(v), stdhash{}(make_view(v)));
   CHECK_EQUAL(stdhash{}(m), stdhash{}(make_view(m)));

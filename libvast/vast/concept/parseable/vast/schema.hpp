@@ -71,6 +71,9 @@ struct symbol_resolver {
     if (!y)
       return y.error();
     x.value_type = *y;
+    if (caf::holds_alternative<legacy_record_type>(x.value_type)
+        && !has_skip_attribute(x))
+      x.update_attributes({{"skip", caf::none}});
     return std::move(x);
   }
 

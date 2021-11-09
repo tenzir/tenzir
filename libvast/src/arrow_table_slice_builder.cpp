@@ -204,7 +204,10 @@ struct column_builder_trait<address_type>
   }
 
   static bool append(typename super::BuilderType& builder, view_type x) {
-    return builder.Append(x.data()).ok();
+    auto bytes = as_bytes(x);
+    auto ptr = reinterpret_cast<const char*>(bytes.data());
+    auto str = arrow::util::string_view{ptr, bytes.size()};
+    return builder.Append(str).ok();
   }
 };
 
@@ -229,8 +232,9 @@ struct column_builder_trait<subnet_type>
 
   static bool append(typename super::BuilderType& builder, view_type x) {
     std::array<uint8_t, 17> data;
-    auto& src = x.network().data();
-    std::copy(src.begin(), src.end(), data.begin());
+    auto bytes = as_bytes(x.network());
+    VAST_ASSERT(bytes.size() == 16);
+    std::memcpy(&data, bytes.data(), bytes.size());
     data[16] = x.length();
     return builder.Append(data).ok();
   }
@@ -423,9 +427,13 @@ public:
     if (auto status = struct_builder_->Append(); !status.ok())
       return false;
     const auto& r = **xptr;
-    for (size_t i = 0; i < r.size(); ++i)
+    VAST_ASSERT(r.size() == field_builders_.size(), "record size mismatch");
+    for (size_t i = 0; i < r.size(); ++i) {
+      VAST_ASSERT(struct_builder_->type()->field(i)->name() == r.at(i).first,
+                  "field name mismatch");
       if (!field_builders_[i]->add(r.at(i).second))
         return false;
+    }
     return true;
   }
 

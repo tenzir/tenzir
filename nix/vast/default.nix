@@ -18,6 +18,7 @@
 , robin-map
 , jemalloc
 , libunwind
+, xxHash
 , zeek-broker
 , python3
 , jq
@@ -83,7 +84,12 @@ stdenv.mkDerivation rec {
     libunwind
     zeek-broker
   ];
-  propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
+  propagatedBuildInputs = [
+    arrow-cpp
+    caf
+    flatbuffers
+    xxHash
+  ];
 
   cmakeFlags = [
     "-DCMAKE_BUILD_TYPE:STRING=${buildType}"

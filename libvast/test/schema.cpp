@@ -313,6 +313,7 @@ TEST(parseable - out of order definitions) {
         },
       },
     },
+    {{"skip"}},
   };
   CHECK_EQUAL(baz, expected);
 }

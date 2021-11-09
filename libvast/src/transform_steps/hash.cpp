@@ -11,6 +11,8 @@
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
+#include "vast/hash/default_hash.hpp"
+#include "vast/hash/hash_append.hpp"
 #include "vast/optional.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -48,11 +50,12 @@ caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
     for (size_t j = 0; j < slice.columns(); ++j) {
       const auto& item = slice.at(i, j);
       if (j == column_index) {
-        auto hasher = vast::uhash<xxhash64>{};
-        auto hash = hasher(item);
+        auto h = default_hash{};
+        hash_append(h, item);
         if (salt_)
-          hash = hasher(*salt_);
-        out_hash = fmt::format("{:x}", hash);
+          hash_append(h, *salt_);
+        auto digest = h.finish();
+        out_hash = fmt::format("{:x}", digest);
       }
       if (!builder_ptr->add(item))
         return builder_error;
@@ -77,12 +80,12 @@ hash_step::operator()(record_type layout,
     string_type{}, arrow::default_memory_pool());
   for (int i = 0; i < batch->num_rows(); ++i) {
     const auto& item = column->GetScalar(i);
-    auto as_string = item.ValueOrDie()->ToString();
-    auto hasher = vast::uhash<xxhash64>{};
-    auto hash = hasher(as_string);
+    auto h = default_hash{};
+    hash_append(h, item.ValueOrDie()->ToString());
     if (salt_)
-      hash = hasher(*salt_);
-    auto x = fmt::format("{:x}", hash);
+      hash_append(h, *salt_);
+    auto digest = h.finish();
+    auto x = fmt::format("{:x}", digest);
     cb->add(std::string_view{x});
   }
   auto hashes_column = cb->finish();

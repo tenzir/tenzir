@@ -8,6 +8,7 @@
 
 #include "vast/system/local_segment_store.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/fbs/partition.hpp"
@@ -108,6 +109,7 @@ std::filesystem::path store_path_for_partition(const uuid& partition_id) {
 store_actor::behavior_type
 passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                     filesystem_actor fs, const std::filesystem::path& path) {
+  self->state.fs = std::move(fs);
   self->state.path = path;
   self->set_exit_handler([self](const caf::exit_msg&) {
     for (auto&& [expr, rp] : std::exchange(self->state.deferred_requests, {}))
@@ -115,7 +117,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                                                    "down"));
   });
   VAST_DEBUG("loading passive store from path {}", path);
-  self->request(fs, caf::infinite, atom::mmap_v, path)
+  self->request(self->state.fs, caf::infinite, atom::mmap_v, path)
     .then(
       [self](chunk_ptr chunk) {
         auto seg = segment::make(std::move(chunk));
@@ -177,16 +179,12 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                  rank(self->state.segment->ids()));
       if (is_subset(self->state.segment->ids(), xs)) {
         VAST_VERBOSE("{} gets wholly erased from {}", *self, self->state.path);
-        std::error_code err;
-        std::filesystem::remove_all(self->state.path, err);
-        if (err)
-          return caf::make_error(ec::system_error, err.message());
         // There is a (small) chance one or more lookups are currently still in
         // progress, so we dont call `self->quit()` here but instead rely on
         // ref-counting. The lookups can still finish normally because the
         // `mmap()` is still valid even after the underlying segment file was
         // removed.
-        return atom::done_v;
+        return self->delegate(self->state.fs, atom::erase_v, self->state.path);
       }
       auto new_segment = segment::copy_without(*self->state.segment, xs);
       if (!new_segment) {
@@ -197,7 +195,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       VAST_ASSERT(self->state.path.has_filename());
       auto old_path = self->state.path;
       auto new_path = self->state.path.replace_extension("next");
-      auto rp = caf::typed_response_promise<atom::done>{};
+      auto rp = self->make_response_promise<atom::done>();
       self
         ->request(self->state.fs, caf::infinite, atom::write_v, new_path,
                   new_segment->chunk())
@@ -227,11 +225,11 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
                    filesystem_actor fs, const std::filesystem::path& path) {
   VAST_DEBUG("spawning active local store");
   self->state.self = self;
-  self->state.fs = fs;
+  self->state.fs = std::move(fs);
   self->state.path = path;
   self->state.builder
     = std::make_unique<segment_builder>(defaults::system::max_segment_size);
-  self->set_exit_handler([self /*, path, fs*/](const caf::exit_msg&) {
+  self->set_exit_handler([self](const caf::exit_msg&) {
     VAST_DEBUG("active local store exits");
     // TODO: We should save the finished segment in the state, so we can
     //       answer queries that arrive after the stream has ended.
@@ -292,9 +290,10 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
     // Conform to the protocol of the STATUS CLIENT actor.
     [self](atom::status, status_verbosity) -> record {
       auto result = record{};
-      auto& store = insert_record(result, "segment-store");
+      auto store = record{};
       store["events"] = count{self->state.events};
       store["path"] = self->state.path.string();
+      result["segment-store"] = std::move(store);
       return result;
     },
     // internal handlers
@@ -342,7 +341,7 @@ public:
                               std::move(header)};
   }
 
-  [[nodiscard]] virtual caf::expected<system::store_actor>
+  [[nodiscard]] caf::expected<system::store_actor>
   make_store(filesystem_actor fs,
              std::span<const std::byte> header) const override {
     auto path = store_path_from_header(header);

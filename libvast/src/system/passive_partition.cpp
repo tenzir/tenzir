@@ -13,7 +13,6 @@
 #include "vast/address_synopsis.hpp"
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/table_slice.hpp"
@@ -27,6 +26,7 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/hash/xxhash.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -186,6 +186,7 @@ partition_actor::behavior_type passive_partition(
   self->state.self = self;
   self->state.path = path;
   self->state.archive = legacy_archive;
+  self->state.filesystem = filesystem;
   self->state.name = "partition-" + id_string;
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -222,7 +223,7 @@ partition_actor::behavior_type passive_partition(
   // We send a "read" to the fs actor and upon receiving the result deserialize
   // the flatbuffer and switch to the "normal" partition behavior for responding
   // to queries.
-  self->request(filesystem, caf::infinite, atom::mmap_v, path)
+  self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
     .then(
       [=](chunk_ptr chunk) {
         VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(chunk));
@@ -371,11 +372,14 @@ partition_actor::behavior_type passive_partition(
       }
       VAST_DEBUG("{} received an erase message and deletes {}", *self,
                  self->state.path);
-      std::error_code err{};
-      std::filesystem::remove_all(self->state.path, err);
-      if (err)
-        VAST_WARN("{} failed to delete {}: {}; try deleting manually", *self,
-                  self->state.path, err.message());
+      self
+        ->request(self->state.filesystem, caf::infinite, atom::erase_v,
+                  self->state.path)
+        .then([](atom::done) {},
+              [self](const caf::error& err) {
+                VAST_WARN("{} failed to delete {}: {}; try deleting manually",
+                          *self, self->state.path, err);
+              });
       vast::ids all_ids;
       for (const auto& kv : self->state.type_ids_) {
         all_ids |= kv.second;

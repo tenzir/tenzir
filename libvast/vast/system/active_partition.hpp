@@ -88,6 +88,11 @@ struct active_partition_state {
     /// A mapping from qualified field name to serialized indexer state
     /// for each indexer in the partition.
     std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
+
+    /// Maps qualified fields to indexer actors.
+    //  TODO: Should we use the tsl map here for heterogenous key lookup?
+    detail::stable_map<qualified_record_field, active_indexer_actor> indexers
+      = {};
   };
 
   // -- utility functions ------------------------------------------------------
@@ -115,11 +120,6 @@ struct active_partition_state {
 
   /// Tracks whether we already received at least one table slice.
   bool streaming_initiated = {};
-
-  /// Maps qualified fields to indexer actors.
-  //  TODO: Should we use the tsl map here for heterogenous key lookup?
-  detail::stable_map<qualified_record_field, active_indexer_actor> indexers
-    = {};
 
   /// Options to be used when adding events to the partition_synopsis.
   caf::settings synopsis_opts = {};
@@ -167,7 +167,7 @@ struct active_partition_state {
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder,
-     const active_partition_state& state);
+     const active_partition_state::serialization_data& x);
 
 // -- behavior -----------------------------------------------------------------
 

@@ -10,6 +10,8 @@
 
 #include "vast/detail/operators.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/hash/hash.hpp"
+#include "vast/hash/uniquely_represented.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
@@ -76,6 +78,10 @@ private:
   std::array<value_type, num_bytes> id_;
 };
 
+template <>
+struct is_uniquely_represented<uuid>
+  : std::bool_constant<sizeof(uuid) == uuid::num_bytes> {};
+
 // flatbuffer support
 [[nodiscard]] caf::expected<flatbuffers::Offset<fbs::uuid::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x);
@@ -84,17 +90,12 @@ pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x);
 
 } // namespace vast
 
-// TODO: express in terms of hashable concept. This means simply hashing the
-// bytes of the entire std::array.
 namespace std {
 
 template <>
 struct hash<vast::uuid> {
-  size_t operator()(const vast::uuid& u) const {
-    size_t x = 0;
-    for (auto& byte : u)
-      x ^= static_cast<size_t>(byte) + 0x9e3779b9 + (x << 6) + (x >> 2);
-    return x;
+  size_t operator()(const vast::uuid& x) const {
+    return vast::hash(x);
   }
 };
 

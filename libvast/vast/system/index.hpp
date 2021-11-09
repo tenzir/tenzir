@@ -11,13 +11,14 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/lru_cache.hpp"
-#include "vast/detail/stable_map.hpp"
+#include "vast/detail/stable_set.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/importer.hpp"
 #include "vast/system/meta_index.hpp"
 #include "vast/uuid.hpp"
 
@@ -26,13 +27,28 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/meta/omittable_if_empty.hpp>
 #include <caf/meta/type_name.hpp>
-#include <caf/response_promise.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <caf/typed_response_promise.hpp>
 
+#include <queue>
 #include <unordered_map>
 #include <vector>
 
 namespace vast::system {
+
+/// Extract a partition synopsis from the partition at `partition_path`
+/// and write it to `partition_synopsis_path`.
+//  TODO: Move into separate header.
+caf::error
+extract_partition_synopsis(const std::filesystem::path& partition_path,
+                           const std::filesystem::path& partition_synopsis_path);
+
+/// Flatbuffer integration. Note that this is only one-way, restoring
+/// the index state needs additional runtime information.
+// TODO: Pull out the persisted part of the state into a separate struct
+// that can be packed and unpacked.
+caf::expected<flatbuffers::Offset<fbs::Index>>
+pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// The state of the active partition.
 struct active_partition_info {
@@ -50,6 +66,7 @@ struct active_partition_info {
   // do the streaming.
   store_builder_actor store = {};
 
+  // The slot ID that identifies the store in the stream.
   caf::stream_slot store_slot = {};
 
   /// The remaining free capacity of the partition.
@@ -100,6 +117,21 @@ private:
   const index_state& state_;
 };
 
+struct query_backlog {
+  struct job {
+    vast::query query;
+    caf::typed_response_promise<void> rp;
+  };
+
+  // Emplace a job.
+  void emplace(vast::query query, caf::typed_response_promise<void> rp);
+
+  [[nodiscard]] std::optional<job> take_next();
+
+  std::queue<job> normal;
+  std::queue<job> low;
+};
+
 struct query_state {
   /// The UUID of the query.
   vast::uuid id;
@@ -110,10 +142,13 @@ struct query_state {
   /// Unscheduled partitions.
   std::vector<uuid> partitions;
 
+  /// The assigned query worker.
+  query_supervisor_actor worker;
+
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
     return f(caf::meta::type_name("query_state"), x.id, x.query,
-             caf::meta::omittable_if_empty(), x.partitions);
+             caf::meta::omittable_if_empty(), x.partitions, x.worker);
   }
 };
 
@@ -131,14 +166,6 @@ struct index_state {
 
   // -- persistence ------------------------------------------------------------
 
-  caf::error load_from_disk();
-
-  /// @returns various status metrics.
-  [[nodiscard]] caf::typed_response_promise<record>
-  status(status_verbosity v) const;
-
-  void flush_to_disk();
-
   [[nodiscard]] std::filesystem::path
   index_filename(const std::filesystem::path& basename = {}) const;
 
@@ -148,6 +175,10 @@ struct index_state {
   // Maps partition synopses to their expected location on the file system.
   [[nodiscard]] std::filesystem::path
   partition_synopsis_path(const uuid& id) const;
+
+  caf::error load_from_disk();
+
+  void flush_to_disk();
 
   // -- query handling ---------------------------------------------------------
 
@@ -170,11 +201,23 @@ struct index_state {
 
   // -- partition handling -----------------------------------------------------
 
+  /// Generates a unique query id.
+  vast::uuid create_query_id();
+
   /// Creates a new active partition.
   void create_active_partition();
 
   /// Decommissions the active partition.
   void decomission_active_partition();
+
+  // -- introspection ----------------------------------------------------------
+
+  /// Flushes collected metrics to the accountant.
+  void send_report();
+
+  /// @returns various status metrics.
+  [[nodiscard]] caf::typed_response_promise<record>
+  status(status_verbosity v) const;
 
   // -- data members -----------------------------------------------------------
 
@@ -213,12 +256,15 @@ struct index_state {
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
-  // The maximum size of the partition LRU cache (or the maximum number of
-  // read-only partition loaded to memory).
+  /// The maximum size of the partition LRU cache (or the maximum number of
+  /// read-only partition loaded to memory).
   size_t max_inmem_partitions = {};
 
-  // The number of partitions initially returned for a query.
+  /// The number of partitions initially returned for a query.
   size_t taste_partitions = {};
+
+  /// The set of received but unprocessed queries.
+  query_backlog backlog = {};
 
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, query_state> pending = {};
@@ -232,7 +278,7 @@ struct index_state {
   size_t workers = 0;
 
   /// Caches idle workers.
-  std::vector<query_supervisor_actor> idle_workers = {};
+  detail::stable_set<query_supervisor_actor> idle_workers = {};
 
   /// The META INDEX actor.
   meta_index_actor meta_index = {};
@@ -258,31 +304,27 @@ struct index_state {
   /// Actor handle of the store actor.
   archive_actor global_store = {};
 
+  /// Actor handle of the importer actor to reserve additional
+  /// parts of the id space.
+  idspace_distributor_actor importer = {};
+
   /// Plugin responsible for spawning new partition-local stores.
   const vast::store_plugin* store_plugin = {};
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
 
-  // The false positive rate for the meta index.
+  /// The false positive rate for the meta index.
   double meta_index_fp_rate = {};
+
+  /// Config options to be used for new synopses; passed to active partitions.
+  caf::settings synopsis_opts;
+
+  /// Config options for the index.
+  caf::settings index_opts;
 
   constexpr static inline auto name = "index";
 };
-
-/// Extract a partition synopsis from the partition at `partition_path`
-/// and write it to `partition_synopsis_path`.
-//  TODO: Move into separate header.
-caf::error
-extract_partition_synopsis(const std::filesystem::path& partition_path,
-                           const std::filesystem::path& partition_synopsis_path);
-
-/// Flatbuffer integration. Note that this is only one-way, restoring
-/// the index state needs additional runtime information.
-// TODO: Pull out the persisted part of the state into a separate struct
-// that can be packed and unpacked.
-caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// Indexes events in horizontal partitions.
 /// @param filesystem The filesystem actor. Not used by the index itself but

@@ -24,12 +24,33 @@ TEST(deleter) {
   char buf[100] = {};
   auto i = 42;
   MESSAGE("owning chunk");
-  auto deleter = [&]() noexcept { i = 0; };
+  auto deleter = [&]() noexcept {
+    i = 0;
+  };
   auto x = chunk::make(buf, sizeof(buf), std::move(deleter));
   CHECK_EQUAL(i, 42);
   x = nullptr;
   CHECK_EQUAL(i, 0);
   i = 42;
+}
+
+TEST(deletion_step) {
+  char buf[100] = {};
+  auto i = 0;
+  MESSAGE("owning chunk");
+  auto x = chunk::copy(buf);
+  x->add_deletion_step([&]() noexcept {
+    i = 42;
+  });
+  auto y = x->slice(1);
+  auto z = y->slice(2);
+  CHECK_EQUAL(i, 0);
+  x = nullptr;
+  CHECK_EQUAL(i, 0);
+  y = nullptr;
+  CHECK_EQUAL(i, 0);
+  z = nullptr;
+  CHECK_EQUAL(i, 42);
 }
 
 TEST(access) {

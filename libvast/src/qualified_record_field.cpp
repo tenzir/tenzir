@@ -8,8 +8,8 @@
 
 #include "vast/qualified_record_field.hpp"
 
-#include "vast/concept/hashable/hash_append.hpp"
 #include "vast/data.hpp"
+#include "vast/hash/hash.hpp"
 #include "vast/legacy_type.hpp"
 
 #include <caf/deserializer.hpp>
@@ -117,11 +117,7 @@ namespace std {
 
 size_t hash<vast::qualified_record_field>::operator()(
   const vast::qualified_record_field& f) const noexcept {
-  using hash_algorithm = vast::default_hash;
-  hash_algorithm h{};
-  hash_append(h, f.name());
-  hash_append(h, f.type());
-  return static_cast<hash_algorithm::result_type>(h);
+  return vast::hash(f.name(), f.type());
 }
 
 } // namespace std

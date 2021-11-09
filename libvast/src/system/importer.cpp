@@ -197,15 +197,18 @@ importer_state::status(status_verbosity v) const {
   record result;
   result["ids.available"] = count{available_ids()};
   if (v >= status_verbosity::detailed) {
-    auto& ids = insert_record(rs->content, "ids");
+    auto ids = record{};
     ids["available"] = count{available_ids()};
-    auto& block = insert_record(ids, "block");
+    auto block = record{};
     block["next"] = count{current.next};
     block["end"] = count{current.end};
-    auto& sources_status = insert_list(rs->content, "sources");
+    ids["block"] = std::move(block);
+    rs->content["ids"] = std::move(ids);
+    auto sources_status = list{};
     sources_status.reserve(inbound_descriptions.size());
     for (const auto& kv : inbound_descriptions)
       sources_status.emplace_back(kv.second);
+    rs->content["sources"] = std::move(sources_status);
   }
   // General state such as open streams.
   if (v >= status_verbosity::debug)
@@ -257,6 +260,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit(std::move(err));
     return importer_actor::behavior_type::make_empty_behavior();
   }
+  self->send(index, atom::importer_v,
+             static_cast<idspace_distributor_actor>(self));
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
@@ -334,6 +339,12 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       VAST_ASSERT(self->state.stage != nullptr);
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
+    },
+    // Reserve a part of the id space.
+    [self](atom::reserve, uint64_t n) {
+      VAST_ASSERT(n <= static_cast<size_t>(self->state.available_ids()),
+                  "id space overflow");
+      return self->state.next_id(n);
     },
     // The internal telemetry loop of the IMPORTER.
     [self](atom::telemetry) {

@@ -99,7 +99,13 @@ query_supervisor_actor::behavior_type query_supervisor(
             });
       }
     },
-  };
+    [self](atom::shutdown, atom::sink) {
+      // If there are still open requests, the message will be sent when
+      // the count drops to zero. We currently don't have a way of aborting
+      // the in-progress work.
+      if (self->state.open_requests == 0)
+        self->send(self->state.master, atom::worker_v, self);
+    }};
 }
 
 } // namespace vast::system

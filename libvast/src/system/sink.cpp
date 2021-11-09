@@ -139,8 +139,9 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
         if (self->state.writer)
           sink_status["format"] = self->state.writer->name();
         sink_status["processed"] = count{self->state.processed};
-        auto& xs = insert_list(result, "sinks");
+        auto xs = list{};
         xs.emplace_back(std::move(sink_status));
+        result["sinks"] = std::move(xs);
       }
       return result;
     },

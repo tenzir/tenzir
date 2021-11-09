@@ -10,12 +10,12 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/hash/hash_append.hpp"
+#include "vast/hash/xxhash.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 

@@ -25,9 +25,11 @@ using namespace std::string_literals;
 
 namespace {
 
+#if 0
 std::string_view eve_log
   = R"json({"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1}}
   {"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1},"resp_mime_types":null})json";
+#endif
 
 } // namespace
 
@@ -98,12 +100,9 @@ TEST(json to data) {
   CHECK_EQUAL(slice.at(0, 4), data{std::string{"0123456789®\r\n"}});
   CHECK_EQUAL(slice.at(0, 5), data{std::string{"42.42"}});
   std::array<std::uint8_t, 4> addr1{147, 32, 84, 165};
-  CHECK(slice.at(0, 6)
-        == data{address::v4(addr1.data(), address::byte_order::network)});
+  CHECK(slice.at(0, 6) == data{address::v4(std::span{addr1})});
   std::array<std::uint8_t, 4> addr2{192, 168, 0, 1};
-  CHECK(slice.at(0, 7)
-        == data{
-          subnet{address::v4(addr2.data(), address::byte_order::network), 24}});
+  CHECK(slice.at(0, 7) == data{subnet{address::v4(std::span{addr2}), 24}});
   CHECK(slice.at(0, 11) == data{enumeration{2}});
   const list lc
     = {data{count{0x3e7}}, data{count{19}}, data{count{5555}}, data{count{0}}};
