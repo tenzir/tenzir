@@ -140,7 +140,7 @@ TEST(empty partition roundtrip) {
   auto layout = vast::record_type{{"x", vast::count_type{}}};
   layout.assign_metadata(vast::type{"y", vast::none_type{}});
   auto qf = vast::qualified_record_field{layout, vast::offset{0}};
-  state.data.indexers[qf] = nullptr;
+  state.indexers[qf] = nullptr;
   auto slice_builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, layout);
   REQUIRE(slice_builder);
@@ -151,7 +151,9 @@ TEST(empty partition roundtrip) {
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {
-    auto partition = pack(builder, state.data);
+    auto combined_layout = state.combined_layout();
+    REQUIRE(combined_layout);
+    auto partition = pack(builder, state.data, *combined_layout);
     REQUIRE(partition);
     vast::fbs::FinishPartitionBuffer(builder, *partition);
   }

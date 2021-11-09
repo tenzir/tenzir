@@ -198,7 +198,17 @@ partition_transformer_actor::behavior_type partition_transformer(
       [&] {
         { // Pack partition
           flatbuffers::FlatBufferBuilder builder;
-          auto partition = pack(builder, self->state.data);
+          if (self->state.indexers.empty()) {
+            stream_data.partition_chunk
+              = caf::make_error(ec::logic_error, "cannot create partition with "
+                                                 "empty layout");
+            return;
+          }
+          auto fields = std::vector<struct record_type::field>{};
+          fields.reserve(self->state.indexers.size());
+          for (const auto& [qf, _] : self->state.indexers)
+            fields.push_back({std::string{qf.name()}, qf.type()});
+          auto partition = pack(builder, self->state.data, record_type{fields});
           if (!partition) {
             stream_data.partition_chunk = partition.error();
             return;

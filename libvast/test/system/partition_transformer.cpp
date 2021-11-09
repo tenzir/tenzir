@@ -101,8 +101,8 @@ TEST(identity transform / done before persist) {
     [&](std::shared_ptr<vast::partition_synopsis>& ps) {
       synopsis = ps;
     },
-    [&](caf::error&) {
-      FAIL("failed to persist");
+    [&](caf::error& err) {
+      FAIL("failed to persist: " << err);
     });
   // Verify serialized data
   auto partition_rp = self->request(filesystem, caf::infinite,

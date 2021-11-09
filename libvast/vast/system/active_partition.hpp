@@ -88,11 +88,6 @@ struct active_partition_state {
     /// A mapping from qualified field name to serialized indexer state
     /// for each indexer in the partition.
     std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
-
-    /// Maps qualified fields to indexer actors.
-    //  TODO: Should we use the tsl map here for heterogenous key lookup?
-    detail::stable_map<qualified_record_field, active_indexer_actor> indexers
-      = {};
   };
 
   // -- utility functions ------------------------------------------------------
@@ -144,6 +139,11 @@ struct active_partition_state {
   /// Path where the partition synopsis is written.
   std::optional<std::filesystem::path> synopsis_path = {};
 
+  /// Maps qualified fields to indexer actors.
+  //  TODO: Should we use the tsl map here for heterogenous key lookup?
+  detail::stable_map<qualified_record_field, active_indexer_actor> indexers
+    = {};
+
   /// Counts how many indexers have already responded to the `snapshot` atom
   /// with a serialized chunk.
   size_t persisted_indexers = {};
@@ -167,7 +167,8 @@ struct active_partition_state {
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder,
-     const active_partition_state::serialization_data& x);
+     const active_partition_state::serialization_data& x,
+     const record_type& combined_layout);
 
 // -- behavior -----------------------------------------------------------------
 
