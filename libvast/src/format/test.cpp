@@ -39,75 +39,78 @@ caf::expected<distribution> make_distribution(const type& t) {
     return caf::no_error;
   auto parser = +alpha >> '(' >> real_opt_dot >> ',' >> real_opt_dot >> ')';
   std::string name;
-  double p0, p1;
+  double p0 = {};
+  double p1 = {};
   auto tie = std::tie(name, p0, p1);
   if (!parser(*tag, tie))
     return caf::make_error(ec::parse_error, "invalid distribution "
                                             "specification");
-  VAST_DEBUG("generating distribution {}={} in [{}, {})", *tag, name, p0, p1);
+  VAST_DEBUG("generating distribution {} in [{}, {})", name, p0, p1);
   if (name == "uniform") {
-    if (holds_alternative<integer_type>(t))
+    if (caf::holds_alternative<integer_type>(t))
       return {std::uniform_int_distribution<vast::integer::value_type>{
         static_cast<vast::integer::value_type>(p0),
         static_cast<vast::integer::value_type>(p1)}};
-    else if (holds_alternative<bool_type>(t) || holds_alternative<count_type>(t)
-             || holds_alternative<string_type>(t))
+    if (caf::holds_alternative<bool_type>(t)
+        || caf::holds_alternative<count_type>(t)
+        || caf::holds_alternative<string_type>(t))
       return {std::uniform_int_distribution<count>{static_cast<count>(p0),
                                                    static_cast<count>(p1)}};
-    else
-      return {std::uniform_real_distribution<long double>{p0, p1}};
+    return {std::uniform_real_distribution<long double>{p0, p1}};
   }
   if (name == "normal")
     return {std::normal_distribution<long double>{p0, p1}};
   if (name == "pareto")
     return {detail::pareto_distribution<long double>{p0, p1}};
   return caf::make_error(ec::parse_error, "unknown distribution", name);
-}
-
-struct initializer {
-  initializer(blueprint& bp)
-    : distributions_{bp.distributions}, data_{bp.data.get()} {
-  }
-
-  template <class T>
-  caf::expected<void> operator()(const T& t) {
-    auto dist = make_distribution(t);
-    if (dist)
-      distributions_.push_back(std::move(*dist));
-    else if (!dist.error())
-      *data_ = caf::none;
-    else
-      return dist.error();
-    return caf::no_error;
-  }
-
-  caf::expected<void> operator()(const record_type& r) {
-    auto& xs = caf::get<record>(*data_);
-    if (xs.size() != r.num_fields()) {
-      fmt::print(stderr, "{} != {}\n", xs.size(), r.num_fields());
-      fmt::print(stderr, "{} != {}\n", *data_, r);
-    }
-    VAST_ASSERT(xs.size() == r.num_fields());
-    for (size_t i = 0; auto& [_, v] : xs) {
-      data_ = &v;
-      auto result = visit(*this, r.field(i++).type);
-      if (!result)
-        return result;
-    }
-    return caf::no_error;
-  }
-
-  std::vector<distribution>& distributions_;
-  data* data_ = nullptr;
 };
 
 caf::expected<blueprint> make_blueprint(const type& t) {
   blueprint bp;
-  bp.data = std::make_unique<data>(t.construct());
-  VAST_DEBUG("making test blueprint for type {} with data {}", t, *bp.data);
-  auto result = visit(initializer{bp}, t);
-  if (!result)
-    return result.error();
+  auto initialize = detail::overload{
+    [&]<basic_type T>(const T& x) -> caf::error {
+      bp.data = std::make_unique<data>(x.construct());
+      // It's important that we pass t rather than x here as this needs access
+      // to the tags, which are part of type but not the concrete type.
+      auto dist = make_distribution(x);
+      if (!dist)
+        return dist.error();
+      bp.distributions.push_back(std::move(*dist));
+      return caf::none;
+    },
+    [&](const record_type& x) -> caf::error {
+      auto l = list{};
+      l.reserve(x.num_fields());
+      for (const auto& [_, ft] : x.fields()) {
+        l.push_back(ft.construct());
+        auto dist = make_distribution(ft);
+        if (!dist) {
+          // TODO: This may cause a mismatch between data and distributions. We
+          // probably need to make bp.distributions a list of optional
+          // distributions so we can add a nullopt in this case, and then handle
+          // that case when visiting the distributions by printing a warning and
+          // just adding nil. As-is, we just skip the field, which may result in
+          // errors for layouts that such fields anywhere but at the end.
+          if (dist.error() == caf::no_error)
+            continue;
+          return dist.error();
+        }
+        bp.distributions.push_back(std::move(*dist));
+      }
+      l.reserve(x.num_fields());
+      bp.data = std::make_unique<data>(std::move(l));
+      return caf::none;
+    },
+    []<complex_type T>(const T& x) -> caf::error {
+      // Complex types other than record_type are not supported.
+      return caf::make_error(
+        ec::unimplemented,
+        fmt::format("test generator does not support complex type {}", x));
+    },
+  };
+  if (auto err = visit(initialize, t))
+    return err;
+  VAST_DEBUG("created blueprint for type {} with stub data {}", t, *bp.data);
   return bp;
 }
 
@@ -132,9 +135,19 @@ struct randomizer {
     : dists_{dists}, gen_{gen} {
   }
 
-  template <class T, class U>
+  template <basic_type T, class U>
+    requires(!std::is_same_v<type_to_data_t<T>, U>)
   auto operator()(const T&, U&) {
     // Do nothing.
+  }
+
+  template <complex_type T, class U>
+  auto operator()(const T&, U&) {
+    // Do nothing.
+  }
+
+  void operator()(const none_type&, caf::none_t&) {
+    // nop
   }
 
   void operator()(const integer_type&, integer& x) {
@@ -172,6 +185,12 @@ struct randomizer {
       c = unif_char(gen);
   }
 
+  void operator()(const pattern_type&, pattern& p) {
+    auto intermediate = std::string{};
+    (*this)(string_type{}, intermediate);
+    p = pattern{std::move(intermediate)};
+  }
+
   void operator()(const address_type&, address& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.
@@ -186,9 +205,8 @@ struct randomizer {
   }
 
   void operator()(const subnet_type&, subnet& sn) {
-    static type addr_type = address_type{};
     address addr;
-    (*this)(addr_type, addr);
+    (*this)(address_type{}, addr);
     std::uniform_int_distribution<uint8_t> unif{0, 128};
     sn = {addr, unif(gen_)};
   }
@@ -225,7 +243,6 @@ std::string_view builtin_schema = R"__(
     d: duration #default="uniform(100,200)",
     a: addr #default="uniform(0,2000000)",
     u: subnet #default="uniform(1000,2000)",
-    n: list<int>,
   }
 )__";
 
@@ -308,15 +325,18 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   size_t produced = 0;
   while (produced < max_events) {
     // Generate random data.
-    auto& t = *next_;
-    auto& bp = blueprints_[t];
+    const auto& t = *next_;
+    auto bp = blueprints_.find(t);
+    VAST_ASSERT(bp != blueprints_.end());
     auto ptr = builder(t);
     VAST_ASSERT(ptr != nullptr);
     auto rows = std::min({num_events_, max_events - produced, max_slice_size});
     VAST_ASSERT(rows > 0);
     for (size_t i = 0; i < rows; ++i) {
-      visit(default_randomizer{bp.distributions, generator_}, t, *bp.data);
-      if (!ptr->recursive_add(*bp.data, t)) {
+      auto randomizer
+        = default_randomizer{bp->second.distributions, generator_};
+      visit(randomizer, t, *bp->second.data);
+      if (!ptr->recursive_add(*bp->second.data, t)) {
         VAST_ERROR("{} failed to add blueprint data to slice builder",
                    detail::pretty_type_name(this));
         return caf::make_error(ec::format_error, "failed to add blueprint data "

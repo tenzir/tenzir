@@ -9,5 +9,4 @@ type test.full = record{
  d: duration #default="uniform(100,200)",
  a: addr #default="uniform(0,2000000)",
  u: subnet #default="uniform(1000,2000)",
- n: list<int>
 }
