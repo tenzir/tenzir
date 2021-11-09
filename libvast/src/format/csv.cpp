@@ -243,7 +243,7 @@ struct container_parser_builder {
     // nop
   }
 
-  template <class T>
+  template <concrete_type T>
   result_type operator()(const T& t) const {
     if constexpr (std::is_same_v<T, string_type>) {
       // clang-format off
@@ -367,7 +367,7 @@ struct csv_parser_factory {
         // clang-format on
       } else if constexpr (detail::is_any_v<U, list_type, map_type>) {
         auto pb = container_parser_builder<Iterator, data>{opt_};
-        return (-pb(t)).with(add_t<data>{bptr_});
+        return (-caf::visit(pb, t)).with(add_t<data>{bptr_});
       } else if constexpr (registered_parser_type<type_to_data_t<U>>) {
         using value_type = type_to_data_t<U>;
         auto p = make_parser<value_type>{};
