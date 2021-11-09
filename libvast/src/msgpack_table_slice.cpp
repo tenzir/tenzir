@@ -255,7 +255,7 @@ msgpack_map_view::value_type msgpack_map_view::at(size_type i) const {
 
 template <class FlatBuffer>
 msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
-  const FlatBuffer& slice, const chunk_ptr& parent) noexcept
+  const FlatBuffer& slice, [[maybe_unused]] const chunk_ptr& parent) noexcept
   : slice_{slice}, state_{} {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::msgpack::v0>) {
     // This legacy type has to stay; it is deserialized from disk.
@@ -265,7 +265,12 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
     state_.layout = caf::get<record_type>(type::from_legacy_type(intermediate));
     state_.columns = this->layout().num_leaves();
   } else {
-    auto layout = type{parent->slice(as_bytes(*slice_.layout()))};
+    // We decouple the sliced type from the layout intentionally. This is an
+    // absolute must because we store the state in the deletion step of the
+    // table slice's chunk, and storing a sliced chunk in there would cause a
+    // cyclic reference. In the future, we should just not store the sliced
+    // chunk at all, but rather create it on the fly only.
+    auto layout = type{chunk::copy(as_bytes(*slice_.layout()))};
     VAST_ASSERT(caf::holds_alternative<record_type>(layout));
     state_.layout = caf::get<record_type>(layout);
     state_.columns = this->layout().num_leaves();

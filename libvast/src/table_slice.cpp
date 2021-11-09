@@ -158,17 +158,9 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
 
 table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
                          const chunk_ptr& parent_chunk,
-                         enum verify verify) noexcept {
-  const auto* const flat_slice_begin
-    = reinterpret_cast<const std::byte*>(flat_slice.data()->data());
-  const auto flat_slice_size = flat_slice.data()->size();
-  VAST_ASSERT(flat_slice_begin >= parent_chunk->data());
-  VAST_ASSERT(std::next(flat_slice_begin, flat_slice_size)
-              <= std::next(parent_chunk->data(), parent_chunk->size()));
-  auto chunk = parent_chunk->slice(flat_slice_begin - parent_chunk->data(),
-                                   flat_slice_size);
-  // Delegate the sliced chunk to the constructor.
-  *this = table_slice{std::move(chunk), verify};
+                         enum verify verify) noexcept
+  : table_slice(parent_chunk->slice(as_bytes(*flat_slice.data())), verify) {
+  // nop
 }
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,

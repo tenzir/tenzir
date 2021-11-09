@@ -640,7 +640,7 @@ private:
 
 template <class FlatBuffer>
 arrow_table_slice<FlatBuffer>::arrow_table_slice(
-  const FlatBuffer& slice, const chunk_ptr& parent) noexcept
+  const FlatBuffer& slice, [[maybe_unused]] const chunk_ptr& parent) noexcept
   : slice_{slice}, state_{} {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>) {
     // This legacy type has to stay; it is deserialized from disk.
@@ -651,7 +651,12 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     auto decoder = record_batch_decoder{};
     state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
   } else {
-    state_.layout = type{parent->slice(as_bytes(*slice_.layout()))};
+    // We decouple the sliced type from the layout intentionally. This is an
+    // absolute must because we store the state in the deletion step of the
+    // table slice's chunk, and storing a sliced chunk in there would cause a
+    // cyclic reference. In the future, we should just not store the sliced
+    // chunk at all, but rather create it on the fly only.
+    state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
     VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
     auto decoder = record_batch_decoder{};
     state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
