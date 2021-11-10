@@ -65,40 +65,16 @@ struct bloom_filter_view {
   std::span<Word> bits;
 };
 
-/// Constructs a flatbuffer Bloom filter that is not yet initialized.
-caf::expected<std::pair<flatbuffers::DetachedBuffer, bloom_filter_view<uint64_t>>>
-make_uninitialized(bloom_filter_params params);
+/// Computes the optimal Bloom filter parameters for a given false positive and
+/// size, i.e., the minimum number of bits needed.
+caf::expected<bloom_filter_params>
+compute_bloom_filter_params(size_t n, double p);
 
 } // namespace detail
 
 /// An immutable Bloom filter wrapped in a contiguous chunk of memory.
 class frozen_bloom_filter {
 public:
-  /// Constructs a frozen Bloom filter from a range of digests, for a given
-  /// false-positive probability.
-  /// @param range The range that contains the hash digests.
-  /// @param p The desired false-positive probability of the filter.
-  template <concepts::range Range>
-  static caf::expected<frozen_bloom_filter> make(Range& range, double p) {
-    // Compute optimal parameters.
-    bloom_filter_config cfg;
-    cfg.p = p;
-    cfg.n = std::size(range);
-    auto params = evaluate(cfg);
-    if (!params)
-      return caf::make_error(ec::invalid_argument, "invalid p or n");
-    // Make m odd for worm hashing to be regenerative.
-    params->m -= ~(params->m & 1);
-    auto pair = detail::make_uninitialized(*params);
-    if (!pair)
-      return pair.error();
-    auto& view = pair->second;
-    std::fill(view.bits.begin(), view.bits.end(), 0);
-    for (auto digest : range)
-      view.add(digest);
-    return frozen_bloom_filter{chunk::make(std::move(pair->first))};
-  }
-
   /// Constructs a frozen Bloom filter from a flatbuffer.
   /// @pre *table* must be a valid Bloom filter flatbuffer.
   explicit frozen_bloom_filter(chunk_ptr table) noexcept;

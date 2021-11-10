@@ -15,38 +15,17 @@
 namespace vast::sketch {
 namespace detail {
 
-caf::expected<std::pair<flatbuffers::DetachedBuffer, bloom_filter_view<uint64_t>>>
-make_uninitialized(bloom_filter_params params) {
-  VAST_ASSERT(params.m > 0);
-  VAST_ASSERT(params.m & 1);
-  constexpr auto fixed_size = 56;
-  const auto bitvector_size = (params.m + 63) / 64;
-  const auto expected_size = fixed_size + bitvector_size * sizeof(uint64_t);
-  // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t' over
-  // 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
-  using ::flatbuffers::soffset_t;
-  if (expected_size >= FLATBUFFERS_MAX_BUFFER_SIZE)
-    return caf::make_error(
-      ec::invalid_argument,
-      fmt::format("frozen size {} exceeds max flatbuffer size of {} bytes",
-                  expected_size, FLATBUFFERS_MAX_BUFFER_SIZE));
-  // We know the exact size, so we reserve it to avoid re-allocations.
-  flatbuffers::FlatBufferBuilder builder{expected_size};
-  auto flat_params
-    = fbs::BloomFilterParameters{params.m, params.n, params.k, params.p};
-  uint64_t* buf;
-  auto bits_offset = builder.CreateUninitializedVector(bitvector_size, &buf);
-  auto bloom_filter_offset
-    = fbs::CreateBloomFilter(builder, &flat_params, bits_offset);
-  builder.Finish(bloom_filter_offset);
-  auto buffer = builder.Release();
-  VAST_ASSERT(buffer.size() == expected_size);
-  auto root = fbs::GetMutableBloomFilter(buffer.data());
-  bloom_filter_view<uint64_t> view;
-  view.params = params;
-  auto bits = root->mutable_bits();
-  view.bits = std::span{bits->data(), bits->size()};
-  return std::pair{std::move(buffer), view};
+caf::expected<bloom_filter_params>
+compute_bloom_filter_params(size_t n, double p) {
+  bloom_filter_config cfg;
+  cfg.p = p;
+  cfg.n = n;
+  auto params = evaluate(cfg);
+  if (!params)
+    return caf::make_error(ec::invalid_argument, "invalid p or n");
+  // Make m odd for worm hashing to be regenerative.
+  params->m -= ~(params->m & 1);
+  return *params;
 }
 
 } // namespace detail
@@ -102,13 +81,37 @@ size_t mem_usage(const bloom_filter& x) {
 }
 
 caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
-  auto pair = detail::make_uninitialized(x.parameters());
-  if (!pair)
-    return pair.error();
-  auto& view = pair->second;
-  VAST_ASSERT(x.view_.bits.size() == view.bits.size());
-  std::copy(x.view_.bits.begin(), x.view_.bits.end(), view.bits.begin());
-  return frozen_bloom_filter{chunk::make(std::move(pair->first))};
+  VAST_ASSERT(x.parameters().m > 0);
+  VAST_ASSERT(x.parameters().m & 1);
+  constexpr auto fixed_size = 56;
+  const auto bitvector_size = (x.parameters().m + 63) / 64;
+  const auto expected_size = fixed_size + bitvector_size * sizeof(uint64_t);
+  // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t' over
+  // 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
+  using ::flatbuffers::soffset_t;
+  if (expected_size >= FLATBUFFERS_MAX_BUFFER_SIZE)
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("frozen size {} exceeds max flatbuffer size of {} bytes",
+                  expected_size, FLATBUFFERS_MAX_BUFFER_SIZE));
+  // We know the exact size, so we reserve it to avoid re-allocations.
+  flatbuffers::FlatBufferBuilder builder{expected_size};
+  auto flat_params = fbs::BloomFilterParameters{
+    x.parameters().m, x.parameters().n, x.parameters().k, x.parameters().p};
+  uint64_t* buf;
+  auto bits_offset = builder.CreateUninitializedVector(bitvector_size, &buf);
+  auto bloom_filter_offset
+    = fbs::CreateBloomFilter(builder, &flat_params, bits_offset);
+  builder.Finish(bloom_filter_offset);
+  auto buffer = builder.Release();
+  VAST_ASSERT(buffer.size() == expected_size);
+  // Copy words into flatbuffer.
+  auto root = fbs::GetMutableBloomFilter(buffer.data());
+  auto mutable_bits = root->mutable_bits();
+  auto bits = std::span{mutable_bits->data(), mutable_bits->size()};
+  VAST_ASSERT(x.view_.bits.size() == bits.size());
+  std::copy(x.view_.bits.begin(), x.view_.bits.end(), bits.begin());
+  return frozen_bloom_filter{chunk::make(std::move(buffer))};
 }
 
 bloom_filter::bloom_filter(bloom_filter_params params) {
