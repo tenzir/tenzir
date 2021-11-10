@@ -77,17 +77,3 @@ TEST(frozen bloom filter) {
   CHECK(frozen.lookup(hash("foo")));
   CHECK_EQUAL(filter.parameters(), frozen.parameters());
 }
-
-TEST(frozen bloom filter - bulk add) {
-  auto i = int64_t{0};
-  auto xs = std::vector<int64_t>(1024);
-  std::generate(xs.begin(), xs.end(), [&] {
-    return hash(i++);
-  });
-  auto filter = unbox(frozen_bloom_filter::make(xs, 0.1));
-  CHECK_EQUAL(filter.parameters().m, 4'909u);
-  CHECK_EQUAL(filter.parameters().n, xs.size());
-  CHECK_EQUAL(filter.parameters().k, 3u);
-  CHECK(filter.lookup(xs[42]));
-  CHECK(!filter.lookup(hash("foo")));
-}
