@@ -362,11 +362,11 @@ TEST(record_type name resolving) {
         }},
      }},
   };
-  CHECK_EQUAL(rt.resolve_prefix("i"), offset{0});
-  CHECK_EQUAL(rt.resolve_prefix("r2"), offset{3});
-  CHECK_EQUAL(rt.resolve_prefix("r.a"), (offset{1, 1}));
-  CHECK_EQUAL(rt.resolve_prefix("a"), std::nullopt);
-  CHECK_EQUAL(rt.resolve_prefix("r.not"), std::nullopt);
+  CHECK_EQUAL(rt.resolve_key("i"), offset{0});
+  CHECK_EQUAL(rt.resolve_key("r2"), offset{3});
+  CHECK_EQUAL(rt.resolve_key("r.a"), (offset{1, 1}));
+  CHECK_EQUAL(rt.resolve_key("a"), std::nullopt);
+  CHECK_EQUAL(rt.resolve_key("r.not"), std::nullopt);
   CHECK_EQUAL(rt.resolve_suffix("a"), (std::vector<offset>{{1, 1}, {3, 1, 0}}));
   CHECK_EQUAL(rt.resolve_suffix("r.a"),
               (std::vector<offset>{{1, 1}, {3, 1, 0}}));
@@ -376,8 +376,8 @@ TEST(record_type name resolving) {
   CHECK_EQUAL(rt.resolve_suffix("i"), (std::vector<offset>{{0}}));
   CHECK_EQUAL(rt.resolve_suffix(""), (std::vector<offset>{}));
   const auto named_rt = caf::get<record_type>(type{"name", rt});
-  CHECK_EQUAL(named_rt.resolve_prefix("i"), offset{0});
-  CHECK_EQUAL(named_rt.resolve_prefix("name.i"), offset{0});
+  CHECK_EQUAL(named_rt.resolve_key("i"), offset{0});
+  CHECK_EQUAL(named_rt.resolve_key("name.i"), offset{0});
   CHECK_EQUAL(named_rt.resolve_suffix("r2.r.a"),
               (std::vector<offset>{{3, 1, 0}}));
   CHECK_EQUAL(named_rt.resolve_suffix("name.r2.r.a"),

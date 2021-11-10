@@ -207,7 +207,7 @@ reader::make_layout(const std::vector<std::string>& names) {
         std::vector<record_type::field_view> result_raw;
         result_raw.reserve(names.size());
         for (const auto& name : names) {
-          if (auto index = r->resolve_prefix(name))
+          if (auto index = r->resolve_key(name))
             result_raw.push_back({
               name,
               r->field(*index).type,

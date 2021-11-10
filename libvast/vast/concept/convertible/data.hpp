@@ -352,7 +352,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
     const auto* element_rec = caf::get_if<record>(&element);
     if (!element_rec)
       return caf::make_error(ec::convert_error, ": expected record");
-    auto record_resolve_prefix
+    auto record_resolve_key
       = [](const auto& self, const record& d,
            std::string_view name) -> const record::value_type* {
       for (const auto& e : d) {
@@ -373,8 +373,8 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
       }
       return nullptr;
     };
-    auto key = record_resolve_prefix(record_resolve_prefix, *element_rec,
-                                     *key_field_name);
+    auto key
+      = record_resolve_key(record_resolve_key, *element_rec, *key_field_name);
     if (!key)
       continue;
     typename To::key_type key_dst{};
@@ -397,7 +397,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
                                            err));
     } else {
       // We need to strip an outer layer before handling the value of the map.
-      auto stripped_vt_offset = rvt->resolve_prefix(stripped_record_prefix);
+      auto stripped_vt_offset = rvt->resolve_key(stripped_record_prefix);
       if (!stripped_vt_offset)
         return caf::make_error(
           ec::convert_error,
@@ -406,8 +406,8 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
       auto stripped_vt = rvt->field(*stripped_vt_offset);
       // This cannot fail, we already know we can handle the full name, so we
       // can also handle a prefix to get the record.
-      auto value = record_resolve_prefix(record_resolve_prefix, *element_rec,
-                                         stripped_record_prefix);
+      auto value = record_resolve_key(record_resolve_key, *element_rec,
+                                      stripped_record_prefix);
       VAST_ASSERT(value);
       if (auto err = convert(value->second, value_dst, stripped_vt.type))
         return caf::make_error(ec::convert_error,

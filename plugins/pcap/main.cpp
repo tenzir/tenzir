@@ -610,14 +610,14 @@ public:
       return caf::make_error(ec::format_error, "invalid pcap packet type");
     // TODO: consider iterating in natural order for the slice.
     for (size_t row = 0; row < slice.rows(); ++row) {
-      const auto payload_offset = pcap_packet_type.resolve_prefix("payload");
+      const auto payload_offset = pcap_packet_type.resolve_key("payload");
       VAST_ASSERT(payload_offset);
       auto payload_field
         = slice.at(row, 6, pcap_packet_type.field(*payload_offset).type);
       auto& payload = caf::get<view<std::string>>(payload_field);
       // Make PCAP header.
       ::pcap_pkthdr header{};
-      const auto time_offset = pcap_packet_type.resolve_prefix("time");
+      const auto time_offset = pcap_packet_type.resolve_key("time");
       VAST_ASSERT(time_offset);
       auto ns_field
         = slice.at(row, 0, pcap_packet_type.field(*time_offset).type);

@@ -201,7 +201,7 @@ TEST(delete transform / persist before done) {
       REQUIRE(caf::holds_alternative<vast::record_type>(combined_layout));
       // Verify that the deleted column does not exist anymore.
       const auto column = caf::get<vast::record_type>(combined_layout)
-                            .resolve_prefix("zeek.conn.uid");
+                            .resolve_key("zeek.conn.uid");
       CHECK(!column.has_value());
     },
     [](const caf::error& e) {

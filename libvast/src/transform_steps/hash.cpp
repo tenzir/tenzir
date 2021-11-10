@@ -30,7 +30,7 @@ hash_step::hash_step(const std::string& fieldname, const std::string& out,
 
 caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
   auto layout = slice.layout().type;
-  auto offset = layout.resolve_prefix(field_);
+  auto offset = layout.resolve_key(field_);
   if (!offset)
     return std::move(slice);
   auto column_index = layout.flat_index(*offset);
@@ -70,7 +70,7 @@ caf::expected<std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
 hash_step::operator()(record_type layout,
                       std::shared_ptr<arrow::RecordBatch> batch) const {
   // Get the target field if it exists.
-  auto offset = layout.resolve_prefix(field_);
+  auto offset = layout.resolve_key(field_);
   if (!offset)
     return std::make_pair(std::move(layout), std::move(batch));
   auto column_index = layout.flat_index(*offset);

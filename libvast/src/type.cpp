@@ -1706,9 +1706,9 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
 }
 
 std::optional<offset>
-record_type::resolve_prefix(std::string_view key) const noexcept {
-  auto do_resolve_prefix = [](auto&& self, const record_type& record,
-                              std::string_view key) -> std::optional<offset> {
+record_type::resolve_key(std::string_view key) const noexcept {
+  auto do_resolve_key = [](auto&& self, const record_type& record,
+                           std::string_view key) -> std::optional<offset> {
     if (key.empty())
       return {};
     auto index = static_cast<offset::size_type>(-1);
@@ -1745,7 +1745,7 @@ record_type::resolve_prefix(std::string_view key) const noexcept {
       = fmt::format("{}.", type_name(&table(transparent::no)));
       key.starts_with(prefix))
     key = key.substr(prefix.size());
-  return do_resolve_prefix(do_resolve_prefix, *this, key);
+  return do_resolve_key(do_resolve_key, *this, key);
 }
 
 std::vector<offset>
@@ -2042,7 +2042,7 @@ merge(const record_type& lhs, const record_type& rhs,
   transformations.reserve(rfields.size());
   auto err = caf::error{};
   for (auto rfield : rfields) {
-    if (const auto& lindex = lhs.resolve_prefix(rfield.name)) {
+    if (const auto& lindex = lhs.resolve_key(rfield.name)) {
       transformations.emplace_back(
         *lindex,
         [&, rfield = std::move(rfield)](

@@ -226,7 +226,7 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
   for (const auto& [k, v] : r) {
     if (const auto* ir = caf::get_if<record>(&v)) {
       // Look for a matching field of type record.
-      const auto offset = rt.resolve_prefix(k);
+      const auto offset = rt.resolve_key(k);
       if (!offset.has_value())
         return {};
       auto field = rt.field(*offset);

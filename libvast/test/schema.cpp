@@ -180,7 +180,7 @@ TEST(schema : zeek - style) {
   REQUIRE(ssl);
   auto r = get_if<record_type>(ssl);
   REQUIRE(r);
-  auto id = r->resolve_prefix("id");
+  auto id = r->resolve_key("id");
   REQUIRE(id);
   CHECK(holds_alternative<record_type>(r->field(*id).type));
 }
@@ -235,7 +235,7 @@ TEST(parseable - basic types global) {
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto t8 = r->resolve_prefix("a8");
+  auto t8 = r->resolve_key("a8");
   REQUIRE(t8);
   CHECK(holds_alternative<pattern_type>(r->field(*t8).type));
 }
@@ -261,7 +261,7 @@ TEST(parseable - basic types local) {
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto p = r->resolve_prefix("a10");
+  auto p = r->resolve_key("a10");
   REQUIRE(p);
   CHECK(holds_alternative<subnet_type>(r->field(*p).type));
 }
@@ -287,7 +287,7 @@ TEST(parseable - complex types global) {
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto e = r->resolve_prefix("e");
+  auto e = r->resolve_key("e");
   REQUIRE(e);
   CHECK(r->field(*e).type == *enum_t);
 }

@@ -432,7 +432,7 @@ caf::error reader::parse_header() {
     auto transformations = std::vector<record_type::transformation>{};
     for (const auto& [layout_field, layout_index] : layout.leaves()) {
       const auto key = layout.key(layout_index);
-      if (auto schema_index = r->resolve_prefix(key)) {
+      if (auto schema_index = r->resolve_key(key)) {
         const auto schema_field = r->field(*schema_index);
         if (!congruent(schema_field.type, layout_field.type))
           VAST_WARN("{} encountered a type mismatch between the schema "

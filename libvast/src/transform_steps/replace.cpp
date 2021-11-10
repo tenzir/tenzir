@@ -27,7 +27,7 @@ replace_step::replace_step(const std::string& fieldname,
 
 caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
   const auto& layout = slice.layout().type;
-  auto offset = layout.resolve_prefix(field_);
+  auto offset = layout.resolve_key(field_);
   if (!offset)
     return std::move(slice);
   // We just got the offset from `layout`, so we can safely dereference.
@@ -56,7 +56,7 @@ caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
 caf::expected<std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
 replace_step::operator()(record_type layout,
                          std::shared_ptr<arrow::RecordBatch> batch) const {
-  auto offset = layout.resolve_prefix(field_);
+  auto offset = layout.resolve_key(field_);
   if (!offset)
     return std::make_pair(std::move(layout), std::move(batch));
   auto column_index = layout.flat_index(*offset);

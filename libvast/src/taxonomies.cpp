@@ -117,7 +117,7 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
       return std::any_of(
         i->second.begin(), i->second.end(), [&](const type& t) {
           if (const auto& layout = caf::get_if<record_type>(&t)) {
-            if (auto offset = layout->resolve_prefix(field))
+            if (auto offset = layout->resolve_key(field))
               return compatible(layout->field(*offset).type, op, data);
           }
           return false;

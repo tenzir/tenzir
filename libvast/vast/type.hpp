@@ -843,7 +843,7 @@ public:
   /// but not 'x.y_other.z' .
   /// @note The key may optionally begin with the type name for aliased types.
   [[nodiscard]] std::optional<offset>
-  resolve_prefix(std::string_view key) const noexcept;
+  resolve_key(std::string_view key) const noexcept;
 
   /// Resolves a key into a list of offsets by suffix matching the given key.
   /// @note This only matches on full keys, so the key 'y.z' matches 'x.y.z' but
