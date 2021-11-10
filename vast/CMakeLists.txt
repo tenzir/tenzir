@@ -74,6 +74,7 @@ file(
       --set \"$base_dir\"/vast_integration_suite.yaml \
       \"$@\"
      $<$<BOOL:${VAST_ENABLE_LSVAST}>:
+     rm -rf \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\"
      mkdir -p \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\"
      $app -N -d \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test/vast.db\" \
        import -r \"$base_dir\"/data/suricata/eve.json suricata
