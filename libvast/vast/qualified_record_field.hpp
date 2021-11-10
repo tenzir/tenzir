@@ -79,7 +79,7 @@ struct qualified_record_field {
 
 private:
   /// The pointed-at field.
-  record_type::field_view field_ = {};
+  struct record_type::field field_ = {};
 
   /// The name of the layout we're using.
   std::string_view layout_name_ = {};

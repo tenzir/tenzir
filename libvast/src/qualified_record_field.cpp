@@ -20,10 +20,17 @@ namespace vast {
 qualified_record_field::qualified_record_field(const class type& layout,
                                                const offset& index) noexcept {
   VAST_ASSERT(!layout.name().empty());
-  VAST_ASSERT(caf::holds_alternative<record_type>(layout));
   VAST_ASSERT(!index.empty());
+  const auto* rt = caf::get_if<record_type>(&layout);
+  VAST_ASSERT(rt);
   layout_name_ = layout.name();
-  field_ = caf::get<record_type>(layout).field(index);
+  // We cannot assign the field_view directly, but rather need to store a field
+  // with a corrected name, as that needs to be flattened here.
+  auto field = rt->field(index);
+  field_ = {
+    rt->key(index),
+    std::move(field.type),
+  };
 }
 
 qualified_record_field::qualified_record_field(
