@@ -850,7 +850,7 @@ public:
   /// not 'x.other_y.z'.
   /// @note The key may optionally begin with the type name for aliased types.
   [[nodiscard]] std::vector<offset>
-  resolve_suffix(std::string_view key) const noexcept;
+  resolve_key_suffix(std::string_view key) const noexcept;
 
   /// Computes the flattened field name at a given index.
   [[nodiscard]] std::string_view key(size_t index) const& noexcept;

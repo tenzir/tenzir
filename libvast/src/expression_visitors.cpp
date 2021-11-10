@@ -435,7 +435,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
   std::vector<expression> connective;
   // First, interpret the field as a suffix of a record field name.
   if (const auto* r = caf::get_if<record_type>(&type_)) {
-    auto suffixes = r->resolve_suffix(ex.field);
+    auto suffixes = r->resolve_key_suffix(ex.field);
     for (auto& offset : suffixes) {
       const auto f = r->field(offset);
       if (!compatible(f.type, op_, d))

@@ -600,7 +600,7 @@ struct row_evaluator {
       // auto abs_op = neg ? negate(op_) : op_;
       // FIXME: The #field meta extractor does not match the dot separator
       // correctly on prefix matching, and should be rewritten to use
-      // resolve_suffix instead.
+      // resolve_key_suffix instead.
       for (const auto& [field, index] : layout.type.leaves()) {
         const auto fqn
           = fmt::format("{}.{}", layout.name, layout.type.key(index));

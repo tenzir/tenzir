@@ -1749,7 +1749,7 @@ record_type::resolve_key(std::string_view key) const noexcept {
 }
 
 std::vector<offset>
-record_type::resolve_suffix(std::string_view key) const noexcept {
+record_type::resolve_key_suffix(std::string_view key) const noexcept {
   auto result = std::vector<offset>{};
   const auto prefix = fmt::format("{}.", type_name(&table(transparent::no)));
   // TODO: Once we support queries for nested records, we must not just iterate
