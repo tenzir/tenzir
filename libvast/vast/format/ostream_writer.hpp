@@ -131,13 +131,14 @@ protected:
   print(Printer& printer, const table_slice& xs, const line_elements& le) {
     auto&& layout = [&]() {
       if constexpr (detail::is_any_v<policy::flatten_layout, Policies...>)
-        return flatten(xs.layout().type);
+        return flatten(xs.layout());
       else
-        return xs.layout().type;
+        return xs.layout();
     }();
     for (size_t row = 0; row < xs.rows(); ++row) {
       size_t pos = 0;
-      if (auto err = print_record<Policies...>(printer, le, layout,
+      if (auto err = print_record<Policies...>(printer, le,
+                                               caf::get<record_type>(layout),
                                                table_slice_row{xs, row}, pos))
         return err;
       append('\n');

@@ -43,25 +43,25 @@ constexpr std::string_view type_name_prefix = "zeek.";
 caf::expected<type> parse_type(std::string_view zeek_type) {
   type t;
   if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file")
-    t = string_type{};
+    t = type{string_type{}};
   else if (zeek_type == "bool")
-    t = bool_type{};
+    t = type{bool_type{}};
   else if (zeek_type == "int")
-    t = integer_type{};
+    t = type{integer_type{}};
   else if (zeek_type == "count")
-    t = count_type{};
+    t = type{count_type{}};
   else if (zeek_type == "double")
-    t = real_type{};
+    t = type{real_type{}};
   else if (zeek_type == "time")
-    t = time_type{};
+    t = type{time_type{}};
   else if (zeek_type == "interval")
-    t = duration_type{};
+    t = type{duration_type{}};
   else if (zeek_type == "pattern")
-    t = pattern_type{};
+    t = type{pattern_type{}};
   else if (zeek_type == "addr")
-    t = address_type{};
+    t = type{address_type{}};
   else if (zeek_type == "subnet")
-    t = subnet_type{};
+    t = type{subnet_type{}};
   else if (zeek_type == "port")
     // FIXME: once we ship with builtin type aliases, we should reference the
     // port alias type here. Until then, we create the alias manually.
@@ -84,7 +84,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
       return elem.error();
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. In VAST, they are all lists.
-    t = list_type{*elem};
+    t = type{list_type{*elem}};
   }
   if (caf::holds_alternative<none_type>(t))
     return caf::make_error(ec::format_error,
@@ -237,7 +237,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       return ec::stalled;
     if (auto err = parse_header())
       return err;
-    if (!reset_builder(caf::get<record_type>(layout_)))
+    if (!reset_builder(layout_))
       return caf::make_error(ec::parse_error,
                              "unable to create a bulider for parsed layout at",
                              lines_->line_number());
@@ -276,7 +276,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       separator_.clear();
       if (auto err = parse_header())
         return err;
-      if (!reset_builder(caf::get<record_type>(layout_)))
+      if (!reset_builder(layout_))
         return caf::make_error(
           ec::parse_error, "unable to create a bulider for parsed layout at",
           lines_->line_number());
@@ -593,21 +593,21 @@ caf::error writer::write(const table_slice& slice) {
       VAST_DEBUG("{} creates a new stream for STDOUT",
                  detail::pretty_type_name(this));
       auto out = std::make_unique<detail::fdostream>(1);
-      writers_.emplace(layout.name, std::make_unique<writer_child>(
-                                      std::move(out), show_timestamp_tags_));
+      writers_.emplace(layout.name(), std::make_unique<writer_child>(
+                                        std::move(out), show_timestamp_tags_));
     }
     child = writers_.begin()->second.get();
-    if (layout.type != previous_layout_) {
-      print_header(layout.type, child->out(), show_timestamp_tags_);
-      previous_layout_ = layout.type;
+    if (layout != previous_layout_) {
+      print_header(layout, child->out(), show_timestamp_tags_);
+      previous_layout_ = layout;
     }
   } else {
-    auto i = writers_.find(std::string{layout.name});
+    auto i = writers_.find(std::string{layout.name()});
     if (i != writers_.end()) {
       child = i->second.get();
     } else {
       VAST_DEBUG("{} creates new stream for layout {}",
-                 detail::pretty_type_name(this), layout.name);
+                 detail::pretty_type_name(this), layout.name());
       std::error_code err{};
       const auto exists = std::filesystem::exists(dir_, err);
       if (err)
@@ -626,11 +626,11 @@ caf::error writer::write(const table_slice& slice) {
         return caf::make_error(
           ec::format_error, "got existing non-directory path", dir_.string());
       }
-      auto filename = dir_ / fmt::format("{}.log", layout.name);
+      auto filename = dir_ / fmt::format("{}.log", layout.name());
       auto fos = std::make_unique<std::ofstream>(filename.string());
-      print_header(layout.type, *fos, show_timestamp_tags_);
+      print_header(layout, *fos, show_timestamp_tags_);
       auto i = writers_.emplace(
-        layout.name,
+        layout.name(),
         std::make_unique<writer_child>(std::move(fos), show_timestamp_tags_));
       child = i.first->second.get();
     }

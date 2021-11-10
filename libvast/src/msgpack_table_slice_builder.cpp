@@ -108,8 +108,7 @@ template <class Builder>
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_builder_ptr
-msgpack_table_slice_builder::make(record_type layout,
-                                  size_t initial_buffer_size) {
+msgpack_table_slice_builder::make(type layout, size_t initial_buffer_size) {
   return table_slice_builder_ptr{
     new msgpack_table_slice_builder{std::move(layout), initial_buffer_size},
     false};
@@ -122,7 +121,7 @@ msgpack_table_slice_builder::~msgpack_table_slice_builder() {
 // -- properties ---------------------------------------------------------------
 
 size_t msgpack_table_slice_builder::columns() const noexcept {
-  return flat_layout_.num_fields();
+  return caf::get<record_type>(flat_layout_).num_fields();
 }
 
 table_slice msgpack_table_slice_builder::finish() {
@@ -171,7 +170,7 @@ void msgpack_table_slice_builder::reserve(size_t num_rows) {
 // -- implementation details ---------------------------------------------------
 
 msgpack_table_slice_builder::msgpack_table_slice_builder(
-  record_type layout, size_t initial_buffer_size)
+  type layout, size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
     flat_layout_{flatten(this->layout())},
     msgpack_builder_{data_},
@@ -181,7 +180,7 @@ msgpack_table_slice_builder::msgpack_table_slice_builder(
 
 bool msgpack_table_slice_builder::add_impl(data_view x) {
   // Check whether input is valid.
-  if (!type_check(flat_layout_.field(column_).type, x))
+  if (!type_check(caf::get<record_type>(flat_layout_).field(column_).type, x))
     return false;
   if (column_ == 0)
     offset_table_.push_back(data_.size());

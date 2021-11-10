@@ -117,9 +117,9 @@ value_index_ptr make(type x, caf::settings opts) {
   return std::make_unique<T>(std::move(x), std::move(opts));
 }
 
-template <class T, class Index>
+template <concrete_type T, class Index>
 auto add_value_index_factory(T&& x = {}) {
-  return factory<value_index>::add(std::forward<T>(x), make<Index>);
+  return factory<value_index>::add(type{std::forward<T>(x)}, make<Index>);
 }
 
 template <class T>

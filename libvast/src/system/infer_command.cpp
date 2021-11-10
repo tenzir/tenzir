@@ -45,9 +45,9 @@ namespace {
 template <class Reader>
 caf::expected<schema>
 infer(const std::string& input, const caf::settings& options) {
-  auto rec = std::optional<record_type>{};
+  auto rec = std::optional<type>{};
   auto layout = [&](auto x) {
-    rec = x.layout().type;
+    rec = x.layout();
   };
   auto stream = std::make_unique<std::istringstream>(input);
   auto reader = Reader{options, std::move(stream)};
@@ -65,38 +65,38 @@ type deduce(simdjson::dom::element e) {
   switch (e.type()) {
     case ::simdjson::dom::element_type::ARRAY:
       if (const auto arr = e.get_array(); arr.size())
-        return list_type{deduce(arr.at(0))};
-      return list_type{none_type{}};
+        return type{list_type{deduce(arr.at(0))}};
+      return type{list_type{none_type{}}};
     case ::simdjson::dom::element_type::OBJECT: {
       auto fields = std::vector<record_type::field_view>{};
       auto xs = e.get_object();
       if (xs.size() == 0)
-        return map_type{string_type{}, none_type{}};
+        return type{map_type{string_type{}, none_type{}}};
       fields.reserve(xs.size());
       for (auto [k, v] : xs)
         fields.push_back({k, deduce(v)});
-      return record_type{fields};
+      return type{record_type{fields}};
     }
     case ::simdjson::dom::element_type::INT64:
-      return integer_type{};
+      return type{integer_type{}};
     case ::simdjson::dom::element_type::UINT64:
-      return count_type{};
+      return type{count_type{}};
     case ::simdjson::dom::element_type::DOUBLE:
-      return real_type{};
+      return type{real_type{}};
     case ::simdjson::dom::element_type::STRING: {
       const std::string x{e.get_string().value()};
       if (parsers::net(x))
-        return subnet_type{};
+        return type{subnet_type{}};
       if (parsers::addr(x))
-        return address_type{};
+        return type{address_type{}};
       if (parsers::ymdhms(x))
-        return time_type{};
+        return type{time_type{}};
       if (parsers::duration(x))
-        return duration_type{};
-      return string_type{};
+        return type{duration_type{}};
+      return type{string_type{}};
     }
     case ::simdjson::dom::element_type::BOOL:
-      return bool_type{};
+      return type{bool_type{}};
     case ::simdjson::dom::element_type::NULL_VALUE:
       return {};
   }
@@ -119,8 +119,7 @@ caf::expected<schema> infer_json(const std::string& input) {
   const auto* rec_ptr = caf::get_if<record_type>(&deduced);
   if (!rec_ptr)
     return caf::make_error(ec::parse_error, "could not parse JSON object");
-  auto rec = *rec_ptr;
-  rec.assign_metadata(type{"json", none_type{}});
+  auto rec = type{"json", *rec_ptr};
   schema result;
   result.add(rec);
   return result;

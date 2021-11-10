@@ -117,7 +117,8 @@ evaluate(const PartitionState& state, const expression& expr) {
   std::vector<system::evaluation_triple> result;
   // Pretend the partition is a table, and return fitted predicates for the
   // partitions layout.
-  auto resolved = resolve(expr, *state.combined_layout());
+  // TODO: Should resolve take a record_type directly?
+  auto resolved = resolve(expr, type{*state.combined_layout()});
   for (auto& kvp : resolved) {
     // For each fitted predicate, look up the corresponding INDEXER
     // according to the specified type of extractor.

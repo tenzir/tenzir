@@ -40,7 +40,7 @@ public:
   /// @param initial_buffer_size The buffer size the builder starts with.
   /// @returns A table_slice_builder instance.
   static table_slice_builder_ptr
-  make(record_type layout, size_t initial_buffer_size = default_buffer_size);
+  make(type layout, size_t initial_buffer_size = default_buffer_size);
 
   /// Destroys a MessagePack table slice builder.
   ~msgpack_table_slice_builder() override;
@@ -78,9 +78,8 @@ private:
   /// Constructs a MessagePack table slice builder.
   /// @param layout The layout of the slice.
   /// @param initial_buffer_size The buffer size the builder starts with.
-  explicit msgpack_table_slice_builder(record_type layout,
-                                       size_t initial_buffer_size
-                                       = default_buffer_size);
+  explicit msgpack_table_slice_builder(type layout, size_t initial_buffer_size
+                                                    = default_buffer_size);
 
   /// Adds data to the builder.
   /// @param x The data to add.
@@ -91,7 +90,7 @@ private:
   size_t column_ = 0;
 
   /// The flattened layout.
-  record_type flat_layout_;
+  type flat_layout_;
 
   /// Offsets from the beginning of the buffer to each row.
   std::vector<uint64_t> offset_table_ = {};

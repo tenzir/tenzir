@@ -240,25 +240,23 @@ public:
     hash_append(h, xs->size());
   }
 
+  friend bool
+  operator==(const container_view_handle& x, const container_view_handle& y) {
+    return x && y && *x == *y;
+  }
+
+  friend bool
+  operator<(const container_view_handle& x, const container_view_handle& y) {
+    if (!x)
+      return static_cast<bool>(y);
+    if (!y)
+      return false;
+    return *x < *y;
+  }
+
 private:
   Pointer ptr_;
 };
-
-template <class Pointer>
-bool operator==(const container_view_handle<Pointer>& x,
-                const container_view_handle<Pointer>& y) {
-  return x && y && *x == *y;
-}
-
-template <class Pointer>
-bool operator<(const container_view_handle<Pointer>& x,
-               const container_view_handle<Pointer>& y) {
-  if (!x)
-    return static_cast<bool>(y);
-  if (!y)
-    return false;
-  return *x < *y;
-}
 
 namespace detail {
 

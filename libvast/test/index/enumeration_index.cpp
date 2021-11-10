@@ -21,7 +21,7 @@ using namespace std::string_literals;
 
 TEST(enumeration) {
   auto e = enumeration_type{{{"foo"}, {"bar"}}};
-  auto idx = enumeration_index(e);
+  auto idx = enumeration_index(type{e});
   REQUIRE(idx.append(enumeration{0}));
   REQUIRE(idx.append(enumeration{0}));
   REQUIRE(idx.append(enumeration{1}));

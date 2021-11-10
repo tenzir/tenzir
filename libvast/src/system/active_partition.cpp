@@ -96,13 +96,14 @@ void active_partition_state::notify_flush_listeners() {
 bool partition_selector::operator()(const qualified_record_field& filter,
                                     const table_slice_column& column) const {
   const auto rhs_layout = column.slice().layout();
+  const auto rhs_layout_rt = caf::get<record_type>(rhs_layout);
   const auto rhs_field_offset
-    = rhs_layout.type.resolve_flat_index(column.index());
-  const auto rhs_field = rhs_layout.type.field(rhs_field_offset);
+    = rhs_layout_rt.resolve_flat_index(column.index());
+  const auto rhs_field = rhs_layout_rt.field(rhs_field_offset);
   // name check
   const auto lhs = filter.name();
   // FIXME: use mismatch twice here.
-  if (filter.name() != fmt::format("{}.{}", rhs_layout.name, rhs_field.name))
+  if (filter.name() != fmt::format("{}.{}", rhs_layout.name(), rhs_field.name))
     return false;
   // type check
   return filter.type() == rhs_field.type;
@@ -223,10 +224,9 @@ active_partition_actor::behavior_type active_partition(
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
       auto first = x.offset();
       auto last = x.offset() + x.rows();
-      const auto layout_type = x.layout().type;
-      const auto layout_name = x.layout().name;
-      VAST_ASSERT(!layout_name.empty());
-      auto it = self->state.data.type_ids.emplace(layout_name, ids{}).first;
+      const auto& layout = x.layout();
+      VAST_ASSERT(!layout.name().empty());
+      auto it = self->state.data.type_ids.emplace(layout.name(), ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());
       // Mark the ids of this table slice for the current type.
@@ -236,8 +236,9 @@ active_partition_actor::behavior_type active_partition(
       self->state.data.events += x.rows();
       self->state.data.synopsis->add(x, self->state.synopsis_opts);
       size_t col = 0;
-      for (const auto& [field, offset] : layout_type.leaves()) {
-        auto qf = qualified_record_field{layout_type, offset};
+      for (const auto& [field, offset] :
+           caf::get<record_type>(layout).leaves()) {
+        auto qf = qualified_record_field{layout, offset};
         auto& idx = self->state.indexers[qf];
         if (!idx) {
           idx = self->spawn(active_indexer, field.type, index_opts);

@@ -33,7 +33,7 @@ arrow_transform_step::operator()(table_slice&& x) const {
   // to its underlying table slice, but the RecordBatches created by the
   // transform step will most likely reference some of same underlying data.
   auto batch = as_record_batch(x);
-  auto result = (*this)(x.layout().type, batch);
+  auto result = (*this)(x.layout(), batch);
   if (!result)
     return result.error();
   return arrow_table_slice_builder::create(result->second, result->first);
@@ -63,7 +63,9 @@ caf::expected<table_slice> transform::apply(table_slice&& x) const {
   VAST_DEBUG("applying {} steps of transform {}", steps_.size(), name_);
   // TODO: Add a private method `unchecked_apply()` that the transformation
   // engine can call directly to avoid repeating the check.
-  if (std::find(event_types_.begin(), event_types_.end(), x.layout().name)
+  const auto& layout = x.layout();
+  if (std::find(event_types_.begin(), event_types_.end(),
+                std::string{layout.name()})
       == event_types_.end())
     return std::move(x);
   // TODO: Use the fast-path overload if all steps are `arrow_transform_step`s.
@@ -76,14 +78,14 @@ caf::expected<table_slice> transform::apply(table_slice&& x) const {
   return std::move(x);
 }
 
-std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
-transform::apply(vast::record_type layout,
+std::pair<vast::type, std::shared_ptr<arrow::RecordBatch>>
+transform::apply(vast::type layout,
                  std::shared_ptr<arrow::RecordBatch> batch) const {
   VAST_DEBUG("applying {} arrow steps of transform {}", steps_.size(), name_);
   for (const auto& step : steps_) {
     auto arrow_step = dynamic_cast<const arrow_transform_step*>(step.get());
     VAST_ASSERT(arrow_step);
-    auto result = (*arrow_step)(std::move(layout), std::move(batch));
+    auto result = (*arrow_step)(layout, std::move(batch));
     if (!result)
       return std::make_pair(std::move(layout), std::move(batch));
     std::tie(layout, batch) = std::move(*result);
@@ -106,12 +108,12 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
   auto size = x.rows();
   auto layout = x.layout();
   // TODO: Consider using a tsl robin map instead for transparent key lookup.
-  const auto& matching = layout_mapping_.find(std::string{layout.name});
+  const auto& matching = layout_mapping_.find(std::string{layout.name()});
   if (matching == layout_mapping_.end())
     return std::move(x);
   const auto& indices = matching->second;
   VAST_INFO("applying {} transforms for received table slice w/ layout {}",
-            indices.size(), x.layout().name);
+            indices.size(), x.layout());
   auto arrow_fast_path
     = std::all_of(indices.begin(), indices.end(), [&](size_t idx) {
         return transforms_.at(idx).arrow_fast_path_;
@@ -126,8 +128,7 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
     auto batch = original_batch;
     for (auto idx : indices) {
       const auto& t = transforms_.at(idx);
-      std::tie(layout.type, batch)
-        = t.apply(std::move(layout.type), std::move(batch));
+      std::tie(layout, batch) = t.apply(std::move(layout), std::move(batch));
       if (batch->num_rows() != static_cast<int>(size))
         return caf::make_error(ec::invalid_result, "adding or deleting rows in "
                                                    "a transform is currently "
@@ -136,7 +137,7 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
         return caf::make_error(ec::convert_error, "error while applying arrow "
                                                   "transform");
     }
-    return arrow_table_slice_builder::create(batch, layout.type);
+    return arrow_table_slice_builder::create(batch, layout);
   }
   VAST_INFO("falling back to generic path because not all transforms support "
             "arrow");

@@ -99,15 +99,17 @@ TEST(merging) {
 
 TEST(serialization) {
   schema sch;
-  auto t = record_type{
-    {"s1", string_type{}},
-    {"d1", real_type{}},
-    {"c", type{count_type{}, {{"skip"}}}},
-    {"i", integer_type{}},
-    {"s2", string_type{}},
-    {"d2", real_type{}},
+  auto t = type{
+    "foo",
+    record_type{
+      {"s1", string_type{}},
+      {"d1", real_type{}},
+      {"c", type{count_type{}, {{"skip"}}}},
+      {"i", integer_type{}},
+      {"s2", string_type{}},
+      {"d2", real_type{}},
+    },
   };
-  t.assign_metadata(type{"foo", none_type{}});
   sch.add(t);
   // Save & load
   std::vector<char> buf;

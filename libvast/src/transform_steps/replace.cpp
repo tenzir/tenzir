@@ -26,20 +26,23 @@ replace_step::replace_step(const std::string& fieldname,
 }
 
 caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
-  const auto& layout = slice.layout().type;
-  auto offset = layout.resolve_key(field_);
+  const auto& layout = slice.layout();
+  const auto& layout_rt = caf::get<record_type>(layout);
+  auto offset = layout_rt.resolve_key(field_);
   if (!offset)
     return std::move(slice);
   // We just got the offset from `layout`, so we can safely dereference.
-  auto column_index = layout.flat_index(*offset);
+  auto column_index = layout_rt.flat_index(*offset);
   const auto inferred_type = type::infer(value_);
-  auto field = layout.field(*offset);
-  auto adjusted_layout = layout.transform(
+  auto field = layout_rt.field(*offset);
+  auto adjusted_layout_rt = layout_rt.transform(
     {{*offset,
       record_type::assign({{std::string{field.name}, inferred_type}})}});
-  VAST_ASSERT(adjusted_layout); // cannot fail
+  VAST_ASSERT(adjusted_layout_rt); // cannot fail
+  auto adjusted_layout = type{*adjusted_layout_rt};
+  adjusted_layout.assign_metadata(layout);
   auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), *adjusted_layout);
+    = factory<table_slice_builder>::make(slice.encoding(), adjusted_layout);
   for (size_t i = 0; i < slice.rows(); ++i) {
     for (size_t j = 0; j < slice.columns(); ++j) {
       const auto& item = slice.at(i, j);
@@ -53,13 +56,14 @@ caf::expected<table_slice> replace_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-caf::expected<std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
-replace_step::operator()(record_type layout,
+caf::expected<std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
+replace_step::operator()(type layout,
                          std::shared_ptr<arrow::RecordBatch> batch) const {
-  auto offset = layout.resolve_key(field_);
+  const auto& layout_rt = caf::get<record_type>(layout);
+  auto offset = layout_rt.resolve_key(field_);
   if (!offset)
     return std::make_pair(std::move(layout), std::move(batch));
-  auto column_index = layout.flat_index(*offset);
+  auto column_index = layout_rt.flat_index(*offset);
   // Compute the hash values.
   // TODO: Consider making this strongly typed so we don't need to infer the
   // type at this point.
@@ -88,12 +92,14 @@ replace_step::operator()(record_type layout,
                                        added.status().ToString()));
   batch = added.ValueOrDie();
   // Adjust layout.
-  auto field = layout.field(*offset);
-  auto adjusted_layout = layout.transform(
+  auto field = layout_rt.field(*offset);
+  auto adjusted_layout_rt = layout_rt.transform(
     {{*offset,
       record_type::assign({{std::string{field.name}, inferred_type}})}});
-  VAST_ASSERT(adjusted_layout); // replacing a field cannot fail.
-  return std::make_pair(std::move(*adjusted_layout), std::move(batch));
+  VAST_ASSERT(adjusted_layout_rt); // replacing a field cannot fail.
+  auto adjusted_layout = type{*adjusted_layout_rt};
+  adjusted_layout.assign_metadata(layout);
+  return std::make_pair(std::move(adjusted_layout), std::move(batch));
 }
 
 class replace_step_plugin final : public virtual transform_plugin {

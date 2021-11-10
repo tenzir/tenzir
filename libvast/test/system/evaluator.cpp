@@ -86,13 +86,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     container.emplace_back(sys.spawn(dummy_indexer, std::move(data)));
   }
 
-  record_type layout = caf::get<record_type>(type{
+  type layout = type{
     "test",
     record_type{
       {"x", count_type{}},
       {"y", count_type{}},
     },
-  });
+  };
 
   ids query(std::string_view expr_str) {
     auto expr = unbox(to<expression>(expr_str));

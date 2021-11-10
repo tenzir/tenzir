@@ -19,9 +19,7 @@ template <>
 struct factory_traits<table_slice_builder> {
   using result_type = table_slice_builder_ptr;
   using key_type = table_slice_encoding;
-  // TODO: It'd make more sense for this to take a name and a record type rather
-  // than just a record type.
-  using signature = result_type (*)(record_type layout);
+  using signature = result_type (*)(type layout);
 
   static void initialize();
 
@@ -31,7 +29,7 @@ struct factory_traits<table_slice_builder> {
   }
 
   template <class T>
-  static result_type make(record_type layout) {
+  static result_type make(type layout) {
     return T::make(std::move(layout));
   }
 };

@@ -56,7 +56,7 @@ TEST(arrow batch) {
   for (auto& slice : zeek_conn_log)
     writer.write(slice);
   // Cause the writer to close its current Arrow writer by switching the layout.
-  writer.layout(record_type{{"irrelevant", none_type{}}});
+  writer.layout(type{"stub", record_type{{"irrelevant", none_type{}}}});
   // Deserialize record batches, store them in arrow_table_slice objects, and
   // compare to the original slices.
   std::shared_ptr<arrow::Buffer> buf;
@@ -70,7 +70,7 @@ TEST(arrow batch) {
   REQUIRE_OK(reader_result);
   auto reader = *reader_result;
   auto&& layout = zeek_conn_log[0].layout();
-  auto arrow_schema = make_arrow_schema(layout.type);
+  auto arrow_schema = make_arrow_schema(layout);
   size_t slice_id = 0;
   std::shared_ptr<arrow::RecordBatch> batch;
   while (reader->ReadNext(&batch).ok() && batch != nullptr) {

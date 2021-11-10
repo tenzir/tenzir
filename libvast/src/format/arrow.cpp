@@ -47,8 +47,7 @@ writer::~writer() {
 caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
     return caf::make_error(ec::logic_error, "invalid arrow output stream");
-  auto [_, layout] = slice.layout();
-  if (!this->layout(layout))
+  if (!this->layout(slice.layout()))
     return caf::make_error(ec::logic_error, "failed to update layout");
   // Get the Record Batch and print it.
   auto batch = as_record_batch(slice);
@@ -64,7 +63,7 @@ const char* writer::name() const {
   return "arrow-writer";
 }
 
-bool writer::layout(const record_type& layout) {
+bool writer::layout(const type& layout) {
   if (current_layout_ == layout)
     return true;
   if (current_batch_writer_ != nullptr) {

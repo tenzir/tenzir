@@ -263,8 +263,8 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
     auto intermediate = legacy_record_type{};
     if (auto err = fbs::deserialize_bytes(slice_.layout(), intermediate))
       die("failed to deserialize layout: " + render(err));
-    state_.layout = caf::get<record_type>(type::from_legacy_type(intermediate));
-    state_.columns = this->layout().num_leaves();
+    state_.layout = type::from_legacy_type(intermediate);
+    state_.columns = caf::get<record_type>(this->layout()).num_leaves();
   } else {
     // We decouple the sliced type from the layout intentionally. This is an
     // absolute must because we store the state in the deletion step of the
@@ -273,8 +273,8 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
     // chunk at all, but rather create it on the fly only.
     auto layout = type{chunk::copy(as_bytes(*slice_.layout()))};
     VAST_ASSERT(caf::holds_alternative<record_type>(layout));
-    state_.layout = caf::get<record_type>(layout);
-    state_.columns = this->layout().num_leaves();
+    state_.layout = std::move(layout);
+    state_.columns = caf::get<record_type>(this->layout()).num_leaves();
   }
 }
 
@@ -284,8 +284,8 @@ msgpack_table_slice<FlatBuffer>::~msgpack_table_slice() noexcept = default;
 // -- properties -------------------------------------------------------------
 
 template <class FlatBuffer>
-const record_type& msgpack_table_slice<FlatBuffer>::layout() const noexcept {
-  return caf::get<record_type>(state_.layout);
+const type& msgpack_table_slice<FlatBuffer>::layout() const noexcept {
+  return state_.layout;
 }
 
 template <class FlatBuffer>
@@ -306,8 +306,9 @@ void msgpack_table_slice<FlatBuffer>::append_column_to_index(
   id offset, table_slice::size_type column, value_index& index) const {
   const auto& offset_table = *slice_.offset_table();
   auto view = as_bytes(*slice_.data());
-  auto layout_offset = this->layout().resolve_flat_index(column);
-  auto type = this->layout().field(layout_offset).type;
+  const auto& layout_rt = caf::get<record_type>(this->layout());
+  auto layout_offset = layout_rt.resolve_flat_index(column);
+  auto type = layout_rt.field(layout_offset).type;
   for (size_t row = 0; row < rows(); ++row) {
     auto row_offset = offset_table[row];
     auto xs = msgpack::overlay{view.subspan(row_offset)};
@@ -330,8 +331,9 @@ msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
   auto xs = msgpack::overlay{view.subspan(offset)};
   // ...then skip (decode) up to the desired column.
   xs.next(column);
-  auto layout_offset = this->layout().resolve_flat_index(column);
-  return decode(xs, this->layout().field(layout_offset).type);
+  const auto& layout_rt = caf::get<record_type>(this->layout());
+  auto layout_offset = layout_rt.resolve_flat_index(column);
+  return decode(xs, layout_rt.field(layout_offset).type);
 }
 
 template <class FlatBuffer>
@@ -343,7 +345,10 @@ data_view msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
   // First find the desired row...
   VAST_ASSERT(row < offset_table.size());
   VAST_ASSERT(congruent(
-    this->layout().field(this->layout().resolve_flat_index(column)).type, t));
+    caf::get<record_type>(this->layout())
+      .field(caf::get<record_type>(this->layout()).resolve_flat_index(column))
+      .type,
+    t));
   auto offset = offset_table[row];
   VAST_ASSERT(offset < static_cast<size_t>(view.size()));
   auto xs = msgpack::overlay{view.subspan(offset)};

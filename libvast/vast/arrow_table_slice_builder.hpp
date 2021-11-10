@@ -59,7 +59,7 @@ public:
   /// @param initial_buffer_size The buffer size the builder starts with.
   /// @returns A table_slice_builder instance.
   static table_slice_builder_ptr
-  make(record_type layout, size_t initial_buffer_size = default_buffer_size);
+  make(type layout, size_t initial_buffer_size = default_buffer_size);
 
   /// Destroys an Arrow table slice builder.
   ~arrow_table_slice_builder() noexcept override;
@@ -70,8 +70,7 @@ public:
 
   /// @pre `record_batch->schema()->Equals(make_arrow_schema(layout))``
   [[nodiscard]] table_slice static create(
-    const std::shared_ptr<arrow::RecordBatch>& record_batch,
-    const record_type& layout,
+    const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout,
     size_t initial_buffer_size = default_buffer_size);
 
   /// @returns The number of columns in the table slice.
@@ -93,9 +92,8 @@ private:
   /// Constructs an Arrow table slice.
   /// @param layout The layout of the slice.
   /// @param initial_buffer_size The buffer size the builder starts with.
-  explicit arrow_table_slice_builder(record_type layout,
-                                     size_t initial_buffer_size
-                                     = default_buffer_size);
+  explicit arrow_table_slice_builder(type layout, size_t initial_buffer_size
+                                                  = default_buffer_size);
 
   /// Adds data to the builder.
   /// @param x The data to add.

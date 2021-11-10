@@ -33,9 +33,8 @@ public:
   [[nodiscard]] const std::string& name() const;
 
 private:
-  [[nodiscard]] std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>
-  apply(vast::record_type layout,
-        std::shared_ptr<arrow::RecordBatch> batch) const;
+  [[nodiscard]] std::pair<vast::type, std::shared_ptr<arrow::RecordBatch>>
+  apply(vast::type layout, std::shared_ptr<arrow::RecordBatch> batch) const;
 
   // Grant access to the transformation engine so it can check the fast path.
   friend class transformation_engine;

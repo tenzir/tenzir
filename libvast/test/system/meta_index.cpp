@@ -75,9 +75,12 @@ struct generator {
     return slice;
   }
 
-  record_type layout = record_type{
-    {"timestamp", type{"timestamp", time_type{}}},
-    {"content", string_type{}},
+  type layout = type{
+    "stub",
+    record_type{
+      {"timestamp", type{"timestamp", time_type{}}},
+      {"content", string_type{}},
+    },
   };
 };
 
@@ -264,8 +267,12 @@ TEST(meta index with bool synopsis) {
   // FIXME: do we have to replace the meta index from the fixture with a new
   // one for this test?
   auto meta_idx = self->spawn(meta_index);
-  auto layout
-    = caf::get<record_type>(type{"test", record_type{{"x", bool_type{}}}});
+  auto layout = type{
+    "test",
+    record_type{
+      {"x", bool_type{}},
+    },
+  };
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   REQUIRE(builder);

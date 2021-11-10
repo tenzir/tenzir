@@ -22,8 +22,8 @@ identity_step::operator()(table_slice&& slice) const {
   return std::move(slice);
 }
 
-caf::expected<std::pair<vast::record_type, std::shared_ptr<arrow::RecordBatch>>>
-identity_step::operator()(vast::record_type layout,
+caf::expected<std::pair<vast::type, std::shared_ptr<arrow::RecordBatch>>>
+identity_step::operator()(vast::type layout,
                           std::shared_ptr<arrow::RecordBatch> batch) const {
   return std::make_pair(std::move(layout), std::move(batch));
 }

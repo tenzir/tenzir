@@ -95,10 +95,7 @@ public:
             return std::nullopt;
           return data;
         } else {
-          auto data = proj_.slice_.at(row_, column, type);
-          if (caf::holds_alternative<caf::none_t>(data))
-            return std::nullopt;
-          return caf::get<view<type_to_data_t<Type>>>(data);
+          return proj_.slice_.at(row_, column, type);
         }
       };
       return detail::tuple_zip_and_map(get, proj_.indices_, proj_.types_);
@@ -241,20 +238,22 @@ auto project(table_slice slice, Hints&&... hints) {
                       ->projection<Types...> {
     static_assert(sizeof...(Types) == sizeof...(Indices),
                   "project requires an equal number of types and hints");
-    const auto layout = slice.layout().type;
+    const auto& layout = slice.layout();
+    const auto& layout_rt = caf::get<record_type>(layout);
     auto find_flat_index_for_hint
       = [&]<concrete_type Type>(
           auto&& self, const Type& type,
           const auto& index) noexcept -> table_slice::size_type {
       if constexpr (std::is_convertible_v<decltype(index), offset>) {
         // If the index is an offset, we can just use it directly.
-        const auto field = layout.field(index);
-        if (std::is_same_v<Type, none_type> || congruent(field.type, type))
-          return layout.flat_index(index);
+        const auto field = layout_rt.field(index);
+        if (std::is_same_v<
+              Type, none_type> || congruent(field.type, vast::type{type}))
+          return layout_rt.flat_index(index);
       } else if constexpr (std::is_constructible_v<std::string_view,
                                                    decltype(index)>) {
         // If the index is a string, we need to resolve it to an offset first.
-        const auto offsets = layout.resolve_key_suffix(index);
+        const auto offsets = layout_rt.resolve_key_suffix(index);
         // TODO: Should we instead check whether we have exactly one match, or
         // prefix-match rather than suffix-match?
         if (!offsets.empty())
@@ -262,10 +261,11 @@ auto project(table_slice slice, Hints&&... hints) {
       } else if constexpr (std::is_convertible_v<decltype(index),
                                                  table_slice::size_type>) {
         for (table_slice::size_type flat_index = 0;
-             const auto& [field, _] : layout.leaves()) {
+             const auto& [field, _] : layout_rt.leaves()) {
           if (flat_index
               == detail::narrow_cast<table_slice::size_type>(index)) {
-            if (std::is_same_v<Type, none_type> || congruent(field.type, type))
+            if (std::is_same_v<
+                  Type, none_type> || congruent(field.type, vast::type{type}))
               return flat_index;
             break;
           }

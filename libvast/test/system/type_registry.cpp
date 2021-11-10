@@ -33,7 +33,7 @@ using namespace vast;
 namespace {
 
 template <class... Ts>
-vast::table_slice make_data(const vast::record_type& layout, Ts&&... ts) {
+vast::table_slice make_data(const vast::type& layout, Ts&&... ts) {
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   REQUIRE(builder->add(std::forward<Ts>(ts)...));
@@ -81,19 +81,19 @@ TEST(taxonomies) {
   self->send(aut, atom::put_v, t1);
   run();
   MESSAGE("collecting some types");
-  const vast::record_type la = caf::get<vast::record_type>(vast::type{
+  const vast::type la = vast::type{
     "a",
     vast::record_type{
       {"fo0", vast::string_type{}},
     },
-  });
+  };
   auto slices_a = std::vector{make_data(la, "bogus")};
-  const vast::record_type lx = caf::get<vast::record_type>(vast::type{
+  const vast::type lx = vast::type{
     "x",
     vast::record_type{
       {"foe", vast::count_type{}},
     },
-  });
+  };
   auto slices_x = std::vector{make_data(lx, 1u)};
   vast::detail::spawn_container_source(sys, std::move(slices_a), aut);
   vast::detail::spawn_container_source(sys, std::move(slices_x), aut);

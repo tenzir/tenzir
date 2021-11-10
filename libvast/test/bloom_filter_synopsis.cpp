@@ -35,7 +35,7 @@ TEST(bloom filter synopsis) {
   xs.m = 1_k;
   xs.p = 0.1;
   auto bf = unbox(make_bloom_filter<xxh64>(std::move(xs)));
-  bloom_filter_synopsis<integer, xxh64> x{integer_type{}, std::move(bf)};
+  bloom_filter_synopsis<integer, xxh64> x{type{integer_type{}}, std::move(bf)};
   x.add(make_data_view(integer{0}));
   x.add(make_data_view(integer{1}));
   x.add(make_data_view(integer{2}));
@@ -52,7 +52,7 @@ TEST(bloom filter synopsis - wrong lookup type) {
   xs.m = 1_k;
   xs.p = 0.1;
   auto bf = unbox(make_bloom_filter<xxh64>(std::move(xs)));
-  bloom_filter_synopsis<std::string, xxh64> synopsis{string_type{},
+  bloom_filter_synopsis<std::string, xxh64> synopsis{type{string_type{}},
                                                      std::move(bf)};
   auto r1
     = synopsis.lookup(relational_operator::equal, make_data_view(caf::none));

@@ -29,7 +29,7 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
   data.events += slice.rows();
   data.synopsis->add(slice, synopsis_opts);
   // Update type ids
-  auto it = data.type_ids.emplace(layout.name, ids{}).first;
+  auto it = data.type_ids.emplace(layout.name(), ids{}).first;
   auto& ids = it->second;
   auto first = slice.offset();
   auto last = slice.offset() + slice.rows();
@@ -37,10 +37,10 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
   ids.append_bits(false, first - ids.size());
   ids.append_bits(true, last - first);
   // Push the event data to the indexers.
-  VAST_ASSERT(slice.columns() == layout.type.num_leaves());
+  VAST_ASSERT(slice.columns() == caf::get<record_type>(layout).num_leaves());
   for (size_t flat_index = 0;
-       const auto& [field, offset] : layout.type.leaves()) {
-    const auto qf = qualified_record_field{layout.type, offset};
+       const auto& [field, offset] : caf::get<record_type>(layout).leaves()) {
+    const auto qf = qualified_record_field{layout, offset};
     auto it = indexers.find(qf);
     if (it == indexers.end()) {
       const auto skip = field.type.tag("skip").has_value();

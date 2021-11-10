@@ -20,8 +20,7 @@ namespace vast::format::json {
 
 template <class Specification>
 struct field_selector {
-  std::optional<vast::record_type>
-  operator()(const ::simdjson::dom::object& j) {
+  std::optional<vast::type> operator()(const ::simdjson::dom::object& j) {
     auto el = j.at_key(Specification::field);
     if (el.error())
       return {};
@@ -48,13 +47,12 @@ struct field_selector {
       auto sn = detail::split(t.name(), ".");
       if (sn.size() != 2)
         continue;
-      const auto* r = caf::get_if<record_type>(&t);
-      if (!r)
+      if (!caf::holds_alternative<record_type>(t))
         continue;
       if (sn[0] == Specification::prefix) {
         // The temporary string can be dropped with c++20.
         // See https://wg21.link/p0919.
-        types.emplace(sn[1], *r);
+        types.emplace(sn[1], t);
       }
     }
     return caf::none;
@@ -72,7 +70,7 @@ struct field_selector {
   }
 
   /// A map of all seen types.
-  std::unordered_map<std::string, record_type> types;
+  std::unordered_map<std::string, type> types;
 
   /// A set of all unknown types; used to avoid printing duplicate warnings.
   std::unordered_set<std::string> unknown_types;

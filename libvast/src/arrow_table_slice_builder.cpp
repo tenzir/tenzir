@@ -479,7 +479,8 @@ arrow_table_slice_builder::column_builder::make(const type& t,
       auto key_builder = column_builder::make(x.key_type(), pool);
       auto value_builder = column_builder::make(x.value_type(), pool);
       record_type fields{{"key", x.key_type()}, {"value", x.value_type()}};
-      return std::make_unique<map_column_builder>(pool, make_arrow_type(fields),
+      return std::make_unique<map_column_builder>(pool,
+                                                  make_arrow_type(type{fields}),
                                                   std::move(key_builder),
                                                   std::move(value_builder));
     },
@@ -488,8 +489,8 @@ arrow_table_slice_builder::column_builder::make(const type& t,
       field_builders.reserve(x.num_fields());
       for (const auto& field : x.fields())
         field_builders.push_back(column_builder::make(field.type, pool));
-      return std::make_unique<record_column_builder>(pool, make_arrow_type(x),
-                                                     std::move(field_builders));
+      return std::make_unique<record_column_builder>(
+        pool, make_arrow_type(type{x}), std::move(field_builders));
     },
   };
   return caf::visit(f, t);
@@ -498,8 +499,7 @@ arrow_table_slice_builder::column_builder::make(const type& t,
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_builder_ptr
-arrow_table_slice_builder::make(record_type layout,
-                                size_t initial_buffer_size) {
+arrow_table_slice_builder::make(type layout, size_t initial_buffer_size) {
   return table_slice_builder_ptr{
     new arrow_table_slice_builder{std::move(layout), initial_buffer_size},
     false};
@@ -563,14 +563,8 @@ table_slice arrow_table_slice_builder::finish() {
 }
 
 table_slice arrow_table_slice_builder::create(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch,
-  const record_type& layout, size_t initial_buffer_size) {
-  if (!record_batch->schema()->Equals(make_arrow_schema(layout))) {
-    fmt::print(stderr, "record_batch->schema() = {}\n",
-               record_batch->schema()->ToString());
-    fmt::print(stderr, "make_arrow_schema(layout) = {}\n",
-               make_arrow_schema(layout)->ToString());
-  }
+  const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout,
+  size_t initial_buffer_size) {
   VAST_ASSERT(record_batch->schema()->Equals(make_arrow_schema(layout)),
               "record layout doesn't match record batch schema");
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
@@ -623,17 +617,18 @@ void arrow_table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {
 
 // -- implementation details ---------------------------------------------------
 
-arrow_table_slice_builder::arrow_table_slice_builder(record_type layout,
+arrow_table_slice_builder::arrow_table_slice_builder(type layout,
                                                      size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
     schema_{make_arrow_schema(this->layout())},
     builder_{initial_buffer_size} {
   VAST_ASSERT(schema_);
+  const auto& rt = caf::get<record_type>(this->layout());
   VAST_ASSERT(schema_->num_fields()
-              == detail::narrow_cast<int>(this->layout().num_leaves()));
+              == detail::narrow_cast<int>(rt.num_leaves()));
   column_builders_.reserve(columns());
   auto* pool = arrow::default_memory_pool();
-  for (const auto& [field, _] : this->layout().leaves())
+  for (const auto& [field, _] : rt.leaves())
     column_builders_.emplace_back(column_builder::make(field.type, pool));
 }
 

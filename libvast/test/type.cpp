@@ -697,9 +697,9 @@ TEST(tagged types) {
 
 TEST(sorting) {
   auto ts = std::vector<type>{
-    none_type{},
-    bool_type{},
-    integer_type{},
+    type{none_type{}},
+    type{bool_type{}},
+    type{integer_type{}},
     type{"custom_none", none_type{}},
     type{"custom_bool", bool_type{}},
     type{"custom_integer", integer_type{}},

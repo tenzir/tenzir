@@ -62,9 +62,12 @@ public:
   /// record type itself. But that is no longer true with the FlatBuffers-based
   /// type-system, where only the sum-type of all concrete types contains
   /// metadata like a nane or tags.
+  /// TODO: Allow this only on type, not on all stateful_type_base instances.
   void assign_metadata(const stateful_type_base& other) noexcept;
 
   /// Prunes the metadata of this type.
+  /// TODO: Remove this function; if necessary, re-create the type from its
+  /// underlying concrete type, which is better because it slices internally.
   void prune_metadata() noexcept;
 
 protected:
@@ -100,7 +103,8 @@ concept concrete_type = requires(const T& value) {
 
 /// A concept that models any concrete type, or the abstract type class itself.
 template <class T>
-concept type_or_concrete_type = std::is_same_v<T, type> || concrete_type<T>;
+concept type_or_concrete_type
+  = std::is_same_v<std::remove_cv_t<T>, type> || concrete_type<T>;
 
 /// A concept that models basic concrete types, i.e., types that do not hold
 /// additional state.
@@ -185,9 +189,9 @@ public:
   /// @pre `table != nullptr`
   explicit type(chunk_ptr&& table) noexcept;
 
-  /// Implicitly construct a type from a basic concrete type.
+  /// Explicitly construct a type from a basic concrete type.
   template <basic_type T>
-  type(const T& other) noexcept {
+  explicit type(const T& other) noexcept {
     // This creates a chunk that does not own anything, which at first sounds
     // like an antipattern. It is safe for this particular case because the
     // memory for basic types is guaranteed to have static lifetime that
@@ -195,41 +199,10 @@ public:
     table_ = chunk::make(as_bytes(other), []() noexcept {});
   }
 
-  /// Implicitly assings a type from a basic concrete type.
-  template <basic_type T>
-  type& operator=(const T& rhs) noexcept {
-    table_ = chunk::make(as_bytes(rhs), []() noexcept {});
-    return *this;
-  }
-
-  /// Implicitly construct a type from a complex concrete type.
+  /// Explicitly construct a type from a complex concrete type.
   template <complex_type T>
-  type(const T& other) noexcept {
-    table_ = other.table_;
-    // FIXME: consider using prune_metadata here.
-    // prune_metadata();
-  }
-
-  /// Implicitly assign a type from a complex concrete type.
-  template <complex_type T>
-  type& operator=(const T& rhs) noexcept {
-    table_ = rhs.table_;
-    return *this;
-  }
-
-  /// Implicitly move-construct a type from a complex concrete type.
-  template <complex_type T>
-    requires(std::is_rvalue_reference_v<T>)
-  type(T&& other) // NOLINT(bugprone-forwarding-reference-overload)
-  noexcept {
-    table_ = std::exchange(other.table_, {});
-  }
-
-  /// Implicitly move-assign a type from a complex concrete type.
-  template <complex_type T>
-    requires(std::is_rvalue_reference_v<T>)
-  type& operator=(T&& other) noexcept {
-    table_ = std::exchange(other.table_, {});
+  explicit type(const T& other) noexcept {
+    table_ = other.table_->slice(as_bytes(other));
   }
 
   /// Constructs a named and tagged type.
@@ -240,17 +213,36 @@ public:
   type(std::string_view name, const type& nested,
        const std::vector<struct tag>& tags) noexcept;
 
+  template <concrete_type T>
+  type(std::string_view name, const T& nested,
+       const std::vector<struct tag>& tags) noexcept
+    : type(name, type{nested}, tags) {
+    // nop
+  }
+
   /// Constructs a named type.
   /// @param name The type name.
   /// @param nested The aliased type.
   /// @note Creates a copy of nested if the provided name is empty.
   type(std::string_view name, const type& nested) noexcept;
 
+  template <concrete_type T>
+  type(std::string_view name, const T& nested) noexcept
+    : type(name, type{nested}) {
+    // nop
+  }
+
   /// Constructs a tagged type.
   /// @param nested The aliased type.
   /// @param tags The key-value type annotations.
   /// @note Creates a copy of nested if the tags are empty.
   type(const type& nested, const std::vector<struct tag>& tags) noexcept;
+
+  template <concrete_type T>
+  type(const T& nested, const std::vector<struct tag>& tags) noexcept
+    : type(type{nested}, tags) {
+    // nop
+  }
 
   /// Infers a type from a given data.
   /// @note Returns a *none_type* if the type cannot be inferred.
@@ -684,6 +676,13 @@ public:
   /// Constructs a list type with a known value type.
   explicit list_type(const type& value_type) noexcept;
 
+  template <concrete_type T>
+    requires(!std::is_same_v<T, list_type>) // avoid calling copy constructor
+  explicit list_type(const T& value_type) noexcept
+    : list_type{type{value_type}} {
+    // nop
+  }
+
   /// Returns the type index.
   static uint8_t type_index() noexcept;
 
@@ -730,6 +729,13 @@ public:
   /// Constructs a map type with known key and value types.
   explicit map_type(const type& key_type, const type& value_type) noexcept;
 
+  template <type_or_concrete_type T, type_or_concrete_type U>
+    requires(!std::is_same_v<T, vast::type> || !std::is_same_v<U, vast::type>)
+  explicit map_type(const T& key_type, const U& value_type) noexcept
+    : map_type{type{key_type}, type{value_type}} {
+    // nop
+  }
+
   /// Returns the type index.
   static uint8_t type_index() noexcept;
 
@@ -761,16 +767,33 @@ class record_type final : public stateful_type_base {
   struct leaf_iterable;
 
 public:
+  template <class String>
+  struct basic_field {
+    basic_field() noexcept = default;
+    ~basic_field() noexcept = default;
+    basic_field(const basic_field& other) noexcept = default;
+    basic_field& operator=(const basic_field& other) noexcept = default;
+    basic_field(basic_field&& other) noexcept = default;
+    basic_field& operator=(basic_field&& other) noexcept = default;
+
+    template <type_or_concrete_type Type>
+    basic_field(String n, const Type& t) noexcept
+      : name{std::move(n)}, type{t} {
+      // nop
+    }
+
+    String name = {};
+    class type type = {};
+  };
+
   /// A record type field.
-  struct field final {
-    std::string name; ///< The mame of the field.
-    class type type;  ///< The type of the field.
+  struct field final : basic_field<std::string> {
+    using basic_field::basic_field;
   };
 
   /// A sliced view on a record type field.
-  struct field_view final {
-    std::string_view name; /// The name of the field.
-    class type type;       /// The type of the field.
+  struct field_view final : basic_field<std::string_view> {
+    using basic_field::basic_field;
   };
 
   /// A transformation that can be applied to a record type; maps a valid offset

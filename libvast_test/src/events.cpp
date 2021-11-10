@@ -42,8 +42,7 @@ struct alternating {};
 template <class Policy>
 std::vector<table_slice> make_integers(size_t count) {
   auto layout = type{"test.int", record_type{{"value", integer_type{}}}};
-  auto builder
-    = msgpack_table_slice_builder::make(caf::get<record_type>(layout));
+  auto builder = msgpack_table_slice_builder::make(layout);
   VAST_ASSERT(builder != nullptr);
   std::vector<table_slice> result;
   result.reserve(count);
@@ -117,7 +116,7 @@ events::events() {
     artifacts::logs::zeek::small_conn, slice_size);
   REQUIRE_EQUAL(rows(zeek_conn_log), 20u);
   auto&& layout = zeek_conn_log[0].layout();
-  CHECK_EQUAL(layout.name, "zeek.conn");
+  CHECK_EQUAL(layout.name(), "zeek.conn");
   zeek_dns_log
     = inhale<format::zeek::reader>(artifacts::logs::zeek::dns, slice_size);
   REQUIRE_EQUAL(rows(zeek_dns_log), 32u);

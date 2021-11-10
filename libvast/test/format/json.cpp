@@ -36,7 +36,7 @@ std::string_view eve_log
 FIXTURE_SCOPE(zeek_reader_tests, fixtures::deterministic_actor_system)
 
 TEST(json to data) {
-  auto layout = caf::get<record_type>(type{
+  auto layout = type{
     "layout",
     record_type{
       {"b", bool_type{}},
@@ -57,7 +57,7 @@ TEST(json to data) {
       {"msa", map_type{string_type{}, address_type{}}},
       {"mcs", map_type{count_type{}, string_type{}}},
     },
-  });
+  };
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   std::string_view str = R"json({

@@ -60,7 +60,7 @@ using concepts_map = detail::stable_map<std::string, concept_>;
 
 /// Describes the layout of a vast::list of concepts for automatic conversion to
 /// a `concepts_map`.
-extern const map_type concepts_data_layout;
+extern const type concepts_data_layout;
 
 /// The definition of a model.
 struct model {
@@ -93,7 +93,7 @@ using models_map = detail::stable_map<std::string, model>;
 
 /// Describes the layout of a vast::list of models for automatic conversion to
 /// a `models_map`.
-extern const map_type models_data_layout;
+extern const type models_data_layout;
 
 /// A taxonomy is a combination of concepts and models. VAST stores all
 /// configured taxonomies in memory together, hence the plural naming.

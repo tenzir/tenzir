@@ -126,8 +126,8 @@ struct accountant_state_impl {
           {"value", real_type{}},
         },
       };
-      builder = factory<table_slice_builder>::make(
-        cfg.self_sink.slice_type, caf::get<record_type>(layout));
+      builder
+        = factory<table_slice_builder>::make(cfg.self_sink.slice_type, layout);
       VAST_DEBUG("{} obtained a table slice builder", *self);
     }
     VAST_ASSERT(builder->add(ts, actor_map[actor_id], key, x));

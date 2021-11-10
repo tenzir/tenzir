@@ -211,7 +211,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
           // nop
         },
         [=](caf::unit_t&, const table_slice& x) {
-          self->state.insert(x.layout().type);
+          self->state.insert(x.layout());
         });
       return result.inbound_slot();
     },

@@ -35,7 +35,8 @@ using namespace vast::si_literals;
 TEST(failed construction) {
   // If there's no type attribute with Bloom filter parameters present,
   // construction fails.
-  auto x = make_address_synopsis<legacy_hash>(address_type{}, caf::settings{});
+  auto x
+    = make_address_synopsis<legacy_hash>(type{address_type{}}, caf::settings{});
   CHECK_EQUAL(x, nullptr);
 }
 
@@ -43,7 +44,8 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
   fixture() {
-    factory<synopsis>::add(address_type{}, make_address_synopsis<legacy_hash>);
+    factory<synopsis>::add(type{address_type{}},
+                           make_address_synopsis<legacy_hash>);
   }
   caf::settings opts;
 };
@@ -77,7 +79,7 @@ TEST(serialization with custom attribute type) {
 
 TEST(construction based on partition size) {
   opts["max-partition-size"] = 1_Mi;
-  auto ptr = factory<synopsis>::make(address_type{}, opts);
+  auto ptr = factory<synopsis>::make(type{address_type{}}, opts);
   REQUIRE_NOT_EQUAL(ptr, nullptr);
   CHECK_ROUNDTRIP_DEREF(std::move(ptr));
 }
@@ -85,7 +87,7 @@ TEST(construction based on partition size) {
 TEST(updated params after shrinking) {
   opts["buffer-input-data"] = true;
   opts["max-partition-size"] = 1_Mi;
-  auto ptr = factory<synopsis>::make(address_type{}, opts);
+  auto ptr = factory<synopsis>::make(type{address_type{}}, opts);
   ptr->add(to_addr_view("192.168.0.1"));
   ptr->add(to_addr_view("192.168.0.2"));
   ptr->add(to_addr_view("192.168.0.3"));

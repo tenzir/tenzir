@@ -73,14 +73,14 @@ struct pcap {
 namespace vast::plugins::pcap {
 
 template <class... RecordFields>
-record_type make_packet_type(RecordFields&&... record_fields) {
+type make_packet_type(RecordFields&&... record_fields) {
   // FIXME: once we ship with builtin type aliases, we should reference the
   // port alias type here. Until then, we create the alias manually.
   // See also:
   // - src/format/zeek.cpp
   const auto port_type = type{"port", count_type{}};
   const auto timestamp_type = type{"timestamp", time_type{}};
-  auto result = type{
+  return type{
     "pcap.packet",
     record_type{
       {"time", timestamp_type},
@@ -92,7 +92,6 @@ record_type make_packet_type(RecordFields&&... record_fields) {
       {"payload", type{string_type{}, {{"skip"}}}},
     },
   };
-  return caf::get<record_type>(result);
 }
 
 const auto pcap_packet_type = make_packet_type();
@@ -266,7 +265,7 @@ protected:
     if (builder_ == nullptr) {
       if (!caf::holds_alternative<record_type>(packet_type_))
         return caf::make_error(ec::parse_error, "illegal packet type");
-      if (!reset_builder(caf::get<record_type>(packet_type_)))
+      if (!reset_builder(packet_type_))
         return caf::make_error(ec::parse_error, "unable to create builder for "
                                                 "packet type");
     }
@@ -605,22 +604,25 @@ public:
         return caf::make_error(ec::format_error, "failed to open pcap dumper");
     }
     auto&& layout = slice.layout();
-    if (!congruent(layout.type, type{pcap_packet_type})
-        && !congruent(layout.type, type{pcap_packet_type_community_id}))
+    if (!congruent(layout, type{pcap_packet_type})
+        && !congruent(layout, type{pcap_packet_type_community_id}))
       return caf::make_error(ec::format_error, "invalid pcap packet type");
-    // TODO: consider iterating in natural order for the slice.
+    // TODO: Consider iterating in natural order for the slice.
+    // TODO: Calculate column offsets and indices only once instead
+    // of again for every row.
     for (size_t row = 0; row < slice.rows(); ++row) {
-      const auto payload_offset = pcap_packet_type.resolve_key("payload");
+      const auto& layout_rt = caf::get<record_type>(layout);
+      const auto payload_offset = layout_rt.resolve_key("payload");
       VAST_ASSERT(payload_offset);
-      auto payload_field
-        = slice.at(row, 6, pcap_packet_type.field(*payload_offset).type);
+      auto payload_field = slice.at(row, layout_rt.flat_index(*payload_offset),
+                                    layout_rt.field(*payload_offset).type);
       auto& payload = caf::get<view<std::string>>(payload_field);
       // Make PCAP header.
       ::pcap_pkthdr header{};
-      const auto time_offset = pcap_packet_type.resolve_key("time");
+      const auto time_offset = layout_rt.resolve_key("time");
       VAST_ASSERT(time_offset);
-      auto ns_field
-        = slice.at(row, 0, pcap_packet_type.field(*time_offset).type);
+      auto ns_field = slice.at(row, layout_rt.flat_index(*time_offset),
+                               layout_rt.field(*time_offset).type);
       auto ns = caf::get<view<time>>(ns_field).time_since_epoch().count();
       header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO

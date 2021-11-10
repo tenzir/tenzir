@@ -72,7 +72,7 @@ caf::expected<blueprint> make_blueprint(const type& t) {
       bp.data = std::make_unique<data>(x.construct());
       // It's important that we pass t rather than x here as this needs access
       // to the tags, which are part of type but not the concrete type.
-      auto dist = make_distribution(x);
+      auto dist = make_distribution(t);
       if (!dist)
         return dist.error();
       bp.distributions.push_back(std::move(*dist));

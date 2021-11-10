@@ -68,7 +68,7 @@ public:
     = table_slice_encoding::arrow;
 
   /// @returns The table layout.
-  [[nodiscard]] const record_type& layout() const noexcept;
+  [[nodiscard]] const type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] table_slice::size_type rows() const noexcept;

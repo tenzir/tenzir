@@ -42,7 +42,7 @@ void partition_synopsis::add(const table_slice& slice,
     return factory<synopsis>::make(t, synopsis_options);
   };
   const auto& layout = slice.layout();
-  auto each = layout.type.leaves();
+  auto each = caf::get<record_type>(layout).leaves();
   auto field_it = each.begin();
   for (size_t col = 0; col < slice.columns(); ++col, ++field_it) {
     auto add_column = [&](const synopsis_ptr& syn) {
@@ -55,7 +55,7 @@ void partition_synopsis::add(const table_slice& slice,
           syn->add(std::move(view));
       }
     };
-    auto key = qualified_record_field{layout.type, field_it->second};
+    auto key = qualified_record_field{layout, field_it->second};
     if (!caf::holds_alternative<string_type>(field_it->first.type)) {
       // Locate the relevant synopsis.
       auto it = field_synopses_.find(key);

@@ -33,7 +33,7 @@ namespace {
 
 template <class... Ts>
 auto make_slice(record_type layout, Ts&&... xs) {
-  auto builder = arrow_table_slice_builder::make(layout);
+  auto builder = arrow_table_slice_builder::make(type{"stub", layout});
   auto ok = builder->add(std::forward<Ts>(xs)...);
   if (!ok)
     FAIL("builder failed to add given values");
@@ -99,7 +99,7 @@ TEST(single column - count) {
   REQUIRE_EQUAL(slice.rows(), 4u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 0_c);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_c);
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), 3_c);
   CHECK_ROUNDTRIP(slice);
 }
@@ -110,7 +110,7 @@ TEST(single column - enumeration) {
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 0_e);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_e);
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -118,7 +118,7 @@ TEST(single column - integer) {
   auto t = integer_type{};
   auto slice = make_single_column_slice(t, caf::none, 1_i, 2_i);
   REQUIRE_EQUAL(slice.rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_i);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), 2_i);
   CHECK_ROUNDTRIP(slice);
@@ -129,7 +129,7 @@ TEST(single column - boolean) {
   auto slice = make_single_column_slice(t, false, caf::none, true);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), false);
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), true);
   CHECK_ROUNDTRIP(slice);
 }
@@ -140,7 +140,7 @@ TEST(single column - real) {
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 1.23);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 3.21);
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -149,7 +149,7 @@ TEST(single column - string) {
   auto slice = make_single_column_slice(t, "a"sv, caf::none, "c"sv);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), "a"sv);
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), "c"sv);
   CHECK_ROUNDTRIP(slice);
 }
@@ -162,7 +162,7 @@ TEST(single column - pattern) {
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(p1));
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(p2));
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -173,7 +173,7 @@ TEST(single column - time) {
   auto slice = make_single_column_slice(t, epoch, caf::none, epoch + 48h);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), epoch);
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), epoch + 48h);
   CHECK_ROUNDTRIP(slice);
 }
@@ -186,7 +186,7 @@ TEST(single column - duration) {
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), h0);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), h12);
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -199,7 +199,7 @@ TEST(single column - address) {
   auto a3 = unbox(to<address>("2001:db8::"));
   auto slice = make_single_column_slice(t, caf::none, a1, a2, a3);
   REQUIRE_EQUAL(slice.rows(), 4u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), a1);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), a2);
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), a3);
@@ -218,7 +218,7 @@ TEST(single column - subnet) {
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), s1);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), s2);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), s3);
-  CHECK_VARIANT_EQUAL(slice.at(3, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(3, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -230,7 +230,7 @@ TEST(single column - list of integers) {
   auto slice = make_slice(layout, list1, caf::none, list2);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), make_view(list2));
   CHECK_ROUNDTRIP(slice);
 }
@@ -242,7 +242,7 @@ TEST(single column - list of record) {
   auto slice = make_slice(layout, list1, caf::none);
   REQUIRE_EQUAL(slice.rows(), 2u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -255,7 +255,7 @@ TEST(single column - list of strings) {
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(list2));
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -272,7 +272,7 @@ TEST(single column - list of list of integers) {
   list list2{list11, list12};
   auto slice = make_slice(layout, caf::none, list1, list2);
   REQUIRE_EQUAL(slice.rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0, llt), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0, llt), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(1, 0, llt), make_view(list1));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, llt), make_view(list2));
   CHECK_ROUNDTRIP(slice);
@@ -287,7 +287,7 @@ TEST(single column - map) {
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(map1));
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(map2));
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -322,8 +322,8 @@ TEST(arrow schema from type with nested records) {
      }},
   };
   auto ft = flatten(t);
-  auto af = make_arrow_schema(t);
-  auto aft = make_arrow_schema(ft);
+  auto af = make_arrow_schema(type{t});
+  auto aft = make_arrow_schema(type{ft});
   CHECK(af->Equals(aft));
 }
 
@@ -333,7 +333,7 @@ TEST(record batch roundtrip) {
   auto t = count_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
   auto batch = as_record_batch(slice1);
-  auto slice2 = table_slice{batch, slice1.layout().type};
+  auto slice2 = table_slice{batch, slice1.layout()};
   CHECK_EQUAL(slice1, slice2);
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, t), 0_c);
   CHECK_VARIANT_EQUAL(slice2.at(1, 0, t), 1_c);
@@ -347,7 +347,7 @@ TEST(record batch roundtrip - adding column) {
   auto slice1 = make_single_column_slice(count_type{}, 0_c, 1_c, 2_c, 3_c);
   auto batch = as_record_batch(slice1);
   auto cb = arrow_table_slice_builder::column_builder::make(
-    string_type{}, arrow::default_memory_pool());
+    type{string_type{}}, arrow::default_memory_pool());
   cb->add("0"sv);
   cb->add("1"sv);
   cb->add("2"sv);
@@ -356,11 +356,14 @@ TEST(record batch roundtrip - adding column) {
   REQUIRE(column);
   auto new_batch = batch->AddColumn(1, "new", column);
   REQUIRE(new_batch.ok());
-  auto new_layout = slice1.layout().type.transform(
-    {{{slice1.layout().type.num_fields() - 1},
+  const auto& layout_rt = caf::get<record_type>(slice1.layout());
+  auto new_layout_rt = layout_rt.transform(
+    {{{layout_rt.num_fields() - 1},
       record_type::insert_after({{"new", string_type{}}})}});
-  REQUIRE(new_layout);
-  auto slice2 = table_slice{new_batch.ValueUnsafe(), *new_layout};
+  REQUIRE(new_layout_rt);
+  auto new_layout = type{*new_layout_rt};
+  new_layout.assign_metadata(slice1.layout());
+  auto slice2 = table_slice{new_batch.ValueUnsafe(), new_layout};
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, count_type{}), 0_c);
   CHECK_VARIANT_EQUAL(slice2.at(1, 0, count_type{}), 1_c);
   CHECK_VARIANT_EQUAL(slice2.at(2, 0, count_type{}), 2_c);

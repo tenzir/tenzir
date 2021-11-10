@@ -77,11 +77,13 @@ struct transformer_fixture
   // Creates a table slice with a single string field and random data.
   static std::vector<vast::detail::framed<vast::table_slice>>
   make_transforms_testdata() {
-    auto layout = vast::record_type{
-      {"uid", vast::string_type{}},
-      {"index", vast::integer_type{}},
+    auto layout = vast::type{
+      "vast.test",
+      vast::record_type{
+        {"uid", vast::string_type{}},
+        {"index", vast::integer_type{}},
+      },
     };
-    layout.assign_metadata(vast::type{"vast.test", vast::none_type{}});
     auto builder = vast::factory<vast::table_slice_builder>::make(
       vast::defaults::import::table_slice_type, layout);
     REQUIRE(builder);
@@ -156,8 +158,7 @@ TEST(transformer) {
   auto& slice = slices[0];
   CHECK_EQUAL(slice.header, vast::detail::stream_control_header::data);
   CHECK_EQUAL(slice.body.rows(), result.rows());
-  CHECK_EQUAL(slice.body.layout().name, result.layout().name);
-  CHECK_EQUAL(result.layout().type, layout_after_delete);
+  CHECK_EQUAL(result.layout(), layout_after_delete);
   CHECK_EQUAL(slice.body.offset(), result.offset());
   self->send_exit(transformer, caf::exit_reason::user_shutdown);
 }

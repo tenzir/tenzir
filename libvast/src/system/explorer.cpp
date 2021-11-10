@@ -138,11 +138,11 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
             return true;
         return false;
       };
-      auto leaves = layout.type.leaves();
+      auto leaves = caf::get<record_type>(layout).leaves();
       auto it = std::find_if(leaves.begin(), leaves.end(), is_timestamp);
       if (it == leaves.end()) {
         VAST_DEBUG("{} could not find timestamp field in {}", *self,
-                   layout.name);
+                   layout.name());
         return;
       }
       std::optional<table_slice_column> by_column;
@@ -151,7 +151,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
           by_column.emplace(std::move(*col));
         if (!by_column) {
           VAST_TRACE_SCOPE("skipping slice with {} because it has no column {}",
-                           layout.name, *st.by);
+                           layout.name(), *st.by);
           return;
         }
       }

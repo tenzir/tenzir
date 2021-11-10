@@ -145,9 +145,9 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
   // Construct a candidate checker if we don't have one for this type.
   auto layout = slice.layout();
-  auto it = self->state.checkers.find(layout.type);
+  auto it = self->state.checkers.find(layout);
   if (it == self->state.checkers.end()) {
-    auto x = tailor(self->state.expr, layout.type);
+    auto x = tailor(self->state.expr, layout);
     if (!x) {
       VAST_ERROR("{} failed to tailor expression: {}", *self,
                  render(x.error()));
@@ -155,9 +155,9 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
       shutdown(self);
       return;
     }
-    VAST_DEBUG("{} tailored AST to {}: {}", *self, layout.type, x);
+    VAST_DEBUG("{} tailored AST to {}: {}", *self, layout, x);
     std::tie(it, std::ignore)
-      = self->state.checkers.emplace(layout.type, std::move(*x));
+      = self->state.checkers.emplace(layout, std::move(*x));
   }
   auto& checker = it->second;
   // Perform candidate check, splitting the slice into subsets if needed.

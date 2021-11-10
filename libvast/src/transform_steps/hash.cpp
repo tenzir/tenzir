@@ -29,19 +29,22 @@ hash_step::hash_step(const std::string& fieldname, const std::string& out,
 }
 
 caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
-  auto layout = slice.layout().type;
-  auto offset = layout.resolve_key(field_);
+  const auto& layout = slice.layout();
+  const auto& layout_rt = caf::get<record_type>(layout);
+  auto offset = layout_rt.resolve_key(field_);
   if (!offset)
     return std::move(slice);
-  auto column_index = layout.flat_index(*offset);
+  auto column_index = layout_rt.flat_index(*offset);
   // Adjust layout.
-  auto adjusted_layout = layout.transform({{
-    {layout.num_fields() - 1},
+  auto adjusted_layout_rt = layout_rt.transform({{
+    {layout_rt.num_fields() - 1},
     record_type::insert_after({{out_, string_type{}}}),
   }});
-  VAST_ASSERT(adjusted_layout); // adding a field cannot fail.
+  VAST_ASSERT(adjusted_layout_rt); // adding a field cannot fail.
+  auto adjusted_layout = type{*adjusted_layout_rt};
+  adjusted_layout.assign_metadata(layout);
   auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), *adjusted_layout);
+    = factory<table_slice_builder>::make(slice.encoding(), adjusted_layout);
   auto builder_error
     = caf::make_error(ec::unspecified, "pseudonymize step: unknown error "
                                        "in table slice builder");
@@ -66,18 +69,19 @@ caf::expected<table_slice> hash_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-caf::expected<std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
-hash_step::operator()(record_type layout,
+caf::expected<std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
+hash_step::operator()(type layout,
                       std::shared_ptr<arrow::RecordBatch> batch) const {
   // Get the target field if it exists.
-  auto offset = layout.resolve_key(field_);
+  const auto& layout_rt = caf::get<record_type>(layout);
+  auto offset = layout_rt.resolve_key(field_);
   if (!offset)
     return std::make_pair(std::move(layout), std::move(batch));
-  auto column_index = layout.flat_index(*offset);
+  auto column_index = layout_rt.flat_index(*offset);
   // Compute the hash values.
   auto column = batch->column(detail::narrow_cast<int>(column_index));
   auto cb = arrow_table_slice_builder::column_builder::make(
-    string_type{}, arrow::default_memory_pool());
+    type{string_type{}}, arrow::default_memory_pool());
   for (int i = 0; i < batch->num_rows(); ++i) {
     const auto& item = column->GetScalar(i);
     auto h = default_hash{};
@@ -94,12 +98,14 @@ hash_step::operator()(record_type layout,
   if (!result_batch.ok())
     return std::make_pair(std::move(layout), nullptr);
   // Adjust layout.
-  auto adjusted_layout = layout.transform({{
-    {layout.num_fields() - 1},
+  auto adjusted_layout_rt = layout_rt.transform({{
+    {layout_rt.num_fields() - 1},
     record_type::insert_after({{out_, string_type{}}}),
   }});
-  VAST_ASSERT(adjusted_layout); // adding a field cannot fail.
-  return std::make_pair(std::move(*adjusted_layout), result_batch.ValueOrDie());
+  VAST_ASSERT(adjusted_layout_rt); // adding a field cannot fail.
+  auto adjusted_layout = type{*adjusted_layout_rt};
+  adjusted_layout.assign_metadata(*adjusted_layout_rt);
+  return std::make_pair(std::move(adjusted_layout), result_batch.ValueOrDie());
 }
 
 class hash_step_plugin final : public virtual transform_plugin {

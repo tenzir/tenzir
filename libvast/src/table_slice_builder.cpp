@@ -21,9 +21,10 @@ namespace vast {
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_slice_builder::table_slice_builder(record_type layout) noexcept
+table_slice_builder::table_slice_builder(type layout) noexcept
   : layout_(std::move(layout)) {
-  // nop
+  VAST_ASSERT(caf::holds_alternative<record_type>(layout_));
+  VAST_ASSERT(!layout_.name().empty());
 }
 
 table_slice_builder::~table_slice_builder() noexcept {
@@ -97,7 +98,7 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
         // (3) We're done unwrapping.
         return x;
       };
-      return add(unwrap_nested(unwrap_nested, xs, lt));
+      return add(unwrap_nested(unwrap_nested, xs, type{lt}));
     },
     [&](const auto&, const auto&) {
       return add(make_view(x));
@@ -107,10 +108,10 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
 }
 
 size_t table_slice_builder::columns() const noexcept {
-  return layout_.num_leaves();
+  return caf::get<record_type>(layout_).num_leaves();
 }
 
-const record_type& table_slice_builder::layout() const noexcept {
+const type& table_slice_builder::layout() const noexcept {
   return layout_;
 }
 

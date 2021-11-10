@@ -52,8 +52,7 @@ private:
   }
 
 public:
-  std::optional<record_type>
-  operator()(const ::simdjson::dom::object& obj) const {
+  std::optional<type> operator()(const ::simdjson::dom::object& obj) const {
     if (type_cache.empty())
       return {};
     // Iff there is only one type in the type cache, allow the JSON reader to
@@ -74,12 +73,15 @@ public:
     for (const auto& entry : sch) {
       if (!caf::holds_alternative<record_type>(entry))
         continue;
-      auto layout = caf::get<record_type>(entry);
+      if (entry.name().empty()) {
+        VAST_WARN("unexpectedly unnamed layout in schema: {}", entry);
+        continue;
+      }
       std::vector<std::string> cache_entry;
-      for (const auto& [k, v] : layout.fields())
+      for (const auto& [k, v] : caf::get<record_type>(entry).fields())
         cache_entry.emplace_back(k);
       std::sort(cache_entry.begin(), cache_entry.end());
-      type_cache.insert({std::move(cache_entry), std::move(layout)});
+      type_cache.insert({std::move(cache_entry), entry});
     }
     return caf::none;
   }
@@ -99,7 +101,7 @@ public:
     return "json-reader";
   }
 
-  detail::flat_map<std::vector<std::string>, record_type> type_cache = {};
+  detail::flat_map<std::vector<std::string>, type> type_cache = {};
 };
 
 } // namespace vast::format::json

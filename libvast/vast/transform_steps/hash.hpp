@@ -21,8 +21,8 @@ public:
   operator()(table_slice&& slice) const override;
 
   [[nodiscard]] caf::expected<
-    std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
-  operator()(record_type layout,
+    std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
+  operator()(type layout,
              std::shared_ptr<arrow::RecordBatch> batch) const override;
 
 private:

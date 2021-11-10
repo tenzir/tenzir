@@ -35,7 +35,7 @@ table_slice_column::table_slice_column(table_slice slice,
 
 std::optional<table_slice_column>
 table_slice_column::make(table_slice slice, std::string_view column) noexcept {
-  const auto layout = slice.layout().type;
+  const auto layout = caf::get<record_type>(slice.layout());
   // TODO: Doesn't it make way more sense to resolve the column name exactly
   // here instead of taking the first column that suffix-matches the name?
   const auto offsets = layout.resolve_key_suffix(column);

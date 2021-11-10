@@ -20,7 +20,7 @@ bool_synopsis::bool_synopsis(vast::type x) : synopsis{std::move(x)} {
 }
 
 bool_synopsis::bool_synopsis(bool true_, bool false_)
-  : synopsis{bool_type{}}, true_(true_), false_(false_) {
+  : synopsis{vast::type{bool_type{}}}, true_(true_), false_(false_) {
 }
 
 void bool_synopsis::add(data_view x) {

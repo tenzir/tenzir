@@ -33,8 +33,8 @@ namespace vast {
 /// @returns a list of randomnly filled table slices or an error.
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
-make_random_table_slices(size_t num_slices, size_t slice_size,
-                         record_type layout, id offset, size_t seed) {
+make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
+                         id offset, size_t seed) {
   schema sc;
   sc.add(layout);
   // We have no access to the actor system, so we can only pick the default
@@ -75,7 +75,7 @@ make_data(const table_slice& slice, size_t first_row, size_t num_rows) {
     num_rows = slice.rows() - first_row;
   std::vector<std::vector<data>> result;
   result.reserve(num_rows);
-  auto fl = flatten(slice.layout().type);
+  auto fl = flatten(caf::get<record_type>(slice.layout()));
   for (size_t i = 0; i < num_rows; ++i) {
     std::vector<data> xs;
     xs.reserve(slice.columns());
@@ -205,7 +205,7 @@ void table_slices::test_add() {
   MESSAGE(">> test table_slice_builder::add");
   auto slice = make_slice();
   CHECK_EQUAL(slice.rows(), 2u);
-  auto flat_layout = flatten(layout);
+  auto flat_layout = flatten(caf::get<record_type>(layout));
   CHECK_EQUAL(slice.columns(), flat_layout.num_fields());
   for (size_t row = 0; row < slice.rows(); ++row)
     for (size_t col = 0; col < slice.columns(); ++col) {
@@ -281,7 +281,7 @@ void table_slices::test_message_serialization() {
 
 void table_slices::test_append_column_to_index() {
   MESSAGE(">> test append_column_to_index");
-  auto idx = factory<value_index>::make(integer_type{}, caf::settings{});
+  auto idx = factory<value_index>::make(type{integer_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   auto slice = make_slice();
   slice.offset(0);

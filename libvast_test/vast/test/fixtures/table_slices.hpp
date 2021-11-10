@@ -45,8 +45,8 @@ namespace vast {
 /// @returns a list of randomnly filled table slices or an error.
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
-make_random_table_slices(size_t num_slices, size_t slice_size,
-                         record_type layout, id offset = 0, size_t seed = 0);
+make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
+                         id offset = 0, size_t seed = 0);
 
 /// Converts the table slice into a 2-D matrix in row-major order such that
 /// each row represents an event.
@@ -121,7 +121,7 @@ private:
 
   void test_append_column_to_index();
 
-  vast::record_type layout = caf::get<record_type>(type{
+  vast::type layout = type{
     "test",
     record_type{
       {"a", bool_type{}},
@@ -174,8 +174,9 @@ private:
       {"maj", map_type{bool_type{}, subnet_type{}}},
       // {"mal", map_type{bool_type{}, list_type{count_type{}}}},
       // {"man", map_type{bool_type{}, map_type{count_type{}, bool_type{}}}},
-      {"aas", {"aas", {"as", string_type{}}}},
-    }});
+      {"aas", type{"aas", type{"as", string_type{}}}},
+    },
+  };
 
   vast::table_slice_builder_ptr builder;
 

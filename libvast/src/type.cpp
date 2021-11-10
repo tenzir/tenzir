@@ -102,6 +102,41 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
   return root;
 }
 
+template <complex_type T>
+std::span<const std::byte> as_bytes_complex(const T& ct) {
+  const auto& t
+    = static_cast<const type&>(static_cast<const stateful_type_base&>(ct));
+  const auto* root = &t.table(type::transparent::no);
+  auto result = as_bytes(t);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
+        return result;
+      case fbs::type::Type::tagged_type_v0:
+        const auto* tagged = root->type_as_tagged_type_v0();
+        VAST_ASSERT(tagged);
+        root = tagged->type_nested_root();
+        VAST_ASSERT(root);
+        result = as_bytes(*tagged->type());
+        break;
+    }
+  }
+}
+
 template <class T>
   requires(std::is_same_v<T, struct enumeration_type::field> //
            || std::is_same_v<T, enumeration_type::field_view>)
@@ -401,46 +436,46 @@ type::type(const type& nested, const std::vector<struct tag>& tags) noexcept
 type type::infer(const data& value) noexcept {
   auto f = detail::overload{
     [](caf::none_t) noexcept -> type {
-      return none_type{};
+      return {};
     },
     [](const bool&) noexcept -> type {
-      return bool_type{};
+      return type{bool_type{}};
     },
     [](const integer&) noexcept -> type {
-      return integer_type{};
+      return type{integer_type{}};
     },
     [](const count&) noexcept -> type {
-      return count_type{};
+      return type{count_type{}};
     },
     [](const real&) noexcept -> type {
-      return real_type{};
+      return type{real_type{}};
     },
     [](const duration&) noexcept -> type {
-      return duration_type{};
+      return type{duration_type{}};
     },
     [](const time&) noexcept -> type {
-      return time_type{};
+      return type{time_type{}};
     },
     [](const std::string&) noexcept -> type {
-      return string_type{};
+      return type{string_type{}};
     },
     [](const pattern&) noexcept -> type {
-      return pattern_type{};
+      return type{pattern_type{}};
     },
     [](const address&) noexcept -> type {
-      return address_type{};
+      return type{address_type{}};
     },
     [](const subnet&) noexcept -> type {
-      return subnet_type{};
+      return type{subnet_type{}};
     },
     [](const enumeration&) noexcept -> type {
       // Enumeration types cannot be inferred.
-      return none_type{};
+      return {};
     },
     [](const list& list) noexcept -> type {
       // List types cannot be inferred from empty lists.
       if (list.empty())
-        return list_type{none_type{}};
+        return type{list_type{none_type{}}};
       // Technically lists can contain heterogenous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
       auto value_type = infer(*list.begin());
@@ -450,12 +485,12 @@ type type::infer(const data& value) noexcept {
                                        == infer(elem).type_index();
                               }),
                   "expected a homogenous list");
-      return list_type{value_type};
+      return type{list_type{value_type}};
     },
     [](const map& map) noexcept -> type {
       // Map types cannot be inferred from empty maps.
       if (map.empty())
-        return map_type{none_type{}, none_type{}};
+        return type{map_type{none_type{}, none_type{}}};
       // Technically maps can contain heterogenous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
       auto key_type = infer(map.begin()->first);
@@ -468,12 +503,12 @@ type type::infer(const data& value) noexcept {
                                             == infer(elem.second).type_index();
                               }),
                   "expected a homogenous map");
-      return map_type{key_type, value_type};
+      return type{map_type{key_type, value_type}};
     },
     [](const record& record) noexcept -> type {
       // Record types cannot be inferred from empty records.
       if (record.empty())
-        return none_type{};
+        return {};
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(record.size());
       for (const auto& field : record)
@@ -481,7 +516,7 @@ type type::infer(const data& value) noexcept {
           field.first,
           infer(field.second),
         });
-      return record_type{fields};
+      return type{record_type{fields}};
     },
   };
   return caf::visit(f, value);
@@ -835,10 +870,13 @@ bool is_container(const type& type) noexcept {
   }
 }
 
-type flatten(const type& type) noexcept {
-  if (const auto* record = caf::get_if<record_type>(&type))
-    return flatten(*record);
-  return type;
+type flatten(const type& t) noexcept {
+  if (const auto* rt = caf::get_if<record_type>(&t)) {
+    auto result = type{flatten(*rt)};
+    result.assign_metadata(t);
+    return result;
+  }
+  return t;
 }
 
 bool congruent(const type& x, const type& y) noexcept {
@@ -1487,7 +1525,7 @@ uint8_t enumeration_type::type_index() noexcept {
 }
 
 std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
-  return as_bytes(static_cast<const type&>(x));
+  return as_bytes_complex(x);
 }
 
 enumeration enumeration_type::construct() const noexcept {
@@ -1559,7 +1597,7 @@ uint8_t list_type::type_index() noexcept {
 }
 
 std::span<const std::byte> as_bytes(const list_type& x) noexcept {
-  return as_bytes(static_cast<const type&>(x));
+  return as_bytes_complex(x);
 }
 
 list list_type::construct() noexcept {
@@ -1611,7 +1649,7 @@ uint8_t map_type::type_index() noexcept {
 }
 
 std::span<const std::byte> as_bytes(const map_type& x) noexcept {
-  return as_bytes(static_cast<const type&>(x));
+  return as_bytes_complex(x);
 }
 
 map map_type::construct() noexcept {
@@ -1661,7 +1699,7 @@ uint8_t record_type::type_index() noexcept {
 }
 
 std::span<const std::byte> as_bytes(const record_type& x) noexcept {
-  return as_bytes(static_cast<const type&>(x));
+  return as_bytes_complex(x);
 }
 
 record record_type::construct() const noexcept {
@@ -1979,7 +2017,7 @@ merge(const record_type& lhs, const record_type& rhs,
       [&](const record_type& lhs,
           const record_type& rhs) noexcept -> caf::expected<type> {
         if (auto result = merge(lhs, rhs, merge_conflict))
-          return *result;
+          return type{*result};
         else
           return result.error();
       },
@@ -1987,7 +2025,7 @@ merge(const record_type& lhs, const record_type& rhs,
         const T& lhs, const U& rhs) noexcept -> caf::expected<type> {
         switch (merge_conflict) {
           case record_type::merge_conflict::fail: {
-            if (congruent(lhs, rhs)) {
+            if (congruent(type{lhs}, type{rhs})) {
               if (lfield.type.name() != rfield.type.name())
                 return caf::make_error(
                   ec::logic_error,

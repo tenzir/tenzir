@@ -21,17 +21,21 @@ delete_step::delete_step(const std::string& fieldname) : fieldname_(fieldname) {
 }
 
 caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
-  const auto& layout = slice.layout().type;
-  auto offset = layout.resolve_key(fieldname_);
+  const auto& layout = slice.layout();
+  const auto& layout_rt = caf::get<record_type>(layout);
+  auto offset = layout_rt.resolve_key(fieldname_);
   if (!offset)
     return std::move(slice);
-  auto columnn_index = layout.flat_index(*offset);
-  auto adjusted_layout = layout.transform({{*offset, record_type::drop()}});
-  if (!adjusted_layout)
+  auto columnn_index = layout_rt.flat_index(*offset);
+  auto adjusted_layout_rt
+    = layout_rt.transform({{*offset, record_type::drop()}});
+  if (!adjusted_layout_rt)
     return caf::make_error(ec::unspecified, "failed to remove field from "
                                             "layout");
-  auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), *adjusted_layout);
+  auto adjusted_layout = type{*adjusted_layout_rt};
+  adjusted_layout.assign_metadata(layout);
+  auto builder_ptr = factory<table_slice_builder>::make(
+    slice.encoding(), std::move(adjusted_layout));
   builder_ptr->reserve(slice.rows());
   for (size_t i = 0; i < slice.rows(); ++i) {
     for (size_t j = 0; j < slice.columns(); ++j) {
@@ -45,24 +49,28 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   return builder_ptr->finish();
 }
 
-caf::expected<std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
-delete_step::operator()(record_type layout,
+caf::expected<std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
+delete_step::operator()(type layout,
                         std::shared_ptr<arrow::RecordBatch> batch) const {
-  auto offset = layout.resolve_key(fieldname_);
+  const auto& layout_rt = caf::get<record_type>(layout);
+  auto offset = layout_rt.resolve_key(fieldname_);
   if (!offset)
     return std::make_pair(std::move(layout), std::move(batch));
-  auto column_index = layout.flat_index(*offset);
+  auto column_index = layout_rt.flat_index(*offset);
   auto removed = batch->RemoveColumn(column_index);
   if (!removed.ok())
     return caf::make_error(
       ec::unspecified, fmt::format("failed to remove field from record "
                                    "batch schema at index {}: {}",
                                    column_index, removed.status().ToString()));
-  auto adjusted_layout = layout.transform({{*offset, record_type::drop()}});
-  if (!adjusted_layout)
+  auto adjusted_layout_rt
+    = layout_rt.transform({{*offset, record_type::drop()}});
+  if (!adjusted_layout_rt)
     return caf::make_error(ec::unspecified, "failed to remove field from "
                                             "layout");
-  return std::make_pair(std::move(*adjusted_layout),
+  auto adjusted_layout = type{*adjusted_layout_rt};
+  adjusted_layout.assign_metadata(layout);
+  return std::make_pair(std::move(adjusted_layout),
                         std::move(removed.ValueOrDie()));
 }
 

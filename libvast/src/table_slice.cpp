@@ -163,8 +163,8 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
   // nop
 }
 
-table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                         const record_type& layout) {
+table_slice::table_slice(
+  const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout) {
   *this = arrow_table_slice_builder::create(record_batch, layout);
 }
 
@@ -204,10 +204,10 @@ bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
     return true;
   // Check whether the slices have different sizes or layouts.
   if (lhs.rows() != rhs.rows() || lhs.columns() != rhs.columns()
-      || lhs.layout().type != rhs.layout().type)
+      || lhs.layout() != lhs.layout())
     return false;
   // Check whether the slices contain different data.
-  auto flat_layout = flatten(lhs.layout().type);
+  auto flat_layout = flatten(caf::get<record_type>(lhs.layout()));
   for (size_t row = 0; row < lhs.rows(); ++row)
     for (size_t col = 0; col < flat_layout.num_fields(); ++col)
       if (lhs.at(row, col, flat_layout.field(col).type)
@@ -234,21 +234,19 @@ enum table_slice_encoding table_slice::encoding() const noexcept {
   return visit(f, as_flatbuffer(chunk_));
 }
 
-struct table_slice::layout table_slice::layout() const noexcept {
-  using result_type = struct layout;
+type table_slice::layout() const noexcept {
   auto f = detail::overload{
-    []() noexcept -> result_type {
+    []() noexcept -> type {
       die("unable to access layout of invalid table slice");
     },
-    [&](const auto& encoded) noexcept -> result_type {
-      const auto t = type{state(encoded, state_)->layout()};
-      return {
-        t.name(),
-        caf::get<record_type>(t),
-      };
+    [&](const auto& encoded) noexcept -> type {
+      return state(encoded, state_)->layout();
     },
   };
-  return visit(f, as_flatbuffer(chunk_));
+  auto result = visit(f, as_flatbuffer(chunk_));
+  VAST_ASSERT(caf::holds_alternative<record_type>(result));
+  VAST_ASSERT(!result.name().empty());
+  return result;
 }
 
 table_slice::size_type table_slice::rows() const noexcept {
@@ -389,10 +387,10 @@ rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
           && state(encoded, slice.state_)->is_latest_version)
         return std::move(slice);
       auto builder = factory<table_slice_builder>::make(builder_id(encoding),
-                                                        slice.layout().type);
+                                                        slice.layout());
       if (!builder)
         return table_slice{};
-      auto flat_layout = flatten(slice.layout().type);
+      auto flat_layout = flatten(caf::get<record_type>(slice.layout()));
       for (table_slice::size_type row = 0; row < slice.rows(); ++row)
         for (table_slice::size_type column = 0;
              column < flat_layout.num_fields(); ++column)
@@ -433,8 +431,8 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   table_slice_encoding implementation_id
     = visit(f, as_flatbuffer(slice.chunk_));
   // Start slicing and dicing.
-  auto builder = factory<table_slice_builder>::make(implementation_id,
-                                                    slice.layout().type);
+  auto builder
+    = factory<table_slice_builder>::make(implementation_id, slice.layout());
   if (builder == nullptr) {
     VAST_ERROR("{} failed to get a table slice builder for {}", __func__,
                implementation_id);
@@ -452,7 +450,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     new_slice.offset(last_offset);
     result.emplace_back(std::move(new_slice));
   };
-  auto flat_layout = flatten(slice.layout().type);
+  auto flat_layout = flatten(caf::get<record_type>(slice.layout()));
   auto last_id = last_offset - 1;
   for (auto id : select(intersection)) {
     // Finish last slice when hitting non-consecutive IDs.
@@ -588,7 +586,7 @@ struct row_evaluator {
     // TODO: type and field queries don't produce false positives in the
     // partition. Is there actually any reason to do the check here?
     if (e.kind == meta_extractor::type)
-      return evaluate(std::string{layout.name}, op_, d);
+      return evaluate(std::string{layout.name()}, op_, d);
     if (e.kind == meta_extractor::field) {
       const auto* s = caf::get_if<std::string>(&d);
       if (!s) {
@@ -598,12 +596,10 @@ struct row_evaluator {
       auto result = false;
       auto neg = is_negated(op_);
       // auto abs_op = neg ? negate(op_) : op_;
-      // FIXME: The #field meta extractor does not match the dot separator
-      // correctly on prefix matching, and should be rewritten to use
-      // resolve_key_suffix instead.
-      for (const auto& [field, index] : layout.type.leaves()) {
+      for (const auto& layout_rt = caf::get<record_type>(layout);
+           const auto& [field, index] : layout_rt.leaves()) {
         const auto fqn
-          = fmt::format("{}.{}", layout.name, layout.type.key(index));
+          = fmt::format("{}.{}", layout.name(), layout_rt.key(index));
         // This is essentially s->ends_with(fqn), except that it also checks the
         // dot separators correctly (modulo quoting).
         const auto [fqn_mismatch, s_mismatch]
@@ -628,7 +624,7 @@ struct row_evaluator {
   }
 
   bool operator()(const data_extractor& e, const data& d) {
-    auto col = slice_.layout().type.flat_index(e.offset);
+    auto col = caf::get<record_type>(slice_.layout()).flat_index(e.offset);
     auto lhs = to_canonical(e.type, slice_.at(row_, col, e.type));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
@@ -673,7 +669,7 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
     // Tailor the expression to the type; this is required for using the
     // row_evaluator, which expects field and type extractors to be resolved
     // already.
-    auto tailored_expr = tailor(expr, slice.layout().type);
+    auto tailored_expr = tailor(expr, slice.layout());
     if (!tailored_expr)
       return {};
     expr = std::move(*tailored_expr);
@@ -691,10 +687,10 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
     = visit(f, as_flatbuffer(slice.chunk_));
   ;
   // Start slicing and dicing.
-  auto builder = factory<table_slice_builder>::make(implementation_id,
-                                                    slice.layout().type);
+  auto builder
+    = factory<table_slice_builder>::make(implementation_id, slice.layout());
   VAST_ASSERT(builder);
-  auto flat_layout = flatten(slice.layout().type);
+  auto flat_layout = flatten(caf::get<record_type>(slice.layout()));
   auto check = [&](row_evaluator eval) {
     // If no expression was provided, we rely on the provided hints only.
     if (!has_expr)

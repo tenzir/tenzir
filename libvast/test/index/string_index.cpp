@@ -40,7 +40,7 @@ FIXTURE_SCOPE(value_index_tests, fixture)
 TEST(string) {
   caf::settings opts;
   opts["max-size"] = 100;
-  string_index idx{string_type{}, opts};
+  string_index idx{type{string_type{}}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view("foo")));
   REQUIRE(idx.append(make_data_view("bar")));
@@ -95,7 +95,7 @@ TEST(string) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
-  auto idx2 = string_index{string_type{}};
+  auto idx2 = string_index{type{string_type{}}};
   CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
   result = idx2.lookup(relational_operator::equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(result)), "1001100000");
@@ -104,7 +104,7 @@ TEST(string) {
 }
 
 TEST(none values - string) {
-  auto idx = factory<value_index>::make(string_type{}, caf::settings{});
+  auto idx = factory<value_index>::make(type{string_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view("foo")));
@@ -163,7 +163,7 @@ TEST(regression - zeek conn log service http) {
   slice_stats.reserve(slices.size());
   size_t row_id = 0;
   for (auto& slice : slices) {
-    slice_stats.emplace_back(factory<value_index>::make(string_type{},
+    slice_stats.emplace_back(factory<value_index>::make(type{string_type{}},
                                                         caf::settings{}),
                              ids(row_id, false));
     auto& [idx, expected] = slice_stats.back();

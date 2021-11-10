@@ -59,9 +59,8 @@ public:
   //  metadata stored in a record batch, we can drop the record type from
   //  this function signature.
   [[nodiscard]] virtual caf::expected<
-    std::pair<record_type, std::shared_ptr<arrow::RecordBatch>>>
-  operator()(record_type layout,
-             std::shared_ptr<arrow::RecordBatch> batch) const = 0;
+    std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
+  operator()(type layout, std::shared_ptr<arrow::RecordBatch> batch) const = 0;
 };
 
 caf::expected<transform_step_ptr>

@@ -126,13 +126,14 @@ writer::writer(ostream_ptr out, const caf::settings&) : super{std::move(out)} {
 caf::error writer::write(const table_slice& x) {
   constexpr char separator = writer::defaults::separator;
   // Print a new header each time we encounter a new layout.
-  auto [name, layout] = x.layout();
-  if (last_layout_ != name) {
-    last_layout_ = name;
+  const auto& layout = x.layout();
+  const auto& rlayout = caf::get<record_type>(layout);
+  if (last_layout_ != layout.name()) {
+    last_layout_ = layout.name();
     append("type");
-    for (const auto& [_, index] : layout.leaves()) {
+    for (const auto& [_, index] : rlayout.leaves()) {
       append(separator);
-      append(layout.key(index));
+      append(rlayout.key(index));
     }
     append('\n');
     write_buf();
@@ -142,7 +143,7 @@ caf::error writer::write(const table_slice& x) {
   for (size_t row = 0; row < x.rows(); ++row) {
     append(last_layout_);
     size_t column = 0;
-    for (const auto& [field, _] : layout.leaves()) {
+    for (const auto& [field, _] : rlayout.leaves()) {
       append(separator);
       if (auto err = render(iter, x.at(row, column, field.type)))
         return err;
@@ -181,12 +182,8 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 }
 
 caf::error reader::schema(vast::schema s) {
-  for (const auto& t : s) {
-    if (const auto* r = caf::get_if<record_type>(&t))
-      schema_.add(*r);
-    else
-      schema_.add(t);
-  }
+  for (const auto& t : s)
+    schema_.add(t);
   return caf::none;
 }
 
@@ -198,12 +195,11 @@ const char* reader::name() const {
   return "csv-reader";
 }
 
-caf::optional<record_type>
-reader::make_layout(const std::vector<std::string>& names) {
+caf::optional<type> reader::make_layout(const std::vector<std::string>& names) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(names));
   for (const auto& t : schema_) {
     if (const auto* r = caf::get_if<record_type>(&t)) {
-      auto select_fields = [&]() -> caf::optional<record_type> {
+      auto select_fields = [&]() -> caf::optional<type> {
         std::vector<record_type::field_view> result_raw;
         result_raw.reserve(names.size());
         for (const auto& name : names) {
@@ -215,7 +211,7 @@ reader::make_layout(const std::vector<std::string>& names) {
           else
             return caf::none;
         }
-        auto result = record_type{result_raw};
+        auto result = type{record_type{result_raw}};
         result.assign_metadata(t);
         return result;
       };
@@ -223,7 +219,12 @@ reader::make_layout(const std::vector<std::string>& names) {
         return result;
     } else if (names.size() == 1 && names[0] == t.name()) {
       // Hoist naked type into record.
-      return caf::get<record_type>(type{t.name(), record_type{{t.name(), t}}});
+      return type{
+        t.name(),
+        record_type{
+          {t.name(), t},
+        },
+      };
     } // else skip
   }
   return caf::none;
@@ -434,7 +435,8 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   if (!reset_builder(*layout))
     return caf::make_error(ec::parse_error, "unable to create a builder for "
                                             "layout");
-  auto parser = make_csv_parser<iterator_type>(*layout, builder_, opt_);
+  auto parser = make_csv_parser<iterator_type>(caf::get<record_type>(*layout),
+                                               builder_, opt_);
   if (!parser)
     return caf::make_error(ec::parse_error, "unable to generate a parser");
   return *parser;

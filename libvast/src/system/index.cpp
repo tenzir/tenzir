@@ -782,7 +782,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // TODO: Consider switching layouts to a robin map to take advantage of
       // transparent key lookup with string views, avoding the copy of the name
       // here.
-      self->state.stats.layouts[std::string{layout.name}].count += x.rows();
+      self->state.stats.layouts[std::string{layout.name()}].count += x.rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
         self->state.create_active_partition();

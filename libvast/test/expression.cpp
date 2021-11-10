@@ -53,7 +53,7 @@ struct fixture {
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
     // expr0 || :real > 4.2
-    auto p2 = predicate{type_extractor{real_type{}},
+    auto p2 = predicate{type_extractor{type{real_type{}}},
                         relational_operator::greater_equal, data{4.2}};
     expr1 = disjunction{expr0, p2};
   }
@@ -186,12 +186,12 @@ TEST(extractors) {
     {"real", real_type{}}, {"bool", bool_type{}}, {"host", address_type{}},
     {"port", port},        {"subport", subport},
   };
-  auto r = flatten(record_type{{"orig", s}, {"resp", s}});
+  auto r = type{flatten(record_type{{"orig", s}, {"resp", s}})};
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
-    auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
+    auto pred0 = predicate{data_extractor{type{address_type{}}, offset{2}},
                            relational_operator::in, data{sn}};
-    auto pred1 = predicate{data_extractor{address_type{}, offset{7}},
+    auto pred1 = predicate{data_extractor{type{address_type{}}, offset{7}},
                            relational_operator::in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
@@ -204,9 +204,9 @@ TEST(extractors) {
     CHECK_EQUAL(resolved, normalized);
   }
   {
-    auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
+    auto pred0 = predicate{data_extractor{type{address_type{}}, offset{2}},
                            relational_operator::not_in, data{sn}};
-    auto pred1 = predicate{data_extractor{address_type{}, offset{7}},
+    auto pred1 = predicate{data_extractor{type{address_type{}}, offset{7}},
                            relational_operator::not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
@@ -290,20 +290,20 @@ TEST(matcher) {
   auto match = [](const std::string& str, auto&& t) {
     auto expr = to<expression>(str);
     REQUIRE(expr);
-    auto resolved = caf::visit(type_resolver(t), *expr);
+    auto resolved = caf::visit(type_resolver(type{t}), *expr);
     REQUIRE(resolved);
-    return caf::visit(matcher{t}, *resolved);
+    return caf::visit(matcher{type{t}}, *resolved);
   };
   MESSAGE("type extractors");
   CHECK(match(":real < 4.2", real_type{}));
   CHECK(!match(":int == -42", real_type{}));
   CHECK(!match(":count == 42 && :real < 4.2", real_type{}));
   CHECK(match(":count == 42 || :real < 4.2", real_type{}));
-  auto r = record_type{
+  auto r = type{record_type{
     {"x", real_type{}},
     {"y", bool_type{}},
     {"z", address_type{}},
-  };
+  }};
   CHECK(match(":count == 42 || :real < 4.2", r));
   CHECK(match(":bool == T && :real < 4.2", r));
   MESSAGE("field extractors");
@@ -312,7 +312,7 @@ TEST(matcher) {
   CHECK(!match("x < 4.2 && a == T", r));
   MESSAGE("attribute extractors");
   CHECK(!match("#type == \"foo\"", r));
-  r.assign_metadata(type{"foo", none_type{}});
+  r = type{"foo", r};
   CHECK(match("#type == \"foo\"", r));
   CHECK(match("#type != \"bar\"", r));
 }

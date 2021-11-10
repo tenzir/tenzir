@@ -239,14 +239,20 @@ template <class From, class To, class Type>
 caf::error convert(const From& src, std::optional<To>& dst, const Type& t) {
   if (!dst)
     dst = To{};
-  return convert(src, *dst, t);
+  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t))
+    return convert(src, *dst, t);
+  else
+    return convert(src, *dst, type{t});
 }
 
 template <class From, class To, class Type>
 caf::error convert(const From& src, caf::optional<To>& dst, const Type& t) {
   if (!dst)
     dst = To{};
-  return convert(src, *dst, t);
+  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t))
+    return convert(src, *dst, t);
+  else
+    return convert(src, *dst, type{t});
 }
 
 // Overload for lists.

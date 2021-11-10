@@ -365,10 +365,10 @@ auto map_at(type key_type, type value_type, const arrow::ListArray& arr,
   using view_impl = arrow_container_view<std::pair<data_view, data_view>>;
   auto offset = arr.value_offset(row);
   auto length = arr.value_length(row);
-  type kvp_type = record_type{
-    {"key", std::move(key_type)},
-    {"value", std::move(value_type)},
-  };
+  auto kvp_type = type{record_type{
+    {"key", key_type},
+    {"value", value_type},
+  }};
   auto ptr = caf::make_counted<view_impl>(std::move(kvp_type), arr.values(),
                                           offset, length);
   return map_view_handle{map_view_ptr{std::move(ptr)}};
@@ -672,8 +672,8 @@ arrow_table_slice<FlatBuffer>::~arrow_table_slice() noexcept {
 // -- properties -------------------------------------------------------------
 
 template <class FlatBuffer>
-const record_type& arrow_table_slice<FlatBuffer>::layout() const noexcept {
-  return caf::get<record_type>(state_.layout);
+const type& arrow_table_slice<FlatBuffer>::layout() const noexcept {
+  return state_.layout;
 }
 
 template <class FlatBuffer>
@@ -698,8 +698,9 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
   if (auto&& batch = record_batch()) {
     auto f = index_applier{offset, index};
     auto array = batch->column(detail::narrow_cast<int>(column));
-    auto offset = this->layout().resolve_flat_index(column);
-    decode(this->layout().field(offset).type, *array, f);
+    const auto& layout = caf::get<record_type>(this->layout());
+    auto offset = layout.resolve_flat_index(column);
+    decode(layout.field(offset).type, *array, f);
   }
 }
 
@@ -710,8 +711,9 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
   auto&& batch = record_batch();
   VAST_ASSERT(batch);
   auto array = batch->column(detail::narrow_cast<int>(column));
-  auto offset = this->layout().resolve_flat_index(column);
-  return value_at(this->layout().field(offset).type, *array, row);
+  const auto& layout = caf::get<record_type>(this->layout());
+  auto offset = layout.resolve_flat_index(column);
+  return value_at(layout.field(offset).type, *array, row);
 }
 
 template <class FlatBuffer>
@@ -719,7 +721,10 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             table_slice::size_type column,
                                             const type& t) const {
   VAST_ASSERT(congruent(
-    this->layout().field(this->layout().resolve_flat_index(column)).type, t));
+    caf::get<record_type>(this->layout())
+      .field(caf::get<record_type>(this->layout()).resolve_flat_index(column))
+      .type,
+    t));
   auto&& batch = record_batch();
   VAST_ASSERT(batch);
   auto array = batch->column(detail::narrow_cast<int>(column));

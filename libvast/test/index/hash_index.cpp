@@ -27,7 +27,7 @@ using namespace vast::si_literals;
 
 TEST(string) {
   // This one-byte parameterization creates a collision for "foo" and "bar".
-  hash_index<1> idx{string_type{}};
+  hash_index<1> idx{type{string_type{}}};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view("foo")));
   REQUIRE(idx.append(make_data_view("bar")));
@@ -46,13 +46,13 @@ TEST(string) {
 }
 
 TEST(serialization) {
-  hash_index<1> x{string_type{}};
+  hash_index<1> x{type{string_type{}}};
   REQUIRE(x.append(make_data_view("foo")));
   REQUIRE(x.append(make_data_view("bar")));
   REQUIRE(x.append(make_data_view("baz")));
   std::vector<char> buf;
   REQUIRE(detail::serialize(buf, x) == caf::none);
-  hash_index<1> y{string_type{}};
+  hash_index<1> y{type{string_type{}}};
   REQUIRE(detail::deserialize(buf, y) == caf::none);
   auto result = y.lookup(relational_operator::not_equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "101");

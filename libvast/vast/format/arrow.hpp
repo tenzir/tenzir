@@ -46,7 +46,7 @@ public:
     out_ = std::move(ptr);
   }
 
-  bool layout(const record_type& layout);
+  bool layout(const type& layout);
 
 private:
   output_stream_ptr out_;

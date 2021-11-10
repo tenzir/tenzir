@@ -137,8 +137,12 @@ TEST(empty partition roundtrip) {
   // Prepare a layout for the partition synopsis. The partition synopsis only
   // looks at the layout of the table slices it gets, so we feed it
   // with an empty table slice.
-  auto layout = vast::record_type{{"x", vast::count_type{}}};
-  layout.assign_metadata(vast::type{"y", vast::none_type{}});
+  auto layout = vast::type{
+    "y",
+    vast::record_type{
+      {"x", vast::count_type{}},
+    },
+  };
   auto qf = vast::qualified_record_field{layout, vast::offset{0}};
   state.indexers[qf] = nullptr;
   auto slice_builder = vast::factory<vast::table_slice_builder>::make(
@@ -231,8 +235,12 @@ TEST(full partition roundtrip) {
   run();
   REQUIRE(partition);
   // Add data to the partition.
-  auto layout = vast::record_type{{"x", vast::count_type{}}};
-  layout.assign_metadata(vast::type{"y", vast::none_type{}});
+  auto layout = vast::type{
+    "y",
+    vast::record_type{
+      {"x", vast::count_type{}},
+    },
+  };
   auto builder = vast::msgpack_table_slice_builder::make(layout);
   CHECK(builder->add(0u));
   auto slice = builder->finish();

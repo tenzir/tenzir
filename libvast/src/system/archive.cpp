@@ -194,7 +194,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
         // Add an lru cache for checkers in the archive state.
         auto checker = expression{};
         if (request.query.expr != expression{}) {
-          auto c = tailor(request.query.expr, slice->layout().type);
+          auto c = tailor(request.query.expr, slice->layout());
           if (!c) {
             VAST_ERROR("{} {}", *self, c.error());
             request.cancelled = true;
