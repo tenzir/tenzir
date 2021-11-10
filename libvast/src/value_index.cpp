@@ -9,6 +9,8 @@
 #include "vast/value_index.hpp"
 
 #include "vast/chunk.hpp"
+#include "vast/legacy_type.hpp"
+#include "vast/operator.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/binary_serializer.hpp>

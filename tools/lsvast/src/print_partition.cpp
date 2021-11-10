@@ -11,6 +11,7 @@
 #include <vast/fbs/partition.hpp>
 #include <vast/fbs/utils.hpp>
 #include <vast/index/hash_index.hpp>
+#include <vast/legacy_type.hpp>
 #include <vast/qualified_record_field.hpp>
 #include <vast/type.hpp>
 #include <vast/value_index_factory.hpp>

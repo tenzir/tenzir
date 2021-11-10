@@ -32,7 +32,7 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
   static auto to_attr =
     [](std::tuple<std::string, caf::optional<std::string>> xs) {
       auto& [key, value] = xs;
-      return vast::attribute{std::move(key), std::move(value)};
+      return vast::legacy_attribute{std::move(key), std::move(value)};
     };
   static constexpr auto attr_value
     = parsers::qqstr
@@ -154,7 +154,7 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
   // Complete type
   using type_tuple = std::tuple<
     vast::legacy_type,
-    std::vector<vast::attribute>
+    std::vector<vast::legacy_attribute>
   >;
   static auto insert_attributes = [](type_tuple xs) {
     auto& [t, attrs] = xs;

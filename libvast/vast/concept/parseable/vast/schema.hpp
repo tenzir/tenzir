@@ -67,6 +67,13 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(legacy_list_type x) {
+    auto has_skip_attribute = [](const legacy_type& t) {
+      for (const auto& [k, v] : t.attributes()) {
+        if (k == "skip")
+          return true;
+      }
+      return false;
+    };
     auto y = caf::visit(*this, x.value_type);
     if (!y)
       return y.error();
@@ -90,13 +97,20 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(legacy_record_type x) {
+    auto has_algebra_attribute = [](const legacy_type& t) {
+      for (const auto& [k, v] : t.attributes()) {
+        if (k == "$algebra")
+          return true;
+      }
+      return false;
+    };
     for (auto& [field_name, field_type] : x.fields) {
       auto y = caf::visit(*this, field_type);
       if (!y)
         return y.error();
       field_type = *y;
     }
-    if (has_attribute(x, "$algebra")) {
+    if (has_algebra_attribute(x)) {
       VAST_ASSERT(x.fields.size() >= 2);
       const auto* base = caf::get_if<legacy_record_type>(&x.fields[0].type);
       VAST_ASSERT(base);

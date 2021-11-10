@@ -8,7 +8,6 @@
 
 #include "vast/format/zeek.hpp"
 
-#include "vast/attribute.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"

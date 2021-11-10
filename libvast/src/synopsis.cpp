@@ -12,6 +12,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis_factory.hpp"

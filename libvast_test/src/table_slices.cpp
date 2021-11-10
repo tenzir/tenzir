@@ -13,6 +13,7 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/detail/append.hpp"
 #include "vast/format/test.hpp"
+#include "vast/operator.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 

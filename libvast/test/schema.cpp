@@ -27,6 +27,7 @@ using namespace vast;
 using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
+using namespace std::string_literals;
 
 TEST(offset finding) {
   std::string str = R"__(

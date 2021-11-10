@@ -19,6 +19,7 @@
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/operator.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"

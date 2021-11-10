@@ -17,6 +17,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/value_index.hpp"
 

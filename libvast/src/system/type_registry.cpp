@@ -16,6 +16,7 @@
 #include "vast/event_types.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"

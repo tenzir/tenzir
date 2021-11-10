@@ -15,7 +15,6 @@
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/vast/address.hpp"
 #include "vast/concept/printable/vast/integer.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/pattern.hpp"
 #include "vast/concept/printable/vast/subnet.hpp"

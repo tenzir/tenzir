@@ -10,6 +10,7 @@
 
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/operator.hpp"
 #include "vast/type.hpp"
 
 #include <algorithm>
@@ -50,8 +51,9 @@ bool operator<(pattern_view x, pattern_view y) noexcept {
 }
 
 bool is_equal(const data& x, const data_view& y) {
-  auto pred
-    = [](const auto& lhs, const auto& rhs) { return is_equal(lhs, rhs); };
+  auto pred = [](const auto& lhs, const auto& rhs) {
+    return is_equal(lhs, rhs);
+  };
   auto f = detail::overload{
     [&](const auto& lhs, const auto& rhs) {
       using lhs_type = std::decay_t<decltype(lhs)>;
@@ -135,7 +137,11 @@ default_record_view::size_type default_record_view::size() const noexcept {
 // -- make_view ---------------------------------------------------------------
 
 data_view make_view(const data& x) {
-  return caf::visit([](const auto& z) { return make_data_view(z); }, x);
+  return caf::visit(
+    [](const auto& z) {
+      return make_data_view(z);
+    },
+    x);
 }
 
 // -- materialization ----------------------------------------------------------
@@ -182,7 +188,11 @@ record materialize(record_view_handle xs) {
 }
 
 data materialize(data_view x) {
-  return caf::visit([](auto y) { return data{materialize(y)}; }, x);
+  return caf::visit(
+    [](auto y) {
+      return data{materialize(y)};
+    },
+    x);
 }
 
 // WARNING: making changes to the logic of this function requires adapting the
@@ -291,13 +301,13 @@ struct contains_predicate {
     }
   }
 
-  bool operator()(const view<std::string>& lhs,
-                  const view<std::string>& rhs) const {
+  bool
+  operator()(const view<std::string>& lhs, const view<std::string>& rhs) const {
     return rhs.find(lhs) != std::string::npos;
   }
 
-  bool operator()(const view<std::string>& lhs,
-                  const view<pattern>& rhs) const {
+  bool
+  operator()(const view<std::string>& lhs, const view<pattern>& rhs) const {
     return rhs.search(lhs);
   }
 
@@ -316,7 +326,9 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
                    const data_view& rhs) {
   auto check_match = [](const auto& x, const auto& y) {
     return caf::visit(detail::overload{
-                        [](auto, auto) { return false; },
+                        [](auto, auto) {
+                          return false;
+                        },
                         [](view<std::string>& lhs, view<pattern> rhs) {
                           return rhs.match(lhs);
                         },
