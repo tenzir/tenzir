@@ -1913,9 +1913,7 @@ std::optional<record_type> record_type::transform(
   std::vector<transformation> transformations) const noexcept {
   const auto do_transform
     = [](const auto& do_transform, const record_type& self, offset index,
-         std::vector<transformation>::iterator& current,
-         const std::vector<transformation>::iterator end) noexcept
-    -> std::optional<record_type> {
+         auto& current, const auto end) noexcept -> std::optional<record_type> {
     if (current == end)
       return self;
     auto new_fields = std::vector<struct field>{};
@@ -1981,15 +1979,15 @@ std::optional<record_type> record_type::transform(
     construct_record_type(result, new_fields.rbegin(), new_fields.rend());
     return caf::get<record_type>(result);
   };
-  // Sort transformations by offsets in reverse order.
-  std::stable_sort(transformations.begin(), transformations.end(),
-                   [](const auto& lhs, const auto& rhs) noexcept {
-                     return lhs.first > rhs.first;
-                   });
-  auto current = transformations.begin();
+  // Verify that transformations are sorted in order.
+  VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end(),
+                             [](const auto& lhs, const auto& rhs) noexcept {
+                               return lhs.first <= rhs.first;
+                             }));
+  auto current = transformations.rbegin();
   auto result
-    = do_transform(do_transform, *this, {}, current, transformations.end());
-  VAST_ASSERT(current == transformations.end(), "index out of bounds");
+    = do_transform(do_transform, *this, {}, current, transformations.rend());
+  VAST_ASSERT(current == transformations.rend(), "index out of bounds");
   return result;
 }
 

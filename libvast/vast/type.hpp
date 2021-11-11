@@ -894,6 +894,7 @@ public:
   insert_after(std::vector<struct field> fields) noexcept;
 
   /// Creates a new record by applying a set of transformations to this record.
+  /// @pre The transformations must be sorted by offset.
   /// @note The changes are applied back-to-front over the individual fields.
   /// This function returns nullopt if the result is empty.
   /// @note While it is possible to apply multiple transformations to the same
