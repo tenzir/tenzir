@@ -8,37 +8,18 @@
 
 #include "vast/sketch/bloom_filter.hpp"
 
-#include "vast/fbs/bloom_filter.hpp"
+#include "vast/error.hpp"
 
 #include <fmt/format.h>
 
 namespace vast::sketch {
-namespace detail {
-
-caf::expected<bloom_filter_params>
-compute_bloom_filter_params(size_t n, double p) {
-  bloom_filter_config cfg;
-  cfg.p = p;
-  cfg.n = n;
-  auto params = evaluate(cfg);
-  if (!params)
-    return caf::make_error(ec::invalid_argument, "invalid p or n");
-  // Make m odd for worm hashing to be regenerative.
-  params->m -= ~(params->m & 1);
-  return *params;
-}
-
-} // namespace detail
 
 frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
   : table_{std::move(table)} {
   VAST_ASSERT(table_ != nullptr);
   auto root = fbs::GetBloomFilter(table_->data());
-  view_.params.m = root->parameters()->m();
-  view_.params.n = root->parameters()->n();
-  view_.params.k = root->parameters()->k();
-  view_.params.p = root->parameters()->p();
-  view_.bits = std::span{root->bits()->data(), root->bits()->size()};
+  auto err = unpack(*root, view_);
+  VAST_ASSERT(!err);
 }
 
 bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
@@ -96,27 +77,16 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
                   expected_size, FLATBUFFERS_MAX_BUFFER_SIZE));
   // We know the exact size, so we reserve it to avoid re-allocations.
   flatbuffers::FlatBufferBuilder builder{expected_size};
-  auto flat_params = fbs::BloomFilterParameters{
-    x.parameters().m, x.parameters().n, x.parameters().k, x.parameters().p};
-  uint64_t* buf;
-  auto bits_offset = builder.CreateUninitializedVector(bitvector_size, &buf);
-  auto bloom_filter_offset
-    = fbs::CreateBloomFilter(builder, &flat_params, bits_offset);
-  builder.Finish(bloom_filter_offset);
+  auto bloom_filter_offset = pack(builder, x.view_);
+  if (!bloom_filter_offset)
+    return bloom_filter_offset.error();
+  builder.Finish(*bloom_filter_offset);
   auto buffer = builder.Release();
   VAST_ASSERT(buffer.size() == expected_size);
-  // Copy words into flatbuffer.
-  auto root = fbs::GetMutableBloomFilter(buffer.data());
-  auto mutable_bits = root->mutable_bits();
-  auto bits = std::span{mutable_bits->data(), mutable_bits->size()};
-  VAST_ASSERT(x.view_.bits.size() == bits.size());
-  std::copy(x.view_.bits.begin(), x.view_.bits.end(), bits.begin());
   return frozen_bloom_filter{chunk::make(std::move(buffer))};
 }
 
 bloom_filter::bloom_filter(bloom_filter_params params) {
-  // Make m odd for worm hashing to be regenerative.
-  params.m -= ~(params.m & 1);
   bits_.resize((params.m + 63) / 64); // integer ceiling
   std::fill(bits_.begin(), bits_.end(), 0);
   view_.params = params;

@@ -15,62 +15,16 @@
 #pragma once
 
 #include "vast/chunk.hpp"
-#include "vast/concepts.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/worm.hpp"
-#include "vast/error.hpp"
 #include "vast/sketch/bloom_filter_config.hpp"
+#include "vast/sketch/bloom_filter_view.hpp"
 
 #include <caf/expected.hpp>
-#include <flatbuffers/flatbuffers.h>
 
-#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 namespace vast::sketch {
-namespace detail {
-
-/// A Bloom filter view, used by mutable and frozen Bloom filter.
-template <class Word>
-struct bloom_filter_view {
-  static_assert(
-    std::is_same_v<Word, uint64_t> || std::is_same_v<Word, const uint64_t>);
-
-  void add(uint64_t digest) noexcept {
-    VAST_ASSERT(params.m & 1, "worm hashing requires odd m");
-    for (size_t i = 0; i < params.k; ++i) {
-      auto [upper, lower] = vast::detail::wide_mul(params.m, digest);
-      bits[upper >> 6] |= (uint64_t{1} << (upper & 63));
-      digest = lower;
-    }
-  }
-
-  bool lookup(uint64_t digest) const noexcept {
-    VAST_ASSERT(params.m & 1, "worm hashing requires odd m");
-    for (size_t i = 0; i < params.k; ++i) {
-      auto [upper, lower] = vast::detail::wide_mul(params.m, digest);
-      if ((bits[upper >> 6] & (uint64_t{1} << (upper & 63))) == 0)
-        return false;
-      digest = lower;
-    }
-    return true;
-  }
-
-  friend size_t mem_usage(const bloom_filter_view& x) noexcept {
-    return sizeof(x.params) + sizeof(x.bits);
-  }
-
-  bloom_filter_params params;
-  std::span<Word> bits;
-};
-
-/// Computes the optimal Bloom filter parameters for a given false positive and
-/// size, i.e., the minimum number of bits needed.
-caf::expected<bloom_filter_params>
-compute_bloom_filter_params(size_t n, double p);
-
-} // namespace detail
 
 /// An immutable Bloom filter wrapped in a contiguous chunk of memory.
 class frozen_bloom_filter {
@@ -93,7 +47,7 @@ public:
   friend size_t mem_usage(const frozen_bloom_filter& x) noexcept;
 
 private:
-  detail::bloom_filter_view<const uint64_t> view_;
+  immutable_bloom_filter_view view_;
   chunk_ptr table_;
 };
 
@@ -127,7 +81,7 @@ public:
 private:
   explicit bloom_filter(bloom_filter_params params);
 
-  detail::bloom_filter_view<uint64_t> view_;
+  mutable_bloom_filter_view view_;
   std::vector<uint64_t> bits_;
 };
 

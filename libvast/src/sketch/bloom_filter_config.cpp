@@ -15,11 +15,10 @@ namespace vast::sketch {
 
 namespace {
 
-// Helper to avoid noisy casting when checking out.
-template <class T, class U, class V>
-bloom_filter_params make(T x, U u, V v, double w) {
-  return {static_cast<uint64_t>(x), static_cast<uint64_t>(u),
-          static_cast<uint64_t>(v), w};
+bloom_filter_params make(uint64_t m, uint64_t n, uint64_t k, double p) {
+  // Make m odd for worm hashing to be regenerative.
+  m -= ~(m & 1);
+  return {m, n, k, p};
 }
 
 } // namespace
