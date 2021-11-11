@@ -56,9 +56,12 @@ qualified_record_field::qualified_record_field(
   }
 }
 
-/// Retrieves the layout name.
 std::string_view qualified_record_field::layout_name() const noexcept {
   return layout_name_;
+}
+
+std::string_view qualified_record_field::field_name() const noexcept {
+  return field_.name;
 }
 
 std::string qualified_record_field::name() const noexcept {

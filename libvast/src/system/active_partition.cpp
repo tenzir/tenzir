@@ -95,17 +95,21 @@ void active_partition_state::notify_flush_listeners() {
 
 bool partition_selector::operator()(const qualified_record_field& filter,
                                     const table_slice_column& column) const {
-  const auto rhs_layout = column.slice().layout();
-  const auto rhs_layout_rt = caf::get<record_type>(rhs_layout);
+  // NOTE: This function is very performance-sensitive as it is on called a lot
+  // on the hot path of the ingest pipeline. We must make sure not to allocate
+  // here.
+  // Check whether the layout name is an exact match.
+  const auto& rhs_layout = column.slice().layout();
+  if (filter.layout_name() != rhs_layout.name())
+    return false;
+  // Check whether the field name is an exact match.
+  const auto& rhs_layout_rt = caf::get<record_type>(rhs_layout);
   const auto rhs_field_offset
     = rhs_layout_rt.resolve_flat_index(column.index());
   const auto rhs_field = rhs_layout_rt.field(rhs_field_offset);
-  // name check
-  const auto lhs = filter.name();
-  // FIXME: use mismatch twice here.
-  if (filter.name() != fmt::format("{}.{}", rhs_layout.name(), rhs_field.name))
+  if (filter.field_name() != rhs_field.name)
     return false;
-  // type check
+  // Check whether the type is an exact match.
   return filter.type() == rhs_field.type;
 }
 

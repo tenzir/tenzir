@@ -39,6 +39,9 @@ struct qualified_record_field {
   /// Retrieves the layout name.
   [[nodiscard]] std::string_view layout_name() const noexcept;
 
+  /// Retrieves the field name.
+  [[nodiscard]] std::string_view field_name() const noexcept;
+
   /// Retrieves the full-qualified name, i.e., the record typename concatenated
   /// with the field name.
   [[nodiscard]] std::string name() const noexcept;
