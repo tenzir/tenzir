@@ -864,16 +864,17 @@ public:
   /// Resolves a key into an offset.
   /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
   /// but not 'x.y_other.z' .
-  /// @note The key may optionally begin with the type name for aliased types.
   [[nodiscard]] std::optional<offset>
   resolve_key(std::string_view key) const noexcept;
 
   /// Resolves a key into a list of offsets by suffix matching the given key.
   /// @note This only matches on full keys, so the key 'y.z' matches 'x.y.z' but
   /// not 'x.other_y.z'.
-  /// @note The key may optionally begin with the type name for aliased types.
+  /// @note The key may optionally begin with a given prefix for backwards
+  /// compatilibty with the old type system.
   [[nodiscard]] std::vector<offset>
-  resolve_key_suffix(std::string_view key) const noexcept;
+  resolve_key_suffix(std::string_view key, std::string_view prefix
+                                           = "") const noexcept;
 
   /// Computes the flattened field name at a given index.
   [[nodiscard]] std::string_view key(size_t index) const& noexcept;

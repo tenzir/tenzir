@@ -15,6 +15,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/legacy_type.hpp"
+#include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
 #include <caf/sum_type.hpp>
@@ -38,36 +39,6 @@ constexpr size_t reserved_string_size(std::string_view str) {
   // always zero-terminated, and then rounds up to a full four bytes because of
   // the included padding.
   return str.empty() ? 0 : (((str.size() + 1 + 3) / 4) * 4);
-}
-
-std::string_view type_name(const fbs::Type* root) {
-  while (true) {
-    switch (root->type_type()) {
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
-        return "";
-      case fbs::type::Type::tagged_type_v0:
-        const auto* tagged_type = root->type_as_tagged_type_v0();
-        if (const auto* name = tagged_type->name())
-          return name->string_view();
-        root = tagged_type->type_nested_root();
-        VAST_ASSERT(root);
-        break;
-    }
-  }
 }
 
 const fbs::Type*
@@ -736,7 +707,34 @@ void inspect(caf::detail::stringification_inspector& f, type& x) {
 }
 
 std::string_view type::name() const& noexcept {
-  return type_name(&table(transparent::no));
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
+        return "";
+      case fbs::type::Type::tagged_type_v0:
+        const auto* tagged_type = root->type_as_tagged_type_v0();
+        if (const auto* name = tagged_type->name())
+          return name->string_view();
+        root = tagged_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
 }
 
 std::vector<std::string_view> type::names() const& noexcept {
@@ -1776,29 +1774,42 @@ record_type::resolve_key(std::string_view key) const noexcept {
     }
     return {};
   };
-  // TODO: We currently strip the type name when resolving prefixes, which is
-  // not something we should be doing, because this is an operation on record
-  // types which only know their surrounding type's name because of a workaround.
-  if (const auto prefix
-      = fmt::format("{}.", type_name(&table(transparent::no)));
-      key.starts_with(prefix))
-    key = key.substr(prefix.size());
   return do_resolve_key(do_resolve_key, *this, key);
 }
 
 std::vector<offset>
-record_type::resolve_key_suffix(std::string_view key) const noexcept {
+record_type::resolve_key_suffix(std::string_view key,
+                                std::string_view prefix) const noexcept {
   auto result = std::vector<offset>{};
-  const auto prefix = fmt::format("{}.", type_name(&table(transparent::no)));
   // TODO: Once we support queries for nested records, we must not just iterate
   // over leafs here, but rather include nested record types.
   for (auto&& [_, offset] : leaves()) {
-    auto name = prefix + this->key(offset);
+    const auto name = this->key(offset);
     auto [name_mismatch, key_mismatch]
       = std::mismatch(name.rbegin(), name.rend(), key.rbegin(), key.rend());
     if (key_mismatch == key.rend()) {
       if (name_mismatch == name.rend() || *name_mismatch == '.')
         result.push_back(std::move(offset));
+    } else if (!prefix.empty() && *key_mismatch == '.'
+               && name_mismatch == name.rend()) {
+      // TODO: This handles the special case where the field name suffix
+      // includes the name of the type that we're looking at even. This is done
+      // for backwards compatibility reasons, as otherwise some queries would no
+      // longer function. We should get rid of this long term and just have
+      // these queries error.
+      auto [prefix_mismatch, remaining_key_mismatch] = std::mismatch(
+        prefix.rbegin(), prefix.rend(), ++key_mismatch, key.rend());
+      if (remaining_key_mismatch == key.rend()) {
+        if (prefix_mismatch == prefix.rend()) {
+          result.push_back(std::move(offset));
+        } else if (*prefix_mismatch == '.') {
+          VAST_WARN("partial match '{}' against type name '{}' will be "
+                    "removed in the future",
+                    fmt::join(prefix_mismatch.base(), prefix.end(), ""),
+                    prefix);
+          result.push_back(std::move(offset));
+        }
+      }
     }
   }
   return result;
