@@ -9,6 +9,7 @@
 #include "vast/synopsis.hpp"
 
 #include "vast/bool_synopsis.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
@@ -71,6 +72,25 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   using std::swap;
   swap(ptr, new_ptr);
   return caf::none;
+}
+
+bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr) {
+  // Read synopsis type.
+  legacy_type t;
+  if (!source(t))
+    return false;
+  // Only nullptr has a none type.
+  if (!t) {
+    ptr.reset();
+    return true;
+  }
+  // Deserialize into a new instance.
+  auto new_ptr = factory<synopsis>::make(std::move(t), caf::settings{});
+  if (!new_ptr || !new_ptr->deserialize(source))
+    return false;
+  // Change `ptr` only after successfully deserializing.
+  std::swap(ptr, new_ptr);
+  return true;
 }
 
 caf::expected<flatbuffers::Offset<fbs::synopsis::v0>>

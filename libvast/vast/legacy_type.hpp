@@ -24,6 +24,7 @@
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
 
+#include <caf/binary_deserializer.hpp>
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
 #include <caf/detail/type_list.hpp>
@@ -252,6 +253,9 @@ public:
              caf::meta::omittable_if_empty(), x.name_,
              caf::meta::omittable_if_empty(), x.attributes_);
   }
+
+  //  friend auto inspect(caf::binary_deserializer& , legacy_address_type& ) =
+  //  delete;
 
 protected:
   virtual bool equals(const legacy_abstract_type& other) const;

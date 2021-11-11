@@ -32,6 +32,8 @@ public:
 
   caf::error deserialize(caf::deserializer& source) override;
 
+  bool deserialize(vast::detail::legacy_deserializer& source) override;
+
   bool any_true();
 
   bool any_false();

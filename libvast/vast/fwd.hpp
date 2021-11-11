@@ -149,6 +149,7 @@ namespace detail {
 template <class>
 class framed;
 
+class legacy_deserializer;
 }
 
 void intrusive_ptr_add_ref(const table_slice_builder*);

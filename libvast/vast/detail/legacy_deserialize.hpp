@@ -8,14 +8,16 @@
 
 #pragma once
 
-#include "caf/deserializer.hpp"
-#include "caf/detail/ieee_754.hpp"
-#include "caf/detail/network_order.hpp"
-#include "caf/detail/type_traits.hpp"
-#include "caf/error.hpp"
-#include "caf/expected.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/error.hpp"
+#include "vast/logger.hpp"
+
+#include <caf/detail/ieee_754.hpp>
+#include <caf/detail/network_order.hpp>
+#include <caf/detail/type_traits.hpp>
+#include <caf/error.hpp>
+#include <caf/expected.hpp>
+#include <caf/meta/load_callback.hpp>
 
 #include <array>
 #include <cstddef>
@@ -52,9 +54,18 @@ private:
   }
 
   template <class T>
-    requires(caf::meta::is_annotation<T>::value)
+    requires(caf::meta::is_annotation<T>::value
+             && !caf::meta::is_load_callback<T>::value)
   result_type apply(T&) {
+    // annotations are skipped
     return true;
+  }
+
+  template <class T>
+    requires(caf::meta::is_load_callback<T>::value)
+  result_type apply(T& x) {
+    auto err = x.fun();
+    return static_cast<bool>(err == caf::none);
   }
 
   template <class T>
@@ -135,6 +146,38 @@ private:
       return false;
     x.assign(reinterpret_cast<const char*>(bytes_.data()), str_size);
     bytes_ = bytes_.subspan(str_size);
+    return true;
+  }
+
+  template <class Rep, class Period>
+    requires(std::is_integral<Rep>::value)
+  result_type apply(std::chrono::duration<Rep, Period>& x) {
+    using duration_type = std::chrono::duration<Rep, Period>;
+    Rep tmp;
+    if (!apply(tmp))
+      return false;
+    x = duration_type{tmp};
+    return true;
+  }
+
+  template <class Rep, class Period>
+    requires(std::is_floating_point<Rep>::value)
+  result_type apply(std::chrono::duration<Rep, Period>& x) {
+    using duration_type = std::chrono::duration<Rep, Period>;
+    // always save/store floating point durations as doubles
+    double tmp = NAN;
+    if (!apply(tmp))
+      return false;
+    x = duration_type{tmp};
+    return true;
+  }
+
+  template <class Clock, class Duration>
+  bool apply(std::chrono::time_point<Clock, Duration>& t) {
+    Duration dur{};
+    if (!apply(dur))
+      return false;
+    t = std::chrono::time_point<Clock, Duration>{dur};
     return true;
   }
 

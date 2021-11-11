@@ -108,6 +108,11 @@ public:
                                             "buffered_string_synopsis");
   }
 
+  bool deserialize(vast::detail::legacy_deserializer&) override {
+    VAST_ERROR("attempted to deserialize a buffered_string_synopsis");
+    return false;
+  }
+
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
     if (auto* p = dynamic_cast<const buffered_synopsis*>(&other))
       return data_ == p->data_;

@@ -75,6 +75,9 @@ public:
   /// Loads the contents for this slice from `source`.
   virtual caf::error deserialize(caf::deserializer& source) = 0;
 
+  /// Loads the contents for this slice from `source`.
+  virtual bool deserialize(vast::detail::legacy_deserializer& source) = 0;
+
   /// @relates synopsis
   friend inline bool operator==(const synopsis& x, const synopsis& y) {
     return x.equals(y);
@@ -94,6 +97,9 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 
 /// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
+
+/// @relates synopsis
+bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr);
 
 /// Flatbuffer support.
 [[nodiscard]] caf::expected<flatbuffers::Offset<fbs::synopsis::v0>>
