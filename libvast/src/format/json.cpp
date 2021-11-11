@@ -35,22 +35,30 @@ namespace vast::format::json {
 
 namespace {
 
-data extract_impl(const ::simdjson::dom::element& value, const type& type);
-data extract_impl(const ::simdjson::dom::array& values, const type& type);
-data extract_impl(const ::simdjson::dom::object& value, const type& type);
+// Various implementations for simdjson + type to element conversion.  The
+// expand_records flag toggles whether we add nil values for all fields in
+// records that cannot be found, which we do for records nested inside lists or
+// maps for historical reasons.
+data extract_impl(const ::simdjson::dom::element& value, const type& type,
+                  bool expand_records);
+data extract_impl(const ::simdjson::dom::array& values, const type& type,
+                  bool expand_records);
+data extract_impl(const ::simdjson::dom::object& value, const type& type,
+                  bool expand_records);
 data extract_impl(int64_t value, const type& type);
 data extract_impl(uint64_t value, const type& type);
 data extract_impl(double value, const type& type);
 data extract_impl(bool value, const type& type);
 data extract_impl(std::string_view value, const type& type);
-data extract_impl(nullptr_t, const type& type);
+data extract_impl(nullptr_t, const type& type, bool expand_records);
 
-data extract_impl(const ::simdjson::dom::element& value, const type& type) {
+data extract_impl(const ::simdjson::dom::element& value, const type& type,
+                  bool expand_records) {
   switch (value.type()) {
     case ::simdjson::dom::element_type::ARRAY:
-      return extract_impl(value.get_array().value(), type);
+      return extract_impl(value.get_array().value(), type, expand_records);
     case ::simdjson::dom::element_type::OBJECT:
-      return extract_impl(value.get_object().value(), type);
+      return extract_impl(value.get_object().value(), type, expand_records);
     case ::simdjson::dom::element_type::INT64:
       return extract_impl(value.get_int64().value(), type);
     case ::simdjson::dom::element_type::UINT64:
@@ -62,12 +70,13 @@ data extract_impl(const ::simdjson::dom::element& value, const type& type) {
     case ::simdjson::dom::element_type::BOOL:
       return extract_impl(value.get_bool().value(), type);
     case ::simdjson::dom::element_type::NULL_VALUE:
-      return extract_impl(nullptr, type);
+      return extract_impl(nullptr, type, expand_records);
   }
   die("unhandled JSON DOM element type");
 }
 
-data extract_impl(const ::simdjson::dom::array& values, const type& type) {
+data extract_impl(const ::simdjson::dom::array& values, const type& type,
+                  bool expand_records) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
@@ -109,15 +118,19 @@ data extract_impl(const ::simdjson::dom::array& values, const type& type) {
       auto result = list{};
       result.reserve(values.size());
       auto vt = lt.value_type();
+      // At this point we want to stop expanding records, so we always pass
+      // false to nested extract calls.
       for (const auto& value : values)
-        result.emplace_back(extract_impl(value, vt));
+        result.emplace_back(extract_impl(value, vt, false));
       return result;
     },
     [&](const map_type&) noexcept -> data {
       return caf::none;
     },
     [&](const record_type& rt) noexcept -> data {
-      return list(rt.num_leaves(), data{caf::none});
+      if (expand_records)
+        return list(rt.num_leaves(), data{caf::none});
+      return caf::none;
     },
   };
   return caf::visit(f, type);
@@ -182,7 +195,8 @@ data extract_impl(int64_t value, const type& type) {
   return caf::visit(f, type);
 }
 
-data extract_impl(const ::simdjson::dom::object& value, const type& type) {
+data extract_impl(const ::simdjson::dom::object& value, const type& type,
+                  bool expand_records) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
@@ -228,8 +242,10 @@ data extract_impl(const ::simdjson::dom::object& value, const type& type) {
       result.reserve(value.size());
       const auto kt = mt.key_type();
       const auto vt = mt.value_type();
+      // At this point we want to stop expanding records, so we always pass
+      // false to nested extract calls.
       for (const auto& [k, v] : value)
-        result.emplace(extract_impl(k, kt), extract_impl(v, vt));
+        result.emplace(extract_impl(k, kt), extract_impl(v, vt, false));
       return result;
     },
     [&](const record_type& rt) noexcept -> data {
@@ -268,9 +284,15 @@ data extract_impl(const ::simdjson::dom::object& value, const type& type) {
             result.emplace_back(caf::visit(recurse, field.type));
           } else {
             // (2) The field exists and we extracted it successfully.
-            result.emplace_back(extract_impl(x.value(), field.type));
+            auto value = extract_impl(x.value(), field.type, expand_records);
+            result.emplace_back(std::move(value));
           }
         }
+        if (!expand_records)
+          if (std::all_of(result.begin(), result.end(), [](const data& x) {
+                return x == caf::none;
+              }))
+            return caf::none;
         return result;
       };
       return try_extract_record(try_extract_record, rt, "");
@@ -519,13 +541,15 @@ data extract_impl(bool value, const type& type) {
   return caf::visit(f, type);
 }
 
-data extract_impl(nullptr_t, const type& type) {
+data extract_impl(nullptr_t, const type& type, bool expand_records) {
+  if (!expand_records)
+    return caf::none;
   auto f = detail::overload{
     [&](const record_type& rt) noexcept -> data {
       auto result = list{};
       result.reserve(rt.num_fields());
       for (const auto& field : rt.fields())
-        result.emplace_back(extract_impl(nullptr, field.type));
+        result.emplace_back(extract_impl(nullptr, field.type, expand_records));
       return result;
     },
     [&]<concrete_type T>(const T&) noexcept -> data {
@@ -539,7 +563,7 @@ data extract_impl(nullptr_t, const type& type) {
 } // namespace
 
 data extract(const ::simdjson::dom::object& value, const type& type) {
-  return extract_impl(value, type);
+  return extract_impl(value, type, true);
 }
 
 writer::writer(ostream_ptr out, const caf::settings& options)
