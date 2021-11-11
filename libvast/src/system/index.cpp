@@ -929,7 +929,7 @@ index(index_actor::stateful_pointer<index_state> self,
       -> caf::result<uuid, uint32_t, uint32_t> {
       // Query handling
       auto sender = self->current_sender();
-      auto client = caf::actor_cast<caf::actor>(sender);
+      auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
       // Sanity check.
       if (!sender) {
         VAST_WARN("{} ignores an anonymous query", *self);
@@ -979,7 +979,7 @@ index(index_actor::stateful_pointer<index_state> self,
                          *self);
               self->send(self, atom::worker_v, worker);
               rp.deliver(query_id, 0u, 0u);
-              caf::anon_send(client, atom::done_v);
+              self->send(client, atom::done_v);
               return;
             }
             auto total = candidates.size();
