@@ -130,7 +130,8 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       // Don't bother making new queries if we discard all results anyways.
       if (st.num_sent >= st.limits.total)
         return;
-      auto&& layout = slice.layout();
+      const auto& layout = slice.layout();
+      const auto& layout_rt = caf::get<record_type>(layout);
       auto is_timestamp = [](const auto& leaf) {
         const auto& [field, _] = leaf;
         for (const auto& name : field.type.names())
@@ -147,19 +148,18 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       }
       std::optional<table_slice_column> by_column;
       if (st.by) {
-        if (auto col = table_slice_column::make(slice, *st.by))
-          by_column.emplace(std::move(*col));
-        if (!by_column) {
+        auto by_indices = layout_rt.resolve_key_suffix(*st.by, layout.name());
+        if (by_indices.empty()) {
           VAST_TRACE_SCOPE("skipping slice with {} because it has no column {}",
                            layout.name(), *st.by);
           return;
         }
+        by_column.emplace(slice, layout_rt.flat_index(by_indices[0]));
       }
       VAST_DEBUG("{} uses {} to construct timebox", *self, it->first.name);
-      auto column = table_slice_column::make(slice, it->first.name);
-      VAST_ASSERT(column);
-      for (size_t i = 0; i < column->size(); ++i) {
-        auto data_view = (*column)[i];
+      auto column = table_slice_column{slice, layout_rt.flat_index(it->second)};
+      for (size_t i = 0; i < column.size(); ++i) {
+        auto data_view = column[i];
         auto x = caf::get_if<vast::time>(&data_view);
         // Skip if no value
         if (!x)

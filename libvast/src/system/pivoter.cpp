@@ -99,16 +99,20 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
   return {
     [=](vast::table_slice slice) {
       auto& st = self->state;
-      auto pivot_field = common_field(st, slice.layout());
+      const auto& layout = slice.layout();
+      const auto& layout_rt = caf::get<record_type>(layout);
+      auto pivot_field = common_field(st, layout);
       if (!pivot_field)
         return;
       VAST_DEBUG("{} uses {} to extract {} events", *self, *pivot_field,
                  st.target);
-      auto column = table_slice_column::make(slice, pivot_field->name);
-      VAST_ASSERT(column);
+      auto indices
+        = layout_rt.resolve_key_suffix(pivot_field->name, layout.name());
+      VAST_ASSERT(!indices.empty());
+      auto column = table_slice_column{slice, layout_rt.flat_index(indices[0])};
       auto xs = list{};
-      for (size_t i = 0; i < column->size(); ++i) {
-        auto data = materialize((*column)[i]);
+      for (size_t i = 0; i < column.size(); ++i) {
+        auto data = materialize(column[i]);
         auto x = caf::get_if<std::string>(&data);
         // Skip if no value
         if (!x)

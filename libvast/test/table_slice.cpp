@@ -52,10 +52,11 @@ TEST(random integer slices) {
 
 TEST(column view) {
   auto sut = zeek_conn_log[0];
-  auto ts_cview = table_slice_column::make(sut, "ts");
-  REQUIRE(ts_cview);
   auto flat_layout = flatten(caf::get<record_type>(sut.layout()));
-  CHECK_EQUAL(ts_cview->index(), 0u);
+  auto ts_index = flat_layout.resolve_key("ts");
+  REQUIRE(ts_index);
+  auto ts_cview = table_slice_column{sut, flat_layout.flat_index(*ts_index)};
+  CHECK_EQUAL(ts_cview.index(), 0u);
   for (size_t column = 0; column < sut.columns(); ++column) {
     auto cview = table_slice_column{sut, column};
     REQUIRE_NOT_EQUAL(cview.size(), 0u);

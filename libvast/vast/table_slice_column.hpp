@@ -39,12 +39,6 @@ public:
   /// @pre `column < slice.columns()`
   table_slice_column(table_slice slice, size_t column) noexcept;
 
-  /// Construct a view on a column of a table slice.
-  /// @param slice The slice to view.
-  /// @param column The viewed column's name.
-  static std::optional<table_slice_column>
-  make(table_slice slice, std::string_view column) noexcept;
-
   /// @returns the data at given row.
   /// @pre `row < size()`
   data_view operator[](size_t row) const;
