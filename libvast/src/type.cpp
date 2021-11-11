@@ -220,7 +220,7 @@ size_t flat_size(const fbs::Type* view) noexcept {
       return flat_size(view->type_as_tagged_type_v0()->type_nested_root());
   }
   __builtin_unreachable();
-};
+}
 
 } // namespace
 
@@ -1694,7 +1694,7 @@ record record_type::construct() const noexcept {
 
 record_type::iterable record_type::fields() const noexcept {
   return iterable{*this};
-};
+}
 
 record_type::leaf_iterable record_type::leaves() const noexcept {
   return leaf_iterable{*this};

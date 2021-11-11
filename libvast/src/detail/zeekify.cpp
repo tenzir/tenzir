@@ -30,7 +30,7 @@ bool is_opaque_id(const auto& field) {
   // other fields, such as zeek.x509.id instead of uid.
   static auto ids = std::array{"uid", "fuid", "community_id"};
   return std::find_if(ids.begin(), ids.end(), has_name) != ids.end();
-};
+}
 
 } // namespace
 

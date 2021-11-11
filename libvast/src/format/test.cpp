@@ -63,7 +63,7 @@ caf::expected<distribution> make_distribution(const type& t) {
   if (name == "pareto")
     return {detail::pareto_distribution<long double>{p0, p1}};
   return caf::make_error(ec::parse_error, "unknown distribution", name);
-};
+}
 
 caf::expected<blueprint> make_blueprint(const type& t) {
   blueprint bp;
