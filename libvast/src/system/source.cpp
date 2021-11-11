@@ -44,17 +44,26 @@ void source_state::initialize(const type_registry_actor& type_registry,
     auto blocking = caf::scoped_actor{self->system()};
     blocking->request(type_registry, caf::infinite, atom::get_v)
       .receive(
-        [=, this](type_set types) {
+        [=, this](const type_set& types) {
+          auto prefix_then_dot = [](std::string_view name,
+                                    std::string_view prefix) {
+            if (prefix.empty())
+              return true;
+            auto [name_mismatch, prefix_mismatch] = std::mismatch(
+              name.begin(), name.end(), prefix.begin(), prefix.end());
+            return prefix_mismatch == prefix.end()
+                   && (name_mismatch == name.end() || *name_mismatch == '.');
+          };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
           auto merged_schema = schema{};
           for (const auto& type : local_schema)
-            if (type.name().starts_with(type_filter))
+            if (prefix_then_dot(type.name(), type_filter))
               if (caf::holds_alternative<record_type>(type))
                 merged_schema.add(type);
           // Second, filter valid types from all available record types.
-          for (auto& type : types)
-            if (type.name().starts_with(type_filter))
+          for (const auto& type : types)
+            if (prefix_then_dot(type.name(), type_filter))
               if (caf::holds_alternative<record_type>(type))
                 merged_schema.add(type);
           // Third, try to set the new schema.
