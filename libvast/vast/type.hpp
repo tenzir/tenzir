@@ -987,6 +987,7 @@ struct sum_type_access<vast::type> final {
   template <class T, int Index>
   static bool is(const vast::type&, sum_type_token<T, Index>) {
     static_assert(vast::detail::always_false_v<T>, "T must be a concrete type");
+    __builtin_unreachable();
   }
 
   template <vast::basic_type T, int Index>
@@ -1004,6 +1005,7 @@ struct sum_type_access<vast::type> final {
   template <class T, int Index>
   static const T& get(const vast::type&, sum_type_token<T, Index>) {
     static_assert(vast::detail::always_false_v<T>, "T must be a concrete type");
+    __builtin_unreachable();
   }
 
   template <vast::concrete_type T, int Index>
@@ -1016,6 +1018,7 @@ struct sum_type_access<vast::type> final {
   template <class T, int Index>
   static const T* get_if(const vast::type*, sum_type_token<T, Index>) {
     static_assert(vast::detail::always_false_v<T>, "T must be a concrete type");
+    __builtin_unreachable();
   }
 
   // A helper function that dispatches from concrete type id to index of the

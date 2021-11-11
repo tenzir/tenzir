@@ -106,6 +106,7 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
         break;
     }
   }
+  __builtin_unreachable();
 }
 
 template <class T>
@@ -218,6 +219,7 @@ size_t flat_size(const fbs::Type* view) noexcept {
     case fbs::type::Type::tagged_type_v0:
       return flat_size(view->type_as_tagged_type_v0()->type_nested_root());
   }
+  __builtin_unreachable();
 };
 
 } // namespace
@@ -705,6 +707,7 @@ std::string_view type::name() const& noexcept {
         break;
     }
   }
+  __builtin_unreachable();
 }
 
 std::vector<std::string_view> type::names() const& noexcept {
@@ -773,6 +776,7 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
         break;
     }
   }
+  __builtin_unreachable();
 }
 
 std::vector<type::tag_view> type::tags() const& noexcept {
@@ -811,6 +815,7 @@ std::vector<type::tag_view> type::tags() const& noexcept {
         break;
     }
   }
+  __builtin_unreachable();
 }
 
 bool is_container(const type& type) noexcept {
@@ -834,8 +839,9 @@ bool is_container(const type& type) noexcept {
     case fbs::type::Type::record_type_v0:
       return true;
     case fbs::type::Type::tagged_type_v0:
-      die("tagged types must be resolved at this point.");
+      __builtin_unreachable();
   }
+  __builtin_unreachable();
 }
 
 type flatten(const type& t) noexcept {
@@ -1003,7 +1009,7 @@ bool compatible(const type& lhs, relational_operator op,
     case relational_operator::not_ni:
       return compatible(rhs, relational_operator::not_in, lhs);
   }
-  die("missing case for relational operator");
+  __builtin_unreachable();
 }
 
 bool compatible(const type& lhs, relational_operator op,
@@ -1046,7 +1052,7 @@ bool compatible(const type& lhs, relational_operator op,
       else
         return is_container(lhs);
   }
-  die("missing case for relational operator");
+  __builtin_unreachable();
 }
 
 bool compatible(const data& lhs, relational_operator op,
@@ -2049,7 +2055,7 @@ merge(const record_type& lhs, const record_type& rhs,
           case record_type::merge_conflict::prefer_right:
             return rfield.type;
         }
-        die("unhandled merge conflict case");
+        __builtin_unreachable();
       },
     };
   };
@@ -2207,10 +2213,11 @@ void record_type::leaf_iterable::next() noexcept {
         index_.push_back(0);
         break;
       case fbs::type::Type::tagged_type_v0:
-        die("tagged types must be resolved at this point.");
+        __builtin_unreachable();
         break;
     }
   }
+  __builtin_unreachable();
 }
 
 bool record_type::leaf_iterable::done() const noexcept {
