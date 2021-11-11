@@ -104,7 +104,7 @@ hash_step::operator()(type layout,
   }});
   VAST_ASSERT(adjusted_layout_rt); // adding a field cannot fail.
   auto adjusted_layout = type{*adjusted_layout_rt};
-  adjusted_layout.assign_metadata(*adjusted_layout_rt);
+  adjusted_layout.assign_metadata(layout);
   return std::make_pair(std::move(adjusted_layout), result_batch.ValueOrDie());
 }
 

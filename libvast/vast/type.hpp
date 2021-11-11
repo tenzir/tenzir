@@ -55,16 +55,6 @@ public:
   [[nodiscard]] const fbs::Type&
   table(enum transparent transparent) const noexcept;
 
-  /// Assigns the metadata of another type to this type.
-  /// @note I wish this function did not have to exist. However, there's a
-  /// serious need for it: The INDEX and its parts assume that a table slice's
-  /// layout is named, and falsely assume that name to be part of the layout
-  /// record type itself. But that is no longer true with the FlatBuffers-based
-  /// type-system, where only the sum-type of all concrete types contains
-  /// metadata like a nane or tags.
-  /// TODO: Allow this only on type, not on all stateful_type_base instances.
-  void assign_metadata(const stateful_type_base& other) noexcept;
-
 protected:
   /// The underlying representation of the type.
   chunk_ptr table_ = {}; // NOLINT
@@ -301,6 +291,9 @@ public:
   /// Explicitly forbid usage of the CAF binary serializer/deserializer.
   friend auto inspect(caf::binary_serializer&, type&) = delete;
   friend auto inspect(caf::binary_deserializer&, type&) = delete;
+
+  /// Assigns the metadata of another type to this type.
+  void assign_metadata(const type& other) noexcept;
 
   /// Returns the name of this type.
   /// @note The result is empty if the contained type is unnammed. Built-in

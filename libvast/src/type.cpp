@@ -230,57 +230,6 @@ stateful_type_base::table(enum transparent transparent) const noexcept {
   return *resolve_transparent(fbs::GetType(repr.data()), transparent);
 }
 
-void stateful_type_base::assign_metadata(
-  const stateful_type_base& other) noexcept {
-  const auto& rhs = static_cast<const type&>(other);
-  const auto name = rhs.name();
-  const auto tags = rhs.tags();
-  if (name.empty() && tags.empty())
-    return;
-  const auto nested_bytes = as_bytes(table_);
-  const auto reserved_size = [&]() noexcept {
-    // The total length is made up from the following terms:
-    // - 52 bytes FlatBuffers table framing
-    // - Nested type FlatBuffers table size
-    // - All contained string lengths, rounded up to four each
-    // Note that this cannot account for tags, since they are stored in hash
-    // map which makes calculating the space requirements non-trivial.
-    size_t size = 52;
-    size += nested_bytes.size();
-    size += reserved_string_size(name);
-    return size;
-  };
-  auto builder = tags.empty() ? flatbuffers::FlatBufferBuilder{reserved_size()}
-                              : flatbuffers::FlatBufferBuilder{};
-  const auto nested_type_offset = builder.CreateVector(
-    reinterpret_cast<const uint8_t*>(nested_bytes.data()), nested_bytes.size());
-  const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
-  const auto tags_offset
-    = [&]() noexcept -> flatbuffers::Offset<flatbuffers::Vector<
-                       flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>> {
-    if (tags.empty())
-      return 0;
-    auto tags_offsets
-      = std::vector<flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>{};
-    tags_offsets.reserve(tags.size());
-    for (const auto& tag : tags) {
-      const auto key_offset = builder.CreateString(tag.key);
-      const auto value_offset
-        = tag.value.empty() ? 0 : builder.CreateString(tag.value);
-      tags_offsets.emplace_back(fbs::type::tagged_type::tag::Createv0(
-        builder, key_offset, value_offset));
-    }
-    return builder.CreateVectorOfSortedTables(&tags_offsets);
-  }();
-  const auto tagged_type_offset = fbs::type::tagged_type::Createv0(
-    builder, nested_type_offset, name_offset, tags_offset);
-  const auto type_offset = fbs::CreateType(
-    builder, fbs::type::Type::tagged_type_v0, tagged_type_offset.Union());
-  builder.Finish(type_offset);
-  auto result = builder.Release();
-  table_ = chunk::make(std::move(result));
-}
-
 // -- type --------------------------------------------------------------------
 
 type::type() noexcept = default;
@@ -676,6 +625,55 @@ void inspect(caf::detail::stringification_inspector& f, type& x) {
   static_assert(caf::detail::stringification_inspector::reads_state);
   auto str = fmt::to_string(x);
   f(str);
+}
+
+void type::assign_metadata(const type& other) noexcept {
+  const auto name = other.name();
+  const auto tags = other.tags();
+  if (name.empty() && tags.empty())
+    return;
+  const auto nested_bytes = as_bytes(table_);
+  const auto reserved_size = [&]() noexcept {
+    // The total length is made up from the following terms:
+    // - 52 bytes FlatBuffers table framing
+    // - Nested type FlatBuffers table size
+    // - All contained string lengths, rounded up to four each
+    // Note that this cannot account for tags, since they are stored in hash
+    // map which makes calculating the space requirements non-trivial.
+    size_t size = 52;
+    size += nested_bytes.size();
+    size += reserved_string_size(name);
+    return size;
+  };
+  auto builder = tags.empty() ? flatbuffers::FlatBufferBuilder{reserved_size()}
+                              : flatbuffers::FlatBufferBuilder{};
+  const auto nested_type_offset = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(nested_bytes.data()), nested_bytes.size());
+  const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
+  const auto tags_offset
+    = [&]() noexcept -> flatbuffers::Offset<flatbuffers::Vector<
+                       flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>> {
+    if (tags.empty())
+      return 0;
+    auto tags_offsets
+      = std::vector<flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>{};
+    tags_offsets.reserve(tags.size());
+    for (const auto& tag : tags) {
+      const auto key_offset = builder.CreateString(tag.key);
+      const auto value_offset
+        = tag.value.empty() ? 0 : builder.CreateString(tag.value);
+      tags_offsets.emplace_back(fbs::type::tagged_type::tag::Createv0(
+        builder, key_offset, value_offset));
+    }
+    return builder.CreateVectorOfSortedTables(&tags_offsets);
+  }();
+  const auto tagged_type_offset = fbs::type::tagged_type::Createv0(
+    builder, nested_type_offset, name_offset, tags_offset);
+  const auto type_offset = fbs::CreateType(
+    builder, fbs::type::Type::tagged_type_v0, tagged_type_offset.Union());
+  builder.Finish(type_offset);
+  auto result = builder.Release();
+  table_ = chunk::make(std::move(result));
 }
 
 std::string_view type::name() const& noexcept {
@@ -1975,8 +1973,6 @@ std::optional<record_type> record_type::transform(
       return std::nullopt;
     type result{};
     construct_record_type(result, new_fields.rbegin(), new_fields.rend());
-    // Re-assign the name of any surrounding tagged type.
-    result.assign_metadata(self);
     return caf::get<record_type>(result);
   };
   // Sort transformations by offsets in reverse order.
@@ -2103,9 +2099,7 @@ record_type flatten(const record_type& type) noexcept {
       type.key(offset),
       field.type,
     });
-  auto result = record_type{fields};
-  result.assign_metadata(type);
-  return result;
+  return record_type{fields};
 }
 
 /// Access a field by index.
