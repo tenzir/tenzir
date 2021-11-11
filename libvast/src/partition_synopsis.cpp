@@ -73,8 +73,13 @@ void partition_synopsis::add(const table_slice& slice,
       // NOTE: if this is made configurable or removed, the pruning step from
       // the meta index lookup must be adjusted acordingly.
       field_synopses_[key] = nullptr;
-      auto cleaned_type = field_it->first.type;
-      cleaned_type.prune_metadata();
+      // We need to prune the type's metadata here by converting it to a
+      // concrete type and back, because the type synopses are looked up
+      // independent from names and attributes.
+      auto prune = [&]<concrete_type T>(const T& x) {
+        return type{x};
+      };
+      auto cleaned_type = caf::visit(prune, field_it->first.type);
       auto tt = type_synopses_.find(cleaned_type);
       if (tt == type_synopses_.end())
         tt = type_synopses_

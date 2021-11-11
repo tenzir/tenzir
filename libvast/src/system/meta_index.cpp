@@ -208,8 +208,13 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         for (const auto& [part_id, part_syn] : synopses) {
           for (const auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
-              auto cleaned_type = field.type();
-              cleaned_type.prune_metadata();
+              // We need to prune the type's metadata here by converting it to a
+              // concrete type and back, because the type synopses are looked up
+              // independent from names and attributes.
+              auto prune = [&]<concrete_type T>(const T& x) {
+                return type{x};
+              };
+              auto cleaned_type = caf::visit(prune, field.type());
               // We rely on having a field -> nullptr mapping here for the
               // fields that don't have their own synopsis.
               if (syn) {

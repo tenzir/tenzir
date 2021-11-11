@@ -65,11 +65,6 @@ public:
   /// TODO: Allow this only on type, not on all stateful_type_base instances.
   void assign_metadata(const stateful_type_base& other) noexcept;
 
-  /// Prunes the metadata of this type.
-  /// TODO: Remove this function; if necessary, re-create the type from its
-  /// underlying concrete type, which is better because it slices internally.
-  void prune_metadata() noexcept;
-
 protected:
   /// The underlying representation of the type.
   chunk_ptr table_ = {}; // NOLINT

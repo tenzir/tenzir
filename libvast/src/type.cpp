@@ -281,34 +281,6 @@ void stateful_type_base::assign_metadata(
   table_ = chunk::make(std::move(result));
 }
 
-void stateful_type_base::prune_metadata() noexcept {
-  while (true) {
-    const auto& view = table(transparent::no);
-    switch (view.type_type()) {
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
-        return;
-      case fbs::type::Type::tagged_type_v0:
-        table_
-          = table_->slice(as_bytes(*view.type_as_tagged_type_v0()->type()));
-        break;
-    }
-  }
-}
-
 // -- type --------------------------------------------------------------------
 
 type::type() noexcept = default;

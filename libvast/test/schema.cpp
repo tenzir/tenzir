@@ -601,9 +601,10 @@ TEST(parseable - with context) {
       },
     };
     CHECK_EQUAL(derived1, expected);
-    expected.prune_metadata();
-    expected.assign_metadata(type{"derived2", none_type{}});
-    CHECK_EQUAL(derived2, expected);
+    auto rename = [&]<concrete_type T>(const T& x) -> type {
+      return type{"derived2", x};
+    };
+    CHECK_EQUAL(caf::visit(rename, expected), derived2);
   }
 }
 

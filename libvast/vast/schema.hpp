@@ -130,11 +130,10 @@ struct formatter<vast::schema> {
   auto format(const vast::schema& value, FormatContext& ctx) {
     auto out = ctx.out();
     for (const auto& t : value) {
-      // FIXME: Instead of doing this, make it possible to always print a type's
-      // definition.
-      auto pruned = t;
-      pruned.prune_metadata();
-      out = format_to(out, "type {} = {}\n", t.name(), pruned);
+      auto f = [&]<vast::concrete_type T>(const T& x) {
+        out = format_to(out, "type {} = {}\n", t.name(), x);
+      };
+      caf::visit(f, t);
     }
     return out;
   }
