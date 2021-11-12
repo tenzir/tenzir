@@ -119,6 +119,22 @@ private:
     return apply_int(x);
   }
 
+#if VAST_CLANG
+  // For whatever reason, clang treats long and unsigned long as separate
+  // types from int64_t and uint64_t respectively, so we need to add another
+  // two overloads.
+
+  result_type apply(unsigned long& x) {
+    static_assert(sizeof(x) == sizeof(uint64_t));
+    return apply(reinterpret_cast<uint64_t&>(x));
+  }
+
+  result_type apply(long& x) {
+    static_assert(sizeof(x) == sizeof(int64_t));
+    return apply(reinterpret_cast<int64_t&>(x));
+  }
+#endif // VAST_CLANG
+
   result_type apply(float& x) {
     return apply_float(x);
   }
