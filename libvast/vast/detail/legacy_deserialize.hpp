@@ -119,21 +119,24 @@ private:
     return apply_int(x);
   }
 
-#if VAST_CLANG
-  // For whatever reason, clang treats long and unsigned long as separate
-  // types from int64_t and uint64_t respectively, so we need to add another
-  // two overloads.
-
-  result_type apply(unsigned long& x) {
-    static_assert(sizeof(x) == sizeof(uint64_t));
-    return apply(reinterpret_cast<uint64_t&>(x));
-  }
-
-  result_type apply(long& x) {
-    static_assert(sizeof(x) == sizeof(int64_t));
+  // On some platforms, e.g., macOS, int64_t and uint64_t are defined as long
+  // long and unsigned long long respectively rather than long and unsigned
+  // long, with long long and unsigned long long being extension types and thus
+  // separate from long and unsigned long. For these platforms we need to
+  // enable additional overloads that take long and unsigned long.
+  template <concepts::same_as<long> T>
+    requires(!std::is_same_v<T, int64_t>)
+  result_type apply(T& x) {
+    static_assert(sizeof(T) == sizeof(int64_t));
     return apply(reinterpret_cast<int64_t&>(x));
   }
-#endif // VAST_CLANG
+
+  template <concepts::same_as<unsigned long> T>
+    requires(!std::is_same_v<T, uint64_t>)
+  result_type apply(T& x) {
+    static_assert(sizeof(T) == sizeof(uint64_t));
+    return apply(reinterpret_cast<uint64_t&>(x));
+  }
 
   result_type apply(float& x) {
     return apply_float(x);
