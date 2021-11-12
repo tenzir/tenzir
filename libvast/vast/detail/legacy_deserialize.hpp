@@ -119,23 +119,12 @@ private:
     return apply_int(x);
   }
 
-  // On some platforms, e.g., macOS, int64_t and uint64_t are defined as long
-  // long and unsigned long long respectively rather than long and unsigned
-  // long, with long long and unsigned long long being extension types and thus
-  // separate from long and unsigned long. For these platforms we need to
-  // enable additional overloads that take long and unsigned long.
-  template <concepts::same_as<long> T>
-    requires(!std::is_same_v<T, int64_t>)
+  template <class T>
+    requires(std::is_integral<T>::value && !std::is_same<bool, T>::value)
   result_type apply(T& x) {
-    static_assert(sizeof(T) == sizeof(int64_t));
-    return apply(reinterpret_cast<int64_t&>(x));
-  }
-
-  template <concepts::same_as<unsigned long> T>
-    requires(!std::is_same_v<T, uint64_t>)
-  result_type apply(T& x) {
-    static_assert(sizeof(T) == sizeof(uint64_t));
-    return apply(reinterpret_cast<uint64_t&>(x));
+    using type
+      = caf::detail::select_integer_type_t<sizeof(T), std::is_signed<T>::value>;
+    return apply(reinterpret_cast<type&>(x));
   }
 
   result_type apply(float& x) {
