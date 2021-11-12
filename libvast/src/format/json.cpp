@@ -50,7 +50,7 @@ data extract_impl(uint64_t value, const type& type);
 data extract_impl(double value, const type& type);
 data extract_impl(bool value, const type& type);
 data extract_impl(std::string_view value, const type& type);
-data extract_impl(nullptr_t, const type& type, bool expand_records);
+data extract_impl(std::nullptr_t, const type& type, bool expand_records);
 
 data extract_impl(const ::simdjson::dom::element& value, const type& type,
                   bool expand_records) {
@@ -541,7 +541,7 @@ data extract_impl(bool value, const type& type) {
   return caf::visit(f, type);
 }
 
-data extract_impl(nullptr_t, const type& type, bool expand_records) {
+data extract_impl(std::nullptr_t, const type& type, bool expand_records) {
   if (!expand_records)
     return caf::none;
   auto f = detail::overload{
