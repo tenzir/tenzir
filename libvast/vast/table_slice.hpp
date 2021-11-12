@@ -112,7 +112,7 @@ public:
   [[nodiscard]] enum table_slice_encoding encoding() const noexcept;
 
   /// @returns The table layout.
-  [[nodiscard]] type layout() const noexcept;
+  [[nodiscard]] const type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] size_type rows() const noexcept;

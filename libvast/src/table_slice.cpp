@@ -234,19 +234,20 @@ enum table_slice_encoding table_slice::encoding() const noexcept {
   return visit(f, as_flatbuffer(chunk_));
 }
 
-type table_slice::layout() const noexcept {
+const type& table_slice::layout() const noexcept {
   auto f = detail::overload{
-    []() noexcept -> type {
+    []() noexcept -> const type* {
       die("unable to access layout of invalid table slice");
     },
-    [&](const auto& encoded) noexcept -> type {
-      return state(encoded, state_)->layout();
+    [&](const auto& encoded) noexcept -> const type* {
+      return &state(encoded, state_)->layout();
     },
   };
-  auto result = visit(f, as_flatbuffer(chunk_));
-  VAST_ASSERT(caf::holds_alternative<record_type>(result));
-  VAST_ASSERT(!result.name().empty());
-  return result;
+  const auto* result = visit(f, as_flatbuffer(chunk_));
+  VAST_ASSERT(result);
+  VAST_ASSERT(caf::holds_alternative<record_type>(*result));
+  VAST_ASSERT(!result->name().empty());
+  return *result;
 }
 
 table_slice::size_type table_slice::rows() const noexcept {
