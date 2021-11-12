@@ -97,13 +97,14 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
       case fbs::type::Type::map_type_v0:
       case fbs::type::Type::record_type_v0:
         return result;
-      case fbs::type::Type::tagged_type_v0:
+      case fbs::type::Type::tagged_type_v0: {
         const auto* tagged = root->type_as_tagged_type_v0();
         VAST_ASSERT(tagged);
         root = tagged->type_nested_root();
         VAST_ASSERT(root);
         result = as_bytes(*tagged->type());
         break;
+      }
     }
   }
   __builtin_unreachable();
@@ -211,26 +212,26 @@ size_t flat_size(const fbs::Type* view) noexcept {
       return 1;
     case fbs::type::Type::record_type_v0: {
       const auto* record = view->type_as_record_type_v0();
+      VAST_ASSERT(record);
       auto result = size_t{0};
-      for (const auto& field : *record->fields())
+      for (const auto& field : *record->fields()) {
+        VAST_ASSERT(field);
+        VAST_ASSERT(field->type());
         result += flat_size(field->type_nested_root());
+      }
       return result;
     }
-    case fbs::type::Type::tagged_type_v0:
-      return flat_size(view->type_as_tagged_type_v0()->type_nested_root());
+    case fbs::type::Type::tagged_type_v0: {
+      const auto* tagged = view->type_as_tagged_type_v0();
+      VAST_ASSERT(tagged);
+      VAST_ASSERT(tagged->type());
+      return flat_size(tagged->type_nested_root());
+    }
   }
   __builtin_unreachable();
 }
 
 } // namespace
-
-// -- stateful_type_base ------------------------------------------------------
-
-const fbs::Type&
-stateful_type_base::table(enum transparent transparent) const noexcept {
-  const auto& repr = as_bytes(static_cast<const type&>(*this));
-  return *resolve_transparent(fbs::GetType(repr.data()), transparent);
-}
 
 // -- type --------------------------------------------------------------------
 
@@ -569,6 +570,15 @@ legacy_type type::to_legacy_type() const noexcept {
       }});
   }
   return result;
+}
+
+const fbs::Type& type::table(enum transparent transparent) const noexcept {
+  const auto repr = as_bytes(*this);
+  const auto* table = fbs::GetType(repr.data());
+  VAST_ASSERT(table);
+  const auto* resolved = resolve_transparent(table, transparent);
+  VAST_ASSERT(resolved);
+  return *resolved;
 }
 
 type::operator bool() const noexcept {
@@ -1494,6 +1504,15 @@ enumeration_type::enumeration_type(
                              fields.data() + fields.size());
 }
 
+const fbs::Type& enumeration_type::table() const noexcept {
+  const auto repr = as_bytes(*this);
+  const auto* table = fbs::GetType(repr.data());
+  VAST_ASSERT(table);
+  VAST_ASSERT(table == resolve_transparent(table));
+  VAST_ASSERT(table->type_type() == fbs::type::Type::enumeration_type_v0);
+  return *table;
+}
+
 uint8_t enumeration_type::type_index() noexcept {
   return static_cast<uint8_t>(fbs::type::Type::enumeration_type_v0);
 }
@@ -1503,8 +1522,7 @@ std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
 }
 
 enumeration enumeration_type::construct() const noexcept {
-  const auto* fields
-    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
+  const auto* fields = table().type_as_enumeration_type_v0()->fields();
   VAST_ASSERT(fields);
   VAST_ASSERT(fields->size() > 0);
   const auto value = fields->Get(0)->key();
@@ -1518,8 +1536,7 @@ enumeration enumeration_type::construct() const noexcept {
 }
 
 std::string_view enumeration_type::field(uint32_t key) const& noexcept {
-  const auto* fields
-    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
+  const auto* fields = table().type_as_enumeration_type_v0()->fields();
   VAST_ASSERT(fields);
   if (const auto* field = fields->LookupByKey(key))
     return field->name()->string_view();
@@ -1528,8 +1545,7 @@ std::string_view enumeration_type::field(uint32_t key) const& noexcept {
 
 std::vector<enumeration_type::field_view>
 enumeration_type::fields() const& noexcept {
-  const auto* fields
-    = table(transparent::yes).type_as_enumeration_type_v0()->fields();
+  const auto* fields = table().type_as_enumeration_type_v0()->fields();
   VAST_ASSERT(fields);
   auto result = std::vector<field_view>{};
   result.reserve(fields->size());
@@ -1566,6 +1582,15 @@ list_type::list_type(const type& value_type) noexcept {
   table_ = chunk::make(std::move(result));
 }
 
+const fbs::Type& list_type::table() const noexcept {
+  const auto repr = as_bytes(*this);
+  const auto* table = fbs::GetType(repr.data());
+  VAST_ASSERT(table);
+  VAST_ASSERT(table == resolve_transparent(table));
+  VAST_ASSERT(table->type_type() == fbs::type::Type::list_type_v0);
+  return *table;
+}
+
 uint8_t list_type::type_index() noexcept {
   return static_cast<uint8_t>(fbs::type::Type::list_type_v0);
 }
@@ -1579,7 +1604,7 @@ list list_type::construct() noexcept {
 }
 
 type list_type::value_type() const noexcept {
-  const auto* view = table(transparent::yes).type_as_list_type_v0()->type();
+  const auto* view = table().type_as_list_type_v0()->type();
   VAST_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
@@ -1618,6 +1643,15 @@ map_type::map_type(const type& key_type, const type& value_type) noexcept {
   table_ = chunk::make(std::move(result));
 }
 
+const fbs::Type& map_type::table() const noexcept {
+  const auto repr = as_bytes(*this);
+  const auto* table = fbs::GetType(repr.data());
+  VAST_ASSERT(table);
+  VAST_ASSERT(table == resolve_transparent(table));
+  VAST_ASSERT(table->type_type() == fbs::type::Type::map_type_v0);
+  return *table;
+}
+
 uint8_t map_type::type_index() noexcept {
   return static_cast<uint8_t>(fbs::type::Type::map_type_v0);
 }
@@ -1631,14 +1665,13 @@ map map_type::construct() noexcept {
 }
 
 type map_type::key_type() const noexcept {
-  const auto* view = table(transparent::yes).type_as_map_type_v0()->key_type();
+  const auto* view = table().type_as_map_type_v0()->key_type();
   VAST_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
 
 type map_type::value_type() const noexcept {
-  const auto* view
-    = table(transparent::yes).type_as_map_type_v0()->value_type();
+  const auto* view = table().type_as_map_type_v0()->value_type();
   VAST_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
@@ -1666,6 +1699,15 @@ record_type::record_type(std::initializer_list<field_view> fields) noexcept
 
 record_type::record_type(const std::vector<struct field>& fields) noexcept {
   construct_record_type(*this, fields.data(), fields.data() + fields.size());
+}
+
+const fbs::Type& record_type::table() const noexcept {
+  const auto repr = as_bytes(*this);
+  const auto* table = fbs::GetType(repr.data());
+  VAST_ASSERT(table);
+  VAST_ASSERT(table == resolve_transparent(table));
+  VAST_ASSERT(table->type_type() == fbs::type::Type::record_type_v0);
+  return *table;
 }
 
 uint8_t record_type::type_index() noexcept {
@@ -1701,13 +1743,13 @@ record_type::leaf_iterable record_type::leaves() const noexcept {
 }
 
 size_t record_type::num_fields() const noexcept {
-  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  const auto* record = table().type_as_record_type_v0();
   VAST_ASSERT(record);
   return record->fields()->size();
 }
 
 size_t record_type::num_leaves() const noexcept {
-  return flat_size(&table(transparent::yes));
+  return flat_size(&table());
 }
 
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
@@ -1792,7 +1834,7 @@ record_type::resolve_key_suffix(std::string_view key,
 }
 
 std::string_view record_type::key(size_t index) const& noexcept {
-  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  const auto* record = table().type_as_record_type_v0();
   VAST_ASSERT(record);
   VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
   const auto* field = record->fields()->Get(index);
@@ -1802,7 +1844,7 @@ std::string_view record_type::key(size_t index) const& noexcept {
 
 std::string record_type::key(const offset& index) const noexcept {
   auto result = std::string{};
-  const auto* record = table(type::transparent::yes).type_as_record_type_v0();
+  const auto* record = table().type_as_record_type_v0();
   VAST_ASSERT(record);
   for (size_t i = 0; i < index.size() - 1; ++i) {
     VAST_ASSERT(index[i] < record->fields()->size());
@@ -1823,7 +1865,7 @@ std::string record_type::key(const offset& index) const noexcept {
 }
 
 record_type::field_view record_type::field(size_t index) const noexcept {
-  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  const auto* record = table().type_as_record_type_v0();
   VAST_ASSERT(record);
   VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
   const auto* field = record->fields()->Get(index);
@@ -1837,7 +1879,7 @@ record_type::field_view record_type::field(size_t index) const noexcept {
 
 record_type::field_view record_type::field(const offset& index) const noexcept {
   VAST_ASSERT(!index.empty(), "offset must not be empty");
-  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  const auto* record = table().type_as_record_type_v0();
   VAST_ASSERT(record);
   for (size_t i = 0; i < index.size() - 1; ++i) {
     VAST_ASSERT(index[i] < record->fields()->size(), "index out of bounds");
@@ -1858,7 +1900,7 @@ record_type::field_view record_type::field(const offset& index) const noexcept {
 size_t record_type::flat_index(const offset& index) const noexcept {
   VAST_ASSERT(!index.empty(), "offset must not be empty");
   auto result = size_t{0};
-  const auto* record = table(transparent::yes).type_as_record_type_v0();
+  const auto* record = table().type_as_record_type_v0();
   for (size_t i = 0; i < index.size(); ++i) {
     VAST_ASSERT(record);
     const auto* fields = record->fields();
@@ -2109,7 +2151,7 @@ record_type flatten(const record_type& type) noexcept {
 /// Access a field by index.
 [[nodiscard]] record_type::field_view
 record_type::iterable::operator[](size_t index) const noexcept {
-  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  const auto* record = type_.table().type_as_record_type_v0();
   VAST_ASSERT(record);
   const auto* field = record->fields()->Get(index);
   VAST_ASSERT(field);
@@ -2121,7 +2163,7 @@ record_type::iterable::operator[](size_t index) const noexcept {
 
 /// Get the number of fields in the record field.
 size_t record_type::iterable::size() const noexcept {
-  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  const auto* record = type_.table().type_as_record_type_v0();
   VAST_ASSERT(record);
   return record->fields()->size();
 }
@@ -2136,7 +2178,7 @@ void record_type::iterable::next() noexcept {
 }
 
 bool record_type::iterable::done() const noexcept {
-  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  const auto* record = type_.table().type_as_record_type_v0();
   VAST_ASSERT(record);
   return index_ >= record->fields()->size();
 }
@@ -2148,7 +2190,7 @@ record_type::field_view record_type::iterable::get() const noexcept {
 record_type::leaf_iterable::leaf_iterable(record_type type) noexcept
   : index_(), type_{std::move(type)} {
   // Set the index of the first leaf.
-  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  const auto* record = type_.table().type_as_record_type_v0();
   VAST_ASSERT(record);
   do {
     index_.push_back(0);
@@ -2160,7 +2202,7 @@ record_type::leaf_iterable::leaf_iterable(record_type type) noexcept
 void record_type::leaf_iterable::next() noexcept {
   if (index_.empty())
     return;
-  const auto* view = &type_.table(transparent::yes);
+  const auto* view = &type_.table();
   VAST_ASSERT(view);
   auto records = std::vector{view->type_as_record_type_v0()};
   VAST_ASSERT(records.back());
@@ -2224,7 +2266,7 @@ bool record_type::leaf_iterable::done() const noexcept {
 
 std::pair<record_type::field_view, offset>
 record_type::leaf_iterable::get() const noexcept {
-  const auto* record = type_.table(transparent::yes).type_as_record_type_v0();
+  const auto* record = type_.table().type_as_record_type_v0();
   VAST_ASSERT(record);
   // Resolve everything but the last layer.
   VAST_ASSERT(!index_.empty());

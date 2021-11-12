@@ -41,20 +41,6 @@ namespace vast {
 /// sometimes prefer the forbidden conversion to a complex type's private base
 /// type `type` over the implicit `type` constructor from complex types.
 struct stateful_type_base {
-public:
-  /// Indiciates whether to skip over internal types when looking at the
-  /// underlying FlatBuffers representation.
-  enum class transparent : uint8_t {
-    yes, ///< Skip internal types.
-    no,  ///< Include internal types. Use with caution.
-  };
-
-  /// Returns the underlying FlatBuffers table representation.
-  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
-  /// @param transparent Whether to skip over alias and tag types
-  [[nodiscard]] const fbs::Type&
-  table(enum transparent transparent) const noexcept;
-
 protected:
   /// The underlying representation of the type.
   chunk_ptr table_ = {}; // NOLINT
@@ -140,6 +126,13 @@ public:
   struct tag_view final {
     std::string_view key;   ///< The key.
     std::string_view value; ///< The value (empty if unset).
+  };
+
+  /// Indiciates whether to skip over internal types when looking at the
+  /// underlying FlatBuffers representation.
+  enum class transparent : uint8_t {
+    yes, ///< Skip internal types.
+    no,  ///< Include internal types. Use with caution.
   };
 
   /// Default-constructs a type, which is semantically equivalent to the
@@ -245,6 +238,12 @@ public:
   /// compare equal.
   /// @relates legacy_type
   [[nodiscard]] legacy_type to_legacy_type() const noexcept;
+
+  /// Returns the underlying FlatBuffers table representation.
+  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
+  /// @param transparent Whether to skip over alias and tag types
+  [[nodiscard]] const fbs::Type&
+  table(enum transparent transparent) const noexcept;
 
   /// Returns whether the type contains a conrete type other than the *none_type*.
   [[nodiscard]] explicit operator bool() const noexcept;
@@ -612,6 +611,10 @@ public:
   explicit enumeration_type(std::initializer_list<field_view> fields) noexcept;
   explicit enumeration_type(const std::vector<struct field>& fields) noexcept;
 
+  /// Returns the underlying FlatBuffers table representation.
+  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
+  [[nodiscard]] const fbs::Type& table() const noexcept;
+
   /// Returns the type index.
   static uint8_t type_index() noexcept;
 
@@ -671,6 +674,10 @@ public:
     // nop
   }
 
+  /// Returns the underlying FlatBuffers table representation.
+  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
+  [[nodiscard]] const fbs::Type& table() const noexcept;
+
   /// Returns the type index.
   static uint8_t type_index() noexcept;
 
@@ -723,6 +730,10 @@ public:
     : map_type{type{key_type}, type{value_type}} {
     // nop
   }
+
+  /// Returns the underlying FlatBuffers table representation.
+  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
+  [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
   static uint8_t type_index() noexcept;
@@ -824,6 +835,10 @@ public:
   explicit record_type(const std::vector<field_view>& fields) noexcept;
   explicit record_type(std::initializer_list<field_view> fields) noexcept;
   explicit record_type(const std::vector<struct field>& fields) noexcept;
+
+  /// Returns the underlying FlatBuffers table representation.
+  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
+  [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
   static uint8_t type_index() noexcept;
