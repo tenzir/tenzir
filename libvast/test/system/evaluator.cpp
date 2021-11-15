@@ -102,7 +102,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     for (auto& [expr_position, pred] : resolved) {
       VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
       auto& dx = caf::get<data_extractor>(pred.lhs);
-      std::string field_name = dx.offset.back() == 0 ? "x" : "y";
+      std::string field_name = dx.column == 0 ? "x" : "y";
       auto& xs = indexers[field_name];
       for (auto& x : xs)
         triples.emplace_back(expr_position, curried(pred), x);

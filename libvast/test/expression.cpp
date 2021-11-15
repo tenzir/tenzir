@@ -189,9 +189,9 @@ TEST(extractors) {
   auto r = type{flatten(record_type{{"orig", s}, {"resp", s}})};
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
-    auto pred0 = predicate{data_extractor{type{address_type{}}, offset{2}},
+    auto pred0 = predicate{data_extractor{type{address_type{}}, 2},
                            relational_operator::in, data{sn}};
-    auto pred1 = predicate{data_extractor{type{address_type{}}, offset{7}},
+    auto pred1 = predicate{data_extractor{type{address_type{}}, 7},
                            relational_operator::in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
@@ -204,9 +204,9 @@ TEST(extractors) {
     CHECK_EQUAL(resolved, normalized);
   }
   {
-    auto pred0 = predicate{data_extractor{type{address_type{}}, offset{2}},
+    auto pred0 = predicate{data_extractor{type{address_type{}}, 2},
                            relational_operator::not_in, data{sn}};
-    auto pred1 = predicate{data_extractor{type{address_type{}}, offset{7}},
+    auto pred1 = predicate{data_extractor{type{address_type{}}, 7},
                            relational_operator::not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
@@ -219,13 +219,13 @@ TEST(extractors) {
     CHECK_EQUAL(resolved, normalized);
   }
   {
-    auto pred0 = predicate{data_extractor{port, offset{3}},
+    auto pred0 = predicate{data_extractor{port, 3}, relational_operator::equal,
+                           data{80u}};
+    auto pred1 = predicate{data_extractor{subport, 4},
                            relational_operator::equal, data{80u}};
-    auto pred1 = predicate{data_extractor{subport, offset{4}},
-                           relational_operator::equal, data{80u}};
-    auto pred2 = predicate{data_extractor{port, offset{8}},
-                           relational_operator::equal, data{80u}};
-    auto pred3 = predicate{data_extractor{subport, offset{9}},
+    auto pred2 = predicate{data_extractor{port, 8}, relational_operator::equal,
+                           data{80u}};
+    auto pred3 = predicate{data_extractor{subport, 9},
                            relational_operator::equal, data{80u}};
     auto normalized = disjunction{pred0, pred1, pred2, pred3};
     MESSAGE("type extractor - used defined types");
@@ -294,11 +294,6 @@ TEST(matcher) {
     REQUIRE(resolved);
     return caf::visit(matcher{type{t}}, *resolved);
   };
-  MESSAGE("type extractors");
-  CHECK(match(":real < 4.2", real_type{}));
-  CHECK(!match(":int == -42", real_type{}));
-  CHECK(!match(":count == 42 && :real < 4.2", real_type{}));
-  CHECK(match(":count == 42 || :real < 4.2", real_type{}));
   auto r = type{record_type{
     {"x", real_type{}},
     {"y", bool_type{}},

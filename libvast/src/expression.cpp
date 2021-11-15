@@ -55,16 +55,20 @@ bool operator<(const type_extractor& x, const type_extractor& y) {
 
 // -- data_extractor -----------------------------------------------------------
 
-data_extractor::data_extractor(vast::type t, vast::offset o)
-  : type{std::move(t)}, offset{std::move(o)} {
+data_extractor::data_extractor(class type t, size_t column)
+  : type{std::move(t)}, column{column} {
+}
+
+data_extractor::data_extractor(const record_type& rt, const offset& o)
+  : type{rt.field(o).type}, column{rt.flat_index(o)} {
 }
 
 bool operator==(const data_extractor& x, const data_extractor& y) {
-  return x.type == y.type && x.offset == y.offset;
+  return x.type == y.type && x.column == y.column;
 }
 
 bool operator<(const data_extractor& x, const data_extractor& y) {
-  return std::tie(x.type, x.offset) < std::tie(y.type, y.offset);
+  return std::tie(x.type, x.column) < std::tie(y.type, y.column);
 }
 
 // -- predicate ----------------------------------------------------------------
@@ -217,7 +221,9 @@ const expression* at(const expression* expr, offset::value_type i) {
     [&](const negation& x) -> const expression* {
       return i == 0 ? &x.expr() : nullptr;
     },
-    [&](const auto&) -> const expression* { return nullptr; },
+    [&](const auto&) -> const expression* {
+      return nullptr;
+    },
   };
   return caf::visit(f, *expr);
 }

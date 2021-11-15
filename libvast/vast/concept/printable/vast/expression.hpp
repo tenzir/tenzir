@@ -73,10 +73,7 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(const data_extractor& e) const {
-      // FIXME: Use {n} for nameonly
-      out_ = fmt::format_to(out_, "{}", e.type);
-      if (!e.offset.empty())
-        out_ = fmt::format_to(out_, "@{}", fmt::join(e.offset, ","));
+      out_ = fmt::format_to(out_, "{}@{}", e.type, e.column);
       return true;
     }
 

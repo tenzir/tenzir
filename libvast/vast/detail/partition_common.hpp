@@ -26,13 +26,7 @@ system::indexer_actor
 fetch_indexer(const PartitionState& state, const data_extractor& dx,
               relational_operator op, const data& x) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
-  // Sanity check.
-  if (dx.offset.empty())
-    return {};
-  // TODO: For active partitions, we create the combined layout twice for data
-  // extractors.
-  auto index = state.combined_layout()->flat_index(dx.offset);
-  return state.indexer_at(index);
+  return state.indexer_at(dx.column);
 }
 
 /// Retrieves an INDEXER for a predicate with a data extractor.

@@ -440,7 +440,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
       const auto f = r->field(offset);
       if (!compatible(f.type, op_, d))
         continue;
-      auto x = data_extractor{f.type, std::move(offset)};
+      auto x = data_extractor{*r, offset};
       connective.emplace_back(predicate{std::move(x), op_, d});
     }
     // Second, try to interpret the field as the name of a single type.

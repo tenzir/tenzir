@@ -130,15 +130,15 @@ struct type_resolver {
   template <class Function>
   [[nodiscard]] expression resolve_extractor(Function f, const data& x) const {
     std::vector<expression> connective;
-    auto make_predicate = [&](type t, offset off) {
-      return predicate{data_extractor{std::move(t), off}, op_, x};
+    auto make_predicate = [&](type t, size_t i) {
+      return predicate{data_extractor{std::move(t), i}, op_, x};
     };
-    if (const auto* r = caf::get_if<record_type>(&type_)) {
-      for (const auto& [field, index] : r->leaves())
-        if (f(field.type))
-          connective.emplace_back(make_predicate(field.type, index));
-    } else if (f(type_)) {
-      connective.emplace_back(make_predicate(type_, offset{}));
+    VAST_ASSERT(caf::holds_alternative<record_type>(type_));
+    for (size_t flat_index = 0;
+         const auto& [field, _] : caf::get<record_type>(type_).leaves()) {
+      if (f(field.type))
+        connective.emplace_back(make_predicate(field.type, flat_index));
+      ++flat_index;
     }
     if (connective.empty())
       return expression{}; // did not resolve
@@ -211,7 +211,7 @@ public:
     if (!xs.empty()) {
       push();
       caf::visit(*this, xs[0]);
-      for (size_t i = 1; i< xs.size(); ++i) {
+      for (size_t i = 1; i < xs.size(); ++i) {
         next();
         caf::visit(*this, xs[i]);
       }

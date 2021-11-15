@@ -98,10 +98,11 @@ auto inspect(Inspector& f, type_extractor& x) {
 struct data_extractor : detail::totally_ordered<data_extractor> {
   data_extractor() = default;
 
-  data_extractor(vast::type t, vast::offset o);
+  data_extractor(class type t, size_t column);
+  data_extractor(const record_type& rt, const offset& o);
 
-  vast::type type;
-  vast::offset offset;
+  class type type;
+  size_t column;
 };
 
 /// @relates data_extractor
@@ -113,7 +114,7 @@ bool operator<(const data_extractor& x, const data_extractor& y);
 /// @relates data_extractor
 template <class Inspector>
 auto inspect(Inspector& f, data_extractor& x) {
-  return f(caf::meta::type_name("data_extractor"), x.type, x.offset);
+  return f(caf::meta::type_name("data_extractor"), x.type, x.column);
 }
 
 /// A predicate with two operands evaluated under a relational operator.

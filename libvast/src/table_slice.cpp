@@ -625,8 +625,7 @@ struct row_evaluator {
   }
 
   bool operator()(const data_extractor& e, const data& d) {
-    auto col = caf::get<record_type>(slice_.layout()).flat_index(e.offset);
-    auto lhs = to_canonical(e.type, slice_.at(row_, col, e.type));
+    auto lhs = to_canonical(e.type, slice_.at(row_, e.column, e.type));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
   }
@@ -686,7 +685,6 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   };
   table_slice_encoding implementation_id
     = visit(f, as_flatbuffer(slice.chunk_));
-  ;
   // Start slicing and dicing.
   auto builder
     = factory<table_slice_builder>::make(implementation_id, slice.layout());
