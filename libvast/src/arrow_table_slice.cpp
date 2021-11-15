@@ -402,8 +402,8 @@ public:
       return;
     if constexpr (detail::is_any_v<U, real_type, integer_type, count_type,
                                    enumeration_type>) {
-      using data_type = type_to_data_t<U>;
-      result_ = static_cast<data_type>(arr.Value(row_));
+      using view_type = view<type_to_data_t<U>>;
+      result_ = static_cast<view_type>(arr.Value(row_));
     } else {
       static_assert(std::is_same_v<U, duration_type>);
       result_ = duration_at(arr, row_);
