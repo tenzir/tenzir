@@ -689,23 +689,30 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   auto builder
     = factory<table_slice_builder>::make(implementation_id, slice.layout());
   VAST_ASSERT(builder);
-  auto flat_layout = flatten(caf::get<record_type>(slice.layout()));
-  auto check = [&](row_evaluator eval) {
+  auto check = [&](size_t row) {
     // If no expression was provided, we rely on the provided hints only.
     if (!has_expr)
       return true;
     // Check if the expression was unable to be tailored to the type.
     if (expr == expression{})
       return false;
-    return caf::visit(eval, expr);
+    return caf::visit(row_evaluator{slice, row}, expr);
   };
+  const auto& layout = caf::get<record_type>(slice.layout());
+  const auto column_types = [&]() noexcept {
+    auto result = std::vector<type>{};
+    result.reserve(layout.num_leaves());
+    for (auto&& [field, _] : layout.leaves())
+      result.emplace_back(field.type);
+    return result;
+  }();
   for (auto id : select(selection)) {
     VAST_ASSERT(id >= offset);
     auto row = id - offset;
     VAST_ASSERT(row < slice.rows());
-    if (check(row_evaluator{slice, row})) {
-      for (size_t column = 0; column < flat_layout.num_fields(); ++column) {
-        auto cell_value = slice.at(row, column, flat_layout.field(column).type);
+    if (check(row)) {
+      for (size_t column = 0; column < column_types.size(); ++column) {
+        auto cell_value = slice.at(row, column, column_types[column]);
         auto ret = builder->add(cell_value);
         VAST_ASSERT(ret);
       }
