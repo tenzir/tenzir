@@ -103,10 +103,7 @@ struct validator {
 /// Transforms all ::field_extractor and ::type_extractor predicates into
 /// ::data_extractor instances according to a given type.
 struct type_resolver {
-  // TODO: This function still assumes that we can pass types that are no
-  // records. This is an overly generic assumption and only adds complexity at
-  // this point. We should condense the scope of this visitor to record types.
-  explicit type_resolver(const type& t);
+  explicit type_resolver(const type& layout);
 
   caf::expected<expression> operator()(caf::none_t);
   caf::expected<expression> operator()(const conjunction& c);
@@ -133,9 +130,7 @@ struct type_resolver {
     auto make_predicate = [&](type t, size_t i) {
       return predicate{data_extractor{std::move(t), i}, op_, x};
     };
-    VAST_ASSERT(caf::holds_alternative<record_type>(type_));
-    for (size_t flat_index = 0;
-         const auto& [field, _] : caf::get<record_type>(type_).leaves()) {
+    for (size_t flat_index = 0; const auto& [field, _] : layout_.leaves()) {
       if (f(field.type))
         connective.emplace_back(make_predicate(field.type, flat_index));
       ++flat_index;
@@ -154,7 +149,8 @@ struct type_resolver {
   }
 
   relational_operator op_;
-  const type& type_;
+  const record_type& layout_;
+  std::string_view layout_name_;
 };
 
 /// Checks whether a [resolved](@ref type_extractor) expression matches a given

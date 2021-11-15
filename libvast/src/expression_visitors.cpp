@@ -332,7 +332,9 @@ caf::expected<void> validator::operator()(const field_extractor&, const data&) {
   return caf::no_error;
 }
 
-type_resolver::type_resolver(const type& t) : type_{t} {
+type_resolver::type_resolver(const type& layout)
+  : layout_{caf::get<record_type>(layout)}, layout_name_{layout.name()} {
+  // nop
 }
 
 caf::expected<expression> type_resolver::operator()(caf::none_t) {
@@ -434,20 +436,12 @@ caf::expected<expression>
 type_resolver::operator()(const field_extractor& ex, const data& d) {
   std::vector<expression> connective;
   // First, interpret the field as a suffix of a record field name.
-  if (const auto* r = caf::get_if<record_type>(&type_)) {
-    auto suffixes = r->resolve_key_suffix(ex.field, type_.name());
-    for (auto& offset : suffixes) {
-      const auto f = r->field(offset);
-      if (!compatible(f.type, op_, d))
-        continue;
-      auto x = data_extractor{*r, offset};
-      connective.emplace_back(predicate{std::move(x), op_, d});
-    }
-    // Second, try to interpret the field as the name of a single type.
-  } else if (ex.field == type_.name()) {
-    if (!compatible(type_, op_, d))
-      return caf::make_error(ec::type_clash, type_, op_, d);
-    auto x = data_extractor{type_, {}};
+  auto suffixes = layout_.resolve_key_suffix(ex.field, layout_name_);
+  for (auto& offset : suffixes) {
+    const auto f = layout_.field(offset);
+    if (!compatible(f.type, op_, d))
+      continue;
+    auto x = data_extractor{layout_, offset};
     connective.emplace_back(predicate{std::move(x), op_, d});
   }
   if (connective.empty())
@@ -459,8 +453,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
       || op_ == relational_operator::not_in
       || op_ == relational_operator::not_ni)
     return {conjunction{std::move(connective)}};
-  else
-    return {disjunction{std::move(connective)}};
+  return {disjunction{std::move(connective)}};
 }
 
 caf::expected<expression>
