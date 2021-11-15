@@ -632,6 +632,11 @@ public:
   /// Returns a view onto all fields, sorted by key.
   [[nodiscard]] std::vector<field_view> fields() const& noexcept;
   [[nodiscard]] std::vector<field_view> fields() && = delete;
+
+  /// Returns the value of the field with the given name, or nullopt if the key
+  /// does not exist.
+  [[nodiscard]] std::optional<uint32_t>
+  resolve(std::string_view key) const noexcept;
 };
 
 // -- list_type ---------------------------------------------------------------

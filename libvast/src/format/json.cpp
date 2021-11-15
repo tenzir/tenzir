@@ -472,9 +472,8 @@ data extract_impl(std::string_view value, const type& type) {
       return caf::none;
     },
     [&](const enumeration_type& et) noexcept -> data {
-      for (const auto& [canonical, internal] : et.fields())
-        if (value == canonical)
-          return detail::narrow_cast<enumeration>(internal);
+      if (auto internal = et.resolve(value))
+        return detail::narrow_cast<enumeration>(*internal);
       return caf::none;
     },
     [&](const list_type& lt) noexcept -> data {

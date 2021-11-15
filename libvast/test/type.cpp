@@ -254,6 +254,10 @@ TEST(enumeration_type) {
   CHECK_EQUAL(caf::get<enumeration_type>(et).field(1), "");
   CHECK_EQUAL(caf::get<enumeration_type>(et).field(2), "third");
   CHECK_EQUAL(caf::get<enumeration_type>(et).field(3), "fourth");
+  CHECK_EQUAL(caf::get<enumeration_type>(et).resolve("first"), 0u);
+  CHECK_EQUAL(caf::get<enumeration_type>(et).resolve("second"), std::nullopt);
+  CHECK_EQUAL(caf::get<enumeration_type>(et).resolve("third"), 2u);
+  CHECK_EQUAL(caf::get<enumeration_type>(et).resolve("fourth"), 3u);
   const auto let = type::from_legacy_type(
     legacy_enumeration_type{{"first", "second", "third"}});
   CHECK(caf::holds_alternative<enumeration_type>(let));

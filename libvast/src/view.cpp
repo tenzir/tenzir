@@ -386,9 +386,8 @@ data_view to_canonical(const type& t, const data_view& x) {
 data_view to_internal(const type& t, const data_view& x) {
   auto v = detail::overload{
     [](const view<std::string>& s, const enumeration_type& t) -> data_view {
-      for (const auto& field : t.fields())
-        if (field.name == s)
-          return detail::narrow_cast<enumeration>(field.key);
+      if (auto key = t.resolve(s))
+        return detail::narrow_cast<enumeration>(*key);
       return caf::none;
     },
     [&](auto&, auto&) {

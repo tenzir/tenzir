@@ -942,10 +942,7 @@ bool congruent(const type& x, const data& y) noexcept {
       return true;
     },
     [](const enumeration_type& x, const std::string& y) noexcept {
-      const auto xf = x.fields();
-      return std::any_of(xf.begin(), xf.end(), [&](const auto& field) {
-        return field.name == y;
-      });
+      return x.resolve(y).has_value();
     },
     [](const list_type&, const list&) noexcept {
       return true;
@@ -1552,6 +1549,16 @@ enumeration_type::fields() const& noexcept {
   for (const auto& field : *fields)
     result.push_back({field->name()->string_view(), field->key()});
   return result;
+}
+
+std::optional<uint32_t>
+enumeration_type::resolve(std::string_view key) const noexcept {
+  const auto* fields = table().type_as_enumeration_type_v0()->fields();
+  VAST_ASSERT(fields);
+  for (const auto& field : *fields)
+    if (field->name()->string_view() == key)
+      return field->key();
+  return std::nullopt;
 }
 
 // -- list_type ---------------------------------------------------------------
