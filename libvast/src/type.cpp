@@ -1189,9 +1189,8 @@ replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
 
 // -- none_type ---------------------------------------------------------------
 
-uint8_t none_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::NONE);
-}
+static_assert(none_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::NONE));
 
 std::span<const std::byte> as_bytes(const none_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1212,9 +1211,8 @@ caf::none_t none_type::construct() noexcept {
 
 // -- bool_type ---------------------------------------------------------------
 
-uint8_t bool_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::bool_type_v0);
-}
+static_assert(bool_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::bool_type_v0));
 
 std::span<const std::byte> as_bytes(const bool_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1237,9 +1235,8 @@ bool bool_type::construct() noexcept {
 
 // -- integer_type ------------------------------------------------------------
 
-uint8_t integer_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::integer_type_v0);
-}
+static_assert(integer_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::integer_type_v0));
 
 std::span<const std::byte> as_bytes(const integer_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1262,9 +1259,8 @@ integer integer_type::construct() noexcept {
 
 // -- count_type --------------------------------------------------------------
 
-uint8_t count_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::count_type_v0);
-}
+static_assert(count_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::count_type_v0));
 
 std::span<const std::byte> as_bytes(const count_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1288,9 +1284,8 @@ count count_type::construct() noexcept {
 
 // -- real_type ---------------------------------------------------------------
 
-uint8_t real_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::real_type_v0);
-}
+static_assert(real_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::real_type_v0));
 
 std::span<const std::byte> as_bytes(const real_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1314,9 +1309,8 @@ real real_type::construct() noexcept {
 
 // -- duration_type -----------------------------------------------------------
 
-uint8_t duration_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::duration_type_v0);
-}
+static_assert(duration_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::duration_type_v0));
 
 std::span<const std::byte> as_bytes(const duration_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1340,9 +1334,8 @@ duration duration_type::construct() noexcept {
 
 // -- time_type ---------------------------------------------------------------
 
-uint8_t time_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::time_type_v0);
-}
+static_assert(time_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::time_type_v0));
 
 std::span<const std::byte> as_bytes(const time_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1366,9 +1359,8 @@ time time_type::construct() noexcept {
 
 // -- string_type --------------------------------------------------------------
 
-uint8_t string_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::string_type_v0);
-}
+static_assert(string_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::string_type_v0));
 
 std::span<const std::byte> as_bytes(const string_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1392,9 +1384,8 @@ std::string string_type::construct() noexcept {
 
 // -- pattern_type ------------------------------------------------------------
 
-uint8_t pattern_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::pattern_type_v0);
-}
+static_assert(pattern_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::pattern_type_v0));
 
 std::span<const std::byte> as_bytes(const pattern_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1418,9 +1409,8 @@ pattern pattern_type::construct() noexcept {
 
 // -- address_type ------------------------------------------------------------
 
-uint8_t address_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::address_type_v0);
-}
+static_assert(address_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::address_type_v0));
 
 std::span<const std::byte> as_bytes(const address_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1444,9 +1434,8 @@ address address_type::construct() noexcept {
 
 // -- subnet_type -------------------------------------------------------------
 
-uint8_t subnet_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::subnet_type_v0);
-}
+static_assert(subnet_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::subnet_type_v0));
 
 std::span<const std::byte> as_bytes(const subnet_type&) noexcept {
   static const auto buffer = []() noexcept {
@@ -1510,9 +1499,8 @@ const fbs::Type& enumeration_type::table() const noexcept {
   return *table;
 }
 
-uint8_t enumeration_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::enumeration_type_v0);
-}
+static_assert(enumeration_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::enumeration_type_v0));
 
 std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
   return as_bytes_complex(x);
@@ -1598,9 +1586,8 @@ const fbs::Type& list_type::table() const noexcept {
   return *table;
 }
 
-uint8_t list_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::list_type_v0);
-}
+static_assert(list_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::list_type_v0));
 
 std::span<const std::byte> as_bytes(const list_type& x) noexcept {
   return as_bytes_complex(x);
@@ -1659,9 +1646,8 @@ const fbs::Type& map_type::table() const noexcept {
   return *table;
 }
 
-uint8_t map_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::map_type_v0);
-}
+static_assert(map_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::map_type_v0));
 
 std::span<const std::byte> as_bytes(const map_type& x) noexcept {
   return as_bytes_complex(x);
@@ -1717,9 +1703,8 @@ const fbs::Type& record_type::table() const noexcept {
   return *table;
 }
 
-uint8_t record_type::type_index() noexcept {
-  return static_cast<uint8_t>(fbs::type::Type::record_type_v0);
-}
+static_assert(record_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::record_type_v0));
 
 std::span<const std::byte> as_bytes(const record_type& x) noexcept {
   return as_bytes_complex(x);
@@ -2313,7 +2298,7 @@ sum_type_access<vast::type>::index_from_type(const vast::type& x) noexcept {
     std::integer_sequence<uint8_t, Indices...>) noexcept {
     std::array<uint8_t, std::numeric_limits<uint8_t>::max()> tbl{};
     tbl.fill(std::numeric_limits<uint8_t>::max());
-    (static_cast<void>(tbl[Ts::type_index()] = Indices), ...);
+    (static_cast<void>(tbl[Ts::type_index] = Indices), ...);
     return tbl;
   }
   (types{},

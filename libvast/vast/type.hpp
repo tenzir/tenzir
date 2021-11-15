@@ -63,7 +63,7 @@ concept concrete_type = requires(const T& value) {
   // The type must not be inherited from to avoid slicing issues.
   requires std::is_final_v<T>;
   // The type must offer a way to get a unique type index.
-  { T::type_index() } -> concepts::same_as<uint8_t>;
+  {T::type_index};
   // Values of the type must offer an `as_bytes` overload.
   { as_bytes(value) } -> concepts::same_as<std::span<const std::byte>>;
   // Values of the type must be able to construct the corresponding data type.
@@ -392,7 +392,7 @@ replace_if_congruent(std::initializer_list<type*> xs, const schema& with);
 class none_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 0;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const none_type&) noexcept;
@@ -408,7 +408,7 @@ public:
 class bool_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 1;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const bool_type&) noexcept;
@@ -424,7 +424,7 @@ public:
 class integer_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 2;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const integer_type&) noexcept;
@@ -440,7 +440,7 @@ public:
 class count_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 3;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const count_type&) noexcept;
@@ -456,7 +456,7 @@ public:
 class real_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 4;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const real_type&) noexcept;
@@ -472,7 +472,7 @@ public:
 class duration_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 5;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const duration_type&) noexcept;
@@ -488,7 +488,7 @@ public:
 class time_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 6;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const time_type&) noexcept;
@@ -504,7 +504,7 @@ public:
 class string_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 7;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const string_type&) noexcept;
@@ -520,7 +520,7 @@ public:
 class pattern_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 8;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const pattern_type&) noexcept;
@@ -536,7 +536,7 @@ public:
 class address_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 9;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const address_type&) noexcept;
@@ -552,7 +552,7 @@ public:
 class subnet_type final {
 public:
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 10;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const subnet_type&) noexcept;
@@ -616,7 +616,7 @@ public:
   [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 11;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte>
@@ -684,7 +684,7 @@ public:
   [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 12;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
@@ -741,7 +741,7 @@ public:
   [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 13;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
@@ -846,7 +846,7 @@ public:
   [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
-  static uint8_t type_index() noexcept;
+  static constexpr uint8_t type_index = 14;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const record_type& x) noexcept;
@@ -1001,7 +1001,7 @@ struct sum_type_access<vast::type> final {
 
   template <vast::concrete_type T, int Index>
   static bool is(const vast::type& x, sum_type_token<T, Index>) {
-    return x.type_index() == T::type_index();
+    return x.type_index() == T::type_index;
   }
 
   template <class T, int Index>

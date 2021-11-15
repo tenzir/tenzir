@@ -29,7 +29,7 @@ struct factory_traits<synopsis> {
 
   template <concrete_type T>
   static key_type key() {
-    return T::type_index();
+    return T::type_index;
   }
 
   static key_type key(const type& t) {
