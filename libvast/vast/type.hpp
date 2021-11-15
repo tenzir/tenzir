@@ -13,7 +13,6 @@
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/concepts.hpp"
-#include "vast/detail/function.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -29,6 +28,7 @@
 #include <fmt/format.h>
 
 #include <compare>
+#include <functional>
 #include <initializer_list>
 
 namespace vast {
@@ -802,9 +802,9 @@ public:
 
   /// A transformation that can be applied to a record type; maps a valid offset
   /// to a function that transforms a field into other fields.
-  using transformation
-    = std::pair<offset, detail::function<std::vector<struct field>(
-                          const field_view&) noexcept>>;
+  using transformation_fun
+    = std::function<std::vector<struct field>(const field_view&)>;
+  using transformation = std::pair<offset, transformation_fun>;
 
   /// The behavior of the merge function in case of conflicts.
   enum class merge_conflict {
@@ -899,18 +899,17 @@ public:
   [[nodiscard]] size_t flat_index(const offset& index) const noexcept;
 
   /// A transformation that drops fields.
-  static transformation::second_type drop() noexcept;
+  static transformation_fun drop() noexcept;
 
   /// A transformation that replaces a field.
-  static transformation::second_type
-  assign(std::vector<struct field> fields) noexcept;
+  static transformation_fun assign(std::vector<struct field> fields) noexcept;
 
   /// A transformation that inserts fields before the index.
-  static transformation::second_type
+  static transformation_fun
   insert_before(std::vector<struct field> fields) noexcept;
 
   /// A transformation that inserts fields after the index.
-  static transformation::second_type
+  static transformation_fun
   insert_after(std::vector<struct field> fields) noexcept;
 
   /// Creates a new record by applying a set of transformations to this record.

@@ -1924,13 +1924,13 @@ size_t record_type::flat_index(const offset& index) const noexcept {
   return result;
 }
 
-record_type::transformation::second_type record_type::drop() noexcept {
+record_type::transformation_fun record_type::drop() noexcept {
   return [](const field_view&) noexcept -> std::vector<struct field> {
     return {};
   };
 }
 
-record_type::transformation::second_type
+record_type::transformation_fun
 record_type::assign(std::vector<struct field> fields) noexcept {
   return [fields = std::move(fields)](
            const field_view&) noexcept -> std::vector<struct field> {
@@ -1938,7 +1938,7 @@ record_type::assign(std::vector<struct field> fields) noexcept {
   };
 }
 
-record_type::transformation::second_type
+record_type::transformation_fun
 record_type::insert_before(std::vector<struct field> fields) noexcept {
   return [fields = std::move(fields)](const field_view& field) mutable noexcept
          -> std::vector<struct field> {
@@ -1948,7 +1948,7 @@ record_type::insert_before(std::vector<struct field> fields) noexcept {
   };
 }
 
-record_type::transformation::second_type
+record_type::transformation_fun
 record_type::insert_after(std::vector<struct field> fields) noexcept {
   return [fields = std::move(fields)](const field_view& field) mutable noexcept
          -> std::vector<struct field> {
