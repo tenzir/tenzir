@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/qualified_record_field.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/view.hpp"
 
@@ -52,6 +53,9 @@ public:
   /// @returns the viewed column's index.
   [[nodiscard]] size_t index() const noexcept;
 
+  /// @returns the viewed column's qualified record field.
+  [[nodiscard]] const qualified_record_field& field() const noexcept;
+
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, table_slice_column& x) ->
@@ -63,6 +67,7 @@ public:
 private:
   table_slice slice_ = {};
   size_t column_ = 0;
+  qualified_record_field field_ = {};
 };
 
 } // namespace vast

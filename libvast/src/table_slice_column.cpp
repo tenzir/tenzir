@@ -29,7 +29,10 @@ table_slice_column::operator=(table_slice_column&&) noexcept = default;
 
 table_slice_column::table_slice_column(table_slice slice,
                                        size_t column) noexcept
-  : slice_{std::move(slice)}, column_{column} {
+  : slice_{std::move(slice)},
+    column_{column},
+    field_{slice_.layout(),
+           caf::get<record_type>(slice_.layout()).resolve_flat_index(column_)} {
   // nop
 }
 
@@ -48,6 +51,10 @@ const table_slice& table_slice_column::slice() const noexcept {
 
 size_t table_slice_column::index() const noexcept {
   return column_;
+}
+
+const qualified_record_field& table_slice_column::field() const noexcept {
+  return field_;
 }
 
 } // namespace vast
