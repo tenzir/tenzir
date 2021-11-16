@@ -1752,38 +1752,75 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
 
 std::optional<offset>
 record_type::resolve_key(std::string_view key) const noexcept {
-  auto do_resolve_key = [](auto&& self, const record_type& record,
-                           std::string_view key) -> std::optional<offset> {
-    if (key.empty())
-      return {};
-    auto index = static_cast<offset::size_type>(-1);
-    for (auto&& field : record.fields()) {
-      ++index;
-      VAST_ASSERT(!field.name.empty());
-      // Check whether the field name is a prefix of the key to resolve.
-      auto [name_mismatch, key_mismatch] = std::mismatch(
-        field.name.begin(), field.name.end(), key.begin(), key.end());
-      if (name_mismatch == field.name.end()) {
-        // If it's an exact match we already have our result.
-        if (key_mismatch == key.end())
-          return offset{index};
-        // Otherwise, if the remainder begings with the . separator and the
-        // nested type is a record type, we can recurse and try to match the
-        // remainder.
-        if (*key_mismatch++ != '.')
-          continue;
-        if (const auto* nested = caf::get_if<record_type>(&field.type)) {
-          if (auto result
-              = self(self, *nested, key.substr(key_mismatch - key.begin()))) {
-            result->insert(result->begin(), index);
-            return result;
-          }
-        }
-      }
+  auto index = offset{0};
+  auto history = std::vector{std::pair{
+    table().type_as_record_type_v0(),
+    key,
+  }};
+  while (!index.empty()) {
+    const auto& [record, remaining_key] = history.back();
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // This is our exit condition: If we arrived at the end of a record, we need
+    // to step out one layer. We must also reset the target key at this point.
+    if (index.back() >= fields->size() || remaining_key.empty()) {
+      history.pop_back();
+      index.pop_back();
+      ++index.back();
+      continue;
     }
-    return {};
-  };
-  return do_resolve_key(do_resolve_key, *this, key);
+    const auto* field = record->fields()->Get(index.back());
+    VAST_ASSERT(field);
+    const auto* field_name = field->name();
+    VAST_ASSERT(field_name);
+    const auto* field_type = resolve_transparent(field->type_nested_root());
+    VAST_ASSERT(field_type);
+    switch (field_type->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0: {
+        if (remaining_key == field_name->string_view())
+          return index;
+        ++index.back();
+        break;
+      }
+      case fbs::type::Type::record_type_v0: {
+        auto [remaining_key_mismatch, field_name_mismatch]
+          = std::mismatch(remaining_key.begin(), remaining_key.end(),
+                          field_name->begin(), field_name->end());
+        if (field_name_mismatch == field_name->end()
+            && remaining_key_mismatch == remaining_key.end())
+          return index;
+        if (field_name_mismatch == field_name->end()
+            && remaining_key_mismatch != remaining_key.end()
+            && *remaining_key_mismatch == '.') {
+          history.emplace_back(field_type->type_as_record_type_v0(),
+                               remaining_key.substr(1 + remaining_key_mismatch
+                                                    - remaining_key.begin()));
+          index.push_back(0);
+        } else {
+          ++index.back();
+        }
+        break;
+      }
+      case fbs::type::Type::tagged_type_v0:
+        __builtin_unreachable();
+        break;
+    }
+  }
+  return {};
 }
 
 std::vector<offset>
