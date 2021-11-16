@@ -381,6 +381,42 @@ TEST(record_type name resolving) {
   CHECK_EQUAL(rt.resolve_key_suffix("2.r.a"), (std::vector<offset>{}));
   CHECK_EQUAL(rt.resolve_key_suffix("i"), (std::vector<offset>{{0}}));
   CHECK_EQUAL(rt.resolve_key_suffix(""), (std::vector<offset>{}));
+  CHECK_EQUAL(rt.resolve_key_suffix("t.u.r2.r.a", "t.u"),
+              (std::vector<offset>{{3, 1, 0}}));
+  CHECK_EQUAL(rt.resolve_key_suffix("u.r2.r.a", "t.u"),
+              (std::vector<offset>{{3, 1, 0}}));
+  CHECK_EQUAL(rt.resolve_key_suffix(".u.r2.r.a", "t.u"),
+              (std::vector<offset>{}));
+  const auto zeek_conn = type{
+    "zeek.conn",
+    record_type{
+      {"ts", type{"timestamp", time_type{}}},
+      {"uid", type{string_type{}, {{"index", "hash"}}}},
+      {
+        "id",
+        type{"zeek.conn_id",
+             record_type{
+               {"orig_h", address_type{}},
+               {"orig_p", type{"port", count_type{}}},
+               {"resp_h", address_type{}},
+               {"resp_p", type{"port", count_type{}}},
+             }},
+      },
+      {"proto", string_type{}},
+    },
+  };
+  CHECK_EQUAL(caf::get<record_type>(zeek_conn).resolve_key_suffix(
+                "resp_p", zeek_conn.name()),
+              (std::vector<offset>{{2, 3}}));
+  CHECK_EQUAL(caf::get<record_type>(zeek_conn).resolve_key_suffix("resp_p"),
+              (std::vector<offset>{{2, 3}}));
+  const auto zeek_conn_flat = flatten(zeek_conn);
+  CHECK_EQUAL(caf::get<record_type>(zeek_conn_flat)
+                .resolve_key_suffix("resp_p", zeek_conn.name()),
+              (std::vector<offset>{{5}}));
+  CHECK_EQUAL(
+    caf::get<record_type>(zeek_conn_flat).resolve_key_suffix("resp_p"),
+    (std::vector<offset>{{5}}));
 }
 
 TEST(record_type flat index computation) {
