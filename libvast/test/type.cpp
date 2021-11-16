@@ -602,7 +602,7 @@ TEST(record_type merging) {
               fmt::format("{}", expected_result_prefer_left));
   REQUIRE(!result_fail);
   CHECK_EQUAL(result_fail.error(), expected_result_fail);
-};
+}
 
 TEST(type inference) {
   CHECK_EQUAL(type::infer(caf::none), none_type{});
