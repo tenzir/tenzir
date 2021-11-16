@@ -87,7 +87,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   if (!bound_port)
     return caf::make_message(std::move(bound_port.error()));
   auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
-  VAST_INFO("vast-{} is listening on {}", version::version, listen_addr);
+  VAST_INFO("VAST ({}) is listening on {}", version::version, listen_addr);
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
