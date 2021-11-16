@@ -2072,7 +2072,7 @@ std::optional<record_type> record_type::transform(
           std::move(replacements.rbegin(), replacements.rend(),
                     std::back_inserter(new_fields));
           ++current;
-        } while (current->first == index);
+        } while (current != end && current->first == index);
       } else if (index_mismatch == index.end()) {
         // The index is a prefix of the target offset for the next
         // transformation, so we recurse one level deeper.
@@ -2085,7 +2085,7 @@ std::optional<record_type> record_type::transform(
             std::move(*sub_result),
           });
         // Check for invalid arguments on the way in.
-        VAST_ASSERT(index != current->first,
+        VAST_ASSERT(current == end || index != current->first,
                     "cannot apply transformations to both a nested record type "
                     "and its children at the same time.");
       } else {
