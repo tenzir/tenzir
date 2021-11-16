@@ -15,7 +15,6 @@
 #include "vast/error.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/legacy_type.hpp"
-#include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
 #include <caf/sum_type.hpp>
@@ -1790,36 +1789,103 @@ record_type::resolve_key(std::string_view key) const noexcept {
 std::vector<offset>
 record_type::resolve_key_suffix(std::string_view key,
                                 std::string_view prefix) const noexcept {
+  if (key.empty())
+    return {};
   auto result = std::vector<offset>{};
-  // TODO: Once we support queries for nested records, we must not just iterate
-  // over leafs here, but rather include nested record types.
-  for (auto&& [_, offset] : leaves()) {
-    const auto name = this->key(offset);
-    auto [name_mismatch, key_mismatch]
-      = std::mismatch(name.rbegin(), name.rend(), key.rbegin(), key.rend());
-    if (key_mismatch == key.rend()) {
-      if (name_mismatch == name.rend() || *name_mismatch == '.')
-        result.push_back(std::move(offset));
-    } else if (!prefix.empty() && *key_mismatch == '.'
-               && name_mismatch == name.rend()) {
-      // TODO: This handles the special case where the field name suffix
-      // includes the name of the type that we're looking at even. This is done
-      // for backwards compatibility reasons, as otherwise some queries would no
-      // longer function. We should get rid of this long term and just have
-      // these queries error.
-      auto [prefix_mismatch, remaining_key_mismatch] = std::mismatch(
-        prefix.rbegin(), prefix.rend(), ++key_mismatch, key.rend());
-      if (remaining_key_mismatch == key.rend()) {
-        if (prefix_mismatch == prefix.rend()) {
-          result.push_back(std::move(offset));
-        } else if (*prefix_mismatch == '.') {
-          VAST_WARN("partial match '{}' against type name '{}' will be "
-                    "removed in the future",
-                    fmt::join(prefix_mismatch.base(), prefix.end(), ""),
-                    prefix);
-          result.push_back(std::move(offset));
+  auto index = offset{0};
+  auto history = std::vector{
+    std::pair{
+      table().type_as_record_type_v0(),
+      std::vector{key},
+    },
+  };
+  const auto* prefix_begin = prefix.begin();
+  while (prefix_begin != prefix.end()) {
+    const auto [prefix_mismatch, key_mismatch]
+      = std::mismatch(prefix_begin, prefix.end(), key.begin(), key.end());
+    if (prefix_mismatch == prefix.end() && key_mismatch != key.end()
+        && *key_mismatch == '.')
+      history[0].second.push_back(key.substr(1 + key_mismatch - key.begin()));
+    prefix_begin = std::find(prefix_begin, prefix.end(), '.');
+    if (prefix_begin == prefix.end())
+      break;
+    ++prefix_begin;
+  }
+  while (!index.empty()) {
+    auto& [record, remaining_keys] = history.back();
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // This is our exit condition: If we arrived at the end of a record, we
+    // need to step out one layer. We must also reset the target key at this
+    // point.
+    if (index.back() >= fields->size()) {
+      history.pop_back();
+      index.pop_back();
+      ++index.back();
+      continue;
+    }
+    const auto* field = record->fields()->Get(index.back());
+    VAST_ASSERT(field);
+    const auto* field_name = field->name();
+    VAST_ASSERT(field_name);
+    const auto* field_type = resolve_transparent(field->type_nested_root());
+    VAST_ASSERT(field_type);
+    switch (field_type->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0: {
+        for (const auto& remaining_key : remaining_keys) {
+          // TODO: Once we no longer support flattening types, we can switch to
+          // an equality comparison between field_name and remaining_key here.
+          const auto [field_name_mismatch, remaining_key_mismatch]
+            = std::mismatch(field_name->rbegin(), field_name->rend(),
+                            remaining_key.rbegin(), remaining_key.rend());
+          if (remaining_key_mismatch == remaining_key.rend()
+              && (field_name_mismatch == field_name->rend()
+                  || *field_name_mismatch == '.')) {
+            result.push_back(index);
+            break;
+          }
         }
+        ++index.back();
+        break;
       }
+      case fbs::type::Type::record_type_v0: {
+        using history_entry = decltype(history)::value_type;
+        auto next = history_entry{
+          field_type->type_as_record_type_v0(),
+          history[0].second,
+        };
+        for (const auto& remaining_key : remaining_keys) {
+          auto [remaining_key_mismatch, field_name_mismatch]
+            = std::mismatch(remaining_key.begin(), remaining_key.end(),
+                            field_name->begin(), field_name->end());
+          if (field_name_mismatch == field_name->end()
+              && remaining_key_mismatch != remaining_key.end()
+              && *remaining_key_mismatch == '.') {
+            next.second.emplace_back(remaining_key.substr(
+              1 + remaining_key_mismatch - remaining_key.begin()));
+          }
+        }
+        history.push_back(std::move(next));
+        index.push_back(0);
+        break;
+      }
+      case fbs::type::Type::tagged_type_v0:
+        __builtin_unreachable();
+        break;
     }
   }
   return result;
