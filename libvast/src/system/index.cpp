@@ -356,9 +356,8 @@ caf::error index_state::load_from_disk() {
                 std::exchange(synopses, {}))
       .then(
         [this](atom::ok) {
-          VAST_VERBOSE("{} successfully loaded meta index from disk and will "
-                       "start processing queries",
-                       *self);
+          VAST_INFO("{} finished initalizing and is ready to accept queries",
+                    *self);
           this->accept_queries = true;
         },
         [this](caf::error& err) {
