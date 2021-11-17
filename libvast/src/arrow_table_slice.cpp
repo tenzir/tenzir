@@ -123,73 +123,83 @@ private:
 // -- decoding of Arrow column arrays ------------------------------------------
 
 // Safe ourselves redundant boilerplate code for dispatching to the visitor.
-#define DECODE_TRY_DISPATCH(vast_type)                                         \
-  if (auto dt = caf::get_if<vast_type##_type>(&t))                             \
-  return f(arr, *dt)
+template <concrete_type Type, class Array>
+struct decodable : std::false_type {};
+
+template <>
+struct decodable<bool_type, arrow::BooleanArray> : std::true_type {};
+
+template <class TypeClass>
+  requires(arrow::is_floating_type<TypeClass>::value)
+struct decodable<real_type, arrow::NumericArray<TypeClass>> : std::true_type {};
+
+template <class TypeClass>
+  requires(std::is_integral_v<typename TypeClass::c_type>&&
+             std::is_signed_v<typename TypeClass::c_type>)
+struct decodable<integer_type, arrow::NumericArray<TypeClass>>
+  : std::true_type {};
+
+template <class TypeClass>
+  requires(std::is_integral_v<typename TypeClass::c_type>&&
+             std::is_signed_v<typename TypeClass::c_type>)
+struct decodable<duration_type, arrow::NumericArray<TypeClass>>
+  : std::true_type {};
+
+template <class TypeClass>
+  requires(
+    std::is_integral_v<
+      typename TypeClass::c_type> && !std::is_signed_v<typename TypeClass::c_type>)
+struct decodable<count_type, arrow::NumericArray<TypeClass>> : std::true_type {
+};
+
+template <class TypeClass>
+  requires(
+    std::is_integral_v<
+      typename TypeClass::c_type> && !std::is_signed_v<typename TypeClass::c_type>)
+struct decodable<enumeration_type, arrow::NumericArray<TypeClass>>
+  : std::true_type {};
+
+template <>
+struct decodable<address_type, arrow::FixedSizeBinaryArray> : std::true_type {};
+
+template <>
+struct decodable<subnet_type, arrow::FixedSizeBinaryArray> : std::true_type {};
+
+template <>
+struct decodable<string_type, arrow::StringArray> : std::true_type {};
+
+template <>
+struct decodable<pattern_type, arrow::StringArray> : std::true_type {};
+
+template <>
+struct decodable<time_type, arrow::TimestampArray> : std::true_type {};
+
+template <>
+struct decodable<list_type, arrow::ListArray> : std::true_type {};
+
+template <>
+struct decodable<map_type, arrow::ListArray> : std::true_type {};
+
+template <>
+struct decodable<record_type, arrow::StructArray> : std::true_type {};
 
 template <class F>
-void decode(const type& t, const arrow::BooleanArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(bool);
-  VAST_WARN("{} expected to decode a boolean but got a {}", __func__, t);
-}
-
-template <class T, class F>
-void decode(const type& t, const arrow::NumericArray<T>& arr, F& f) {
-  if constexpr (arrow::is_floating_type<T>::value) {
-    DECODE_TRY_DISPATCH(real);
-    VAST_WARN("{} expected to decode a real but got a {}", __func__, t);
-  } else if constexpr (std::is_signed_v<typename T::c_type>) {
-    DECODE_TRY_DISPATCH(integer);
-    DECODE_TRY_DISPATCH(duration);
-    VAST_WARN("{} expected to decode an integer or timespan but got a "
-              "{}",
-              __func__, t);
-  } else {
-    DECODE_TRY_DISPATCH(count);
-    DECODE_TRY_DISPATCH(enumeration);
-    VAST_WARN("{} expected to decode a count or enumeration but got a "
-              "{}",
-              __func__, t);
-  }
-}
-
-template <class F>
-void decode(const type& t, const arrow::FixedSizeBinaryArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(address);
-  DECODE_TRY_DISPATCH(subnet);
-  VAST_WARN("{} expected to decode an address or subnet but got a {}", __func__,
-            t);
-}
-
-template <class F>
-void decode(const type& t, const arrow::StringArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(string);
-  DECODE_TRY_DISPATCH(pattern);
-  VAST_WARN("{} expected to decode a string or pattern but got a {}", __func__,
-            t);
-}
-
-template <class F>
-void decode(const type& t, const arrow::TimestampArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(time);
-  VAST_WARN("{} expected to decode a timestamp but got a {}", __func__, t);
-}
-
-template <class F>
-void decode(const type& t, const arrow::ListArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(list);
-  DECODE_TRY_DISPATCH(map);
-  VAST_WARN("{} expected to decode a list or map but got a {}", __func__, t);
-}
-
-template <class F>
-void decode(const type& t, const arrow::StructArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(record);
-  VAST_WARN("{} expected to decode a record but got a {}", __func__, t);
-}
-
-template <class F>
-void decode(const type& t, const arrow::Array& arr, F& f) {
+auto decode(const type& t, const arrow::Array& arr, F& f) ->
+  typename F::result_type {
+  auto dispatch = [&]<class Array>(const Array& arr) {
+    auto visitor
+      = [&]<concrete_type Type>(const Type& t) -> typename F::result_type {
+      if constexpr (decodable<Type, Array>::value)
+        return f(arr, t);
+      else if constexpr (std::is_void_v<typename F::result_type>)
+        VAST_ERROR("unable to decode {} into {}", detail::pretty_type_name(arr),
+                   t);
+      else
+        die(fmt::format("unable to decode {} into {}",
+                        detail::pretty_type_name(arr), t));
+    };
+    return caf::visit(visitor, t);
+  };
   switch (arr.type_id()) {
     default: {
       VAST_WARN("{} got an unrecognized Arrow type ID", __func__);
@@ -197,76 +207,74 @@ void decode(const type& t, const arrow::Array& arr, F& f) {
     }
     // -- handle basic types ---------------------------------------------------
     case arrow::Type::BOOL: {
-      return decode(t, static_cast<const arrow::BooleanArray&>(arr), f);
+      return dispatch(static_cast<const arrow::BooleanArray&>(arr));
     }
     case arrow::Type::STRING: {
-      return decode(t, static_cast<const arrow::StringArray&>(arr), f);
+      return dispatch(static_cast<const arrow::StringArray&>(arr));
     }
     case arrow::Type::TIMESTAMP: {
-      return decode(t, static_cast<const arrow::TimestampArray&>(arr), f);
+      return dispatch(static_cast<const arrow::TimestampArray&>(arr));
     }
     case arrow::Type::FIXED_SIZE_BINARY: {
       using array_type = arrow::FixedSizeBinaryArray;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     // -- handle container types -----------------------------------------------
     case arrow::Type::LIST: {
-      return decode(t, static_cast<const arrow::ListArray&>(arr), f);
+      return dispatch(static_cast<const arrow::ListArray&>(arr));
     }
     case arrow::Type::STRUCT: {
-      return decode(t, static_cast<const arrow::StructArray&>(arr), f);
+      return dispatch(static_cast<const arrow::StructArray&>(arr));
     }
     // -- lift floating point values to real -----------------------------
     case arrow::Type::HALF_FLOAT: {
       using array_type = arrow::NumericArray<arrow::HalfFloatType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::FLOAT: {
       using array_type = arrow::NumericArray<arrow::FloatType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::DOUBLE: {
       using array_type = arrow::NumericArray<arrow::DoubleType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     // -- lift singed values to integer ----------------------------------
     case arrow::Type::INT8: {
       using array_type = arrow::NumericArray<arrow::Int8Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::INT16: {
       using array_type = arrow::NumericArray<arrow::Int16Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::INT32: {
       using array_type = arrow::NumericArray<arrow::Int32Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::INT64: {
       using array_type = arrow::NumericArray<arrow::Int64Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     // -- lift unsinged values to count ----------------------------------
     case arrow::Type::UINT8: {
       using array_type = arrow::NumericArray<arrow::UInt8Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::UINT16: {
       using array_type = arrow::NumericArray<arrow::UInt16Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::UINT32: {
       using array_type = arrow::NumericArray<arrow::UInt32Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::UINT64: {
       using array_type = arrow::NumericArray<arrow::UInt64Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
   }
 }
-
-#undef DECODE_TRY_DISPATCH
 
 // -- access to a single element -----------------------------------------------
 
@@ -382,6 +390,8 @@ auto record_at(const record_type& type, const arrow::StructArray& arr,
 
 class row_picker {
 public:
+  using result_type = void;
+
   row_picker(size_t row) : row_(detail::narrow_cast<int64_t>(row)) {
     // nop
   }
@@ -481,6 +491,8 @@ data_view value_at(const type& t, const Array& arr, size_t row) {
 
 class index_applier {
 public:
+  using result_type = void;
+
   index_applier(size_t offset, value_index& idx)
     : offset_(detail::narrow_cast<int64_t>(offset)), idx_(idx) {
     // nop
