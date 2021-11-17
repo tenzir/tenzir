@@ -1744,9 +1744,57 @@ size_t record_type::num_leaves() const noexcept {
 }
 
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
-  for (const auto& [_, offset] : leaves())
-    if (flat_index-- == 0)
-      return offset;
+  size_t current_flat_index = 0;
+  auto index = offset{0};
+  auto history = std::vector{table().type_as_record_type_v0()};
+  while (!index.empty()) {
+    const auto* record = history.back();
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // This is our exit condition: If we arrived at the end of a record, we need
+    // to step out one layer. We must also reset the target key at this point.
+    if (index.back() >= fields->size()) {
+      history.pop_back();
+      index.pop_back();
+      ++index.back();
+      continue;
+    }
+    const auto* field = record->fields()->Get(index.back());
+    VAST_ASSERT(field);
+    const auto* field_type = resolve_transparent(field->type_nested_root());
+    VAST_ASSERT(field_type);
+    switch (field_type->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0: {
+        if (current_flat_index == flat_index)
+          return index;
+        ++current_flat_index;
+        ++index.back();
+        break;
+      }
+      case fbs::type::Type::record_type_v0: {
+        history.emplace_back(field_type->type_as_record_type_v0());
+        index.push_back(0);
+        break;
+      }
+      case fbs::type::Type::tagged_type_v0:
+        __builtin_unreachable();
+        break;
+    }
+  }
   die("index out of bounds");
 }
 
