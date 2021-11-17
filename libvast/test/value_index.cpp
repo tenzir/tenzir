@@ -17,7 +17,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/events.hpp"
@@ -65,7 +65,7 @@ TEST(bool) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   value_index_ptr idx2;
-  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   t = idx2->lookup(relational_operator::equal, make_data_view(true));
   CHECK_EQUAL(to_string(unbox(t)), "11010001");
 }
@@ -100,7 +100,7 @@ TEST(integer) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   value_index_ptr idx2;
-  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   less_than_leet
     = idx2->lookup(relational_operator::less, make_data_view(integer{31337}));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");

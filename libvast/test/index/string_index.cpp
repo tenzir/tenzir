@@ -12,7 +12,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/table_slice.hpp"
@@ -96,7 +96,7 @@ TEST(string) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   auto idx2 = string_index{legacy_string_type{}};
-  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(result)), "1001100000");
   result = idx2.lookup(relational_operator::equal, make_data_view("bar"));

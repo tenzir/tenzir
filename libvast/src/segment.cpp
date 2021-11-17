@@ -27,7 +27,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <flatbuffers/base.h> // FLATBUFFERS_MAX_BUFFER_SIZE
 

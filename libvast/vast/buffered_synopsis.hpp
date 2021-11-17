@@ -10,8 +10,11 @@
 
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/bloom_filter_synopsis.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/synopsis.hpp"
+
+#include <caf/fwd.hpp>
 
 namespace vast {
 

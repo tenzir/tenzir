@@ -18,9 +18,10 @@
 #include "vast/synopsis_factory.hpp"
 #include "vast/time_synopsis.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
+#include <caf/deserializer.hpp>
 #include <caf/error.hpp>
+#include <caf/sec.hpp>
 
 #include <typeindex>
 
@@ -138,11 +139,10 @@ caf::error unpack(const fbs::synopsis::v0& synopsis, synopsis_ptr& ptr) {
       vast::time{} + vast::duration{ts->start()},
       vast::time{} + vast::duration{ts->end()});
   else if (auto os = synopsis.opaque_synopsis()) {
-    caf::binary_deserializer sink(
-      nullptr, reinterpret_cast<const char*>(os->data()->data()),
-      os->data()->size());
-    if (auto error = sink(ptr))
-      return error;
+    vast::detail::legacy_deserializer sink(as_bytes(*os->data()));
+    if (!sink(ptr))
+      return caf::make_error(ec::parse_error, "opaque_synopsis not "
+                                              "deserializable");
   } else {
     return caf::make_error(ec::format_error, "no synopsis type");
   }

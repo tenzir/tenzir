@@ -8,6 +8,7 @@
 
 #include "vast/chunk.hpp"
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
@@ -199,12 +200,32 @@ caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
   const auto data = buffer.get();
   if (auto err = source.apply_raw(size, data)) {
     x = nullptr;
-    return caf::none;
+    return err;
   }
   x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
     static_cast<void>(buffer);
   });
   return caf::none;
+}
+
+bool inspect(detail::legacy_deserializer& source, chunk_ptr& x) {
+  uint32_t size = 0;
+  if (!source(size))
+    return false;
+  if (size == 0) {
+    x = nullptr;
+    return true;
+  }
+  auto buffer = std::make_unique<chunk::value_type[]>(size);
+  const auto data = buffer.get();
+  if (!source.apply_raw(size, data)) {
+    x = nullptr;
+    return false; // TODO originally returned true
+  }
+  x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
+    static_cast<void>(buffer);
+  });
+  return true;
 }
 
 // -- implementation details ---------------------------------------------------

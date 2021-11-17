@@ -12,6 +12,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/detail/append.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/format/test.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
@@ -227,12 +228,7 @@ void table_slices::run() {
   test_copy();
   test_manual_serialization();
   test_smart_pointer_serialization();
-  test_message_serialization();
   test_append_column_to_index();
-}
-
-caf::binary_deserializer table_slices::make_source() {
-  return caf::binary_deserializer{sys, buf};
 }
 
 caf::binary_serializer table_slices::make_sink() {
@@ -292,8 +288,7 @@ void table_slices::test_manual_serialization() {
   auto sink = make_sink();
   CHECK_EQUAL(inspect(sink, slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
-  auto source = make_source();
-  CHECK_EQUAL(inspect(source, slice2), caf::none);
+  CHECK_EQUAL(vast::detail::legacy_deserialize(buf, slice2), true);
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
@@ -308,30 +303,10 @@ void table_slices::test_smart_pointer_serialization() {
   auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
-  auto source = make_source();
-  CHECK_EQUAL(source(slice2), caf::none);
+  CHECK_EQUAL(vast::detail::legacy_deserialize(buf, slice2), true);
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
-}
-
-void table_slices::test_message_serialization() {
-  MESSAGE(">> test message serialization");
-  MESSAGE("make slices");
-  auto slice1 = caf::make_message(make_slice());
-  caf::message slice2;
-  MESSAGE("save content of the first slice into the buffer");
-  auto sink = make_sink();
-  CHECK_EQUAL(sink(slice1), caf::none);
-  MESSAGE("load content for the second slice from the buffer");
-  auto source = make_source();
-  CHECK_EQUAL(source(slice2), caf::none);
-  MESSAGE("check result of serialization roundtrip");
-  REQUIRE(slice2.match_elements<table_slice>());
-  CHECK_EQUAL(slice1.get_as<table_slice>(0), slice2.get_as<table_slice>(0));
-  // FIXME: Make the table slice builders use `table_slice_encoding` as key.
-  // CHECK_EQUAL(slice2.get_as<table_slice>(0).encoding(),
-  //             builder->implementation_id());
 }
 
 void table_slices::test_append_column_to_index() {

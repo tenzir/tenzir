@@ -18,7 +18,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/expression_visitors.hpp"
@@ -88,7 +88,7 @@ TEST(serialization) {
   expression ex0, ex1;
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, expr0, expr1), caf::none);
-  CHECK_EQUAL(detail::deserialize(buf, ex0, ex1), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, ex0, ex1), true);
   auto d = caf::get_if<disjunction>(&ex1);
   REQUIRE(d);
   REQUIRE(!d->empty());

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
 
 namespace vast {

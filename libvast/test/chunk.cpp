@@ -10,7 +10,7 @@
 
 #include "vast/chunk.hpp"
 
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
@@ -56,7 +56,7 @@ TEST(serialization) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, x), caf::none);
   chunk_ptr y;
-  CHECK_EQUAL(detail::deserialize(buf, y), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_NOT_EQUAL(y, nullptr);
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }

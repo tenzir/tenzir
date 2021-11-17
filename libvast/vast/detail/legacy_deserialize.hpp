@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/as_bytes.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -15,6 +16,7 @@
 #include <caf/detail/ieee_754.hpp>
 #include <caf/detail/network_order.hpp>
 #include <caf/detail/type_traits.hpp>
+#include <caf/detail/uri_impl.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/meta/load_callback.hpp>
@@ -31,7 +33,8 @@
 
 namespace vast::detail {
 
-class legacy_deserializer { // an inspector for CAF inspect
+/// An inspector for CAF inspect
+class legacy_deserializer {
 public:
   static constexpr bool reads_state = false;
   static constexpr bool writes_state = true;
@@ -44,6 +47,14 @@ public:
   template <class... Ts>
   result_type operator()(Ts&&... xs) noexcept {
     return (apply(xs) && ...);
+  }
+
+  result_type apply_raw(size_t num_bytes, void* storage) {
+    if (num_bytes > bytes_.size())
+      return false;
+    memcpy(storage, bytes_.data(), num_bytes);
+    bytes_ = bytes_.subspan(num_bytes);
+    return true;
   }
 
 private:
@@ -76,6 +87,25 @@ private:
     if (!apply(tmp))
       return false;
     x = static_cast<T>(tmp);
+    return true;
+  }
+
+  template <class F, class S>
+    requires(
+      caf::detail::is_serializable<typename std::remove_const<F>::type>::value&&
+        caf::detail::is_serializable<S>::value)
+  result_type apply(std::pair<F, S>& xs) {
+    using t0 = typename std::remove_const<F>::type;
+    if (!apply(const_cast<t0&>(xs.first)))
+      return false;
+    return apply(xs.second);
+  }
+
+  result_type apply(caf::uri& x) {
+    auto impl = caf::make_counted<caf::detail::uri_impl>();
+    if (!apply(*impl))
+      return false;
+    x = caf::uri{std::move(impl)};
     return true;
   }
 
@@ -157,6 +187,11 @@ private:
     return true;
   }
 
+  result_type apply(caf::none_t& x) {
+    x = caf::none;
+    return true;
+  }
+
   template <class Rep, class Period>
     requires(std::is_integral<Rep>::value)
   result_type apply(std::chrono::duration<Rep, Period>& x) {
@@ -180,20 +215,20 @@ private:
     return true;
   }
 
-  template <class Clock, class Duration>
-  bool apply(std::chrono::time_point<Clock, Duration>& t) {
-    Duration dur{};
-    if (!apply(dur))
-      return false;
-    t = std::chrono::time_point<Clock, Duration>{dur};
-    return true;
-  }
-
   template <class T>
     requires(caf::detail::is_iterable<T>::value
              && !caf::detail::is_inspectable<legacy_deserializer, T>::value)
   result_type apply(T& xs) {
     return apply_sequence(xs);
+  }
+
+  template <class Clock, class Duration>
+  result_type apply(std::chrono::time_point<Clock, Duration>& t) {
+    Duration dur{};
+    if (!apply(dur))
+      return false;
+    t = std::chrono::time_point<Clock, Duration>{dur};
+    return true;
   }
 
   template <class T>
@@ -254,24 +289,19 @@ private:
     return true;
   }
 
-  result_type apply_raw(size_t num_bytes, void* storage) {
-    if (num_bytes > bytes_.size())
-      return false;
-    memcpy(storage, bytes_.data(), num_bytes);
-    bytes_ = bytes_.subspan(num_bytes);
-    return true;
-  }
-
   std::span<const std::byte> bytes_ = {};
 };
 
-template <class T>
-std::optional<T> legacy_deserialize(std::span<const std::byte> bytes) {
-  legacy_deserializer f{bytes};
-  T result{};
-  if (f(result))
-    return result;
-  return std::nullopt;
+/// Deserializes a sequence of objects from a byte buffer.
+/// @param buffer The vector of bytes to read from.
+/// @param xs The object to deserialize.
+/// @returns The status of the operation.
+/// @relates detail::serialize
+template <concepts::byte_container Buffer, class... Ts>
+  requires(!std::is_rvalue_reference_v<Ts> && ...)
+bool legacy_deserialize(const Buffer& buffer, Ts&... xs) {
+  legacy_deserializer f{as_bytes(buffer)};
+  return f(xs...);
 }
 
 } // namespace vast::detail

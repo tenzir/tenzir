@@ -14,6 +14,7 @@
 #include "vast/attribute.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
@@ -254,8 +255,8 @@ public:
              caf::meta::omittable_if_empty(), x.attributes_);
   }
 
-  //  friend auto inspect(caf::binary_deserializer& , legacy_address_type& ) =
-  //  delete;
+  friend auto inspect(caf::binary_deserializer&, legacy_abstract_type&)
+    = delete;
 
 protected:
   virtual bool equals(const legacy_abstract_type& other) const;
@@ -1166,6 +1167,8 @@ auto inspect(Inspector& f, legacy_type& x) {
   return f(caf::meta::type_name("vast.type"), caf::meta::omittable(), type_tag,
            helper);
 }
+
+auto inspect(caf::binary_deserializer& f, legacy_type& x) = delete;
 
 } // namespace vast
 

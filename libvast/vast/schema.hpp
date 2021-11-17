@@ -14,6 +14,7 @@
 #include "vast/concept/printable/string/string.hpp"
 #include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/legacy_type.hpp"
@@ -77,6 +78,7 @@ public:
 
   friend void serialize(caf::serializer& sink, const schema& sch);
   friend void serialize(caf::deserializer& source, schema& sch);
+  friend bool inspect(detail::legacy_deserializer& source, schema& sch);
 
 private:
   std::vector<value_type> types_;

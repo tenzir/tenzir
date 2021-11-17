@@ -12,6 +12,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/project.hpp"
@@ -363,8 +364,7 @@ TEST(roundtrip) {
   std::vector<char> buf;
   caf::binary_serializer sink{nullptr, buf};
   CHECK_EQUAL(inspect(sink, slice), caf::none);
-  caf::binary_deserializer source{nullptr, buf};
-  CHECK_EQUAL(inspect(source, slice_copy), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, slice_copy), true);
   CHECK_EQUAL(slice_copy.offset(), 42u);
   CHECK_EQUAL(slice, slice_copy);
 }

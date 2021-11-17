@@ -10,7 +10,7 @@
 
 #include "vast/segment.hpp"
 
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/ids.hpp"
 #include "vast/segment_builder.hpp"
@@ -51,7 +51,7 @@ TEST(serialization) {
   chunk_ptr chk;
   std::vector<char> buf;
   REQUIRE_EQUAL(detail::serialize(buf, x.chunk()), caf::none);
-  REQUIRE_EQUAL(detail::deserialize(buf, chk), caf::none);
+  REQUIRE_EQUAL(detail::legacy_deserialize(buf, chk), true);
   REQUIRE_NOT_EQUAL(chk, nullptr);
   auto y = segment::make(chk);
   REQUIRE(y);

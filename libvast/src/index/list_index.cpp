@@ -10,13 +10,13 @@
 
 #include "vast/base.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/value_index_factory.hpp"
 
-#include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
@@ -47,14 +47,28 @@ list_index::list_index(vast::legacy_type t, caf::settings opts)
 
 caf::error list_index::serialize(caf::serializer& sink) const {
   return caf::error::eval(
-    [&] { return value_index::serialize(sink); },
-    [&] { return sink(elements_, size_, max_size_, value_type_); });
+    [&] {
+      return value_index::serialize(sink);
+    },
+    [&] {
+      return sink(elements_, size_, max_size_, value_type_);
+    });
 }
 
 caf::error list_index::deserialize(caf::deserializer& source) {
   return caf::error::eval(
-    [&] { return value_index::deserialize(source); },
-    [&] { return source(elements_, size_, max_size_, value_type_); });
+    [&] {
+      return value_index::deserialize(source);
+    },
+    [&] {
+      return source(elements_, size_, max_size_, value_type_);
+    });
+}
+
+bool list_index::deserialize(detail::legacy_deserializer& source) {
+  if (!value_index::deserialize(source))
+    return false;
+  return source(elements_, size_, max_size_, value_type_);
 }
 
 bool list_index::append_impl(data_view x, id pos) {

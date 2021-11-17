@@ -10,7 +10,7 @@
 
 #include "vast/detail/range_map.hpp"
 
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/test/test.hpp"
 
@@ -185,7 +185,7 @@ TEST(range_map serialization) {
   x.insert(20, 30, 'c');
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, x), caf::none);
-  CHECK_EQUAL(detail::deserialize(buf, y), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_EQUAL(y.size(), 3u);
   auto i = y.lookup(50);
   REQUIRE(i);

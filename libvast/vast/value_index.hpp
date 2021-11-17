@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
@@ -80,6 +83,8 @@ public:
 
   virtual caf::error deserialize(caf::deserializer& source);
 
+  virtual bool deserialize(detail::legacy_deserializer& source);
+
 protected:
   [[nodiscard]] const ewah_bitmap& mask() const;
   [[nodiscard]] const ewah_bitmap& none() const;
@@ -105,10 +110,16 @@ caf::error inspect(caf::serializer& sink, const value_index& x);
 caf::error inspect(caf::deserializer& source, value_index& x);
 
 /// @relates value_index
+bool inspect(detail::legacy_deserializer& source, value_index& x);
+
+/// @relates value_index
 caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
 
 /// @relates value_index
 caf::error inspect(caf::deserializer& source, value_index_ptr& x);
+
+/// @relates value_index
+bool inspect(detail::legacy_deserializer& source, value_index_ptr& x);
 
 /// Serialize the value index into a chunk.
 vast::chunk_ptr chunkify(const value_index_ptr& idx);
