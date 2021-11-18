@@ -2060,13 +2060,13 @@ size_t record_type::flat_index(const offset& index) const noexcept {
   return result;
 }
 
-record_type::transformation_fun record_type::drop() noexcept {
+record_type::transformation::function_type record_type::drop() noexcept {
   return [](const field_view&) noexcept -> std::vector<struct field> {
     return {};
   };
 }
 
-record_type::transformation_fun
+record_type::transformation::function_type
 record_type::assign(std::vector<struct field> fields) noexcept {
   return [fields = std::move(fields)](
            const field_view&) noexcept -> std::vector<struct field> {
@@ -2074,7 +2074,7 @@ record_type::assign(std::vector<struct field> fields) noexcept {
   };
 }
 
-record_type::transformation_fun
+record_type::transformation::function_type
 record_type::insert_before(std::vector<struct field> fields) noexcept {
   return [fields = std::move(fields)](const field_view& field) mutable noexcept
          -> std::vector<struct field> {
@@ -2084,7 +2084,7 @@ record_type::insert_before(std::vector<struct field> fields) noexcept {
   };
 }
 
-record_type::transformation_fun
+record_type::transformation::function_type
 record_type::insert_after(std::vector<struct field> fields) noexcept {
   return [fields = std::move(fields)](const field_view& field) mutable noexcept
          -> std::vector<struct field> {
@@ -2096,6 +2096,29 @@ record_type::insert_after(std::vector<struct field> fields) noexcept {
 
 std::optional<record_type> record_type::transform(
   std::vector<transformation> transformations) const noexcept {
+  // This function recursively calls do_transform while iterating over all the
+  // leaves of the record type backwards.
+  //
+  // Given this record type:
+  //
+  //   type x = record {
+  //     a: record {
+  //       b: integer,
+  //       c: integer,
+  //     },
+  //     d: record {
+  //       e: record {
+  //         f: integer,
+  //       },
+  //     },
+  //   }
+  //
+  // A transformation of `d.e` will cause `f` and `a` to be untouched and
+  // simply copied to the new record type, while all the other fields need to
+  // be re-created. This is essentially an optimization over the naive approach
+  // that recursively converts the record type into a list of record fields,
+  // and then modifies that. As an additional benefit this function allows for
+  // applying multiple transformations at the same time.
   const auto do_transform
     = [](const auto& do_transform, const record_type& self, offset index,
          auto& current, const auto end) noexcept -> std::optional<record_type> {
@@ -2108,19 +2131,18 @@ std::optional<record_type> record_type::transform(
     while (index.back() > 0 && current != end) {
       const auto& old_field = old_fields[--index.back()];
       // Compare the offsets of the next target with our current offset.
-      auto& target = *current;
-      const auto [index_mismatch, target_mismatch] = std::mismatch(
-        index.begin(), index.end(), target.first.begin(), target.first.end());
+      const auto [index_mismatch, current_index_mismatch]
+        = std::mismatch(index.begin(), index.end(), current->index.begin(),
+                        current->index.end());
       if (index_mismatch == index.end()
-          && target_mismatch == target.first.end()) {
+          && current_index_mismatch == current->index.end()) {
         // The offset matches exactly, so we apply the transformation.
         do {
-          auto replacements
-            = std::invoke(std::move(current->second), old_field);
+          auto replacements = std::invoke(std::move(current->fun), old_field);
           std::move(replacements.rbegin(), replacements.rend(),
                     std::back_inserter(new_fields));
           ++current;
-        } while (current != end && current->first == index);
+        } while (current != end && current->index == index);
       } else if (index_mismatch == index.end()) {
         // The index is a prefix of the target offset for the next
         // transformation, so we recurse one level deeper.
@@ -2133,12 +2155,12 @@ std::optional<record_type> record_type::transform(
             std::move(*sub_result),
           });
         // Check for invalid arguments on the way in.
-        VAST_ASSERT(current == end || index != current->first,
+        VAST_ASSERT(current == end || index != current->index,
                     "cannot apply transformations to both a nested record type "
                     "and its children at the same time.");
       } else {
         // Check for invalid arguments on the way out.
-        VAST_ASSERT(target_mismatch != target.first.end(),
+        VAST_ASSERT(current_index_mismatch != current->index.end(),
                     "cannot apply transformations to both a nested record type "
                     "and its children at the same time.");
         // We don't have a match and we also don't have a transformation, so
@@ -2167,7 +2189,7 @@ std::optional<record_type> record_type::transform(
   // Verify that transformations are sorted in order.
   VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end(),
                              [](const auto& lhs, const auto& rhs) noexcept {
-                               return lhs.first <= rhs.first;
+                               return lhs.index <= rhs.index;
                              }));
   auto current = transformations.rbegin();
   auto result
@@ -2249,11 +2271,11 @@ merge(const record_type& lhs, const record_type& rhs,
   auto err = caf::error{};
   for (auto rfield : rfields) {
     if (const auto& lindex = lhs.resolve_key(rfield.name)) {
-      transformations.emplace_back(
+      transformations.push_back({
         *lindex,
-        [&, rfield = std::move(rfield)](
-          const record_type::field_view& lfield) mutable noexcept
-        -> std::vector<struct record_type::field> {
+        ([&, rfield = std::move(rfield)](
+           const record_type::field_view& lfield) mutable noexcept
+         -> std::vector<struct record_type::field> {
           if (auto result = caf::visit(do_merge(lfield, rfield), lfield.type,
                                        rfield.type)) {
             return {{
@@ -2264,9 +2286,10 @@ merge(const record_type& lhs, const record_type& rhs,
             err = std::move(result.error());
             return {};
           }
-        });
+        }),
+      });
     } else {
-      additions.push_back({std::string{rfield.name}, std::move(rfield.type)});
+      additions.push_back({std::string{rfield.name}, rfield.type});
     }
   }
   auto result = lhs.transform(std::move(transformations));

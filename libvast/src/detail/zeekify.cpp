@@ -45,22 +45,27 @@ record_type zeekify(record_type layout) {
       // Zeek logs. Its has the field name `ts`. For streaming JSON, some other
       // fields, e.g., `_path`, precede it.
       VAST_DEBUG("using timestamp type for field {}", field.name);
-      transformations.emplace_back(offset, record_type::assign({
-                                             {
-                                               "ts",
-                                               type{"timestamp", time_type{}},
-                                             },
-                                           }));
+      transformations.push_back({
+        offset,
+        record_type::assign({
+          {
+            "ts",
+            type{"timestamp", time_type{}},
+          },
+        }),
+      });
       found_event_timestamp = true;
     } else if (is_opaque_id(field)) {
       VAST_DEBUG("using hash index for field {}", field.name);
-      transformations.emplace_back(offset,
-                                   record_type::assign({
-                                     {
-                                       std::string{field.name},
-                                       type{field.type, {{"index", "hash"}}},
-                                     },
-                                   }));
+      transformations.push_back({
+        offset,
+        record_type::assign({
+          {
+            std::string{field.name},
+            type{field.type, {{"index", "hash"}}},
+          },
+        }),
+      });
     }
   }
   return layout;

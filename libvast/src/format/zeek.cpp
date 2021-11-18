@@ -439,10 +439,12 @@ caf::error reader::parse_header() {
                     "definition ({}) and the input data ({}",
                     detail::pretty_type_name(this), schema_field, layout_field);
         else {
-          transformations.emplace_back(
-            layout_index, record_type::assign({
-                            {std::string{layout_field.name}, schema_field.type},
-                          }));
+          transformations.push_back({
+            layout_index,
+            record_type::assign({
+              {std::string{layout_field.name}, schema_field.type},
+            }),
+          });
         }
       }
     }

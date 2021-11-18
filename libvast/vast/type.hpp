@@ -802,9 +802,13 @@ public:
 
   /// A transformation that can be applied to a record type; maps a valid offset
   /// to a function that transforms a field into other fields.
-  using transformation_fun
-    = std::function<std::vector<struct field>(const field_view&)>;
-  using transformation = std::pair<offset, transformation_fun>;
+  struct transformation {
+    using function_type
+      = std::function<std::vector<struct field>(const field_view&)>;
+
+    offset index;      ///< The index of the field to transform.
+    function_type fun; /// The transformation function to apply.
+  };
 
   /// The behavior of the merge function in case of conflicts.
   enum class merge_conflict {
@@ -899,17 +903,18 @@ public:
   [[nodiscard]] size_t flat_index(const offset& index) const noexcept;
 
   /// A transformation that drops fields.
-  static transformation_fun drop() noexcept;
+  static transformation::function_type drop() noexcept;
 
   /// A transformation that replaces a field.
-  static transformation_fun assign(std::vector<struct field> fields) noexcept;
+  static transformation::function_type
+  assign(std::vector<struct field> fields) noexcept;
 
   /// A transformation that inserts fields before the index.
-  static transformation_fun
+  static transformation::function_type
   insert_before(std::vector<struct field> fields) noexcept;
 
   /// A transformation that inserts fields after the index.
-  static transformation_fun
+  static transformation::function_type
   insert_after(std::vector<struct field> fields) noexcept;
 
   /// Creates a new record by applying a set of transformations to this record.
