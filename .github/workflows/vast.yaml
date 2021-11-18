@@ -11,11 +11,6 @@ on:
       - master
   pull_request:
     types: [opened, synchronize]
-    paths-ignore:
-      - 'pyvast'
-      - 'systemd'
-      - '.github/workflows/jupyter.yaml'
-      - '.github/workflows/pyvast.yaml'
   release:
     types: published
 env:
