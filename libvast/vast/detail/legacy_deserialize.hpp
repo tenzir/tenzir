@@ -49,7 +49,7 @@ public:
     return (apply(xs) && ...);
   }
 
-  result_type apply_raw(size_t num_bytes, void* storage) {
+  inline result_type apply_raw(size_t num_bytes, void* storage) {
     if (num_bytes > bytes_.size())
       return false;
     memcpy(storage, bytes_.data(), num_bytes);
@@ -80,9 +80,9 @@ private:
   }
 
   template <class T>
-    requires(std::is_enum<T>::value)
+    requires(std::is_enum_v<T>)
   result_type apply(T& x) {
-    using underlying = typename std::underlying_type<T>::type;
+    using underlying = typename std::underlying_type_t<T>;
     underlying tmp;
     if (!apply(tmp))
       return false;
@@ -92,16 +92,16 @@ private:
 
   template <class F, class S>
     requires(
-      caf::detail::is_serializable<typename std::remove_const<F>::type>::value&&
+      caf::detail::is_serializable<typename std::remove_const_t<F>>::value&&
         caf::detail::is_serializable<S>::value)
   result_type apply(std::pair<F, S>& xs) {
-    using t0 = typename std::remove_const<F>::type;
+    using t0 = typename std::remove_const_t<F>;
     if (!apply(const_cast<t0&>(xs.first)))
       return false;
     return apply(xs.second);
   }
 
-  result_type apply(caf::uri& x) {
+  inline result_type apply(caf::uri& x) {
     auto impl = caf::make_counted<caf::detail::uri_impl>();
     if (!apply(*impl))
       return false;
@@ -109,7 +109,7 @@ private:
     return true;
   }
 
-  result_type apply(bool& x) {
+  inline result_type apply(bool& x) {
     uint8_t tmp = 0;
     if (!apply(tmp))
       return false;
@@ -117,55 +117,55 @@ private:
     return true;
   }
 
-  result_type apply(int8_t& x) {
+  inline result_type apply(int8_t& x) {
     return apply_raw(sizeof(x), &x);
   }
 
-  result_type apply(uint8_t& x) {
+  inline result_type apply(uint8_t& x) {
     return apply_raw(sizeof(x), &x);
   }
 
-  result_type apply(int16_t& x) {
+  inline result_type apply(int16_t& x) {
     return apply_int(x);
   }
 
-  result_type apply(uint16_t& x) {
+  inline result_type apply(uint16_t& x) {
     return apply_int(x);
   }
 
-  result_type apply(int32_t& x) {
+  inline result_type apply(int32_t& x) {
     return apply_int(x);
   }
 
-  result_type apply(uint32_t& x) {
+  inline result_type apply(uint32_t& x) {
     return apply_int(x);
   }
 
-  result_type apply(int64_t& x) {
+  inline result_type apply(int64_t& x) {
     return apply_int(x);
   }
 
-  result_type apply(uint64_t& x) {
+  inline result_type apply(uint64_t& x) {
     return apply_int(x);
   }
 
   template <class T>
-    requires(std::is_integral<T>::value && !std::is_same<bool, T>::value)
+    requires(std::is_integral_v<T> && !std::is_same_v<bool, T>)
   result_type apply(T& x) {
     using type
-      = caf::detail::select_integer_type_t<sizeof(T), std::is_signed<T>::value>;
+      = caf::detail::select_integer_type_t<sizeof(T), std::is_signed_v<T>>;
     return apply(reinterpret_cast<type&>(x));
   }
 
-  result_type apply(float& x) {
+  inline result_type apply(float& x) {
     return apply_float(x);
   }
 
-  result_type apply(double& x) {
+  inline result_type apply(double& x) {
     return apply_float(x);
   }
 
-  result_type apply(long double& x) {
+  inline result_type apply(long double& x) {
     // The IEEE-754 conversion does not work for long double
     // => fall back to string serialization (even though it sucks).
     std::string tmp;
@@ -176,7 +176,7 @@ private:
     return true;
   }
 
-  result_type apply(std::string& x) {
+  inline result_type apply(std::string& x) {
     size_t str_size = 0;
     if (!begin_sequence(str_size))
       return false;
@@ -187,13 +187,13 @@ private:
     return true;
   }
 
-  result_type apply(caf::none_t& x) {
+  inline result_type apply(caf::none_t& x) {
     x = caf::none;
     return true;
   }
 
   template <class Rep, class Period>
-    requires(std::is_integral<Rep>::value)
+    requires(std::is_integral_v<Rep>)
   result_type apply(std::chrono::duration<Rep, Period>& x) {
     using duration_type = std::chrono::duration<Rep, Period>;
     Rep tmp;
@@ -204,7 +204,7 @@ private:
   }
 
   template <class Rep, class Period>
-    requires(std::is_floating_point<Rep>::value)
+    requires(std::is_floating_point_v<Rep>)
   result_type apply(std::chrono::duration<Rep, Period>& x) {
     using duration_type = std::chrono::duration<Rep, Period>;
     // always save/store floating point durations as doubles
@@ -256,7 +256,7 @@ private:
     return true;
   }
 
-  result_type begin_sequence(size_t& list_size) {
+  inline result_type begin_sequence(size_t& list_size) {
     // Use varbyte encoding to compress sequence size on the wire.
     uint32_t x = 0;
     int n = 0;

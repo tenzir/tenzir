@@ -113,7 +113,8 @@ caf::error type_registry_state::load_from_disk() {
     if (!buffer)
       return buffer.error();
     if (!detail::legacy_deserialize(buffer.cvalue(), data))
-      return caf::make_error(ec::parse_error, "data deserialization failed");
+      return caf::make_error(ec::parse_error, "failed to load type-registry "
+                                              "state");
     VAST_DEBUG("{} loaded state from disk", *self);
   }
   return caf::none;

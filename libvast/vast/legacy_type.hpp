@@ -1089,9 +1089,9 @@ auto make_inspect_fun() {
   return static_cast<fun>(lambda);
 }
 
-/// @private
+// TODO: after upgrading to CAF 0.18 this can be removed.
 template <class Inspector, class... Ts>
-  requires(std::is_same<typename Inspector::result_type, caf::error>::value)
+  requires(std::is_same_v<typename Inspector::result_type, caf::error>)
 auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> caf::error {
     using result_type = typename Inspector::result_type;
@@ -1111,8 +1111,9 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
   };
 }
 
+/// @private
 template <class Inspector, class... Ts>
-  requires(std::is_same<typename Inspector::result_type, bool>::value)
+  requires(std::is_same_v<typename Inspector::result_type, bool>)
 auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
     using result_type = typename Inspector::result_type;
@@ -1132,8 +1133,9 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
   };
 }
 
+// TODO: after upgrading to CAF 0.18 this can be removed.
 template <class Inspector, class... Ts>
-  requires(std::is_same<typename Inspector::result_type, void>::value)
+  requires(std::is_same_v<typename Inspector::result_type, void>)
 auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> void {
     using result_type = typename Inspector::result_type;

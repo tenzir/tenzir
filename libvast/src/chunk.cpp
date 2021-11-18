@@ -220,7 +220,7 @@ bool inspect(detail::legacy_deserializer& source, chunk_ptr& x) {
   const auto data = buffer.get();
   if (!source.apply_raw(size, data)) {
     x = nullptr;
-    return false; // TODO originally returned true
+    return false;
   }
   x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
     static_cast<void>(buffer);

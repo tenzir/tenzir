@@ -79,14 +79,11 @@ FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)
 
 TEST(serialization) {
   factory<synopsis>::initialize();
-  // auto x = synopsis_ptr{};
-  // CHECK_EQUAL(roundtrip(x), x);
-
   CHECK_ROUNDTRIP(synopsis_ptr{});
-  // TODO CHECK_ROUNDTRIP_DEREF(
-  // TODO factory<synopsis>::make(legacy_bool_type{}, caf::settings{}));
-  // TODO CHECK_ROUNDTRIP_DEREF(
-  // TODO factory<synopsis>::make(legacy_time_type{}, caf::settings{}));
+  CHECK_ROUNDTRIP_DEREF(
+    factory<synopsis>::make(legacy_bool_type{}, caf::settings{}));
+  CHECK_ROUNDTRIP_DEREF(
+    factory<synopsis>::make(legacy_time_type{}, caf::settings{}));
 }
 
 FIXTURE_SCOPE_END()

@@ -38,7 +38,7 @@ bool ldes(std::vector<char>& buf, Ts&... xs) {
   return detail::legacy_deserialize(buf, xs...);
 }
 
-TEST(deserialize_string) {
+TEST(string) {
   // serialize
   const auto str = "test string"s;
   std::vector<char> buf;
@@ -49,7 +49,7 @@ TEST(deserialize_string) {
   CHECK_EQUAL(str, str2);
 }
 
-TEST(deserialize_integrals) {
+TEST(integrals) {
   // signed char min
   std::vector<char> buf;
   const signed char sc_min = SCHAR_MIN;
@@ -214,7 +214,7 @@ TEST(deserialize_integrals) {
   CHECK_EQUAL(b, b2);
 }
 
-TEST(deserialize_bytes) {
+TEST(bytes) {
   const std::array bytes{std::byte{'a'}, std::byte{'c'}};
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, bytes), caf::none);
@@ -223,7 +223,7 @@ TEST(deserialize_bytes) {
   CHECK_EQUAL(bytes, bytes2);
 }
 
-TEST(deserialize_record_type) {
+TEST(record_type) {
   const auto r = legacy_record_type{
     {
       "x",
@@ -259,7 +259,7 @@ TEST(deserialize_record_type) {
   CHECK_EQUAL(r, r2);
 }
 
-TEST(deserialize_qualified_record_field) {
+TEST(qualified_record_field) {
   const auto field = qualified_record_field{
     "zeek.conn",
     record_field{
@@ -275,7 +275,7 @@ TEST(deserialize_qualified_record_field) {
   CHECK_EQUAL(field, field2);
 }
 
-TEST(deserialize_ids) {
+TEST(ids) {
   auto i = ids{};
   i.append_bits(true, 20);
   i.append_bits(false, 5);
@@ -287,11 +287,15 @@ TEST(deserialize_ids) {
   CHECK_EQUAL(i, i2);
 }
 
+namespace {
+
 auto to_addr_view(std::string_view str) {
   return make_data_view(unbox(to<address>(str)));
 }
 
-TEST(deserialize_time_synopsis) {
+} // namespace
+
+TEST(time_synopsis) {
   using vast::time;
   const time epoch;
   factory<synopsis>::initialize();
@@ -306,7 +310,7 @@ TEST(deserialize_time_synopsis) {
   CHECK_EQUAL(*ts, *ts2);
 }
 
-TEST(deserialize_bool_synopsis) {
+TEST(bool_synopsis) {
   factory<synopsis>::initialize();
   auto bs = factory<synopsis>::make(legacy_bool_type{}, caf::settings{});
   REQUIRE_NOT_EQUAL(bs, nullptr);
@@ -317,7 +321,7 @@ TEST(deserialize_bool_synopsis) {
   CHECK_EQUAL(*bs, *bs2);
 }
 
-TEST(deserialize_address_synopsis) {
+TEST(address_synopsis) {
   factory<synopsis>::initialize();
   auto lat
     = legacy_address_type{}.attributes({{"synopsis", "bloomfilter(1,0.1)"}});
@@ -331,7 +335,7 @@ TEST(deserialize_address_synopsis) {
   CHECK_EQUAL(*as2, *as);
 }
 
-TEST(deserialize_string_synopsis) {
+TEST(string_synopsis) {
   factory<synopsis>::initialize();
   auto lst
     = legacy_string_type{}.attributes({{"synopsis", "bloomfilter(1,0.1)"}});
