@@ -357,7 +357,7 @@ jobs:
           git fetch origin +refs/tags/*:refs/tags/*
 
       - name: Setup Python
-        uses: actions/setup-python@v2.2.2
+        uses: actions/setup-python@v2.3.0
         with:
           python-version: '3.9'
 
@@ -781,7 +781,7 @@ jobs:
           path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
 
       - name: Setup Python
-        uses: actions/setup-python@v2.2.2
+        uses: actions/setup-python@v2.3.0
         with:
           python-version: '3.9'
 
