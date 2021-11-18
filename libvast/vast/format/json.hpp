@@ -33,15 +33,10 @@
 namespace vast::format::json {
 
 /// Extracts data from a given JSON object for a given type.
-/// @param value The simdjson DOM element of type object.
-/// @param type The type that determines how we extract he data.
-/// @note The result of this function is meant for use with
-/// `table_slice_buiilder::recursive_add`, and returns a `list` when given a
-/// record type iff successful.
-/// @note This function does intentionally not return an error on failure, but
-/// rather fills the unextractable fields with nils. This aligns better with the
-/// `table_slice_builder` API, which has no way of resetting in case of an error.
-data extract(const ::simdjson::dom::object& value, const type& type);
+/// @param object The simdjson DOM element of type object.
+/// @param builder The builder to add data to.
+caf::error
+add(const ::simdjson::dom::object& object, table_slice_builder& builder);
 
 class writer : public ostream_writer {
 public:
@@ -213,22 +208,13 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     bptr = builder(*layout);
     if (bptr == nullptr)
       return caf::make_error(ec::parse_error, "unable to get a builder");
-    auto extracted = extract(get_object_result.value(), *layout);
-    if (!caf::holds_alternative<list>(extracted)) {
-      if (num_invalid_lines_ == 0)
-        VAST_WARN("{} failed to extract value(s) in line {}",
-                  detail::pretty_type_name(this), lines_->line_number());
-      ++num_invalid_lines_;
-      continue;
-    }
-    if (!bptr->recursive_add(extracted, *layout)) {
-      auto err = caf::make_error( //
-        ec::logic_error,
-        fmt::format("failed to add extracted values {} of layout {} in line {} "
-                    "to builder",
-                    extracted, *layout, lines_->line_number()));
-      return finish(cons, std::move(err));
-    }
+    if (auto err = add(get_object_result.value(), *bptr))
+      return finish(cons, //
+                    caf::make_error(ec::logic_error,
+                                    fmt::format("failed to add line {} of "
+                                                "layout {} to builder: {}",
+                                                lines_->line_number(), *layout,
+                                                err)));
     produced++;
     batch_events_++;
     if (bptr->rows() == max_slice_size)

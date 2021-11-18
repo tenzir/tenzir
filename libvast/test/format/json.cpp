@@ -84,9 +84,7 @@ TEST(json to data) {
   CHECK(el.error() == ::simdjson::error_code::SUCCESS);
   auto obj = el.value().get_object();
   CHECK(obj.error() == ::simdjson::error_code::SUCCESS);
-  auto values = vast::format::json::extract(obj.value(), layout);
-  CHECK(caf::holds_alternative<list>(values));
-  CHECK(builder->recursive_add(values, layout));
+  REQUIRE_EQUAL(vast::format::json::add(obj.value(), *builder), caf::none);
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});

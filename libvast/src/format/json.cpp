@@ -35,48 +35,43 @@ namespace vast::format::json {
 
 namespace {
 
-// Various implementations for simdjson + type to element conversion.  The
-// expand_records flag toggles whether we add nil values for all fields in
-// records that cannot be found, which we do for records nested inside lists or
-// maps for historical reasons.
-data extract_impl(const ::simdjson::dom::element& value, const type& type,
-                  bool expand_records);
-data extract_impl(const ::simdjson::dom::array& values, const type& type,
-                  bool expand_records);
-data extract_impl(const ::simdjson::dom::object& value, const type& type,
-                  bool expand_records);
-data extract_impl(int64_t value, const type& type);
-data extract_impl(uint64_t value, const type& type);
-data extract_impl(double value, const type& type);
-data extract_impl(bool value, const type& type);
-data extract_impl(std::string_view value, const type& type);
-data extract_impl(std::nullptr_t, const type& type, bool expand_records);
+// Various implementations for simdjson element + type to data conversion.
+// Note: extract copies; prefer to use add where possible. extract should no
+// longer be necessary once we fully support nested lists and records inside
+// lists.
+data extract(const ::simdjson::dom::element& value, const type& type);
+data extract(const ::simdjson::dom::array& values, const type& type);
+data extract(const ::simdjson::dom::object& value, const type& type);
+data extract(int64_t value, const type& type);
+data extract(uint64_t value, const type& type);
+data extract(double value, const type& type);
+data extract(bool value, const type& type);
+data extract(std::string_view value, const type& type);
+data extract(std::nullptr_t, const type& type);
 
-data extract_impl(const ::simdjson::dom::element& value, const type& type,
-                  bool expand_records) {
+data extract(const ::simdjson::dom::element& value, const type& type) {
   switch (value.type()) {
     case ::simdjson::dom::element_type::ARRAY:
-      return extract_impl(value.get_array().value(), type, expand_records);
+      return extract(value.get_array().value(), type);
     case ::simdjson::dom::element_type::OBJECT:
-      return extract_impl(value.get_object().value(), type, expand_records);
+      return extract(value.get_object().value(), type);
     case ::simdjson::dom::element_type::INT64:
-      return extract_impl(value.get_int64().value(), type);
+      return extract(value.get_int64().value(), type);
     case ::simdjson::dom::element_type::UINT64:
-      return extract_impl(value.get_uint64().value(), type);
+      return extract(value.get_uint64().value(), type);
     case ::simdjson::dom::element_type::DOUBLE:
-      return extract_impl(value.get_double().value(), type);
+      return extract(value.get_double().value(), type);
     case ::simdjson::dom::element_type::STRING:
-      return extract_impl(value.get_string().value(), type);
+      return extract(value.get_string().value(), type);
     case ::simdjson::dom::element_type::BOOL:
-      return extract_impl(value.get_bool().value(), type);
+      return extract(value.get_bool().value(), type);
     case ::simdjson::dom::element_type::NULL_VALUE:
-      return extract_impl(nullptr, type, expand_records);
+      return extract(nullptr, type);
   }
-  die("unhandled JSON DOM element type");
+  __builtin_unreachable();
 }
 
-data extract_impl(const ::simdjson::dom::array& values, const type& type,
-                  bool expand_records) {
+data extract(const ::simdjson::dom::array& values, const type& type) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
@@ -118,25 +113,21 @@ data extract_impl(const ::simdjson::dom::array& values, const type& type,
       auto result = list{};
       result.reserve(values.size());
       auto vt = lt.value_type();
-      // At this point we want to stop expanding records, so we always pass
-      // false to nested extract calls.
       for (const auto& value : values)
-        result.emplace_back(extract_impl(value, vt, false));
+        result.emplace_back(extract(value, vt));
       return result;
     },
     [&](const map_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const record_type& rt) noexcept -> data {
-      if (expand_records)
-        return list(rt.num_leaves(), data{caf::none});
+    [&](const record_type&) noexcept -> data {
       return caf::none;
     },
   };
   return caf::visit(f, type);
 }
 
-data extract_impl(int64_t value, const type& type) {
+data extract(int64_t value, const type& type) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
@@ -183,20 +174,23 @@ data extract_impl(int64_t value, const type& type) {
       return caf::none;
     },
     [&](const list_type& lt) noexcept -> data {
-      return list{extract_impl(value, lt.value_type())};
+      return list{extract(value, lt.value_type())};
     },
     [&](const map_type&) noexcept -> data {
       return caf::none;
     },
     [&](const record_type& rt) noexcept -> data {
-      return list(rt.num_leaves(), data{caf::none});
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
     },
   };
   return caf::visit(f, type);
 }
 
-data extract_impl(const ::simdjson::dom::object& value, const type& type,
-                  bool expand_records) {
+data extract(const ::simdjson::dom::object& value, const type& type) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
@@ -242,10 +236,8 @@ data extract_impl(const ::simdjson::dom::object& value, const type& type,
       result.reserve(value.size());
       const auto kt = mt.key_type();
       const auto vt = mt.value_type();
-      // At this point we want to stop expanding records, so we always pass
-      // false to nested extract calls.
       for (const auto& [k, v] : value)
-        result.emplace(extract_impl(k, kt), extract_impl(v, vt, false));
+        result.emplace(extract(k, kt), extract(v, vt));
       return result;
     },
     [&](const record_type& rt) noexcept -> data {
@@ -263,7 +255,7 @@ data extract_impl(const ::simdjson::dom::object& value, const type& type,
       //   case.
       auto try_extract_record = [&](auto&& self, const record_type& rt,
                                     std::string_view prefix) -> data {
-        auto result = list{};
+        auto result = record{};
         result.reserve(rt.num_fields());
         for (const auto& field : rt.fields()) {
           const auto next_prefix = fmt::format("{}{}.", prefix, field.name);
@@ -281,18 +273,17 @@ data extract_impl(const ::simdjson::dom::object& value, const type& type,
                 return caf::none;
               }
             };
-            result.emplace_back(caf::visit(recurse, field.type));
+            result.emplace(field.name, caf::visit(recurse, field.type));
           } else {
             // (2) The field exists and we extracted it successfully.
-            auto value = extract_impl(x.value(), field.type, expand_records);
-            result.emplace_back(std::move(value));
+            auto value = extract(x.value(), field.type);
+            result.emplace(field.name, std::move(value));
           }
         }
-        if (!expand_records)
-          if (std::all_of(result.begin(), result.end(), [](const data& x) {
-                return x == caf::none;
-              }))
-            return caf::none;
+        if (std::all_of(result.begin(), result.end(), [](const auto& x) {
+              return x.second == caf::none;
+            }))
+          return caf::none;
         return result;
       };
       return try_extract_record(try_extract_record, rt, "");
@@ -301,7 +292,7 @@ data extract_impl(const ::simdjson::dom::object& value, const type& type,
   return caf::visit(f, type);
 }
 
-data extract_impl(uint64_t value, const type& type) {
+data extract(uint64_t value, const type& type) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
@@ -348,19 +339,23 @@ data extract_impl(uint64_t value, const type& type) {
       return caf::none;
     },
     [&](const list_type& lt) noexcept -> data {
-      return list{extract_impl(value, lt.value_type())};
+      return list{extract(value, lt.value_type())};
     },
     [&](const map_type&) noexcept -> data {
       return caf::none;
     },
     [&](const record_type& rt) noexcept -> data {
-      return list(rt.num_leaves(), data{caf::none});
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
     },
   };
   return caf::visit(f, type);
 }
 
-data extract_impl(double value, const type& type) {
+data extract(double value, const type& type) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
@@ -402,44 +397,48 @@ data extract_impl(double value, const type& type) {
       return caf::none;
     },
     [&](const list_type& lt) noexcept -> data {
-      return list{extract_impl(value, lt.value_type())};
+      return list{extract(value, lt.value_type())};
     },
     [&](const map_type&) noexcept -> data {
       return caf::none;
     },
     [&](const record_type& rt) noexcept -> data {
-      return list(rt.num_leaves(), data{caf::none});
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
     },
   };
   return caf::visit(f, type);
 }
 
-data extract_impl(std::string_view value, const type& type) {
+data extract(std::string_view value, const type& type) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
     },
     [&](const bool_type&) noexcept -> data {
-      if (bool result; parsers::json_boolean(value, result))
+      if (bool result = {}; parsers::json_boolean(value, result))
         return result;
       return caf::none;
     },
     [&](const integer_type&) noexcept -> data {
-      if (integer::value_type result; parsers::json_int(value, result))
+      if (integer::value_type result = {}; parsers::json_int(value, result))
         return integer{result};
-      if (real result; parsers::json_number(value, result))
+      if (real result = {}; parsers::json_number(value, result))
         return integer{detail::narrow_cast<integer::value_type>(result)};
       return caf::none;
     },
     [&](const count_type&) noexcept -> data {
-      if (count result; parsers::json_count(value, result))
+      if (count result = {}; parsers::json_count(value, result))
         return result;
-      if (real result; parsers::json_number(value, result))
+      if (real result = {}; parsers::json_number(value, result))
         return detail::narrow_cast<count>(result);
       return caf::none;
     },
     [&](const real_type&) noexcept -> data {
-      if (real result; parsers::json_number(value, result))
+      if (real result = {}; parsers::json_number(value, result))
         return result;
       return caf::none;
     },
@@ -477,19 +476,23 @@ data extract_impl(std::string_view value, const type& type) {
       return caf::none;
     },
     [&](const list_type& lt) noexcept -> data {
-      return list{extract_impl(value, lt.value_type())};
+      return list{extract(value, lt.value_type())};
     },
     [&](const map_type&) noexcept -> data {
       return caf::none;
     },
     [&](const record_type& rt) noexcept -> data {
-      return list(rt.num_leaves(), data{caf::none});
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
     },
   };
   return caf::visit(f, type);
 }
 
-data extract_impl(bool value, const type& type) {
+data extract(bool value, const type& type) {
   auto f = detail::overload{
     [&](const none_type&) noexcept -> data {
       return caf::none;
@@ -528,41 +531,578 @@ data extract_impl(bool value, const type& type) {
       return caf::none;
     },
     [&](const list_type& lt) noexcept -> data {
-      return list{extract_impl(value, lt.value_type())};
+      return list{extract(value, lt.value_type())};
     },
     [&](const map_type&) noexcept -> data {
       return caf::none;
     },
     [&](const record_type& rt) noexcept -> data {
-      return list(rt.num_leaves(), data{caf::none});
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
     },
   };
   return caf::visit(f, type);
 }
 
-data extract_impl(std::nullptr_t, const type& type, bool expand_records) {
-  if (!expand_records)
-    return caf::none;
-  auto f = detail::overload{
-    [&](const record_type& rt) noexcept -> data {
-      auto result = list{};
-      result.reserve(rt.num_fields());
-      for (const auto& field : rt.fields())
-        result.emplace_back(extract_impl(nullptr, field.type, expand_records));
-      return result;
-    },
-    [&]<concrete_type T>(const T&) noexcept -> data {
+data extract(std::nullptr_t, const type& type) {
+  if (const auto* rt = caf::get_if<record_type>(&type)) {
+    auto result = record{};
+    result.reserve(rt->num_fields());
+    for (const auto& field : rt->fields())
+      result.emplace(field.name, caf::none);
+    return result;
+  }
+  return caf::none;
+}
+
+void add(int64_t value, const type& type, table_slice_builder& builder);
+void add(uint64_t value, const type& type, table_slice_builder& builder);
+void add(double value, const type& type, table_slice_builder& builder);
+void add(bool value, const type& type, table_slice_builder& builder);
+void add(std::string_view value, const type& type,
+         table_slice_builder& builder);
+
+caf::error add(const ::simdjson::dom::element& value, const type& type,
+               table_slice_builder& builder) {
+  switch (value.type()) {
+    case ::simdjson::dom::element_type::ARRAY: {
+      // Arrays need to be extracted.
+      if (!builder.add(extract(value.get_array().value(), type)))
+        return caf::make_error(
+          ec::parse_error,
+          fmt::format("failed to extract value of type {} from JSON array {}",
+                      type, ::simdjson::to_string(value.get_array())));
       return caf::none;
+    }
+    case ::simdjson::dom::element_type::OBJECT:
+      // We cannot have an object at this point because we are visiting only the
+      // leaves of the outermost record type, and for records inside lists we
+      // extract rather than add.
+      __builtin_unreachable();
+    case ::simdjson::dom::element_type::INT64: {
+      add(value.get_int64().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::UINT64: {
+      add(value.get_uint64().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::DOUBLE: {
+      add(value.get_double().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::STRING: {
+      add(value.get_string().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::BOOL: {
+      add(value.get_bool().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::NULL_VALUE: {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+      return caf::none;
+    }
+  }
+  __builtin_unreachable();
+}
+
+void add(int64_t value, const type& type, table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      const auto added = builder.add(value != 0);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      const auto added = builder.add(view<integer>{value});
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      if (value >= 0) {
+        const auto added = builder.add(detail::narrow_cast<view<count>>(value));
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<view<real>>(value));
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      const auto added = builder.add(std::chrono::duration_cast<duration>(
+        std::chrono::duration<integer::value_type>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      const auto added
+        = builder.add(time{}
+                      + std::chrono::duration_cast<duration>(
+                        std::chrono::duration<integer::value_type>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(fmt::to_string(value));
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type& et) noexcept {
+      if (auto key = detail::narrow_cast<view<enumeration>>(value);
+          !et.field(key).empty()) {
+        const auto added = builder.add(key);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
     },
   };
-  auto result = caf::visit(f, type);
-  return result;
+  caf::visit(f, type);
+}
+
+void add(uint64_t value, const type& type, table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      const auto added = builder.add(value != 0);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      if (value <= std::numeric_limits<int64_t>::max()) {
+        const auto added = builder.add(
+          view<integer>{detail::narrow_cast<integer::value_type>(value)});
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      const auto added = builder.add(view<count>{value});
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<view<real>>(value));
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      const auto added = builder.add(std::chrono::duration_cast<duration>(
+        std::chrono::duration<count>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      const auto added = builder.add(time{}
+                                     + std::chrono::duration_cast<duration>(
+                                       std::chrono::duration<count>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(fmt::to_string(value));
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type& et) noexcept {
+      if (auto key = detail::narrow_cast<view<enumeration>>(value);
+          !et.field(key).empty()) {
+        const auto added = builder.add(key);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
+}
+
+void add(double value, const type& type, table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      const auto added = builder.add(value != 0);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      const auto added = builder.add(
+        view<integer>{detail::narrow_cast<integer::value_type>(value)});
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<count>(value));
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      const auto added = builder.add(value);
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      const auto added = builder.add(std::chrono::duration_cast<duration>(
+        std::chrono::duration<real>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      const auto added = builder.add(time{}
+                                     + std::chrono::duration_cast<duration>(
+                                       std::chrono::duration<real>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(fmt::to_string(value));
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
+}
+
+void add(bool value, const type& type, table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      const auto added = builder.add(value);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      const auto added = builder.add(value ? integer{1} : integer{0});
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      const auto added = builder.add(value ? count{1} : count{0});
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(fmt::to_string(value));
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
+}
+
+void add(std::string_view value, const type& type,
+         table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      if (bool result = {}; parsers::json_boolean(value, result)) {
+        const auto added = builder.add(result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      if (integer::value_type result = {}; parsers::json_int(value, result)) {
+        const auto added = builder.add(view<integer>{result});
+        VAST_ASSERT(added);
+        return;
+      }
+      if (real result = {}; parsers::json_number(value, result)) {
+        const auto added = builder.add(
+          view<integer>{detail::narrow_cast<integer::value_type>(result)});
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      if (count result = {}; parsers::json_count(value, result)) {
+        const auto added = builder.add(result);
+        VAST_ASSERT(added);
+        return;
+      }
+      if (real result = {}; parsers::json_number(value, result)) {
+        const auto added
+          = builder.add(detail::narrow_cast<view<count>>(result));
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      if (real result = {}; parsers::json_number(value, result)) {
+        const auto added = builder.add(result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      if (auto result = to<duration>(value)) {
+        const auto added = builder.add(*result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      if (auto result = to<time>(value)) {
+        const auto added = builder.add(*result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(value);
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(view<pattern>{value});
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      if (auto result = to<address>(value)) {
+        const auto added = builder.add(*result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      if (auto result = to<subnet>(value)) {
+        const auto added = builder.add(*result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type& et) noexcept {
+      if (auto internal = et.resolve(value)) {
+        const auto added
+          = builder.add(detail::narrow_cast<enumeration>(*internal));
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
 }
 
 } // namespace
 
-data extract(const ::simdjson::dom::object& value, const type& type) {
-  return extract_impl(value, type, true);
+caf::error
+add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
+  auto self
+    = [&](auto&& self, const ::simdjson::dom::object& object,
+          const record_type& layout, std::string_view prefix) -> caf::error {
+    for (const auto& field : layout.fields()) {
+      auto handle_found = [&](const ::simdjson::dom::element& element) {
+        auto f = detail::overload{
+          [&](const map_type& mt) {
+            if (element.is_object()) {
+              const auto& object = element.get_object().value();
+              auto result = map{};
+              result.reserve(object.size());
+              const auto kt = mt.key_type();
+              const auto vt = mt.value_type();
+              for (const auto& [k, v] : object)
+                result.emplace(extract(k, kt), extract(v, vt));
+              const auto added = builder.add(result);
+              VAST_ASSERT(added);
+            } else {
+              const auto added = builder.add(caf::none);
+              VAST_ASSERT(added);
+            }
+          },
+          [&](const record_type& rt) {
+            if (element.is_object()) {
+              self(self, element.get_object().value(), rt, "");
+            } else {
+              const auto added = builder.add(caf::none);
+              VAST_ASSERT(added);
+            }
+          },
+          [&](const auto&) {
+            if (element.is_object()) {
+              const auto added = builder.add(caf::none);
+              VAST_ASSERT(added);
+            } else {
+              add(element, field.type, builder);
+            }
+          },
+        };
+        caf::visit(f, field.type);
+      };
+      auto handle_not_found = [&](std::string_view next_prefix) -> caf::error {
+        if (const auto* nested = caf::get_if<record_type>(&field.type)) {
+          if (auto err = self(self, object, *nested, next_prefix))
+            return err;
+        } else {
+          const auto added = builder.add(caf::none);
+          VAST_ASSERT(added);
+        }
+        return caf::none;
+      };
+      if (prefix.empty()) {
+        auto element = object.at_key(field.name);
+        if (element.error() == ::simdjson::error_code::SUCCESS)
+          handle_found(element.value());
+        else if (auto err = handle_not_found(field.name))
+          return err;
+      } else {
+        const auto prefixed_key = fmt::format("{}.{}", prefix, field.name);
+        auto element = object.at_key(prefixed_key);
+        if (element.error() == ::simdjson::error_code::SUCCESS)
+          handle_found(element.value());
+        else if (auto err = handle_not_found(prefixed_key))
+          return err;
+      }
+    }
+    return caf::none;
+  };
+  const auto& layout = caf::get<record_type>(builder.layout());
+  return self(self, object, layout, "");
 }
 
 writer::writer(ostream_ptr out, const caf::settings& options)
