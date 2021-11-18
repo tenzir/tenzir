@@ -251,14 +251,14 @@ using index_actor = typed_actor_fwd<
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // Evaluates a query.
-  caf::replies_to<query>::with<uuid, uint32_t, uint32_t>,
+  caf::replies_to<query>::with<query_cursor>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
   // INTERNAL: The actual query evaluation handler. Does the meta index lookup,
   // sends the response triple to the client, and schedules the first batch of
   // partitions.
   caf::replies_to<atom::internal, query, query_supervisor_actor>::with< //
-    uuid, uint32_t, uint32_t>,
+    query_cursor>,
   // Erases the given events from the INDEX, and returns their ids.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
   // Applies the given transformation to the partition.

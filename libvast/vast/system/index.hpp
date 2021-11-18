@@ -20,6 +20,7 @@
 #include "vast/system/actors.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/meta_index.hpp"
+#include "vast/system/query_cursor.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>
@@ -120,12 +121,11 @@ private:
 struct query_backlog {
   struct job {
     vast::query query;
-    caf::typed_response_promise<uuid, uint32_t, uint32_t> rp;
+    caf::typed_response_promise<query_cursor> rp;
   };
 
   // Emplace a job.
-  void emplace(vast::query query,
-               caf::typed_response_promise<uuid, uint32_t, uint32_t> rp);
+  void emplace(vast::query query, caf::typed_response_promise<query_cursor> rp);
 
   [[nodiscard]] std::optional<job> take_next();
 

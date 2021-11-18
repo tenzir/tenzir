@@ -9,8 +9,6 @@
 #include <caf/fwd.hpp>
 #define SUITE query_processor
 
-#include "vast/system/query_processor.hpp"
-
 #include "vast/fwd.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -18,6 +16,8 @@
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/query.hpp"
+#include "vast/system/query_cursor.hpp"
+#include "vast/system/query_processor.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
@@ -63,8 +63,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::subscribe, atom::flush, system::flush_listener_actor) {
       FAIL("no mock implementation available");
     },
-    [=](atom::internal, vast::query&, system::query_supervisor_actor&)
-      -> caf::result<uuid, uint32_t, uint32_t> {
+    [=](atom::internal, vast::query&,
+        system::query_supervisor_actor&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
     [=](atom::apply, transform_ptr, uuid) -> atom::done {
@@ -73,11 +73,11 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
-    [=](vast::query&) -> caf::result<uuid, uint32_t, uint32_t> {
+    [=](vast::query&) -> caf::result<system::query_cursor> {
       auto query_id = unbox(to<uuid>(uuid_str));
       self->state.client = self->current_sender()->address();
       self->send(self, query_id, 3u);
-      return {query_id, uint32_t{5}, uint32_t(3)};
+      return system::query_cursor{query_id, 5u, 3u};
     },
     [=](const uuid&, uint32_t n) {
       auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
@@ -151,7 +151,7 @@ TEST(state transitions) {
   expect((vast::query, system::index_actor), from(self).to(aut));
   expect((vast::query), from(aut).to(index));
   expect((uuid, uint32_t), from(index).to(index));
-  expect((uuid, uint32_t, uint32_t), from(index).to(aut));
+  expect((system::query_cursor), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));

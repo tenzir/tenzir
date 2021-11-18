@@ -217,8 +217,8 @@ partition_actor partition_factory::operator()(const uuid& id) const {
 
 // -- query_backlog ------------------------------------------------------------
 
-void query_backlog::emplace(
-  vast::query query, caf::typed_response_promise<uuid, uint32_t, uint32_t> rp) {
+void query_backlog::emplace(vast::query query,
+                            caf::typed_response_promise<query_cursor> rp) {
   auto& q = query.priority == query::priority::normal ? normal : low;
   // TODO: emplace does not work with libc++ <= 12.0. Switch to it once
   // we updated to LLVM 13.
@@ -909,7 +909,7 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} adds flush listener", *self);
       self->state.add_flush_listener(std::move(listener));
     },
-    [self](vast::query query) -> caf::result<uuid, uint32_t, uint32_t> {
+    [self](vast::query query) -> caf::result<query_cursor> {
       if (!self->state.accept_queries) {
         VAST_VERBOSE("{} delays query {} because it is still starting up",
                      *self, query);
@@ -921,12 +921,12 @@ index(index_actor::stateful_pointer<index_state> self,
                               std::move(query), std::move(*worker));
       }
       VAST_VERBOSE("{} pushes query {} to the backlog", *self, query);
-      auto rp = self->make_response_promise<uuid, uint32_t, uint32_t>();
+      auto rp = self->make_response_promise<query_cursor>();
       self->state.backlog.emplace(std::move(query), rp);
       return rp;
     },
-    [self](atom::internal, vast::query query, query_supervisor_actor worker)
-      -> caf::result<uuid, uint32_t, uint32_t> {
+    [self](atom::internal, vast::query query,
+           query_supervisor_actor worker) -> caf::result<query_cursor> {
       // Query handling
       auto sender = self->current_sender();
       auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
@@ -958,7 +958,7 @@ index(index_actor::stateful_pointer<index_state> self,
         candidates.push_back(self->state.active_partition.id);
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
-      auto rp = self->make_response_promise<uuid, uint32_t, uint32_t>();
+      auto rp = self->make_response_promise<query_cursor>();
       // Get all potentially matching partitions.
       auto start = std::chrono::steady_clock::now();
       self
@@ -978,7 +978,7 @@ index(index_actor::stateful_pointer<index_state> self,
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          *self);
               self->send(self, atom::worker_v, worker);
-              rp.deliver(query_id, 0u, 0u);
+              rp.deliver(query_cursor{query_id, 0u, 0u});
               self->send(client, atom::done_v);
               return;
             }
@@ -993,7 +993,8 @@ index(index_actor::stateful_pointer<index_state> self,
             auto delta = std::chrono::steady_clock::now() - start;
             VAST_TRACEPOINT(query_meta_index, query_id.as_u64().first, total,
                             delta.count());
-            rp.deliver(query_id, detail::narrow<uint32_t>(total), scheduled);
+            rp.deliver(query_cursor{query_id, detail::narrow<uint32_t>(total),
+                                    scheduled});
             caf::send_as(client, static_cast<index_actor>(self), query_id,
                          scheduled);
           },

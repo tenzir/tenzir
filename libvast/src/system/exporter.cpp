@@ -23,6 +23,7 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/query.hpp"
+#include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
@@ -270,14 +271,15 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
                   std::move(q))
         .then(
-          [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
+          [=](const query_cursor& cursor) {
             VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
                          "partitions",
-                         *self, lookup, scheduled, partitions);
-            self->state.id = lookup;
-            if (partitions > 0) {
-              self->state.query.expected = partitions;
-              self->state.query.scheduled = scheduled;
+                         *self, cursor.id, cursor.scheduled_partitions,
+                         cursor.candidate_partitions);
+            self->state.id = cursor.id;
+            if (cursor.candidate_partitions > 0) {
+              self->state.query.expected = cursor.candidate_partitions;
+              self->state.query.scheduled = cursor.scheduled_partitions;
             } else {
               shutdown(self);
             }
