@@ -37,6 +37,8 @@ in {
     # at the optimization stage.
     # TODO: Remove when updating to CAF 0.18.
     + lib.optionalString isStatic " -std=c++17";
+    # https://github.com/NixOS/nixpkgs/issues/130963
+    NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
     preCheck = ''
       export LD_LIBRARY_PATH=$PWD/lib
       export DYLD_LIBRARY_PATH=$PWD/lib
@@ -69,9 +71,15 @@ in {
       "-DSPDLOG_BUILD_SHARED=OFF"
     ];
   });
-  zeek-broker = final.callPackage ./zeek-broker {inherit stdenv;};
+  zeek-broker = (final.callPackage ./zeek-broker {inherit stdenv;}).overrideAttrs (old: {
+    # https://github.com/NixOS/nixpkgs/issues/130963
+    NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
+  });
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
-  vast = final.callPackage ./vast {inherit stdenv;};
+  vast = (final.callPackage ./vast {inherit stdenv;}).overrideAttrs (old: {
+    # https://github.com/NixOS/nixpkgs/issues/130963
+    NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
+  });
   vast-ci = final.vast.override {
     buildType = "CI";
     arrow-cpp = final.arrow-cpp-no-simd;
