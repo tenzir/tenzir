@@ -33,11 +33,11 @@
 
 #  define VAST_ASSERT_2(expr, msg)                                             \
     do {                                                                       \
-      static_cast<void>(sizeof(expr));                                         \
-      static_cast<void>(sizeof(msg));                                          \
+      static_cast<void>(sizeof(decltype(expr)));                               \
+      static_cast<void>(sizeof(decltype(msg)));                                \
     } while (false)
 
-#  define VAST_ASSERT_1(expr) static_cast<void>(sizeof(expr))
+#  define VAST_ASSERT_1(expr) static_cast<void>(sizeof(decltype(expr)))
 
 #endif
 
