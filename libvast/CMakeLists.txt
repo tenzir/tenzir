@@ -252,6 +252,12 @@ else ()
       VASTSystemizeTarget(libcaf_openssl_${_linkage_suffix})
       set_target_properties(libcaf_openssl_${_linkage_suffix}
                             PROPERTIES EXPORT_NAME openssl)
+      # Fix deprecation warnings for OpenSSL >= 3.0.
+      target_compile_options(
+        libcaf_openssl_${_linkage_suffix}
+        PRIVATE
+          $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
+          $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
       add_library(CAF::openssl ALIAS libcaf_openssl_${_linkage_suffix})
       install(
         TARGETS libcaf_openssl_${_linkage_suffix}
