@@ -48,20 +48,21 @@ caf::expected<distribution> make_distribution(const type& t) {
   VAST_DEBUG("generating distribution {} in [{}, {})", name, p0, p1);
   if (name == "uniform") {
     if (caf::holds_alternative<integer_type>(t))
-      return {std::uniform_int_distribution<vast::integer::value_type>{
-        static_cast<vast::integer::value_type>(p0),
-        static_cast<vast::integer::value_type>(p1)}};
+      return distribution{
+        std::uniform_int_distribution<vast::integer::value_type>{
+          static_cast<vast::integer::value_type>(p0),
+          static_cast<vast::integer::value_type>(p1)}};
     if (caf::holds_alternative<bool_type>(t)
         || caf::holds_alternative<count_type>(t)
         || caf::holds_alternative<string_type>(t))
-      return {std::uniform_int_distribution<count>{static_cast<count>(p0),
-                                                   static_cast<count>(p1)}};
-    return {std::uniform_real_distribution<long double>{p0, p1}};
+      return distribution{std::uniform_int_distribution<count>{
+        static_cast<count>(p0), static_cast<count>(p1)}};
+    return distribution{std::uniform_real_distribution<long double>{p0, p1}};
   }
   if (name == "normal")
-    return {std::normal_distribution<long double>{p0, p1}};
+    return distribution{std::normal_distribution<long double>{p0, p1}};
   if (name == "pareto")
-    return {detail::pareto_distribution<long double>{p0, p1}};
+    return distribution{detail::pareto_distribution<long double>{p0, p1}};
   return caf::make_error(ec::parse_error, "unknown distribution", name);
 }
 
