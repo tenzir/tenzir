@@ -26,7 +26,7 @@ bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
   return view_.lookup(digest);
 }
 
-bloom_filter_params frozen_bloom_filter::parameters() const noexcept {
+const bloom_filter_params& frozen_bloom_filter::parameters() const noexcept {
   return view_.params;
 }
 
