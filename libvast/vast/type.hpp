@@ -240,7 +240,6 @@ public:
   [[nodiscard]] legacy_type to_legacy_type() const noexcept;
 
   /// Returns the underlying FlatBuffers table representation.
-  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
   /// @param transparent Whether to skip over alias and tag types
   [[nodiscard]] const fbs::Type&
   table(enum transparent transparent) const noexcept;
@@ -612,7 +611,6 @@ public:
   explicit enumeration_type(const std::vector<struct field>& fields) noexcept;
 
   /// Returns the underlying FlatBuffers table representation.
-  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
   [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
@@ -680,7 +678,6 @@ public:
   }
 
   /// Returns the underlying FlatBuffers table representation.
-  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
   [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
@@ -737,7 +734,6 @@ public:
   }
 
   /// Returns the underlying FlatBuffers table representation.
-  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
   [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
@@ -846,7 +842,6 @@ public:
   explicit record_type(const std::vector<struct field>& fields) noexcept;
 
   /// Returns the underlying FlatBuffers table representation.
-  /// @note Include `vast/fbs/type.hpp` to be able to use this function.
   [[nodiscard]] const fbs::Type& table() const noexcept;
 
   /// Returns the type index.
