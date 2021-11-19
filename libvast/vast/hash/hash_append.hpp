@@ -15,7 +15,6 @@
 
 #include <caf/detail/type_traits.hpp>
 #include <caf/meta/save_callback.hpp>
-#include <caf/meta/type_name.hpp>
 
 #include <array>
 #include <chrono>
@@ -309,16 +308,6 @@ struct hash_inspector {
 
   result_type operator()() const noexcept {
     // End of recursion.
-  }
-
-  template <class... Ts>
-  result_type operator()(caf::meta::type_name_t x, Ts&&... xs) const {
-    // Figure out the actual bytes to hash.
-    auto ptr = x.value;
-    while (*ptr != '\0')
-      ++ptr;
-    h_.add(as_bytes(x.value, ptr - x.value));
-    (*this)(std::forward<Ts>(xs)...);
   }
 
   template <class F, class... Ts>
