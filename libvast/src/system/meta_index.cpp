@@ -333,7 +333,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
           if (lhs.type.name() == "timestamp") {
             auto pred = [](auto& field) {
               const auto type = field.type();
-              return type.tag("timestamp").has_value();
+              return type.attribute("timestamp").has_value();
             };
             detail::inplace_unify(result, search(pred));
           }

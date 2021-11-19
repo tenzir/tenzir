@@ -40,7 +40,7 @@ active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
                type index_type, caf::settings index_opts) {
   self->state.name = fmt::format("indexer-{}", index_type);
-  self->state.has_skip_attribute = index_type.tag("skip").has_value();
+  self->state.has_skip_attribute = index_type.attribute("skip").has_value();
   self->state.idx = factory<value_index>::make(index_type, index_opts);
   if (!self->state.idx) {
     VAST_ERROR("{} failed to construct value index", *self);

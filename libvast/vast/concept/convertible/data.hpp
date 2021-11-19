@@ -308,7 +308,7 @@ caf::error convert(const record& src, To& dst, const map_type& t) {
   // that.
   const auto kt = t.key_type();
   const auto vt = t.value_type();
-  if (auto key = kt.tag("key"))
+  if (auto key = kt.attribute("key"))
     return caf::make_error(ec::convert_error,
                            fmt::format("expected a list of records with the "
                                        "key field {}, but received record {}",
@@ -347,7 +347,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
     return caf::make_error(ec::convert_error,
                            fmt::format(": expected a record_type, but got {}",
                                        vt));
-  auto key_field_name = kt.tag("key");
+  auto key_field_name = kt.attribute("key");
   if (!key_field_name)
     return caf::make_error(
       ec::convert_error,

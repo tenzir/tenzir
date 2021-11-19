@@ -332,7 +332,7 @@ struct csv_parser_factory {
         }).with(add_t<duration>{bptr_});
           // clang-format on
         };
-        if (auto unit = t.tag("unit")) {
+        if (auto unit = t.attribute("unit")) {
           if (*unit == "ns")
             return make_duration_parser(std::nano{});
           if (*unit == "us")

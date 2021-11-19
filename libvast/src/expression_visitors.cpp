@@ -414,7 +414,7 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
       if (!caf::holds_alternative<time>(d))
         return caf::make_error(ec::type_clash, ":timestamp", op_, d);
       auto has_timestamp_attribute = [&](const type& t) {
-        return t.tag("timestamp").has_value();
+        return t.attribute("timestamp").has_value();
       };
       return disjunction{resolve_extractor(matches, d),
                          resolve_extractor(has_timestamp_attribute, d)};

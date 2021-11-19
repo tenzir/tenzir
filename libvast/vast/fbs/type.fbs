@@ -93,7 +93,7 @@ table v0 {
   fields: [field.v0] (required);
 }
 
-namespace vast.fbs.type.tagged_type.tag;
+namespace vast.fbs.type.enriched_type.attribute;
 
 /// A key-value pair type annotation.
 table v0 {
@@ -101,13 +101,13 @@ table v0 {
   value: string;
 }
 
-namespace vast.fbs.type.tagged_type;
+namespace vast.fbs.type.enriched_type;
 
-/// A type with a name, tags, or both.
+/// A type with a name, attributes, or both.
 table v0 {
   type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
   name: string;
-  tags: [tag.v0];
+  attributes: [attribute.v0];
 }
 
 namespace vast.fbs.type;
@@ -128,7 +128,7 @@ union Type {
   list_type.v0,
   map_type.v0,
   record_type.v0,
-  tagged_type.v0,
+  enriched_type.v0,
 }
 
 namespace vast.fbs;

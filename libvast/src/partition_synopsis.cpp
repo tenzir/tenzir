@@ -37,7 +37,7 @@ void partition_synopsis::shrink() {
 void partition_synopsis::add(const table_slice& slice,
                              const caf::settings& synopsis_options) {
   auto make_synopsis = [&](const type& t) -> synopsis_ptr {
-    if (t.tag("skip"))
+    if (t.attribute("skip"))
       return nullptr;
     return factory<synopsis>::make(t, synopsis_options);
   };

@@ -705,22 +705,22 @@ TEST(named types) {
   CHECK_EQUAL(fmt::format("{}", lat), "l3");
 }
 
-TEST(tagged types) {
+TEST(enriched types) {
   const auto at = type{bool_type{}, {{"first", "value"}, {"second"}}};
   CHECK(caf::holds_alternative<bool_type>(at));
   CHECK_EQUAL(at.name(), "");
-  CHECK_EQUAL(at.tag("first"), "value");
-  CHECK_EQUAL(at.tag("second"), "");
-  CHECK_EQUAL(at.tag("third"), std::nullopt);
-  CHECK_EQUAL(at.tag("fourth"), std::nullopt);
+  CHECK_EQUAL(at.attribute("first"), "value");
+  CHECK_EQUAL(at.attribute("second"), "");
+  CHECK_EQUAL(at.attribute("third"), std::nullopt);
+  CHECK_EQUAL(at.attribute("fourth"), std::nullopt);
   CHECK_EQUAL(fmt::format("{}", at), "bool #first=value #second");
   const auto aat = type{"l2", at, {{"third", "nestingworks"}}};
   CHECK(caf::holds_alternative<bool_type>(aat));
   CHECK_EQUAL(aat.name(), "l2");
-  CHECK_EQUAL(aat.tag("first"), "value");
-  CHECK_EQUAL(aat.tag("second"), "");
-  CHECK_EQUAL(aat.tag("third"), "nestingworks");
-  CHECK_EQUAL(aat.tag("fourth"), std::nullopt);
+  CHECK_EQUAL(aat.attribute("first"), "value");
+  CHECK_EQUAL(aat.attribute("second"), "");
+  CHECK_EQUAL(aat.attribute("third"), "nestingworks");
+  CHECK_EQUAL(aat.attribute("fourth"), std::nullopt);
   CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks #first=value "
                                       "#second");
   const auto lat = type::from_legacy_type(

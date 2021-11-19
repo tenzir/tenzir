@@ -173,7 +173,7 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
                   << std::endl;
         // Print even more detailed information for hash indices.
         using namespace std::string_literals;
-        if (auto index = type.tag("index"))
+        if (auto index = type.attribute("index"))
           if (*index == "hash")
             print_hash_index(state_ptr, indent, options);
       }

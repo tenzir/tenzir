@@ -34,7 +34,7 @@ namespace {
 caf::expected<distribution> make_distribution(const type& t) {
   using parsers::alpha;
   using parsers::real_opt_dot;
-  auto tag = t.tag("default");
+  auto tag = t.attribute("default");
   if (!tag || tag->empty())
     return caf::no_error;
   auto parser = +alpha >> '(' >> real_opt_dot >> ',' >> real_opt_dot >> ')';

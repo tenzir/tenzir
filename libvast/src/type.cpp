@@ -63,8 +63,8 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
       case fbs::type::Type::record_type_v0:
         transparent = type::transparent::no;
         break;
-      case fbs::type::Type::tagged_type_v0:
-        root = root->type_as_tagged_type_v0()->type_nested_root();
+      case fbs::type::Type::enriched_type_v0:
+        root = root->type_as_enriched_type_v0()->type_nested_root();
         VAST_ASSERT(root);
         break;
     }
@@ -96,12 +96,12 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
       case fbs::type::Type::map_type_v0:
       case fbs::type::Type::record_type_v0:
         return result;
-      case fbs::type::Type::tagged_type_v0: {
-        const auto* tagged = root->type_as_tagged_type_v0();
-        VAST_ASSERT(tagged);
-        root = tagged->type_nested_root();
+      case fbs::type::Type::enriched_type_v0: {
+        const auto* enriched = root->type_as_enriched_type_v0();
+        VAST_ASSERT(enriched);
+        root = enriched->type_nested_root();
         VAST_ASSERT(root);
-        result = as_bytes(*tagged->type());
+        result = as_bytes(*enriched->type());
         break;
       }
     }
@@ -220,11 +220,11 @@ size_t flat_size(const fbs::Type* view) noexcept {
       }
       return result;
     }
-    case fbs::type::Type::tagged_type_v0: {
-      const auto* tagged = view->type_as_tagged_type_v0();
-      VAST_ASSERT(tagged);
-      VAST_ASSERT(tagged->type());
-      return flat_size(tagged->type_nested_root());
+    case fbs::type::Type::enriched_type_v0: {
+      const auto* enriched = view->type_as_enriched_type_v0();
+      VAST_ASSERT(enriched);
+      VAST_ASSERT(enriched->type());
+      return flat_size(enriched->type_nested_root());
     }
   }
   __builtin_unreachable();
@@ -264,8 +264,8 @@ type::type(chunk_ptr&& table) noexcept {
 }
 
 type::type(std::string_view name, const type& nested,
-           const std::vector<struct tag>& tags) noexcept {
-  if (name.empty() && tags.empty()) {
+           const std::vector<struct attribute>& attributes) noexcept {
+  if (name.empty() && attributes.empty()) {
     // This special case exists for easier conversion of legacy types, which did
     // not require an legacy alias type wrapping to have a name.
     *this = nested;
@@ -276,41 +276,42 @@ type::type(std::string_view name, const type& nested,
       // - 52 bytes FlatBuffers table framing
       // - Nested type FlatBuffers table size
       // - All contained string lengths, rounded up to four each
-      // Note that this cannot account for tags, since they are stored in hash
-      // map which makes calculating the space requirements non-trivial.
+      // Note that this cannot account for attributes, since they are stored in
+      // hash map which makes calculating the space requirements non-trivial.
       size_t size = 52;
       size += nested_bytes.size();
       size += reserved_string_size(name);
       return size;
     };
-    auto builder = tags.empty()
+    auto builder = attributes.empty()
                      ? flatbuffers::FlatBufferBuilder{reserved_size()}
                      : flatbuffers::FlatBufferBuilder{};
     const auto nested_type_offset = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(nested_bytes.data()),
       nested_bytes.size());
     const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
-    const auto tags_offset =
-      [&]() noexcept -> flatbuffers::Offset<flatbuffers::Vector<
-                       flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>> {
-      if (tags.empty())
+    const auto attributes_offset = [&]() noexcept
+      -> flatbuffers::Offset<flatbuffers::Vector<
+        flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>> {
+      if (attributes.empty())
         return 0;
-      auto tags_offsets
-        = std::vector<flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>{};
-      tags_offsets.reserve(tags.size());
-      for (const auto& tag : tags) {
-        const auto key_offset = builder.CreateString(tag.key);
+      auto attributes_offsets = std::vector<
+        flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>{};
+      attributes_offsets.reserve(attributes.size());
+      for (const auto& attribute : attributes) {
+        const auto key_offset = builder.CreateString(attribute.key);
         const auto value_offset
-          = tag.value ? builder.CreateString(*tag.value) : 0;
-        tags_offsets.emplace_back(fbs::type::tagged_type::tag::Createv0(
-          builder, key_offset, value_offset));
+          = attribute.value ? builder.CreateString(*attribute.value) : 0;
+        attributes_offsets.emplace_back(
+          fbs::type::enriched_type::attribute::Createv0(builder, key_offset,
+                                                        value_offset));
       }
-      return builder.CreateVectorOfSortedTables(&tags_offsets);
+      return builder.CreateVectorOfSortedTables(&attributes_offsets);
     }();
-    const auto tagged_type_offset = fbs::type::tagged_type::Createv0(
-      builder, nested_type_offset, name_offset, tags_offset);
+    const auto enriched_type_offset = fbs::type::enriched_type::Createv0(
+      builder, nested_type_offset, name_offset, attributes_offset);
     const auto type_offset = fbs::CreateType(
-      builder, fbs::type::Type::tagged_type_v0, tagged_type_offset.Union());
+      builder, fbs::type::Type::enriched_type_v0, enriched_type_offset.Union());
     builder.Finish(type_offset);
     auto result = builder.Release();
     table_ = chunk::make(std::move(result));
@@ -322,8 +323,9 @@ type::type(std::string_view name, const type& nested) noexcept
   // nop
 }
 
-type::type(const type& nested, const std::vector<struct tag>& tags) noexcept
-  : type("", nested, tags) {
+type::type(const type& nested,
+           const std::vector<struct attribute>& attributes) noexcept
+  : type("", nested, attributes) {
   // nop
 }
 
@@ -417,8 +419,8 @@ type type::infer(const data& value) noexcept {
 }
 
 type type::from_legacy_type(const legacy_type& other) noexcept {
-  const auto tags = [&] {
-    auto result = std::vector<struct tag>{};
+  const auto attributes = [&] {
+    auto result = std::vector<struct attribute>{};
     const auto& attributes = other.attributes();
     result.reserve(attributes.size());
     for (const auto& attribute : other.attributes())
@@ -430,64 +432,64 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
   }();
   auto f = detail::overload{
     [&](const legacy_none_type&) {
-      return type{other.name(), none_type{}, tags};
+      return type{other.name(), none_type{}, attributes};
     },
     [&](const legacy_bool_type&) {
-      return type{other.name(), bool_type{}, tags};
+      return type{other.name(), bool_type{}, attributes};
     },
     [&](const legacy_integer_type&) {
-      return type{other.name(), integer_type{}, tags};
+      return type{other.name(), integer_type{}, attributes};
     },
     [&](const legacy_count_type&) {
-      return type{other.name(), count_type{}, tags};
+      return type{other.name(), count_type{}, attributes};
     },
     [&](const legacy_real_type&) {
-      return type{other.name(), real_type{}, tags};
+      return type{other.name(), real_type{}, attributes};
     },
     [&](const legacy_duration_type&) {
-      return type{other.name(), duration_type{}, tags};
+      return type{other.name(), duration_type{}, attributes};
     },
     [&](const legacy_time_type&) {
-      return type{other.name(), time_type{}, tags};
+      return type{other.name(), time_type{}, attributes};
     },
     [&](const legacy_string_type&) {
-      return type{other.name(), string_type{}, tags};
+      return type{other.name(), string_type{}, attributes};
     },
     [&](const legacy_pattern_type&) {
-      return type{other.name(), pattern_type{}, tags};
+      return type{other.name(), pattern_type{}, attributes};
     },
     [&](const legacy_address_type&) {
-      return type{other.name(), address_type{}, tags};
+      return type{other.name(), address_type{}, attributes};
     },
     [&](const legacy_subnet_type&) {
-      return type{other.name(), subnet_type{}, tags};
+      return type{other.name(), subnet_type{}, attributes};
     },
     [&](const legacy_enumeration_type& enumeration) {
       auto fields = std::vector<struct enumeration_type::field>{};
       fields.reserve(enumeration.fields.size());
       for (const auto& field : enumeration.fields)
         fields.push_back({field});
-      return type{other.name(), enumeration_type{fields}, tags};
+      return type{other.name(), enumeration_type{fields}, attributes};
     },
     [&](const legacy_list_type& list) {
       return type{other.name(), list_type{from_legacy_type(list.value_type)},
-                  tags};
+                  attributes};
     },
     [&](const legacy_map_type& list) {
       return type{other.name(),
                   map_type{from_legacy_type(list.key_type),
                            from_legacy_type(list.value_type)},
-                  tags};
+                  attributes};
     },
     [&](const legacy_alias_type& alias) {
-      return type{other.name(), from_legacy_type(alias.value_type), tags};
+      return type{other.name(), from_legacy_type(alias.value_type), attributes};
     },
     [&](const legacy_record_type& record) {
       auto fields = std::vector<struct record_type::field_view>{};
       fields.reserve(record.fields.size());
       for (const auto& field : record.fields)
         fields.push_back({field.name, from_legacy_type(field.type)});
-      return type{other.name(), record_type{fields}, tags};
+      return type{other.name(), record_type{fields}, attributes};
     },
   };
   return caf::visit(f, other);
@@ -559,13 +561,13 @@ legacy_type type::to_legacy_type() const noexcept {
   auto result = caf::visit(f, *this);
   if (!name().empty())
     result = legacy_alias_type{std::move(result)}.name(std::string{name()});
-  for (const auto& tag : tags()) {
-    if (tag.value.empty())
-      result.update_attributes({{std::string{tag.key}}});
+  for (const auto& attribute : attributes()) {
+    if (attribute.value.empty())
+      result.update_attributes({{std::string{attribute.key}}});
     else
       result.update_attributes({{
-        std::string{tag.key},
-        std::string{tag.value},
+        std::string{attribute.key},
+        std::string{attribute.value},
       }});
   }
   return result;
@@ -640,8 +642,8 @@ void inspect(caf::detail::stringification_inspector& f, type& x) {
 
 void type::assign_metadata(const type& other) noexcept {
   const auto name = other.name();
-  const auto tags = other.tags();
-  if (name.empty() && tags.empty())
+  const auto attributes = other.attributes();
+  if (name.empty() && attributes.empty())
     return;
   const auto nested_bytes = as_bytes(table_);
   const auto reserved_size = [&]() noexcept {
@@ -649,39 +651,41 @@ void type::assign_metadata(const type& other) noexcept {
     // - 52 bytes FlatBuffers table framing
     // - Nested type FlatBuffers table size
     // - All contained string lengths, rounded up to four each
-    // Note that this cannot account for tags, since they are stored in hash
-    // map which makes calculating the space requirements non-trivial.
+    // Note that this cannot account for attributes, since they are stored in
+    // hash map which makes calculating the space requirements non-trivial.
     size_t size = 52;
     size += nested_bytes.size();
     size += reserved_string_size(name);
     return size;
   };
-  auto builder = tags.empty() ? flatbuffers::FlatBufferBuilder{reserved_size()}
-                              : flatbuffers::FlatBufferBuilder{};
+  auto builder = attributes.empty()
+                   ? flatbuffers::FlatBufferBuilder{reserved_size()}
+                   : flatbuffers::FlatBufferBuilder{};
   const auto nested_type_offset = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(nested_bytes.data()), nested_bytes.size());
   const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
-  const auto tags_offset
-    = [&]() noexcept -> flatbuffers::Offset<flatbuffers::Vector<
-                       flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>> {
-    if (tags.empty())
+  const auto attributes_offset = [&]() noexcept
+    -> flatbuffers::Offset<flatbuffers::Vector<
+      flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>> {
+    if (attributes.empty())
       return 0;
-    auto tags_offsets
-      = std::vector<flatbuffers::Offset<fbs::type::tagged_type::tag::v0>>{};
-    tags_offsets.reserve(tags.size());
-    for (const auto& tag : tags) {
-      const auto key_offset = builder.CreateString(tag.key);
+    auto attributes_offsets = std::vector<
+      flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>{};
+    attributes_offsets.reserve(attributes.size());
+    for (const auto& attribute : attributes) {
+      const auto key_offset = builder.CreateString(attribute.key);
       const auto value_offset
-        = tag.value.empty() ? 0 : builder.CreateString(tag.value);
-      tags_offsets.emplace_back(fbs::type::tagged_type::tag::Createv0(
-        builder, key_offset, value_offset));
+        = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
+      attributes_offsets.emplace_back(
+        fbs::type::enriched_type::attribute::Createv0(builder, key_offset,
+                                                      value_offset));
     }
-    return builder.CreateVectorOfSortedTables(&tags_offsets);
+    return builder.CreateVectorOfSortedTables(&attributes_offsets);
   }();
-  const auto tagged_type_offset = fbs::type::tagged_type::Createv0(
-    builder, nested_type_offset, name_offset, tags_offset);
+  const auto enriched_type_offset = fbs::type::enriched_type::Createv0(
+    builder, nested_type_offset, name_offset, attributes_offset);
   const auto type_offset = fbs::CreateType(
-    builder, fbs::type::Type::tagged_type_v0, tagged_type_offset.Union());
+    builder, fbs::type::Type::enriched_type_v0, enriched_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
   table_ = chunk::make(std::move(result));
@@ -707,11 +711,11 @@ std::string_view type::name() const& noexcept {
       case fbs::type::Type::map_type_v0:
       case fbs::type::Type::record_type_v0:
         return "";
-      case fbs::type::Type::tagged_type_v0:
-        const auto* tagged_type = root->type_as_tagged_type_v0();
-        if (const auto* name = tagged_type->name())
+      case fbs::type::Type::enriched_type_v0:
+        const auto* enriched_type = root->type_as_enriched_type_v0();
+        if (const auto* name = enriched_type->name())
           return name->string_view();
-        root = tagged_type->type_nested_root();
+        root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
     }
@@ -740,18 +744,19 @@ std::vector<std::string_view> type::names() const& noexcept {
       case fbs::type::Type::map_type_v0:
       case fbs::type::Type::record_type_v0:
         return result;
-      case fbs::type::Type::tagged_type_v0:
-        const auto* tagged_type = root->type_as_tagged_type_v0();
-        if (const auto* name = tagged_type->name())
+      case fbs::type::Type::enriched_type_v0:
+        const auto* enriched_type = root->type_as_enriched_type_v0();
+        if (const auto* name = enriched_type->name())
           result.push_back(name->string_view());
-        root = tagged_type->type_nested_root();
+        root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
     }
   }
 }
 
-std::optional<std::string_view> type::tag(const char* key) const& noexcept {
+std::optional<std::string_view>
+type::attribute(const char* key) const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
@@ -771,16 +776,16 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
       case fbs::type::Type::map_type_v0:
       case fbs::type::Type::record_type_v0:
         return std::nullopt;
-      case fbs::type::Type::tagged_type_v0:
-        const auto* tagged_type = root->type_as_tagged_type_v0();
-        if (const auto* tags = tagged_type->tags()) {
-          if (const auto* tag = tags->LookupByKey(key)) {
-            if (const auto* value = tag->value())
+      case fbs::type::Type::enriched_type_v0:
+        const auto* enriched_type = root->type_as_enriched_type_v0();
+        if (const auto* attributes = enriched_type->attributes()) {
+          if (const auto* attribute = attributes->LookupByKey(key)) {
+            if (const auto* value = attribute->value())
               return value->string_view();
             return "";
           }
         }
-        root = tagged_type->type_nested_root();
+        root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
     }
@@ -788,8 +793,8 @@ std::optional<std::string_view> type::tag(const char* key) const& noexcept {
   __builtin_unreachable();
 }
 
-std::vector<type::tag_view> type::tags() const& noexcept {
-  auto result = std::vector<type::tag_view>{};
+std::vector<type::attribute_view> type::attributes() const& noexcept {
+  auto result = std::vector<type::attribute_view>{};
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
@@ -809,17 +814,17 @@ std::vector<type::tag_view> type::tags() const& noexcept {
       case fbs::type::Type::map_type_v0:
       case fbs::type::Type::record_type_v0:
         return result;
-      case fbs::type::Type::tagged_type_v0:
-        const auto* tagged_type = root->type_as_tagged_type_v0();
-        if (const auto* tags = tagged_type->tags()) {
-          result.reserve(result.size() + tags->size());
-          for (const auto& tag : *tags)
+      case fbs::type::Type::enriched_type_v0:
+        const auto* enriched_type = root->type_as_enriched_type_v0();
+        if (const auto* attributes = enriched_type->attributes()) {
+          result.reserve(result.size() + attributes->size());
+          for (const auto& attribute : *attributes)
             result.push_back({
-              tag->key()->string_view(),
-              tag->value() ? tag->value()->string_view() : "",
+              attribute->key()->string_view(),
+              attribute->value() ? attribute->value()->string_view() : "",
             });
         }
-        root = tagged_type->type_nested_root();
+        root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
     }
@@ -847,7 +852,7 @@ bool is_container(const type& type) noexcept {
     case fbs::type::Type::map_type_v0:
     case fbs::type::Type::record_type_v0:
       return true;
-    case fbs::type::Type::tagged_type_v0:
+    case fbs::type::Type::enriched_type_v0:
       __builtin_unreachable();
   }
   __builtin_unreachable();
@@ -1790,7 +1795,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
         index.push_back(0);
         break;
       }
-      case fbs::type::Type::tagged_type_v0:
+      case fbs::type::Type::enriched_type_v0:
         __builtin_unreachable();
         break;
     }
@@ -1863,7 +1868,7 @@ record_type::resolve_key(std::string_view key) const noexcept {
         }
         break;
       }
-      case fbs::type::Type::tagged_type_v0:
+      case fbs::type::Type::enriched_type_v0:
         __builtin_unreachable();
         break;
     }
@@ -1968,7 +1973,7 @@ record_type::resolve_key_suffix(std::string_view key,
         index.push_back(0);
         break;
       }
-      case fbs::type::Type::tagged_type_v0:
+      case fbs::type::Type::enriched_type_v0:
         __builtin_unreachable();
         break;
     }
@@ -2223,31 +2228,33 @@ merge(const record_type& lhs, const record_type& rhs,
                               "field {}; failed to merge {} and {}",
                               lfield.type.name(), rfield.type.name(),
                               rfield.name, lhs, rhs));
-              const auto lhs_tags = lfield.type.tags();
-              const auto rhs_tags = rfield.type.tags();
-              const auto conflicting_tag
-                = std::any_of(lhs_tags.begin(), lhs_tags.end(),
-                              [&](const auto& lhs_tag) noexcept {
-                                return rfield.type.tag(lhs_tag.key.data())
-                                       != lhs_tag.value;
-                              });
-              if (conflicting_tag)
+              const auto lhs_attributes = lfield.type.attributes();
+              const auto rhs_attributes = rfield.type.attributes();
+              const auto conflicting_attribute = std::any_of(
+                lhs_attributes.begin(), lhs_attributes.end(),
+                [&](const auto& lhs_attribute) noexcept {
+                  return rfield.type.attribute(lhs_attribute.key.data())
+                         != lhs_attribute.value;
+                });
+              if (conflicting_attribute)
                 return caf::make_error(
                   ec::logic_error,
-                  fmt::format("conflicting tags ['{}'] and ['{}'] for "
+                  fmt::format("conflicting attributes ['{}'] and ['{}'] for "
                               "field {}; failed to merge {} and {}",
-                              fmt::join(lhs_tags, "', '"),
-                              fmt::join(rhs_tags, "', '"), rfield.name, lhs,
-                              rhs));
-              auto tags = std::vector<struct type::tag>{};
-              tags.reserve(lhs_tags.size() + rhs_tags.size());
-              for (const auto& tag : lhs_tags)
-                tags.push_back({std::string{tag.key},
-                                std::optional{std::string{tag.value}}});
-              for (const auto& tag : rhs_tags)
-                tags.push_back({std::string{tag.key},
-                                std::optional{std::string{tag.value}}});
-              return type{lfield.type.name(), lfield.type, tags};
+                              fmt::join(lhs_attributes, "', '"),
+                              fmt::join(rhs_attributes, "', '"), rfield.name,
+                              lhs, rhs));
+              auto attributes = std::vector<struct type::attribute>{};
+              attributes.reserve(lhs_attributes.size() + rhs_attributes.size());
+              for (const auto& attribute : lhs_attributes)
+                attributes.push_back(
+                  {std::string{attribute.key},
+                   std::optional{std::string{attribute.value}}});
+              for (const auto& attribute : rhs_attributes)
+                attributes.push_back(
+                  {std::string{attribute.key},
+                   std::optional{std::string{attribute.value}}});
+              return type{lfield.type.name(), lfield.type, attributes};
             }
             return caf::make_error(ec::logic_error,
                                    fmt::format("conflicting field {}; "
@@ -2418,7 +2425,7 @@ void record_type::leaf_iterable::next() noexcept {
         VAST_ASSERT(records.back());
         index_.push_back(0);
         break;
-      case fbs::type::Type::tagged_type_v0:
+      case fbs::type::Type::enriched_type_v0:
         __builtin_unreachable();
         break;
     }

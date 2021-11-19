@@ -117,13 +117,13 @@ using type_to_data_t = typename type_to_data<T>::type;
 class type final : public stateful_type_base {
 public:
   /// An owned key-value type annotation.
-  struct tag final {
+  struct attribute final {
     std::string key;                       ///< The key.
     std::optional<std::string> value = {}; ///< The value (optional).
   };
 
   /// A view on a key-value type annotation.
-  struct tag_view final {
+  struct attribute_view final {
     std::string_view key;   ///< The key.
     std::string_view value; ///< The value (empty if unset).
   };
@@ -183,18 +183,19 @@ public:
     table_ = other.table_->slice(as_bytes(other));
   }
 
-  /// Constructs a named and tagged type.
+  /// Constructs a named type with attributes.
   /// @param name The type name.
   /// @param nested The aliased type.
-  /// @param tags The key-value type annotations.
-  /// @note Creates a copy of nested if the provided name and tags are empty.
+  /// @param attributes The key-value type annotations.
+  /// @note Creates a copy of nested if the provided name and attributes are
+  /// empty.
   type(std::string_view name, const type& nested,
-       const std::vector<struct tag>& tags) noexcept;
+       const std::vector<struct attribute>& attributes) noexcept;
 
   template <concrete_type T>
   type(std::string_view name, const T& nested,
-       const std::vector<struct tag>& tags) noexcept
-    : type(name, type{nested}, tags) {
+       const std::vector<struct attribute>& attributes) noexcept
+    : type(name, type{nested}, attributes) {
     // nop
   }
 
@@ -210,15 +211,17 @@ public:
     // nop
   }
 
-  /// Constructs a tagged type.
+  /// Constructs a type with attributes.
   /// @param nested The aliased type.
-  /// @param tags The key-value type annotations.
-  /// @note Creates a copy of nested if the tags are empty.
-  type(const type& nested, const std::vector<struct tag>& tags) noexcept;
+  /// @param attributes The key-value type annotations.
+  /// @note Creates a copy of nested if the attributes are empty.
+  type(const type& nested,
+       const std::vector<struct attribute>& attributes) noexcept;
 
   template <concrete_type T>
-  type(const T& nested, const std::vector<struct tag>& tags) noexcept
-    : type(type{nested}, tags) {
+  type(const T& nested,
+       const std::vector<struct attribute>& attributes) noexcept
+    : type(type{nested}, attributes) {
     // nop
   }
 
@@ -240,7 +243,7 @@ public:
   [[nodiscard]] legacy_type to_legacy_type() const noexcept;
 
   /// Returns the underlying FlatBuffers table representation.
-  /// @param transparent Whether to skip over alias and tag types
+  /// @param transparent Whether to skip over internal types.
   [[nodiscard]] const fbs::Type&
   table(enum transparent transparent) const noexcept;
 
@@ -303,20 +306,21 @@ public:
   [[nodiscard]] std::vector<std::string_view> names() const& noexcept;
   [[nodiscard]] std::vector<std::string_view> names() && = delete;
 
-  /// Returns the value of a tag by name, if it exists.
-  /// @param key The key of the tag.
-  /// @note If a tag exists and its value is empty, the result contains an empty
-  /// string to. If the tag does not exists, the result is `std::nullopt`.
+  /// Returns the value of an attribute by name, if it exists.
+  /// @param key The key of the attribute.
+  /// @note If an attribute exists and its value is empty, the result contains
+  /// an empty string to. If the attribute does not exists, the result is
+  /// `std::nullopt`.
   // TODO: The generated FlatBuffers code does not work with `std::string_view`.
   // Re-evaluate when upgrading to FlatBuffers 2.0
   [[nodiscard]] std::optional<std::string_view>
-  tag(const char* key) const& noexcept;
+  attribute(const char* key) const& noexcept;
   [[nodiscard]] std::optional<std::string_view>
-  tag(const char* key) && = delete;
+  attribute(const char* key) && = delete;
 
-  /// Returns a view on all tags.
-  [[nodiscard]] std::vector<tag_view> tags() const& noexcept;
-  [[nodiscard]] std::vector<tag_view> tags() && = delete;
+  /// Returns a view on all attributes.
+  [[nodiscard]] std::vector<attribute_view> attributes() const& noexcept;
+  [[nodiscard]] std::vector<attribute_view> attributes() && = delete;
 
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
@@ -1125,21 +1129,21 @@ struct formatter<vast::type> {
           out = format_to(out, "{}", x);
         },
         value);
-    if (const auto& tags = value.tags(); !tags.empty())
-      out = format_to(out, " {}", fmt::join(tags, " "));
+    if (const auto& attributes = value.attributes(); !attributes.empty())
+      out = format_to(out, " {}", fmt::join(attributes, " "));
     return out;
   }
 };
 
 template <>
-struct formatter<vast::type::tag_view> {
+struct formatter<vast::type::attribute_view> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto format(const vast::type::tag_view& value, FormatContext& ctx)
+  auto format(const vast::type::attribute_view& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
     if (value.value.empty())
       return format_to(ctx.out(), "#{}", value.key);

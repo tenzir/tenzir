@@ -43,7 +43,7 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
     const auto qf = qualified_record_field{layout, offset};
     auto it = indexers.find(qf);
     if (it == indexers.end()) {
-      const auto skip = field.type.tag("skip").has_value();
+      const auto skip = field.type.attribute("skip").has_value();
       auto idx
         = skip ? nullptr : factory<value_index>::make(field.type, index_opts);
       it = indexers.emplace(qf, std::move(idx)).first;

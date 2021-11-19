@@ -56,7 +56,7 @@ value_index_ptr make(type x, caf::settings opts) {
       return nullptr;
     }
   }
-  if (auto index = x.tag("index")) {
+  if (auto index = x.attribute("index")) {
     if (*index == "hash"sv) {
       auto i = opts.find("cardinality");
       if (i == opts.end())
