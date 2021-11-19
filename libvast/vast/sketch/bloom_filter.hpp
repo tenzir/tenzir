@@ -40,7 +40,7 @@ public:
   bool lookup(uint64_t digest) const noexcept;
 
   /// Retrieves the parameters of the filter.
-  bloom_filter_params parameters() const noexcept;
+  const bloom_filter_params& parameters() const noexcept;
 
   // -- concepts --------------------------------------------------------------
 
