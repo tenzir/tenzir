@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.10.35-rc3]
+## [2021.11.18]
 
 ### :warning: Changes
 
@@ -29,6 +29,10 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The export command now has a `--low-priority` option to reduce the priority of the request while query backlogs are being worked down.
   [#1929](https://github.com/tenzir/vast/pull/1929)
+  [#1947](https://github.com/tenzir/vast/pull/1947)
+
+- The keys `query.backlog.normal` and `query.backlog.low` have been added to the metrics output. The values indicate the number of quries that are currently in the backlog.
+  [#1942](https://github.com/tenzir/vast/pull/1942)
 
 ### :beetle: Bug Fixes
 
@@ -49,6 +53,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST no longer tries to create indexes for fields of type `list<record{...}>` as that wasn't supported in the first place.
   [#1933](https://github.com/tenzir/vast/pull/1933)
+
+- Static plugins are no longer always loaded, but rather need to be explicitly enabled as documented. To restore the behavior from before this bug fix, set `vast.plugins: [bundled]` in your configuration file.
+  [#1959](https://github.com/tenzir/vast/pull/1959)
 
 ## [2021.09.30]
 
@@ -1448,7 +1455,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.10.35-rc3]: https://github.com/tenzir/vast/releases/tag/2021.10.35-rc3
+[2021.11.18]: https://github.com/tenzir/vast/releases/tag/2021.11.18
 [2021.09.30]: https://github.com/tenzir/vast/releases/tag/2021.09.30
 [2021.08.26]: https://github.com/tenzir/vast/releases/tag/2021.08.26
 [2021.07.29]: https://github.com/tenzir/vast/releases/tag/2021.07.29

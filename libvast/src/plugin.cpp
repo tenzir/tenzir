@@ -114,9 +114,21 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
           paths_or_names.push_back(file.path());
       }
     }
+    // 'all' implies 'bundled'.
+    paths_or_names.emplace_back("bundled");
   }
-  // Step 3: Disable static plugins that were not enabled, and remove the names
-  // of static plugins from the list of 'bundled' plugins.
+  // Step 3: Try to resolve the reserved identifier 'bundled' into a list of
+  // plugin names. The list may only contain plugin names and plugin paths
+  // afterwards.
+  if (const auto bundled
+      = std::remove(paths_or_names.begin(), paths_or_names.end(), "bundled");
+      bundled != paths_or_names.end()) {
+    paths_or_names.erase(bundled, paths_or_names.end());
+    std::copy(bundled_plugins.begin(), bundled_plugins.end(),
+              std::back_inserter(paths_or_names));
+  }
+  // Step 4: Disable static plugins that were not enabled, and remove the names
+  // of static plugins from the list of enabled plugins.
   auto check_and_remove_disabled_static_plugin = [&](auto& plugin) -> bool {
     switch (plugin.type()) {
       case plugin_ptr::type::dynamic:
@@ -125,10 +137,10 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
         auto has_same_name = [&](const auto& name) {
           return plugin->name() == name;
         };
-        auto it = std::remove_if(bundled_plugins.begin(), bundled_plugins.end(),
+        auto it = std::remove_if(paths_or_names.begin(), paths_or_names.end(),
                                  has_same_name);
-        const auto result = it == bundled_plugins.end();
-        bundled_plugins.erase(it, bundled_plugins.end());
+        const auto result = it == paths_or_names.end();
+        paths_or_names.erase(it, paths_or_names.end());
         return result;
       }
       case plugin_ptr::type::native:
@@ -139,16 +151,6 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
   get_mutable().erase(std::remove_if(get_mutable().begin(), get_mutable().end(),
                                      check_and_remove_disabled_static_plugin),
                       get_mutable().end());
-  // Step 4: Try to resolve the reserved identifier 'bundled' into a list of
-  // plugin names. The list may only contain plugin names and plugin paths
-  // afterwards.
-  if (const auto bundled
-      = std::remove(paths_or_names.begin(), paths_or_names.end(), "bundled");
-      bundled != paths_or_names.end()) {
-    paths_or_names.erase(bundled, paths_or_names.end());
-    std::copy(bundled_plugins.begin(), bundled_plugins.end(),
-              std::back_inserter(paths_or_names));
-  }
   // Step 5: Try to resolve plugin names to plugin paths. After this step, the
   // list only contains plugin paths.
   for (auto& path_or_name : paths_or_names) {
