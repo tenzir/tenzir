@@ -1041,7 +1041,7 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
         auto f = detail::overload{
           [&](const map_type& mt) {
             if (element.is_object()) {
-              const auto& object = element.get_object().value();
+              const auto object = element.get_object().value();
               auto result = map{};
               result.reserve(object.size());
               const auto kt = mt.key_type();
