@@ -17,7 +17,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/operator.hpp"
 #include "vast/test/test.hpp"
@@ -213,7 +213,7 @@ TEST(serialization) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, x0), caf::none);
   data x1;
-  CHECK_EQUAL(detail::deserialize(buf, x1), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, x1), true);
   CHECK_EQUAL(x0, x1);
 }
 

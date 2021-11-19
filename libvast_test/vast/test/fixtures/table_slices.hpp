@@ -20,7 +20,6 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
 #include <string>
@@ -98,8 +97,6 @@ public:
 
 private:
   using triple = std::tuple<vast::integer, std::string, vast::real>;
-
-  caf::binary_deserializer make_source();
 
   caf::binary_serializer make_sink();
 

@@ -13,7 +13,9 @@
 #include "vast/as_bytes.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/function.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 
+#include <caf/deserializer.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
@@ -190,6 +192,7 @@ public:
   friend caf::error read(const std::filesystem::path& filename, chunk_ptr& x);
   friend caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
   friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);
+  friend bool inspect(detail::legacy_deserializer& source, chunk_ptr& x);
 
 private:
   // -- implementation details -------------------------------------------------

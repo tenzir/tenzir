@@ -19,7 +19,6 @@
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/settings.hpp>
 
 // Pull in the auto-generated serialized table slices.

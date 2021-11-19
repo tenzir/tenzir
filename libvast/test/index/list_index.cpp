@@ -12,7 +12,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/test/test.hpp"
 #include "vast/value_index_factory.hpp"
@@ -66,7 +66,7 @@ TEST(list) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   list_index idx2{container_type};
-  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   x = "foo";
   CHECK_EQUAL(
     to_string(*idx2.lookup(relational_operator::ni, make_data_view(x))), "11000"

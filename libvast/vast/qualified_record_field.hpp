@@ -79,6 +79,8 @@ struct qualified_record_field {
   // - legacy_type field_type
   friend caf::error inspect(caf::serializer& f, qualified_record_field& x);
   friend caf::error inspect(caf::deserializer& f, qualified_record_field& x);
+  friend bool
+  inspect(detail::legacy_deserializer& f, qualified_record_field& x);
 
 private:
   /// The pointed-at field.

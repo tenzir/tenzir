@@ -17,7 +17,6 @@
 #include "vast/test/test.hpp"
 #include "vast/time_synopsis.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
 using namespace std::chrono_literals;

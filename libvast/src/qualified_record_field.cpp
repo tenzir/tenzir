@@ -121,6 +121,19 @@ caf::error inspect(caf::deserializer& f, qualified_record_field& x) {
   return result;
 }
 
+bool inspect(detail::legacy_deserializer& f, qualified_record_field& x) {
+  static_assert(std::is_same_v<detail::legacy_deserializer::result_type, bool>);
+  static_assert(detail::legacy_deserializer::writes_state);
+  std::string layout_name = {};
+  std::string field_name = {};
+  legacy_type field_type = {};
+  auto result = f(layout_name, field_name, field_type);
+  if (result)
+    x = qualified_record_field{layout_name, field_name,
+                               type::from_legacy_type(field_type)};
+  return result;
+}
+
 } // namespace vast
 
 namespace std {

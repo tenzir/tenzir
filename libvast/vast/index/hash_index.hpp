@@ -11,6 +11,7 @@
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -114,6 +115,12 @@ public:
       [&] {
         return source(digests_, seeds_);
       });
+  }
+
+  bool deserialize(detail::legacy_deserializer& source) override {
+    if (!value_index::deserialize(source))
+      return false;
+    return source(digests_, seeds_);
   }
 
   const std::vector<digest_type>& digests() const {

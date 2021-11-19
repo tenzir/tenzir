@@ -19,7 +19,6 @@ if (PkgConfig_FOUND)
   mark_as_advanced(XXHASH_FOUND XXHASH_INCLUDE_DIRS XXHASH_LIBRARIES)
 
   if (XXHASH_FOUND)
-    message("xxhash: ${XXHASH_LIBRARIES}")
     if (NOT TARGET xxhash::xxhash)
       add_library(xxhash::xxhash UNKNOWN IMPORTED)
       set_target_properties(

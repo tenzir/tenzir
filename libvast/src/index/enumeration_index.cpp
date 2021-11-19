@@ -8,11 +8,11 @@
 
 #include "vast/index/enumeration_index.hpp"
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
 
-#include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
@@ -25,13 +25,29 @@ enumeration_index::enumeration_index(vast::type t, caf::settings opts)
 }
 
 caf::error enumeration_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval([&] { return value_index::serialize(sink); },
-                          [&] { return sink(index_); });
+  return caf::error::eval(
+    [&] {
+      return value_index::serialize(sink);
+    },
+    [&] {
+      return sink(index_);
+    });
 }
 
 caf::error enumeration_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval([&] { return value_index::deserialize(source); },
-                          [&] { return source(index_); });
+  return caf::error::eval(
+    [&] {
+      return value_index::deserialize(source);
+    },
+    [&] {
+      return source(index_);
+    });
+}
+
+bool enumeration_index::deserialize(detail::legacy_deserializer& source) {
+  if (!value_index::deserialize(source))
+    return false;
+  return source(index_);
 }
 
 bool enumeration_index::append_impl(data_view x, id pos) {
@@ -54,7 +70,9 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
         return caf::make_error(ec::unsupported_operator, op);
       return index_.lookup(op, x);
     },
-    [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+    [&](view<list> xs) {
+      return detail::container_lookup(*this, op, xs);
+    },
   };
   return caf::visit(f, d);
 }

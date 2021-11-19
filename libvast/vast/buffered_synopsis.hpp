@@ -10,8 +10,11 @@
 
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/bloom_filter_synopsis.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/synopsis.hpp"
+
+#include <caf/fwd.hpp>
 
 namespace vast {
 
@@ -105,6 +108,11 @@ public:
   caf::error deserialize(caf::deserializer&) override {
     return caf::make_error(ec::logic_error, "attempted to deserialize a "
                                             "buffered_string_synopsis");
+  }
+
+  bool deserialize(vast::detail::legacy_deserializer&) override {
+    VAST_ERROR("attempted to deserialize a buffered_string_synopsis");
+    return false;
   }
 
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override {

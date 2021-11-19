@@ -12,6 +12,7 @@
 #include "vast/concept/convertible/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/io/read.hpp"
@@ -24,7 +25,6 @@
 #include "vast/taxonomies.hpp"
 
 #include <caf/attach_stream_sink.hpp>
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/expected.hpp>
 
@@ -121,10 +121,10 @@ caf::error type_registry_state::load_from_disk() {
     auto buffer = io::read(fname);
     if (!buffer)
       return buffer.error();
-    caf::binary_deserializer source{self->system(), *buffer};
     std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
-    if (auto error = source(intermediate))
-      return error;
+    if (!detail::legacy_deserialize(*buffer, intermediate))
+      return caf::make_error(ec::parse_error, "failed to load type-registry "
+                                              "state");
     for (const auto& [k, vs] : intermediate) {
       auto entry = type_set{};
       for (const auto& v : vs)

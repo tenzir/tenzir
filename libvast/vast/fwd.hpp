@@ -180,7 +180,9 @@ namespace detail {
 template <class>
 class framed;
 
-}
+class legacy_deserializer;
+
+} // namespace detail
 
 void intrusive_ptr_add_ref(const table_slice_builder*);
 void intrusive_ptr_release(const table_slice_builder*);

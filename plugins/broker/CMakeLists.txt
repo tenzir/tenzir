@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18...3.21 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18...3.22 FATAL_ERROR)
 
 project(
   broker

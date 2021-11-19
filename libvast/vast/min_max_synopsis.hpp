@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
 
 #include <caf/deserializer.hpp>
@@ -84,6 +85,10 @@ public:
   }
 
   caf::error deserialize(caf::deserializer& source) override {
+    return source(min_, max_);
+  }
+
+  bool deserialize(vast::detail::legacy_deserializer& source) override {
     return source(min_, max_);
   }
 

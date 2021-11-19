@@ -14,7 +14,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/concept/printable/vast/coder.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/order.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/null_bitmap.hpp"
@@ -474,7 +474,7 @@ TEST(serialization range coder) {
   fill(x, 42, 84, 42, 21, 30);
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, x), caf::none);
-  CHECK_EQUAL(detail::deserialize(buf, c), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, c), true);
   CHECK_EQUAL(x, c);
   CHECK_DECODE(relational_operator::equal, 21, "00010");
   CHECK_DECODE(relational_operator::equal, 30, "00001");
@@ -500,7 +500,7 @@ TEST(serialization multi-level coder) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, x), caf::none);
   auto c = coder_type{};
-  CHECK_EQUAL(detail::deserialize(buf, c), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, c), true);
   CHECK_EQUAL(x, c);
   CHECK_DECODE(relational_operator::equal, 21, "00010");
   CHECK_DECODE(relational_operator::equal, 30, "00001");

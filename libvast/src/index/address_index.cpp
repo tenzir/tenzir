@@ -8,11 +8,11 @@
 
 #include "vast/index/address_index.hpp"
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
 
-#include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
@@ -26,13 +26,29 @@ address_index::address_index(vast::type t, caf::settings opts)
 }
 
 caf::error address_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval([&] { return value_index::serialize(sink); },
-                          [&] { return sink(bytes_, v4_); });
+  return caf::error::eval(
+    [&] {
+      return value_index::serialize(sink);
+    },
+    [&] {
+      return sink(bytes_, v4_);
+    });
 }
 
 caf::error address_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval([&] { return value_index::deserialize(source); },
-                          [&] { return source(bytes_, v4_); });
+  return caf::error::eval(
+    [&] {
+      return value_index::deserialize(source);
+    },
+    [&] {
+      return source(bytes_, v4_);
+    });
+}
+
+bool address_index::deserialize(detail::legacy_deserializer& source) {
+  if (!value_index::deserialize(source))
+    return false;
+  return source(bytes_, v4_);
 }
 
 bool address_index::append_impl(data_view x, id pos) {
@@ -102,7 +118,9 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
           result.flip();
         return result;
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<list> xs) {
+        return detail::container_lookup(*this, op, xs);
+      },
     },
     d);
 }

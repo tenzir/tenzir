@@ -12,6 +12,7 @@
 
 #include "vast/concept/printable/print.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
@@ -19,6 +20,7 @@
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
 
+#include <caf/binary_deserializer.hpp>
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
 #include <caf/detail/type_list.hpp>
@@ -230,6 +232,9 @@ public:
              caf::meta::omittable_if_empty(), x.name_,
              caf::meta::omittable_if_empty(), x.attributes_);
   }
+
+  friend auto inspect(caf::binary_deserializer&, legacy_abstract_type&)
+    = delete;
 
 protected:
   virtual bool equals(const legacy_abstract_type& other) const;
@@ -748,8 +753,9 @@ auto make_inspect_fun() {
   return static_cast<fun>(lambda);
 }
 
-/// @private
+// TODO: after upgrading to CAF 0.18 this can be removed.
 template <class Inspector, class... Ts>
+  requires(std::is_same_v<typename Inspector::result_type, caf::error>)
 auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> caf::error {
     using result_type = typename Inspector::result_type;
@@ -765,6 +771,48 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
         return tbl[x.type_tag](f, x.x);
       x.x = legacy_type{};
       return caf::none;
+    }
+  };
+}
+
+/// @private
+template <class Inspector, class... Ts>
+  requires(std::is_same_v<typename Inspector::result_type, bool>)
+auto make_inspect(caf::detail::type_list<Ts...>) {
+  return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
+    using result_type = typename Inspector::result_type;
+    if constexpr (Inspector::reads_state) {
+      if (x.type_tag != invalid_type_id)
+        caf::visit(f, x.x);
+      return true;
+    } else {
+      using reference = legacy_type&;
+      using fun = result_type (*)(Inspector&, reference);
+      static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
+      if (x.type_tag != invalid_type_id)
+        return tbl[x.type_tag](f, x.x);
+      x.x = legacy_type{};
+      return true;
+    }
+  };
+}
+
+// TODO: after upgrading to CAF 0.18 this can be removed.
+template <class Inspector, class... Ts>
+  requires(std::is_same_v<typename Inspector::result_type, void>)
+auto make_inspect(caf::detail::type_list<Ts...>) {
+  return [](Inspector& f, legacy_type::inspect_helper& x) -> void {
+    using result_type = typename Inspector::result_type;
+    if constexpr (Inspector::reads_state) {
+      if (x.type_tag != invalid_type_id)
+        caf::visit(f, x.x);
+    } else {
+      using reference = legacy_type&;
+      using fun = result_type (*)(Inspector&, reference);
+      static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
+      if (x.type_tag != invalid_type_id)
+        return tbl[x.type_tag](f, x.x);
+      x.x = legacy_type{};
     }
   };
 }
@@ -785,5 +833,7 @@ auto inspect(Inspector& f, legacy_type& x) {
   return f(caf::meta::type_name("vast.type"), caf::meta::omittable(), type_tag,
            helper);
 }
+
+auto inspect(caf::binary_deserializer& f, legacy_type& x) = delete;
 
 } // namespace vast

@@ -25,7 +25,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
 #include <type_traits>

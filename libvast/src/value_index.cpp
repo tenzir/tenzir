@@ -9,12 +9,13 @@
 #include "vast/value_index.hpp"
 
 #include "vast/chunk.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/legacy_type.hpp"
-#include "vast/operator.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/binary_serializer.hpp>
 #include <caf/deserializer.hpp>
+#include <caf/sec.hpp>
 
 namespace vast {
 
@@ -107,6 +108,10 @@ caf::error value_index::deserialize(caf::deserializer& source) {
   return source(mask_, none_);
 }
 
+bool value_index::deserialize(detail::legacy_deserializer& source) {
+  return source(mask_, none_);
+}
+
 const ewah_bitmap& value_index::mask() const {
   return mask_;
 }
@@ -120,6 +125,10 @@ caf::error inspect(caf::serializer& sink, const value_index& x) {
 }
 
 caf::error inspect(caf::deserializer& source, value_index& x) {
+  return x.deserialize(source);
+}
+
+bool inspect(detail::legacy_deserializer& source, value_index& x) {
   return x.deserialize(source);
 }
 
@@ -152,6 +161,25 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
   if (x == nullptr)
     return caf::make_error(ec::unspecified, "failed to construct value index");
   return x->deserialize(source);
+}
+
+bool inspect(detail::legacy_deserializer& source, value_index_ptr& x) {
+  legacy_type t;
+  if (!source(t))
+    return false;
+  if (caf::holds_alternative<legacy_none_type>(t)) {
+    x = nullptr;
+    return true;
+  }
+  caf::settings opts;
+  if (!source(opts))
+    return false;
+  auto new_ptr
+    = factory<value_index>::make(type::from_legacy_type(t), std::move(opts));
+  if (!new_ptr || !new_ptr->deserialize(source))
+    return false;
+  std::swap(x, new_ptr);
+  return true;
 }
 
 vast::chunk_ptr chunkify(const value_index_ptr& idx) {

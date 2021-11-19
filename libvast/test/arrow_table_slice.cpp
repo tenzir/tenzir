@@ -15,6 +15,7 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
@@ -56,8 +57,7 @@ table_slice roundtrip(table_slice slice) {
   std::vector<char> buf;
   caf::binary_serializer sink{nullptr, buf};
   CHECK_EQUAL(inspect(sink, slice), caf::none);
-  caf::binary_deserializer source{nullptr, buf};
-  CHECK_EQUAL(inspect(source, slice_copy), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, slice_copy), true);
   return slice_copy;
 }
 
@@ -301,8 +301,7 @@ TEST(single column - serialization) {
     std::vector<char> buf;
     caf::binary_serializer sink{nullptr, buf};
     CHECK_EQUAL(sink(slice1), caf::none);
-    caf::binary_deserializer source{nullptr, buf};
-    CHECK_EQUAL(source(slice2), caf::none);
+    CHECK_EQUAL(detail::legacy_deserialize(buf, slice2), true);
   }
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, t), 0_c);
   CHECK_VARIANT_EQUAL(slice2.at(1, 0, t), 1_c);

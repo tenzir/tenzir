@@ -6,8 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/as_bytes.hpp>
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/uuid.hpp>
+#include <vast/detail/legacy_deserialize.hpp>
 #include <vast/fbs/partition.hpp>
 #include <vast/fbs/utils.hpp>
 #include <vast/index/hash_index.hpp>
@@ -93,11 +95,10 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
       auto ids_bytes = type_ids->ids();
       std::cout << indent << name << ": ";
       vast::ids restored_ids;
-      caf::binary_deserializer bds(
-        nullptr, reinterpret_cast<const char*>(ids_bytes->data()),
-        ids_bytes->size());
-      if (auto error = bds(restored_ids))
-        std::cout << " (error: " << caf::to_string(error) << ")";
+      vast::detail::legacy_deserializer bds(
+        vast::as_bytes(ids_bytes->data(), ids_bytes->size()));
+      if (!bds(restored_ids))
+        std::cout << " (deserialization error)";
       else
         std::cout << rank(restored_ids);
       if (options.format.print_bytesizes)
