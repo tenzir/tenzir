@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
 
 namespace vast {
@@ -31,6 +32,8 @@ public:
   caf::error serialize(caf::serializer& sink) const override;
 
   caf::error deserialize(caf::deserializer& source) override;
+
+  bool deserialize(vast::detail::legacy_deserializer& source) override;
 
   bool any_true();
 

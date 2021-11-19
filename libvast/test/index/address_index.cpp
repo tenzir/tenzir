@@ -15,7 +15,7 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/subnet.hpp"
 #include "vast/table_slice.hpp"
@@ -93,7 +93,7 @@ TEST(address) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   address_index idx2{legacy_address_type{}};
-  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   CHECK_EQUAL(to_string(unbox(
                 idx2.lookup(relational_operator::equal, make_data_view(x)))),
               str);

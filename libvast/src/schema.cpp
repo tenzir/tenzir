@@ -17,6 +17,7 @@
 #include "vast/detail/env.hpp"
 #include "vast/detail/filter_dir.hpp"
 #include "vast/detail/installdirs.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/load_contents.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
@@ -25,6 +26,7 @@
 #include "vast/plugin.hpp"
 
 #include <caf/actor_system_config.hpp>
+#include <caf/deserializer.hpp>
 
 #include <filesystem>
 
@@ -182,6 +184,17 @@ void serialize(caf::deserializer& source, schema& sch) {
   sch.clear();
   auto i = str.begin();
   parse(i, str.end(), sch);
+}
+
+bool inspect(detail::legacy_deserializer& source, schema& sch) {
+  std::string str;
+  source(str);
+  if (str.empty())
+    return false;
+  sch.clear();
+  auto i = str.begin();
+  parse(i, str.end(), sch);
+  return true;
 }
 
 bool convert(const schema& s, data& d) {

@@ -9,6 +9,7 @@
 #include "vast/bool_synopsis.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
@@ -66,6 +67,10 @@ caf::error bool_synopsis::serialize(caf::serializer& sink) const {
 }
 
 caf::error bool_synopsis::deserialize(caf::deserializer& source) {
+  return source(false_, true_);
+}
+
+bool bool_synopsis::deserialize(vast::detail::legacy_deserializer& source) {
   return source(false_, true_);
 }
 

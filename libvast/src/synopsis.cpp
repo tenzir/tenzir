@@ -9,6 +9,7 @@
 #include "vast/synopsis.hpp"
 
 #include "vast/bool_synopsis.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
@@ -17,9 +18,10 @@
 #include "vast/synopsis_factory.hpp"
 #include "vast/time_synopsis.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
+#include <caf/deserializer.hpp>
 #include <caf/error.hpp>
+#include <caf/sec.hpp>
 
 #include <typeindex>
 
@@ -73,6 +75,25 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   return caf::none;
 }
 
+bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr) {
+  // Read synopsis type.
+  legacy_type t;
+  if (!source(t))
+    return false;
+  // Only nullptr has a none type.
+  if (!t) {
+    ptr.reset();
+    return true;
+  }
+  // Deserialize into a new instance.
+  auto new_ptr = factory<synopsis>::make(std::move(t), caf::settings{});
+  if (!new_ptr || !new_ptr->deserialize(source))
+    return false;
+  // Change `ptr` only after successfully deserializing.
+  std::swap(ptr, new_ptr);
+  return true;
+}
+
 caf::expected<flatbuffers::Offset<fbs::synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
      const qualified_record_field& fqf) {
@@ -118,11 +139,10 @@ caf::error unpack(const fbs::synopsis::v0& synopsis, synopsis_ptr& ptr) {
       vast::time{} + vast::duration{ts->start()},
       vast::time{} + vast::duration{ts->end()});
   else if (auto os = synopsis.opaque_synopsis()) {
-    caf::binary_deserializer sink(
-      nullptr, reinterpret_cast<const char*>(os->data()->data()),
-      os->data()->size());
-    if (auto error = sink(ptr))
-      return error;
+    vast::detail::legacy_deserializer sink(as_bytes(*os->data()));
+    if (!sink(ptr))
+      return caf::make_error(ec::parse_error, "opaque_synopsis not "
+                                              "deserializable");
   } else {
     return caf::make_error(ec::format_error, "no synopsis type");
   }

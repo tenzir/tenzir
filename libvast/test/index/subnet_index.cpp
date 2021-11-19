@@ -15,7 +15,7 @@
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/test/test.hpp"
 
@@ -84,7 +84,7 @@ TEST(subnet) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   subnet_index idx2{legacy_subnet_type{}};
-  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   bm = idx2.lookup(relational_operator::not_equal, make_data_view(s1));
   CHECK_EQUAL(to_string(unbox(bm)), "101111");
 }

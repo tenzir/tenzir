@@ -13,7 +13,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bits.hpp"
 #include "vast/concept/printable/vast/bitvector.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/test/test.hpp"
 
@@ -205,7 +205,7 @@ TEST(serializable) {
   x[1000] = true;
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, x), caf::none);
-  CHECK_EQUAL(detail::deserialize(buf, y), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_EQUAL(x, y);
   CHECK(y[1000]);
 }

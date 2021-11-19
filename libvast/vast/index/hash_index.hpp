@@ -11,6 +11,7 @@
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -96,13 +97,29 @@ public:
     for (auto& [k, v] : seeds_)
       if (v > 0)
         non_null_seeds.emplace(k, v);
-    return caf::error::eval([&] { return value_index::serialize(sink); },
-                            [&] { return sink(digests_, non_null_seeds); });
+    return caf::error::eval(
+      [&] {
+        return value_index::serialize(sink);
+      },
+      [&] {
+        return sink(digests_, non_null_seeds);
+      });
   }
 
   caf::error deserialize(caf::deserializer& source) override {
-    return caf::error::eval([&] { return value_index::deserialize(source); },
-                            [&] { return source(digests_, seeds_); });
+    return caf::error::eval(
+      [&] {
+        return value_index::deserialize(source);
+      },
+      [&] {
+        return source(digests_, seeds_);
+      });
+  }
+
+  bool deserialize(detail::legacy_deserializer& source) override {
+    if (!value_index::deserialize(source))
+      return false;
+    return source(digests_, seeds_);
   }
 
   const std::vector<digest_type>& digests() const {
@@ -212,8 +229,12 @@ private:
     if (op == relational_operator::equal
         || op == relational_operator::not_equal) {
       auto k = find_digest(x);
-      auto eq = [=](const digest_type& digest) { return k == digest; };
-      auto ne = [=](const digest_type& digest) { return k != digest; };
+      auto eq = [=](const digest_type& digest) {
+        return k == digest;
+      };
+      auto ne = [=](const digest_type& digest) {
+        return k != digest;
+      };
       return op == relational_operator::equal ? scan(eq) : scan(ne);
     }
     if (op == relational_operator::in || op == relational_operator::not_in) {
@@ -239,11 +260,15 @@ private:
         return keys.error();
       // We're good to go with: create the set predicates an run the scan.
       auto in_pred = [&](const digest_type& digest) {
-        auto cmp = [=](auto& k) { return k == digest; };
+        auto cmp = [=](auto& k) {
+          return k == digest;
+        };
         return std::any_of(keys->begin(), keys->end(), cmp);
       };
       auto not_in_pred = [&](const digest_type& digest) {
-        auto cmp = [=](auto& k) { return k == digest; };
+        auto cmp = [=](auto& k) {
+          return k == digest;
+        };
         return std::none_of(keys->begin(), keys->end(), cmp);
       };
       return op == relational_operator::in ? scan(in_pred) : scan(not_in_pred);

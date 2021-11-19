@@ -12,7 +12,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/test/test.hpp"
@@ -52,7 +52,7 @@ TEST(serialization) {
   std::vector<char> buf;
   REQUIRE(detail::serialize(buf, x) == caf::none);
   hash_index<1> y{legacy_string_type{}};
-  REQUIRE(detail::deserialize(buf, y) == caf::none);
+  REQUIRE(detail::legacy_deserialize(buf, y));
   auto result = y.lookup(relational_operator::not_equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "101");
   // Cannot append after deserialization.

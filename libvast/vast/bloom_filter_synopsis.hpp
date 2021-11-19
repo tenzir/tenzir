@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/bloom_filter.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/synopsis.hpp"
 
@@ -84,6 +85,10 @@ public:
   }
 
   caf::error deserialize(caf::deserializer& source) override {
+    return source(bloom_filter_);
+  }
+
+  bool deserialize(vast::detail::legacy_deserializer& source) override {
     return source(bloom_filter_);
   }
 

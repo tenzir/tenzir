@@ -17,7 +17,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/test.hpp"
@@ -66,7 +66,7 @@ TEST(real with custom binner) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   auto idx2 = index_type{legacy_real_type{}, opts};
-  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
 }
@@ -135,7 +135,7 @@ TEST(time) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   arithmetic_index<vast::time> idx2{legacy_time_type{}, opts};
-  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   eighteen = idx2.lookup(relational_operator::greater_equal,
                          make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
