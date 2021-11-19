@@ -377,7 +377,7 @@ jobs:
             gnu-sed \
             libpcap \
             libunwind-headers \
-            llvm@12 \
+            llvm \
             ninja \
             openssl \
             pandoc \
@@ -399,7 +399,7 @@ jobs:
       - name: Setup Homebrew Clang
         if: matrix.build.compiler == 'Clang'
         run: |
-          llvm_root="$(brew --prefix llvm@12)"
+          llvm_root="$(brew --prefix llvm)"
           echo "${llvm_root}/bin" >> $GITHUB_PATH
           echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
