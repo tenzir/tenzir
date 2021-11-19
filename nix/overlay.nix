@@ -2,7 +2,7 @@ final: prev:
 let
   inherit (final) lib;
   inherit (final.stdenv.hostPlatform) isStatic;
-  stdenv = if prev.stdenv.isDarwin then final.llvmPackages_12.stdenv else prev.gcc11Stdenv;
+  stdenv = if final.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
 in {
   arrow-cpp = (prev.arrow-cpp.override {enableShared = !isStatic;}).overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ [
