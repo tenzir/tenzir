@@ -214,6 +214,7 @@ using enumeration = uint8_t;
 namespace fbs {
 
 struct FlatTableSlice;
+struct Segment;
 struct TableSlice;
 struct Type;
 

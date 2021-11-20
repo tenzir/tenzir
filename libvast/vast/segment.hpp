@@ -12,6 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/ids.hpp"
 #include "vast/uuid.hpp"
 
@@ -33,7 +34,7 @@ public:
   /// Constructs a segment.
   /// @param header The header of the segment.
   /// @param chunk The chunk holding the segment data.
-  static caf::expected<segment> make(chunk_ptr chunk);
+  static caf::expected<segment> make(const chunk_ptr& chunk);
 
   /// Create a new segment that is a copy of the given segment excluding
   /// the given ids. The returned segment will have the same segment id
@@ -66,9 +67,9 @@ public:
   erase(const vast::ids& xs) const;
 
 private:
-  explicit segment(chunk_ptr chk);
+  explicit segment(flatbuffer<fbs::Segment> flatbuffer);
 
-  chunk_ptr chunk_;
+  flatbuffer<fbs::Segment> flatbuffer_ = {};
 };
 
 } // namespace vast

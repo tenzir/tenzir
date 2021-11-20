@@ -34,26 +34,17 @@ namespace vast {
 
 using namespace binary_byte_literals;
 
-caf::expected<segment> segment::make(chunk_ptr chunk) {
-  VAST_ASSERT(chunk != nullptr);
-  // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t' over
-  // 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
-  using ::flatbuffers::soffset_t;
-  if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE)
-    return caf::make_error(ec::format_error,
-                           "cannot read segment because its size",
-                           chunk->size(), "exceeds the maximum allowed size of",
-                           FLATBUFFERS_MAX_BUFFER_SIZE);
-  auto s = fbs::GetSegment(chunk->data());
-  VAST_ASSERT(s); // `GetSegment` is just a cast, so this cant become null.
-  if (s->segment_type() != fbs::segment::Segment::v0)
+caf::expected<segment> segment::make(const chunk_ptr& chunk) {
+  auto s = flatbuffer<fbs::Segment>::make(chunk);
+  if (!s)
+    return s.error();
+  if ((*s)->segment_type() != fbs::segment::Segment::v0)
     return caf::make_error(ec::format_error, "unsupported segment version");
-  return segment{std::move(chunk)};
+  return segment{std::move(*s)};
 }
 
 uuid segment::id() const {
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
+  auto segment_v0 = flatbuffer_->segment_as_v0();
   uuid result;
   if (auto error = unpack(*segment_v0->uuid(), result))
     VAST_ERROR("couldnt get uuid from segment: {}", error);
@@ -62,8 +53,7 @@ uuid segment::id() const {
 
 vast::ids segment::ids() const {
   vast::ids result;
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
+  auto segment_v0 = flatbuffer_->segment_as_v0();
   for (auto interval : *segment_v0->ids()) {
     result.append_bits(false, interval->begin() - result.size());
     result.append_bits(true, interval->end() - interval->begin());
@@ -72,19 +62,18 @@ vast::ids segment::ids() const {
 }
 
 size_t segment::num_slices() const {
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
+  auto segment_v0 = flatbuffer_->segment_as_v0();
   return segment_v0->slices()->size();
 }
 
 chunk_ptr segment::chunk() const {
-  return chunk_;
+  return flatbuffer_.chunk();
 }
 
 caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice> result;
-  auto segment = fbs::GetSegment(chunk_->data())->segment_as_v0();
+  auto segment = flatbuffer_->segment_as_v0();
   if (!segment)
     return caf::make_error(ec::format_error, "invalid segment version");
   VAST_ASSERT(segment->ids()->size() == segment->slices()->size());
@@ -94,7 +83,8 @@ segment::lookup(const vast::ids& xs) const {
   };
   auto g = [&](const auto& zip) {
     auto&& [interval, flat_slice] = zip;
-    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::yes};
+    // TODO: rework livetime sharing API of table slice.
+    auto slice = table_slice{*flat_slice, chunk(), table_slice::verify::yes};
     slice.offset(interval->begin());
     VAST_ASSERT(slice.offset() == interval->begin());
     VAST_ASSERT(slice.offset() + slice.rows() == interval->end());
@@ -120,7 +110,7 @@ segment::lookup(const vast::ids& xs) const {
 
 caf::expected<std::vector<table_slice>>
 segment::erase(const vast::ids& xs) const {
-  const auto* segment = fbs::GetSegment(chunk_->data())->segment_as_v0();
+  const auto* segment = flatbuffer_->segment_as_v0();
   auto intervals = std::vector(segment->ids()->begin(), segment->ids()->end());
   auto flat_slices
     = std::vector(segment->slices()->begin(), segment->slices()->end());
@@ -133,7 +123,7 @@ segment::erase(const vast::ids& xs) const {
   std::vector<table_slice> result;
   for (unsigned int i = 0; i < segment->slices()->size(); ++i) {
     const auto& flat_slice = segment->slices()->Get(i);
-    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::yes};
+    auto slice = table_slice{*flat_slice, chunk(), table_slice::verify::yes};
     slice.offset(intervals.at(i)->begin());
     // Expand keep_mask on-the-fly if needed.
     auto max_id = slice.offset() + slice.rows();
@@ -144,7 +134,8 @@ segment::erase(const vast::ids& xs) const {
   return result;
 }
 
-segment::segment(chunk_ptr chk) : chunk_{std::move(chk)} {
+segment::segment(flatbuffer<fbs::Segment> flatbuffer)
+  : flatbuffer_{std::move(flatbuffer)} {
   // nop
 }
 
