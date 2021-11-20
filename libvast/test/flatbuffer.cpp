@@ -13,6 +13,7 @@
 #include "vast/data.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/flatbuffer.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
 
@@ -50,5 +51,27 @@ TEST(lifetime) {
   fbrtft = nullptr;
   CHECK_EQUAL(counter, 1);
 }
+
+FIXTURE_SCOPE(flatbuffer_fixture, fixtures::deterministic_actor_system)
+
+TEST(serialization) {
+  auto fbt = flatbuffer<fbs::Type>{};
+  {
+    auto rt = record_type{
+      {"foo", address_type{}},
+    };
+    auto chunk = chunk::copy(rt);
+    auto maybe_fbt = flatbuffer<fbs::Type>::make(chunk);
+    REQUIRE_NOERROR(maybe_fbt);
+    fbt = std::move(*maybe_fbt);
+    CHECK_ROUNDTRIP(fbt);
+  }
+  auto fbrt = fbt.slice(*fbt->type_as_record_type_v0());
+  auto fbrtf = fbrt.slice(*fbrt->fields()->Get(0));
+  auto fbrtft = fbrtf.slice(*fbrtf->type_nested_root(), *fbrtf->type());
+  CHECK_ROUNDTRIP(fbrtft);
+}
+
+FIXTURE_SCOPE_END()
 
 } // namespace vast
