@@ -176,8 +176,9 @@ function (VASTCompileFlatBuffers)
     add_custom_command(
       OUTPUT "${desired_file}"
       COMMAND
-        flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings
-        --gen-mutable -o "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
+        flatbuffers::flatc -b --cpp --cpp-std c++17 --scoped-enums
+        --gen-name-strings --gen-mutable -o
+        "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
       COMMAND ${CMAKE_COMMAND} -E rename "${output_file}" "${desired_file}"
       COMMAND ${CMAKE_COMMAND} -P
               "${CMAKE_CURRENT_BINARY_DIR}/fbs-strip-suffix-${basename}.cmake"
