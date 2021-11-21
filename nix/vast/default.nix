@@ -2,7 +2,6 @@
 , lib
 , vast-source
 , nix-gitignore
-, nix-gitDescribe
 , cmake
 , cmake-format
 , pkgconfig
@@ -44,8 +43,7 @@ let
 
   src = vast-source;
 
-  version = if (versionOverride != null) then versionOverride else lib.fileContents (nix-gitDescribe src);
-
+  version = if (versionOverride != null) then versionOverride else "v1.0.0";
 in
 
 stdenv.mkDerivation rec {
