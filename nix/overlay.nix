@@ -7,7 +7,6 @@ in {
   musl = prev.musl.overrideAttrs (old: {
     CFLAGS = old.CFLAGS ++ [ "-fno-omit-frame-pointer" ];
   });
-  nix-gitDescribe = final.callPackage ./gitDescribe.nix {};
   arrow-cpp = (prev.arrow-cpp.override {enableShared = !isStatic;}).overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ [
       "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"

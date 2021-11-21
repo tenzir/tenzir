@@ -49,7 +49,8 @@ git switch -C "topic/release-${new_version}" origin/master
 
 # Change the fallback version.
 perl -i -pe "s/${last_rc_version}/${new_version}/g" \
-  "${source_dir}/cmake/VASTVersionFallback.cmake"
+  "${source_dir}/cmake/VASTVersionFallback.cmake" \
+  "${source_dir}/nix/vast/default.nix"
 
 # If the new version is not a release candidate, change mentions of the version
 # in README.md and pyvast/setup.py as well.
