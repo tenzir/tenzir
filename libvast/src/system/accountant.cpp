@@ -36,6 +36,7 @@
 #include <limits>
 #include <queue>
 #include <string>
+#include <string_view>
 
 namespace vast::system {
 
@@ -123,6 +124,7 @@ struct accountant_state_impl {
           {"ts", type{"timestamp", time_type{}}},
           {"actor", string_type{}},
           {"key", string_type{}},
+          {"version", string_type{}},
           {"value", real_type{}},
         },
       };
@@ -130,7 +132,9 @@ struct accountant_state_impl {
         = factory<table_slice_builder>::make(cfg.self_sink.slice_type, layout);
       VAST_DEBUG("{} obtained a table slice builder", *self);
     }
-    VAST_ASSERT(builder->add(ts, actor_map[actor_id], key, x));
+    const auto added = builder->add(ts, actor_map[actor_id], key,
+                                    std::string_view{version::version}, x);
+    VAST_ASSERT(added);
     if (builder->rows() == static_cast<size_t>(cfg.self_sink.slice_size))
       finish_slice();
   }
@@ -148,6 +152,9 @@ struct accountant_state_impl {
                   std::pair{"actor"sv, make_data_view(actor_map[actor_id])});
     *iter++ = ',';
     printer.print(iter, std::pair{"key"sv, make_data_view(key)});
+    *iter++ = ',';
+    printer.print(iter, std::pair{"version"sv, make_data_view(std::string_view{
+                                                 version::version})});
     *iter++ = ',';
     printer.print(iter, std::pair{"value"sv, make_data_view(x)});
     *iter++ = '}';
