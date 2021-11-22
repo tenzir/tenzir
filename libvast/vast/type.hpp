@@ -262,6 +262,7 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const type& x) noexcept;
+  friend std::span<const std::byte> as_bytes(type&&) noexcept = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] data construct() const noexcept;
@@ -623,6 +624,8 @@ public:
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte>
   as_bytes(const enumeration_type& x) noexcept;
+  friend std::span<const std::byte>
+  as_bytes(enumeration_type&&) noexcept = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] enumeration construct() const noexcept;
@@ -689,6 +692,7 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
+  friend std::span<const std::byte> as_bytes(list_type&&) noexcept = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] static list construct() noexcept;
@@ -745,6 +749,7 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
+  friend std::span<const std::byte> as_bytes(map_type&&) noexcept = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] static map construct() noexcept;
@@ -853,6 +858,7 @@ public:
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const record_type& x) noexcept;
+  friend std::span<const std::byte> as_bytes(record_type&&) noexcept = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] record construct() const noexcept;

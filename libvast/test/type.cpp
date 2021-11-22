@@ -272,17 +272,18 @@ TEST(list_type) {
   static_assert(!basic_type<list_type>);
   static_assert(complex_type<list_type>);
   const auto t = type{};
-  const auto lit = type{list_type{integer_type{}}};
-  CHECK(lit);
-  CHECK_EQUAL(as_bytes(lit), as_bytes(list_type{integer_type{}}));
-  CHECK(t != lit);
-  CHECK(t < lit);
-  CHECK(t <= lit);
-  CHECK_EQUAL(fmt::format("{}", lit), "list<int>");
+  const auto tlit = type{list_type{integer_type{}}};
+  const auto lit = list_type{integer_type{}};
+  CHECK(tlit);
+  CHECK_EQUAL(as_bytes(tlit), as_bytes(lit));
+  CHECK(t != tlit);
+  CHECK(t < tlit);
+  CHECK(t <= tlit);
+  CHECK_EQUAL(fmt::format("{}", tlit), "list<int>");
   CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<none>");
   CHECK(!caf::holds_alternative<list_type>(t));
-  CHECK(caf::holds_alternative<list_type>(lit));
-  CHECK_EQUAL(caf::get<list_type>(lit).value_type(), type{integer_type{}});
+  CHECK(caf::holds_alternative<list_type>(tlit));
+  CHECK_EQUAL(caf::get<list_type>(tlit).value_type(), type{integer_type{}});
   const auto llbt
     = type::from_legacy_type(legacy_list_type{legacy_bool_type{}});
   CHECK(caf::holds_alternative<list_type>(llbt));
@@ -294,19 +295,19 @@ TEST(map_type) {
   static_assert(!basic_type<map_type>);
   static_assert(complex_type<map_type>);
   const auto t = type{};
-  const auto msit = type{map_type{string_type{}, integer_type{}}};
-  CHECK(msit);
-  CHECK_EQUAL(as_bytes(msit),
-              as_bytes(map_type{string_type{}, integer_type{}}));
-  CHECK(t != msit);
-  CHECK(t < msit);
-  CHECK(t <= msit);
-  CHECK_EQUAL(fmt::format("{}", msit), "map<string, int>");
+  const auto tmsit = type{map_type{string_type{}, integer_type{}}};
+  const auto msit = map_type{string_type{}, integer_type{}};
+  CHECK(tmsit);
+  CHECK_EQUAL(as_bytes(tmsit), as_bytes(msit));
+  CHECK(t != tmsit);
+  CHECK(t < tmsit);
+  CHECK(t <= tmsit);
+  CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int>");
   CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<none, none>");
   CHECK(!caf::holds_alternative<map_type>(t));
-  CHECK(caf::holds_alternative<map_type>(msit));
-  CHECK_EQUAL(caf::get<map_type>(msit).key_type(), type{string_type{}});
-  CHECK_EQUAL(caf::get<map_type>(msit).value_type(), type{integer_type{}});
+  CHECK(caf::holds_alternative<map_type>(tmsit));
+  CHECK_EQUAL(caf::get<map_type>(tmsit).key_type(), type{string_type{}});
+  CHECK_EQUAL(caf::get<map_type>(tmsit).value_type(), type{integer_type{}});
   const auto lmabt = type::from_legacy_type(
     legacy_map_type{legacy_address_type{}, legacy_bool_type{}});
   CHECK(caf::holds_alternative<map_type>(lmabt));
