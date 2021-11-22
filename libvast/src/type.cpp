@@ -1762,7 +1762,8 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      ++index.back();
+      if (!index.empty())
+        ++index.back();
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
@@ -1820,7 +1821,8 @@ record_type::resolve_key(std::string_view key) const noexcept {
     if (index.back() >= fields->size() || remaining_key.empty()) {
       history.pop_back();
       index.pop_back();
-      ++index.back();
+      if (!index.empty())
+        ++index.back();
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
@@ -1912,7 +1914,8 @@ record_type::resolve_key_suffix(std::string_view key,
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      ++index.back();
+      if (!index.empty())
+        ++index.back();
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
