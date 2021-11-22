@@ -154,7 +154,6 @@ caf::error segment_store::erase(const ids& xs) {
   // the builder directly by replacing the set of table slices. In any case, we
   // have to update `segments_` to point to the new segment ID.
   auto impl = [&](auto& seg) {
-    fmt::print(stderr, "in erase impl\n");
     auto segment_id = seg.id();
     // Get all slices in the segment and generate a new segment that contains
     // only what's left after dropping the selection.
@@ -246,13 +245,9 @@ caf::error segment_store::erase(const ids& xs) {
                    detail::pretty_type_name(this));
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
-      fmt::print(stderr, "scheduling deletion of {}\n",
-                 stale_filename.string());
       seg.chunk()->add_deletion_step([=]() noexcept {
         std::error_code err{};
         std::filesystem::remove(stale_filename, err);
-        fmt::print(stderr, "fs remove {}: {}\n", stale_filename.string(),
-                   err.message());
       });
     }
     // else: nothing to do, since we can continue filling the active segment.
@@ -466,11 +461,9 @@ uint64_t segment_store::drop(segment& x) {
             segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);
-  fmt::print(stderr, "refcount: {}\n", x.chunk()->get_reference_count());
   x.chunk()->add_deletion_step([=]() noexcept {
     std::error_code err{};
     std::filesystem::remove(filename, err);
-    fmt::print(stderr, "removing {}: {}\n", filename, err);
   });
   segments_.erase_value(segment_id);
   return erased_events;
