@@ -2124,6 +2124,13 @@ std::optional<record_type> record_type::transform(
   // that recursively converts the record type into a list of record fields,
   // and then modifies that. As an additional benefit this function allows for
   // applying multiple transformations at the same time.
+  //
+  // This algorithm works by walking over the transformations in reverse order
+  // (by offset), and unwrapping the record type into fields for all fields
+  // whose offset is a prefix of the transformations target offset.
+  // Transformations are applied when unwrapping if the target offset matches
+  // the field offset exactly. After having walked over a record type, the
+  // fields are joined back together at the end of the recursive lambda call.
   const auto do_transform
     = [](const auto& do_transform, const record_type& self, offset index,
          auto& current, const auto end) noexcept -> std::optional<record_type> {
