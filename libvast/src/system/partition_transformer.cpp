@@ -25,10 +25,11 @@ namespace vast::system {
 // constructed, we don't have to spawn separate indexer actors and
 // stream data but can just compute everything inline here.
 void partition_transformer_state::add_slice(const table_slice& slice) {
-  const auto& layout = slice.layout();
+  // Flatten the layout analogous to the active partition, to ensure
+  // `slice.columns()` corresponds to `layout.fields`.
+  const auto& layout = flatten(slice.layout());
   data.events += slice.rows();
   data.synopsis->add(slice, synopsis_opts);
-  VAST_ASSERT(slice.columns() == layout.fields.size());
   // Update type ids
   auto it = data.type_ids.emplace(layout.name(), ids{}).first;
   auto& ids = it->second;
@@ -38,6 +39,7 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
   ids.append_bits(false, first - ids.size());
   ids.append_bits(true, last - first);
   // Push the event data to the indexers.
+  VAST_ASSERT(slice.columns() == layout.fields.size());
   for (size_t i = 0; i < slice.columns(); ++i) {
     const auto& field = layout.fields[i];
     auto qf = qualified_record_field{layout.name(), field};
