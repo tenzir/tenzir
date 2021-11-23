@@ -83,7 +83,7 @@ segment::lookup(const vast::ids& xs) const {
   };
   auto g = [&](const auto& zip) {
     auto&& [interval, flat_slice] = zip;
-    // TODO: rework livetime sharing API of table slice.
+    // TODO: rework lifetime sharing API of table slice.
     auto slice = table_slice{*flat_slice, chunk(), table_slice::verify::yes};
     slice.offset(interval->begin());
     VAST_ASSERT(slice.offset() == interval->begin());

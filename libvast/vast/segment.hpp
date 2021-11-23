@@ -32,7 +32,6 @@ class segment {
 
 public:
   /// Constructs a segment.
-  /// @param header The header of the segment.
   /// @param chunk The chunk holding the segment data.
   static caf::expected<segment> make(chunk_ptr&& chunk);
 
