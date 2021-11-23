@@ -52,7 +52,7 @@ public:
   /// lifetime with the chunk it's constructed from.
   /// @pre *chunk* must hold a valid *Table*.
   [[nodiscard]] static caf::expected<flatbuffer>
-  make(const chunk_ptr& chunk, enum verify verify = verify_default) noexcept
+  make(chunk_ptr&& chunk, enum verify verify = verify_default) noexcept
     requires(IsRootTable) {
     if (!chunk)
       return caf::make_error(ec::logic_error,

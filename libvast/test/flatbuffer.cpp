@@ -30,7 +30,7 @@ TEST(lifetime) {
     chunk->add_deletion_step([&]() noexcept {
       ++counter;
     });
-    auto maybe_fbt = flatbuffer<fbs::Type>::make(chunk);
+    auto maybe_fbt = flatbuffer<fbs::Type>::make(std::move(chunk));
     REQUIRE_NOERROR(maybe_fbt);
     fbt = std::move(*maybe_fbt);
     CHECK_EQUAL(counter, 0);
@@ -61,7 +61,7 @@ TEST(serialization) {
       {"foo", address_type{}},
     };
     auto chunk = chunk::copy(rt);
-    auto maybe_fbt = flatbuffer<fbs::Type>::make(chunk);
+    auto maybe_fbt = flatbuffer<fbs::Type>::make(std::move(chunk));
     REQUIRE_NOERROR(maybe_fbt);
     fbt = std::move(*maybe_fbt);
     CHECK_ROUNDTRIP(fbt);

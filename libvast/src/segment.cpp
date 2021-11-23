@@ -34,8 +34,8 @@ namespace vast {
 
 using namespace binary_byte_literals;
 
-caf::expected<segment> segment::make(const chunk_ptr& chunk) {
-  auto s = flatbuffer<fbs::Segment>::make(chunk);
+caf::expected<segment> segment::make(chunk_ptr&& chunk) {
+  auto s = flatbuffer<fbs::Segment>::make(std::move(chunk));
   if (!s)
     return s.error();
   if ((*s)->segment_type() != fbs::segment::Segment::v0)
