@@ -43,7 +43,7 @@ RUN apt-get update && \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
     apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* *.deb
 
 # VAST
 COPY changelog ./changelog

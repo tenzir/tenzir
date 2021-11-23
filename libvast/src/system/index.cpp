@@ -1196,6 +1196,12 @@ index(index_actor::stateful_pointer<index_state> self,
                                 std::move(*worker)};
       auto actors
         = self->state.collect_query_actors(lookup, /* num_partitions = */ 1);
+      if (actors.empty()) {
+        self->send(self, atom::worker_v, lookup.worker);
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("invalid partition id: {}",
+                                           old_partition_id));
+      }
       self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
                  std::move(actors),
                  caf::actor_cast<receiver_actor<atom::done>>(sink));
@@ -1214,7 +1220,9 @@ index(index_actor::stateful_pointer<index_state> self,
               ->request(self->state.meta_index, caf::infinite, atom::replace_v,
                         old_partition_id, new_partition_id, std::move(synopsis))
               .then(
-                [self, rp, old_partition_id](atom::ok) mutable {
+                [self, rp, old_partition_id,
+                 new_partition_id](atom::ok) mutable {
+                  self->state.persisted_partitions.insert(new_partition_id);
                   rp.delegate(static_cast<index_actor>(self), atom::erase_v,
                               old_partition_id);
                 },
