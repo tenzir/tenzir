@@ -297,11 +297,9 @@ public:
   }
 
   /// Accesses the underlying chunk.
-  /// @note This is only available for FlatBuffers root table pointers, as
-  /// this operation is fundamentally unsafe for non-root tables, for which
-  /// the table pointer is not at the beginning of the chunk.
-  [[nodiscard]] const chunk_ptr& chunk() const noexcept
-    requires(Type == flatbuffer_type::root) {
+  /// @note The returned chunk may contain more than just the FlatBuffers table
+  /// if it is not a root table.
+  [[nodiscard]] const chunk_ptr& chunk() const noexcept {
     return chunk_;
   }
 
