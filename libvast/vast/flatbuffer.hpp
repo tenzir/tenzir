@@ -19,17 +19,38 @@
 
 namespace vast {
 
+/// Determines whether the FlatBuffers table is a root or a child table, i.e.,
+/// whether the only data contained in the owned chunk is the table itself
+/// (root) or other the table is just part of a bigger root table (child).
+enum class flatbuffer_type {
+  root,  ///< The table type is a root type, or a nested FlatBuffers table.
+  child, ///< The table is sliced from a root table.
+};
+
+/// Determines whether the FlatBuffers table has buffer- or pointer-like
+/// behavior, i.e., whether comparison operators compare the buffer or the table
+/// pointer.
+enum class flatbuffer_semantics {
+  buffer,  ///< Comparison operators compare the buffer contents bytewise. This
+           ///< is only supported for root tables.
+  pointer, ///< Comparison operators compare the table pointers.
+};
+
 /// A wrapper class around a FlatBuffers table that allows for sharing the
 /// lifetime with the chunk containing the table.
 /// @tparam Table The generated FlatBuffers table type.
-/// @tparam IsRootTable Whether the table is a root table, i.e., starts at the
-/// beginning of the chunk.
-template <class Table, bool IsRootTable = true>
+/// @tparam Semantics Determins whether the table behaves like a buffer or a
+/// pointer.
+/// @tparam Type Determines whether the table is a root or a child table.
+template <class Table,
+          flatbuffer_semantics Semantics = flatbuffer_semantics::buffer,
+          flatbuffer_type Type = flatbuffer_type::root>
 class flatbuffer final {
 public:
   // -- member types and constants --------------------------------------------
 
-  template <class ParentTable, bool ParentIsRootTable>
+  template <class ParentTable, flatbuffer_semantics ParentSemantics,
+            flatbuffer_type ParentType>
   friend class flatbuffer;
 
   friend struct ::fmt::formatter<flatbuffer>;
@@ -53,7 +74,7 @@ public:
   /// @pre *chunk* must hold a valid *Table*.
   [[nodiscard]] static caf::expected<flatbuffer>
   make(chunk_ptr&& chunk, enum verify verify = verify_default) noexcept
-    requires(IsRootTable) {
+    requires(Type == flatbuffer_type::root) {
     if (!chunk)
       return caf::make_error(ec::logic_error,
                              fmt::format("failed to read {} from a nullptr",
@@ -109,7 +130,8 @@ public:
   // compiling the schemas.
   flatbuffer(flatbuffers::FlatBufferBuilder& builder,
              flatbuffers::Offset<Table> offset,
-             const char* file_identifier) noexcept requires(IsRootTable) {
+             const char* file_identifier) noexcept
+    requires(Type == flatbuffer_type::root) {
     builder.Finish(offset, file_identifier);
     auto chunk = chunk::make(builder.Release());
     VAST_ASSERT(chunk);
@@ -120,9 +142,11 @@ public:
   /// lifetime with another FlatBuffer pointer.
   /// @pre `parent`
   /// @pre *table* must be accessible from *parent*.
-  template <class ParentTable, bool ParentIsRootTable>
-  flatbuffer(flatbuffer<ParentTable, ParentIsRootTable> parent,
-             const Table& table) noexcept requires(!IsRootTable)
+  template <class ParentTable, flatbuffer_semantics ParentSemantics,
+            flatbuffer_type ParentType>
+  flatbuffer(flatbuffer<ParentTable, ParentSemantics, ParentType> parent,
+             const Table& table) noexcept
+    requires(Type == flatbuffer_type::child)
     : chunk_{std::exchange(parent.chunk_, {})}, table_{&table} {
     VAST_ASSERT(chunk_);
     VAST_ASSERT(reinterpret_cast<const std::byte*>(table_) >= chunk_->data());
@@ -143,7 +167,8 @@ public:
     // nop
   }
 
-  flatbuffer(std::nullptr_t) noexcept {
+  flatbuffer(std::nullptr_t) noexcept
+    requires(Semantics == flatbuffer_semantics::pointer) {
     // nop
   }
 
@@ -161,7 +186,8 @@ public:
     return *this;
   }
 
-  flatbuffer& operator=(std::nullptr_t) noexcept {
+  flatbuffer& operator=(std::nullptr_t) noexcept
+    requires(Semantics == flatbuffer_semantics::pointer) {
     chunk_ = nullptr;
     table_ = nullptr;
     return *this;
@@ -184,7 +210,8 @@ public:
   }
 
   friend bool operator==(flatbuffer lhs, flatbuffer rhs) noexcept
-    requires(IsRootTable) {
+    requires(Type == flatbuffer_type::root
+             && Semantics == flatbuffer_semantics::buffer) {
     if (&lhs == &rhs)
       return true;
     if (lhs && rhs) {
@@ -196,8 +223,15 @@ public:
     return static_cast<bool>(lhs) == static_cast<bool>(rhs);
   }
 
+  friend bool operator==(const flatbuffer& lhs, const flatbuffer& rhs) noexcept
+    requires(Semantics == flatbuffer_semantics::pointer) {
+    return lhs.table_ = rhs.table_;
+  }
+
   friend std::strong_ordering
-  operator<=>(flatbuffer lhs, flatbuffer rhs) noexcept requires(IsRootTable) {
+  operator<=>(flatbuffer lhs, flatbuffer rhs) noexcept
+    requires(Type == flatbuffer_type::root
+             && Semantics == flatbuffer_semantics::buffer) {
     if (&lhs == &rhs)
       return std::strong_ordering::equal;
     if (!lhs && !rhs)
@@ -227,6 +261,12 @@ public:
                                 : std::strong_ordering::equivalent;
   }
 
+  friend std::strong_ordering
+  operator<=>(const flatbuffer& lhs, const flatbuffer& rhs) noexcept
+    requires(Semantics == flatbuffer_semantics::pointer) {
+    return lhs.table_ <=> rhs.table_;
+  }
+
   // -- accessors -------------------------------------------------------------
 
   /// Slices a nested FlatBuffers table pointer with shared lifetime.
@@ -235,10 +275,10 @@ public:
   /// table and operations that require root tables must be supported.
   /// @pre `*this != nullptr`
   template <class ChildTable>
-  [[nodiscard]] flatbuffer<ChildTable, false>
+  [[nodiscard]] flatbuffer<ChildTable, Semantics, flatbuffer_type::child>
   slice(const ChildTable& child_table) const noexcept {
     VAST_ASSERT(*this);
-    return flatbuffer<ChildTable, false>{*this, child_table};
+    return {*this, child_table};
   }
 
   /// Slices a nested FlatBuffers root table pointer with shared lifetime.
@@ -247,32 +287,32 @@ public:
   /// FlatBuffers table, i.e., `*(*this)->child_nested_root()` and
   /// `*(*this)->child()` respectively.
   template <class ChildTable>
-  [[nodiscard]] flatbuffer<ChildTable, true>
+  [[nodiscard]] flatbuffer<ChildTable, Semantics, flatbuffer_type::root>
   slice(const ChildTable& child_table,
         const flatbuffers::Vector<uint8_t>& nested_flatbuffer) const noexcept {
     VAST_ASSERT(*this);
     VAST_ASSERT(&child_table
                 == flatbuffers::GetRoot<ChildTable>(nested_flatbuffer.data()));
-    return flatbuffer<ChildTable, true>{
-      chunk_->slice(as_bytes(nested_flatbuffer))};
+    return {chunk_->slice(as_bytes(nested_flatbuffer))};
   }
 
   /// Accesses the underlying chunk.
   /// @note This is only available for FlatBuffers root table pointers, as
   /// this operation is fundamentally unsafe for non-root tables, for which
   /// the table pointer is not at the beginning of the chunk.
-  [[nodiscard]] const chunk_ptr& chunk() const noexcept requires(IsRootTable) {
+  [[nodiscard]] const chunk_ptr& chunk() const noexcept
+    requires(Type == flatbuffer_type::root) {
     return chunk_;
   }
 
   // -- concepts --------------------------------------------------------------
 
   /// Gets the underlying binary representation of a FlatBuffers root table.
-  /// @note This is intentionally disabled for FlatBuffers tables that are not
-  /// root tables, as they are not guaranteed to be contiguous in memory.
   /// @pre `flatbuffer != nullptr`
   [[nodiscard]] friend std::span<const std::byte>
-  as_bytes(const flatbuffer& flatbuffer) noexcept requires(IsRootTable) {
+  as_bytes(const flatbuffer& flatbuffer) noexcept
+    requires(Type == flatbuffer_type::root
+             && Semantics == flatbuffer_semantics::buffer) {
     VAST_ASSERT(flatbuffer);
     return as_bytes(*flatbuffer.chunk_);
   }
@@ -308,7 +348,7 @@ private:
   /// Constructs a ref-counted FlatBuffers root table that shares the
   /// lifetime with the chunk it's constructed from.
   /// @pre *chunk* must hold a valid *Table*.
-  explicit flatbuffer(chunk_ptr chunk) noexcept requires(IsRootTable)
+  flatbuffer(chunk_ptr chunk) noexcept requires(Type == flatbuffer_type::root)
     : chunk_{std::move(chunk)},
       table_{flatbuffers::GetRoot<Table>(chunk_->data())} {
     // nop
@@ -325,25 +365,26 @@ private:
 
 // -- deduction guides --------------------------------------------------------
 
-template <class Table, class ParentTable, bool ParentIsRootTable>
-flatbuffer(flatbuffer<ParentTable, ParentIsRootTable>, const Table*)
-  -> flatbuffer<Table, false>;
+template <class Table, class ParentTable, flatbuffer_semantics ParentSemantics,
+          flatbuffer_type ParentType>
+flatbuffer(flatbuffer<ParentTable, ParentSemantics, ParentType>, const Table*)
+  -> flatbuffer<Table, ParentSemantics, flatbuffer_type::child>;
 
 } // namespace vast
 
 // -- formatter ---------------------------------------------------------------
 
-template <class Table, bool IsRootTable>
-struct fmt::formatter<vast::flatbuffer<Table, IsRootTable>> {
+template <class Table, vast::flatbuffer_semantics Semantics,
+          vast::flatbuffer_type Type>
+struct fmt::formatter<vast::flatbuffer<Table, Semantics, Type>> {
   template <class ParseContext>
   auto parse(const ParseContext& ctx) -> decltype(ctx.begin()) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto
-  format(vast::flatbuffer<Table, IsRootTable> flatbuffer, FormatContext& ctx)
-    -> decltype(ctx.out()) {
+  auto format(const vast::flatbuffer<Table, Semantics, Type>& flatbuffer,
+              FormatContext& ctx) -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "{}({})", Table::GetFullyQualifiedName(),
                           fmt::ptr(flatbuffer.table_));
   }

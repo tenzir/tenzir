@@ -42,13 +42,13 @@ TEST(lifetime) {
   auto fbrtft = fbrtf.slice(*fbrtf->type_nested_root(), *fbrtf->type());
   CHECK_EQUAL(as_bytes(fbrtft), as_bytes(address_type{}));
   CHECK_EQUAL(counter, 0);
-  fbt = nullptr;
+  fbt = {};
   CHECK_EQUAL(counter, 0);
-  fbrt = nullptr;
+  fbrt = {};
   CHECK_EQUAL(counter, 0);
-  fbrtf = nullptr;
+  fbrtf = {};
   CHECK_EQUAL(counter, 0);
-  fbrtft = nullptr;
+  fbrtft = {};
   CHECK_EQUAL(counter, 1);
 }
 
