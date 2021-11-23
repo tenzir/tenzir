@@ -25,6 +25,8 @@ namespace vast::system {
 // constructed, we don't have to spawn separate indexer actors and
 // stream data but can just compute everything inline here.
 void partition_transformer_state::add_slice(const table_slice& slice) {
+  // Flatten the layout analogous to the active partition, to ensure
+  // `slice.columns()` corresponds to `layout.fields`.
   const auto& layout = flatten(slice.layout());
   data.events += slice.rows();
   data.synopsis->add(slice, synopsis_opts);
