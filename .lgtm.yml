@@ -1,5 +1,8 @@
 extraction:
   cpp:
+    prepare:
+      packages:
+        - gcc-10
     after_prepare:
       - mkdir $HOME/cmake-3.18 \
           \ && wget -qO- "https://cmake.org/files/v3.18/cmake-3.18.3-Linux-x86_64.tar.gz" \
