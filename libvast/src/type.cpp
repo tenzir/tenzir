@@ -475,10 +475,10 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
       return type{other.name(), list_type{from_legacy_type(list.value_type)},
                   attributes};
     },
-    [&](const legacy_map_type& list) {
+    [&](const legacy_map_type& map) {
       return type{other.name(),
-                  map_type{from_legacy_type(list.key_type),
-                           from_legacy_type(list.value_type)},
+                  map_type{from_legacy_type(map.key_type),
+                           from_legacy_type(map.value_type)},
                   attributes};
     },
     [&](const legacy_alias_type& alias) {
