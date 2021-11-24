@@ -1,0 +1,11 @@
+path_classifiers:
+  test:
+    - "/libvast/test/**/*.cpp"
+  scripts:
+    - exclude: "/scripts/"
+  library:
+    - exclude: "/libvast/aux/"
+  docs:
+    - generate_javadoc.py
+queries:
+  - exclude: cpp/use-of-goto  
