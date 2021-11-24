@@ -1144,12 +1144,12 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   if (const auto selector_opt
       = caf::get_if<std::string>(&options, "vast.import.json.selector")) {
     auto split = detail::split(*selector_opt, ":");
-    if (split.size() > 2) {
+    VAST_ASSERT(!split.empty());
+    if (split.size() > 2 || split[0].empty()) {
       VAST_ERROR("{} failed to parse selector '{}': must contain at most one "
-                 "':'; ignoring option");
+                 "':' and field name must not be empty; ignoring option");
       selector_ = std::make_unique<default_selector>();
     } else {
-      VAST_ASSERT(!split.empty());
       auto field_name = std::string{split[0]};
       auto type_prefix = split.size() == 2 ? std::string{split[1]} : "";
       if (!type_prefix.empty())
