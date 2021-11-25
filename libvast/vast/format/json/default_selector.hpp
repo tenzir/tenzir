@@ -14,10 +14,10 @@
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/format/json/selector.hpp"
 #include "vast/hash/hash_append.hpp"
 #include "vast/hash/xxhash.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
 
 #include <caf/expected.hpp>
 
@@ -26,7 +26,7 @@
 
 namespace vast::format::json {
 
-struct default_selector {
+struct default_selector final : selector {
 private:
   template <typename Prefix>
   static void
@@ -42,7 +42,7 @@ private:
     }
   }
 
-  static auto make_names_layout(const ::simdjson::dom::object& obj) {
+  static inline auto make_names_layout(const ::simdjson::dom::object& obj) {
     std::vector<std::string> entries;
     entries.reserve(100);
     auto prefix = detail::stack_vector<std::string_view, 64>{};
@@ -52,7 +52,9 @@ private:
   }
 
 public:
-  std::optional<type> operator()(const ::simdjson::dom::object& obj) const {
+  /// Locates the type for a given JSON object.
+  inline std::optional<type>
+  operator()(const ::simdjson::dom::object& obj) const override {
     if (type_cache.empty())
       return {};
     // Iff there is only one type in the type cache, allow the JSON reader to
@@ -65,7 +67,8 @@ public:
     return {};
   }
 
-  caf::error schema(vast::schema sch) {
+  /// Sets the schema.
+  inline caf::error schema(const vast::schema& sch) override {
     if (sch.empty())
       return caf::make_error(ec::invalid_configuration,
                              "no schema provided or type "
@@ -86,21 +89,15 @@ public:
     return caf::none;
   }
 
-  [[nodiscard]] vast::schema schema() const {
+  /// Retrieves the current schema.
+  inline vast::schema schema() const override {
     vast::schema result;
     for (const auto& [k, v] : type_cache)
       result.add(v);
     return result;
   }
 
-  static const char* category() {
-    return "json";
-  }
-
-  static const char* name() {
-    return "json-reader";
-  }
-
+private:
   detail::flat_map<std::vector<std::string>, type> type_cache = {};
 };
 

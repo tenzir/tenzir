@@ -24,9 +24,20 @@
 
 namespace vast {
 
-template <class Reader>
+template <class Reader, class Selector = void>
 caf::expected<std::unique_ptr<format::reader>>
-make_reader(const caf::settings& options) {
+make_reader(caf::settings options) {
+  if constexpr (!std::is_void_v<Selector>) {
+    static_assert(std::is_same_v<Reader, format::json::reader>,
+                  "selectors are currently only implemented for the JSON "
+                  "reader");
+    caf::put(options, "vast.import.json.selector",
+             fmt::format("{}:{}", Selector::field_name, Selector::type_prefix));
+    // If the user did not provide a type restriction, we can use the type
+    // prefix to restrict the types as a good default.
+    if (!caf::holds_alternative<std::string>(options, "vast.import.type"))
+      caf::put(options, "vast.import.type", Selector::type_prefix);
+  }
   using istream_ptr = std::unique_ptr<std::istream>;
   if constexpr (std::is_constructible_v<Reader, caf::settings, istream_ptr>) {
     auto in = detail::make_input_stream(options);
@@ -38,25 +49,16 @@ make_reader(const caf::settings& options) {
   }
 }
 
-template <class Reader, class ReaderS,
-          class Defaults = typename Reader::defaults>
-caf::expected<std::unique_ptr<format::reader>>
-make_json_reader(const caf::settings& options) {
-  return make_reader<Reader, Defaults>(options);
-}
-
 void factory_traits<format::reader>::initialize() {
   using namespace format;
   using fac = factory<reader>;
   fac::add("csv", make_reader<csv::reader>);
-  fac::add("json",
-           make_reader<format::json::reader<format::json::default_selector>>);
+  fac::add("json", make_reader<json::reader>);
   fac::add("suricata",
-           make_reader<format::json::reader<format::json::suricata_selector>>);
+           make_reader<format::json::reader, json::suricata_selector>);
   fac::add("syslog", make_reader<syslog::reader>);
   fac::add("zeek", make_reader<zeek::reader>);
-  fac::add("zeek-json",
-           make_reader<format::json::reader<format::json::zeek_selector>>);
+  fac::add("zeek-json", make_reader<json::reader, json::zeek_selector>);
   for (const auto& plugin : plugins::get()) {
     if (const auto* reader = plugin.as<reader_plugin>()) {
       fac::add(

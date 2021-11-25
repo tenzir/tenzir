@@ -8,17 +8,11 @@
 
 #pragma once
 
-#include "vast/format/json/field_selector.hpp"
-
 namespace vast::format::json {
 
-struct zeek_selector_specification {
-  // static constexpr auto category = defaults::import::zeek_json::category;
-  static constexpr auto name = "zeek-reader";
-  static constexpr auto field = "_path";
-  static constexpr auto prefix = "zeek";
+struct zeek_selector {
+  static constexpr auto field_name = "_path";
+  static constexpr auto type_prefix = "zeek";
 };
-
-using zeek_selector = field_selector<zeek_selector_specification>;
 
 } // namespace vast::format::json

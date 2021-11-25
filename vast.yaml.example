@@ -314,9 +314,14 @@ vast:
     # An alternate schema as a string.
     #schema: <none>
 
+    # The `vast import json` command imports JSONL data.
+    json:
+      # Read the event type from the given field (specify as
+      # '<field>[:<prefix>]').
+      #selector= <none>
+
     # The `vast import pcap` command imports PCAP logs.
     pcap:
-
       # Network interface to read packets from.
       #interface: <none>
 
@@ -351,7 +356,6 @@ vast:
 
     # The `vast import zeek` command imports Zeek logs.
     zeek:
-
       # Flag to indicate whether the output should contain #open/#close tags.
       # Zeek writes these tags in its logs such that users can gain insight
       # when Zeek processed the corresponding data. By default, VAST
