@@ -13,14 +13,14 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
 namespace vast {
 
-string_index::string_index(vast::legacy_type t, caf::settings opts)
+string_index::string_index(vast::type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   max_length_
     = caf::get_or(options(), "max-size", defaults::index::max_string_size);

@@ -59,16 +59,17 @@ ids select(const counts& xs, curried_predicate pred) {
 // Dummy actor representing an INDEXER for field `x`.
 vast::system::indexer_actor::behavior_type dummy_indexer(counts xs) {
   return {
-    [xs = std::move(xs)](curried_predicate pred) { return select(xs, pred); },
-    [](atom::shutdown) { FAIL("received shutdown request as dummy indexer"); },
+    [xs = std::move(xs)](curried_predicate pred) {
+      return select(xs, pred);
+    },
+    [](atom::shutdown) {
+      FAIL("received shutdown request as dummy indexer");
+    },
   };
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
-    layout.fields.emplace_back("x", legacy_count_type{});
-    layout.fields.emplace_back("y", legacy_count_type{});
-    layout.name("test");
     // Spin up our dummies.
     auto& x_indexers = indexers["x"];
     add_indexer(x_indexers, {12, 42, 42, 17, 42, 75, 38, 11, 10});
@@ -85,7 +86,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     container.emplace_back(sys.spawn(dummy_indexer, std::move(data)));
   }
 
-  legacy_record_type layout;
+  type layout = type{
+    "test",
+    record_type{
+      {"x", count_type{}},
+      {"y", count_type{}},
+    },
+  };
 
   ids query(std::string_view expr_str) {
     auto expr = unbox(to<expression>(expr_str));
@@ -95,7 +102,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     for (auto& [expr_position, pred] : resolved) {
       VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
       auto& dx = caf::get<data_extractor>(pred.lhs);
-      std::string field_name = dx.offset.back() == 0 ? "x" : "y";
+      std::string field_name = dx.column == 0 ? "x" : "y";
       auto& xs = indexers[field_name];
       for (auto& x : xs)
         triples.emplace_back(expr_position, curried(pred), x);
@@ -106,7 +113,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     run();
     ids result;
     REQUIRE(!self->mailbox().empty());
-    self->receive([&](const ids& hits) { result = hits; });
+    self->receive([&](const ids& hits) {
+      result = hits;
+    });
     REQUIRE(self->mailbox().empty());
     return result;
   }

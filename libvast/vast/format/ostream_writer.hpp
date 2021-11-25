@@ -15,6 +15,7 @@
 #include "vast/policy/include_field_names.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_row.hpp"
+#include "vast/type.hpp"
 
 #include <caf/error.hpp>
 
@@ -70,10 +71,11 @@ protected:
   }
 
   template <class... Policies, class Printer>
-  caf::error print_record(Printer& printer, const line_elements& le,
-                          const legacy_record_type& layout, table_slice_row row,
-                          size_t& pos) {
-    auto print_field = [&](auto& iter, const record_field& f, size_t column) {
+  caf::error
+  print_record(Printer& printer, const line_elements& le,
+               const record_type& layout, table_slice_row row, size_t& pos) {
+    auto print_field = [&](auto& iter, const record_type::field_view& f,
+                           size_t column) {
       auto rep = [&](data_view x) {
         if constexpr (detail::is_any_v<policy::include_field_names, Policies...>)
           return std::pair{std::string_view{f.name}, x};
@@ -86,10 +88,10 @@ protected:
     auto iter = std::back_inserter(buf_);
     append(le.begin_of_line);
     auto start = 0;
-    for (const auto& f : layout.fields) {
+    for (const auto& f : layout.fields()) {
       if (!!start++)
         append(le.separator);
-      if (const auto& r = caf::get_if<legacy_record_type>(&f.type)) {
+      if (const auto& r = caf::get_if<record_type>(&f.type)) {
         if constexpr (detail::is_any_v<policy::include_field_names,
                                        Policies...>) {
           if (!printer.print(iter, f.name))
@@ -135,7 +137,8 @@ protected:
     }();
     for (size_t row = 0; row < xs.rows(); ++row) {
       size_t pos = 0;
-      if (auto err = print_record<Policies...>(printer, le, layout,
+      if (auto err = print_record<Policies...>(printer, le,
+                                               caf::get<record_type>(layout),
                                                table_slice_row{xs, row}, pos))
         return err;
       append('\n');

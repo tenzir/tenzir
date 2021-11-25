@@ -15,7 +15,6 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/query.hpp"
@@ -26,6 +25,7 @@
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
 #include <flatbuffers/flatbuffers.h>
@@ -122,36 +122,42 @@ TEST(empty partition roundtrip) {
   // Init factory.
   vast::factory<vast::table_slice_builder>::initialize();
   // Create partition state.
-  vast::system::active_partition_state::serialization_data state;
-  state.id = vast::uuid::random();
-  state.store_id = "legacy_archive";
-  state.store_header = vast::chunk::empty();
-  state.offset = 17;
-  state.events = 23;
-  state.synopsis = std::make_shared<vast::partition_synopsis>();
-  state.synopsis->offset = state.offset;
-  state.synopsis->events = state.events;
-  state.combined_layout
-    = vast::legacy_record_type{{"x", vast::legacy_count_type{}}}.name("y");
-  auto& ids = state.type_ids["x"];
-  ids.append_bits(0, 3);
-  ids.append_bits(1, 3);
+  vast::system::active_partition_state state;
+  state.data.id = vast::uuid::random();
+  state.data.store_id = "legacy_archive";
+  state.data.store_header = vast::chunk::make_empty();
+  state.data.offset = 17;
+  state.data.events = 23;
+  state.data.synopsis = std::make_shared<vast::partition_synopsis>();
+  state.data.synopsis->offset = state.data.offset;
+  state.data.synopsis->events = state.data.events;
+  auto& ids = state.data.type_ids["x"];
+  ids.append_bits(false, 3);
+  ids.append_bits(true, 3);
   // Prepare a layout for the partition synopsis. The partition synopsis only
   // looks at the layout of the table slices it gets, so we feed it
   // with an empty table slice.
-  auto layout
-    = vast::legacy_record_type{{"x", vast::legacy_count_type{}}}.name("y");
+  auto layout = vast::type{
+    "y",
+    vast::record_type{
+      {"x", vast::count_type{}},
+    },
+  };
+  auto qf = vast::qualified_record_field{layout, vast::offset{0}};
+  state.indexers[qf] = nullptr;
   auto slice_builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, layout);
   REQUIRE(slice_builder);
   auto slice = slice_builder->finish();
   slice.offset(0);
   REQUIRE_NOT_EQUAL(slice.encoding(), vast::table_slice_encoding::none);
-  state.synopsis->add(slice, caf::settings{});
+  state.data.synopsis->add(slice, caf::settings{});
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {
-    auto partition = pack(builder, state);
+    auto combined_layout = state.combined_layout();
+    REQUIRE(combined_layout);
+    auto partition = pack(builder, state.data, *combined_layout);
     REQUIRE(partition);
     vast::fbs::FinishPartitionBuffer(builder, *partition);
   }
@@ -169,27 +175,32 @@ TEST(empty partition roundtrip) {
   REQUIRE(partition_v0->store());
   REQUIRE(partition_v0->store()->id());
   CHECK_EQUAL(partition_v0->store()->id()->str(), "legacy_archive");
-  CHECK_EQUAL(partition_v0->offset(), state.offset);
-  CHECK_EQUAL(partition_v0->events(), state.events);
+  CHECK_EQUAL(partition_v0->offset(), state.data.offset);
+  CHECK_EQUAL(partition_v0->events(), state.data.events);
   auto error = unpack(*partition_v0, recovered_state);
   CHECK(!error);
-  CHECK_EQUAL(recovered_state.id, state.id);
-  CHECK_EQUAL(recovered_state.offset, state.offset);
-  CHECK_EQUAL(recovered_state.events, state.events);
-  CHECK_EQUAL(recovered_state.combined_layout_, state.combined_layout);
-  CHECK_EQUAL(recovered_state.type_ids_, state.type_ids);
+  CHECK_EQUAL(recovered_state.id, state.data.id);
+  CHECK_EQUAL(recovered_state.offset, state.data.offset);
+  CHECK_EQUAL(recovered_state.events, state.data.events);
+  // As of the Type FlatBuffers change we no longer keep the combined layout in
+  // the active partition, which makes this test irrelevant:
+  //   CHECK_EQUAL(recovered_state.combined_layout_, state.combined_layout);
+  CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
   // Deserialize meta index state from this partition.
   auto ps = std::make_shared<vast::partition_synopsis>();
   auto error2 = vast::system::unpack(*partition_v0, *ps);
   CHECK(!error2);
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
-  CHECK_EQUAL(ps->offset, state.offset);
-  CHECK_EQUAL(ps->events, state.events);
+  CHECK_EQUAL(ps->offset, state.data.offset);
+  CHECK_EQUAL(ps->events, state.data.events);
   auto meta_index = self->spawn(vast::system::meta_index);
   auto rp = self->request(meta_index, caf::infinite, vast::atom::merge_v,
                           recovered_state.id, ps);
   run();
-  rp.receive([=](vast::atom::ok) {}, [=](const caf::error& err) { FAIL(err); });
+  rp.receive([=](vast::atom::ok) {},
+             [=](const caf::error& err) {
+               FAIL(err);
+             });
   auto rp2 = self->request(meta_index, caf::infinite, vast::atom::candidates_v,
                            vast::expression{vast::predicate{
                              vast::field_extractor{".x"},
@@ -199,9 +210,11 @@ TEST(empty partition roundtrip) {
   rp2.receive(
     [&](const std::vector<vast::uuid>& candidates) {
       REQUIRE_EQUAL(candidates.size(), 1ull);
-      CHECK_EQUAL(candidates[0], state.id);
+      CHECK_EQUAL(candidates[0], state.data.id);
     },
-    [=](const caf::error& err) { FAIL(err); });
+    [=](const caf::error& err) {
+      FAIL(err);
+    });
 }
 
 // This test spawns a partition, fills it with some test data, then persists
@@ -218,12 +231,16 @@ TEST(full partition roundtrip) {
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid, fs,
                 caf::settings{}, caf::settings{}, vast::system::store_actor{},
-                store_id, vast::chunk::empty());
+                store_id, vast::chunk::make_empty());
   run();
   REQUIRE(partition);
   // Add data to the partition.
-  auto layout
-    = vast::legacy_record_type{{"x", vast::legacy_count_type{}}}.name("y");
+  auto layout = vast::type{
+    "y",
+    vast::record_type{
+      {"x", vast::count_type{}},
+    },
+  };
   auto builder = vast::msgpack_table_slice_builder::make(layout);
   CHECK(builder->add(0u));
   auto slice = builder->finish();
@@ -245,7 +262,9 @@ TEST(full partition roundtrip) {
     [](std::shared_ptr<vast::partition_synopsis>&) {
       CHECK("persisting done");
     },
-    [](const caf::error& err) { FAIL(err); });
+    [](const caf::error& err) {
+      FAIL(err);
+    });
   self->send_exit(partition, caf::exit_reason::user_shutdown);
   // Spawn a read-only partition from this chunk and try to query the data we
   // added. We make two queries, one "#type"-query and one "normal" query
@@ -261,7 +280,9 @@ TEST(full partition roundtrip) {
   auto dummy_client = [](std::shared_ptr<uint64_t> count)
     -> vast::system::receiver_actor<uint64_t>::behavior_type {
     return {
-      [count](uint64_t hits) { *count += hits; },
+      [count](uint64_t hits) {
+        *count += hits;
+      },
     };
   };
   auto test_expression
@@ -274,8 +295,13 @@ TEST(full partition roundtrip) {
           vast::query::make_count(dummy, vast::query::count::mode::estimate,
                                   expression));
         run();
-        rp.receive([&done](vast::atom::done) { done = true; },
-                   [](caf::error&) { REQUIRE(false); });
+        rp.receive(
+          [&done](vast::atom::done) {
+            done = true;
+          },
+          [](caf::error&) {
+            REQUIRE(false);
+          });
         run();
         self->send_exit(dummy, caf::exit_reason::user_shutdown);
         run();

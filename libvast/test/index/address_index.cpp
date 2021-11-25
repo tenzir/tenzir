@@ -28,7 +28,7 @@ using namespace vast;
 using namespace std::string_literals;
 
 TEST(address) {
-  address_index idx{legacy_address_type{}};
+  address_index idx{type{address_type{}}};
   MESSAGE("append");
   auto x = *to<address>("192.168.0.1");
   REQUIRE(idx.append(make_data_view(x)));
@@ -92,7 +92,7 @@ TEST(address) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
-  address_index idx2{legacy_address_type{}};
+  address_index idx2{type{address_type{}}};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   CHECK_EQUAL(to_string(unbox(
                 idx2.lookup(relational_operator::equal, make_data_view(x)))),
@@ -107,12 +107,12 @@ FIXTURE_SCOPE(value_index_tests, fixtures::events)
 // made the bug disappear.
 TEST(regression - build an address index from zeek events) {
   // Populate the index with data up to the critical point.
-  address_index idx{legacy_address_type{}};
+  address_index idx{type{address_type{}}};
   size_t row_id = 0;
   for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice.rows(); ++row) {
       // Column 2 is orig_h.
-      if (!idx.append(slice.at(row, 2, legacy_address_type{}), row_id))
+      if (!idx.append(slice.at(row, 2), row_id))
         FAIL("appending to the value_index failed!");
       if (++row_id == 6464) {
         // The last ID should be 720 at this point.
@@ -139,7 +139,7 @@ TEST(regression - manual address bitmap index from bitmaps) {
   for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice.rows(); ++row) {
       // Column 2 is orig_h.
-      auto x = caf::get<view<address>>(slice.at(row, 2, legacy_address_type{}));
+      auto x = caf::get<view<address>>(slice.at(row, 2));
       for (auto i = 0u; i < 4; ++i) {
         auto bytes = static_cast<address::byte_array>(x);
         auto byte = bytes[i + 12];
@@ -176,7 +176,7 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
   for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice.rows(); ++row) {
       // Column 2 is orig_h.
-      auto x = caf::get<view<address>>(slice.at(row, 2, legacy_address_type{}));
+      auto x = caf::get<view<address>>(slice.at(row, 2));
       for (auto i = 0u; i < 4; ++i) {
         auto bytes = static_cast<address::byte_array>(x);
         auto byte = bytes[i + 12];

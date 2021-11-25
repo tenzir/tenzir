@@ -13,6 +13,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -27,7 +28,7 @@
 
 namespace vast {
 
-synopsis::synopsis(vast::legacy_type x) : type_{std::move(x)} {
+synopsis::synopsis(vast::type x) : type_{std::move(x)} {
   // nop
 }
 
@@ -35,7 +36,7 @@ synopsis::~synopsis() {
   // nop
 }
 
-const vast::legacy_type& synopsis::type() const {
+const vast::type& synopsis::type() const {
   return type_;
 }
 
@@ -49,8 +50,12 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
     return sink(dummy);
   }
   return caf::error::eval(
-    [&] { return sink(ptr->type()); },
-    [&] { return ptr->serialize(sink); });
+    [&] {
+      return sink(ptr->type().to_legacy_type());
+    },
+    [&] {
+      return ptr->serialize(sink);
+    });
 }
 
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
@@ -64,7 +69,8 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
     return caf::none;
   }
   // Deserialize into a new instance.
-  auto new_ptr = factory<synopsis>::make(std::move(t), caf::settings{});
+  auto new_ptr
+    = factory<synopsis>::make(type::from_legacy_type(t), caf::settings{});
   if (!new_ptr)
     return ec::invalid_synopsis_type;
   if (auto err = new_ptr->deserialize(source))
@@ -86,7 +92,8 @@ bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr) {
     return true;
   }
   // Deserialize into a new instance.
-  auto new_ptr = factory<synopsis>::make(std::move(t), caf::settings{});
+  auto new_ptr
+    = factory<synopsis>::make(type::from_legacy_type(t), caf::settings{});
   if (!new_ptr || !new_ptr->deserialize(source))
     return false;
   // Change `ptr` only after successfully deserializing.
@@ -100,8 +107,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
   auto column_name = fbs::serialize_bytes(builder, fqf);
   if (!column_name)
     return column_name.error();
-  auto ptr = synopsis.get();
-  if (auto tptr = dynamic_cast<time_synopsis*>(ptr)) {
+  auto* ptr = synopsis.get();
+  if (auto* tptr = dynamic_cast<time_synopsis*>(ptr)) {
     auto min = tptr->min().time_since_epoch().count();
     auto max = tptr->max().time_since_epoch().count();
     fbs::time_synopsis::v0 time_synopsis(min, max);
@@ -109,7 +116,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
     synopsis_builder.add_qualified_record_field(*column_name);
     synopsis_builder.add_time_synopsis(&time_synopsis);
     return synopsis_builder.Finish();
-  } else if (auto bptr = dynamic_cast<bool_synopsis*>(ptr)) {
+  }
+  if (auto* bptr = dynamic_cast<bool_synopsis*>(ptr)) {
     fbs::bool_synopsis::v0 bool_synopsis(bptr->any_true(), bptr->any_false());
     fbs::synopsis::v0Builder synopsis_builder(builder);
     synopsis_builder.add_qualified_record_field(*column_name);

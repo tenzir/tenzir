@@ -44,6 +44,15 @@ struct concept_ {
     return f(caf::meta::type_name("concept"), c.description, c.fields,
              c.concepts);
   }
+
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"description", string_type{}},
+      {"fields", list_type{string_type{}}},
+      {"concepts", list_type{string_type{}}},
+    };
+    return result;
+  }
 };
 
 /// Maps concept names to their definitions.
@@ -51,7 +60,7 @@ using concepts_map = detail::stable_map<std::string, concept_>;
 
 /// Describes the layout of a vast::list of concepts for automatic conversion to
 /// a `concepts_map`.
-extern const legacy_list_type concepts_data_layout;
+extern const type concepts_data_layout;
 
 /// The definition of a model.
 struct model {
@@ -69,6 +78,14 @@ struct model {
   friend auto inspect(Inspector& f, model& m) {
     return f(caf::meta::type_name("model"), m.description, m.definition);
   }
+
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"description", string_type{}},
+      {"definition", list_type{string_type{}}},
+    };
+    return result;
+  }
 };
 
 /// Maps model names to their definitions.
@@ -76,7 +93,7 @@ using models_map = detail::stable_map<std::string, model>;
 
 /// Describes the layout of a vast::list of models for automatic conversion to
 /// a `models_map`.
-extern const legacy_list_type models_data_layout;
+extern const type models_data_layout;
 
 /// A taxonomy is a combination of concepts and models. VAST stores all
 /// configured taxonomies in memory together, hence the plural naming.
@@ -123,18 +140,34 @@ caf::expected<expression> resolve(const taxonomies& t, const expression& e,
 namespace fmt {
 
 template <>
-struct formatter<vast::model> : formatter<std::string> {
+struct formatter<vast::model> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
   template <class FormatContext>
-  auto format(const vast::model& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  auto format(const vast::model& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "model {{description: {}, definition: [{}]}}",
+                     value.description, fmt::join(value.definition, ", "));
   }
 };
 
 template <>
-struct formatter<vast::concept_> : formatter<std::string> {
+struct formatter<vast::concept_> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
   template <class FormatContext>
-  auto format(const vast::concept_& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  auto format(const vast::concept_& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(
+      ctx.out(), "concept {{description: {}, fields: [{}], concepts: [{}]}}",
+      value.description, fmt::join(value.fields, ", "),
+      fmt::join(value.concepts, ", "));
   }
 };
 

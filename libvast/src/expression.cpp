@@ -42,7 +42,7 @@ bool operator<(const field_extractor& x, const field_extractor& y) {
 
 // -- type_extractor -----------------------------------------------------------
 
-type_extractor::type_extractor(vast::legacy_type t) : type{std::move(t)} {
+type_extractor::type_extractor(vast::type t) : type{std::move(t)} {
 }
 
 bool operator==(const type_extractor& x, const type_extractor& y) {
@@ -55,16 +55,20 @@ bool operator<(const type_extractor& x, const type_extractor& y) {
 
 // -- data_extractor -----------------------------------------------------------
 
-data_extractor::data_extractor(vast::legacy_type t, vast::offset o)
-  : type{std::move(t)}, offset{std::move(o)} {
+data_extractor::data_extractor(class type t, size_t column)
+  : type{std::move(t)}, column{column} {
+}
+
+data_extractor::data_extractor(const record_type& rt, const offset& o)
+  : type{rt.field(o).type}, column{rt.flat_index(o)} {
 }
 
 bool operator==(const data_extractor& x, const data_extractor& y) {
-  return x.type == y.type && x.offset == y.offset;
+  return x.type == y.type && x.column == y.column;
 }
 
 bool operator<(const data_extractor& x, const data_extractor& y) {
-  return std::tie(x.type, x.offset) < std::tie(y.type, y.offset);
+  return std::tie(x.type, x.column) < std::tie(y.type, y.column);
 }
 
 // -- predicate ----------------------------------------------------------------
@@ -194,12 +198,14 @@ caf::expected<expression> normalize_and_validate(expression expr) {
   return expr;
 }
 
-caf::expected<expression> tailor(expression expr, const legacy_type& t) {
+caf::expected<expression> tailor(expression expr, const type& layout) {
+  VAST_ASSERT(caf::holds_alternative<record_type>(layout));
   if (caf::holds_alternative<caf::none_t>(expr))
-    return caf::make_error(
-      ec::unspecified,
-      fmt::format("failed to tailor expression {} for type {}", expr, t));
-  return caf::visit(type_resolver{t}, std::move(expr));
+    return caf::make_error(ec::unspecified, fmt::format("failed to tailor "
+                                                        "expression {} for "
+                                                        "layout {}",
+                                                        expr, layout));
+  return caf::visit(type_resolver{layout}, std::move(expr));
 }
 
 namespace {
@@ -217,7 +223,9 @@ const expression* at(const expression* expr, offset::value_type i) {
     [&](const negation& x) -> const expression* {
       return i == 0 ? &x.expr() : nullptr;
     },
-    [&](const auto&) -> const expression* { return nullptr; },
+    [&](const auto&) -> const expression* {
+      return nullptr;
+    },
   };
   return caf::visit(f, *expr);
 }
@@ -241,7 +249,7 @@ const expression* at(const expression& expr, const offset& o) {
 namespace {
 
 bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
-                  const expression& expr, const legacy_type& t, offset& o) {
+                  const expression& expr, const type& t, offset& o) {
   auto v = detail::overload{
     [&](const auto& xs) { // conjunction or disjunction
       o.emplace_back(0);
@@ -285,7 +293,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
 } // namespace
 
 std::vector<std::pair<offset, predicate>>
-resolve(const expression& expr, const legacy_type& t) {
+resolve(const expression& expr, const type& t) {
   std::vector<std::pair<offset, predicate>> result;
   offset o{0};
   if (resolve_impl(result, expr, t, o))

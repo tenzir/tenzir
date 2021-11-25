@@ -13,7 +13,6 @@
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/framed.hpp"
-#include "vast/qualified_record_field.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/transformer.hpp"

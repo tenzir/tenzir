@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <vast/legacy_type.hpp>
+#include <vast/type.hpp>
 #include <vast/view.hpp>
 
 #include <broker/zeek.hh>
@@ -38,7 +38,7 @@ make_subscriber(::broker::endpoint& endpoint, std::vector<std::string> topics);
 /// writes.
 /// @param msg The log create message to process.
 /// @returns The VAST type corresponding to the meta data in the message.
-caf::expected<legacy_record_type> process(const ::broker::zeek::LogCreate& msg);
+caf::expected<type> process(const ::broker::zeek::LogCreate& msg);
 
 /// Handle a Zeek *log write* message. This message contains the data portion
 /// corresponding to a previous log create message. The message data is

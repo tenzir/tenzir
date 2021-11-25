@@ -11,7 +11,7 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
@@ -20,9 +20,9 @@
 
 namespace vast {
 
-subnet_index::subnet_index(vast::legacy_type x, caf::settings opts)
+subnet_index::subnet_index(vast::type x, caf::settings opts)
   : value_index{std::move(x), std::move(opts)},
-    network_{legacy_address_type{}},
+    network_{vast::type{address_type{}}},
     length_{128 + 1} {
   // nop
 }

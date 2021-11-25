@@ -18,12 +18,12 @@
 namespace vast {
 
 void factory_traits<synopsis>::initialize() {
-  factory<synopsis>::add(legacy_address_type{},
+  factory<synopsis>::add(type{address_type{}},
                          make_address_synopsis<legacy_hash>);
-  factory<synopsis>::add<legacy_bool_type, bool_synopsis>();
-  factory<synopsis>::add(legacy_string_type{},
+  factory<synopsis>::add<bool_type, bool_synopsis>();
+  factory<synopsis>::add(type{string_type{}},
                          make_string_synopsis<legacy_hash>);
-  factory<synopsis>::add<legacy_time_type, time_synopsis>();
+  factory<synopsis>::add<time_type, time_synopsis>();
 }
 
 } // namespace vast

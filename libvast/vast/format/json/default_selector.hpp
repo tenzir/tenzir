@@ -52,8 +52,7 @@ private:
   }
 
 public:
-  std::optional<legacy_record_type>
-  operator()(const ::simdjson::dom::object& obj) const {
+  std::optional<type> operator()(const ::simdjson::dom::object& obj) const {
     if (type_cache.empty())
       return {};
     // Iff there is only one type in the type cache, allow the JSON reader to
@@ -71,15 +70,18 @@ public:
       return caf::make_error(ec::invalid_configuration,
                              "no schema provided or type "
                              "too restricted");
-    for (auto& entry : sch) {
-      if (!caf::holds_alternative<legacy_record_type>(entry))
+    for (const auto& entry : sch) {
+      if (!caf::holds_alternative<record_type>(entry))
         continue;
-      auto layout = caf::get<legacy_record_type>(entry);
+      if (entry.name().empty()) {
+        VAST_WARN("unexpectedly unnamed layout in schema: {}", entry);
+        continue;
+      }
       std::vector<std::string> cache_entry;
-      for (auto& [k, v] : layout.fields)
+      for (const auto& [k, v] : caf::get<record_type>(entry).fields())
         cache_entry.emplace_back(k);
       std::sort(cache_entry.begin(), cache_entry.end());
-      type_cache.insert({std::move(cache_entry), std::move(layout)});
+      type_cache.insert({std::move(cache_entry), entry});
     }
     return caf::none;
   }
@@ -99,8 +101,7 @@ public:
     return "json-reader";
   }
 
-  detail::flat_map<std::vector<std::string>, legacy_record_type> type_cache
-    = {};
+  detail::flat_map<std::vector<std::string>, type> type_cache = {};
 };
 
 } // namespace vast::format::json

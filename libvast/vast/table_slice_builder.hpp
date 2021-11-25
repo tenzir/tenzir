@@ -10,6 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/table_slice.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/meta/type_name.hpp>
@@ -53,7 +55,7 @@ public:
 
   /// Calls `add(x)` as long as `x` is not a vector, otherwise calls `add(y)`
   /// for each `y` in `x`.
-  [[nodiscard]] bool recursive_add(const data& x, const legacy_type& t);
+  [[nodiscard]] bool recursive_add(const data& x, const type& t);
 
   /// Adds data to the builder.
   /// @param x The data to add.
@@ -62,7 +64,9 @@ public:
   template <class T, class... Ts>
   [[nodiscard]] bool add(const T& x, const Ts&... xs) {
     if constexpr (sizeof...(xs) == 0) {
-      if constexpr (std::is_same_v<std::decay_t<T>, data_view>) {
+      if constexpr (std::is_same_v<T, data_view>) {
+        return add_impl(x);
+      } else if constexpr (caf::detail::tl_contains<data_view::types, T>::value) {
         return add_impl(x);
       } else {
         return add_impl(make_view(x));
@@ -75,14 +79,9 @@ public:
   /// Constructs a table_slice from the currently accumulated state. After
   /// calling this function, implementations must reset their internal state
   /// such that subsequent calls to add will restart with a new table_slice.
-  /// @param serialized_layout An optional buffer that contains the
-  /// CAF-serialized layout; TODO: remove this when switching the type system to
-  /// be FlatBuffers-based.
   /// @returns A table slice from the accumulated calls to add.
   /// @note Returns an invalid table slice on failure.
-  [[nodiscard]] virtual table_slice
-  finish(std::span<const std::byte> serialized_layout = {})
-    = 0;
+  [[nodiscard]] virtual table_slice finish() = 0;
 
   /// @returns The current number of rows in the table slice.
   virtual size_t rows() const noexcept = 0;
@@ -91,7 +90,7 @@ public:
   size_t columns() const noexcept;
 
   /// @returns The table layout.
-  const legacy_record_type& layout() const noexcept;
+  const type& layout() const noexcept;
 
   /// @returns An identifier for the implementing class.
   virtual table_slice_encoding implementation_id() const noexcept = 0;
@@ -113,7 +112,7 @@ protected:
 
   /// Construct a builder for tables slices.
   /// @param layout The table layout.
-  explicit table_slice_builder(legacy_record_type layout) noexcept;
+  explicit table_slice_builder(type layout) noexcept;
 
   /// Adds data to the builder.
   /// @param x The data to add.
@@ -122,7 +121,8 @@ protected:
 
 private:
   // -- implementation details -------------------------------------------------
-  legacy_record_type layout_;
+
+  type layout_;
 };
 
 // -- intrusive_ptr facade -----------------------------------------------------

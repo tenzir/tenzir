@@ -24,8 +24,13 @@ struct msgpack_table_slice_state;
 
 template <>
 struct msgpack_table_slice_state<fbs::table_slice::msgpack::v0> {
-  /// The deserialized table layout.
-  legacy_record_type layout;
+  type layout;
+  size_t columns;
+};
+
+template <>
+struct msgpack_table_slice_state<fbs::table_slice::msgpack::v1> {
+  type layout;
   size_t columns;
 };
 
@@ -39,14 +44,9 @@ public:
 
   /// Constructs a MessagePack-encoded table slice from a FlatBuffers table.
   /// @param slice The encoding-specific FlatBuffers table.
-  explicit msgpack_table_slice(const FlatBuffer& slice) noexcept;
-
-  /// Constructs a MessagePack-encoded table slice from a FlatBuffers table and
-  /// a known layout.
-  /// @param slice The encoding-specific FlatBuffers table.
-  /// @param layout The table layout.
+  /// @param parent The surrounding chunk.
   msgpack_table_slice(const FlatBuffer& slice,
-                      legacy_record_type layout) noexcept;
+                      const chunk_ptr& parent) noexcept;
 
   /// Destroys a MessagePack-encoded table slice.
   ~msgpack_table_slice() noexcept;
@@ -55,14 +55,14 @@ public:
 
   /// Whether the most recent version of the encoding is used.
   inline static constexpr bool is_latest_version
-    = std::is_same_v<FlatBuffer, fbs::table_slice::msgpack::v0>;
+    = std::is_same_v<FlatBuffer, fbs::table_slice::msgpack::v1>;
 
   /// The encoding of the slice.
   inline static constexpr enum table_slice_encoding encoding
     = table_slice_encoding::msgpack;
 
   /// @returns The table layout.
-  [[nodiscard]] const legacy_record_type& layout() const noexcept;
+  [[nodiscard]] const type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] table_slice::size_type rows() const noexcept;
@@ -93,7 +93,7 @@ public:
   /// @pre `row < rows() && column < columns()`
   [[nodiscard]] data_view
   at(table_slice::size_type row, table_slice::size_type column,
-     const legacy_type& t) const;
+     const type& t) const;
 
 private:
   // -- implementation details -------------------------------------------------
@@ -113,5 +113,6 @@ msgpack_table_slice(const FlatBuffer&) -> msgpack_table_slice<FlatBuffer>;
 
 /// Extern template declarations for all MessagePack encoding versions.
 extern template class msgpack_table_slice<fbs::table_slice::msgpack::v0>;
+extern template class msgpack_table_slice<fbs::table_slice::msgpack::v1>;
 
 } // namespace vast

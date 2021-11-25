@@ -8,13 +8,14 @@
 
 #include <vast/as_bytes.hpp>
 #include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/legacy_type.hpp>
 #include <vast/concept/printable/vast/uuid.hpp>
 #include <vast/detail/legacy_deserialize.hpp>
 #include <vast/fbs/partition.hpp>
 #include <vast/fbs/utils.hpp>
 #include <vast/index/hash_index.hpp>
+#include <vast/legacy_type.hpp>
 #include <vast/qualified_record_field.hpp>
+#include <vast/type.hpp>
 #include <vast/value_index_factory.hpp>
 
 #include <iostream>
@@ -114,7 +115,7 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
       vast::qualified_record_field fqf;
       auto name = vast::fbs::deserialize_bytes(
         column_synopsis->qualified_record_field(), fqf);
-      std::cout << indent << fqf.fqn() << ": ";
+      std::cout << indent << fqf.name() << ": ";
       if (auto opaque = column_synopsis->opaque_synopsis()) {
         std::cout << "opaque_synopsis";
         if (options.format.print_bytesizes)
@@ -134,21 +135,23 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
   }
   // Print column indices.
   std::cout << indent << "Column Indices\n";
-  vast::legacy_record_type combined_layout;
-  vast::fbs::deserialize_bytes(partition->combined_layout(), combined_layout);
+  vast::legacy_record_type intermediate;
+  vast::fbs::deserialize_bytes(partition->combined_layout(), intermediate);
+  auto combined_layout
+    = caf::get<vast::record_type>(vast::type::from_legacy_type(intermediate));
   if (auto indexes = partition->indexes()) {
-    if (indexes->size() != combined_layout.fields.size()) {
+    if (indexes->size() != combined_layout.num_fields()) {
       std::cout << indent << "!! wrong number of fields\n";
       return;
     }
     const auto& expand_indexes = options.partition.expand_indexes;
     indented_scope _(indent);
     for (size_t i = 0; i < indexes->size(); ++i) {
-      auto field = combined_layout.fields.at(i);
+      auto field = combined_layout.field(i);
       const auto* index = indexes->Get(i);
       auto name = field.name;
       auto sz = index->index()->data()->size();
-      std::cout << indent << name << ": " << vast::to_string(field.type);
+      std::cout << indent << name << ": " << fmt::to_string(field.type);
       if (options.format.print_bytesizes)
         std::cout << " (" << print_bytesize(sz, options.format) << ")";
       std::cout << "\n";
@@ -165,17 +168,14 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
           continue;
         }
         const auto& type = state_ptr->type();
-        std::cout << indent << "- type: " << to_string(type) << std::endl;
+        std::cout << indent << "- type: " << fmt::to_string(type) << std::endl;
         std::cout << indent << "- options: " << to_string(state_ptr->options())
                   << std::endl;
         // Print even more detailed information for hash indices.
         using namespace std::string_literals;
-        if (std::any_of(type.attributes().begin(), type.attributes().end(),
-                        [](const vast::attribute& x) {
-                          return x.key == "index" && x.value == "hash"s;
-                        })) {
-          print_hash_index(state_ptr, indent, options);
-        }
+        if (auto index = type.attribute("index"))
+          if (*index == "hash")
+            print_hash_index(state_ptr, indent, options);
       }
     }
   }

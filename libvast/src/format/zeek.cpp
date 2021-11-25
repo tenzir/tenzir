@@ -8,11 +8,9 @@
 
 #include "vast/format/zeek.hpp"
 
-#include "vast/attribute.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/escapers.hpp"
@@ -21,11 +19,11 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/zeekify.hpp"
 #include "vast/error.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/flatten_layout.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/type.hpp"
 
 #include <caf/none.hpp>
 #include <caf/settings.hpp>
@@ -42,42 +40,42 @@ namespace {
 constexpr std::string_view type_name_prefix = "zeek.";
 
 // Creates a VAST type from an ASCII Zeek type in a log header.
-caf::expected<legacy_type> parse_type(std::string_view zeek_type) {
-  legacy_type t;
+caf::expected<type> parse_type(std::string_view zeek_type) {
+  type t;
   if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file")
-    t = legacy_string_type{};
+    t = type{string_type{}};
   else if (zeek_type == "bool")
-    t = legacy_bool_type{};
+    t = type{bool_type{}};
   else if (zeek_type == "int")
-    t = legacy_integer_type{};
+    t = type{integer_type{}};
   else if (zeek_type == "count")
-    t = legacy_count_type{};
+    t = type{count_type{}};
   else if (zeek_type == "double")
-    t = legacy_real_type{};
+    t = type{real_type{}};
   else if (zeek_type == "time")
-    t = legacy_time_type{};
+    t = type{time_type{}};
   else if (zeek_type == "interval")
-    t = legacy_duration_type{};
+    t = type{duration_type{}};
   else if (zeek_type == "pattern")
-    t = legacy_pattern_type{};
+    t = type{pattern_type{}};
   else if (zeek_type == "addr")
-    t = legacy_address_type{};
+    t = type{address_type{}};
   else if (zeek_type == "subnet")
-    t = legacy_subnet_type{};
+    t = type{subnet_type{}};
   else if (zeek_type == "port")
     // FIXME: once we ship with builtin type aliases, we should reference the
     // port alias type here. Until then, we create the alias manually.
     // See also:
     // - src/format/pcap.cpp
-    t = legacy_count_type{}.name("port");
-  if (caf::holds_alternative<legacy_none_type>(t)
+    t = type{"port", count_type{}};
+  if (caf::holds_alternative<none_type>(t)
       && (zeek_type.starts_with("vector") || zeek_type.starts_with("set")
           || zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
     // safely assume that we're dealing with a basic type inside the brackets.
     // If this will ever change, we'll have to enhance this simple parser.
-    auto open = zeek_type.find("[");
-    auto close = zeek_type.rfind("]");
+    auto open = zeek_type.find('[');
+    auto close = zeek_type.rfind(']');
     if (open == std::string::npos || close == std::string::npos)
       return caf::make_error(ec::format_error, "missing container brackets:",
                              std::string{zeek_type});
@@ -86,51 +84,63 @@ caf::expected<legacy_type> parse_type(std::string_view zeek_type) {
       return elem.error();
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. In VAST, they are all lists.
-    t = legacy_list_type{*elem};
+    t = type{list_type{*elem}};
   }
-  if (caf::holds_alternative<legacy_none_type>(t))
+  if (caf::holds_alternative<none_type>(t))
     return caf::make_error(ec::format_error,
                            "failed to parse type: ", std::string{zeek_type});
   return t;
 }
 
-struct zeek_type_printer {
-  template <class T>
-  std::string operator()(const T& x) const {
-    return kind(x);
-  }
-
-  std::string operator()(const legacy_count_type& t) const {
-    return t.name() == "port" ? "port" : "count";
-  }
-
-  std::string operator()(const legacy_real_type&) const {
-    return "double";
-  }
-
-  std::string operator()(const legacy_time_type&) const {
-    return "time";
-  }
-
-  std::string operator()(const legacy_duration_type&) const {
-    return "interval";
-  }
-
-  std::string operator()(const legacy_address_type&) const {
-    return "addr";
-  }
-
-  std::string operator()(const legacy_list_type& t) const {
-    return "vector[" + caf::visit(*this, t.value_type) + ']';
-  }
-
-  std::string operator()(const legacy_alias_type& t) const {
-    return caf::visit(*this, t.value_type);
-  }
-};
-
-auto to_zeek_string(const legacy_type& t) {
-  return caf::visit(zeek_type_printer{}, t);
+std::string to_zeek_string(const type& t) {
+  auto f = detail::overload{
+    [](const none_type&) -> std::string {
+      return "none";
+    },
+    [](const bool_type&) -> std::string {
+      return "bool";
+    },
+    [](const integer_type&) -> std::string {
+      return "int";
+    },
+    [&](const count_type&) -> std::string {
+      return t.name() == "port" ? "port" : "count";
+    },
+    [](const real_type&) -> std::string {
+      return "double";
+    },
+    [](const duration_type&) -> std::string {
+      return "interval";
+    },
+    [](const time_type&) -> std::string {
+      return "time";
+    },
+    [](const string_type&) -> std::string {
+      return "string";
+    },
+    [](const pattern_type&) -> std::string {
+      return "pattern";
+    },
+    [](const address_type&) -> std::string {
+      return "addr";
+    },
+    [](const subnet_type&) -> std::string {
+      return "subnet";
+    },
+    [](const enumeration_type&) -> std::string {
+      return "enumeration";
+    },
+    [](const list_type& lt) -> std::string {
+      return fmt::format("vector[{}]", to_zeek_string(lt.value_type()));
+    },
+    [](const map_type&) -> std::string {
+      return "map";
+    },
+    [](const record_type&) -> std::string {
+      return "record";
+    },
+  };
+  return caf::visit(f, t);
 }
 
 constexpr char separator = '\x09';
@@ -150,8 +160,7 @@ Stream& operator<<(Stream& out, const time_factory& t) {
   return out;
 }
 
-void print_header(const legacy_type& t, std::ostream& out,
-                  bool show_timestamp_tags) {
+void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
   auto path = std::string_view{t.name()};
   // To ensure that the printed output conforms to standard Zeek naming
   // practices, we strip VAST's internal "zeek." type prefix such that the
@@ -168,12 +177,12 @@ void print_header(const legacy_type& t, std::ostream& out,
   if (show_timestamp_tags)
     out << "#open" << separator << time_factory{} << '\n';
   out << "#fields";
-  auto r = caf::get<legacy_record_type>(t);
-  for (auto& e : legacy_record_type::each{r})
-    out << separator << to_string(e.key());
+  auto r = caf::get<record_type>(t);
+  for (const auto& [_, offset] : r.leaves())
+    out << separator << to_string(r.key(offset));
   out << "\n#types";
-  for (auto& e : legacy_record_type::each{r})
-    out << separator << to_zeek_string(e.trace.back()->type);
+  for (const auto& [field, _] : r.leaves())
+    out << separator << to_zeek_string(field.type);
   out << '\n';
 }
 
@@ -198,7 +207,7 @@ caf::error reader::schema(vast::schema sch) {
 
 schema reader::schema() const {
   vast::schema result;
-  result.add(type_);
+  result.add(layout_);
   return result;
 }
 
@@ -223,7 +232,6 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     return caf::make_error(ec::end_of_input, "input exhausted");
   // Make sure we have a builder.
   if (builder_ == nullptr) {
-    VAST_ASSERT(layout_.fields.empty());
     auto timed_out = next_line();
     if (timed_out)
       return ec::stalled;
@@ -299,7 +307,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
         if (is_unset(i))
           xs[i] = caf::none;
         else if (is_empty(i))
-          xs[i] = construct(layout_.fields[i].type);
+          xs[i] = caf::get<record_type>(layout_).field(i).type.construct();
         else if (!parsers_[i](fields[i], xs[i]))
           return finish(f, caf::make_error(ec::parse_error, "field", i, "line",
                                            lines_->line_number(),
@@ -385,19 +393,21 @@ caf::error reader::parse_header() {
   if (fields.size() != types.size())
     return caf::make_error(ec::format_error, "fields and types have different "
                                              "size");
-  std::vector<record_field> record_fields;
+  std::vector<struct record_type::field> record_fields;
   proto_field_.reset();
   for (auto i = 0u; i < fields.size(); ++i) {
     auto t = parse_type(types[i]);
     if (!t)
       return t.error();
-    record_fields.emplace_back(std::string{fields[i]}, *t);
+    record_fields.push_back({
+      std::string{fields[i]},
+      *t,
+    });
     if (fields[i] == "proto" && types[i] == "enum")
       proto_field_ = i;
   }
   // Construct type.
-  layout_ = legacy_record_type{std::move(record_fields)};
-  layout_.name(std::string{type_name_prefix} + path);
+  auto layout = record_type{record_fields};
   VAST_DEBUG("{} parsed zeek header:", detail::pretty_type_name(this));
   VAST_DEBUG("{}     #separator {}", detail::pretty_type_name(this),
              separator_);
@@ -409,44 +419,53 @@ caf::error reader::parse_header() {
              unset_field_);
   VAST_DEBUG("{}     #path {}", detail::pretty_type_name(this), path);
   VAST_DEBUG("{}     #fields:", detail::pretty_type_name(this));
-  layout_ = detail::zeekify(layout_);
+  layout = detail::zeekify(layout);
+  auto name = std::string{type_name_prefix} + path;
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
-  if (auto t = schema_.find(layout_.name())) {
-    auto r = caf::get_if<legacy_record_type>(t);
+  if (auto* t = schema_.find(name)) {
+    const auto* r = caf::get_if<record_type>(t);
     if (!r)
       return caf::make_error(ec::format_error,
                              "the zeek reader expects records for "
                              "the top level types in the schema");
-    for (const auto& field : legacy_record_type::each(*r)) {
-      auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
-                            [&](auto& hf) {
-                              return hf.name == field.key();
-                            });
-      if (i != layout_.fields.end()) {
-        if (!congruent(i->type, field.type()))
+    auto transformations = std::vector<record_type::transformation>{};
+    for (const auto& [layout_field, layout_index] : layout.leaves()) {
+      const auto key = layout.key(layout_index);
+      if (auto schema_index = r->resolve_key(key)) {
+        const auto schema_field = r->field(*schema_index);
+        if (!congruent(schema_field.type, layout_field.type))
           VAST_WARN("{} encountered a type mismatch between the schema "
-                    "definition ({}: {}) and the input data ({})",
-                    detail::pretty_type_name(this), field.key(), field.type(),
-                    *i);
-        else if (!field.type().attributes().empty())
-          i->type.attributes(field.type().attributes());
+                    "definition ({}) and the input data ({}",
+                    detail::pretty_type_name(this), schema_field, layout_field);
+        else {
+          transformations.push_back({
+            layout_index,
+            record_type::assign({
+              {std::string{layout_field.name}, schema_field.type},
+            }),
+          });
+        }
       }
     }
+    auto transformed_layout = layout.transform(std::move(transformations));
+    // Cannot fail; we're not deleting any fields.
+    VAST_ASSERT(transformed_layout);
+    layout = std::move(*transformed_layout);
   }
-  for (auto i = 0u; i < layout_.fields.size(); ++i)
-    VAST_DEBUG("{}       {} ) {} : {}", detail::pretty_type_name(this), i,
-               layout_.fields[i].name, layout_.fields[i].type);
+  for (auto i = 0u; i < layout.num_fields(); ++i)
+    VAST_DEBUG("{}       {}) {} : {}", detail::pretty_type_name(this), i,
+               layout.field(i).name, layout.field(i).type);
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
-  type_ = layout_;
+  layout_ = type{name, layout};
   // Create Zeek parsers.
   auto make_parser = [](const auto& type, const auto& set_sep) {
     return make_zeek_parser<iterator_type>(type, set_sep);
   };
-  parsers_.resize(layout_.fields.size());
-  for (size_t i = 0; i < layout_.fields.size(); i++)
-    parsers_[i] = make_parser(layout_.fields[i].type, set_separator_);
+  parsers_.resize(layout.num_fields());
+  for (size_t i = 0; i < layout.num_fields(); i++)
+    parsers_[i] = make_parser(layout.field(i).type, set_separator_);
   return caf::none;
 }
 
@@ -582,10 +601,10 @@ caf::error writer::write(const table_slice& slice) {
     child = writers_.begin()->second.get();
     if (layout != previous_layout_) {
       print_header(layout, child->out(), show_timestamp_tags_);
-      previous_layout_ = std::move(layout);
+      previous_layout_ = layout;
     }
   } else {
-    auto i = writers_.find(layout.name());
+    auto i = writers_.find(std::string{layout.name()});
     if (i != writers_.end()) {
       child = i->second.get();
     } else {
@@ -609,7 +628,7 @@ caf::error writer::write(const table_slice& slice) {
         return caf::make_error(
           ec::format_error, "got existing non-directory path", dir_.string());
       }
-      auto filename = dir_ / (layout.name() + ".log");
+      auto filename = dir_ / fmt::format("{}.log", layout.name());
       auto fos = std::make_unique<std::ofstream>(filename.string());
       print_header(layout, *fos, show_timestamp_tags_);
       auto i = writers_.emplace(

@@ -240,25 +240,23 @@ public:
     hash_append(h, xs->size());
   }
 
+  friend bool
+  operator==(const container_view_handle& x, const container_view_handle& y) {
+    return x && y && *x == *y;
+  }
+
+  friend bool
+  operator<(const container_view_handle& x, const container_view_handle& y) {
+    if (!x)
+      return static_cast<bool>(y);
+    if (!y)
+      return false;
+    return *x < *y;
+  }
+
 private:
   Pointer ptr_;
 };
-
-template <class Pointer>
-bool operator==(const container_view_handle<Pointer>& x,
-                const container_view_handle<Pointer>& y) {
-  return x && y && *x == *y;
-}
-
-template <class Pointer>
-bool operator<(const container_view_handle<Pointer>& x,
-               const container_view_handle<Pointer>& y) {
-  if (!x)
-    return static_cast<bool>(y);
-  if (!y)
-    return false;
-  return *x < *y;
-}
 
 namespace detail {
 
@@ -499,10 +497,10 @@ data materialize(data_view xs);
 // -- utilities ----------------------------------------------------------------
 
 /// Checks whether data is valid for a given type.
-/// @param t The type that describes *x*.
-/// @param x The data view to be checked against *t*.
-/// @returns `true` if *t* is a valid type for *x*.
-bool type_check(const legacy_type& t, const data_view& x);
+/// @param x The type that describes *x*.
+/// @param y The data view to be checked against *x*.
+/// @returns `true` if *x* is a valid type for *y*.
+bool type_check(const type& x, const data_view& y);
 
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
@@ -519,14 +517,14 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
 /// @param t The type that describes *x*.
 /// @param x The data view on the internal representation of the value.
 /// @return A data view on the external representation of the value.
-data_view to_canonical(const legacy_type& t, const data_view& x);
+data_view to_canonical(const type& t, const data_view& x);
 
 /// Converts a value from the type defined in the user interface to its
 /// internal representation. This is the inverse of to_canonical.
 /// @param t The type that describes *x*.
 /// @param x The data view on the external representation of the value.
 /// @return A data view on the internal representation of the value.
-data_view to_internal(const legacy_type& t, const data_view& x);
+data_view to_internal(const type& t, const data_view& x);
 
 } // namespace vast
 

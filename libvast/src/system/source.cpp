@@ -44,22 +44,28 @@ void source_state::initialize(const type_registry_actor& type_registry,
     auto blocking = caf::scoped_actor{self->system()};
     blocking->request(type_registry, caf::infinite, atom::get_v)
       .receive(
-        [=, this](type_set types) {
-          const auto is_valid = [&](const auto& layout) {
-            return layout.name().starts_with(type_filter);
+        [=, this](const type_set& types) {
+          auto prefix_then_dot = [](std::string_view name,
+                                    std::string_view prefix) {
+            if (prefix.empty())
+              return true;
+            auto [name_mismatch, prefix_mismatch] = std::mismatch(
+              name.begin(), name.end(), prefix.begin(), prefix.end());
+            return prefix_mismatch == prefix.end()
+                   && (name_mismatch == name.end() || *name_mismatch == '.');
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
           auto merged_schema = schema{};
           for (const auto& type : local_schema)
-            if (auto&& layout = caf::get_if<vast::legacy_record_type>(&type))
-              if (is_valid(*layout))
-                merged_schema.add(*layout);
+            if (prefix_then_dot(type.name(), type_filter))
+              if (caf::holds_alternative<record_type>(type))
+                merged_schema.add(type);
           // Second, filter valid types from all available record types.
-          for (auto& type : types)
-            if (auto&& layout = caf::get_if<vast::legacy_record_type>(&type))
-              if (is_valid(*layout))
-                merged_schema.add(*layout);
+          for (const auto& type : types)
+            if (prefix_then_dot(type.name(), type_filter))
+              if (caf::holds_alternative<record_type>(type))
+                merged_schema.add(type);
           // Third, try to set the new schema.
           if (auto err = reader->schema(std::move(merged_schema));
               err && err != caf::no_error)
@@ -119,15 +125,15 @@ void source_state::filter_and_push(
     if (auto filtered_slice = vast::filter(std::move(slice), *filter)) {
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
-                 slice.layout().name());
+                 slice.layout());
       push_to_out(std::move(*filtered_slice));
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
-                 reader->name(), unfiltered_rows, slice.layout().name());
+                 reader->name(), unfiltered_rows, slice.layout());
     }
   } else {
     VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
-               unfiltered_rows, slice.layout().name());
+               unfiltered_rows, slice.layout());
     push_to_out(std::move(slice));
   }
 }
@@ -218,7 +224,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
         self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
-          self->state.event_counters[slice.layout().name()] += slice.rows();
+          const auto& layout = slice.layout();
+          self->state.event_counters[std::string{layout.name()}]
+            += slice.rows();
           self->state.mgr->out().push(std::move(slice));
         });
       };

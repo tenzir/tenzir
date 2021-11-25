@@ -32,7 +32,7 @@ public:
   using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   using type_index = bitmap_index<bool, singleton_coder<ewah_bitmap>>;
 
-  explicit address_index(vast::legacy_type t, caf::settings opts = {});
+  explicit address_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 

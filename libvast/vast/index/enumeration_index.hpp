@@ -26,7 +26,7 @@ namespace vast {
 /// An index for enumerations.
 class enumeration_index : public value_index {
 public:
-  explicit enumeration_index(vast::legacy_type t, caf::settings opts = {});
+  explicit enumeration_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 

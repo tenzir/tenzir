@@ -54,7 +54,7 @@ chunk_ptr chunk::make(view_type view, deleter_type&& deleter) noexcept {
   return chunk_ptr{new chunk{view, std::move(deleter)}, false};
 }
 
-chunk_ptr chunk::empty() noexcept {
+chunk_ptr chunk::make_empty() noexcept {
   return chunk_ptr{new chunk{view_type{}, deleter_type{}}, false};
 }
 
@@ -135,8 +135,14 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
   VAST_ASSERT(start < size());
   if (length > size() - start)
     length = size() - start;
+  return slice(view_.subspan(start, length));
+}
+
+chunk_ptr chunk::slice(view_type view) const {
+  VAST_ASSERT(view.begin() >= begin());
+  VAST_ASSERT(view.end() <= end());
   this->ref();
-  return make(view_.subspan(start, length), [this]() noexcept {
+  return make(view, [this]() noexcept {
     this->deref();
   });
 }

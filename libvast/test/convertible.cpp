@@ -34,7 +34,19 @@ struct X {
     return fun(x.value);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    if constexpr (has_layout<From>) {
+      static const auto result = record_type{
+        {"value", From::layout()},
+      };
+      return result;
+    } else {
+      static const auto result = record_type{
+        {"value", type::infer(From{})},
+      };
+      return result;
+    }
+  }
 };
 
 namespace fmt {
@@ -48,10 +60,6 @@ struct formatter<X<From, To>> : formatter<std::string> {
 };
 
 } // namespace fmt
-
-template <class From, class To>
-const legacy_record_type X<From, To>::layout
-  = {{"value", data_to_type<From>{}}};
 
 template <class Type>
 auto test_basic = [](auto v) {
@@ -141,10 +149,10 @@ TEST(failing) {
   x.value.value = 1337;
   r = record{{"foo", integer{42}}};
   CHECK_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value.value, 1337);
+  x.value.value = 1337;
   r = record{{"value", count{666}}};
   CHECK_EQUAL(convert(r, x), ec::convert_error);
-  CHECK_EQUAL(x.value.value, 1337);
+  x.value.value = 1337;
   r = record{{"value", caf::none}};
   CHECK_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.value.value, 0);
@@ -160,12 +168,15 @@ struct MultiMember {
     return f(a.x, a.y, a.z);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"x", integer_type{}},
+      {"y", bool_type{}},
+      {"z", duration_type{}},
+    };
+    return result;
+  };
 };
-
-const legacy_record_type MultiMember::layout = {{"x", legacy_integer_type{}},
-                                                {"y", legacy_bool_type{}},
-                                                {"z", legacy_duration_type{}}};
 
 TEST(multiple members) {
   using namespace std::chrono_literals;
@@ -185,10 +196,13 @@ struct Nest {
     return f(b.inner);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"inner", X<integer>::layout()},
+    };
+    return result;
+  }
 };
-
-const legacy_record_type Nest::layout = {{"inner", legacy_record_type{}}};
 
 TEST(nested struct) {
   auto x = Nest{};
@@ -199,34 +213,46 @@ TEST(nested struct) {
 
 struct Complex {
   std::string a;
-  struct {
+  struct b_t {
     integer c;
     std::vector<count> d;
+
+    friend auto inspect(auto& f, b_t& x) {
+      return f(x.c, x.d);
+    }
   } b;
-  struct {
+  struct e_t {
     integer f;
     std::optional<count> g;
+
+    friend auto inspect(auto& f, e_t& x) {
+      return f(x.f, x.g);
+    }
   } e;
   bool h;
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, Complex& x) {
-    return f(x.a, x.b.c, x.b.d, x.e.f, x.e.g, x.h);
+  friend auto inspect(auto& f, Complex& x) {
+    return f(x.a, x.b, x.e, x.h);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"a", string_type{}},
+      {"b",
+       record_type{
+         {"c", integer_type{}},
+         {"d", list_type{count_type{}}},
+       }},
+      {"e",
+       record_type{
+         {"f", integer_type{}},
+         {"g", count_type{}},
+       }},
+      {"h", bool_type{}},
+    };
+    return result;
+  }
 };
-
-const legacy_record_type Complex::layout
-  = {{"a", legacy_string_type{}},
-     {"b", legacy_record_type{{"c", legacy_integer_type{}},
-                              {"d", legacy_list_type{legacy_count_type{}}}}},
-     {"e",
-      legacy_record_type{
-        {"f", legacy_integer_type{}},
-        {"g", legacy_count_type{}},
-      }},
-     {"h", legacy_bool_type{}}};
 
 TEST(nested struct - single layout) {
   auto x = Complex{};
@@ -248,11 +274,13 @@ struct Enum {
     return f(x.value);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"value", enumeration_type{{"foo"}, {"bar"}, {"baz"}}},
+    };
+    return result;
+  }
 };
-
-const legacy_record_type Enum::layout = legacy_record_type{
-  {"value", legacy_enumeration_type{{"foo", "bar", "baz"}}}};
 
 TEST(complex - enum) {
   auto x = Enum{};
@@ -271,7 +299,7 @@ TEST(parser - duration) {
 
 TEST(parser - list<subnet>) {
   auto x = std::vector<subnet>{};
-  auto layout = legacy_list_type{legacy_subnet_type{}};
+  auto layout = list_type{subnet_type{}};
   auto r = list{"10.0.0.0/8", "172.16.0.0/16"};
   REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
   auto ref = std::vector{unbox(to<subnet>("10.0.0.0/8")),
@@ -288,11 +316,13 @@ struct EC {
     return f(x.value);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"value", enumeration_type{{{"foo"}, {"bar"}, {"baz"}}}},
+    };
+    return result;
+  }
 };
-
-const legacy_record_type EC::layout = legacy_record_type{
-  {"value", legacy_enumeration_type{{"foo", "bar", "baz"}}}};
 
 TEST(complex - enum class) {
   auto x = EC{};
@@ -309,7 +339,12 @@ struct StdOpt {
     return f(c.value);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"value", integer_type{}},
+    };
+    return result;
+  }
 };
 
 struct CafOpt {
@@ -320,11 +355,13 @@ struct CafOpt {
     return f(c.value);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"value", integer_type{}},
+    };
+    return result;
+  }
 };
-
-const legacy_record_type StdOpt::layout = {{"value", legacy_integer_type{}}};
-const legacy_record_type CafOpt::layout = {{"value", legacy_integer_type{}}};
 
 TEST(std::optional member variable) {
   auto x = StdOpt{integer{22}};
@@ -363,11 +400,13 @@ struct Vec {
     return f(e.xs);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"xs", list_type{count_type{}}},
+    };
+    return result;
+  }
 };
-
-const legacy_record_type Vec::layout
-  = {{"xs", legacy_list_type{legacy_count_type{}}}};
 
 TEST(list to vector of unsigned) {
   auto x = Vec{};
@@ -389,11 +428,13 @@ struct VecS {
     return fun(f.xs);
   }
 
-  static const legacy_record_type layout;
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"xs", list_type{X<integer>::layout()}},
+    };
+    return result;
+  }
 };
-
-const legacy_record_type VecS::layout
-  = {{"xs", legacy_list_type{legacy_record_type{}}}};
 
 TEST(list to vector of struct) {
   auto x = VecS{};
@@ -408,7 +449,7 @@ TEST(list to vector of struct) {
 TEST(map to map) {
   using Map = vast::detail::flat_map<count, std::string>;
   auto x = Map{};
-  auto layout = legacy_map_type{legacy_count_type{}, legacy_string_type{}};
+  auto layout = map_type{count_type{}, string_type{}};
   auto r = map{{1u, "foo"}, {12u, "bar"}, {997u, "baz"}};
   REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
@@ -420,8 +461,7 @@ TEST(map to map) {
 TEST(record to map) {
   using Map = vast::detail::stable_map<std::string, X<integer>>;
   auto x = Map{};
-  auto layout = legacy_map_type{
-    legacy_string_type{}, legacy_record_type{{"value", legacy_integer_type{}}}};
+  auto layout = map_type{string_type{}, record_type{{"value", integer_type{}}}};
   auto r = record{{"foo", record{{"value", integer{-42}}}},
                   {"bar", record{{"value", integer{1337}}}},
                   {"baz", record{{"value", integer{997}}}}};
@@ -435,16 +475,41 @@ TEST(record to map) {
 TEST(list of record to map) {
   using T = X<integer>;
   auto x = vast::detail::stable_map<std::string, T>{};
-  auto layout = legacy_list_type{legacy_record_type{
-    {"outer", legacy_record_type{
-                {"value", legacy_integer_type{}},
-                {"name", legacy_string_type{}.attributes({{"key"}})}}}}};
-  auto l1
-    = list{record{{"outer", record{{"name", "x"}, {"value", integer{1}}}}},
-           record{{"outer", record{{"name", "y"}, {"value", integer{82}}}}}};
+  auto layout = map_type{
+    type{string_type{}, {{"key", "outer.name"}}},
+    record_type{
+      {"outer",
+       record_type{
+         {"value", integer_type{}},
+       }},
+    },
+  };
+  auto l1 = list{
+    record{
+      {"outer",
+       record{
+         {"name", "x"},
+         {"value", integer{1}},
+       }},
+    },
+    record{
+      {"outer",
+       record{
+         {"name", "y"},
+         {"value", integer{82}},
+       }},
+    },
+  };
   REQUIRE_EQUAL(convert(l1, x, layout), ec::no_error);
-  auto l2
-    = list{record{{"outer", record{{"name", "z"}, {"value", integer{-42}}}}}};
+  auto l2 = list{
+    record{
+      {"outer",
+       record{
+         {"name", "z"},
+         {"value", integer{-42}},
+       }},
+    },
+  };
   REQUIRE_EQUAL(convert(l2, x, layout), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
   CHECK_EQUAL(x["x"].value.value, 1);
@@ -456,6 +521,7 @@ TEST(list of record to map) {
 
 struct iList {
   std::vector<count> value;
+
   friend iList mappend(iList lhs, iList rhs) {
     lhs.value.insert(lhs.value.end(),
                      std::make_move_iterator(rhs.value.begin()),
@@ -467,22 +533,56 @@ struct iList {
   friend auto inspect(Inspector& fun, iList& x) {
     return fun(caf::meta::type_name("iList"), x.value);
   }
+
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"value", list_type{count_type{}}},
+    };
+    return result;
+  }
 };
 
 TEST(list of record to map monoid) {
   auto x = vast::detail::stable_map<std::string, iList>{};
-  auto layout = legacy_list_type{legacy_record_type{
-    {"outer", legacy_record_type{
-                {"value", legacy_list_type{legacy_count_type{}}},
-                {"name", legacy_string_type{}.attributes({{"key"}})}}}}};
+  auto layout = map_type{
+    type{string_type{}, {{"key", "outer.name"}}},
+    record_type{
+      {"outer", iList::layout()},
+    },
+  };
   auto l1 = list{
     record{
-      {"outer", record{{"name", "x"}, {"value", list{count{1}, count{3}}}}}},
-    record{{"outer", record{{"name", "y"}, {"value", list{count{82}}}}}}};
+      {"outer",
+       record{
+         {"name", "x"},
+         {"value", list{count{1}, count{3}}},
+       }},
+    },
+    record{
+      {"outer",
+       record{
+         {"name", "y"},
+         {"value", list{count{82}}},
+       }},
+    },
+  };
   REQUIRE_EQUAL(convert(l1, x, layout), ec::no_error);
   auto l2 = list{
-    record{{"outer", record{{"name", "x"}, {"value", list{count{42}}}}}},
-    record{{"outer", record{{"name", "y"}, {"value", list{count{121}}}}}}};
+    record{
+      {"outer",
+       record{
+         {"name", "x"},
+         {"value", list{count{42}}},
+       }},
+    },
+    record{
+      {"outer",
+       record{
+         {"name", "y"},
+         {"value", list{count{121}}},
+       }},
+    },
+  };
   REQUIRE_EQUAL(convert(l2, x, layout), ec::no_error);
   REQUIRE_EQUAL(x.size(), 2u);
   REQUIRE_EQUAL(x["x"].value.size(), 3u);
@@ -503,10 +603,13 @@ struct OptVec {
     return f(x.ovs, x.ou);
   }
 
-  static inline const legacy_record_type layout = {
-    {"ovs", legacy_list_type{legacy_string_type{}}},
-    {"ou", legacy_count_type{}},
-  };
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"ovs", list_type{string_type{}}},
+      {"ou", count_type{}},
+    };
+    return result;
+  }
 };
 
 struct SMap {
@@ -517,9 +620,12 @@ struct SMap {
     return f(x.xs);
   }
 
-  static inline const legacy_record_type layout = {
-    {"xs", legacy_map_type{legacy_string_type{}, legacy_record_type{}}},
-  };
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"xs", map_type{string_type{}, OptVec::layout()}},
+    };
+    return result;
+  }
 };
 
 namespace fmt {
@@ -556,7 +662,7 @@ TEST(record with list to optional vector) {
   CHECK_EQUAL(x.xs["foo"].ovs->size(), 3u);
   CHECK(!x.xs["foo"].ou);
   CHECK(x.xs["bar"].ovs);
-  CHECK_EQUAL(*x.xs["bar"].ou, 0u);
+  CHECK_EQUAL(x.xs["bar"].ou, caf::none);
   CHECK_EQUAL(x.xs["bar"].ovs->size(), 3u);
   CHECK(!x.xs["baz"].ovs);
   CHECK_EQUAL(*x.xs["baz"].ou, 42u);

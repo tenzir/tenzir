@@ -10,15 +10,6 @@ table v0 {
   count: uint64;
 }
 
-namespace vast.fbs.meta_index;
-
-/// The persistent state of the meta index.
-table v0 {
-  /// The meta index state.
-  /// TODO: tear apart into different pieces.
-  state: [ubyte];
-}
-
 namespace vast.fbs.index;
 
 /// The persistent state of the index.

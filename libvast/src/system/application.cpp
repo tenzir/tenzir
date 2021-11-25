@@ -422,6 +422,7 @@ auto make_command_factory() {
 } // namespace
 
 auto make_root_command(std::string_view path) {
+  using namespace std::string_literals;
   // We're only interested in the application name, not in its path. For
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
   // interested in "vast".

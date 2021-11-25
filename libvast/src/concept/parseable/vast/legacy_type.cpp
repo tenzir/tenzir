@@ -25,13 +25,14 @@ static legacy_type type_factory() {
 }
 
 template <class Iterator, class Attribute>
-bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
+bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
+                               Attribute& a) const {
   // clang-format off
   // Attributes: type meta data
   static auto to_attr =
     [](std::tuple<std::string, caf::optional<std::string>> xs) {
       auto& [key, value] = xs;
-      return vast::attribute{std::move(key), std::move(value)};
+      return vast::legacy_attribute{std::move(key), std::move(value)};
     };
   static constexpr auto attr_value
     = parsers::qqstr
@@ -41,7 +42,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   static auto attr_list = *(skp >> attr);
   // Basic types
   using namespace parser_literals;
-  static auto basic_type_parser
+  static auto legacy_basic_type_parser
     =
     ( "bool"_p      ->* type_factory<legacy_bool_type>
     | "int"_p       ->* type_factory<legacy_integer_type>
@@ -59,7 +60,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   static auto to_enum = [](std::vector<std::string> fields) -> legacy_type {
     return legacy_enumeration_type{std::move(fields)};
   };
-  static auto enum_type_parser
+  static auto legacy_enum_type_parser
     = ("enum" >> skp >> '{'
     >> ((skp >> parsers::identifier >> skp) % ',') >> ~(',' >> skp)
     >> '}') ->* to_enum
@@ -106,14 +107,14 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   static auto placeholder_parser
     = (parsers::identifier) ->* to_named_legacy_none_type
     ;
-  rule<Iterator, legacy_type> type_expr_parser;
+  rule<Iterator, legacy_type> legacy_type_expr_parser;
   auto algebra_leaf_parser
     = legacy_record_type_parser
     | placeholder_parser
     ;
   auto algebra_operand_parser
     = algebra_leaf_parser
-    | ref(type_expr_parser)
+    | ref(legacy_type_expr_parser)
     ;
   auto rplus_parser = "+>" >> skp >> algebra_operand_parser ->* [](legacy_type t) {
     return record_field{"+>", std::move(t)};
@@ -140,7 +141,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
     | lplus_parser
     | minus_parser
     ;
-  type_expr_parser = (algebra_operand_parser >> skp >> (+(skp >> algebra_parser)))
+  legacy_type_expr_parser = (algebra_operand_parser >> skp >> (+(skp >> algebra_parser)))
     ->* [](std::tuple<legacy_type, std::vector<record_field>> xs) -> legacy_type {
       auto& [lhs, op_operands] = xs;
       legacy_record_type result;
@@ -153,16 +154,16 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   // Complete type
   using type_tuple = std::tuple<
     vast::legacy_type,
-    std::vector<vast::attribute>
+    std::vector<vast::legacy_attribute>
   >;
   static auto insert_attributes = [](type_tuple xs) {
     auto& [t, attrs] = xs;
     return t.update_attributes(std::move(attrs));
   };
   type_type = (
-    ( type_expr_parser
-    | basic_type_parser
-    | enum_type_parser
+    ( legacy_type_expr_parser
+    | legacy_basic_type_parser
+    | legacy_enum_type_parser
     | legacy_list_type_parser
     | legacy_map_type_parser
     | legacy_record_type_parser
@@ -174,22 +175,22 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
 }
 
 template bool
-type_parser::parse(std::string::iterator&, const std::string::iterator&,
-                   unused_type&) const;
+legacy_type_parser::parse(std::string::iterator&, const std::string::iterator&,
+                          unused_type&) const;
 template bool
-type_parser::parse(std::string::iterator&, const std::string::iterator&,
-                   legacy_type&) const;
+legacy_type_parser::parse(std::string::iterator&, const std::string::iterator&,
+                          legacy_type&) const;
+
+template bool legacy_type_parser::parse(std::string::const_iterator&,
+                                        const std::string::const_iterator&,
+                                        unused_type&) const;
+template bool legacy_type_parser::parse(std::string::const_iterator&,
+                                        const std::string::const_iterator&,
+                                        legacy_type&) const;
 
 template bool
-type_parser::parse(std::string::const_iterator&,
-                   const std::string::const_iterator&, unused_type&) const;
+legacy_type_parser::parse(char const*&, char const* const&, unused_type&) const;
 template bool
-type_parser::parse(std::string::const_iterator&,
-                   const std::string::const_iterator&, legacy_type&) const;
-
-template bool
-type_parser::parse(char const*&, char const* const&, unused_type&) const;
-template bool
-type_parser::parse(char const*&, char const* const&, legacy_type&) const;
+legacy_type_parser::parse(char const*&, char const* const&, legacy_type&) const;
 
 } // namespace vast

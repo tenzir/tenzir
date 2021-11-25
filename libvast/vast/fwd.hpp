@@ -37,6 +37,14 @@ class Schema;
 
 } // namespace arrow
 
+// -- flatbuffers -------------------------------------------------------------
+
+namespace flatbuffers {
+
+class FlatBufferBuilder;
+
+} // namespace flatbuffers
+
 // -- caf ----------------------------------------------------------------------
 
 // These are missing from <caf/fwd.hpp>.
@@ -49,41 +57,64 @@ class inbound_stream_slot;
 template <class, class...>
 class outbound_stream_slot;
 
+namespace detail {
+
+class stringification_inspector;
+
+} // namespace detail
+
 } // namespace caf
 
 // -- vast ---------------------------------------------------------------------
 
 namespace vast {
 
-class legacy_abstract_type;
 class address;
+class address_type;
 class arrow_table_slice_builder;
 class bitmap;
+class bool_type;
 class chunk;
 class command;
+class count_type;
 class data;
+class duration_type;
+class enumeration_type;
 class expression;
+class integer_type;
+class legacy_abstract_type;
+class legacy_type;
+class list_type;
+class map_type;
 class msgpack_table_slice_builder;
+class none_type;
 class pattern;
+class pattern_type;
 class plugin;
 class plugin_ptr;
 class port;
+class real_type;
+class record_type;
 class schema;
 class segment;
 class segment_builder;
 class segment_store;
 class store;
+class string_type;
 class subnet;
+class subnet_type;
 class synopsis;
 class table_slice;
 class table_slice_builder;
 class table_slice_column;
+class time_type;
 class transform;
 class transform_step;
-class legacy_type;
+class type;
 class uuid;
 class value_index;
 
+struct attribute;
 struct legacy_address_type;
 struct legacy_alias_type;
 struct meta_extractor;
@@ -184,18 +215,21 @@ namespace fbs {
 
 struct FlatTableSlice;
 struct TableSlice;
+struct Type;
 
 namespace table_slice {
 
 namespace msgpack {
 
 struct v0;
+struct v1;
 
 } // namespace msgpack
 
 namespace arrow {
 
 struct v0;
+struct v1;
 
 } // namespace arrow
 
@@ -204,6 +238,9 @@ struct v0;
 } // namespace fbs
 
 namespace detail {
+
+template <class Hasher>
+struct hash_inspector;
 
 struct stable_map_policy;
 
@@ -291,7 +328,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::taxonomies))
-  VAST_ADD_TYPE_ID((vast::legacy_type))
+  VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))

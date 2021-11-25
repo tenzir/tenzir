@@ -18,6 +18,7 @@
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
+#include "vast/type.hpp"
 
 namespace vast {
 
@@ -66,6 +67,13 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(legacy_list_type x) {
+    auto has_skip_attribute = [](const legacy_type& t) {
+      for (const auto& [k, v] : t.attributes()) {
+        if (k == "skip")
+          return true;
+      }
+      return false;
+    };
     auto y = caf::visit(*this, x.value_type);
     if (!y)
       return y.error();
@@ -89,13 +97,20 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(legacy_record_type x) {
+    auto has_algebra_attribute = [](const legacy_type& t) {
+      for (const auto& [k, v] : t.attributes()) {
+        if (k == "$algebra")
+          return true;
+      }
+      return false;
+    };
     for (auto& [field_name, field_type] : x.fields) {
       auto y = caf::visit(*this, field_type);
       if (!y)
         return y.error();
       field_type = *y;
     }
-    if (has_attribute(x, "$algebra")) {
+    if (has_algebra_attribute(x)) {
       VAST_ASSERT(x.fields.size() >= 2);
       const auto* base = caf::get_if<legacy_record_type>(&x.fields[0].type);
       VAST_ASSERT(base);
@@ -155,7 +170,10 @@ struct symbol_resolver {
     if (!inserted)
       return caf::make_error(ec::parse_error, "failed to extend resolved "
                                               "symbols");
-    auto added = sch.add(iter->second);
+    // TODO: The schema parser will soon be obsoleted by the YAML schema
+    // specification, which is why the type and schema parsers still operate on
+    // legacy types.
+    auto added = sch.add(type::from_legacy_type(iter->second));
     if (!added)
       return caf::make_error(ec::parse_error, "failed to insert type",
                              value.first);
@@ -193,7 +211,7 @@ struct symbol_resolver {
 struct symbol_map_parser : parser_base<symbol_map_parser> {
   using attribute = symbol_map;
 
-  static constexpr auto skp = type_parser::skp;
+  static constexpr auto skp = legacy_type_parser::skp;
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& out) const {
@@ -213,7 +231,7 @@ struct symbol_map_parser : parser_base<symbol_map_parser> {
       return ty;
     };
     // We can't use & because the operand is a parser, and our DSL overloads &.
-    auto tp = parsers::type;
+    auto tp = parsers::legacy_type;
     // clang-format off
     auto decl
       = ("type" >> skp >> parsers::identifier >> skp >> '=' >> skp >> tp)

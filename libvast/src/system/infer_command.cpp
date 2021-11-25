@@ -45,8 +45,10 @@ namespace {
 template <class Reader>
 caf::expected<schema>
 infer(const std::string& input, const caf::settings& options) {
-  legacy_record_type rec;
-  auto layout = [&](auto x) { rec = x.layout(); };
+  auto rec = std::optional<type>{};
+  auto layout = [&](auto x) {
+    rec = x.layout();
+  };
   auto stream = std::make_unique<std::istringstream>(input);
   auto reader = Reader{options, std::move(stream)};
   auto [error, n] = reader.read(1, 1, layout);
@@ -54,45 +56,47 @@ infer(const std::string& input, const caf::settings& options) {
     return error;
   VAST_ASSERT(n == 1);
   schema result;
-  result.add(std::move(rec));
+  if (rec)
+    result.add(*rec);
   return result;
 }
 
-legacy_type deduce(simdjson::dom::element e) {
+type deduce(simdjson::dom::element e) {
   switch (e.type()) {
     case ::simdjson::dom::element_type::ARRAY:
       if (const auto arr = e.get_array(); arr.size())
-        return legacy_list_type{deduce(arr.at(0))};
-      return legacy_list_type{legacy_type{}};
+        return type{list_type{deduce(arr.at(0))}};
+      return type{list_type{none_type{}}};
     case ::simdjson::dom::element_type::OBJECT: {
-      legacy_record_type result;
+      auto fields = std::vector<record_type::field_view>{};
       auto xs = e.get_object();
+      if (xs.size() == 0)
+        return type{map_type{string_type{}, none_type{}}};
+      fields.reserve(xs.size());
       for (auto [k, v] : xs)
-        result.fields.emplace_back(std::string{k}, deduce(v));
-      if (result.fields.empty())
-        return {};
-      return result;
+        fields.push_back({k, deduce(v)});
+      return type{record_type{fields}};
     }
     case ::simdjson::dom::element_type::INT64:
-      return legacy_integer_type{};
+      return type{integer_type{}};
     case ::simdjson::dom::element_type::UINT64:
-      return legacy_count_type{};
+      return type{count_type{}};
     case ::simdjson::dom::element_type::DOUBLE:
-      return legacy_real_type{};
+      return type{real_type{}};
     case ::simdjson::dom::element_type::STRING: {
       const std::string x{e.get_string().value()};
       if (parsers::net(x))
-        return legacy_subnet_type{};
+        return type{subnet_type{}};
       if (parsers::addr(x))
-        return legacy_address_type{};
+        return type{address_type{}};
       if (parsers::ymdhms(x))
-        return legacy_time_type{};
+        return type{time_type{}};
       if (parsers::duration(x))
-        return legacy_duration_type{};
-      return legacy_string_type{};
+        return type{duration_type{}};
+      return type{string_type{}};
     }
     case ::simdjson::dom::element_type::BOOL:
-      return legacy_bool_type{};
+      return type{bool_type{}};
     case ::simdjson::dom::element_type::NULL_VALUE:
       return {};
   }
@@ -108,22 +112,21 @@ caf::expected<schema> infer_json(const std::string& input) {
                                             "input");
   ::simdjson::dom::parser json_parser;
   auto x = json_parser.parse(lines[0]);
-  if (x.error())
+  if (x.error() != ::simdjson::error_code::SUCCESS)
     return caf::make_error(ec::parse_error, "failed to parse JSON value");
 
   auto deduced = deduce(x.value());
-  auto rec_ptr = caf::get_if<legacy_record_type>(&deduced);
+  const auto* rec_ptr = caf::get_if<record_type>(&deduced);
   if (!rec_ptr)
     return caf::make_error(ec::parse_error, "could not parse JSON object");
-  auto rec = std::move(*rec_ptr);
-  rec.name("json"); // TODO: decide (and document) what name we want here
+  auto rec = type{"json", *rec_ptr};
   schema result;
-  result.add(std::move(rec));
+  result.add(rec);
   return result;
 }
 
 auto show(const schema& schema) {
-  std::cout << schema;
+  std::cout << fmt::to_string(schema);
   return caf::none;
 }
 

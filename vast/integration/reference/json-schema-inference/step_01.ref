@@ -1,1 +1,1 @@
-type json = record{a: none, b: bool, c: bool, d: int, e: int, f: int, g: real, h: real, i: int}
+type json = record {a: none, b: bool, c: bool, d: int, e: int, f: int, g: real, h: real, i: int}

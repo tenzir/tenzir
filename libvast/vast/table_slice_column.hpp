@@ -37,16 +37,8 @@ public:
   /// Construct a view on a column of a table slice.
   /// @param slice The slice to view.
   /// @param column The viewed column's index.
-  /// @param field The viewed column's fully qualified field.
   /// @pre `column < slice.columns()`
-  table_slice_column(table_slice slice, size_t column,
-                     qualified_record_field field) noexcept;
-
-  /// Construct a view on a column of a table slice.
-  /// @param slice The slice to view.
-  /// @param column The viewed column's name.
-  static std::optional<table_slice_column>
-  make(table_slice slice, std::string_view column) noexcept;
+  table_slice_column(table_slice slice, size_t column) noexcept;
 
   /// @returns the data at given row.
   /// @pre `row < size()`
@@ -61,7 +53,7 @@ public:
   /// @returns the viewed column's index.
   [[nodiscard]] size_t index() const noexcept;
 
-  /// @returns the viewed column's record field.
+  /// @returns the viewed column's qualified record field.
   [[nodiscard]] const qualified_record_field& field() const noexcept;
 
   /// Opt-in to CAF's type inspection API.
@@ -69,13 +61,13 @@ public:
   friend auto inspect(Inspector& f, table_slice_column& x) ->
     typename Inspector::result_type {
     return f(caf::meta::type_name("vast.table_slice_column"), x.slice_,
-             x.column_, x.field_);
+             x.column_);
   }
 
 private:
   table_slice slice_ = {};
   size_t column_ = 0;
-  qualified_record_field field_;
+  qualified_record_field field_ = {};
 };
 
 } // namespace vast

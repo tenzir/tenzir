@@ -519,7 +519,7 @@ void index_state::create_active_partition() {
   // data moves through the index. However, that requires some refactoring of
   // the archive itself so it can handle multiple input streams.)
   std::string store_name = {};
-  chunk_ptr store_header = chunk::empty();
+  chunk_ptr store_header = chunk::make_empty();
   if (partition_local_stores) {
     store_name = store_plugin->name();
     auto builder_and_header = store_plugin->make_store_builder(filesystem, id);
@@ -778,7 +778,10 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
       VAST_ASSERT(x.encoding() != table_slice_encoding::none);
       auto&& layout = x.layout();
-      self->state.stats.layouts[layout.name()].count += x.rows();
+      // TODO: Consider switching layouts to a robin map to take advantage of
+      // transparent key lookup with string views, avoding the copy of the name
+      // here.
+      self->state.stats.layouts[std::string{layout.name()}].count += x.rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
         self->state.create_active_partition();

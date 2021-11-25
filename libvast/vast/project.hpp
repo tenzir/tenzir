@@ -15,6 +15,7 @@
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_row.hpp"
+#include "vast/type.hpp"
 
 #include <iterator>
 
@@ -47,7 +48,7 @@ template <class Invocable, class Tuple, class... Tuples>
 constexpr auto
 tuple_zip_and_map(Invocable& invocable, Tuple&& tuple, Tuples&&... tuples) {
   constexpr auto size = std::tuple_size_v<std::decay_t<Tuple>>;
-  static_assert(((size == std::tuple_size_v<std::decay_t<Tuples>>) &&...),
+  static_assert(((size == std::tuple_size_v<std::decay_t<Tuples>>)&&...),
                 "tuple sizes must match exactly");
   return tuple_zip_and_map_impl(std::make_index_sequence<size>{}, invocable,
                                 std::forward<Tuple>(tuple),
@@ -68,16 +69,22 @@ public:
   struct iterator final {
     // -- iterator facade ------------------------------------------------------
 
+    template <concrete_type Type>
+    using view_for_type
+      = view<std::conditional_t<std::is_same_v<Type, none_type>, data,
+                                type_to_data_t<Type>>>;
+
     // TODO: Consider making this a random access iterator.
     using iterator_category = std::forward_iterator_tag;
     using difference_type = std::ptrdiff_t;
-    using reference = std::tuple<std::optional<view<Types>>...>;
+    using reference = std::tuple<std::optional<view_for_type<Types>>...>;
 
     reference operator*() const noexcept {
-      auto get = [&](auto column, auto type) noexcept
-        -> std::optional<view<type_to_data<decltype(type)>>> {
-        if constexpr (std::is_same_v<std::decay_t<decltype(type)>,
-                                     vast::legacy_type>) {
+      auto get
+        = [&]<concrete_type Type>(
+            table_slice::size_type column,
+            const Type& type) noexcept -> std::optional<view_for_type<Type>> {
+        if constexpr (std::is_same_v<Type, none_type>) {
           // TODO: Wrapping a data_view inside an optional is kind of
           // non-sensical; we should consider offering an explicit operator bool
           // to data_view that checks whether it holds a none_t, and drop the
@@ -87,26 +94,11 @@ public:
           if (caf::holds_alternative<caf::none_t>(data))
             return std::nullopt;
           return data;
-        } else if constexpr (detail::is_any_v<std::decay_t<decltype(type)>,
-                                              vast::legacy_list_type,
-                                              vast::legacy_map_type>) {
-          // Work around a mismatch in the type congruency check. We get
-          // incomplete nested types from `data_to_type`, and those don't match
-          // the actual types in the layout, so we call the unoptimized overload
-          // of `table_slice::at` in this case..
-          auto data = proj_.slice_.at(row_, column);
-          if (caf::holds_alternative<caf::none_t>(data))
-            return std::nullopt;
-          return caf::get<view<type_to_data<decltype(type)>>>(data);
         } else {
-          auto data = proj_.slice_.at(row_, column, std::move(type));
-          if (caf::holds_alternative<caf::none_t>(data))
-            return std::nullopt;
-          return caf::get<view<type_to_data<decltype(type)>>>(data);
+          return proj_.slice_.at(row_, column, type);
         }
       };
-      return detail::tuple_zip_and_map(
-        get, proj_.indices_, std::make_tuple(data_to_type<Types>{}...));
+      return detail::tuple_zip_and_map(get, proj_.indices_, proj_.types_);
     }
 
     iterator& operator++() noexcept {
@@ -210,9 +202,9 @@ public:
 
   /// Construct a table slice projection for a given set of indices (columns).
   projection(
-    table_slice slice,
+    table_slice slice, std::tuple<Types...> types,
     std::array<table_slice::size_type, sizeof...(Types)> indices) noexcept
-    : slice_{std::move(slice)}, indices_{indices} {
+    : slice_{std::move(slice)}, types_{std::move(types)}, indices_{indices} {
     // nop
   }
 
@@ -222,79 +214,94 @@ public:
   template <class Inspector>
   friend auto inspect(Inspector& f, projection& x) ->
     typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.projection"), x.slice_, x.indices_);
+    return f(caf::meta::type_name("vast.projection"), x.slice_, x.types_,
+             x.indices_);
   }
 
   // -- implementation details -------------------------------------------------
 
 private:
   const table_slice slice_ = {};
+  const std::tuple<Types...> types_ = {};
   const std::array<table_slice::size_type, sizeof...(Types)> indices_;
 };
 
 /// Creates a typed view on a given set of columns of a table slice.
 /// @relates projection
-/// @tparam Types... The explicitly specified types of the columns.
 /// @param slice The table slice to project.
-/// @param hints... The hints of the columns, specified as either flat
-/// column indices, offsets, or column names.
-template <class... Types, class... Hints>
-projection<Types...> project(table_slice slice, Hints&&... hints) {
-  static_assert(sizeof...(Types) == sizeof...(Hints),
-                "project requires an equal number of types and hints");
-  const auto& layout = slice.layout();
-  auto find_flat_index_for_hint
-    = [&](const auto& type, auto&& hint) noexcept -> table_slice::size_type {
-    if constexpr (std::is_convertible_v<decltype(hint), offset>) {
-      if (auto field = layout.at(hint))
-        if (detail::is_any_v<std::decay_t<decltype(type)>, vast::legacy_type,
-                             vast::legacy_list_type, vast::legacy_map_type> //
-            || congruent(field.type(), type))
-          if (auto flat_index = layout.flat_index_at(hint))
-            return *flat_index;
-    } else if constexpr (std::is_constructible_v<std::string_view,
-                                                 decltype(hint)>) {
-      table_slice::size_type flat_index = 0;
-      for (const auto& field : legacy_record_type::each{layout}) {
-        const auto full_name = layout.name() + '.' + field.key();
-        auto name_view = std::string_view{full_name};
-        while (true) {
-          if (name_view == hint)
-            if (detail::is_any_v<std::decay_t<decltype(type)>,
-                                 vast::legacy_type, vast::legacy_list_type,
-                                 vast::legacy_map_type> //
-                || congruent(field.type(), type))
+/// @param hints... The hints of the columns, specified as alternating pairs of
+/// type and one of flat column index, offset, or suffix-matched column name.
+template <class... Hints>
+auto project(table_slice slice, Hints&&... hints) {
+  auto do_project = [&]<concrete_type... Types, class... Indices>(
+                      std::tuple<Types, Indices> && ... hints)
+                      ->projection<Types...> {
+    static_assert(sizeof...(Types) == sizeof...(Indices),
+                  "project requires an equal number of types and hints");
+    const auto& layout = slice.layout();
+    const auto& layout_rt = caf::get<record_type>(layout);
+    auto find_flat_index_for_hint
+      = [&]<concrete_type Type>(
+          auto&& self, const Type& type,
+          const auto& index) noexcept -> table_slice::size_type {
+      if constexpr (std::is_convertible_v<decltype(index), offset>) {
+        // If the index is an offset, we can just use it directly.
+        const auto field = layout_rt.field(index);
+        if (std::is_same_v<
+              Type, none_type> || congruent(field.type, vast::type{type}))
+          return layout_rt.flat_index(index);
+      } else if constexpr (std::is_constructible_v<std::string_view,
+                                                   decltype(index)>) {
+        // If the index is a string, we need to resolve it to an offset first.
+        const auto offsets = layout_rt.resolve_key_suffix(index, layout.name());
+        // TODO: Should we instead check whether we have exactly one match, or
+        // prefix-match rather than suffix-match?
+        if (!offsets.empty())
+          return self(self, type, offsets[0]);
+      } else if constexpr (std::is_convertible_v<decltype(index),
+                                                 table_slice::size_type>) {
+        for (table_slice::size_type flat_index = 0;
+             const auto& [field, _] : layout_rt.leaves()) {
+          if (flat_index
+              == detail::narrow_cast<table_slice::size_type>(index)) {
+            if (std::is_same_v<
+                  Type, none_type> || congruent(field.type, vast::type{type}))
               return flat_index;
-          auto colon = name_view.find_first_of('.');
-          if (colon == std::string_view::npos)
             break;
-          name_view.remove_prefix(colon + 1);
+          }
+          ++flat_index;
         }
-        ++flat_index;
+      } else {
+        static_assert(detail::always_false_v<decltype(index)>,
+                      "projection index must be convertible to 'offset', "
+                      "'table_slice::size_type', or 'std::string_view'");
       }
-    } else if constexpr (std::is_convertible_v<decltype(hint),
-                                               table_slice::size_type>) {
-      table_slice::size_type flat_index = 0;
-      for (const auto& field : legacy_record_type::each{layout}) {
-        if (flat_index == detail::narrow_cast<table_slice::size_type>(hint))
-          if (detail::is_any_v<std::decay_t<decltype(type)>, vast::legacy_type,
-                               vast::legacy_list_type, vast::legacy_map_type> //
-              || congruent(field.type(), type))
-            return flat_index;
-        ++flat_index;
-      }
+      return static_cast<table_slice::size_type>(-1);
+    };
+    auto flat_indices = std::array{find_flat_index_for_hint(
+      find_flat_index_for_hint, std::get<0>(hints), std::get<1>(hints))...};
+    return {
+      slice,
+      std::tuple{std::forward<Types>(std::get<0>(hints))...},
+      std::move(flat_indices),
+    };
+  };
+  auto pack_type_and_index = []<concrete_type Type, class Index>(
+                               auto&& self, const Type& type,
+                               const Index& index, const auto&... remainder) {
+    if constexpr (sizeof...(remainder) == 0) {
+      return std::tuple<std::tuple<Type, decltype(+index)>>{
+        std::tuple{type, index}};
     } else {
-      static_assert(detail::always_false_v<decltype(hint)>,
-                    "projection index must be convertible to 'offset', "
-                    "'table_slice::size_type', or 'std::string_view'");
+      return std::tuple_cat(self(self, type, index), self(self, remainder...));
     }
-    return static_cast<table_slice::size_type>(-1);
   };
-  return {
-    slice,
-    {find_flat_index_for_hint(data_to_type<Types>{},
-                              std::forward<Hints>(hints))...},
-  };
+  static_assert(sizeof...(hints) >= 2, "projection hints must be supplied");
+  static_assert(sizeof...(hints) % 2 == 0, "projection hints must be given as "
+                                           "alternating concrete types and "
+                                           "projection indices");
+  return std::apply(do_project,
+                    pack_type_and_index(pack_type_and_index, hints...));
 }
 
 } // namespace vast

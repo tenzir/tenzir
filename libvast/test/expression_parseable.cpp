@@ -76,7 +76,7 @@ TEST(parseable / printable - predicate) {
   CHECK(caf::get<data>(pred.lhs) == data{*to<subnet>("10.0.0.0/8")});
   CHECK(pred.op == relational_operator::ni);
   CHECK(caf::get<type_extractor>(pred.rhs)
-        == type_extractor{legacy_address_type{}});
+        == type_extractor{type{address_type{}}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
   MESSAGE(":real >= -4.8");
@@ -85,7 +85,7 @@ TEST(parseable / printable - predicate) {
   CHECK(caf::holds_alternative<type_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<type_extractor>(pred.lhs)
-        == type_extractor{legacy_real_type{}});
+        == type_extractor{type{real_type{}}});
   CHECK(pred.op == relational_operator::greater_equal);
   CHECK(caf::get<data>(pred.rhs) == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
@@ -116,7 +116,7 @@ TEST(parseable / printable - predicate) {
 TEST(parseable - expression) {
   expression expr;
   predicate p1{field_extractor{"x"}, relational_operator::equal, data{42u}};
-  predicate p2{type_extractor{legacy_real_type{}}, relational_operator::equal,
+  predicate p2{type_extractor{type{real_type{}}}, relational_operator::equal,
                data{real{5.3}}};
   predicate p3{field_extractor{"a"}, relational_operator::greater,
                field_extractor{"b"}};
@@ -171,7 +171,7 @@ TEST(parseable - value predicate) {
   REQUIRE(pred != nullptr);
   auto extractor = caf::get_if<type_extractor>(&pred->lhs);
   REQUIRE(extractor != nullptr);
-  CHECK(caf::holds_alternative<legacy_count_type>(extractor->type));
+  CHECK(caf::holds_alternative<count_type>(extractor->type));
   CHECK(caf::holds_alternative<data>(pred->rhs));
   CHECK_EQUAL(pred->op, relational_operator::equal);
   CHECK(caf::get<data>(pred->rhs) == data{42u});

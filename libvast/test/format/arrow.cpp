@@ -55,8 +55,8 @@ TEST(arrow batch) {
   // Write conn log slices (as record batches) to the stream.
   for (auto& slice : zeek_conn_log)
     writer.write(slice);
-  // Cause the writer to close its current Arrow writer.
-  writer.layout(legacy_record_type{});
+  // Cause the writer to close its current Arrow writer by switching the layout.
+  writer.layout(type{"stub", record_type{{"irrelevant", none_type{}}}});
   // Deserialize record batches, store them in arrow_table_slice objects, and
   // compare to the original slices.
   std::shared_ptr<arrow::Buffer> buf;

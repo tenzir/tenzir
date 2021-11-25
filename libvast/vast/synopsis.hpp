@@ -13,8 +13,8 @@
 #include "vast/aliases.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/fbs/synopsis.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/operator.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/fwd.hpp>
@@ -34,7 +34,7 @@ public:
 
   /// Constructs a synopsis from a type.
   /// @param x The type the synopsis should act for.
-  explicit synopsis(vast::legacy_type x);
+  explicit synopsis(vast::type x);
 
   virtual ~synopsis();
 
@@ -66,7 +66,7 @@ public:
   [[nodiscard]] virtual bool equals(const synopsis& other) const noexcept = 0;
 
   /// @returns the type this synopsis operates for.
-  [[nodiscard]] const vast::legacy_type& type() const;
+  [[nodiscard]] const vast::type& type() const;
 
   // -- serialization ----------------------------------------------------------
 
@@ -90,13 +90,15 @@ public:
   }
 
 private:
-  vast::legacy_type type_;
+  vast::type type_;
 };
 
+/// TODO: Serializing and deserializing a synopsis still involves conversion
+/// to/from legacy types. We need to change the synopsis FlatBuffers table to
+/// embed a vast.fbs.Type directly. Ideally we can make the synopsis
+/// memory-mappable just like table slices and types at the same time.
 /// @relates synopsis
 caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
-
-/// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 
 /// @relates synopsis

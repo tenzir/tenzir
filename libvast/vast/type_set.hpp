@@ -11,12 +11,12 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/stable_set.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
 namespace vast {
 
-struct type_set : detail::stable_set<legacy_type> {
-  using super = detail::stable_set<legacy_type>;
+struct type_set : detail::stable_set<type> {
+  using super = detail::stable_set<type>;
   using super::super;
 
   template <class Inspector>

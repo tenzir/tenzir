@@ -12,14 +12,13 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/parse.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
+#include "vast/type.hpp"
 
 #include <caf/error.hpp>
 
@@ -43,7 +42,7 @@
 /// Similarly, data in `in` that does not match `out` is ignored.
 ///
 /// A special overload that can turn a list of records into a key-value map
-/// requires that one of the fields in the accompanying legacy_record_type has
+/// requires that one of the fields in the accompanying record_type has
 /// the "key" attribute. This field will then be used as the key in the target
 /// map.
 /// NOTE: The overload for `data` is defined last for reasons explained there.
@@ -129,13 +128,13 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
 
 template <class T>
 concept has_layout = requires {
-  concepts::same_as<decltype(T::layout), legacy_record_type>;
+  { T::layout() }
+  noexcept->concepts::sameish<record_type>;
 };
 
 // Overload for records.
 template <concepts::inspectable To>
-caf::error
-convert(const record& src, To& dst, const legacy_record_type& layout);
+caf::error convert(const record& src, To& dst, const record_type& layout);
 
 template <has_layout To>
 caf::error convert(const record& src, To& dst);
@@ -166,7 +165,7 @@ caf::error convert(const From& src, To& dst, const Type&) {
 
 // Overload for counts.
 template <concepts::unsigned_integral To>
-caf::error convert(const count& src, To& dst, const legacy_count_type&) {
+caf::error convert(const count& src, To& dst, const count_type&) {
   if constexpr (sizeof(To) >= sizeof(count)) {
     dst = src;
   } else {
@@ -183,7 +182,7 @@ caf::error convert(const count& src, To& dst, const legacy_count_type&) {
 }
 
 template <concepts::unsigned_integral To>
-caf::error convert(const integer& src, To& dst, const legacy_count_type&) {
+caf::error convert(const integer& src, To& dst, const count_type&) {
   if (src.value < 0)
     return caf::make_error(
       ec::convert_error, fmt::format(": {} can not be negative ({})",
@@ -205,7 +204,7 @@ caf::error convert(const integer& src, To& dst, const legacy_count_type&) {
 
 // Overload for integers.
 template <concepts::signed_integral To>
-caf::error convert(const integer& src, To& dst, const legacy_integer_type&) {
+caf::error convert(const integer& src, To& dst, const integer_type&) {
   if constexpr (sizeof(To) >= sizeof(integer::value)) {
     dst = src.value;
   } else {
@@ -222,41 +221,47 @@ caf::error convert(const integer& src, To& dst, const legacy_integer_type&) {
 }
 
 // Overload for enums.
-// clang-format off
 template <class To>
-  requires std::is_enum_v<To>
-caf::error convert(const std::string& src, To& dst, const legacy_enumeration_type& t) {
-  auto i = std::find(t.fields.begin(), t.fields.end(), src);
-  if (i == t.fields.end())
-    return caf::make_error(ec::convert_error,
-                           fmt::format(": {} is not a value of {}", src,
-                                       detail::pretty_type_name(dst)));
-  dst = detail::narrow_cast<To>(std::distance(t.fields.begin(), i));
-  return caf::none;
+  requires(std::is_enum_v<To>)
+caf::error convert(const std::string& src, To& dst, const enumeration_type& t) {
+  for (const auto& [canonical, internal] : t.fields()) {
+    if (src == canonical) {
+      dst = detail::narrow_cast<To>(internal);
+      return caf::none;
+    }
+  }
+  return caf::make_error(ec::convert_error,
+                         fmt::format(": {} is not a value of {}", src,
+                                     detail::pretty_type_name(dst)));
 }
-// clang-format on
 
 template <class From, class To, class Type>
 caf::error convert(const From& src, std::optional<To>& dst, const Type& t) {
   if (!dst)
     dst = To{};
-  return convert(src, *dst, t);
+  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t))
+    return convert(src, *dst, t);
+  else
+    return convert(src, *dst, type{t});
 }
 
 template <class From, class To, class Type>
 caf::error convert(const From& src, caf::optional<To>& dst, const Type& t) {
   if (!dst)
     dst = To{};
-  return convert(src, *dst, t);
+  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t))
+    return convert(src, *dst, t);
+  else
+    return convert(src, *dst, type{t});
 }
 
 // Overload for lists.
 template <concepts::appendable To>
-caf::error convert(const list& src, To& dst, const legacy_list_type& t) {
+caf::error convert(const list& src, To& dst, const list_type& t) {
   size_t num = 0;
   for (const auto& element : src) {
     typename To::value_type v{};
-    if (auto err = convert(element, v, t.value_type))
+    if (auto err = convert(element, v, t.value_type()))
       return detail::prepend(std::move(err), "[{}]", num);
     dst.push_back(std::move(v));
     num++;
@@ -272,17 +277,17 @@ template <concepts::insertable To>
     typename To::mapped_type;
   }
 // clang-format on
-caf::error convert(const map& src, To& dst, const legacy_map_type& t) {
+caf::error convert(const map& src, To& dst, const map_type& t) {
   // TODO: Use structured bindings outside of the lambda once clang supports
   // that.
   for (const auto& x : src) {
     auto err = [&] {
       const auto& [data_key, data_value] = x;
       typename To::key_type key{};
-      if (auto err = convert(data_key, key, t.key_type))
+      if (auto err = convert(data_key, key, t.key_type()))
         return err;
       typename To::mapped_type value{};
-      if (auto err = convert(data_value, value, t.value_type))
+      if (auto err = convert(data_value, value, t.value_type()))
         return err;
       return detail::insert_to_map(dst, std::move(key), std::move(value));
     }();
@@ -293,24 +298,29 @@ caf::error convert(const map& src, To& dst, const legacy_map_type& t) {
 }
 
 // Overload for record to map.
-// clang-format off
 template <concepts::insertable To>
   requires requires {
     typename To::key_type;
     typename To::mapped_type;
   }
-// clang-format on
-caf::error convert(const record& src, To& dst, const legacy_map_type& t) {
+caf::error convert(const record& src, To& dst, const map_type& t) {
   // TODO: Use structured bindings outside of the lambda once clang supports
   // that.
+  const auto kt = t.key_type();
+  const auto vt = t.value_type();
+  if (auto key = kt.attribute("key"))
+    return caf::make_error(ec::convert_error,
+                           fmt::format("expected a list of records with the "
+                                       "key field {}, but received record {}",
+                                       *key, src));
   for (const auto& x : src) {
     auto err = [&] {
       const auto& [data_key, data_value] = x;
       typename To::key_type key{};
-      if (auto err = convert(data_key, key, t.key_type))
+      if (auto err = convert(data_key, key, kt))
         return err;
       typename To::mapped_type value{};
-      if (auto err = convert(data_value, value, t.value_type))
+      if (auto err = convert(data_value, value, vt))
         return err;
       return detail::insert_to_map(dst, std::move(key), std::move(value));
     }();
@@ -320,66 +330,101 @@ caf::error convert(const record& src, To& dst, const legacy_map_type& t) {
   return caf::none;
 }
 
-// TODO: Consider moving this to data.hpp
-caf::expected<const data*>
-get(const record& rec,
-    const detail::stack_vector<const record_field*, 64>& trace);
-
 // Overload for list<record> to map.
 // NOTE: This conversion type needs a field with the "key" attribute in the
-// legacy_record_type. The field with the "key" attribute is pulled out and used
+// record_type. The field with the "key" attribute is pulled out and used
 // as the key for the new entry in the destination map.
-// clang-format off
 template <concepts::insertable To>
   requires requires {
     typename To::key_type;
     typename To::mapped_type;
   }
-// clang-format on
-caf::error convert(const list& src, To& dst, const legacy_list_type& t) {
-  const auto* r = caf::get_if<legacy_record_type>(&t.value_type);
-  if (!r)
+caf::error convert(const list& src, To& dst, const map_type& t) {
+  const auto kt = t.key_type();
+  const auto vt = t.value_type();
+  const auto* rvt = caf::get_if<record_type>(&vt);
+  if (!rvt)
+    return caf::make_error(ec::convert_error,
+                           fmt::format(": expected a record_type, but got {}",
+                                       vt));
+  auto key_field_name = kt.attribute("key");
+  if (!key_field_name)
     return caf::make_error(
       ec::convert_error,
-      fmt::format(": expected a legacy_record_type, but got {}", t.value_type));
-  // Look for the "key" attribute in `r`.
-  auto key_field = legacy_record_type::each::range_state{};
-  for (const auto& leaf : legacy_record_type::each(*r)) {
-    if (has_attribute(leaf.type(), "key")) {
-      if (!key_field.offset.empty())
-        return caf::make_error(
-          ec::convert_error, fmt::format(": key field must be unique: {}", *r));
-      key_field = leaf;
-    }
-  }
-  if (key_field.offset.empty())
-    return caf::make_error(
-      ec::convert_error,
-      fmt::format(": record type in list is missing a key field: {}", *r));
-  std::vector<std::string_view> path;
-  for (const auto* f : key_field.trace)
-    path.emplace_back(f->name);
-  // TODO: Consider adding an overload that takes a trace as argument.
-  auto pruned = remove_field(*r, path);
-  VAST_ASSERT(pruned);
+      fmt::format(": record type in list is missing a key field: {}", *rvt));
+  // We now iterate over all elements in src, converting both key from the key
+  // field and and value from the pruned record type.
   for (const auto& element : src) {
-    const auto* rec = caf::get_if<record>(&element);
-    if (!rec)
-      return caf::make_error(ec::convert_error, ": no record in list");
-    // Find the value from the record
-    const auto data_key = get(*rec, key_field.trace);
-    if (!data_key)
-      return data_key.error();
-    if (*data_key == nullptr)
+    const auto* element_rec = caf::get_if<record>(&element);
+    if (!element_rec)
+      return caf::make_error(ec::convert_error, ": expected record");
+    auto record_resolve_key
+      = [](const auto& self, const record& d,
+           std::string_view name) -> const record::value_type* {
+      for (const auto& e : d) {
+        const auto& [k, v] = e;
+        auto [key_mismatch, name_mismatch]
+          = std::mismatch(k.begin(), k.end(), name.begin(), name.end());
+        if (key_mismatch != k.end())
+          continue;
+        if (name_mismatch == name.end())
+          return &e;
+        if (*name_mismatch != '.')
+          continue;
+        if (const auto* rv = caf::get_if<record>(&v)) {
+          auto remainder = name.substr(1 + name_mismatch - name.begin());
+          if (auto result = self(self, *rv, remainder))
+            return result;
+        }
+      }
+      return nullptr;
+    };
+    auto key
+      = record_resolve_key(record_resolve_key, *element_rec, *key_field_name);
+    if (!key)
       continue;
-    typename To::key_type key{};
-    if (auto err = convert(**data_key, key, key_field.type()))
-      return err;
-    using mapped_type = typename To::mapped_type;
-    mapped_type value{};
-    if (auto err = convert(*rec, value, *pruned))
-      return err;
-    if (auto err = detail::insert_to_map(dst, std::move(key), std::move(value)))
+    typename To::key_type key_dst{};
+    if (auto err = convert(key->second, key_dst, kt))
+      return caf::make_error(
+        ec::convert_error,
+        fmt::format("failed to convert map key {} of type "
+                    "{} to {}: {}",
+                    key->second, kt, detail::pretty_type_name(key_dst), err));
+    typename To::mapped_type value_dst{};
+    auto stripped_record_prefix = *key_field_name;
+    stripped_record_prefix.remove_suffix(key->first.size() + 1);
+    if (stripped_record_prefix.empty()) {
+      if (auto err = convert(*element_rec, value_dst, *rvt))
+        return caf::make_error(ec::convert_error,
+                               fmt::format("failed to convert map value {} of "
+                                           "type {} to {}: {}",
+                                           *element_rec, *rvt,
+                                           detail::pretty_type_name(value_dst),
+                                           err));
+    } else {
+      // We need to strip an outer layer before handling the value of the map.
+      auto stripped_vt_offset = rvt->resolve_key(stripped_record_prefix);
+      if (!stripped_vt_offset)
+        return caf::make_error(
+          ec::convert_error,
+          fmt::format("failed to strip outer record {} from {} for key {}",
+                      stripped_record_prefix, *rvt, *key_field_name));
+      auto stripped_vt = rvt->field(*stripped_vt_offset);
+      // This cannot fail, we already know we can handle the full name, so we
+      // can also handle a prefix to get the record.
+      auto value = record_resolve_key(record_resolve_key, *element_rec,
+                                      stripped_record_prefix);
+      VAST_ASSERT(value);
+      if (auto err = convert(value->second, value_dst, stripped_vt.type))
+        return caf::make_error(ec::convert_error,
+                               fmt::format("failed to convert stripped map "
+                                           "value {} of type {} to {}: {}",
+                                           value->second, stripped_vt.type,
+                                           detail::pretty_type_name(value_dst),
+                                           err));
+    }
+    if (auto err
+        = detail::insert_to_map(dst, std::move(key_dst), std::move(value_dst)))
       return err;
   }
   return caf::none;
@@ -390,48 +435,53 @@ public:
   using result_type = caf::error;
 
   template <class To>
-  caf::error apply(const legacy_record_type::each::range_state& f, To& dst) {
-    // Find the value from the record
-    const auto data_value = get(src, f.trace);
-    if (!data_value)
-      return data_value.error();
-    if (*data_value == nullptr)
-      return caf::none;
-    auto err = caf::visit(
-      [&]<class Data, class Type>(const Data& d, const Type& t) -> caf::error {
-        using concrete_type = std::decay_t<Type>;
-        if constexpr (detail::is_any_v<concrete_type, legacy_alias_type,
-                                       legacy_none_type>) {
-          // Data conversion of none or alias type does not make sense.
-          return caf::make_error(ec::convert_error, ": can't convert alias or "
-                                                    "none types");
-        } else {
-          if constexpr (std::is_same_v<Data, caf::none_t>) {
-            if constexpr (std::is_default_constructible_v<To>)
-              new (&dst) To{};
-            return caf::none;
-          } else {
-            if constexpr (IS_TYPED_CONVERTIBLE(d, dst, t))
-              return convert(d, dst, t);
-            if constexpr (IS_UNTYPED_CONVERTIBLE(d, dst))
-              return convert(d, dst);
-            else
-              return caf::make_error(
-                ec::convert_error,
-                fmt::format(": can't convert from {} to {} with type {}",
-                            detail::pretty_type_name(d),
-                            detail::pretty_type_name(dst), t));
-          }
-        }
+  caf::error apply(const record_type::field_view& field, To& dst) {
+    auto f = detail::overload{
+      [&](const caf::none_t&, const none_type&) -> caf::error {
+        // If the data is nil then the best we can do is default-construct.
+        if constexpr (std::is_default_constructible_v<To>)
+          new (&dst) To{};
         return caf::none;
       },
-      **data_value, f.type());
-    return detail::prepend(std::move(err), ".{}", f.key());
+      [&]<class Data>(const Data&, const none_type&) -> caf::error {
+        // Data conversion of none type does not make sense.
+        // TODO: Consider using untyped convertible here as a best-effort
+        // approach.
+        return caf::make_error(ec::convert_error,
+                               fmt::format("failed to convert field {} because "
+                                           "it has no type",
+                                           field));
+      },
+      [&]<concrete_type Type>(const caf::none_t&, const Type&) -> caf::error {
+        // If the data is nil then the best we can do is default-construct.
+        if constexpr (std::is_default_constructible_v<To>)
+          new (&dst) To{};
+        return caf::none;
+      },
+      [&]<class Data, concrete_type Type>(const Data& d,
+                                          const Type& t) -> caf::error {
+        if constexpr (IS_TYPED_CONVERTIBLE(d, dst, t)) {
+          return convert(d, dst, t);
+        } else if constexpr (IS_UNTYPED_CONVERTIBLE(d, dst)) {
+          return convert(d, dst);
+        } else {
+          return caf::make_error(ec::convert_error,
+                                 fmt::format("failed to find conversion "
+                                             "operation for value {} of "
+                                             "type {} to {}",
+                                             data{d}, t,
+                                             detail::pretty_type_name(dst)));
+        }
+      },
+    };
+    // Find the value from the record
+    auto it = src.find(field.name);
+    return caf::visit(f, it != src.end() ? it->second : data{}, field.type);
   }
 
   template <class... Ts>
   caf::error operator()(Ts&&... xs) {
-    const auto& rng = legacy_record_type::each(layout);
+    const auto& rng = layout.fields();
     auto it = rng.begin();
     return caf::error::eval([&]() -> caf::error {
       if constexpr (!caf::meta::is_annotation<Ts>::value)
@@ -440,30 +490,20 @@ public:
     }...);
   }
 
-  const legacy_record_type& layout;
+  const record_type& layout;
   const record& src;
 };
 
 // Overload for records.
 template <concepts::inspectable To>
-caf::error
-convert(const record& src, To& dst, const legacy_record_type& layout) {
-  if (layout.fields.empty()) {
-    if constexpr (has_layout<To>)
-      return convert(src, dst);
-    else
-      return caf::make_error(ec::convert_error,
-                             fmt::format(": destination types must have a "
-                                         "static layout definition: {}",
-                                         detail::pretty_type_name(dst)));
-  }
+caf::error convert(const record& src, To& dst, const record_type& layout) {
   auto ri = record_inspector{layout, src};
   return inspect(ri, dst);
 }
 
 template <has_layout To>
 caf::error convert(const record& src, To& dst) {
-  return convert(src, dst, dst.layout);
+  return convert(src, dst, dst.layout());
 }
 
 template <has_layout To>
@@ -506,7 +546,7 @@ concept is_concrete_untyped_convertible = requires(const From& src, To& dst) {
 // it must not be declared before to prevent recursing into itself because
 // of the non-explicit constructor of `data`.
 template <class To>
-caf::error convert(const data& src, To& dst, const legacy_type& t) {
+caf::error convert(const data& src, To& dst, const type& t) {
   return caf::visit(
     [&]<class From, class Type>(const From& x, const Type& t) {
       if constexpr (is_concrete_typed_convertible<From, To, Type>)

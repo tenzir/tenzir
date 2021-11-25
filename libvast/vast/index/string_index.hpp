@@ -30,9 +30,9 @@ namespace vast {
 class string_index : public value_index {
 public:
   /// Constructs a string index.
-  /// @param t An instance of `legacy_string_type`.
+  /// @param t An instance of `string_type`.
   /// @param opts Runtime context for index parameterization.
-  explicit string_index(vast::legacy_type t, caf::settings opts = {});
+  explicit string_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 

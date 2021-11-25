@@ -117,12 +117,15 @@ struct accountant_state_impl {
     }
     auto actor_id = self->current_sender()->id();
     if (!builder) {
-      auto layout = legacy_record_type{
-      {"ts", legacy_time_type{}.name("timestamp")},
-      {"actor", legacy_string_type{}},
-      {"key", legacy_string_type{}},
-      {"value", legacy_real_type{}},
-    }.name("vast.metrics");
+      auto layout = type{
+        "vast.metrics",
+        record_type{
+          {"ts", type{"timestamp", time_type{}}},
+          {"actor", string_type{}},
+          {"key", string_type{}},
+          {"value", real_type{}},
+        },
+      };
       builder
         = factory<table_slice_builder>::make(cfg.self_sink.slice_type, layout);
       VAST_DEBUG("{} obtained a table slice builder", *self);

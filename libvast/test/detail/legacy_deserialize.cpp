@@ -16,13 +16,13 @@
 #include "vast/detail/serialize.hpp"
 #include "vast/factory.hpp"
 #include "vast/ids.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 #include "vast/time_synopsis.hpp"
+#include "vast/type.hpp"
 
 #include <climits>
 #include <span>
@@ -30,6 +30,7 @@
 #include <string_view>
 
 using namespace std::chrono_literals;
+using namespace std::string_literals;
 using namespace vast;
 
 template <class... Ts>
@@ -224,37 +225,37 @@ TEST(bytes) {
 }
 
 TEST(record_type) {
-  const auto r = legacy_record_type{
+  const auto r = type{record_type{
     {
       "x",
-      legacy_record_type{
+      record_type{
         {"y",
-         legacy_record_type{
-           {"z", legacy_integer_type{}},
-           {"k", legacy_bool_type{}},
+         record_type{
+           {"z", integer_type{}},
+           {"k", bool_type{}},
          }},
         {"m",
-         legacy_record_type{
+         record_type{
            {"y",
-            legacy_record_type{
-              {"a", legacy_address_type{}},
+            record_type{
+              {"a", address_type{}},
             }},
-           {"f", legacy_real_type{}},
+           {"f", real_type{}},
          }},
-        {"b", legacy_bool_type{}},
+        {"b", bool_type{}},
       },
     },
     {
       "y",
-      legacy_record_type{
-        {"b", legacy_bool_type{}},
+      record_type{
+        {"b", bool_type{}},
       },
     },
-  };
+  }};
 
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, r), caf::none);
-  auto r2 = legacy_record_type{};
+  auto r2 = type{};
   REQUIRE(ldes(buf, r2));
   CHECK_EQUAL(r, r2);
 }
@@ -262,10 +263,8 @@ TEST(record_type) {
 TEST(qualified_record_field) {
   const auto field = qualified_record_field{
     "zeek.conn",
-    record_field{
-      "conn.id",
-      legacy_address_type{},
-    },
+    "conn.id",
+    type{address_type{}},
   };
 
   std::vector<char> buf;
@@ -299,32 +298,31 @@ TEST(time_synopsis) {
   using vast::time;
   const time epoch;
   factory<synopsis>::initialize();
-  auto ts = factory<synopsis>::make(legacy_time_type{}, caf::settings{});
+  auto ts = factory<synopsis>::make(type{time_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(ts, nullptr);
   ts->add(time{epoch + 4s});
   ts->add(time{epoch + 7s});
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, ts), caf::none);
-  auto ts2 = factory<synopsis>::make(legacy_time_type{}, caf::settings{});
+  auto ts2 = factory<synopsis>::make(type{time_type{}}, caf::settings{});
   REQUIRE(ldes(buf, ts2));
   CHECK_EQUAL(*ts, *ts2);
 }
 
 TEST(bool_synopsis) {
   factory<synopsis>::initialize();
-  auto bs = factory<synopsis>::make(legacy_bool_type{}, caf::settings{});
+  auto bs = factory<synopsis>::make(type{bool_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(bs, nullptr);
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, bs), caf::none);
-  auto bs2 = factory<synopsis>::make(legacy_bool_type{}, caf::settings{});
+  auto bs2 = factory<synopsis>::make(type{bool_type{}}, caf::settings{});
   REQUIRE(ldes(buf, bs2));
   CHECK_EQUAL(*bs, *bs2);
 }
 
 TEST(address_synopsis) {
   factory<synopsis>::initialize();
-  auto lat
-    = legacy_address_type{}.attributes({{"synopsis", "bloomfilter(1,0.1)"}});
+  auto lat = type{address_type{}, {{"synopsis", "bloomfilter(1,0.1)"}}};
   auto as = factory<synopsis>::make(lat, caf::settings{});
   REQUIRE_NOT_EQUAL(as, nullptr);
   as->add(to_addr_view("192.168.0.1"));
@@ -337,8 +335,7 @@ TEST(address_synopsis) {
 
 TEST(string_synopsis) {
   factory<synopsis>::initialize();
-  auto lst
-    = legacy_string_type{}.attributes({{"synopsis", "bloomfilter(1,0.1)"}});
+  auto lst = type{string_type{}, {{"synopsis", "bloomfilter(1,0.1)"}}};
   auto ss = factory<synopsis>::make(lst, caf::settings{});
   REQUIRE_NOT_EQUAL(ss, nullptr);
   ss->add(std::string_view{"192.168.0.1"});

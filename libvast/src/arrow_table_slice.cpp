@@ -17,6 +17,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/value_index.hpp"
 
@@ -34,7 +35,7 @@ namespace {
 // -- utility class for mapping Arrow lists to VAST container views ------------
 
 template <class Array>
-data_view value_at(const legacy_type& t, const Array& arr, size_t row);
+data_view value_at(const type& t, const Array& arr, size_t row);
 
 template <class T>
 class arrow_container_view : public container_view<T> {
@@ -47,7 +48,7 @@ public:
 
   using array_ptr = std::shared_ptr<arrow::Array>;
 
-  arrow_container_view(legacy_type element_type, array_ptr arr, int32_t offset,
+  arrow_container_view(type element_type, array_ptr arr, int32_t offset,
                        int32_t length)
     : element_type_(std::move(element_type)),
       offset_(offset),
@@ -63,16 +64,21 @@ public:
     } else {
       using expected_type = std::pair<data_view, data_view>;
       static_assert(std::is_same_v<value_type, expected_type>);
-      if (auto dt = caf::get_if<legacy_record_type>(&element_type_)) {
-        if (dt->fields.size() == 2) {
-          auto& arr = static_cast<const arrow::StructArray&>(*arr_);
+      if (const auto* dt = caf::get_if<record_type>(&element_type_)) {
+        if (dt->num_fields() == 2) {
+          const auto& arr = static_cast<const arrow::StructArray&>(*arr_);
           auto key_arr = arr.field(0);
           auto value_arr = arr.field(1);
-          return {value_at(dt->fields[0].type, *key_arr, adjusted_row),
-                  value_at(dt->fields[1].type, *value_arr, adjusted_row)};
+          return {
+            value_at(dt->field(0).type, *key_arr, adjusted_row),
+            value_at(dt->field(1).type, *value_arr, adjusted_row),
+          };
         }
       }
-      return {caf::none, caf::none};
+      return {
+        caf::none,
+        caf::none,
+      };
     }
   }
 
@@ -81,7 +87,7 @@ public:
   }
 
 private:
-  legacy_type element_type_;
+  type element_type_;
   int32_t offset_;
   int32_t length_;
   std::shared_ptr<arrow::Array> arr_;
@@ -90,17 +96,17 @@ private:
 class arrow_record_view
   : public container_view<std::pair<std::string_view, data_view>> {
 public:
-  explicit arrow_record_view(legacy_record_type type,
-                             const arrow::StructArray& arr, int64_t row)
+  explicit arrow_record_view(record_type type, const arrow::StructArray& arr,
+                             int64_t row)
     : type_{std::move(type)}, arr_{arr}, row_{row} {
     // nop
   }
 
   value_type at(size_type i) const override {
-    const auto& field = type_.fields[i];
+    const auto& field = type_.field(i);
     auto col = arr_.field(i);
     VAST_ASSERT(col);
-    VAST_ASSERT(col->Equals(arr_.GetFieldByName(field.name)));
+    VAST_ASSERT(col->Equals(arr_.GetFieldByName(std::string{field.name})));
     return {field.name, value_at(field.type, *col, row_)};
   }
 
@@ -109,7 +115,7 @@ public:
   }
 
 private:
-  const legacy_record_type type_;
+  const record_type type_;
   const arrow::StructArray& arr_;
   const int64_t row_;
 };
@@ -117,76 +123,83 @@ private:
 // -- decoding of Arrow column arrays ------------------------------------------
 
 // Safe ourselves redundant boilerplate code for dispatching to the visitor.
-#define DECODE_TRY_DISPATCH(vast_type)                                         \
-  if (auto dt = caf::get_if<legacy_##vast_type##_type>(&t))                    \
-  return f(arr, *dt)
+template <concrete_type Type, class Array>
+struct decodable : std::false_type {};
+
+template <>
+struct decodable<bool_type, arrow::BooleanArray> : std::true_type {};
+
+template <class TypeClass>
+  requires(arrow::is_floating_type<TypeClass>::value)
+struct decodable<real_type, arrow::NumericArray<TypeClass>> : std::true_type {};
+
+template <class TypeClass>
+  requires(std::is_integral_v<typename TypeClass::c_type>&&
+             std::is_signed_v<typename TypeClass::c_type>)
+struct decodable<integer_type, arrow::NumericArray<TypeClass>>
+  : std::true_type {};
+
+template <class TypeClass>
+  requires(std::is_integral_v<typename TypeClass::c_type>&&
+             std::is_signed_v<typename TypeClass::c_type>)
+struct decodable<duration_type, arrow::NumericArray<TypeClass>>
+  : std::true_type {};
+
+template <class TypeClass>
+  requires(
+    std::is_integral_v<
+      typename TypeClass::c_type> && !std::is_signed_v<typename TypeClass::c_type>)
+struct decodable<count_type, arrow::NumericArray<TypeClass>> : std::true_type {
+};
+
+template <class TypeClass>
+  requires(
+    std::is_integral_v<
+      typename TypeClass::c_type> && !std::is_signed_v<typename TypeClass::c_type>)
+struct decodable<enumeration_type, arrow::NumericArray<TypeClass>>
+  : std::true_type {};
+
+template <>
+struct decodable<address_type, arrow::FixedSizeBinaryArray> : std::true_type {};
+
+template <>
+struct decodable<subnet_type, arrow::FixedSizeBinaryArray> : std::true_type {};
+
+template <>
+struct decodable<string_type, arrow::StringArray> : std::true_type {};
+
+template <>
+struct decodable<pattern_type, arrow::StringArray> : std::true_type {};
+
+template <>
+struct decodable<time_type, arrow::TimestampArray> : std::true_type {};
+
+template <>
+struct decodable<list_type, arrow::ListArray> : std::true_type {};
+
+template <>
+struct decodable<map_type, arrow::ListArray> : std::true_type {};
+
+template <>
+struct decodable<record_type, arrow::StructArray> : std::true_type {};
 
 template <class F>
-void decode(const legacy_type& t, const arrow::BooleanArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(bool);
-  VAST_WARN("{} expected to decode a boolean but got a {}", __func__, kind(t));
-}
-
-template <class T, class F>
-void decode(const legacy_type& t, const arrow::NumericArray<T>& arr, F& f) {
-  if constexpr (arrow::is_floating_type<T>::value) {
-    DECODE_TRY_DISPATCH(real);
-    VAST_WARN("{} expected to decode a real but got a {}", __func__, kind(t));
-  } else if constexpr (std::is_signed_v<typename T::c_type>) {
-    DECODE_TRY_DISPATCH(integer);
-    DECODE_TRY_DISPATCH(duration);
-    VAST_WARN("{} expected to decode an integer or timespan but got a "
-              "{}",
-              __func__, kind(t));
-  } else {
-    DECODE_TRY_DISPATCH(count);
-    DECODE_TRY_DISPATCH(enumeration);
-    VAST_WARN("{} expected to decode a count or enumeration but got a "
-              "{}",
-              __func__, kind(t));
-  }
-}
-
-template <class F>
-void decode(const legacy_type& t, const arrow::FixedSizeBinaryArray& arr,
-            F& f) {
-  DECODE_TRY_DISPATCH(address);
-  DECODE_TRY_DISPATCH(subnet);
-  VAST_WARN("{} expected to decode an address or subnet but got a {}", __func__,
-            kind(t));
-}
-
-template <class F>
-void decode(const legacy_type& t, const arrow::StringArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(string);
-  DECODE_TRY_DISPATCH(pattern);
-  VAST_WARN("{} expected to decode a string or pattern but got a {}", __func__,
-            kind(t));
-}
-
-template <class F>
-void decode(const legacy_type& t, const arrow::TimestampArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(time);
-  VAST_WARN("{} expected to decode a timestamp but got a {}", __func__,
-            kind(t));
-}
-
-template <class F>
-void decode(const legacy_type& t, const arrow::ListArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(list);
-  DECODE_TRY_DISPATCH(map);
-  VAST_WARN("{} expected to decode a list or map but got a {}", __func__,
-            kind(t));
-}
-
-template <class F>
-void decode(const legacy_type& t, const arrow::StructArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(record);
-  VAST_WARN("{} expected to decode a record but got a {}", __func__, kind(t));
-}
-
-template <class F>
-void decode(const legacy_type& t, const arrow::Array& arr, F& f) {
+auto decode(const type& t, const arrow::Array& arr, F& f) ->
+  typename F::result_type {
+  auto dispatch = [&]<class Array>(const Array& arr) {
+    auto visitor
+      = [&]<concrete_type Type>(const Type& t) -> typename F::result_type {
+      if constexpr (decodable<Type, Array>::value)
+        return f(arr, t);
+      else if constexpr (std::is_void_v<typename F::result_type>)
+        VAST_ERROR("unable to decode {} into {}", detail::pretty_type_name(arr),
+                   t);
+      else
+        die(fmt::format("unable to decode {} into {}",
+                        detail::pretty_type_name(arr), t));
+    };
+    return caf::visit(visitor, t);
+  };
   switch (arr.type_id()) {
     default: {
       VAST_WARN("{} got an unrecognized Arrow type ID", __func__);
@@ -194,76 +207,74 @@ void decode(const legacy_type& t, const arrow::Array& arr, F& f) {
     }
     // -- handle basic types ---------------------------------------------------
     case arrow::Type::BOOL: {
-      return decode(t, static_cast<const arrow::BooleanArray&>(arr), f);
+      return dispatch(static_cast<const arrow::BooleanArray&>(arr));
     }
     case arrow::Type::STRING: {
-      return decode(t, static_cast<const arrow::StringArray&>(arr), f);
+      return dispatch(static_cast<const arrow::StringArray&>(arr));
     }
     case arrow::Type::TIMESTAMP: {
-      return decode(t, static_cast<const arrow::TimestampArray&>(arr), f);
+      return dispatch(static_cast<const arrow::TimestampArray&>(arr));
     }
     case arrow::Type::FIXED_SIZE_BINARY: {
       using array_type = arrow::FixedSizeBinaryArray;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     // -- handle container types -----------------------------------------------
     case arrow::Type::LIST: {
-      return decode(t, static_cast<const arrow::ListArray&>(arr), f);
+      return dispatch(static_cast<const arrow::ListArray&>(arr));
     }
     case arrow::Type::STRUCT: {
-      return decode(t, static_cast<const arrow::StructArray&>(arr), f);
+      return dispatch(static_cast<const arrow::StructArray&>(arr));
     }
     // -- lift floating point values to real -----------------------------
     case arrow::Type::HALF_FLOAT: {
       using array_type = arrow::NumericArray<arrow::HalfFloatType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::FLOAT: {
       using array_type = arrow::NumericArray<arrow::FloatType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::DOUBLE: {
       using array_type = arrow::NumericArray<arrow::DoubleType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     // -- lift singed values to integer ----------------------------------
     case arrow::Type::INT8: {
       using array_type = arrow::NumericArray<arrow::Int8Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::INT16: {
       using array_type = arrow::NumericArray<arrow::Int16Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::INT32: {
       using array_type = arrow::NumericArray<arrow::Int32Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::INT64: {
       using array_type = arrow::NumericArray<arrow::Int64Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     // -- lift unsinged values to count ----------------------------------
     case arrow::Type::UINT8: {
       using array_type = arrow::NumericArray<arrow::UInt8Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::UINT16: {
       using array_type = arrow::NumericArray<arrow::UInt16Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::UINT32: {
       using array_type = arrow::NumericArray<arrow::UInt32Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::UINT64: {
       using array_type = arrow::NumericArray<arrow::UInt64Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return dispatch(static_cast<const array_type&>(arr));
     }
   }
 }
-
-#undef DECODE_TRY_DISPATCH
 
 // -- access to a single element -----------------------------------------------
 
@@ -343,7 +354,7 @@ auto timestamp_at(const arrow::TimestampArray& arr, int64_t row) {
   return time{time_since_epoch};
 }
 
-auto container_view_at(legacy_type value_type, const arrow::ListArray& arr,
+auto container_view_at(type value_type, const arrow::ListArray& arr,
                        int64_t row) {
   auto offset = arr.value_offset(row);
   auto length = arr.value_length(row);
@@ -352,26 +363,26 @@ auto container_view_at(legacy_type value_type, const arrow::ListArray& arr,
                                       offset, length);
 }
 
-auto list_at(legacy_type value_type, const arrow::ListArray& arr, int64_t row) {
+auto list_at(type value_type, const arrow::ListArray& arr, int64_t row) {
   auto ptr = container_view_at(std::move(value_type), arr, row);
   return list_view_handle{list_view_ptr{std::move(ptr)}};
 }
 
-auto map_at(legacy_type key_type, legacy_type value_type,
-            const arrow::ListArray& arr, int64_t row) {
+auto map_at(type key_type, type value_type, const arrow::ListArray& arr,
+            int64_t row) {
   using view_impl = arrow_container_view<std::pair<data_view, data_view>>;
   auto offset = arr.value_offset(row);
   auto length = arr.value_length(row);
-  legacy_type kvp_type = legacy_record_type{
-    {"key", std::move(key_type)},
-    {"value", std::move(value_type)},
-  };
+  auto kvp_type = type{record_type{
+    {"key", key_type},
+    {"value", value_type},
+  }};
   auto ptr = caf::make_counted<view_impl>(std::move(kvp_type), arr.values(),
                                           offset, length);
   return map_view_handle{map_view_ptr{std::move(ptr)}};
 }
 
-auto record_at(const legacy_record_type& type, const arrow::StructArray& arr,
+auto record_at(const record_type& type, const arrow::StructArray& arr,
                int64_t row) {
   auto ptr = caf::make_counted<arrow_record_view>(type, arr, row);
   return record_view_handle{record_view_ptr{std::move(ptr)}};
@@ -379,6 +390,8 @@ auto record_at(const legacy_record_type& type, const arrow::StructArray& arr,
 
 class row_picker {
 public:
+  using result_type = void;
+
   row_picker(size_t row) : row_(detail::narrow_cast<int64_t>(row)) {
     // nop
   }
@@ -387,7 +400,7 @@ public:
     return result_;
   }
 
-  void operator()(const arrow::BooleanArray& arr, const legacy_bool_type&) {
+  void operator()(const arrow::BooleanArray& arr, const bool_type&) {
     if (arr.IsNull(row_))
       return;
     result_ = boolean_at(arr, row_);
@@ -397,33 +410,30 @@ public:
   void operator()(const arrow::NumericArray<T>& arr, const U&) {
     if (arr.IsNull(row_))
       return;
-    if constexpr (detail::is_any_v<U, legacy_real_type, legacy_integer_type,
-                                   legacy_count_type, legacy_enumeration_type>) {
-      using data_type = typename type_traits<U>::data_type;
-      result_ = static_cast<data_type>(arr.Value(row_));
+    if constexpr (detail::is_any_v<U, real_type, integer_type, count_type,
+                                   enumeration_type>) {
+      using view_type = view<type_to_data_t<U>>;
+      result_ = static_cast<view_type>(arr.Value(row_));
     } else {
-      static_assert(std::is_same_v<U, legacy_duration_type>);
+      static_assert(std::is_same_v<U, duration_type>);
       result_ = duration_at(arr, row_);
     }
   }
 
   template <class T>
-  void
-  operator()(const arrow::NumericArray<T>& arr, const legacy_integer_type&) {
+  void operator()(const arrow::NumericArray<T>& arr, const integer_type&) {
     if (arr.IsNull(row_))
       return;
     result_ = integer_at(arr, row_);
   }
 
-  void operator()(const arrow::FixedSizeBinaryArray& arr,
-                  const legacy_address_type&) {
+  void operator()(const arrow::FixedSizeBinaryArray& arr, const address_type&) {
     if (arr.IsNull(row_))
       return;
     result_ = address_at(arr, row_);
   }
 
-  void operator()(const arrow::FixedSizeBinaryArray& arr,
-                  const legacy_subnet_type&) {
+  void operator()(const arrow::FixedSizeBinaryArray& arr, const subnet_type&) {
     if (arr.IsNull(row_))
       return;
     result_ = subnet_at(arr, row_);
@@ -433,15 +443,15 @@ public:
   void operator()(const arrow::StringArray& arr, const T&) {
     if (arr.IsNull(row_))
       return;
-    if constexpr (std::is_same_v<T, legacy_string_type>) {
+    if constexpr (std::is_same_v<T, string_type>) {
       result_ = string_at(arr, row_);
     } else {
-      static_assert(std::is_same_v<T, legacy_pattern_type>);
+      static_assert(std::is_same_v<T, pattern_type>);
       result_ = pattern_at(arr, row_);
     }
   }
 
-  void operator()(const arrow::TimestampArray& arr, const legacy_time_type&) {
+  void operator()(const arrow::TimestampArray& arr, const time_type&) {
     if (arr.IsNull(row_))
       return;
     result_ = timestamp_at(arr, row_);
@@ -451,15 +461,15 @@ public:
   void operator()(const arrow::ListArray& arr, const T& t) {
     if (arr.IsNull(row_))
       return;
-    if constexpr (std::is_same_v<T, legacy_list_type>) {
-      result_ = list_at(t.value_type, arr, row_);
+    if constexpr (std::is_same_v<T, list_type>) {
+      result_ = list_at(t.value_type(), arr, row_);
     } else {
-      static_assert(std::is_same_v<T, legacy_map_type>);
-      result_ = map_at(t.key_type, t.value_type, arr, row_);
+      static_assert(std::is_same_v<T, map_type>);
+      result_ = map_at(t.key_type(), t.value_type(), arr, row_);
     }
   }
 
-  void operator()(const arrow::StructArray& arr, const legacy_record_type& t) {
+  void operator()(const arrow::StructArray& arr, const record_type& t) {
     if (arr.IsNull(row_))
       return;
     result_ = record_at(t, arr, row_);
@@ -471,7 +481,7 @@ private:
 };
 
 template <class Array>
-data_view value_at(const legacy_type& t, const Array& arr, size_t row) {
+data_view value_at(const type& t, const Array& arr, size_t row) {
   row_picker f{row};
   decode(t, arr, f);
   return std::move(f.result());
@@ -481,6 +491,8 @@ data_view value_at(const legacy_type& t, const Array& arr, size_t row) {
 
 class index_applier {
 public:
+  using result_type = void;
+
   index_applier(size_t offset, value_index& idx)
     : offset_(detail::narrow_cast<int64_t>(offset)), idx_(idx) {
     // nop
@@ -493,77 +505,72 @@ public:
         idx_.append(f(arr, row), detail::narrow_cast<size_t>(offset_ + row));
   }
 
-  void operator()(const arrow::BooleanArray& arr, const legacy_bool_type&) {
+  void operator()(const arrow::BooleanArray& arr, const bool_type&) {
     apply(arr, boolean_at);
   }
 
   template <class T>
-  void operator()(const arrow::NumericArray<T>& arr, const legacy_real_type&) {
+  void operator()(const arrow::NumericArray<T>& arr, const real_type&) {
     apply(arr, real_at);
   }
 
   template <class T>
-  void
-  operator()(const arrow::NumericArray<T>& arr, const legacy_integer_type&) {
+  void operator()(const arrow::NumericArray<T>& arr, const integer_type&) {
     apply(arr, integer_at);
   }
 
   template <class T>
-  void operator()(const arrow::NumericArray<T>& arr, const legacy_count_type&) {
+  void operator()(const arrow::NumericArray<T>& arr, const count_type&) {
     apply(arr, count_at);
   }
 
   template <class T>
-  void operator()(const arrow::NumericArray<T>& arr,
-                  const legacy_enumeration_type&) {
+  void operator()(const arrow::NumericArray<T>& arr, const enumeration_type&) {
     apply(arr, enumeration_at);
   }
 
   template <class T>
-  void
-  operator()(const arrow::NumericArray<T>& arr, const legacy_duration_type&) {
+  void operator()(const arrow::NumericArray<T>& arr, const duration_type&) {
     apply(arr, duration_at);
   }
 
-  void operator()(const arrow::FixedSizeBinaryArray& arr,
-                  const legacy_address_type&) {
+  void operator()(const arrow::FixedSizeBinaryArray& arr, const address_type&) {
     apply(arr, address_at);
   }
 
-  void operator()(const arrow::FixedSizeBinaryArray& arr,
-                  const legacy_subnet_type&) {
+  void operator()(const arrow::FixedSizeBinaryArray& arr, const subnet_type&) {
     apply(arr, subnet_at);
   }
 
-  void operator()(const arrow::StringArray& arr, const legacy_string_type&) {
+  void operator()(const arrow::StringArray& arr, const string_type&) {
     apply(arr, string_at);
   }
 
-  void operator()(const arrow::StringArray& arr, const legacy_pattern_type&) {
+  void operator()(const arrow::StringArray& arr, const pattern_type&) {
     apply(arr, pattern_at);
   }
 
-  void operator()(const arrow::TimestampArray& arr, const legacy_time_type&) {
+  void operator()(const arrow::TimestampArray& arr, const time_type&) {
     apply(arr, timestamp_at);
   }
 
   template <class T>
   void operator()(const arrow::ListArray& arr, const T& t) {
-    if constexpr (std::is_same_v<T, legacy_list_type>) {
+    if constexpr (std::is_same_v<T, list_type>) {
       auto f = [&](const auto& arr, int64_t row) {
-        return list_at(t.value_type, arr, row);
+        return list_at(t.value_type(), arr, row);
       };
       apply(arr, f);
     } else {
-      static_assert(std::is_same_v<T, legacy_map_type>);
+      static_assert(std::is_same_v<T, map_type>);
       auto f = [&](const auto& arr, int64_t row) {
-        return map_at(t.key_type, t.value_type, arr, row);
+        return map_at(t.key_type(), t.value_type(), arr, row);
       };
       apply(arr, f);
     }
   }
 
-  void operator()(const arrow::StructArray& arr, const legacy_record_type& t) {
+  void operator()(const arrow::StructArray& arr, const record_type& t) {
     apply(arr, [&](const auto& arr, int64_t row) {
       return record_at(t, arr, row);
     });
@@ -646,21 +653,27 @@ private:
 
 template <class FlatBuffer>
 arrow_table_slice<FlatBuffer>::arrow_table_slice(
-  const FlatBuffer& slice) noexcept
+  const FlatBuffer& slice, [[maybe_unused]] const chunk_ptr& parent) noexcept
   : slice_{slice}, state_{} {
-  if (auto err = fbs::deserialize_bytes(slice_.layout(), state_.layout))
-    die("failed to deserialize layout: " + render(err));
-  auto decoder = record_batch_decoder{};
-  state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
-}
-
-template <class FlatBuffer>
-arrow_table_slice<FlatBuffer>::arrow_table_slice(
-  const FlatBuffer& slice, legacy_record_type layout) noexcept
-  : slice_{slice}, state_{} {
-  state_.layout = std::move(layout);
-  auto decoder = record_batch_decoder{};
-  state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
+  if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>) {
+    // This legacy type has to stay; it is deserialized from disk.
+    auto intermediate = legacy_record_type{};
+    if (auto err = fbs::deserialize_bytes(slice_.layout(), intermediate))
+      die("failed to deserialize layout: " + render(err));
+    state_.layout = type::from_legacy_type(intermediate);
+    auto decoder = record_batch_decoder{};
+    state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
+  } else {
+    // We decouple the sliced type from the layout intentionally. This is an
+    // absolute must because we store the state in the deletion step of the
+    // table slice's chunk, and storing a sliced chunk in there would cause a
+    // cyclic reference. In the future, we should just not store the sliced
+    // chunk at all, but rather create it on the fly only.
+    state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
+    VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
+    auto decoder = record_batch_decoder{};
+    state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
+  }
 }
 
 template <class FlatBuffer>
@@ -671,8 +684,7 @@ arrow_table_slice<FlatBuffer>::~arrow_table_slice() noexcept {
 // -- properties -------------------------------------------------------------
 
 template <class FlatBuffer>
-const legacy_record_type&
-arrow_table_slice<FlatBuffer>::layout() const noexcept {
+const type& arrow_table_slice<FlatBuffer>::layout() const noexcept {
   return state_.layout;
 }
 
@@ -698,9 +710,9 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
   if (auto&& batch = record_batch()) {
     auto f = index_applier{offset, index};
     auto array = batch->column(detail::narrow_cast<int>(column));
-    auto offset = state_.layout.offset_from_index(column);
-    VAST_ASSERT(offset);
-    decode(state_.layout.at(*offset)->type, *array, f);
+    const auto& layout = caf::get<record_type>(this->layout());
+    auto offset = layout.resolve_flat_index(column);
+    decode(layout.field(offset).type, *array, f);
   }
 }
 
@@ -711,17 +723,20 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
   auto&& batch = record_batch();
   VAST_ASSERT(batch);
   auto array = batch->column(detail::narrow_cast<int>(column));
-  auto offset = state_.layout.offset_from_index(column);
-  VAST_ASSERT(offset);
-  return value_at(state_.layout.at(*offset)->type, *array, row);
+  const auto& layout = caf::get<record_type>(this->layout());
+  auto offset = layout.resolve_flat_index(column);
+  return value_at(layout.field(offset).type, *array, row);
 }
 
 template <class FlatBuffer>
 data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             table_slice::size_type column,
-                                            const legacy_type& t) const {
+                                            const type& t) const {
   VAST_ASSERT(congruent(
-    state_.layout.at(*state_.layout.offset_from_index(column))->type, t));
+    caf::get<record_type>(this->layout())
+      .field(caf::get<record_type>(this->layout()).resolve_flat_index(column))
+      .type,
+    t));
   auto&& batch = record_batch();
   VAST_ASSERT(batch);
   auto array = batch->column(detail::narrow_cast<int>(column));
@@ -738,5 +753,6 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 
 /// Explicit template instantiations for all Arrow encoding versions.
 template class arrow_table_slice<fbs::table_slice::arrow::v0>;
+template class arrow_table_slice<fbs::table_slice::arrow::v1>;
 
 } // namespace vast

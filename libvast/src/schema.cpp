@@ -12,7 +12,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/env.hpp"
 #include "vast/detail/filter_dir.hpp"
@@ -34,15 +33,14 @@ namespace vast {
 
 caf::expected<schema> schema::merge(const schema& s1, const schema& s2) {
   auto result = s2;
-  for (auto& t : s1) {
-    if (auto u = s2.find(t.name())) {
+  for (const auto& t : s1) {
+    if (const auto* u = s2.find(t.name())) {
       if (t != *u && t.name() == u->name())
         // Type clash: cannot accommodate two types with same name.
         return caf::make_error(ec::format_error,
-                               "type clash: cannot accommodate two types with "
-                               "the "
-                               "same name:",
-                               t.name());
+                               fmt::format("type clash: cannot accommodate two "
+                                           "types with the same name: {}",
+                                           t.name()));
     } else {
       result.types_.push_back(t);
     }
@@ -52,8 +50,8 @@ caf::expected<schema> schema::merge(const schema& s1, const schema& s2) {
 
 schema schema::combine(const schema& s1, const schema& s2) {
   auto result = s1;
-  for (auto& t : s2) {
-    if (auto x = result.find(t.name()))
+  for (const auto& t : s2) {
+    if (auto* x = result.find(t.name()))
       *x = t;
     else
       result.add(t);
@@ -62,8 +60,8 @@ schema schema::combine(const schema& s1, const schema& s2) {
 }
 
 bool schema::add(schema::value_type t) {
-  if (caf::holds_alternative<legacy_none_type>(t) || t.name().empty()
-      || find(t.name()))
+  if (caf::holds_alternative<none_type>(t) || t.name().empty()
+      || find(t.name()) != nullptr)
     return false;
   types_.push_back(std::move(t));
   return true;
@@ -77,7 +75,7 @@ schema::value_type* schema::find(std::string_view name) {
 }
 
 const schema::value_type* schema::find(std::string_view name) const {
-  for (auto& t : types_)
+  for (const auto& t : types_)
     if (t.name() == name)
       return &t;
   return nullptr;
@@ -107,109 +105,9 @@ bool operator==(const schema& x, const schema& y) {
   return x.types_ == y.types_;
 }
 
-// TODO: we should figure out a better way to (de)serialize: use manual pointer
-// tracking to save types exactly once. Something along those lines:
-//
-// #include <utility>
-//
-// namespace {
-//
-// struct pointer_hash {
-//  size_t operator()(const legacy_type& t) const noexcept {
-//    return reinterpret_cast<size_t>(std::launder(t.ptr_.get()));
-//  }
-//};
-//
-// using type_cache = std::unordered_set<type, pointer_hash>;
-//
-// template <class Serializer>
-// struct type_serializer {
-//
-//  type_serializer(Serializer& sink, type_cache& cache)
-//    : sink_{sink}, cache_{cache} {
-//  }
-//
-//  void save_type(type const t) const {
-//    if (t.name().empty()) {
-//      visit(*this, t); // recurse
-//      return;
-//    }
-//    if (cache_.count(t)) {
-//      sink_ << t.name();
-//      return;
-//    }
-//    visit(*this, t); // recurse
-//    cache_.insert(t.name());
-//  }
-//
-//  template <class T>
-//  void operator()(const T& x) const {
-//    sink_ << x;
-//  };
-//
-//  void operator()(const vector_type& t) const {
-//    save_type(t.value_type);
-//  }
-//
-//  void operator()(const table_type& t) const {
-//    save_type(t.key_type);
-//    save_type(t.value_type);
-//  }
-//
-//  void operator()(const legacy_record_type& t) const {
-//    auto size = t.fields.size();
-//    sink_.begin_sequence(size);
-//    for (auto& f : t.fields) {
-//      sink_ << f.name;
-//      save_type(f.type);
-//    }
-//    sink_.end_sequence();
-//  }
-//
-//  Serializer& sink_;
-//  type_cache& cache_;
-//};
-//
-//} // namespace <anonymous>
-
-void serialize(caf::serializer& sink, const schema& sch) {
-  sink << to_string(sch);
-}
-
-void serialize(caf::deserializer& source, schema& sch) {
-  std::string str;
-  source >> str;
-  if (str.empty())
-    return;
-  sch.clear();
-  auto i = str.begin();
-  parse(i, str.end(), sch);
-}
-
-bool inspect(detail::legacy_deserializer& source, schema& sch) {
-  std::string str;
-  source(str);
-  if (str.empty())
-    return false;
-  sch.clear();
-  auto i = str.begin();
-  parse(i, str.end(), sch);
-  return true;
-}
-
-bool convert(const schema& s, data& d) {
-  record o;
-  list a;
-  std::transform(s.begin(), s.end(), std::back_inserter(a),
-                 [](auto& t) { return to_data(t); });
-  o["types"] = std::move(a);
-  d = std::move(o);
-  return true;
-}
-
 caf::expected<schema> get_schema(const caf::settings& options) {
   // Get the default schema from the registry.
-  auto schema_reg_ptr = event_types::get();
+  const auto* schema_reg_ptr = event_types::get();
   auto schema = schema_reg_ptr ? *schema_reg_ptr : vast::schema{};
   // Update with an alternate schema, if requested.
   auto sc = caf::get_if<std::string>(&options, "vast.import.schema");

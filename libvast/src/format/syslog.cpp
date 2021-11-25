@@ -11,7 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/error.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/settings.hpp>
@@ -22,33 +22,35 @@ namespace syslog {
 
 namespace {
 
-legacy_type make_rfc5424_type() {
-  // clang-format off
-  return legacy_record_type{{
-    {"facility", legacy_count_type{}},
-    {"severity", legacy_count_type{}},
-    {"version", legacy_count_type{}},
-    {"ts", legacy_time_type{}.name("timestamp")},
-    {"hostname", legacy_string_type{}},
-    {"app_name", legacy_string_type{}},
-    {"process_id", legacy_string_type{}},
-    {"message_id", legacy_string_type{}},
-    // TODO: The index is currently incapable of handling legacy_map_type. Hence, the
-    // structured_data is disabled.
-    // {"structered_data", legacy_map_type{
-    //   legacy_string_type{}.name("id"),
-    //   legacy_map_type{legacy_string_type{}.name("key"), legacy_string_type{}.name("value")}.name("params")},
-    // },
-    {"message", legacy_string_type{}},
-  }}.name("syslog.rfc5424");
-  // clang-format on
+type make_rfc5424_type() {
+  return type{
+    "syslog.rfc5424",
+    record_type{{
+      {"facility", count_type{}},
+      {"severity", count_type{}},
+      {"version", count_type{}},
+      {"ts", type{"timestamp", time_type{}}},
+      {"hostname", string_type{}},
+      {"app_name", string_type{}},
+      {"process_id", string_type{}},
+      {"message_id", string_type{}},
+      // TODO: The index is currently incapable of handling map_type. Hence, the
+      // structured_data is disabled.
+      // {"structered_data", map_type{
+      //   string_type{}.name("id"),
+      //   map_type{string_type{}.name("key"),
+      //   string_type{}.name("value")}.name("params")},
+      // },
+      {"message", string_type{}},
+    }},
+  };
 }
 
-legacy_type make_unknown_type() {
+type make_unknown_type() {
   // clang-format off
-  return legacy_record_type{{
-    {"syslog_message", legacy_string_type{}}
-  }}.name("syslog.unknown");
+  return type{"syslog.unknown", record_type{{
+    {"syslog_message", string_type{}}
+  }},};
   // clang-format on
 }
 
@@ -118,37 +120,41 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     if (parser(line, sys_msg)) {
       bptr = builder(syslog_rfc5424_type_);
       if (!bptr) {
-        return finish(f, caf::make_error(ec::format_error,
-                                         "failed to get create table "
-                                         "slice builder for type "
-                                           + syslog_rfc5424_type_.name()));
+        return finish(
+          f, caf::make_error(ec::format_error,
+                             fmt::format("failed to get create table "
+                                         "slice builder for type {}",
+                                         syslog_rfc5424_type_.name())));
       }
-      // TODO: The index is currently incapable of handling legacy_map_type.
+      // TODO: The index is currently incapable of handling map_type.
       // Hence, the structured_data is disabled.
       if (!bptr->add(sys_msg.hdr.facility, sys_msg.hdr.severity,
                      sys_msg.hdr.version, sys_msg.hdr.ts, sys_msg.hdr.hostname,
                      sys_msg.hdr.app_name, sys_msg.hdr.process_id,
                      sys_msg.hdr.msg_id,
                      /*sys_msg.data,*/ sys_msg.msg))
-        return finish(f, caf::make_error(ec::format_error,
-                                         "failed to produce table slice row "
-                                         "for "
-                                           + bptr->layout().name()));
+        return finish(
+          f, caf::make_error(ec::format_error,
+                             fmt::format("failed to produce table slice row "
+                                         "for {}",
+                                         syslog_rfc5424_type_.name())));
       if (bptr->rows() >= max_slice_size)
         if (auto err = finish(f))
           return err;
     } else {
       bptr = builder(syslog_unkown_type_);
       if (!bptr)
-        return finish(f, caf::make_error(ec::format_error,
-                                         "failed to get create table "
-                                         "slice builder for type "
-                                           + syslog_unkown_type_.name()));
+        return finish(f,
+                      caf::make_error(ec::format_error,
+                                      fmt::format("failed to get create table "
+                                                  "slice builder for type {}",
+                                                  syslog_unkown_type_.name())));
       if (!bptr->add(line))
-        return finish(f, caf::make_error(ec::format_error,
-                                         "failed to produce table slice row "
-                                         "for "
-                                           + bptr->layout().name()));
+        return finish(
+          f, caf::make_error(ec::format_error,
+                             fmt::format("failed to produce table slice row "
+                                         "for {}",
+                                         syslog_unkown_type_.name())));
       if (bptr->rows() >= max_slice_size)
         if (auto err = finish(f))
           return err;

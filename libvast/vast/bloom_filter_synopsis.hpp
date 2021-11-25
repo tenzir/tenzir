@@ -10,8 +10,8 @@
 
 #include "vast/bloom_filter.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/synopsis.hpp"
+#include "vast/type.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/optional.hpp>
@@ -28,7 +28,7 @@ public:
   using bloom_filter_type = bloom_filter<HashFunction>;
   using hasher_type = typename bloom_filter_type::hasher_type;
 
-  bloom_filter_synopsis(vast::legacy_type x, bloom_filter_type bf)
+  bloom_filter_synopsis(vast::type x, bloom_filter_type bf)
     : synopsis{std::move(x)}, bloom_filter_{std::move(bf)} {
     // nop
   }
@@ -103,14 +103,14 @@ protected:
 /// Creates a new type annotation from a set of bloom filter parameters.
 /// @returns The provided type with a new `#synopsis=bloom_filter(n,p)`
 ///          attribute. Note that all previous attributes are discarded.
-legacy_type
-annotate_parameters(legacy_type type, const bloom_filter_parameters& params);
+type annotate_parameters(const type& type,
+                         const bloom_filter_parameters& params);
 
 /// Parses Bloom filter parameters from type attributes of the form
 /// `#synopsis=bloom_filter(n,p)`.
 /// @param x The type whose attributes to parse.
 /// @returns The parsed and evaluated Bloom filter parameters.
 /// @relates bloom_filter_synopsis
-std::optional<bloom_filter_parameters> parse_parameters(const legacy_type& x);
+std::optional<bloom_filter_parameters> parse_parameters(const type& x);
 
 } // namespace vast

@@ -23,8 +23,7 @@ using namespace si_literals;
 using namespace test;
 
 TEST(bloom filter parameters : from type) {
-  auto t = legacy_address_type{}.attributes({{"synopsis", "bloomfilter(1000,0."
-                                                          "01)"}});
+  auto t = type{address_type{}, {{"synopsis", "bloomfilter(1000,0.01)"}}};
   auto xs = unbox(parse_parameters(t));
   CHECK_EQUAL(*xs.n, 1000u);
   CHECK_EQUAL(*xs.p, 0.01);
@@ -36,7 +35,7 @@ TEST(bloom filter synopsis) {
   xs.m = 1_k;
   xs.p = 0.1;
   auto bf = unbox(make_bloom_filter<xxh64>(std::move(xs)));
-  bloom_filter_synopsis<integer, xxh64> x{legacy_integer_type{}, std::move(bf)};
+  bloom_filter_synopsis<integer, xxh64> x{type{integer_type{}}, std::move(bf)};
   x.add(make_data_view(integer{0}));
   x.add(make_data_view(integer{1}));
   x.add(make_data_view(integer{2}));
@@ -53,7 +52,7 @@ TEST(bloom filter synopsis - wrong lookup type) {
   xs.m = 1_k;
   xs.p = 0.1;
   auto bf = unbox(make_bloom_filter<xxh64>(std::move(xs)));
-  bloom_filter_synopsis<std::string, xxh64> synopsis{legacy_string_type{},
+  bloom_filter_synopsis<std::string, xxh64> synopsis{type{string_type{}},
                                                      std::move(bf)};
   auto r1
     = synopsis.lookup(relational_operator::equal, make_data_view(caf::none));

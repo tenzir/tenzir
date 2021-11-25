@@ -32,6 +32,12 @@
 
 namespace vast::format::json {
 
+/// Extracts data from a given JSON object for a given type.
+/// @param object The simdjson DOM element of type object.
+/// @param builder The builder to add data to.
+caf::error
+add(const ::simdjson::dom::object& object, table_slice_builder& builder);
+
 class writer : public ostream_writer {
 public:
   using super = ostream_writer;
@@ -46,14 +52,6 @@ private:
   bool flatten_ = false;
   bool numeric_durations_ = false;
 };
-
-/// Adds a JSON object to a table slice builder according to a given layout.
-/// @param builder The builder to add the JSON object to.
-/// @param xs The JSON object to add to *builder.
-/// @param layout The record type describing *xs*.
-/// @returns An error iff the operation failed.
-caf::error add(table_slice_builder& bptr, const ::simdjson::dom::object& xs,
-               const legacy_record_type& layout);
 
 /// A reader for JSON data. It operates with a *selector* to determine the
 /// mapping of JSON object to the appropriate record type in the schema.
@@ -210,18 +208,13 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     bptr = builder(*layout);
     if (bptr == nullptr)
       return caf::make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(*bptr, get_object_result.value(), *layout)) {
-      if (err == ec::convert_error) {
-        if (num_invalid_lines_ == 0)
-          VAST_WARN("{} failed to convert value(s) in line {}: {}",
-                    detail::pretty_type_name(this), lines_->line_number(),
-                    render(err));
-        ++num_invalid_lines_;
-      } else {
-        err.context() += caf::make_message("line", lines_->line_number());
-        return finish(cons, err);
-      }
-    }
+    if (auto err = add(get_object_result.value(), *bptr))
+      return finish(cons, //
+                    caf::make_error(ec::logic_error,
+                                    fmt::format("failed to add line {} of "
+                                                "layout {} to builder: {}",
+                                                lines_->line_number(), *layout,
+                                                err)));
     produced++;
     batch_events_++;
     if (bptr->rows() == max_slice_size)
