@@ -16,6 +16,7 @@
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/query.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_processor.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
@@ -67,13 +68,16 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::query_supervisor_actor&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
-    [=](atom::apply, transform_ptr, uuid) -> atom::done {
+    [=](atom::apply, transform_ptr, uuid) -> uuid {
       FAIL("no mock implementation available");
     },
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
-    [=](vast::query&) -> caf::result<system::query_cursor> {
+    [=](atom::resolve, vast::expression) -> system::meta_index_result {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::evaluate, vast::query&) -> caf::result<system::query_cursor> {
       auto query_id = unbox(to<uuid>(uuid_str));
       self->state.client = self->current_sender()->address();
       self->send(self, query_id, 3u);
@@ -149,7 +153,7 @@ TEST(state transitions) {
                                  unbox(to<expression>(query_str))),
              index);
   expect((vast::query, system::index_actor), from(self).to(aut));
-  expect((vast::query), from(aut).to(index));
+  expect((atom::evaluate, vast::query), from(aut).to(index));
   expect((uuid, uint32_t), from(index).to(index));
   expect((system::query_cursor), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));

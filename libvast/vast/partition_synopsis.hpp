@@ -16,7 +16,12 @@
 namespace vast {
 
 /// Contains one synopsis per partition column.
-struct partition_synopsis {
+struct partition_synopsis final {
+  partition_synopsis() = default;
+  partition_synopsis(partition_synopsis&&) = default;
+
+  partition_synopsis& operator=(partition_synopsis&&) = default;
+
   /// Add data to the synopsis.
   void add(const table_slice& slice, const caf::settings& synopsis_options);
 
@@ -30,10 +35,10 @@ struct partition_synopsis {
   size_t memusage() const;
 
   /// Id of the first event in the partition.
-  uint64_t offset;
+  uint64_t offset = invalid_id;
 
   // Number of events in the partition.
-  uint64_t events;
+  uint64_t events = 0;
 
   /// The minimum import timestamp of all contained table slices.
   time min_import_time = time::max();

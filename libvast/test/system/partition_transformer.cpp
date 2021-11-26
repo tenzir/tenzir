@@ -15,6 +15,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/legacy_type.hpp"
+#include "vast/partition_synopsis.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/meta_index.hpp"
 #include "vast/table_slice.hpp"
@@ -276,8 +277,8 @@ TEST(partition transform via the index) {
                            partition_uuid);
   run();
   rp2.receive(
-    [](vast::atom::done) {
-      REQUIRE(true);
+    [=](vast::uuid&) {
+      CHECK(true);
     },
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);

@@ -208,8 +208,12 @@ using meta_index_actor = typed_actor_fwd<
   // Atomically remove one and merge another partition synopsis
   caf::replies_to<atom::replace, uuid, uuid,
                   std::shared_ptr<partition_synopsis>>::with<atom::ok>,
+  // Return the candidate partitions for an expression.
+  caf::replies_to<atom::candidates, vast::expression,
+                  vast::ids>::with<meta_index_result>,
   // Return the candidate partitions for a query.
-  caf::replies_to<atom::candidates, vast::query>::with<std::vector<vast::uuid>>>
+  // The meta index will only look at the expression and ids subfields.
+  caf::replies_to<atom::candidates, vast::query>::with<meta_index_result>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -249,8 +253,12 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<atom::telemetry>,
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
-  // Evaluates a query.
-  caf::replies_to<query>::with<query_cursor>,
+  // Evaluates a query, ie. sends matching events to the caller.
+  caf::replies_to<atom::evaluate, query>::with<query_cursor>,
+  // Resolves a query to its candidate partitions.
+  // TODO: Expose the meta index as a system component so this
+  // handler can go directly to the meta index.
+  caf::replies_to<atom::resolve, expression>::with<meta_index_result>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
   // INTERNAL: The actual query evaluation handler. Does the meta index lookup,
@@ -261,11 +269,12 @@ using index_actor = typed_actor_fwd<
   // Erases the given events from the INDEX, and returns their ids.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
   // Applies the given transformation to the partition.
-  // Erases the existing partition and returns the uuid of the new
-  // partition.
+  // Erases the existing partition and returns the synopsis of the
+  // new partition. If the partition is completely erased, returns
+  // the nil uuid.
   // TODO: Add options to do an in-place transform keeping the old ids,
-  // and to make a new partition preserving the old one.
-  caf::replies_to<atom::apply, transform_ptr, uuid>::with<atom::done>,
+  // and to make a new partition preserving the old one(s).
+  caf::replies_to<atom::apply, transform_ptr, uuid>::with<vast::uuid>,
   // Makes the identity of the importer known to the index.
   caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.

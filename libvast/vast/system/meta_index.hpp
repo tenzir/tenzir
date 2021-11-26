@@ -88,6 +88,22 @@ public:
   detail::range_map<id, uuid> offset_map = {};
 };
 
+/// The result of a meta-index query.
+struct meta_index_result {
+  enum {
+    exact,
+    probabilistic,
+  } kind;
+
+  std::vector<uuid> partitions;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, meta_index_result& x) {
+    return f(caf::meta::type_name("vast.system.meta_index_result"), x.kind,
+             x.partitions);
+  }
+};
+
 /// The META INDEX is the first index actor that queries hit. The result
 /// represents a list of candidate partition IDs that may contain the desired
 /// data. The META INDEX may return false positives but never false negatives.

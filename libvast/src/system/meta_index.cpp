@@ -405,8 +405,17 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
       self->state.erase(old_partition);
       return atom::ok_v;
     },
+    [=](atom::candidates, vast::expression expr,
+        vast::ids ids) -> caf::result<meta_index_result> {
+      auto query = vast::query{};
+      query.expr = std::move(expr);
+      query.ids = std::move(ids);
+      query.id = vast::uuid::nil();
+      return self->delegate(static_cast<meta_index_actor>(self),
+                            atom::candidates_v, std::move(query));
+    },
     [=](atom::candidates,
-        const vast::query& query) -> caf::result<std::vector<vast::uuid>> {
+        const vast::query& query) -> caf::result<meta_index_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query));
       std::vector<vast::uuid> expression_candidates;
       std::vector<vast::uuid> ids_candidates;
@@ -446,7 +455,11 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
                  metrics_metadata{{"query", id_str}});
       self->send(self->state.accountant, "meta-index.lookup.candidates",
                  result.size(), metrics_metadata{{"query", std::move(id_str)}});
-      return result;
+      // TODO: This reproduces the previous behavior, but it is a pessimization:
+      // We should analyze the query here to see whether it's probabilistic or
+      // exact.
+      return meta_index_result{meta_index_result::probabilistic,
+                               std::move(result)};
     },
     [=](atom::status, status_verbosity v) {
       record result;

@@ -106,10 +106,7 @@ transforms_from_string(vast::system::transforms_location location,
   auto settings = vast::to<caf::settings>(*rec);
   REQUIRE(settings);
   auto transforms = make_transforms(location, *settings);
-  if (!transforms) {
-    std::cout << vast::render(transforms.error()) << std::endl;
-  }
-  REQUIRE(transforms);
+  REQUIRE_NOERROR(transforms);
   return std::move(*transforms);
 }
 

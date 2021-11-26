@@ -46,7 +46,7 @@ void eraser_state::init(caf::timespan interval, std::string query,
       VAST_ERROR("{} failed to normalize and validate {}", *self_, query_);
       return;
     }
-    self_->send(index_, query::make_erase(std::move(*expr)));
+    self_->send(index_, atom::evaluate_v, query::make_erase(std::move(*expr)));
     transition_to(await_query_id);
   });
   // Trigger the delayed send message.
