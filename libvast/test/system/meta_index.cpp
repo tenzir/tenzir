@@ -14,6 +14,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/query.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice.hpp"
@@ -161,18 +162,20 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
   }
 
   auto timestamp_type_query(std::string_view hhmmss) {
-    std::string q = ":timestamp == 1970-01-01+";
-    q += hhmmss;
-    q += ".0";
+    std::string expr = ":timestamp == 1970-01-01+";
+    expr += hhmmss;
+    expr += ".0";
     std::vector<uuid> result;
+    auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
+                                       unbox(to<expression>(expr)));
     auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
-                            unbox(to<expression>(q)), vast::ids{});
+                            std::move(q));
     run();
     rp.receive(
       [&](std::vector<uuid> candidates) {
         result = std::move(candidates);
       },
-      [=](caf::error e) {
+      [=](const caf::error& e) {
         FAIL(render(e));
       });
     return result;
@@ -184,14 +187,16 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   auto lookup(meta_index_actor& meta_idx, std::string_view expr) {
     std::vector<uuid> result;
-    auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
-                            unbox(to<expression>(expr)), vast::ids{});
+    auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
+                                       unbox(to<expression>(expr)));
+    auto rp
+      = self->request(meta_idx, caf::infinite, vast::atom::candidates_v, q);
     run();
     rp.receive(
       [&](std::vector<uuid> candidates) {
         result = std::move(candidates);
       },
-      [=](caf::error e) {
+      [=](const caf::error& e) {
         FAIL(render(e));
       });
     std::sort(result.begin(), result.end());
@@ -332,8 +337,9 @@ TEST(meta index messages) {
   // so this selects everything but the first partition.
   auto expr = unbox(to<expression>("content == \"foo\" && :timestamp >= @25"));
   // Sending an expression should return candidate partition ids
-  auto expr_response = self->request(meta_idx, caf::infinite,
-                                     atom::candidates_v, expr, vast::ids{});
+  auto q = query::make_erase(expr);
+  auto expr_response
+    = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   expr_response.receive(
     [this](const std::vector<uuid>& candidates) {
@@ -345,8 +351,10 @@ TEST(meta index messages) {
       FAIL(msg);
     });
   // Sending ids should return the partition ids containing these ids
-  auto ids_response = self->request(meta_idx, caf::infinite, atom::candidates_v,
-                                    vast::expression{}, lookup_ids);
+  q.expr = vast::expression{};
+  q.ids = lookup_ids;
+  auto ids_response
+    = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   ids_response.receive(
     [this](const std::vector<uuid>& candidates) {
@@ -358,8 +366,10 @@ TEST(meta index messages) {
       FAIL(msg);
     });
   // Sending BOTH an expression and ids should return the intersection.
-  auto both_response = self->request(meta_idx, caf::infinite,
-                                     atom::candidates_v, expr, lookup_ids);
+  q.expr = expr;
+  q.ids = lookup_ids;
+  auto both_response
+    = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   both_response.receive(
     [this](const std::vector<uuid>& candidates) {
@@ -371,9 +381,10 @@ TEST(meta index messages) {
       FAIL(msg);
     });
   // Sending NEITHER an expression nor ids should return an error.
+  q.expr = vast::expression{};
+  q.ids = vast::ids{};
   auto neither_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v,
-                    vast::expression{}, vast::ids{});
+    = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   neither_response.receive(
     [](const std::vector<uuid>&) {
