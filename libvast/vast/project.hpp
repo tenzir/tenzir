@@ -253,11 +253,13 @@ auto project(table_slice slice, Hints&&... hints) {
       } else if constexpr (std::is_constructible_v<std::string_view,
                                                    decltype(index)>) {
         // If the index is a string, we need to resolve it to an offset first.
-        const auto offsets = layout_rt.resolve_key_suffix(index, layout.name());
-        // TODO: Should we instead check whether we have exactly one match, or
-        // prefix-match rather than suffix-match?
-        if (!offsets.empty())
-          return self(self, type, offsets[0]);
+        for (auto&& offset :
+             layout_rt.resolve_key_suffix(index, layout.name())) {
+          // TODO: Should we instead check whether we have exactly one match, or
+          // prefix-match rather than suffix-match? Currently we're
+          // suffix-matching, but only considering the first match.
+          return self(self, type, offset);
+        }
       } else if constexpr (std::is_convertible_v<decltype(index),
                                                  table_slice::size_type>) {
         for (table_slice::size_type flat_index = 0;

@@ -340,11 +340,6 @@ TEST(record_type) {
   CHECK_EQUAL(r.field(2).type, bool_type{});
   CHECK_EQUAL(r.field({1, 1}).type, address_type{});
   CHECK_EQUAL(r.field({3, 0}).name, "s");
-  CHECK_EQUAL(fmt::format("{}", fmt::join(r.fields(), ", ")),
-              "i: int, r1: record {p: port, a: addr}, b: bool, r2: "
-              "record {s: subnet}");
-  CHECK_EQUAL(fmt::format("{}", fmt::join(flatten(r).fields(), ", ")),
-              "i: int, r1.p: port, r1.a: addr, b: bool, r2.s: subnet");
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
 }
 
@@ -372,21 +367,29 @@ TEST(record_type name resolving) {
   CHECK_EQUAL(rt.resolve_key("r.a"), (offset{1, 1}));
   CHECK_EQUAL(rt.resolve_key("a"), std::nullopt);
   CHECK_EQUAL(rt.resolve_key("r.not"), std::nullopt);
-  CHECK_EQUAL(rt.resolve_key_suffix("a"),
+  auto to_vector = [](auto&& rng) {
+    std::vector<offset> result{};
+    for (auto&& elem : std::forward<decltype(rng)>(rng))
+      result.push_back(std::forward<decltype(elem)>(elem));
+    return result;
+  };
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("a")),
               (std::vector<offset>{{1, 1}, {3, 1, 0}}));
-  CHECK_EQUAL(rt.resolve_key_suffix("r.a"),
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("r.a")),
               (std::vector<offset>{{1, 1}, {3, 1, 0}}));
-  CHECK_EQUAL(rt.resolve_key_suffix("r"), (std::vector<offset>{}));
-  CHECK_EQUAL(rt.resolve_key_suffix("r2.r.a"),
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("r")), (std::vector<offset>{}));
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("r2.r.a")),
               (std::vector<offset>{{3, 1, 0}}));
-  CHECK_EQUAL(rt.resolve_key_suffix("2.r.a"), (std::vector<offset>{}));
-  CHECK_EQUAL(rt.resolve_key_suffix("i"), (std::vector<offset>{{0}}));
-  CHECK_EQUAL(rt.resolve_key_suffix(""), (std::vector<offset>{}));
-  CHECK_EQUAL(rt.resolve_key_suffix("t.u.r2.r.a", "t.u"),
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("2.r.a")),
+              (std::vector<offset>{}));
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("i")),
+              (std::vector<offset>{{0}}));
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("")), (std::vector<offset>{}));
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("t.u.r2.r.a", "t.u")),
               (std::vector<offset>{{3, 1, 0}}));
-  CHECK_EQUAL(rt.resolve_key_suffix("u.r2.r.a", "t.u"),
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("u.r2.r.a", "t.u")),
               (std::vector<offset>{{3, 1, 0}}));
-  CHECK_EQUAL(rt.resolve_key_suffix(".u.r2.r.a", "t.u"),
+  CHECK_EQUAL(to_vector(rt.resolve_key_suffix(".u.r2.r.a", "t.u")),
               (std::vector<offset>{}));
   const auto zeek_conn = type{
     "zeek.conn",
@@ -406,17 +409,19 @@ TEST(record_type name resolving) {
       {"proto", string_type{}},
     },
   };
-  CHECK_EQUAL(caf::get<record_type>(zeek_conn).resolve_key_suffix(
-                "resp_p", zeek_conn.name()),
+  CHECK_EQUAL(to_vector(caf::get<record_type>(zeek_conn).resolve_key_suffix(
+                "resp_p", zeek_conn.name())),
               (std::vector<offset>{{2, 3}}));
-  CHECK_EQUAL(caf::get<record_type>(zeek_conn).resolve_key_suffix("resp_p"),
-              (std::vector<offset>{{2, 3}}));
+  CHECK_EQUAL(
+    to_vector(caf::get<record_type>(zeek_conn).resolve_key_suffix("resp_p")),
+    (std::vector<offset>{{2, 3}}));
   const auto zeek_conn_flat = flatten(zeek_conn);
-  CHECK_EQUAL(caf::get<record_type>(zeek_conn_flat)
-                .resolve_key_suffix("resp_p", zeek_conn.name()),
+  CHECK_EQUAL(to_vector(caf::get<record_type>(zeek_conn_flat)
+                          .resolve_key_suffix("resp_p", zeek_conn.name())),
               (std::vector<offset>{{5}}));
   CHECK_EQUAL(
-    caf::get<record_type>(zeek_conn_flat).resolve_key_suffix("resp_p"),
+    to_vector(
+      caf::get<record_type>(zeek_conn_flat).resolve_key_suffix("resp_p")),
     (std::vector<offset>{{5}}));
 }
 
@@ -700,6 +705,10 @@ TEST(named types) {
   CHECK(caf::holds_alternative<bool_type>(aat));
   CHECK_EQUAL(aat.name(), "l2");
   CHECK_EQUAL(fmt::format("{}", aat), "l2");
+  auto aat_names = std::string{};
+  for (auto&& name : aat.names())
+    fmt::format_to(std::back_inserter(aat_names), "{}", name);
+  CHECK_EQUAL(aat_names, "l2l1");
   const auto lat = type::from_legacy_type(legacy_bool_type{}.name("l3"));
   CHECK(caf::holds_alternative<bool_type>(lat));
   CHECK_EQUAL(lat.name(), "l3");

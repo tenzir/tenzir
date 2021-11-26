@@ -106,13 +106,17 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
         return;
       VAST_DEBUG("{} uses {} to extract {} events", *self, *pivot_field,
                  st.target);
-      auto indices
-        = layout_rt.resolve_key_suffix(pivot_field->name, layout.name());
-      VAST_ASSERT(!indices.empty());
-      auto column = table_slice_column{slice, layout_rt.flat_index(indices[0])};
+      auto column = std::optional<table_slice_column>{};
+      for (auto&& index :
+           layout_rt.resolve_key_suffix(pivot_field->name, layout.name())) {
+        // NOTE: We're intentionally only using the first result here.
+        column.emplace(slice, layout_rt.flat_index(index));
+        break;
+      }
+      VAST_ASSERT(column);
       auto xs = list{};
-      for (size_t i = 0; i < column.size(); ++i) {
-        auto data = materialize(column[i]);
+      for (size_t i = 0; i < column->size(); ++i) {
+        auto data = materialize((*column)[i]);
         auto x = caf::get_if<std::string>(&data);
         // Skip if no value
         if (!x)

@@ -123,12 +123,6 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   }
   auto indexes = builder.CreateVector(indices);
   // Serialize layout.
-#if VAST_ENABLE_ASSERTIONS
-  const auto clt = type{combined_layout};
-  VAST_ASSERT(clt.name().empty() && clt.attributes().empty(),
-              "expecting combined layout not to have metadata for "
-              "serialization as legacy record type");
-#endif
   auto legacy_combined_layout
     = caf::get<legacy_record_type>(type{combined_layout}.to_legacy_type());
   auto combined_layout_offset
