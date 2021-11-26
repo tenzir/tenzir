@@ -1016,7 +1016,8 @@ index(index_actor::stateful_pointer<index_state> self,
       auto iter = self->state.pending.find(query_id);
       if (iter == self->state.pending.end()) {
         VAST_WARN("{} drops query for unknown query id {}", *self, query_id);
-        return caf::make_error(ec::lookup_error, "unknown query id");
+        return caf::make_error(ec::lookup_error,
+                               fmt::format("unknown query id: {}", query_id));
       }
       auto& query_state = iter->second;
       if (!sender) {
