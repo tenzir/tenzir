@@ -995,6 +995,9 @@ index(index_actor::stateful_pointer<index_state> self,
                             delta.count());
             rp.deliver(query_cursor{query_id, detail::narrow<uint32_t>(total),
                                     scheduled});
+            // We "delegate" the first continuation back to self by spoofing
+            // the client as source. This is done so the response gets delivered
+            // to the correct recipient: the client.
             caf::send_as(client, static_cast<index_actor>(self), query_id,
                          scheduled);
           },
