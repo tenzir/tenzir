@@ -162,11 +162,7 @@ TEST(state transitions) {
   expect((atom::done), from(index).to(aut));
   CHECK_EQUAL(mock_ref().log, expected_log);
   CHECK_EQUAL(mock_ref().results, unsigned{2 + 3 + 6 + 12 + 24});
-  MESSAGE("hi");
   CHECK_EQUAL(mock_ref().state(), system::query_processor::idle);
-  MESSAGE("ho");
-  // self->send_exit(index, ec::no_error);
-  // sched.run();
 }
 
 FIXTURE_SCOPE_END()
