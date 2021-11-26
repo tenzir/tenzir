@@ -12,6 +12,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/expression.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/typed_actor_view.hpp>
 
@@ -60,6 +61,8 @@ struct query {
 
   enum class priority { normal, low };
 
+  uuid id = uuid::random();
+
   command cmd;
 
   expression expr = {};
@@ -68,10 +71,7 @@ struct query {
 
   priority priority = priority::normal;
 
-  query(const command& cmd, const expression& expr) : cmd(cmd), expr(expr) {
-  }
-
-  query(command&& cmd, expression&& expr)
+  query(command cmd, expression expr)
     : cmd(std::move(cmd)), expr(std::move(expr)) {
   }
 
