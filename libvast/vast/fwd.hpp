@@ -282,7 +282,7 @@ struct data_point;
 struct measurement;
 struct node_state;
 struct performance_sample;
-struct query_status;
+struct query_cursor;
 struct query_status;
 struct spawn_arguments;
 
@@ -340,6 +340,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::detail::stable_map<vast::data, vast::data>))
 
   VAST_ADD_TYPE_ID((vast::system::performance_report))
+  VAST_ADD_TYPE_ID((vast::system::query_cursor))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
   VAST_ADD_TYPE_ID((vast::system::status_verbosity))

@@ -12,6 +12,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
@@ -52,7 +53,7 @@ T take_one(std::vector<T>& xs) {
 struct mock_index_state {
   static inline constexpr auto name = "mock-index";
 
-  std::vector<ids> deltas;
+  caf::actor client;
 };
 
 system::index_actor::behavior_type
@@ -79,7 +80,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::subscribe, atom::flush, system::flush_listener_actor&) {
       FAIL("no mock implementation available");
     },
-    [=](atom::internal, vast::query&, system::query_supervisor_actor&) {
+    [=](atom::internal, vast::query&,
+        system::query_supervisor_actor&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
     [=](atom::apply, transform_ptr, uuid) -> atom::done {
@@ -88,17 +90,15 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
-    [=](vast::query&) {
+    [=](vast::query&) -> caf::result<system::query_cursor> {
       auto query_id = unbox(to<uuid>(uuid_str));
-      auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
-      auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-      anon_self->send(hdl, query_id, uint32_t{7}, uint32_t{3});
-      anon_self->send(hdl, atom::done_v);
+      self->state.client = caf::actor_cast<caf::actor>(self->current_sender());
+      self->send(self, query_id, 3u);
+      return system::query_cursor{query_id, uint32_t{7}, uint32_t{3}};
     },
     [=](const uuid&, uint32_t) {
       auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
-      auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-      anon_self->send(hdl, atom::done_v);
+      anon_self->send(self->state.client, atom::done_v);
     },
     [=](atom::erase, uuid) -> atom::done {
       FAIL("no mock implementation available");
@@ -145,8 +145,8 @@ TEST(eraser on mock INDEX) {
     sched.trigger_timeouts();
     expect((atom::run), from(aut).to(aut));
     expect((vast::query), from(aut).to(index));
-    expect((uuid, uint32_t, uint32_t),
-           from(index).to(aut).with(query_id, 7u, 3u));
+    expect((uuid, uint32_t), from(_).to(index).with(query_id, 3u));
+    expect((system::query_cursor), from(index).to(aut));
     expect((atom::done), from(_).to(aut));
     expect((uuid, uint32_t), from(aut).to(index).with(query_id, 3u));
     expect((atom::done), from(_).to(aut));

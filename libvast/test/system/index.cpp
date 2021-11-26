@@ -66,17 +66,20 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return deref<caf::stateful_actor<system::index_state>>(index).state;
   }
 
-  auto query(std::string_view expr) {
+  system::query_cursor query(std::string_view expr) {
     self->send(index,
                vast::query::make_extract(self, query::extract::preserve_ids,
                                          unbox(to<expression>(expr))));
     run();
-    std::tuple<uuid, uint32_t, uint32_t> result;
+    system::query_cursor result;
     self->receive(
-      [&](uuid& query_id, uint32_t hits, uint32_t scheduled) {
-        result = std::tie(query_id, hits, scheduled);
+      [&](const system::query_cursor& cursor) {
+        result = cursor;
       },
-      after(0s) >> [&] { FAIL("INDEX did not respond to query"); });
+      after(0s) >>
+        [&] {
+          FAIL("INDEX did not respond to query");
+        });
     return result;
   }
 
