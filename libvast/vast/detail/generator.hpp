@@ -37,6 +37,24 @@ namespace stdcoro = std::experimental;
 
 namespace vast::detail {
 
+/// A generator represents a coroutine type that produces a sequence of values
+/// of type, T, where values are produced lazily and synchronously.
+///
+/// The coroutine body is able to yield values of type T using the co_yield
+/// keyword. Note, however, that the coroutine body is not able to use the
+/// co_await keyword; values must be produced synchronously.
+///
+/// When a coroutine function returning a generator<T> is called the coroutine
+/// is created initially suspended. Execution of the coroutine enters the
+/// coroutine body when the generator<T>::begin() method is called and continues
+/// until either the first co_yield statement is reached or the coroutine runs
+/// to completion. If the returned iterator is not equal to the end() iterator
+/// then dereferencing the iterator will return a reference to the value passed
+/// to the co_yield statement. Calling operator++() on the iterator will resume
+/// execution of the coroutine and continue until either the next co_yield point
+/// is reached or the coroutine runs to completion(). Any unhandled exceptions
+/// thrown by the coroutine will propagate out of the begin() or operator++()
+/// calls to the caller.
 template <typename T>
 class generator;
 
