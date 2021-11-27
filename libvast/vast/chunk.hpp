@@ -81,7 +81,7 @@ public:
   template <class Buffer>
     requires(!std::is_lvalue_reference_v<Buffer> && //
              requires(const Buffer& buffer) {
-               { as_bytes(buffer) } -> concepts::convertible_to<view_type>;
+               { as_bytes(buffer) } -> std::convertible_to<view_type>;
              })
   static auto make(Buffer&& buffer) -> chunk_ptr {
     // Move the buffer into a unique pointer; otherwise, we might run into
@@ -106,7 +106,7 @@ public:
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
     requires requires(const Buffer& buffer) {
-      { as_bytes(buffer) } -> concepts::convertible_to<view_type>;
+      { as_bytes(buffer) } -> std::convertible_to<view_type>;
     }
   static auto copy(const Buffer& buffer) -> chunk_ptr {
     const auto view = static_cast<view_type>(as_bytes(buffer));

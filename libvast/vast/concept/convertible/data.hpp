@@ -118,12 +118,12 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
 // specializations of a converter struct template.
 #define IS_TYPED_CONVERTIBLE(from, to, type)                                   \
   requires {                                                                   \
-    { vast::convert(from, to, type) } -> concepts::same_as<caf::error>;        \
+    { vast::convert(from, to, type) } -> std::same_as<caf::error>;             \
   }
 
 #define IS_UNTYPED_CONVERTIBLE(from, to)                                       \
   requires {                                                                   \
-    { vast::convert(from, to) } -> concepts::same_as<caf::error>;              \
+    { vast::convert(from, to) } -> std::same_as<caf::error>;                   \
   }
 
 template <class T>
@@ -145,9 +145,8 @@ caf::error convert(const data& src, To& dst);
 // Generic overload when `src` and `dst` are of the same type.
 // TODO: remove the `!concepts::integral` constraint once count is a real type.
 template <class Type, class T>
-  requires(!concepts::integral<T>)
-|| concepts::same_as<bool, T> caf::error
-  convert(const T& src, T& dst, const Type&) {
+  requires(!std::integral<T>)
+|| std::same_as<bool, T> caf::error convert(const T& src, T& dst, const Type&) {
   dst = src;
   return caf::none;
 }
@@ -155,8 +154,8 @@ template <class Type, class T>
 // Dispatch to standard conversion.
 // clang-format off
 template <class From, class To, class Type>
-  requires (!concepts::same_as<From, To>) &&
-           concepts::convertible_to<From, To>
+  requires (!std::same_as<From, To>) &&
+           std::convertible_to<From, To>
 caf::error convert(const From& src, To& dst, const Type&) {
   dst = src;
   return caf::none;
@@ -531,14 +530,14 @@ caf::error convert(std::string_view src, To& dst) {
 template <class From, class To, class Type>
 concept is_concrete_typed_convertible
   = requires(const From& src, To& dst, const Type& type) {
-  { vast::convert(src, dst, type) } -> concepts::same_as<caf::error>;
+  { vast::convert(src, dst, type) } -> std::same_as<caf::error>;
 };
 
 // The same concept but this time to check for any untyped convert
 // overloads.
 template <class From, class To>
 concept is_concrete_untyped_convertible = requires(const From& src, To& dst) {
-  { vast::convert(src, dst) } -> concepts::same_as<caf::error>;
+  { vast::convert(src, dst) } -> std::same_as<caf::error>;
 };
 
 // NOTE: This overload has to be last because we need to be able to detect

@@ -65,7 +65,7 @@ concept concrete_type = requires(const T& value) {
   // The type must offer a way to get a unique type index.
   {T::type_index};
   // Values of the type must offer an `as_bytes` overload.
-  { as_bytes(value) } -> concepts::same_as<std::span<const std::byte>>;
+  { as_bytes(value) } -> std::same_as<std::span<const std::byte>>;
   // Values of the type must be able to construct the corresponding data type.
   // TODO: Consider including data.hpp and checking whether the returned value
   // is convertible to data.
