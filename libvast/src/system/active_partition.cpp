@@ -174,11 +174,12 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts, store_actor store, std::string store_id,
-  chunk_ptr header) {
+  uuid id, accountant_actor accountant, filesystem_actor filesystem,
+  caf::settings index_opts, caf::settings synopsis_opts, store_actor store,
+  std::string store_id, chunk_ptr header) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
+  self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.streaming_initiated = false;
   self->state.synopsis_opts = std::move(synopsis_opts);

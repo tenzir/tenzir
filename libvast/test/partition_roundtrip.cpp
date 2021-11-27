@@ -21,6 +21,7 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/query.hpp"
 #include "vast/system/active_partition.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/meta_index.hpp"
 #include "vast/system/passive_partition.hpp"
@@ -231,9 +232,10 @@ TEST(full partition roundtrip) {
   auto partition_uuid = vast::uuid::random();
   auto store_id = "legacy_archive";
   auto partition
-    = sys.spawn(vast::system::active_partition, partition_uuid, fs,
-                caf::settings{}, caf::settings{}, vast::system::store_actor{},
-                store_id, vast::chunk::make_empty());
+    = sys.spawn(vast::system::active_partition, partition_uuid,
+                vast::system::accountant_actor{}, fs, caf::settings{},
+                caf::settings{}, vast::system::store_actor{}, store_id,
+                vast::chunk::make_empty());
   run();
   REQUIRE(partition);
   // Add data to the partition.
@@ -273,8 +275,9 @@ TEST(full partition roundtrip) {
   auto archive = sys.spawn(dummy_store);
   // auto archive =
   // vast::system::store_actor::behavior_type::make_empty_behavior();
-  auto readonly_partition = sys.spawn(
-    vast::system::passive_partition, partition_uuid, archive, fs, persist_path);
+  auto readonly_partition
+    = sys.spawn(vast::system::passive_partition, partition_uuid,
+                vast::system::accountant_actor{}, archive, fs, persist_path);
   REQUIRE(readonly_partition);
   run();
   // A minimal `partition_client_actor`that stores the results in a local
