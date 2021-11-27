@@ -20,6 +20,7 @@
 #include "vast/logger.hpp"
 #include "vast/query.hpp"
 #include "vast/synopsis.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
@@ -358,8 +359,10 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
 }
 
 meta_index_actor::behavior_type
-meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
+meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
+           accountant_actor accountant) {
   self->state.self = self;
+  self->state.accountant = std::move(accountant);
   return {
     [=](atom::merge,
         std::shared_ptr<std::map<uuid, partition_synopsis>>& ps) -> atom::ok {

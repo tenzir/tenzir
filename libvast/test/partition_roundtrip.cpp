@@ -192,7 +192,8 @@ TEST(empty partition roundtrip) {
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
   CHECK_EQUAL(ps->offset, state.data.offset);
   CHECK_EQUAL(ps->events, state.data.events);
-  auto meta_index = self->spawn(vast::system::meta_index);
+  auto meta_index
+    = self->spawn(vast::system::meta_index, vast::system::accountant_actor{});
   auto rp = self->request(meta_index, caf::infinite, vast::atom::merge_v,
                           recovered_state.id, ps);
   run();

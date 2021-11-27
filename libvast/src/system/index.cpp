@@ -750,7 +750,8 @@ index(index_actor::stateful_pointer<index_state> self,
     }
   }
   self->state.filesystem = std::move(filesystem);
-  self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
+  self->state.meta_index
+    = self->spawn<caf::lazy_init>(meta_index, self->state.accountant);
   self->state.dir = dir;
   self->state.synopsisdir = meta_index_dir;
   self->state.partition_capacity = partition_capacity;
