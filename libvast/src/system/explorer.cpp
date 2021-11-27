@@ -139,15 +139,14 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
             return true;
         return false;
       };
-      auto timestamp_field
-        = std::optional<std::pair<record_type::field_view, offset>>{};
+      auto timestamp_leaf = std::optional<record_type::leaf_view>{};
       for (auto&& leaf : caf::get<record_type>(layout).leaves()) {
         if (is_timestamp(leaf)) {
-          timestamp_field = std::move(leaf);
+          timestamp_leaf = std::move(leaf);
           break;
         }
       }
-      if (!timestamp_field) {
+      if (!timestamp_leaf) {
         VAST_DEBUG("{} could not find timestamp field in {}", *self,
                    layout.name());
         return;
@@ -167,9 +166,9 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         }
       }
       VAST_DEBUG("{} uses {} to construct timebox", *self,
-                 timestamp_field->first.name);
+                 timestamp_leaf->field.name);
       auto column = table_slice_column{
-        slice, layout_rt.flat_index(timestamp_field->second)};
+        slice, layout_rt.flat_index(timestamp_leaf->index)};
       for (size_t i = 0; i < column.size(); ++i) {
         auto data_view = column[i];
         auto x = caf::get_if<vast::time>(&data_view);

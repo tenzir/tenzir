@@ -803,6 +803,12 @@ public:
     using basic_field::basic_field;
   };
 
+  /// A sliced view on an indexed leaf field.
+  struct leaf_view final {
+    field_view field = {}; ///< The leaf field.
+    offset index = {};     ///< The leaf field's index.
+  };
+
   /// A transformation that can be applied to a record type; maps a valid offset
   /// to a function that transforms a field into other fields.
   struct transformation {
@@ -865,8 +871,7 @@ public:
   [[nodiscard]] detail::generator<field_view> fields() const noexcept;
 
   /// Returns an iterable view over the leaf fields of a record type.
-  [[nodiscard]] detail::generator<std::pair<record_type::field_view, offset>>
-  leaves() const noexcept;
+  [[nodiscard]] detail::generator<leaf_view> leaves() const noexcept;
 
   /// Returns the numnber of fields in a record.
   [[nodiscard]] size_t num_fields() const noexcept;

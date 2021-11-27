@@ -1772,8 +1772,7 @@ record_type::fields() const noexcept {
   co_return;
 }
 
-detail::generator<std::pair<record_type::field_view, offset>>
-record_type::leaves() const noexcept {
+detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
   auto index = offset{0};
   auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
     table().type_as_record_type_v0()};
@@ -1810,13 +1809,14 @@ record_type::leaves() const noexcept {
       case fbs::type::Type::enumeration_type_v0:
       case fbs::type::Type::list_type_v0:
       case fbs::type::Type::map_type_v0: {
-        co_yield {
+        auto leaf = leaf_view{
           {
             field->name()->string_view(),
             type{table_->slice(as_bytes(*field->type()))},
           },
           index,
         };
+        co_yield std::move(leaf);
         ++index.back();
         break;
       }
