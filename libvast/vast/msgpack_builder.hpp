@@ -91,8 +91,7 @@ public:
     /// @param x The object to add.
     /// @returns The number of bytes written or 0 on failure.
     template <format ElementFormat, class T = empty, class U = empty>
-      requires(concepts::same_as<
-                 T, empty> || concepts::different<T, proxy<ElementFormat>>)
+      requires(std::same_as<T, empty> || !std::same_as<T, proxy<ElementFormat>>)
     auto add(const T& x = {}, const U& y = {}) -> size_t {
       if constexpr (std::is_same_v<InputValidationPolicy, input_validation>)
         if (size_ >= capacity<Format>())
@@ -235,8 +234,7 @@ public:
   /// @param x The object to add.
   /// @returns The number of bytes written or 0 on failure
   template <format Format, class T = empty, class U = empty>
-    requires(
-      concepts::same_as<T, empty> || concepts::different<T, proxy<Format>>)
+    requires(std::same_as<T, empty> || !std::same_as<T, proxy<Format>>)
   [[nodiscard]] auto add(const T& x = {}, const U& y = {}) -> size_t {
     if (!validate<Format>(x, y)) {
       VAST_ERROR("vast.msgpack_builder failed to validate {} of "

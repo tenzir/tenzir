@@ -139,7 +139,7 @@ public:
   /// Constructs data.
   /// @param x The instance to construct data from.
   template <class T>
-    requires(concepts::different<to_data_type<T>, detail::invalid_data_type>)
+    requires(!std::same_as<to_data_type<T>, detail::invalid_data_type>)
   data(T&& x) : data_{to_data_type<T>(std::forward<T>(x))} {
     // nop
   }
