@@ -169,7 +169,8 @@ endif ()
 # Doing so breaks non-relocatable installations, so we abort the installation
 # when encountering this.
 if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-  install(CODE "\
+  install(
+    CODE "\
     get_filename_component(build_time_prefix
       \"${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
     get_filename_component(install_time_prefix

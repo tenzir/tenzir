@@ -37,16 +37,16 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
   # prefix at build-time is different than the install prefix at install-time.
   # The macOS installation below handles this correctly, and the FreeBSD
   # installation should be adapted to work similarly.
-  configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/services/rc.d/vast.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/vast" @ONLY)
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/rc.d/vast.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/vast" @ONLY)
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/vast"
     DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/rc.d"
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   # Install launchd script on macOS into ~/Library/LaunchAgents
-  install(CODE "\
+  install(
+    CODE "\
     if (NOT IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
       string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
     endif ()
