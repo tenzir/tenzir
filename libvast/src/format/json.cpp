@@ -1063,8 +1063,10 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
             if (element.is_object()) {
               self(self, element.get_object().value(), rt, "");
             } else {
-              const auto added = builder.add(caf::none);
-              VAST_ASSERT(added);
+              for (size_t i = 0; i < rt.num_leaves(); ++i) {
+                const auto added = builder.add(caf::none);
+                VAST_ASSERT(added);
+              }
             }
           },
           [&](const auto&) {
