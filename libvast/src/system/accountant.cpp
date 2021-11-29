@@ -72,9 +72,6 @@ struct accountant_state_impl {
   /// Stores the names of known actors to fill into the actor_name column.
   std::unordered_map<caf::actor_id, std::string> actor_map;
 
-  /// Accumulates the importer throughput until the next heartbeat.
-  measurement accumulator;
-
   /// Stores the builder instance.
   table_slice_builder_ptr builder;
 
@@ -203,16 +200,6 @@ struct accountant_state_impl {
   void record(const caf::actor_id actor_id, const std::string& key, time x,
               time ts = std::chrono::system_clock::now()) {
     record(actor_id, key, x.time_since_epoch(), ts);
-  }
-
-  void command_line_heartbeat() {
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
-    if (accumulator.events > 0)
-      if (auto rate = accumulator.rate_per_sec(); std::isfinite(rate))
-        VAST_DEBUG("{} received {} events at a rate of {} events/sec", *self,
-                   accumulator.events, static_cast<uint64_t>(rate));
-#endif
-    accumulator = {};
   }
 
   void apply_config(accountant_config cfg) {
@@ -380,12 +367,6 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
             self->state->record(self->current_sender()->id(), key + ".rate",
                                 std::numeric_limits<decltype(rate)>::max(), ts);
         }
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
-        auto logger = caf::logger::current_logger();
-        if (logger && logger->verbosity() >= VAST_LOG_LEVEL_INFO)
-          if (key == "node_throughput")
-            self->state->accumulator += value;
-#endif
       }
     },
     [self](atom::status, status_verbosity v) {
@@ -401,7 +382,6 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       return result;
     },
     [self](atom::telemetry) {
-      self->state->command_line_heartbeat();
       self->delayed_send(self, overview_delay, atom::telemetry_v);
     },
     [self](atom::config, accountant_config cfg) {
