@@ -264,14 +264,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      // TODO: The index replies to expressions by manually sending back to
-      // the sender, which does not work with request(...).then(...) style of
-      // communication for typed actors. Hence, we must actor_cast here.
-      // Ideally, we would change that index handler to actually return the
-      // desired value.
-      self
-        ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
-                  self->state.query)
+      self->request(self->state.index, caf::infinite, self->state.query)
         .then(
           [=](const query_cursor& cursor) {
             VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
