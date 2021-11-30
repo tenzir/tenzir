@@ -150,7 +150,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   auto layout = slice.layout();
   auto it = self->state.checkers.find(layout);
   if (it == self->state.checkers.end()) {
-    auto x = tailor(self->state.expr, layout);
+    auto x = tailor(self->state.query.expr, layout);
     if (!x) {
       VAST_ERROR("{} failed to tailor expression: {}", *self,
                  render(x.error()));
@@ -183,7 +183,14 @@ exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options, std::vector<transform>&& transforms) {
   self->state.options = options;
-  self->state.expr = std::move(expr);
+  auto perserve_ids = has_preserve_ids_option(self->state.options)
+                        ? query::extract::preserve_ids
+                        : query::extract::drop_ids;
+  self->state.query
+    = vast::query::make_extract(self, perserve_ids, std::move(expr));
+  self->state.query.priority = has_low_priority_option(self->state.options)
+                                 ? query::priority::low
+                                 : query::priority::normal;
   self->state.transformer = transformation_engine{std::move(transforms)};
   if (has_continuous_option(options))
     VAST_DEBUG("{} has continuous query option", *self);
@@ -253,7 +260,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->monitor(self->state.sink);
     },
     [self](atom::run) {
-      VAST_VERBOSE("{} executes query: {}", *self, to_string(self->state.expr));
+      VAST_VERBOSE("{} executes query: {}", *self, self->state.query);
       self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
@@ -262,16 +269,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // communication for typed actors. Hence, we must actor_cast here.
       // Ideally, we would change that index handler to actually return the
       // desired value.
-      auto perserve_ids = has_preserve_ids_option(self->state.options)
-                            ? query::extract::preserve_ids
-                            : query::extract::drop_ids;
-      auto q = vast::query::make_extract(self, perserve_ids, self->state.expr);
-      q.priority = has_low_priority_option(self->state.options)
-                     ? query::priority::low
-                     : query::priority::normal;
       self
         ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
-                  std::move(q))
+                  self->state.query)
         .then(
           [=](const query_cursor& cursor) {
             VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
@@ -317,7 +317,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       auto result = record{};
       if (v >= status_verbosity::info) {
         record exp;
-        exp["expression"] = to_string(self->state.expr);
+        exp["expression"] = to_string(self->state.query.expr);
         if (v >= status_verbosity::detailed) {
           exp["start"] = caf::deep_to_string(self->state.start);
           auto transform_names = list{};
