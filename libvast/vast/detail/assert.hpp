@@ -31,13 +31,14 @@
 
 #else
 
+#  define VAST_ASSERT_1(expr)                                                  \
+    static_cast<void>(sizeof(decltype(expr))) // NOLINT(bugprone-*)
+
 #  define VAST_ASSERT_2(expr, msg)                                             \
     do {                                                                       \
-      static_cast<void>(sizeof(decltype(expr)));                               \
-      static_cast<void>(sizeof(decltype(msg)));                                \
+      VAST_ASSERT_1(expr);                                                     \
+      VAST_ASSERT_1(msg);                                                      \
     } while (false)
-
-#  define VAST_ASSERT_1(expr) static_cast<void>(sizeof(decltype(expr)))
 
 #endif
 
