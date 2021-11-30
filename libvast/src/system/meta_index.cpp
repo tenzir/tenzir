@@ -363,6 +363,7 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
            accountant_actor accountant) {
   self->state.self = self;
   self->state.accountant = std::move(accountant);
+  self->send(self->state.accountant, atom::announce_v, self->name());
   return {
     [=](atom::merge,
         std::shared_ptr<std::map<uuid, partition_synopsis>>& ps) -> atom::ok {
