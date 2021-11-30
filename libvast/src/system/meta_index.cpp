@@ -22,6 +22,7 @@
 #include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
@@ -400,6 +401,7 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
       if (!has_expression && !has_ids)
         return caf::make_error(ec::invalid_argument, "query had neither an "
                                                      "expression nor ids");
+      auto start = std::chrono::steady_clock::now();
       if (has_expression) {
         expression_candidates = self->state.lookup(query.expr);
       }
@@ -424,6 +426,12 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
         result = std::move(expression_candidates);
       else
         result = std::move(ids_candidates);
+      auto runtime = std::chrono::steady_clock::now() - start;
+      auto id_str = fmt::to_string(query.id);
+      self->send(self->state.accountant, "meta-index.lookup.runtime", runtime,
+                 metrics_metadata{{"query", id_str}});
+      self->send(self->state.accountant, "meta-index.lookup.candidates",
+                 result.size(), metrics_metadata{{"query", std::move(id_str)}});
       return result;
     },
     [=](atom::status, status_verbosity v) {
