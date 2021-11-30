@@ -16,6 +16,7 @@
 #include "vast/detail/coding.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/make_io_stream.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -58,7 +59,7 @@ struct accountant_state_impl {
     : self{self}, root{std::move(root)} {
     apply_config(std::move(cfg));
     actor_map[self->id()] = self->name();
-    record(self->id(), "startup", 0);
+    record(self->id(), "startup", 0, {});
   }
 
   // -- member variables -------------------------------------------------------
@@ -108,7 +109,7 @@ struct accountant_state_impl {
   }
 
   void record_internally(const caf::actor_id actor_id, const std::string& key,
-                         real x, time ts) {
+                         real x, const metrics_metadata& metadata, time ts) {
     // This is a workaround to a bug that is somewhere else -- the index cannot
     // handle NaN, and a bug that we were unable to reproduce reliably caused
     // the accountant to forward NaN to the index here.
@@ -119,27 +120,32 @@ struct accountant_state_impl {
     if (!builder) {
       auto layout = type{
         "vast.metrics",
-        record_type{
-          {"ts", type{"timestamp", time_type{}}},
-          {"actor", string_type{}},
-          {"key", string_type{}},
-          {"version", string_type{}},
-          {"value", real_type{}},
-        },
+        record_type{{"ts", type{"timestamp", time_type{}}},
+                    {"version", string_type{}},
+                    {"actor", string_type{}},
+                    {"key", string_type{}},
+                    {"value", real_type{}},
+                    {"metadata", map_type{string_type{}, string_type{}}}},
       };
       builder
         = factory<table_slice_builder>::make(cfg.self_sink.slice_type, layout);
       VAST_DEBUG("{} obtained a table slice builder", *self);
     }
-    const auto added = builder->add(ts, actor_map[actor_id], key,
-                                    std::string_view{version::version}, x);
+    map meta = {};
+    meta.reserve(metadata.size());
+    for (const auto& [meta_key, meta_value] : metadata) {
+      meta.insert({meta_key, meta_value});
+    }
+    const auto added = builder->add(ts, std::string_view{version::version},
+                                    actor_map[actor_id], key, x, meta);
     VAST_ASSERT(added);
     if (builder->rows() == static_cast<size_t>(cfg.self_sink.slice_size))
       finish_slice();
   }
 
-  std::vector<char> to_json_line(const caf::actor_id actor_id, time ts,
-                                 const std::string& key, real x) {
+  std::vector<char>
+  to_json_line(const caf::actor_id actor_id, time ts, const std::string& key,
+               real x, const metrics_metadata& metadata) {
     using namespace std::string_view_literals;
     json_printer<policy::oneline, policy::human_readable_durations> printer;
     std::vector<char> buf;
@@ -147,15 +153,21 @@ struct accountant_state_impl {
     *iter++ = '{';
     printer.print(iter, std::pair{"ts"sv, make_data_view(ts)});
     *iter++ = ',';
+    printer.print(iter, std::pair{"version"sv, make_data_view(std::string_view{
+                                                 version::version})});
+    *iter++ = ',';
     printer.print(iter,
                   std::pair{"actor"sv, make_data_view(actor_map[actor_id])});
     *iter++ = ',';
     printer.print(iter, std::pair{"key"sv, make_data_view(key)});
     *iter++ = ',';
-    printer.print(iter, std::pair{"version"sv, make_data_view(std::string_view{
-                                                 version::version})});
-    *iter++ = ',';
     printer.print(iter, std::pair{"value"sv, make_data_view(x)});
+    for (const auto& [meta_key, meta_value] : metadata) {
+      *iter++ = ',';
+      printer.print(iter, meta_key);
+      *iter++ = ':';
+      printer.print(iter, meta_value);
+    }
     *iter++ = '}';
     *iter++ = '\n';
     return buf;
@@ -163,8 +175,9 @@ struct accountant_state_impl {
 
   std::ostream&
   record_to_output(const caf::actor_id actor_id, const std::string& key, real x,
-                   time ts, std::ostream& os, bool real_time) {
-    auto buf = to_json_line(actor_id, ts, key, x);
+                   const metrics_metadata& metadata, time ts, std::ostream& os,
+                   bool real_time) {
+    auto buf = to_json_line(actor_id, ts, key, x, metadata);
     os.write(buf.data(), buf.size());
     if (real_time)
       os << std::flush;
@@ -173,33 +186,39 @@ struct accountant_state_impl {
 
   void
   record_to_unix_datagram(const caf::actor_id actor_id, const std::string& key,
-                          real x, time ts, detail::uds_datagram_sender& dest) {
-    auto buf = to_json_line(actor_id, ts, key, x);
+                          real x, const metrics_metadata& metadata, time ts,
+                          detail::uds_datagram_sender& dest) {
+    auto buf = to_json_line(actor_id, ts, key, x, metadata);
     dest.send(buf);
   }
 
   void record(const caf::actor_id actor_id, const std::string& key, real x,
+              const metrics_metadata& metadata,
               time ts = std::chrono::system_clock::now()) {
     if (cfg.self_sink.enable)
-      record_internally(actor_id, key, x, ts);
+      record_internally(actor_id, key, x, metadata, ts);
     if (file_sink)
-      record_to_output(actor_id, key, x, ts, *file_sink,
+      record_to_output(actor_id, key, x, metadata, ts, *file_sink,
                        cfg.file_sink.real_time);
     if (uds_sink)
-      record_to_output(actor_id, key, x, ts, *uds_sink, cfg.uds_sink.real_time);
+      record_to_output(actor_id, key, x, metadata, ts, *uds_sink,
+                       cfg.uds_sink.real_time);
     if (uds_datagram_sink)
-      record_to_unix_datagram(actor_id, key, x, ts, *uds_datagram_sink);
+      record_to_unix_datagram(actor_id, key, x, metadata, ts,
+                              *uds_datagram_sink);
   }
 
   void record(const caf::actor_id actor_id, const std::string& key, duration x,
+              const metrics_metadata& metadata,
               time ts = std::chrono::system_clock::now()) {
     auto ms = std::chrono::duration<double, std::milli>{x}.count();
-    record(actor_id, key, ms, std::move(ts));
+    record(actor_id, key, ms, metadata, ts);
   }
 
   void record(const caf::actor_id actor_id, const std::string& key, time x,
+              const metrics_metadata& metadata,
               time ts = std::chrono::system_clock::now()) {
-    record(actor_id, key, x.time_since_epoch(), ts);
+    record(actor_id, key, x.time_since_epoch(), metadata, ts);
   }
 
   void apply_config(accountant_config cfg) {
@@ -265,7 +284,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
     self->state->finish_slice();
-    self->state->record(self->id(), "shutdown", 0);
+    self->state->record(self->id(), "shutdown", 0, {});
     self->quit(msg.reason);
   });
   self->set_down_handler([=](const caf::down_msg& msg) {
@@ -310,38 +329,40 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         st.mgr->add_outbound_path(self->current_sender(),
                                   std::make_tuple(std::string{"accountant"}));
     },
-    [self](const std::string& key, duration value) {
+    [self](const std::string& key, duration value, metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
-      self->state->record(self->current_sender()->id(), key, value);
+      self->state->record(self->current_sender()->id(), key, value, metadata);
     },
-    [self](const std::string& key, time value) {
+    [self](const std::string& key, time value, metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
-      self->state->record(self->current_sender()->id(), key, value);
+      self->state->record(self->current_sender()->id(), key, value, metadata);
     },
-    [self](const std::string& key, integer value) {
+    [self](const std::string& key, integer value, metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
-      self->state->record(self->current_sender()->id(), key, value.value);
+      self->state->record(self->current_sender()->id(), key, value.value,
+                          metadata);
     },
-    [self](const std::string& key, count value) {
+    [self](const std::string& key, count value, metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
-      self->state->record(self->current_sender()->id(), key, value);
+      self->state->record(self->current_sender()->id(), key, value, metadata);
     },
-    [self](const std::string& key, real value) {
+    [self](const std::string& key, real value, metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
-      self->state->record(self->current_sender()->id(), key, value);
+      self->state->record(self->current_sender()->id(), key, value, metadata);
     },
     [self](const report& r) {
       VAST_TRACE_SCOPE("{} received a report from {}", *self,
                        self->current_sender());
       time ts = std::chrono::system_clock::now();
-      for (const auto& [key, value] : r) {
+      for (const auto& [key, value] : r.data) {
         auto f = [&, key = key](const auto& x) {
-          self->state->record(self->current_sender()->id(), key, x, ts);
+          self->state->record(self->current_sender()->id(), key, x, r.metadata,
+                              ts);
         };
         caf::visit(f, value);
       }
@@ -350,22 +371,24 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       VAST_TRACE_SCOPE("{} received a performance report from {}", *self,
                        self->current_sender());
       time ts = std::chrono::system_clock::now();
-      for (const auto& [key, value] : r) {
+      for (const auto& [key, value] : r.data) {
         self->state->record(self->current_sender()->id(), key + ".events",
-                            value.events, ts);
+                            detail::narrow_cast<real>(value.events), r.metadata,
+                            ts);
         self->state->record(self->current_sender()->id(), key + ".duration",
-                            value.duration, ts);
+                            value.duration, r.metadata, ts);
         if (value.events == 0) {
           self->state->record(self->current_sender()->id(), key + ".rate", 0.0,
-                              ts);
+                              r.metadata, ts);
         } else {
           auto rate = value.rate_per_sec();
           if (std::isfinite(rate))
             self->state->record(self->current_sender()->id(), key + ".rate",
-                                rate, ts);
+                                rate, r.metadata, ts);
           else
             self->state->record(self->current_sender()->id(), key + ".rate",
-                                std::numeric_limits<decltype(rate)>::max(), ts);
+                                std::numeric_limits<decltype(rate)>::max(),
+                                r.metadata, ts);
         }
       }
     },

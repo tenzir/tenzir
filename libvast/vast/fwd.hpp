@@ -282,15 +282,14 @@ struct component_state_map;
 struct data_point;
 struct measurement;
 struct node_state;
+struct performance_report;
 struct performance_sample;
 struct query_cursor;
 struct query_status;
+struct report;
 struct spawn_arguments;
 
 enum class status_verbosity;
-
-using performance_report = std::vector<performance_sample>;
-using report = std::vector<data_point>;
 
 } // namespace system
 

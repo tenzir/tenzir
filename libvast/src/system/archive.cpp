@@ -33,7 +33,7 @@ namespace vast::system {
 void archive_state::send_report() {
   auto r = performance_report{{{std::string{name}, measurement}}};
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
-  for (const auto& [key, m] : r) {
+  for (const auto& [key, m] : r.data) {
     if (auto rate = m.rate_per_sec(); std::isfinite(rate))
       VAST_DEBUG("{} handled {} events at a rate of {} events/sec in "
                  "{}",

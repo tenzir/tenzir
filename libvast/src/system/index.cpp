@@ -598,12 +598,12 @@ void index_state::decomission_active_partition() {
 // -- introspection ----------------------------------------------------------
 
 void index_state::send_report() {
-  auto msg = report{
-    {"query.backlog.normal", backlog.normal.size()},
-    {"query.backlog.low", backlog.low.size()},
-    {"query.workers.idle", idle_workers.size()},
-    {"query.workers.busy", workers - idle_workers.size()},
-  };
+  auto msg = report{.data = {
+                      {"query.backlog.normal", backlog.normal.size()},
+                      {"query.backlog.low", backlog.low.size()},
+                      {"query.workers.idle", idle_workers.size()},
+                      {"query.workers.busy", workers - idle_workers.size()},
+                    }};
   self->send(accountant, msg);
 }
 
