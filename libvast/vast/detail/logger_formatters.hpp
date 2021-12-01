@@ -196,8 +196,7 @@ struct formatter<caf::error> {
 };
 
 template <class T>
-struct formatter<std::span<T>, format_context::char_type,
-                 std::enable_if_t<vast::concepts::different<T, std::byte>>> {
+struct formatter<std::span<T>> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();

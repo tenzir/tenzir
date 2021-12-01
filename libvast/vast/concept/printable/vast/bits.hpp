@@ -27,7 +27,7 @@ struct bits_printer : printer_base<bits_printer<T, Policy>> {
   using attribute = bits<T>;
   using word_type = typename bits<T>::word_type;
 
-  template <class Iterator, concepts::same_as<policy::rle> P = Policy>
+  template <class Iterator, std::same_as<policy::rle> P = Policy>
   auto print(Iterator& out, const bits<T>& b) const -> bool {
     auto print_run = [&](auto bit, auto length) {
       using size_type = typename word_type::size_type;
@@ -57,7 +57,7 @@ struct bits_printer : printer_base<bits_printer<T, Policy>> {
     return true;
   }
 
-  template <class Iterator, concepts::same_as<policy::expanded> P = Policy>
+  template <class Iterator, std::same_as<policy::expanded> P = Policy>
   auto print(Iterator& out, const bits<T>& b) const -> bool {
     if (b.size() > word_type::width) {
       auto c = b.data() ? '1' : '0';
