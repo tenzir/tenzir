@@ -12,8 +12,9 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/operator.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/test/test.hpp"
 #include "vast/value_index_factory.hpp"
@@ -26,7 +27,7 @@ using namespace vast::si_literals;
 
 TEST(string) {
   // This one-byte parameterization creates a collision for "foo" and "bar".
-  hash_index<1> idx{legacy_string_type{}};
+  hash_index<1> idx{type{string_type{}}};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view("foo")));
   REQUIRE(idx.append(make_data_view("bar")));
@@ -45,14 +46,14 @@ TEST(string) {
 }
 
 TEST(serialization) {
-  hash_index<1> x{legacy_string_type{}};
+  hash_index<1> x{type{string_type{}}};
   REQUIRE(x.append(make_data_view("foo")));
   REQUIRE(x.append(make_data_view("bar")));
   REQUIRE(x.append(make_data_view("baz")));
   std::vector<char> buf;
   REQUIRE(detail::serialize(buf, x) == caf::none);
-  hash_index<1> y{legacy_string_type{}};
-  REQUIRE(detail::deserialize(buf, y) == caf::none);
+  hash_index<1> y{type{string_type{}}};
+  REQUIRE(detail::legacy_deserialize(buf, y));
   auto result = y.lookup(relational_operator::not_equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "101");
   // Cannot append after deserialization.
@@ -62,7 +63,7 @@ TEST(serialization) {
 // The attribute #index=hash selects the hash_index implementation.
 TEST(factory construction and parameterization) {
   factory<value_index>::initialize();
-  auto t = legacy_string_type{}.attributes({{"index", "hash"}});
+  auto t = type{string_type{}, {{"index", "hash"}}};
   caf::settings opts;
   MESSAGE("test cardinality that is a power of 2");
   opts["cardinality"] = 1_Ki;
@@ -83,7 +84,7 @@ TEST(factory construction and parameterization) {
 
 TEST(hash index for integer) {
   factory<value_index>::initialize();
-  auto t = legacy_integer_type{}.attributes({{"index", "hash"}});
+  auto t = type{integer_type{}, {{"index", "hash"}}};
   caf::settings opts;
   opts["cardinality"] = 1_Ki;
   auto idx = factory<value_index>::make(t, opts);
@@ -100,8 +101,7 @@ TEST(hash index for integer) {
 
 TEST(hash index for list) {
   factory<value_index>::initialize();
-  auto t
-    = legacy_list_type{legacy_address_type{}}.attributes({{"index", "hash"}});
+  auto t = type{list_type{address_type{}}, {{"index", "hash"}}};
   auto idx = factory<value_index>::make(t, caf::settings{});
   REQUIRE(idx != nullptr);
   auto xs = list{integer{1}, integer{2}, integer{3}};

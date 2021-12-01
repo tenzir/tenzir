@@ -25,7 +25,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
 #include <type_traits>
@@ -149,8 +148,9 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
       return memoized_partitions;
     memoized_partitions.reserve(synopses.size());
     std::transform(synopses.begin(), synopses.end(),
-                   std::back_inserter(memoized_partitions),
-                   [](auto& x) { return x.first; });
+                   std::back_inserter(memoized_partitions), [](auto& x) {
+                     return x.first;
+                   });
     std::sort(memoized_partitions.begin(), memoized_partitions.end());
     return memoized_partitions;
   };
@@ -198,8 +198,8 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
     [&](const predicate& x) -> result_type {
       // Performs a lookup on all *matching* synopses with operator and
       // data from the predicate of the expression. The match function
-      // uses a qualified_record_field to determine whether the synopsis should
-      // be queried.
+      // uses a qualified_record_field to determine whether the synopsis
+      // should be queried.
       auto search = [&](auto match) {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
         const auto& rhs = caf::get<data>(x.rhs);
@@ -207,7 +207,13 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         for (const auto& [part_id, part_syn] : synopses) {
           for (const auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
-              auto cleaned_type = vast::legacy_type{field.type}.attributes({});
+              // We need to prune the type's metadata here by converting it to a
+              // concrete type and back, because the type synopses are looked up
+              // independent from names and attributes.
+              auto prune = [&]<concrete_type T>(const T& x) {
+                return type{x};
+              };
+              auto cleaned_type = caf::visit(prune, field.type());
               // We rely on having a field -> nullptr mapping here for the
               // fields that don't have their own synopsis.
               if (syn) {
@@ -252,13 +258,12 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
             // at the layout names.
             result_type result;
             for (const auto& [part_id, part_syn] : synopses) {
-              for (const auto& pair : part_syn.field_synopses_) {
+              for (const auto& [fqf, _] : part_syn.field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
                 // short, so we're probably not hitting the allocator due to
                 // SSO.
-                auto type_name = data{pair.first.layout_name};
-                if (evaluate(type_name, x.op, d)) {
+                if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
                   result.push_back(part_id);
                   break;
                 }
@@ -279,8 +284,8 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 // Compare the desired field name with each field in the
                 // partition.
                 auto matching = [&] {
-                  for (const auto& pair : synopsis.second.field_synopses_) {
-                    if (const auto fqn = pair.first.fqn(); fqn.ends_with(*s))
+                  for (const auto& [fqf, _] : synopsis.second.field_synopses_) {
+                    if (fqf.name().ends_with(*s))
                       return true;
                   }
                   return false;
@@ -301,36 +306,34 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         },
         [&](const field_extractor& lhs, const data&) -> result_type {
           auto pred = [&](const auto& field) {
-            return field.fqn().ends_with(lhs.field);
+            return field.name().ends_with(lhs.field);
           };
           return search(pred);
         },
         [&](const type_extractor& lhs, const data& d) -> result_type {
           auto result = [&] {
-            if (caf::holds_alternative<legacy_none_type>(lhs.type)) {
+            if (caf::holds_alternative<none_type>(lhs.type)) {
               VAST_ASSERT(!lhs.type.name().empty());
               auto pred = [&](auto& field) {
-                const auto* p = &field.type;
-                while (const auto* a = caf::get_if<legacy_alias_type>(p)) {
-                  if (a->name() == lhs.type.name())
-                    return compatible(*a, x.op, d);
-                  p = &a->value_type;
-                }
-                if (p->name() == lhs.type.name())
-                  return compatible(*p, x.op, d);
+                const auto type = field.type();
+                for (const auto& name : type.names())
+                  if (name == lhs.type.name())
+                    return compatible(type, x.op, d);
                 return false;
               };
               return search(pred);
             }
-            auto pred
-              = [&](auto& field) { return congruent(field.type, lhs.type); };
+            auto pred = [&](auto& field) {
+              return congruent(field.type(), lhs.type);
+            };
             return search(pred);
           }();
           // Preserve compatibility with databases that were created beore
           // the #timestamp attribute was removed.
           if (lhs.type.name() == "timestamp") {
             auto pred = [](auto& field) {
-              return has_attribute(field.type, "timestamp");
+              const auto type = field.type();
+              return type.attribute("timestamp").has_value();
             };
             detail::inplace_unify(result, search(pred));
           }

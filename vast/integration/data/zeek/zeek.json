@@ -32,3 +32,5 @@
 {"_path":"tunnel","_system_name":"sensor_10_0_0_2","_write_ts":"2020-04-01T16:20:34.146738Z","ts":"2020-04-01T16:20:34.146738Z","uid":"C0XkrZ2SPxmCCyNPGc","id.orig_h":"192.88.99.1","id.orig_p":0,"id.resp_h":"141.9.8.86","id.resp_p":0,"tunnel_type":"Tunnel::IP","action":"Tunnel::DISCOVER"}
 {"_path":"weird","_system_name":"sensor_10_0_0_2","_write_ts":"2020-04-01T16:19:47.135801Z","ts":"2020-04-01T16:19:47.135801Z","uid":"Cdb8303OaXpyiNDlui","id.orig_h":"150.107.75.221","id.orig_p":3739,"id.resp_h":"141.9.105.209","id.resp_p":21,"name":"SYN_seq_jump","notice":false}
 {"_path":"weird.123.190","id.orig_p":54481,"id.resp_h":"141.9.20.185","id.resp_p":53,"proto":"udp","trans_id":32952,"query":"researchscan541.eecs.umich.edu","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","AA":false,"TC":false,"RD":true,"RA":false,"Z":0,"rejected":false}
+{"_path":"conn","id.orig_h":"45.58.146.42","id.orig_p":51472,"id.resp_h":"141.9.217.210","id.resp_p":161}
+{"_path":"conn","id.orig_h":"45.58.146.42","id.orig_p":51472,"id.resp_h":"141.9.217.223","id":0}

@@ -9,23 +9,26 @@
 #include "vast/synopsis.hpp"
 
 #include "vast/bool_synopsis.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/time_synopsis.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
+#include <caf/deserializer.hpp>
 #include <caf/error.hpp>
+#include <caf/sec.hpp>
 
 #include <typeindex>
 
 namespace vast {
 
-synopsis::synopsis(vast::legacy_type x) : type_{std::move(x)} {
+synopsis::synopsis(vast::type x) : type_{std::move(x)} {
   // nop
 }
 
@@ -33,7 +36,7 @@ synopsis::~synopsis() {
   // nop
 }
 
-const vast::legacy_type& synopsis::type() const {
+const vast::type& synopsis::type() const {
   return type_;
 }
 
@@ -47,8 +50,12 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
     return sink(dummy);
   }
   return caf::error::eval(
-    [&] { return sink(ptr->type()); },
-    [&] { return ptr->serialize(sink); });
+    [&] {
+      return sink(ptr->type().to_legacy_type());
+    },
+    [&] {
+      return ptr->serialize(sink);
+    });
 }
 
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
@@ -62,7 +69,8 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
     return caf::none;
   }
   // Deserialize into a new instance.
-  auto new_ptr = factory<synopsis>::make(std::move(t), caf::settings{});
+  auto new_ptr
+    = factory<synopsis>::make(type::from_legacy_type(t), caf::settings{});
   if (!new_ptr)
     return ec::invalid_synopsis_type;
   if (auto err = new_ptr->deserialize(source))
@@ -73,14 +81,34 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   return caf::none;
 }
 
+bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr) {
+  // Read synopsis type.
+  legacy_type t;
+  if (!source(t))
+    return false;
+  // Only nullptr has a none type.
+  if (!t) {
+    ptr.reset();
+    return true;
+  }
+  // Deserialize into a new instance.
+  auto new_ptr
+    = factory<synopsis>::make(type::from_legacy_type(t), caf::settings{});
+  if (!new_ptr || !new_ptr->deserialize(source))
+    return false;
+  // Change `ptr` only after successfully deserializing.
+  std::swap(ptr, new_ptr);
+  return true;
+}
+
 caf::expected<flatbuffers::Offset<fbs::synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
      const qualified_record_field& fqf) {
   auto column_name = fbs::serialize_bytes(builder, fqf);
   if (!column_name)
     return column_name.error();
-  auto ptr = synopsis.get();
-  if (auto tptr = dynamic_cast<time_synopsis*>(ptr)) {
+  auto* ptr = synopsis.get();
+  if (auto* tptr = dynamic_cast<time_synopsis*>(ptr)) {
     auto min = tptr->min().time_since_epoch().count();
     auto max = tptr->max().time_since_epoch().count();
     fbs::time_synopsis::v0 time_synopsis(min, max);
@@ -88,7 +116,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
     synopsis_builder.add_qualified_record_field(*column_name);
     synopsis_builder.add_time_synopsis(&time_synopsis);
     return synopsis_builder.Finish();
-  } else if (auto bptr = dynamic_cast<bool_synopsis*>(ptr)) {
+  }
+  if (auto* bptr = dynamic_cast<bool_synopsis*>(ptr)) {
     fbs::bool_synopsis::v0 bool_synopsis(bptr->any_true(), bptr->any_false());
     fbs::synopsis::v0Builder synopsis_builder(builder);
     synopsis_builder.add_qualified_record_field(*column_name);
@@ -118,11 +147,10 @@ caf::error unpack(const fbs::synopsis::v0& synopsis, synopsis_ptr& ptr) {
       vast::time{} + vast::duration{ts->start()},
       vast::time{} + vast::duration{ts->end()});
   else if (auto os = synopsis.opaque_synopsis()) {
-    caf::binary_deserializer sink(
-      nullptr, reinterpret_cast<const char*>(os->data()->data()),
-      os->data()->size());
-    if (auto error = sink(ptr))
-      return error;
+    vast::detail::legacy_deserializer sink(as_bytes(*os->data()));
+    if (!sink(ptr))
+      return caf::make_error(ec::parse_error, "opaque_synopsis not "
+                                              "deserializable");
   } else {
     return caf::make_error(ec::format_error, "no synopsis type");
   }

@@ -18,3 +18,11 @@ instead of `time`, or annotate them with additional attributes, such as `#skip`.
 If no type prefix is specified with `--type` / `-t`, or multiple types match
 based on the prefix, VAST uses an exact match based on the field names to
 automatically deduce the event type for every line in the input.
+
+As an alternative to matching based on the field names, the option `--selector`
+allows for specifying a colon-separated field name to type prefix mapping that
+allows for selecting the event type based on the value of a field that has to
+be present in the data. E.g., `vast import json --selector=event_type:suricata`
+is equivalent to the older `vast import suricata`, and reads the value from the
+field `event_type`, prefixes it with `suricata.` and uses that as the layout of
+the JSONL row.

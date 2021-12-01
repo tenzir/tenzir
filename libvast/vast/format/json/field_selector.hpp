@@ -10,6 +10,7 @@
 
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/format/json/selector.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
@@ -18,21 +19,23 @@
 
 namespace vast::format::json {
 
-template <class Specification>
-struct field_selector {
-  field_selector() {
-    // nop
+struct field_selector final : selector {
+  /// Constructs a field selector given a field name and a type prefix.
+  /// @pre `!field_name.empty()`
+  inline field_selector(std::string field_name, std::string type_prefix)
+    : field_name_{std::move(field_name)}, type_prefix_{std::move(type_prefix)} {
+    VAST_ASSERT(!field_name_.empty());
   }
 
-  std::optional<vast::legacy_record_type>
-  operator()(const ::simdjson::dom::object& j) {
-    auto el = j.at_key(Specification::field);
-    if (el.error())
+  inline std::optional<vast::type>
+  operator()(const ::simdjson::dom::object& j) const override {
+    auto el = j.at_key(field_name_);
+    if (el.error() != ::simdjson::error_code::SUCCESS)
       return {};
     auto event_type = el.value().get_string();
-    if (event_type.error()) {
+    if (event_type.error() != ::simdjson::error_code::SUCCESS) {
       VAST_WARN("{} got a {} field with a non-string value",
-                detail::pretty_type_name(this), Specification::field);
+                detail::pretty_type_name(this), field_name_);
       return {};
     }
     auto field = std::string{event_type.value()};
@@ -41,44 +44,49 @@ struct field_selector {
       // Keep a list of failed keys to avoid spamming the user with warnings.
       if (unknown_types.insert(field).second)
         VAST_WARN("{} does not have a layout for {} {}",
-                  detail::pretty_type_name(this), Specification::field, field);
+                  detail::pretty_type_name(this), field_name_, field);
       return {};
     }
     return it->second;
   }
 
-  caf::error schema(const vast::schema& s) {
-    for (auto& t : s) {
-      auto sn = detail::split(t.name(), ".");
-      if (sn.size() != 2)
+  inline caf::error schema(const vast::schema& s) override {
+    for (const auto& t : s) {
+      if (!caf::holds_alternative<record_type>(t))
         continue;
-      auto r = caf::get_if<legacy_record_type>(&t);
-      if (!r)
-        continue;
-      if (sn[0] == Specification::prefix)
-        // The temporary string can be dropped with c++20.
-        // See https://wg21.link/p0919.
-        types[std::string{sn[1]}] = *r;
+      const auto type_name = t.name();
+      const auto [name_mismatch, prefix_mismatch]
+        = std::mismatch(type_name.begin(), type_name.end(),
+                        type_prefix_.begin(), type_prefix_.end());
+      if (prefix_mismatch == type_prefix_.end()
+          && name_mismatch != type_name.end() && *name_mismatch == '.') {
+        const auto remaining_name
+          = type_name.substr(1 + name_mismatch - type_name.begin());
+        types.emplace(remaining_name, t);
+      }
     }
     return caf::none;
   }
 
-  vast::schema schema() const {
+  inline vast::schema schema() const override {
     vast::schema result;
-    for (auto& [key, value] : types)
+    for (const auto& [key, value] : types)
       result.add(value);
     return result;
   }
 
-  static const char* name() {
-    return Specification::name;
-  }
+private:
+  /// The field that contains the event name.
+  std::string field_name_ = {};
+
+  /// The prefix of the event name type.
+  std::string type_prefix_ = {};
 
   /// A map of all seen types.
-  std::unordered_map<std::string, legacy_record_type> types;
+  std::unordered_map<std::string, type> types = {};
 
   /// A set of all unknown types; used to avoid printing duplicate warnings.
-  std::unordered_set<std::string> unknown_types;
+  mutable std::unordered_set<std::string> unknown_types = {};
 };
 
 } // namespace vast::format::json

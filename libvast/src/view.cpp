@@ -10,7 +10,8 @@
 
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/operator.hpp"
+#include "vast/type.hpp"
 
 #include <algorithm>
 #include <regex>
@@ -50,8 +51,9 @@ bool operator<(pattern_view x, pattern_view y) noexcept {
 }
 
 bool is_equal(const data& x, const data_view& y) {
-  auto pred
-    = [](const auto& lhs, const auto& rhs) { return is_equal(lhs, rhs); };
+  auto pred = [](const auto& lhs, const auto& rhs) {
+    return is_equal(lhs, rhs);
+  };
   auto f = detail::overload{
     [&](const auto& lhs, const auto& rhs) {
       using lhs_type = std::decay_t<decltype(lhs)>;
@@ -135,7 +137,11 @@ default_record_view::size_type default_record_view::size() const noexcept {
 // -- make_view ---------------------------------------------------------------
 
 data_view make_view(const data& x) {
-  return caf::visit([](const auto& z) { return make_data_view(z); }, x);
+  return caf::visit(
+    [](const auto& z) {
+      return make_data_view(z);
+    },
+    x);
 }
 
 // -- materialization ----------------------------------------------------------
@@ -182,60 +188,93 @@ record materialize(record_view_handle xs) {
 }
 
 data materialize(data_view x) {
-  return caf::visit([](auto y) { return data{materialize(y)}; }, x);
+  return caf::visit(
+    [](auto y) {
+      return data{materialize(y)};
+    },
+    x);
 }
 
 // WARNING: making changes to the logic of this function requires adapting the
 // companion overload in type.cpp.
-bool type_check(const legacy_type& t, const data_view& x) {
+bool type_check(const type& x, const data_view& y) {
   auto f = detail::overload{
-    [&](const auto& u) {
-      using data_type = type_to_data<std::decay_t<decltype(u)>>;
-      return caf::holds_alternative<view<data_type>>(x);
-    },
-    [&](const legacy_none_type&) {
-      // Cannot determine data type since data may always be null.
+    [&](const none_type&, const auto&) {
+      // Cannot determine data type since data may always be
+      // null.
       return true;
     },
-    [&](const legacy_enumeration_type& u) {
-      auto e = caf::get_if<view<enumeration>>(&x);
-      return e && *e < u.fields.size();
+    [&](const auto&, const view<caf::none_t>&) {
+      // Every type can be assigned nil.
+      return true;
     },
-    [&](const legacy_list_type& u) {
-      auto v = caf::get_if<view<list>>(&x);
-      if (!v)
-        return false;
-      auto& xs = **v;
-      return xs.empty() || type_check(u.value_type, xs.at(0));
+    [&](const none_type&, const view<caf::none_t>&) {
+      return true;
     },
-    [&](const legacy_map_type& u) {
-      auto v = caf::get_if<view<map>>(&x);
-      if (!v)
-        return false;
-      auto& xs = **v;
-      if (xs.empty())
+    [&](const enumeration_type& t, const view<enumeration>& u) {
+      return !t.field(u).empty();
+    },
+    [&](const list_type& t, const view<list>& u) {
+      if (u.empty())
         return true;
-      auto [key, value] = xs.at(0);
-      return type_check(u.key_type, key) && type_check(u.value_type, value);
+      const auto vt = t.value_type();
+      auto it = u.begin();
+      const auto check = [&](const auto& d) noexcept {
+        return type_check(vt, d);
+      };
+      if (check(*it)) {
+        // Technically lists can contain heterogenous data,
+        // but for optimization purposes we only check the
+        // first element when assertions are disabled.
+        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
+                    "expected a homogenous list");
+        return true;
+      }
+      return false;
     },
-    [&](const legacy_record_type& u) {
-      // Until we have a separate data type for records we treat them as list.
-      auto v = caf::get_if<view<list>>(&x);
-      if (!v)
+    [&](const map_type& t, const view<map>& u) {
+      if (u.empty())
+        return true;
+      const auto kt = t.key_type();
+      const auto vt = t.value_type();
+      auto it = u.begin();
+      const auto check = [&](const auto& d) noexcept {
+        return type_check(kt, d.first) && type_check(vt, d.second);
+      };
+      if (check(*it)) {
+        // Technically maps can contain heterogenous data,
+        // but for optimization purposes we only check the
+        // first element when assertions are disabled.
+        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
+                    "expected a homogenous map");
+        return true;
+      }
+      return false;
+    },
+    [&](const record_type& t, const view<record>& u) {
+      auto tf = t.fields();
+      if (u.size() != tf.size())
         return false;
-      auto& xs = **v;
-      if (xs.size() != u.fields.size())
-        return false;
-      for (size_t i = 0; i < xs.size(); ++i)
-        if (!type_check(u.fields[i].type, xs.at(i)))
+      for (size_t i = 0; const auto& [k, v] : u) {
+        const auto field = tf[i++];
+        if (field.name != k || type_check(field.type, v))
           return false;
+      }
       return true;
     },
-    [&](const legacy_alias_type& u) {
-      return type_check(u.value_type, x);
+    [&]<basic_type T, class U>(const T&, const U&) {
+      // For basic types we can solely rely on the result of
+      // construct.
+      return std::is_same_v<view<type_to_data_t<T>>, U>;
+    },
+    [&]<complex_type T, class U>(const T&, const U&) {
+      // We don't have a matching overload.
+      static_assert(!std::is_same_v<view<type_to_data_t<T>>, U>, //
+                    "missing type check overload");
+      return false;
     },
   };
-  return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
+  return caf::visit(f, x, y);
 }
 
 namespace {
@@ -262,13 +301,13 @@ struct contains_predicate {
     }
   }
 
-  bool operator()(const view<std::string>& lhs,
-                  const view<std::string>& rhs) const {
+  bool
+  operator()(const view<std::string>& lhs, const view<std::string>& rhs) const {
     return rhs.find(lhs) != std::string::npos;
   }
 
-  bool operator()(const view<std::string>& lhs,
-                  const view<pattern>& rhs) const {
+  bool
+  operator()(const view<std::string>& lhs, const view<pattern>& rhs) const {
     return rhs.search(lhs);
   }
 
@@ -287,7 +326,9 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
                    const data_view& rhs) {
   auto check_match = [](const auto& x, const auto& y) {
     return caf::visit(detail::overload{
-                        [](auto, auto) { return false; },
+                        [](auto, auto) {
+                          return false;
+                        },
                         [](view<std::string>& lhs, view<pattern> rhs) {
                           return rhs.match(lhs);
                         },
@@ -328,13 +369,12 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
   }
 }
 
-data_view to_canonical(const legacy_type& t, const data_view& x) {
+data_view to_canonical(const type& t, const data_view& x) {
   auto v = detail::overload{
-    [](const view<enumeration>& x,
-       const legacy_enumeration_type& t) -> data_view {
-      if (materialize(x) >= t.fields.size())
-        return caf::none;
-      return make_view(t.fields[materialize(x)]);
+    [](const view<enumeration>& x, const enumeration_type& t) -> data_view {
+      if (auto result = t.field(materialize(x)); !result.empty())
+        return result;
+      return caf::none;
     },
     [&](auto&, auto&) {
       return x;
@@ -343,15 +383,12 @@ data_view to_canonical(const legacy_type& t, const data_view& x) {
   return caf::visit(v, x, t);
 }
 
-data_view to_internal(const legacy_type& t, const data_view& x) {
+data_view to_internal(const type& t, const data_view& x) {
   auto v = detail::overload{
-    [](const view<std::string>& s,
-       const legacy_enumeration_type& t) -> data_view {
-      auto i = std::find(t.fields.begin(), t.fields.end(), s);
-      if (i == t.fields.end())
-        return caf::none;
-      return detail::narrow_cast<enumeration>(
-        std::distance(t.fields.begin(), i));
+    [](const view<std::string>& s, const enumeration_type& t) -> data_view {
+      if (auto key = t.resolve(s))
+        return detail::narrow_cast<enumeration>(*key);
+      return caf::none;
     },
     [&](auto&, auto&) {
       return x;

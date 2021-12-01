@@ -10,10 +10,10 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
@@ -68,16 +68,17 @@ serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
 }
 
 /// Deserializes an object of type `T` from a flatbuffer byte vector, using
-/// the `caf::binary_deserializer`.
+/// the `detail::legacy_deserializer`.
 template <class T, class Byte = uint8_t>
 caf::error deserialize_bytes(const flatbuffers::Vector<Byte>* v, T& x) {
   static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
   if (!v)
     return caf::make_error(ec::format_error, "no input");
-  caf::binary_deserializer sink(
-    nullptr, reinterpret_cast<const char*>(v->data()), v->size());
-  if (auto error = sink(x))
-    return error;
+  detail::legacy_deserializer sink(as_bytes(*v));
+  if (!sink(x))
+    return caf::make_error(ec::parse_error,
+                           fmt::format("failed to deserialize {}",
+                                       detail::pretty_type_name(x)));
   return caf::none;
 }
 

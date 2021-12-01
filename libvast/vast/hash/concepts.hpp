@@ -24,9 +24,9 @@ concept incremental_hash
   = requires(HashAlgorithm& h, std::span<const std::byte> bytes) {
   // clang-format off
   typename HashAlgorithm::result_type;
-  { h.add(bytes) } noexcept -> concepts::same_as<void>;
+  { h.add(bytes) } noexcept -> std::same_as<void>;
   { h.finish() } noexcept 
-    -> concepts::same_as<typename HashAlgorithm::result_type>;
+    -> std::same_as<typename HashAlgorithm::result_type>;
   // clang-format on
 };
 
@@ -37,7 +37,7 @@ concept oneshot_hash = requires(std::span<const std::byte> bytes) {
   // clang-format off
   typename HashAlgorithm::result_type;
   { HashAlgorithm::make(bytes) } noexcept
-    -> concepts::same_as<typename HashAlgorithm::result_type>;
+    -> std::same_as<typename HashAlgorithm::result_type>;
   // clang-format on
 };
 

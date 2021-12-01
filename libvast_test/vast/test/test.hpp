@@ -146,17 +146,17 @@ struct less_equal_compare {
 // Checks whether a value initialized from `expr` compares equal to itself
 // after a cycle of serializing and deserializing it. Requires the
 // `deterministic_actor_system` fixture.
-#define CHECK_ROUNDTRIP(expr)                                                  \
+#define CHECK_ROUNDTRIP(...)                                                   \
   {                                                                            \
-    auto __x = expr;                                                           \
+    auto __x = (__VA_ARGS__);                                                  \
     CHECK_EQUAL(roundtrip(__x), __x);                                          \
   }
 
 // Like `CHECK_ROUNDTRIP`, but compares the objects by dereferencing them via
 // `operator*` first.
-#define CHECK_ROUNDTRIP_DEREF(expr)                                            \
+#define CHECK_ROUNDTRIP_DEREF(...)                                             \
   {                                                                            \
-    auto __x = expr;                                                           \
+    auto __x = (__VA_ARGS__);                                                  \
     auto __y = roundtrip(__x);                                                 \
     REQUIRE_NOT_EQUAL(__x, nullptr);                                           \
     REQUIRE_NOT_EQUAL(__y, nullptr);                                           \

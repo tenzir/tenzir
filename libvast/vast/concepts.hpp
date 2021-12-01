@@ -10,6 +10,7 @@
 
 #include "vast/detail/type_traits.hpp"
 
+#include <concepts>
 #include <cstddef>
 #include <iterator>
 #include <type_traits>
@@ -17,22 +18,7 @@
 namespace vast::concepts {
 
 template <class T, class U>
-concept SameHelper = std::is_same_v<T, U>;
-
-template <class T, class U>
-concept same_as = SameHelper<T, U> && SameHelper<U, T>;
-
-template <class T, class U>
-concept sameish = same_as<std::decay_t<T>, std::decay_t<U>>;
-
-template <class T, class U>
-concept different = !same_as<T, U>;
-
-template <typename From, typename To>
-concept convertible_to = std::is_convertible_v<From, To> && requires(
-  std::add_rvalue_reference_t<From> (&f)()) {
-  static_cast<To>(f());
-};
+concept sameish = std::same_as<std::decay_t<T>, std::decay_t<U>>;
 
 template <class T>
 concept transparent = requires {
@@ -127,7 +113,7 @@ concept appendable = requires(C& xs, typename C::value_type x) {
 /// mappend(x, mappend(y, z)) == mappend(mappend(x, y), z)
 template <class T>
 concept semigroup = requires(const T& x, const T& y) {
-  { mappend(x, y) } -> same_as<T>;
+  { mappend(x, y) } -> std::same_as<T>;
 };
 
 /// A type `T` is a monoid if it is a `semigroup` and a neutral element for the

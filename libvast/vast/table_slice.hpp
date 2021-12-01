@@ -12,8 +12,8 @@
 
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/print.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/table_slice_encoding.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/meta/load_callback.hpp>
@@ -57,16 +57,6 @@ public:
   /// FlatBuffers table fails.
   explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
 
-  /// Construct a table slice from a chunk of data, which contains a
-  /// `vast.fbs.TableSlice` FlatBuffers table, and a known layout.
-  /// @param chunk A `vast.fbs.TableSlice` FlatBuffers table in a chunk.
-  /// @param verify Controls whether the table should be verified.
-  /// @param layout The known table layout.
-  /// @note Constructs an invalid table slice if the verification of the
-  /// FlatBuffers table fails.
-  explicit table_slice(chunk_ptr&& chunk, enum verify verify,
-                       legacy_record_type layout) noexcept;
-
   /// Construct a table slice from a flattened table slice embedded in a chunk,
   /// and shares the chunk's lifetime.
   /// @param flat_slice The `vast.fbs.FlatTableSlice` object.
@@ -85,7 +75,7 @@ public:
   /// @param record_batch The record batch containing the table slice data.
   /// @param layout The layout of the tbale slice.
   table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-              const legacy_record_type& layout);
+              const type& layout);
 
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.
@@ -122,7 +112,7 @@ public:
   [[nodiscard]] enum table_slice_encoding encoding() const noexcept;
 
   /// @returns The table layout.
-  [[nodiscard]] const legacy_record_type& layout() const noexcept;
+  [[nodiscard]] const type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] size_type rows() const noexcept;
@@ -160,9 +150,19 @@ public:
   /// @param column The column offset.
   /// @param t The type of the value to be retrieved.
   /// @pre `row < rows() && column < columns()`
-  /// @pre `t == *layout().at(*layout:).offset_from_index(column)) == t`
+  /// @pre The type has to match the type at the given column.
   [[nodiscard]] data_view
-  at(size_type row, size_type column, const legacy_type& t) const;
+  at(size_type row, size_type column, const type& t) const;
+
+  template <concrete_type T>
+  [[nodiscard]] std::optional<view<type_to_data_t<T>>>
+  at(size_type row, size_type column, const T& t) const {
+    auto result = at(row, column, type{t});
+    if (caf::holds_alternative<caf::none_t>(result))
+      return {};
+    VAST_ASSERT(caf::holds_alternative<view<type_to_data_t<T>>>(result));
+    return caf::get<view<type_to_data_t<T>>>(result);
+  }
 
   /// Converts a table slice to an Apache Arrow Record Batch.
   /// @returns The pointer to the Record Batch.
@@ -172,8 +172,8 @@ public:
 
   /// Creates a typed view on a given set of columns of a table slice.
   /// @note This function is defined and documented in 'vast/project.hpp'.
-  template <class... Types, class... Hints>
-  friend projection<Types...> project(table_slice slice, Hints&&... hints);
+  template <class... Hints>
+  friend auto project(table_slice slice, Hints&&... hints);
 
   // -- concepts ---------------------------------------------------------------
 
@@ -263,8 +263,10 @@ private:
   /// use FlatBuffers.
   union {
     const void* none = {};
-    const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
     const arrow_table_slice<fbs::table_slice::arrow::v0>* arrow_v0;
+    const arrow_table_slice<fbs::table_slice::arrow::v1>* arrow_v1;
+    const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
+    const msgpack_table_slice<fbs::table_slice::msgpack::v1>* msgpack_v1;
   } state_;
 
   /// The number of in-memory table slices.

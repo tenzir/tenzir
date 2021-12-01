@@ -10,17 +10,17 @@
 
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
-#include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
 namespace vast {
 
-string_index::string_index(vast::legacy_type t, caf::settings opts)
+string_index::string_index(vast::type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   max_length_
     = caf::get_or(options(), "max-size", defaults::index::max_string_size);
@@ -29,13 +29,29 @@ string_index::string_index(vast::legacy_type t, caf::settings opts)
 }
 
 caf::error string_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval([&] { return value_index::serialize(sink); },
-                          [&] { return sink(max_length_, length_, chars_); });
+  return caf::error::eval(
+    [&] {
+      return value_index::serialize(sink);
+    },
+    [&] {
+      return sink(max_length_, length_, chars_);
+    });
 }
 
 caf::error string_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval([&] { return value_index::deserialize(source); },
-                          [&] { return source(max_length_, length_, chars_); });
+  return caf::error::eval(
+    [&] {
+      return value_index::deserialize(source);
+    },
+    [&] {
+      return source(max_length_, length_, chars_);
+    });
+}
+
+bool string_index::deserialize(detail::legacy_deserializer& source) {
+  if (!value_index::deserialize(source))
+    return false;
+  return source(max_length_, length_, chars_);
 }
 
 bool string_index::append_impl(data_view x, id pos) {
@@ -123,7 +139,9 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
         }
       }
     },
-    [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+    [&](view<list> xs) {
+      return detail::container_lookup(*this, op, xs);
+    },
   };
   return caf::visit(f, x);
 }

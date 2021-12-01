@@ -11,16 +11,13 @@ on:
       - master
   pull_request:
     types: [opened, synchronize]
-    paths-ignore:
-      - 'pyvast'
-      - 'systemd'
-      - '.github/workflows/jupyter.yaml'
-      - '.github/workflows/pyvast.yaml'
   release:
     types: published
 env:
-  # 5G divided by 3 entries in the Matrix with a little bit of room for error.
-  CCACHE_MAXSIZE: '1600M'
+  # 10G cache total w/ 2 runs per branch and a target size of 325M per branch
+  # allows for master + 14 PRs to be cached at the same time with a little room
+  # for error.
+  CCACHE_MAXSIZE: '325M'
 
 jobs:
   cancel-previous-runs:
@@ -198,14 +195,50 @@ jobs:
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
+          # Export slug variables for the cache action.
+          slug_ref() {
+            echo "$1" |
+              tr "[:upper:]" "[:lower:]" |
+              sed -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
+              cut -c1-63
+          }
+          echo "CACHE_REF_SLUG=$(slug_ref "$GITHUB_REF")" >> $GITHUB_ENV
+          echo "CACHE_HEAD_REF_SLUG=$(slug_ref "$GITHUB_HEAD_REF")" >> $GITHUB_ENV
+          echo "CACHE_BASE_REF_SLUG=$(slug_ref "$GITHUB_BASE_REF")" >> $GITHUB_ENV
 
+      # For 'pull_request' events we want to take the latest build on the PR
+      # branch, or if that fails the latest build from the branch we're merging
+      # into.
       - name: Fetch ccache Cache
+        if: github.event_name == 'pull_request'
         uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ github.sha }}
+          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
           restore-keys: |
-            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-
+            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_BASE_REF_SLUG }}
+            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+
+      # For 'push' events we want to take the latest build on the branch we
+      # pushed to.
+      - name: Fetch ccache Cache (Push)
+        if: github.event_name == 'push'
+        uses: pat-s/always-upload-cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
+          restore-keys: |
+            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+
+      # For 'release' events we want to take the latest master build.
+      - name: Fetch ccache Cache (Release)
+        if: github.event_name == 'release'
+        uses: pat-s/always-upload-cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
+          restore-keys: |
+            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
         run: |
@@ -277,7 +310,7 @@ jobs:
           path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
 
       - name: Configure GCS Credentials
-        if: github.event_name == 'push'
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         uses: google-github-actions/setup-gcloud@master
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
@@ -362,7 +395,7 @@ jobs:
           git fetch origin +refs/tags/*:refs/tags/*
 
       - name: Setup Python
-        uses: actions/setup-python@v2.2.2
+        uses: actions/setup-python@v2.3.1
         with:
           python-version: '3.9'
 
@@ -382,7 +415,7 @@ jobs:
             gnu-sed \
             libpcap \
             libunwind-headers \
-            llvm@12 \
+            llvm \
             ninja \
             openssl \
             pandoc \
@@ -400,23 +433,59 @@ jobs:
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
+          # Export slug variables for the cache action.
+          slug_ref() {
+            echo "$1" |
+              tr "[:upper:]" "[:lower:]" |
+              sed -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
+              cut -c1-63
+          }
+          echo "CACHE_REF_SLUG=$(slug_ref "$GITHUB_REF")" >> $GITHUB_ENV
+          echo "CACHE_HEAD_REF_SLUG=$(slug_ref "$GITHUB_HEAD_REF")" >> $GITHUB_ENV
+          echo "CACHE_BASE_REF_SLUG=$(slug_ref "$GITHUB_BASE_REF")" >> $GITHUB_ENV
 
       - name: Setup Homebrew Clang
         if: matrix.build.compiler == 'Clang'
         run: |
-          llvm_root="$(brew --prefix llvm@12)"
+          llvm_root="$(brew --prefix llvm)"
           echo "${llvm_root}/bin" >> $GITHUB_PATH
           echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
 
+      # For 'pull_request' events we want to take the latest build on the PR
+      # branch, or if that fails the latest build from the branch we're merging
+      # into.
       - name: Fetch ccache Cache
+        if: github.event_name == 'pull_request'
         uses: pat-s/always-upload-cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ github.sha }}
+          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
           restore-keys: |
-            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-
+            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_BASE_REF_SLUG }}
+            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+
+      # For 'push' events we want to take the latest build on the branch we
+      # pushed to.
+      - name: Fetch ccache Cache (Push)
+        if: github.event_name == 'push'
+        uses: pat-s/always-upload-cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
+          restore-keys: |
+            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+
+      # For 'release' events we want to take the latest master build.
+      - name: Fetch ccache Cache (Release)
+        if: github.event_name == 'release'
+        uses: pat-s/always-upload-cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
+          restore-keys: |
+            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
         run: |
@@ -756,7 +825,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v15
+        uses: cachix/install-nix-action@v16
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
@@ -786,7 +855,7 @@ jobs:
           path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
 
       - name: Setup Python
-        uses: actions/setup-python@v2.2.2
+        uses: actions/setup-python@v2.3.1
         with:
           python-version: '3.9'
 

@@ -143,18 +143,20 @@ caf::error reader::dispatch(const ::broker::data& msg, size_t max_slice_size,
       VAST_DEBUG("{} received log create message: {}", name(),
                  log_create.stream_id());
       const auto& stream_id = log_create.stream_id().name;
-      auto layout = process(log_create);
-      if (!layout)
-        return layout.error();
-      *layout = detail::zeekify(*layout);
+      auto layout_old = process(log_create);
+      if (!layout_old)
+        return layout_old.error();
+      VAST_ASSERT(caf::holds_alternative<record_type>(*layout_old));
+      auto layout = type{detail::zeekify(caf::get<record_type>(*layout_old))};
+      layout.assign_metadata(*layout_old);
       auto& builder = log_layouts_[stream_id];
       if (builder) {
-        if (*layout != builder->layout()) {
+        if (layout != builder->layout()) {
           VAST_INFO("{} received schema change for stream ID {}", name(),
                     stream_id);
           if (auto err = finish(f, builder, caf::none))
             return err;
-          builder = this->builder(*layout); // use new layout from now on
+          builder = this->builder(layout); // use new layout from now on
           if (!builder)
             return caf::make_error(ec::parse_error, "failed to create table "
                                                     "slice builder");
@@ -164,7 +166,7 @@ caf::error reader::dispatch(const ::broker::data& msg, size_t max_slice_size,
         }
       } else {
         VAST_INFO("{} got schema for new stream {}", name(), stream_id);
-        builder = this->builder(*layout);
+        builder = this->builder(layout);
         if (!builder)
           return caf::make_error(ec::parse_error, "failed to create table "
                                                   "slice builder");

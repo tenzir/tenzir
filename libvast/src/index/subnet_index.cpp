@@ -8,11 +8,11 @@
 
 #include "vast/index/subnet_index.hpp"
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
-#include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
@@ -20,21 +20,37 @@
 
 namespace vast {
 
-subnet_index::subnet_index(vast::legacy_type x, caf::settings opts)
+subnet_index::subnet_index(vast::type x, caf::settings opts)
   : value_index{std::move(x), std::move(opts)},
-    network_{legacy_address_type{}},
+    network_{vast::type{address_type{}}},
     length_{128 + 1} {
   // nop
 }
 
 caf::error subnet_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval([&] { return value_index::serialize(sink); },
-                          [&] { return sink(network_, length_); });
+  return caf::error::eval(
+    [&] {
+      return value_index::serialize(sink);
+    },
+    [&] {
+      return sink(network_, length_);
+    });
 }
 
 caf::error subnet_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval([&] { return value_index::deserialize(source); },
-                          [&] { return source(network_, length_); });
+  return caf::error::eval(
+    [&] {
+      return value_index::deserialize(source);
+    },
+    [&] {
+      return source(network_, length_);
+    });
+}
+
+bool subnet_index::deserialize(detail::legacy_deserializer& source) {
+  if (!value_index::deserialize(source))
+    return false;
+  return source(network_, length_);
 }
 
 bool subnet_index::append_impl(data_view x, id pos) {
@@ -123,7 +139,9 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
           }
         }
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<list> xs) {
+        return detail::container_lookup(*this, op, xs);
+      },
     },
     d);
 }

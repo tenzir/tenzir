@@ -12,7 +12,6 @@
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/legacy_type.hpp"
 
 #include <cmath>
 #include <cstddef>

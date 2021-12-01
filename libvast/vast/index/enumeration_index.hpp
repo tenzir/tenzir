@@ -10,6 +10,7 @@
 
 #include "vast/bitmap_index.hpp"
 #include "vast/coder.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
@@ -25,11 +26,13 @@ namespace vast {
 /// An index for enumerations.
 class enumeration_index : public value_index {
 public:
-  explicit enumeration_index(vast::legacy_type t, caf::settings opts = {});
+  explicit enumeration_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 
   caf::error deserialize(caf::deserializer& source) override;
+
+  bool deserialize(detail::legacy_deserializer& source) override;
 
 private:
   bool append_impl(data_view x, id pos) override;

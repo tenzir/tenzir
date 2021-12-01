@@ -14,11 +14,12 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/base.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
 
@@ -87,7 +88,7 @@ public:
   /// Constructs an arithmetic index.
   /// @param t An arithmetic type.
   /// @param opts Runtime context for index parameterization.
-  explicit arithmetic_index(vast::legacy_type t, caf::settings opts = {})
+  explicit arithmetic_index(vast::type t, caf::settings opts = {})
     : value_index{std::move(t), std::move(opts)} {
     if constexpr (std::is_same_v<coder_type, multi_level_range_coder>) {
       auto i = options().find("base");
@@ -105,13 +106,29 @@ public:
   }
 
   caf::error serialize(caf::serializer& sink) const override {
-    return caf::error::eval([&] { return value_index::serialize(sink); },
-                            [&] { return sink(bmi_); });
+    return caf::error::eval(
+      [&] {
+        return value_index::serialize(sink);
+      },
+      [&] {
+        return sink(bmi_);
+      });
   }
 
   caf::error deserialize(caf::deserializer& source) override {
-    return caf::error::eval([&] { return value_index::deserialize(source); },
-                            [&] { return source(bmi_); });
+    return caf::error::eval(
+      [&] {
+        return value_index::deserialize(source);
+      },
+      [&] {
+        return source(bmi_);
+      });
+  }
+
+  bool deserialize(detail::legacy_deserializer& source) override {
+    if (!value_index::deserialize(source))
+      return false;
+    return source(bmi_);
   }
 
 private:
@@ -122,13 +139,27 @@ private:
       return true;
     };
     auto f = detail::overload{
-      [&](auto&&) { return false; },
-      [&](view<bool> x) { return append(x); },
-      [&](view<integer> x) { return append(x.value); },
-      [&](view<count> x) { return append(x); },
-      [&](view<real> x) { return append(x); },
-      [&](view<duration> x) { return append(x.count()); },
-      [&](view<time> x) { return append(x.time_since_epoch().count()); },
+      [&](auto&&) {
+        return false;
+      },
+      [&](view<bool> x) {
+        return append(x);
+      },
+      [&](view<integer> x) {
+        return append(x.value);
+      },
+      [&](view<count> x) {
+        return append(x);
+      },
+      [&](view<real> x) {
+        return append(x);
+      },
+      [&](view<duration> x) {
+        return append(x.count());
+      },
+      [&](view<time> x) {
+        return append(x.time_since_epoch().count());
+      },
     };
     return caf::visit(f, d);
   }
@@ -139,19 +170,27 @@ private:
       [&](auto x) -> caf::expected<ids> {
         return caf::make_error(ec::type_clash, value_type{}, materialize(x));
       },
-      [&](view<bool> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<bool> x) -> caf::expected<ids> {
+        return bmi_.lookup(op, x);
+      },
       [&](view<integer> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x.value);
       },
-      [&](view<count> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
-      [&](view<real> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<count> x) -> caf::expected<ids> {
+        return bmi_.lookup(op, x);
+      },
+      [&](view<real> x) -> caf::expected<ids> {
+        return bmi_.lookup(op, x);
+      },
       [&](view<duration> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x.count());
       },
       [&](view<time> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<list> xs) {
+        return detail::container_lookup(*this, op, xs);
+      },
     };
     return caf::visit(f, d);
   };

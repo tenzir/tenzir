@@ -17,6 +17,7 @@
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
+#include "vast/type.hpp"
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
@@ -31,7 +32,7 @@ namespace {
 
 template <class VastType, class ArrowType>
 struct column_builder_trait_base : arrow::TypeTraits<ArrowType> {
-  using data_type = typename type_traits<VastType>::data_type;
+  using data_type = type_to_data_t<VastType>;
   using view_type = view<data_type>;
   using meta_type = VastType;
 };
@@ -59,17 +60,16 @@ struct column_builder_trait;
   struct column_builder_trait<VastType>                                        \
     : primitive_column_builder_trait_base<VastType, ArrowType> {}
 
-PRIMITIVE_COLUMN_BUILDER_TRAIT(legacy_bool_type, arrow::BooleanType);
-PRIMITIVE_COLUMN_BUILDER_TRAIT(legacy_count_type, arrow::UInt64Type);
-PRIMITIVE_COLUMN_BUILDER_TRAIT(legacy_real_type, arrow::DoubleType);
+PRIMITIVE_COLUMN_BUILDER_TRAIT(bool_type, arrow::BooleanType);
+PRIMITIVE_COLUMN_BUILDER_TRAIT(count_type, arrow::UInt64Type);
+PRIMITIVE_COLUMN_BUILDER_TRAIT(real_type, arrow::DoubleType);
 
 #undef PRIMITIVE_COLUMN_BUILDER_TRAIT
 
 template <>
-struct column_builder_trait<legacy_integer_type>
-  : column_builder_trait_base<legacy_integer_type, arrow::Int64Type> {
-  using super
-    = column_builder_trait_base<legacy_integer_type, arrow::Int64Type>;
+struct column_builder_trait<integer_type>
+  : column_builder_trait_base<integer_type, arrow::Int64Type> {
+  using super = column_builder_trait_base<integer_type, arrow::Int64Type>;
 
   static auto make_arrow_type() {
     return super::type_singleton();
@@ -82,10 +82,9 @@ struct column_builder_trait<legacy_integer_type>
 };
 
 template <>
-struct column_builder_trait<legacy_time_type>
-  : column_builder_trait_base<legacy_time_type, arrow::TimestampType> {
-  using super
-    = column_builder_trait_base<legacy_time_type, arrow::TimestampType>;
+struct column_builder_trait<time_type>
+  : column_builder_trait_base<time_type, arrow::TimestampType> {
+  using super = column_builder_trait_base<time_type, arrow::TimestampType>;
 
   static auto make_arrow_type() {
     return arrow::timestamp(arrow::TimeUnit::NANO);
@@ -101,10 +100,9 @@ struct column_builder_trait<legacy_time_type>
 // represent the time of day, i.e., nano- or milliseconds since midnight.
 // Hence, we fall back to storing the duration is 64-bit integer.
 template <>
-struct column_builder_trait<legacy_duration_type>
-  : column_builder_trait_base<legacy_duration_type, arrow::Int64Type> {
-  using super
-    = column_builder_trait_base<legacy_duration_type, arrow::Int64Type>;
+struct column_builder_trait<duration_type>
+  : column_builder_trait_base<duration_type, arrow::Int64Type> {
+  using super = column_builder_trait_base<duration_type, arrow::Int64Type>;
 
   static auto make_arrow_type() {
     return super::type_singleton();
@@ -117,10 +115,9 @@ struct column_builder_trait<legacy_duration_type>
 };
 
 template <>
-struct column_builder_trait<legacy_string_type>
-  : column_builder_trait_base<legacy_string_type, arrow::StringType> {
-  using super
-    = column_builder_trait_base<legacy_string_type, arrow::StringType>;
+struct column_builder_trait<string_type>
+  : column_builder_trait_base<string_type, arrow::StringType> {
+  using super = column_builder_trait_base<string_type, arrow::StringType>;
 
   static auto make_arrow_type() {
     return super::type_singleton();
@@ -134,10 +131,9 @@ struct column_builder_trait<legacy_string_type>
 };
 
 template <>
-struct column_builder_trait<legacy_pattern_type>
-  : column_builder_trait_base<legacy_pattern_type, arrow::StringType> {
-  using super
-    = column_builder_trait_base<legacy_pattern_type, arrow::StringType>;
+struct column_builder_trait<pattern_type>
+  : column_builder_trait_base<pattern_type, arrow::StringType> {
+  using super = column_builder_trait_base<pattern_type, arrow::StringType>;
 
   static auto make_arrow_type() {
     return super::type_singleton();
@@ -151,10 +147,9 @@ struct column_builder_trait<legacy_pattern_type>
 };
 
 template <>
-struct column_builder_trait<legacy_enumeration_type>
-  : column_builder_trait_base<legacy_enumeration_type, arrow::UInt64Type> {
-  using super
-    = column_builder_trait_base<legacy_enumeration_type, arrow::UInt64Type>;
+struct column_builder_trait<enumeration_type>
+  : column_builder_trait_base<enumeration_type, arrow::UInt64Type> {
+  using super = column_builder_trait_base<enumeration_type, arrow::UInt64Type>;
 
   static auto make_arrow_type() {
     return super::type_singleton();
@@ -167,8 +162,7 @@ struct column_builder_trait<legacy_enumeration_type>
 };
 
 template <>
-struct column_builder_trait<legacy_none_type>
-  : arrow::TypeTraits<arrow::NullType> {
+struct column_builder_trait<none_type> : arrow::TypeTraits<arrow::NullType> {
   // -- member types -----------------------------------------------------------
 
   using super = arrow::TypeTraits<arrow::NullType>;
@@ -177,7 +171,7 @@ struct column_builder_trait<legacy_none_type>
 
   using view_type = view<data_type>;
 
-  using meta_type = legacy_none_type;
+  using meta_type = none_type;
 
   // -- static member functions ------------------------------------------------
 
@@ -191,7 +185,7 @@ struct column_builder_trait<legacy_none_type>
 };
 
 template <>
-struct column_builder_trait<legacy_address_type>
+struct column_builder_trait<address_type>
   : arrow::TypeTraits<arrow::FixedSizeBinaryType> {
   // -- member types -----------------------------------------------------------
 
@@ -201,7 +195,7 @@ struct column_builder_trait<legacy_address_type>
 
   using view_type = view<data_type>;
 
-  using meta_type = legacy_address_type;
+  using meta_type = address_type;
 
   // -- static member functions ------------------------------------------------
 
@@ -218,7 +212,7 @@ struct column_builder_trait<legacy_address_type>
 };
 
 template <>
-struct column_builder_trait<legacy_subnet_type>
+struct column_builder_trait<subnet_type>
   : arrow::TypeTraits<arrow::FixedSizeBinaryType> {
   // -- member types -----------------------------------------------------------
 
@@ -228,7 +222,7 @@ struct column_builder_trait<legacy_subnet_type>
 
   using view_type = view<data_type>;
 
-  using meta_type = legacy_subnet_type;
+  using meta_type = subnet_type;
 
   // -- static member functions ------------------------------------------------
 
@@ -294,7 +288,7 @@ class list_column_builder : public arrow_table_slice_builder::column_builder {
 public:
   using arrow_builder_type = arrow::ListBuilder;
 
-  using data_type = typename type_traits<legacy_list_type>::data_type;
+  using data_type = type_to_data_t<list_type>;
 
   list_column_builder(arrow::MemoryPool* pool,
                       std::unique_ptr<column_builder> nested)
@@ -470,35 +464,33 @@ arrow_table_slice_builder::column_builder::~column_builder() noexcept {
 }
 
 std::unique_ptr<arrow_table_slice_builder::column_builder>
-arrow_table_slice_builder::column_builder::make(const legacy_type& t,
+arrow_table_slice_builder::column_builder::make(const type& t,
                                                 arrow::MemoryPool* pool) {
   auto f = detail::overload{
     [=](const auto& x) -> std::unique_ptr<column_builder> {
       return std::make_unique<column_builder_impl_t<std::decay_t<decltype(x)>>>(
         pool);
     },
-    [=](const legacy_list_type& x) -> std::unique_ptr<column_builder> {
-      auto nested = column_builder::make(x.value_type, pool);
+    [=](const list_type& x) -> std::unique_ptr<column_builder> {
+      auto nested = column_builder::make(x.value_type(), pool);
       return std::make_unique<list_column_builder>(pool, std::move(nested));
     },
-    [=](const legacy_map_type& x) -> std::unique_ptr<column_builder> {
-      auto key_builder = column_builder::make(x.key_type, pool);
-      auto value_builder = column_builder::make(x.value_type, pool);
-      legacy_record_type fields{{"key", x.key_type}, {"value", x.value_type}};
-      return std::make_unique<map_column_builder>(pool, make_arrow_type(fields),
+    [=](const map_type& x) -> std::unique_ptr<column_builder> {
+      auto key_builder = column_builder::make(x.key_type(), pool);
+      auto value_builder = column_builder::make(x.value_type(), pool);
+      record_type fields{{"key", x.key_type()}, {"value", x.value_type()}};
+      return std::make_unique<map_column_builder>(pool,
+                                                  make_arrow_type(type{fields}),
                                                   std::move(key_builder),
                                                   std::move(value_builder));
     },
-    [=](const legacy_record_type& x) -> std::unique_ptr<column_builder> {
+    [=](const record_type& x) -> std::unique_ptr<column_builder> {
       auto field_builders = std::vector<std::unique_ptr<column_builder>>{};
-      field_builders.reserve(x.fields.size());
-      for (const auto& field : x.fields)
+      field_builders.reserve(x.num_fields());
+      for (const auto& field : x.fields())
         field_builders.push_back(column_builder::make(field.type, pool));
-      return std::make_unique<record_column_builder>(pool, make_arrow_type(x),
-                                                     std::move(field_builders));
-    },
-    [=](const legacy_alias_type& x) -> std::unique_ptr<column_builder> {
-      return column_builder::make(x.value_type, pool);
+      return std::make_unique<record_column_builder>(
+        pool, make_arrow_type(type{x}), std::move(field_builders));
     },
   };
   return caf::visit(f, t);
@@ -507,8 +499,7 @@ arrow_table_slice_builder::column_builder::make(const legacy_type& t,
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_builder_ptr
-arrow_table_slice_builder::make(legacy_record_type layout,
-                                size_t initial_buffer_size) {
+arrow_table_slice_builder::make(type layout, size_t initial_buffer_size) {
   return table_slice_builder_ptr{
     new arrow_table_slice_builder{std::move(layout), initial_buffer_size},
     false};
@@ -526,27 +517,14 @@ size_t arrow_table_slice_builder::columns() const noexcept {
   return detail::narrow_cast<size_t>(result);
 }
 
-table_slice arrow_table_slice_builder::finish(
-  [[maybe_unused]] std::span<const std::byte> serialized_layout) {
+table_slice arrow_table_slice_builder::finish() {
   // Sanity check: If this triggers, the calls to add() did not match the number
   // of fields in the layout.
   VAST_ASSERT(column_ == 0);
   // Pack layout.
-  auto use_layout = [&](const auto& buf) {
-    return builder_.CreateVector(
-      reinterpret_cast<const unsigned char*>(buf.data()), buf.size());
-  };
-  auto gen_layout = [&]() {
-    caf::binary_serializer source(nullptr, serialized_layout_cache_);
-    auto error = source(layout());
-    VAST_ASSERT(error == caf::no_error);
-    return use_layout(serialized_layout_cache_);
-  };
-  auto layout_buffer = !serialized_layout.empty()
-                         ? use_layout(serialized_layout)
-                         : (!serialized_layout_cache_.empty()
-                              ? use_layout(serialized_layout_cache_)
-                              : gen_layout());
+  const auto layout_bytes = as_bytes(layout());
+  auto layout_buffer = builder_.CreateVector(
+    reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
   // Pack schema.
 #if ARROW_VERSION_MAJOR >= 2
   auto flat_schema = arrow::ipc::SerializeSchema(*schema_).ValueOrDie();
@@ -570,34 +548,30 @@ table_slice arrow_table_slice_builder::finish(
   auto record_batch_buffer = builder_.CreateVector(flat_record_batch->data(),
                                                    flat_record_batch->size());
   // Create Arrow-encoded table slices.
-  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv0(
+  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv1(
     builder_, layout_buffer, schema_buffer, record_batch_buffer);
   // Create and finish table slice.
   auto table_slice_buffer
-    = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::arrow_v0,
+    = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::arrow_v1,
                             arrow_table_slice_buffer.Union());
   fbs::FinishTableSliceBuffer(builder_, table_slice_buffer);
   // Reset the builder state.
   rows_ = {};
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder_);
-  return table_slice{std::move(chunk), table_slice::verify::no, layout()};
+  return table_slice{std::move(chunk), table_slice::verify::no};
 }
 
 table_slice arrow_table_slice_builder::create(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch,
-  const legacy_record_type& layout, size_t initial_buffer_size) {
+  const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout,
+  size_t initial_buffer_size) {
   VAST_ASSERT(record_batch->schema()->Equals(make_arrow_schema(layout)),
               "record layout doesn't match record batch schema");
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
   // Pack layout.
-  auto flat_layout = std::vector<char>{};
-  caf::binary_serializer source(nullptr, flat_layout);
-  auto error = source(layout);
-  VAST_ASSERT(error == caf::no_error);
+  const auto layout_bytes = as_bytes(layout);
   auto layout_buffer = builder.CreateVector(
-    reinterpret_cast<const unsigned char*>(flat_layout.data()),
-    flat_layout.size());
+    reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
   // Pack schema.
 #if ARROW_VERSION_MAJOR >= 2
   auto flat_schema
@@ -616,16 +590,16 @@ table_slice arrow_table_slice_builder::create(
   auto record_batch_buffer = builder.CreateVector(flat_record_batch->data(),
                                                   flat_record_batch->size());
   // Create Arrow-encoded table slices.
-  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv0(
+  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv1(
     builder, layout_buffer, schema_buffer, record_batch_buffer);
   // Create and finish table slice.
   auto table_slice_buffer
-    = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::arrow_v0,
+    = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::arrow_v1,
                             arrow_table_slice_buffer.Union());
   fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder);
-  return table_slice{std::move(chunk), table_slice::verify::no, layout};
+  return table_slice{std::move(chunk), table_slice::verify::no};
 }
 
 size_t arrow_table_slice_builder::rows() const noexcept {
@@ -643,18 +617,19 @@ void arrow_table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {
 
 // -- implementation details ---------------------------------------------------
 
-arrow_table_slice_builder::arrow_table_slice_builder(legacy_record_type layout,
+arrow_table_slice_builder::arrow_table_slice_builder(type layout,
                                                      size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
     schema_{make_arrow_schema(this->layout())},
     builder_{initial_buffer_size} {
   VAST_ASSERT(schema_);
+  const auto& rt = caf::get<record_type>(this->layout());
   VAST_ASSERT(schema_->num_fields()
-              == detail::narrow_cast<int>(this->layout().num_leaves()));
+              == detail::narrow_cast<int>(rt.num_leaves()));
   column_builders_.reserve(columns());
   auto* pool = arrow::default_memory_pool();
-  for (const auto& field : legacy_record_type::each(this->layout()))
-    column_builders_.emplace_back(column_builder::make(field.type(), pool));
+  for (const auto& [field, _] : rt.leaves())
+    column_builders_.emplace_back(column_builder::make(field.type, pool));
 }
 
 bool arrow_table_slice_builder::add_impl(data_view x) {
@@ -669,43 +644,45 @@ bool arrow_table_slice_builder::add_impl(data_view x) {
 
 // -- utility functions --------------------------------------------------------
 
-std::shared_ptr<arrow::Schema> make_arrow_schema(const legacy_record_type& t) {
+std::shared_ptr<arrow::Schema> make_arrow_schema(const type& t) {
+  VAST_ASSERT(caf::holds_alternative<record_type>(t));
+  const auto& rt = caf::get<record_type>(t);
   std::vector<std::shared_ptr<arrow::Field>> arrow_fields;
-  arrow_fields.reserve(t.fields.size());
-  for (const auto& field : legacy_record_type::each(t)) {
-    auto field_ptr = arrow::field(field.key(), make_arrow_type(field.type()));
+  arrow_fields.reserve(rt.num_leaves());
+  for (const auto& [field, index] : rt.leaves()) {
+    auto field_ptr = arrow::field(rt.key(index), make_arrow_type(field.type));
     arrow_fields.emplace_back(std::move(field_ptr));
   }
-  auto metadata = arrow::key_value_metadata({{"name", t.name()}});
+  auto metadata = arrow::key_value_metadata({{"name", std::string{t.name()}}});
   return std::make_shared<arrow::Schema>(arrow_fields, metadata);
 }
 
-std::shared_ptr<arrow::DataType> make_arrow_type(const legacy_type& t) {
+std::shared_ptr<arrow::DataType> make_arrow_type(const type& t) {
   using data_type_ptr = std::shared_ptr<arrow::DataType>;
   auto f = detail::overload{
     [=](const auto& x) -> data_type_ptr {
       using trait = column_builder_trait<std::decay_t<decltype(x)>>;
       return trait::make_arrow_type();
     },
-    [=](const legacy_list_type& x) -> data_type_ptr {
-      return arrow::list(make_arrow_type(x.value_type));
+    [=](const list_type& x) -> data_type_ptr {
+      return arrow::list(make_arrow_type(x.value_type()));
     },
-    [=](const legacy_map_type& x) -> data_type_ptr {
+    [=](const map_type& x) -> data_type_ptr {
       // A map in arrow is a list of structs holding key/value pairs.
-      std::vector fields{arrow::field("key", make_arrow_type(x.key_type)),
-                         arrow::field("value", make_arrow_type(x.value_type))};
+      std::vector fields{arrow::field("key", make_arrow_type(x.key_type())),
+                         arrow::field("value",
+                                      make_arrow_type(x.value_type()))};
       return arrow::list(arrow::struct_(fields));
     },
-    [=](const legacy_record_type& x) -> data_type_ptr {
+    [=](const record_type& x) -> data_type_ptr {
       std::vector<std::shared_ptr<arrow::Field>> fields;
-      for (auto& field : x.fields) {
-        auto ptr = arrow::field(field.name, make_arrow_type(field.type));
+      fields.reserve(x.num_fields());
+      for (const auto& field : x.fields()) {
+        auto ptr
+          = arrow::field(std::string{field.name}, make_arrow_type(field.type));
         fields.emplace_back(std::move(ptr));
       }
       return arrow::struct_(fields);
-    },
-    [=](const legacy_alias_type& x) -> data_type_ptr {
-      return make_arrow_type(x.value_type);
     },
   };
   return caf::visit(f, t);

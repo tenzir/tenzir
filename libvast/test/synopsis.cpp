@@ -17,7 +17,6 @@
 #include "vast/test/test.hpp"
 #include "vast/time_synopsis.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
 using namespace std::chrono_literals;
@@ -30,11 +29,11 @@ const vast::time epoch;
 
 } // namespace
 
-TEST(min-max synopsis) {
+TEST(min - max synopsis) {
   using vast::time;
   using namespace nft;
   factory<synopsis>::initialize();
-  auto x = factory<synopsis>::make(legacy_time_type{}, caf::settings{});
+  auto x = factory<synopsis>::make(type{time_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(time{epoch + 4s});
   x->add(time{epoch + 7s});
@@ -82,9 +81,9 @@ TEST(serialization) {
   factory<synopsis>::initialize();
   CHECK_ROUNDTRIP(synopsis_ptr{});
   CHECK_ROUNDTRIP_DEREF(
-    factory<synopsis>::make(legacy_bool_type{}, caf::settings{}));
+    factory<synopsis>::make(type{bool_type{}}, caf::settings{}));
   CHECK_ROUNDTRIP_DEREF(
-    factory<synopsis>::make(legacy_time_type{}, caf::settings{}));
+    factory<synopsis>::make(type{time_type{}}, caf::settings{}));
 }
 
 FIXTURE_SCOPE_END()

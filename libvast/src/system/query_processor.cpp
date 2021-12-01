@@ -12,6 +12,7 @@
 
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/query_cursor.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/skip.hpp>
@@ -30,12 +31,12 @@ query_processor::query_processor(caf::event_based_actor* self)
     });
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
-    [this](const uuid& query_id, uint32_t total, uint32_t scheduled) {
-      VAST_ASSERT(scheduled <= total);
-      query_id_ = query_id;
+    [this](const query_cursor& cursor) {
+      VAST_ASSERT(cursor.scheduled_partitions <= cursor.candidate_partitions);
+      query_id_ = cursor.id;
       partitions_.received = 0;
-      partitions_.scheduled = scheduled;
-      partitions_.total = total;
+      partitions_.scheduled = cursor.scheduled_partitions;
+      partitions_.total = cursor.candidate_partitions;
       transition_to(await_results_until_done);
     });
   behaviors_[await_results_until_done].assign(

@@ -10,6 +10,7 @@
 
 #include "vast/bitmap_index.hpp"
 #include "vast/coder.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
@@ -31,11 +32,13 @@ class subnet_index : public value_index {
 public:
   using prefix_index = bitmap_index<uint8_t, equality_coder<ewah_bitmap>>;
 
-  explicit subnet_index(vast::legacy_type t, caf::settings opts = {});
+  explicit subnet_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 
   caf::error deserialize(caf::deserializer& source) override;
+
+  bool deserialize(detail::legacy_deserializer& source) override;
 
 private:
   bool append_impl(data_view x, id pos) override;

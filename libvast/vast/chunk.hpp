@@ -13,7 +13,9 @@
 #include "vast/as_bytes.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/function.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 
+#include <caf/deserializer.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
@@ -67,7 +69,7 @@ public:
   static chunk_ptr make(view_type view, deleter_type&& deleter) noexcept;
 
   /// Constructs an empty chunk
-  static chunk_ptr empty() noexcept;
+  static chunk_ptr make_empty() noexcept;
 
   /// Construct a chunk from a byte buffer, and bind the lifetime of the chunk
   /// to the buffer.
@@ -79,7 +81,7 @@ public:
   template <class Buffer>
     requires(!std::is_lvalue_reference_v<Buffer> && //
              requires(const Buffer& buffer) {
-               { as_bytes(buffer) } -> concepts::convertible_to<view_type>;
+               { as_bytes(buffer) } -> std::convertible_to<view_type>;
              })
   static auto make(Buffer&& buffer) -> chunk_ptr {
     // Move the buffer into a unique pointer; otherwise, we might run into
@@ -104,7 +106,7 @@ public:
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
     requires requires(const Buffer& buffer) {
-      { as_bytes(buffer) } -> concepts::convertible_to<view_type>;
+      { as_bytes(buffer) } -> std::convertible_to<view_type>;
     }
   static auto copy(const Buffer& buffer) -> chunk_ptr {
     const auto view = static_cast<view_type>(as_bytes(buffer));
@@ -155,6 +157,13 @@ public:
   slice(size_type start, size_type length
                          = std::numeric_limits<size_type>::max()) const;
 
+  /// Creates a new chunk that structurally shares the data of this chunk.
+  /// @param view A view of the to-be sliced chunk.
+  /// @returns A new chunk over the subset.
+  /// @pre `view.begin() >= begin()`
+  /// @pre `view.end() <= end()`
+  chunk_ptr slice(view_type view) const;
+
   /// Adds an additional step for deleting this chunk.
   /// @param step Function object that gets called after all previous deletion
   /// steps ran. It must be nothrow-invocable, as it gets called during the
@@ -183,6 +192,7 @@ public:
   friend caf::error read(const std::filesystem::path& filename, chunk_ptr& x);
   friend caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
   friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);
+  friend bool inspect(detail::legacy_deserializer& source, chunk_ptr& x);
 
 private:
   // -- implementation details -------------------------------------------------

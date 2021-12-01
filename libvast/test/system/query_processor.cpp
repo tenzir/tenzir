@@ -6,9 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <caf/fwd.hpp>
 #define SUITE query_processor
-
-#include "vast/system/query_processor.hpp"
 
 #include "vast/fwd.hpp"
 
@@ -17,6 +16,8 @@
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/query.hpp"
+#include "vast/system/query_cursor.hpp"
+#include "vast/system/query_processor.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
@@ -32,6 +33,10 @@ constexpr std::string_view query_str = ":timestamp < 1 week ago";
 
 struct mock_index_state {
   static inline constexpr const char* name = "mock-index";
+
+  caf::actor_addr client = {};
+  std::array<uint64_t, 5> results = {2ul, 3, 6, 12, 24};
+  std::array<uint64_t, 5>::iterator it = results.begin();
 };
 
 system::index_actor::behavior_type
@@ -58,7 +63,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::subscribe, atom::flush, system::flush_listener_actor) {
       FAIL("no mock implementation available");
     },
-    [=](atom::internal, vast::query&, system::query_supervisor_actor&) {
+    [=](atom::internal, vast::query&,
+        system::query_supervisor_actor&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
     [=](atom::apply, transform_ptr, uuid) -> atom::done {
@@ -67,21 +73,17 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
-    [=](vast::query&) {
+    [=](vast::query&) -> caf::result<system::query_cursor> {
       auto query_id = unbox(to<uuid>(uuid_str));
-      auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
-      auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-      anon_self->send(hdl, query_id, uint32_t{5}, uint32_t(3));
-      anon_self->send(hdl, uint64_t{2});
-      anon_self->send(hdl, uint64_t{3});
-      anon_self->send(hdl, uint64_t{6});
-      anon_self->send(hdl, atom::done_v);
+      self->state.client = self->current_sender()->address();
+      self->send(self, query_id, 3u);
+      return system::query_cursor{query_id, 5u, 3u};
     },
-    [=](const uuid&, uint32_t) {
+    [=](const uuid&, uint32_t n) {
       auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
-      auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-      anon_self->send(hdl, uint64_t{12});
-      anon_self->send(hdl, uint64_t{24});
+      auto hdl = caf::actor_cast<caf::actor>(self->state.client);
+      for (uint32_t i = 0; i < n; ++i)
+        anon_self->send(hdl, *self->state.it++);
       anon_self->send(hdl, atom::done_v);
     },
     [=](atom::erase, uuid) -> atom::done {
@@ -148,7 +150,8 @@ TEST(state transitions) {
              index);
   expect((vast::query, system::index_actor), from(self).to(aut));
   expect((vast::query), from(aut).to(index));
-  expect((uuid, uint32_t, uint32_t), from(index).to(aut));
+  expect((uuid, uint32_t), from(index).to(index));
+  expect((system::query_cursor), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));

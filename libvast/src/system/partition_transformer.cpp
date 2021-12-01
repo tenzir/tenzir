@@ -28,7 +28,6 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
   const auto& layout = slice.layout();
   data.events += slice.rows();
   data.synopsis->add(slice, synopsis_opts);
-  VAST_ASSERT(slice.columns() == layout.fields.size());
   // Update type ids
   auto it = data.type_ids.emplace(layout.name(), ids{}).first;
   auto& ids = it->second;
@@ -38,31 +37,32 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
   ids.append_bits(false, first - ids.size());
   ids.append_bits(true, last - first);
   // Push the event data to the indexers.
-  for (size_t i = 0; i < slice.columns(); ++i) {
-    const auto& field = layout.fields[i];
-    auto qf = qualified_record_field{layout.name(), field};
+  VAST_ASSERT(slice.columns() == caf::get<record_type>(layout).num_leaves());
+  for (size_t flat_index = 0;
+       const auto& [field, offset] : caf::get<record_type>(layout).leaves()) {
+    const auto qf = qualified_record_field{layout, offset};
     auto it = indexers.find(qf);
     if (it == indexers.end()) {
-      auto skip = vast::has_skip_attribute(field.type);
+      const auto skip = field.type.attribute("skip").has_value();
       auto idx
         = skip ? nullptr : factory<value_index>::make(field.type, index_opts);
-      data.combined_layout.fields.push_back(as_record_field(qf));
       it = indexers.emplace(qf, std::move(idx)).first;
     }
     auto& idx = it->second;
     if (idx != nullptr) {
-      auto column = table_slice_column{slice, i, qf};
+      auto column = table_slice_column{slice, flat_index};
       auto offset = column.slice().offset();
       for (size_t i = 0; i < column.size(); ++i)
         idx->append(column[i], offset + i);
     }
+    ++flat_index;
   }
 }
 
 void partition_transformer_state::finalize_data() {
   // Serialize the finished indexers.
   for (auto& [qf, idx] : indexers) {
-    data.indexer_chunks.emplace_back(qf.field_name, chunkify(idx));
+    data.indexer_chunks.emplace_back(qf.name(), chunkify(idx));
   }
   data.synopsis->shrink();
   // TODO: It would probably make more sense if the partition
@@ -198,7 +198,17 @@ partition_transformer_actor::behavior_type partition_transformer(
       [&] {
         { // Pack partition
           flatbuffers::FlatBufferBuilder builder;
-          auto partition = pack(builder, self->state.data);
+          if (self->state.indexers.empty()) {
+            stream_data.partition_chunk
+              = caf::make_error(ec::logic_error, "cannot create partition with "
+                                                 "empty layout");
+            return;
+          }
+          auto fields = std::vector<struct record_type::field>{};
+          fields.reserve(self->state.indexers.size());
+          for (const auto& [qf, _] : self->state.indexers)
+            fields.push_back({std::string{qf.name()}, qf.type()});
+          auto partition = pack(builder, self->state.data, record_type{fields});
           if (!partition) {
             stream_data.partition_chunk = partition.error();
             return;

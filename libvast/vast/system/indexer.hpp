@@ -11,9 +11,9 @@
 #include "vast/fwd.hpp"
 
 #include "vast/fbs/partition.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -48,7 +48,7 @@ struct indexer_state {
 /// Indexes a table slice column with a single value index.
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               legacy_type index_type, caf::settings index_opts);
+               type index_type, caf::settings index_opts);
 
 /// An indexer that was recovered from on-disk state. It can only respond
 /// to queries, but not add eny more entries.

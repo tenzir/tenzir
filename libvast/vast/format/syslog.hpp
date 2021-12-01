@@ -283,8 +283,8 @@ protected:
 private:
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
-  legacy_type syslog_rfc5424_type_;
-  legacy_type syslog_unkown_type_;
+  type syslog_rfc5424_type_;
+  type syslog_unkown_type_;
 };
 
 } // namespace vast::format::syslog

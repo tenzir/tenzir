@@ -252,6 +252,12 @@ else ()
       VASTSystemizeTarget(libcaf_openssl_${_linkage_suffix})
       set_target_properties(libcaf_openssl_${_linkage_suffix}
                             PROPERTIES EXPORT_NAME openssl)
+      # Fix deprecation warnings for OpenSSL >= 3.0.
+      target_compile_options(
+        libcaf_openssl_${_linkage_suffix}
+        PRIVATE
+          $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
+          $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
       add_library(CAF::openssl ALIAS libcaf_openssl_${_linkage_suffix})
       install(
         TARGETS libcaf_openssl_${_linkage_suffix}
@@ -319,8 +325,8 @@ set(libvast_native_plugin_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/src/system/local_segment_store.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/delete.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/hash.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/replace.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/identity.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/identity.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/replace.cpp")
 
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
@@ -336,6 +342,8 @@ add_library(libvast_native_plugins STATIC ${libvast_native_plugin_sources})
 VASTTargetEnableTooling(libvast_native_plugins)
 target_compile_definitions(libvast_native_plugins
                            PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
+set_target_properties(libvast_native_plugins PROPERTIES OUTPUT_NAME
+                                                        vast_native_plugins)
 add_library(vast::native_plugins ALIAS libvast_native_plugins)
 
 target_link_libraries(libvast PRIVATE libvast_internal)

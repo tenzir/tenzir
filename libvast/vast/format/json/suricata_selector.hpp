@@ -8,17 +8,11 @@
 
 #pragma once
 
-#include "vast/format/json/field_selector.hpp"
-
 namespace vast::format::json {
 
-struct suricata_selector_specification {
-  // static constexpr auto category = defaults::import::suricata::category;
-  static constexpr auto name = "suricata-reader";
-  static constexpr auto field = "event_type";
-  static constexpr auto prefix = "suricata";
+struct suricata_selector {
+  static constexpr auto field_name = "event_type";
+  static constexpr auto type_prefix = "suricata";
 };
-
-using suricata_selector = field_selector<suricata_selector_specification>;
 
 } // namespace vast::format::json

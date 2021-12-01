@@ -289,7 +289,7 @@ tests:
   Node suricata rrdata:
     tags: [node, import-export, suricata, eve]
     steps:
-      - command: -N import suricata
+      - command: -N import json --selector=event_type:suricata
         input: data/suricata/rrdata-eve.json
       - command: -N export ascii
       - command: -N export json

@@ -29,7 +29,6 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/hash/xxhash.hpp"
 #include "vast/ids.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -42,6 +41,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/time.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>
@@ -64,9 +64,14 @@ active_indexer_actor active_partition_state::indexer_at(size_t position) const {
   return as_vector(indexers)[position].second;
 }
 
-const vast::legacy_record_type&
-active_partition_state::combined_layout() const {
-  return data.combined_layout;
+std::optional<record_type> active_partition_state::combined_layout() const {
+  if (indexers.empty())
+    return {};
+  auto fields = std::vector<struct record_type::field>{};
+  fields.reserve(indexers.size());
+  for (const auto& [qf, _] : indexers)
+    fields.push_back({std::string{qf.name()}, qf.type()});
+  return record_type{fields};
 }
 
 const std::unordered_map<std::string, ids>&
@@ -95,7 +100,8 @@ bool partition_selector::operator()(const qualified_record_field& filter,
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder,
-     const active_partition_state::serialization_data& x) {
+     const active_partition_state::serialization_data& x,
+     const record_type& combined_layout) {
   auto uuid = pack(builder, x.id);
   if (!uuid)
     return uuid.error();
@@ -117,9 +123,18 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   }
   auto indexes = builder.CreateVector(indices);
   // Serialize layout.
-  auto combined_layout = fbs::serialize_bytes(builder, x.combined_layout);
-  if (!combined_layout)
-    return combined_layout.error();
+#if VAST_ENABLE_ASSERTIONS
+  const auto clt = type{combined_layout};
+  VAST_ASSERT(clt.name().empty() && clt.attributes().empty(),
+              "expecting combined layout not to have metadata for "
+              "serialization as legacy record type");
+#endif
+  auto legacy_combined_layout
+    = caf::get<legacy_record_type>(type{combined_layout}.to_legacy_type());
+  auto combined_layout_offset
+    = fbs::serialize_bytes(builder, legacy_combined_layout);
+  if (!combined_layout_offset)
+    return combined_layout_offset.error();
   std::vector<flatbuffers::Offset<fbs::type_ids::v0>> tids;
   for (const auto& kv : x.type_ids) {
     auto name = builder.CreateString(kv.first);
@@ -151,7 +166,7 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   v0_builder.add_events(x.events);
   v0_builder.add_indexes(indexes);
   v0_builder.add_partition_synopsis(*maybe_ps);
-  v0_builder.add_combined_layout(*combined_layout);
+  v0_builder.add_combined_layout(*combined_layout_offset);
   v0_builder.add_type_ids(type_ids);
   v0_builder.add_store(store_header);
   auto partition_v0 = v0_builder.Finish();
@@ -198,7 +213,8 @@ active_partition_actor::behavior_type active_partition(
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
       auto first = x.offset();
       auto last = x.offset() + x.rows();
-      auto layout = flatten(x.layout());
+      const auto& layout = x.layout();
+      VAST_ASSERT(!layout.name().empty());
       auto it = self->state.data.type_ids.emplace(layout.name(), ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());
@@ -209,20 +225,18 @@ active_partition_actor::behavior_type active_partition(
       self->state.data.events += x.rows();
       self->state.data.synopsis->add(x, self->state.synopsis_opts);
       size_t col = 0;
-      VAST_ASSERT(!layout.fields.empty());
-      for (auto& field : layout.fields) {
-        auto qf = qualified_record_field{layout.name(), field};
+      for (const auto& [field, offset] :
+           caf::get<record_type>(layout).leaves()) {
+        auto qf = qualified_record_field{layout, offset};
         auto& idx = self->state.indexers[qf];
         if (!idx) {
-          self->state.data.combined_layout.fields.push_back(
-            as_record_field(qf));
           idx = self->spawn(active_indexer, field.type, index_opts);
           auto slot = self->state.stage->add_outbound_path(idx);
           self->state.stage->out().set_filter(slot, qf);
           VAST_DEBUG("{} spawned new indexer for field {} at slot {}", *self,
                      field.name, slot);
         }
-        out.push(table_slice_column{x, col++, qf});
+        out.push(table_slice_column{x, col++});
       }
     },
     [=](caf::unit_t&, const caf::error& err) {
@@ -384,15 +398,30 @@ active_partition_actor::behavior_type active_partition(
                   self->state.persistence_promise.deliver(error);
                   return;
                 }
+                // TODO: Consider storing indexer chunks by the fully qualified
+                // field instead of just its fully qualified name in a future
+                // partition version. As-is, this breaks if multiple fields with
+                // the same fully qualified name but different types exist in
+                // the same partition.
                 self->state.data.indexer_chunks.push_back(
-                  std::make_pair(qf.field_name, chunk_it->second));
+                  std::make_pair(qf.name(), chunk_it->second));
               }
               // Create the partition flatbuffer.
               flatbuffers::FlatBufferBuilder builder;
-              auto partition = pack(builder, self->state.data);
+              auto combined_layout = self->state.combined_layout();
+              if (!combined_layout) {
+                auto err = caf::make_error(ec::logic_error, "unable to create "
+                                                            "combined layout");
+                VAST_ERROR("{} failed to serialize {} with error: {}", *self,
+                           self->state.name, err);
+                self->state.persistence_promise.deliver(err);
+                return;
+              }
+              auto partition
+                = pack(builder, self->state.data, *combined_layout);
               if (!partition) {
                 VAST_ERROR("{} failed to serialize {} with error: {}", *self,
-                           self->state.name, render(partition.error()));
+                           self->state.name, partition.error());
                 self->state.persistence_promise.deliver(partition.error());
                 return;
               }
@@ -452,7 +481,7 @@ active_partition_actor::behavior_type active_partition(
             },
             [=](caf::error err) {
               VAST_ERROR("{} failed to persist indexer for {} with error: {}",
-                         *self, kv.first.fqn(), render(err));
+                         *self, kv.first.name(), err);
               ++self->state.persisted_indexers;
               if (!self->state.persistence_promise.pending())
                 self->state.persistence_promise.deliver(std::move(err));
@@ -518,7 +547,8 @@ active_partition_actor::behavior_type active_partition(
         collect_status(
           rs, timeout, v, i.second,
           [rs, v, &ps, &field = i.first](record& response) {
-            ps["field"] = field.fqn();
+            ps["field"] = field.name();
+            ps["type"] = fmt::to_string(field.type());
             auto it = response.find("memory-usage");
             if (it != response.end()) {
               if (const auto* s = caf::get_if<count>(&it->second))
@@ -528,8 +558,8 @@ active_partition_actor::behavior_type active_partition(
               merge(response, ps, policy::merge_lists::no);
           },
           [rs, &ps, &field = i.first](caf::error& err) {
-            VAST_WARN("{} failed to retrieve status from {} : {}", *rs->self,
-                      field.fqn(), fmt::to_string(err));
+            VAST_WARN("{} failed to retrieve status from {}: {}", *rs->self,
+                      field.name(), err);
             ps["error"] = fmt::to_string(err);
           });
       }

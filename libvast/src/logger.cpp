@@ -70,23 +70,8 @@ int loglevel_to_int(std::string x, int default_value) {
 
 namespace {
 
-constexpr bool is_vast_loglevel(const int value) {
-  switch (value) {
-    case VAST_LOG_LEVEL_QUIET:
-    case VAST_LOG_LEVEL_ERROR:
-    case VAST_LOG_LEVEL_WARNING:
-    case VAST_LOG_LEVEL_INFO:
-    case VAST_LOG_LEVEL_VERBOSE:
-    case VAST_LOG_LEVEL_DEBUG:
-    case VAST_LOG_LEVEL_TRACE:
-      return true;
-  }
-  return false;
-}
-
 /// Converts a vast log level to spdlog level
 spdlog::level::level_enum vast_loglevel_to_spd(const int value) {
-  VAST_ASSERT(is_vast_loglevel(value));
   spdlog::level::level_enum level = spdlog::level::off;
   switch (value) {
     case VAST_LOG_LEVEL_QUIET:
@@ -109,6 +94,8 @@ spdlog::level::level_enum vast_loglevel_to_spd(const int value) {
     case VAST_LOG_LEVEL_TRACE:
       level = spdlog::level::trace;
       break;
+    default:
+      VAST_ASSERT(false, "unhandled log level");
   }
   return level;
 }

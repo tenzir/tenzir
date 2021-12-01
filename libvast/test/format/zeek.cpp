@@ -8,7 +8,7 @@
 
 #include "vast/format/zeek.hpp"
 
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 
 #include <istream>
 #include <sstream>
@@ -32,7 +32,7 @@ using namespace std::string_literals;
 namespace {
 
 template <class Attribute>
-bool zeek_parse(const legacy_type& t, const std::string& s, Attribute& attr) {
+bool zeek_parse(const type& t, const std::string& s, Attribute& attr) {
   return format::zeek::make_zeek_parser<std::string::const_iterator>(t)(s,
                                                                         attr);
 }
@@ -234,26 +234,26 @@ FIXTURE_SCOPE(zeek_reader_tests, fixture)
 TEST(zeek data parsing) {
   using namespace std::chrono;
   data d;
-  CHECK(zeek_parse(legacy_bool_type{}, "T", d));
+  CHECK(zeek_parse(type{bool_type{}}, "T", d));
   CHECK(d == true);
-  CHECK(zeek_parse(legacy_integer_type{}, "-49329", d));
+  CHECK(zeek_parse(type{integer_type{}}, "-49329", d));
   CHECK(d == integer{-49329});
-  CHECK(zeek_parse(legacy_count_type{}, "49329"s, d));
+  CHECK(zeek_parse(type{count_type{}}, "49329"s, d));
   CHECK(d == count{49329});
-  CHECK(zeek_parse(legacy_time_type{}, "1258594163.566694", d));
+  CHECK(zeek_parse(type{time_type{}}, "1258594163.566694", d));
   auto ts = duration_cast<vast::duration>(double_seconds{1258594163.566694});
   CHECK(d == vast::time{ts});
-  CHECK(zeek_parse(legacy_duration_type{}, "1258594163.566694", d));
+  CHECK(zeek_parse(type{duration_type{}}, "1258594163.566694", d));
   CHECK(d == ts);
-  CHECK(zeek_parse(legacy_string_type{}, "\\x2afoo*"s, d));
+  CHECK(zeek_parse(type{string_type{}}, "\\x2afoo*"s, d));
   CHECK(d == "*foo*");
-  CHECK(zeek_parse(legacy_address_type{}, "192.168.1.103", d));
+  CHECK(zeek_parse(type{address_type{}}, "192.168.1.103", d));
   CHECK(d == *to<address>("192.168.1.103"));
-  CHECK(zeek_parse(legacy_subnet_type{}, "10.0.0.0/24", d));
+  CHECK(zeek_parse(type{subnet_type{}}, "10.0.0.0/24", d));
   CHECK(d == *to<subnet>("10.0.0.0/24"));
-  CHECK(zeek_parse(legacy_list_type{legacy_integer_type{}}, "49329", d));
+  CHECK(zeek_parse(type{list_type{integer_type{}}}, "49329", d));
   CHECK(d == list{integer{49329}});
-  CHECK(zeek_parse(legacy_list_type{legacy_string_type{}}, "49329,42", d));
+  CHECK(zeek_parse(type{list_type{string_type{}}}, "49329,42", d));
   CHECK(d == list{"49329", "42"});
 }
 
@@ -402,11 +402,11 @@ TEST(zeek writer) {
       FAIL("failed to write HTTP log");
   auto conn_layout = zeek_conn_log[0].layout();
   const auto conn_layout_log
-    = std::filesystem::path{conn_layout.name() + ".log"};
+    = std::filesystem::path{fmt::format("{}.log", conn_layout.name())};
   CHECK(std::filesystem::exists(directory / conn_layout_log));
   auto http_layout = zeek_http_log[0].layout();
   const auto http_layout_log
-    = std::filesystem::path{http_layout.name() + ".log"};
+    = std::filesystem::path{fmt::format("{}.log", http_layout.name())};
   CHECK(std::filesystem::exists(directory / http_layout_log));
   // TODO: these tests should verify content as well.
 }

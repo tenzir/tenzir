@@ -10,8 +10,8 @@
 
 #include "vast/atoms.hpp"
 #include "vast/factory.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/synopsis.hpp"
+#include "vast/type.hpp"
 
 #include <caf/settings.hpp>
 
@@ -22,25 +22,18 @@ namespace vast {
 template <>
 struct factory_traits<synopsis> {
   using result_type = synopsis_ptr;
-  using key_type = std::type_index;
-  using signature = result_type (*)(legacy_type, const caf::settings&);
+  using key_type = uint8_t;
+  using signature = result_type (*)(type, const caf::settings&);
 
   static void initialize();
 
-  template <class T>
+  template <concrete_type T>
   static key_type key() {
-    return std::type_index{typeid(T)};
+    return T::type_index;
   }
 
-  static key_type key(const legacy_type& t) {
-    auto f = [](const auto& x) {
-      using concrete_type = std::decay_t<decltype(x)>;
-      if constexpr (std::is_same_v<concrete_type, legacy_alias_type>)
-        return key(x.value_type);
-      else
-        return key<concrete_type>();
-    };
-    return caf::visit(f, t);
+  static key_type key(const type& t) {
+    return t.type_index();
   }
 
   /// Constructs a synopsis for a given type.
@@ -51,8 +44,8 @@ struct factory_traits<synopsis> {
   ///       Therefore, the type *x* should be sufficient to fully create a
   ///       valid synopsis instance.
   template <class T>
-  static result_type make(legacy_type x, const caf::settings& opts) {
-    if constexpr (std::is_constructible_v<T, legacy_type, const caf::settings&>)
+  static result_type make(type x, const caf::settings& opts) {
+    if constexpr (std::is_constructible_v<T, type, const caf::settings&>)
       return std::make_unique<T>(std::move(x), opts);
     else
       return std::make_unique<T>(std::move(x));

@@ -9,18 +9,19 @@
 #include "vast/bool_synopsis.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 
 namespace vast {
 
-bool_synopsis::bool_synopsis(vast::legacy_type x) : synopsis{std::move(x)} {
-  VAST_ASSERT(caf::holds_alternative<legacy_bool_type>(type()));
+bool_synopsis::bool_synopsis(vast::type x) : synopsis{std::move(x)} {
+  VAST_ASSERT(caf::holds_alternative<bool_type>(type()));
 }
 
 bool_synopsis::bool_synopsis(bool true_, bool false_)
-  : synopsis{legacy_bool_type{}}, true_(true_), false_(false_) {
+  : synopsis{vast::type{bool_type{}}}, true_(true_), false_(false_) {
 }
 
 void bool_synopsis::add(data_view x) {
@@ -66,6 +67,10 @@ caf::error bool_synopsis::serialize(caf::serializer& sink) const {
 }
 
 caf::error bool_synopsis::deserialize(caf::deserializer& source) {
+  return source(false_, true_);
+}
+
+bool bool_synopsis::deserialize(vast::detail::legacy_deserializer& source) {
   return source(false_, true_);
 }
 

@@ -14,6 +14,7 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/system/index.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
@@ -101,8 +102,8 @@ TEST(identity transform / done before persist) {
     [&](std::shared_ptr<vast::partition_synopsis>& ps) {
       synopsis = ps;
     },
-    [&](caf::error&) {
-      FAIL("failed to persist");
+    [&](caf::error& err) {
+      FAIL("failed to persist: " << err);
     });
   // Verify serialized data
   auto partition_rp = self->request(filesystem, caf::infinite,
@@ -193,12 +194,15 @@ TEST(delete transform / persist before done) {
       // TODO: Implement a new transform step that deletes
       // whole events, as opposed to specific fields.
       CHECK_EQUAL(partition_v0->events(), events);
-      vast::legacy_record_type combined_layout;
+      vast::legacy_record_type intermediate;
       REQUIRE(!vast::fbs::deserialize_bytes(partition_v0->combined_layout(),
-                                            combined_layout));
+                                            intermediate));
+      auto combined_layout = vast::type::from_legacy_type(intermediate);
+      REQUIRE(caf::holds_alternative<vast::record_type>(combined_layout));
       // Verify that the deleted column does not exist anymore.
-      const auto* column = combined_layout.find("zeek.conn.uid");
-      CHECK(!column);
+      const auto column = caf::get<vast::record_type>(combined_layout)
+                            .resolve_key("zeek.conn.uid");
+      CHECK(!column.has_value());
     },
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);

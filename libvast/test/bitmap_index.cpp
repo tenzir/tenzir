@@ -12,7 +12,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/test/test.hpp"
@@ -320,7 +320,7 @@ TEST(serialization) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, bmi1), caf::none);
   auto bmi2 = bitmap_index_type{};
-  CHECK_EQUAL(detail::deserialize(buf, bmi2), caf::none);
+  CHECK_EQUAL(detail::legacy_deserialize(buf, bmi2), true);
   CHECK(bmi1 == bmi2);
   CHECK_EQUAL(to_string(bmi2.lookup(relational_operator::not_equal, 100)),
               "11011");

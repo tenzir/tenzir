@@ -8,14 +8,15 @@
 
 #pragma once
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
 
 namespace vast {
 
-// A synopsis for a [bool type](@ref legacy_bool_type).
+// A synopsis for a [bool type](@ref bool_type).
 class bool_synopsis : public synopsis {
 public:
-  explicit bool_synopsis(vast::legacy_type x);
+  explicit bool_synopsis(vast::type x);
 
   bool_synopsis(bool true_, bool false_);
 
@@ -31,6 +32,8 @@ public:
   caf::error serialize(caf::serializer& sink) const override;
 
   caf::error deserialize(caf::deserializer& source) override;
+
+  bool deserialize(vast::detail::legacy_deserializer& source) override;
 
   bool any_true();
 

@@ -8,9 +8,11 @@
 
 #include "vast/format/json.hpp"
 
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/integer.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
+#include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -18,11 +20,13 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/format/json/default_selector.hpp"
+#include "vast/format/json/field_selector.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/include_field_names.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/detail/pretty_type_name.hpp>
@@ -31,400 +35,1083 @@
 
 namespace vast::format::json {
 
+// -- utility -----------------------------------------------------------------
+
 namespace {
 
-/// simdjson values come in a set of types provided by the lib based on the JSON
-/// specification (from here on called J-set). VAST data (variant based type)
-/// has its own (and a richer) set of types (from here on called D-set), and the
-/// task is to perform conversion from a value of a J-set type to a certain
-/// value of D-set type which is defined by layout specification.
-///
-/// Under above conditions we are to organize a "map" function from a J-set
-/// typed value to a D-set typed value. Not all the conversions are possible.
-/// Most of the J*D conversions are not possible, and only certain slots in the
-/// J*D table have a meaning.
-///
-/// For a given J-set type `from_json_x_converter<J>` provides an array of
-/// converter callbacks. Each index in this array corresponds to some type in
-/// the list defined by `vast::data::types`. Each callback is a function
-/// `type_biased_convert_impl<J,D>` There is a default implementation that (1)
-/// handles identity mapping if J, D types match, (2) parses values of type D
-/// from J, if J is a string type and if parsing is available for D, or (3)
-/// returns an error. If a specific version is required an additional template
-/// specialization is porovided.
-///
-/// To summarize, the process of converting has two phases:
-/// * Select convert function.
-/// * Perform convert function.
-///
-/// Selecting a conversion function is a double lookup:
-/// * Find J type `convert(const ::simdjson::dom::element& e, const legacy_type&
-/// t)`.
-/// * Find target D type.
-caf::expected<data>
-convert(const ::simdjson::dom::element& e, const legacy_type& t);
+// Various implementations for simdjson element + type to data conversion.
+// Note: extract copies; prefer to use add where possible. extract should no
+// longer be necessary once we fully support nested lists and records inside
+// lists.
+data extract(const ::simdjson::dom::element& value, const type& type);
+data extract(const ::simdjson::dom::array& values, const type& type);
+data extract(const ::simdjson::dom::object& value, const type& type);
+data extract(int64_t value, const type& type);
+data extract(uint64_t value, const type& type);
+data extract(double value, const type& type);
+data extract(bool value, const type& type);
+data extract(std::string_view value, const type& type);
+data extract(std::nullptr_t, const type& type);
 
-template <class T>
-caf::expected<data> convert_from_impl(T v, const legacy_type& t);
-
-template <class JsonType, class VastType>
-struct parser_traits {
-  using from_type = JsonType;
-  using to_type = VastType;
-
-  static constexpr auto can_be_parsed
-    = std::is_same_v<from_type,
-                     std::string_view> && registered_parser_type<to_type>;
-};
-
-/// Default implementation of conversion from JSON type (known as one of
-/// simdjson element_type) to an internal data type.
-template <class JsonType, class VastType>
-caf::expected<data> type_biased_convert_impl(JsonType j, const legacy_type& t) {
-  using ptraits = parser_traits<JsonType, VastType>;
-  static_cast<void>(t);
-  static_cast<void>(j);
-  if constexpr (std::is_same_v<JsonType, VastType>) {
-    // No conversion needed: The types are the same.
-    return j;
-  } else if constexpr (ptraits::can_be_parsed) {
-    // Conversion available: try to parse.
-    using value_type = typename ptraits::to_type;
-    value_type x;
-    if (auto p = make_parser<value_type>{}; !p(std::string{j}, x))
-      return caf::make_error(ec::parse_error, "unable to parse",
-                             caf::detail::pretty_type_name(typeid(value_type)),
-                             ":", std::string{j});
-    return x;
-  } else {
-    // No conversion available.
-    VAST_ERROR("json-reader cannot convert from {} to {}",
-               detail::pretty_type_name(j), t);
-    return caf::make_error(ec::syntax_error, "conversion not implemented");
+data extract(const ::simdjson::dom::element& value, const type& type) {
+  switch (value.type()) {
+    case ::simdjson::dom::element_type::ARRAY:
+      return extract(value.get_array().value(), type);
+    case ::simdjson::dom::element_type::OBJECT:
+      return extract(value.get_object().value(), type);
+    case ::simdjson::dom::element_type::INT64:
+      return extract(value.get_int64().value(), type);
+    case ::simdjson::dom::element_type::UINT64:
+      return extract(value.get_uint64().value(), type);
+    case ::simdjson::dom::element_type::DOUBLE:
+      return extract(value.get_double().value(), type);
+    case ::simdjson::dom::element_type::STRING:
+      return extract(value.get_string().value(), type);
+    case ::simdjson::dom::element_type::BOOL:
+      return extract(value.get_bool().value(), type);
+    case ::simdjson::dom::element_type::NULL_VALUE:
+      return extract(nullptr, type);
   }
+  __builtin_unreachable();
 }
 
-template <>
-caf::expected<data>
-type_biased_convert_impl<std::string_view, bool>(std::string_view s,
-                                                 const legacy_type&) {
-  if (s == "true")
-    return true;
-  else if (s == "false")
-    return false;
-  return caf::make_error(ec::convert_error, "cannot convert from",
-                         std::string{s}, "to bool");
+data extract(const ::simdjson::dom::array& values, const type& type) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const bool_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const integer_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const count_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const real_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const duration_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const time_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const string_type&) noexcept -> data {
+      return ::simdjson::to_string(values);
+    },
+    [&](const pattern_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const address_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const subnet_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const enumeration_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const list_type& lt) noexcept -> data {
+      auto result = list{};
+      result.reserve(values.size());
+      auto vt = lt.value_type();
+      for (const auto& value : values)
+        result.emplace_back(extract(value, vt));
+      return result;
+    },
+    [&](const map_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const record_type&) noexcept -> data {
+      return caf::none;
+    },
+  };
+  return caf::visit(f, type);
 }
 
-template <>
-caf::expected<data>
-type_biased_convert_impl<int64_t, integer>(int64_t n, const legacy_type&) {
-  return integer{n};
+data extract(int64_t value, const type& type) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const bool_type&) noexcept -> data {
+      return value != 0;
+    },
+    [&](const integer_type&) noexcept -> data {
+      return integer{value};
+    },
+    [&](const count_type&) noexcept -> data {
+      if (value >= 0)
+        return detail::narrow_cast<count>(value);
+      return caf::none;
+    },
+    [&](const real_type&) noexcept -> data {
+      return detail::narrow_cast<real>(value);
+    },
+    [&](const duration_type&) noexcept -> data {
+      return std::chrono::duration_cast<duration>(
+        std::chrono::duration<integer::value_type>{value});
+    },
+    [&](const time_type&) noexcept -> data {
+      return time{}
+             + std::chrono::duration_cast<duration>(
+               std::chrono::duration<integer::value_type>{value});
+    },
+    [&](const string_type&) noexcept -> data {
+      return fmt::to_string(value);
+    },
+    [&](const pattern_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const address_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const subnet_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const enumeration_type& et) noexcept -> data {
+      if (auto key = detail::narrow_cast<enumeration>(value);
+          !et.field(key).empty())
+        return key;
+      return caf::none;
+    },
+    [&](const list_type& lt) noexcept -> data {
+      return list{extract(value, lt.value_type())};
+    },
+    [&](const map_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const record_type& rt) noexcept -> data {
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
+    },
+  };
+  return caf::visit(f, type);
 }
 
-template <>
-caf::expected<data>
-type_biased_convert_impl<std::string_view, integer>(std::string_view s,
-                                                    const legacy_type&) {
-  // Simdjson cannot be reused here as it doesn't accept hex numbers.
-  if (int64_t x; parsers::json_int(s, x))
-    return integer{x};
-  if (real x; parsers::json_number(s, x)) {
-    VAST_WARN("json-reader narrowed {} to type int", std::string{s});
-    return integer{detail::narrow_cast<integer::value_type>(x)};
-  }
-  return caf::make_error(ec::convert_error, "cannot convert from",
-                         std::string{s}, "to int");
+data extract(const ::simdjson::dom::object& value, const type& type) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const bool_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const integer_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const count_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const real_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const duration_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const time_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const string_type&) noexcept -> data {
+      return ::simdjson::to_string(value);
+    },
+    [&](const pattern_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const address_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const subnet_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const enumeration_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const list_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const map_type& mt) noexcept -> data {
+      auto result = map{};
+      result.reserve(value.size());
+      const auto kt = mt.key_type();
+      const auto vt = mt.value_type();
+      for (const auto& [k, v] : value)
+        result.emplace(extract(k, kt), extract(v, vt));
+      return result;
+    },
+    [&](const record_type& rt) noexcept -> data {
+      // Adding nested records is a bit more complicated because we try to be
+      // nice to users, but still need to work with the table slice builder API.
+      // - Given a field x, if x is present as a a field inside our JSON object,
+      //   we just add all its fields and extract recursively.
+      // - If the extraction fails for any nested field at any nesting level, we
+      //   must add nil to the builder because it expects a value to be added
+      //   for all leaves in the record type.
+      // - If a field x is not present, but it contains a nested field x.y that
+      //   is present in the JSON object in a flattened representation, we add
+      //   that. While this technically means that the schema differs from the
+      //   JSON object at hand, we unflatten for our users automatically in this
+      //   case.
+      auto try_extract_record = [&](auto&& self, const record_type& rt,
+                                    std::string_view prefix) -> data {
+        auto result = record{};
+        result.reserve(rt.num_fields());
+        for (const auto& field : rt.fields()) {
+          const auto next_prefix = fmt::format("{}{}.", prefix, field.name);
+          const auto key
+            = std::string_view{next_prefix.data(), next_prefix.size() - 1};
+          auto x = value.at_key(key);
+          if (x.error() != ::simdjson::error_code::SUCCESS) {
+            // (1) The field does not directly exist in the record. We try to
+            // find flattened representations, or add nil values as required for
+            // the given field's type.
+            auto recurse = [&]<concrete_type T>(const T& type) -> data {
+              if constexpr (std::is_same_v<T, record_type>) {
+                return self(self, type, next_prefix);
+              } else {
+                return caf::none;
+              }
+            };
+            result.emplace(field.name, caf::visit(recurse, field.type));
+          } else {
+            // (2) The field exists and we extracted it successfully.
+            auto value = extract(x.value(), field.type);
+            result.emplace(field.name, std::move(value));
+          }
+        }
+        if (std::all_of(result.begin(), result.end(), [](const auto& x) {
+              return x.second == caf::none;
+            }))
+          return caf::none;
+        return result;
+      };
+      return try_extract_record(try_extract_record, rt, "");
+    },
+  };
+  return caf::visit(f, type);
 }
 
-template <>
-caf::expected<data>
-type_biased_convert_impl<int64_t, count>(int64_t n, const legacy_type&) {
-  return detail::narrow_cast<count>(n);
+data extract(uint64_t value, const type& type) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const bool_type&) noexcept -> data {
+      return value != 0;
+    },
+    [&](const integer_type&) noexcept -> data {
+      if (value <= std::numeric_limits<integer::value_type>::max())
+        return integer{detail::narrow_cast<integer::value_type>(value)};
+      return caf::none;
+    },
+    [&](const count_type&) noexcept -> data {
+      return count{value};
+    },
+    [&](const real_type&) noexcept -> data {
+      return detail::narrow_cast<real>(value);
+    },
+    [&](const duration_type&) noexcept -> data {
+      return std::chrono::duration_cast<duration>(
+        std::chrono::duration<count>{value});
+    },
+    [&](const time_type&) noexcept -> data {
+      return time{}
+             + std::chrono::duration_cast<duration>(
+               std::chrono::duration<count>{value});
+    },
+    [&](const string_type&) noexcept -> data {
+      return fmt::to_string(value);
+    },
+    [&](const pattern_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const address_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const subnet_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const enumeration_type& et) noexcept -> data {
+      if (auto key = detail::narrow_cast<enumeration>(value);
+          !et.field(key).empty())
+        return key;
+      return caf::none;
+    },
+    [&](const list_type& lt) noexcept -> data {
+      return list{extract(value, lt.value_type())};
+    },
+    [&](const map_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const record_type& rt) noexcept -> data {
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
+    },
+  };
+  return caf::visit(f, type);
 }
 
-template <>
-caf::expected<data>
-type_biased_convert_impl<std::string_view, count>(std::string_view s,
-                                                  const legacy_type&) {
-  if (count x; parsers::json_count(s, x))
-    return x;
-  if (real x; parsers::json_number(s, x)) {
-    VAST_WARN("json-reader narrowed {} to type count", std::string{s});
-    return detail::narrow_cast<count>(x);
-  }
-  return caf::make_error(ec::convert_error, "cannot convert from",
-                         std::string{s}, "to count");
+data extract(double value, const type& type) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const bool_type&) noexcept -> data {
+      return value != 0.0;
+    },
+    [&](const integer_type&) noexcept -> data {
+      return integer{detail::narrow_cast<integer::value_type>(value)};
+    },
+    [&](const count_type&) noexcept -> data {
+      return detail::narrow_cast<count>(value);
+    },
+    [&](const real_type&) noexcept -> data {
+      return value;
+    },
+    [&](const duration_type&) noexcept -> data {
+      return std::chrono::duration_cast<duration>(
+        std::chrono::duration<real>{value});
+    },
+    [&](const time_type&) noexcept -> data {
+      return time{}
+             + std::chrono::duration_cast<duration>(
+               std::chrono::duration<real>{value});
+    },
+    [&](const string_type&) noexcept -> data {
+      return fmt::to_string(value);
+    },
+    [&](const pattern_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const address_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const subnet_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const enumeration_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const list_type& lt) noexcept -> data {
+      return list{extract(value, lt.value_type())};
+    },
+    [&](const map_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const record_type& rt) noexcept -> data {
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
+    },
+  };
+  return caf::visit(f, type);
 }
 
-template <>
-caf::expected<data>
-type_biased_convert_impl<int64_t, real>(int64_t n, const legacy_type&) {
-  return detail::narrow_cast<real>(n);
+data extract(std::string_view value, const type& type) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const bool_type&) noexcept -> data {
+      if (bool result = {}; parsers::json_boolean(value, result))
+        return result;
+      return caf::none;
+    },
+    [&](const integer_type&) noexcept -> data {
+      if (integer::value_type result = {}; parsers::json_int(value, result))
+        return integer{result};
+      if (real result = {}; parsers::json_number(value, result))
+        return integer{detail::narrow_cast<integer::value_type>(result)};
+      return caf::none;
+    },
+    [&](const count_type&) noexcept -> data {
+      if (count result = {}; parsers::json_count(value, result))
+        return result;
+      if (real result = {}; parsers::json_number(value, result))
+        return detail::narrow_cast<count>(result);
+      return caf::none;
+    },
+    [&](const real_type&) noexcept -> data {
+      if (real result = {}; parsers::json_number(value, result))
+        return result;
+      return caf::none;
+    },
+    [&](const duration_type&) noexcept -> data {
+      if (auto result = to<duration>(value))
+        return *result;
+      return caf::none;
+    },
+    [&](const time_type&) noexcept -> data {
+      if (auto result = to<time>(value))
+        return *result;
+      return caf::none;
+    },
+    [&](const string_type&) noexcept -> data {
+      return std::string{value};
+    },
+    [&](const pattern_type&) noexcept -> data {
+      if (auto result = to<pattern>(value))
+        return *result;
+      return caf::none;
+    },
+    [&](const address_type&) noexcept -> data {
+      if (auto result = to<address>(value))
+        return *result;
+      return caf::none;
+    },
+    [&](const subnet_type&) noexcept -> data {
+      if (auto result = to<subnet>(value))
+        return *result;
+      return caf::none;
+    },
+    [&](const enumeration_type& et) noexcept -> data {
+      if (auto internal = et.resolve(value))
+        return detail::narrow_cast<enumeration>(*internal);
+      return caf::none;
+    },
+    [&](const list_type& lt) noexcept -> data {
+      return list{extract(value, lt.value_type())};
+    },
+    [&](const map_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const record_type& rt) noexcept -> data {
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
+    },
+  };
+  return caf::visit(f, type);
 }
 
-template <>
-caf::expected<data>
-type_biased_convert_impl<count, real>(count n, const legacy_type&) {
-  return detail::narrow_cast<real>(n);
+data extract(bool value, const type& type) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const bool_type&) noexcept -> data {
+      return value;
+    },
+    [&](const integer_type&) noexcept -> data {
+      return value ? integer{1} : integer{0};
+    },
+    [&](const count_type&) noexcept -> data {
+      return value ? count{1} : count{0};
+    },
+    [&](const real_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const duration_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const time_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const string_type&) noexcept -> data {
+      return fmt::to_string(value);
+    },
+    [&](const pattern_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const address_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const subnet_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const enumeration_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const list_type& lt) noexcept -> data {
+      return list{extract(value, lt.value_type())};
+    },
+    [&](const map_type&) noexcept -> data {
+      return caf::none;
+    },
+    [&](const record_type& rt) noexcept -> data {
+      auto result = record{};
+      result.reserve(rt.num_fields());
+      for (const auto& field : rt.fields())
+        result.emplace(field.name, caf::none);
+      return result;
+    },
+  };
+  return caf::visit(f, type);
 }
 
-template <>
-caf::expected<data>
-type_biased_convert_impl<std::string_view, real>(std::string_view s,
-                                                 const legacy_type&) {
-  if (real x; parsers::json_number(s, x))
-    return x;
-  return caf::make_error(ec::convert_error, "cannot convert from",
-                         std::string{s}, "to real");
-}
-
-template <typename NumberType>
-auto to_duration_convert_impl(NumberType s) {
-  auto secs = std::chrono::duration<real>(s);
-  return std::chrono::duration_cast<duration>(secs);
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<int64_t, duration>(int64_t s, const legacy_type&) {
-  return to_duration_convert_impl(s);
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<count, duration>(count s, const legacy_type&) {
-  return to_duration_convert_impl(s);
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<real, duration>(real s, const legacy_type&) {
-  return to_duration_convert_impl(s);
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<int64_t, time>(int64_t s, const legacy_type&) {
-  return time{to_duration_convert_impl(s)};
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<count, time>(count s, const legacy_type&) {
-  return time{to_duration_convert_impl(s)};
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<real, time>(real s, const legacy_type&) {
-  return time{to_duration_convert_impl(s)};
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<bool, std::string>(bool s, const legacy_type&) {
-  return to_string(s);
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<count, std::string>(count s, const legacy_type&) {
-  return to_string(s);
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<int64_t, std::string>(int64_t s, const legacy_type&) {
-  return to_string(s);
-}
-template <>
-caf::expected<data>
-type_biased_convert_impl<real, std::string>(real s, const legacy_type&) {
-  return to_string(s);
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<std::string_view, std::string>(std::string_view s,
-                                                        const legacy_type&) {
-  return std::string{s};
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<std::string_view, enumeration>(std::string_view s,
-                                                        const legacy_type& t) {
-  const auto& e = dynamic_cast<const legacy_enumeration_type&>(*t);
-  const auto i = std::find(e.fields.begin(), e.fields.end(), s);
-  if (i == e.fields.end())
-    return caf::make_error(ec::parse_error, "invalid:", std::string{s});
-  return detail::narrow_cast<enumeration>(std::distance(e.fields.begin(), i));
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<::simdjson::dom::array, list>(::simdjson::dom::array a,
-                                                       const legacy_type& t) {
-  const auto& v = dynamic_cast<const legacy_list_type&>(*t);
-  list xs;
-  xs.reserve(a.size());
-  for (const auto x : a) {
-    if (auto elem = convert(x, v.value_type))
-      xs.push_back(*std::move(elem));
-    else
-      return elem;
-  }
-  return xs;
-}
-
-template <>
-caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
-  ::simdjson::dom::object o, const legacy_type& t) {
-  const auto& m = dynamic_cast<const legacy_map_type&>(*t);
-  map xs;
-  xs.reserve(o.size());
-  for (auto [k, v] : o) {
-    // TODO: Properly unwrap the key type instead of wrapping it in JSON.
-    auto key = convert_from_impl<std::string_view>(k, m.key_type);
-    if (!key)
-      return key.error();
-    auto val = convert(v, m.value_type);
-    if (!val)
-      return val.error();
-    xs[*key] = *val;
-  }
-  return xs;
-}
-
-template <>
-caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, record>(
-  ::simdjson::dom::object o, const legacy_type& t) {
-  const auto& r = dynamic_cast<const legacy_record_type&>(*t);
-  record xs;
-  xs.reserve(r.fields.size());
-  for (const auto& field : r.fields) {
-    auto v = o.at_key(field.name);
-    if (v.error() != ::simdjson::error_code::SUCCESS) {
-      // The field is not present, so we simply add nil to the record.
-      xs.emplace(field.name, caf::none);
-    } else {
-      auto val = convert(v.value(), field.type);
-      if (!val)
-        return val.error();
-      xs.emplace(field.name, *val);
-    }
-  }
-  return xs;
-}
-
-/// A converter from a given JSON type to `vast::data`.
-/// Relies on a specialization of `type_biased_convert_impl` template function.
-/// If no specialization from a given JSON type to data is provided the default
-/// implementation is used which does one of the following:
-/// * returns an unchanged value if source and destination type match, or
-/// * performs string parsing if possible, or
-/// * returns an error.
-template <class JsonType>
-struct from_json_x_converter {
-  /// The signature of a function which takes an instance of JsonType and
-  /// returns data innstance or an error.
-  using converter_callback
-    = caf::expected<data> (*)(JsonType, const legacy_type& t);
-
-  /// A list of types which are possible destination types in the scope of
-  /// conversion from JSON.
-  using dest_types_list = data::types;
-
-  template <std::size_t N>
-  using dest_type_at_t = typename caf::detail::tl_at_t<dest_types_list, N>;
-
-  /// The total number of types possible in `vast::data`. This is also exactly
-  /// the number of possible conversion cases.
-  static constexpr std::size_t dest_types_count
-    = caf::detail::tl_size<dest_types_list>::value;
-
-  using callbacks_array = std::array<converter_callback, dest_types_count>;
-
-  template <std::size_t... ConcreteTypeIndex>
-  static constexpr callbacks_array
-  make_callbacks_array_impl(std::index_sequence<ConcreteTypeIndex...>) noexcept {
-    callbacks_array result = {
-      type_biased_convert_impl<JsonType, dest_type_at_t<ConcreteTypeIndex>>...};
+data extract(std::nullptr_t, const type& type) {
+  if (const auto* rt = caf::get_if<record_type>(&type)) {
+    auto result = record{};
+    result.reserve(rt->num_fields());
+    for (const auto& field : rt->fields())
+      result.emplace(field.name, caf::none);
     return result;
   }
-
-  template <typename ConcreteTypeIndexSeq
-            = std::make_index_sequence<dest_types_count>>
-  static constexpr callbacks_array make_callbacks_array() noexcept {
-    return make_callbacks_array_impl(ConcreteTypeIndexSeq{});
-  }
-
-  static constexpr callbacks_array callbacks = make_callbacks_array();
-};
-
-template <typename T>
-caf::expected<data> convert_from_impl(T v, const legacy_type& t) {
-  const auto type_index = t->index();
-  using converter = from_json_x_converter<T>;
-  if (0L <= type_index
-      && static_cast<int>(converter::dest_types_count) > type_index)
-    return converter::callbacks[type_index](v, t);
-  return caf::make_error(ec::syntax_error, "invalid field type");
+  return caf::none;
 }
 
-template <typename T>
-caf::expected<data>
-convert_from(::simdjson::simdjson_result<T> r, const legacy_type& t) {
-  VAST_ASSERT(r.error() == ::simdjson::error_code::SUCCESS);
-  return convert_from_impl<T>(r.value(), t);
-}
+void add(int64_t value, const type& type, table_slice_builder& builder);
+void add(uint64_t value, const type& type, table_slice_builder& builder);
+void add(double value, const type& type, table_slice_builder& builder);
+void add(bool value, const type& type, table_slice_builder& builder);
+void add(std::string_view value, const type& type,
+         table_slice_builder& builder);
 
-caf::expected<data>
-convert(const ::simdjson::dom::element& e, const legacy_type& t) {
-  switch (e.type()) {
-    case ::simdjson::dom::element_type::ARRAY:
-      return convert_from(e.get_array(), t);
-    case ::simdjson::dom::element_type::OBJECT:
-      return convert_from(e.get_object(), t);
-    case ::simdjson::dom::element_type::INT64:
-      return convert_from(e.get_int64(), t);
-    case ::simdjson::dom::element_type::UINT64:
-      return convert_from(e.get_uint64(), t);
-    case ::simdjson::dom::element_type::DOUBLE:
-      return convert_from(e.get_double(), t);
-    case ::simdjson::dom::element_type::STRING:
-      return convert_from(e.get_string(), t);
-    case ::simdjson::dom::element_type::BOOL:
-      return convert_from(e.get_bool(), t);
-    case ::simdjson::dom::element_type::NULL_VALUE:
+caf::error add(const ::simdjson::dom::element& value, const type& type,
+               table_slice_builder& builder) {
+  switch (value.type()) {
+    case ::simdjson::dom::element_type::ARRAY: {
+      // Arrays need to be extracted.
+      if (!builder.add(extract(value.get_array().value(), type)))
+        return caf::make_error(
+          ec::parse_error,
+          fmt::format("failed to extract value of type {} from JSON array {}",
+                      type, ::simdjson::to_string(value.get_array())));
       return caf::none;
+    }
+    case ::simdjson::dom::element_type::OBJECT:
+      // We cannot have an object at this point because we are visiting only the
+      // leaves of the outermost record type, and for records inside lists we
+      // extract rather than add.
+      __builtin_unreachable();
+    case ::simdjson::dom::element_type::INT64: {
+      add(value.get_int64().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::UINT64: {
+      add(value.get_uint64().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::DOUBLE: {
+      add(value.get_double().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::STRING: {
+      add(value.get_string().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::BOOL: {
+      add(value.get_bool().value(), type, builder);
+      return caf::none;
+    }
+    case ::simdjson::dom::element_type::NULL_VALUE: {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+      return caf::none;
+    }
   }
-  return caf::make_error(ec::syntax_error, "invalid json type");
+  __builtin_unreachable();
 }
 
-::simdjson::simdjson_result<::simdjson::dom::element>
-lookup(std::string_view field, const ::simdjson::dom::object& xs) {
-  VAST_ASSERT(!field.empty());
-  const auto i = field.find('.');
-  if (i == std::string_view::npos)
-    return xs.at_key(field);
-  // We have to deal with a nested field name in a potentially nested JSON
-  // object.
-  if (auto at_key_result = xs.at_key(field.substr(0, i));
-      at_key_result.error() != ::simdjson::error_code::SUCCESS) {
-    // Attempt to access JSON field with flattened name.
-    return xs.at_key(field);
-  } else if (auto get_object_result = at_key_result.get_object();
-             get_object_result.error() != ::simdjson::error_code::SUCCESS) {
-    return ::simdjson::error_code::INCORRECT_TYPE;
-  } else {
-    field.remove_prefix(i + 1);
-    return lookup(field, get_object_result.value());
-  }
+void add(int64_t value, const type& type, table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      const auto added = builder.add(value != 0);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      const auto added = builder.add(view<integer>{value});
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      if (value >= 0) {
+        const auto added = builder.add(detail::narrow_cast<view<count>>(value));
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<view<real>>(value));
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      const auto added = builder.add(std::chrono::duration_cast<duration>(
+        std::chrono::duration<integer::value_type>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      const auto added
+        = builder.add(time{}
+                      + std::chrono::duration_cast<duration>(
+                        std::chrono::duration<integer::value_type>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(fmt::to_string(value));
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type& et) noexcept {
+      if (auto key = detail::narrow_cast<view<enumeration>>(value);
+          !et.field(key).empty()) {
+        const auto added = builder.add(key);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
+}
+
+void add(uint64_t value, const type& type, table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      const auto added = builder.add(value != 0);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      if (value <= std::numeric_limits<int64_t>::max()) {
+        const auto added = builder.add(
+          view<integer>{detail::narrow_cast<integer::value_type>(value)});
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      const auto added = builder.add(view<count>{value});
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<view<real>>(value));
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      const auto added = builder.add(std::chrono::duration_cast<duration>(
+        std::chrono::duration<count>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      const auto added = builder.add(time{}
+                                     + std::chrono::duration_cast<duration>(
+                                       std::chrono::duration<count>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(fmt::to_string(value));
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type& et) noexcept {
+      if (auto key = detail::narrow_cast<view<enumeration>>(value);
+          !et.field(key).empty()) {
+        const auto added = builder.add(key);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
+}
+
+void add(double value, const type& type, table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      const auto added = builder.add(value != 0);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      const auto added = builder.add(
+        view<integer>{detail::narrow_cast<integer::value_type>(value)});
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<count>(value));
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      const auto added = builder.add(value);
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      const auto added = builder.add(std::chrono::duration_cast<duration>(
+        std::chrono::duration<real>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      const auto added = builder.add(time{}
+                                     + std::chrono::duration_cast<duration>(
+                                       std::chrono::duration<real>{value}));
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(fmt::to_string(value));
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
+}
+
+void add(bool value, const type& type, table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      const auto added = builder.add(value);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      const auto added = builder.add(value ? integer{1} : integer{0});
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      const auto added = builder.add(value ? count{1} : count{0});
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(fmt::to_string(value));
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
+}
+
+void add(std::string_view value, const type& type,
+         table_slice_builder& builder) {
+  auto f = detail::overload{
+    [&](const none_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const bool_type&) noexcept {
+      if (bool result = {}; parsers::json_boolean(value, result)) {
+        const auto added = builder.add(result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const integer_type&) noexcept {
+      if (integer::value_type result = {}; parsers::json_int(value, result)) {
+        const auto added = builder.add(view<integer>{result});
+        VAST_ASSERT(added);
+        return;
+      }
+      if (real result = {}; parsers::json_number(value, result)) {
+        const auto added = builder.add(
+          view<integer>{detail::narrow_cast<integer::value_type>(result)});
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const count_type&) noexcept {
+      if (count result = {}; parsers::json_count(value, result)) {
+        const auto added = builder.add(result);
+        VAST_ASSERT(added);
+        return;
+      }
+      if (real result = {}; parsers::json_number(value, result)) {
+        const auto added
+          = builder.add(detail::narrow_cast<view<count>>(result));
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const real_type&) noexcept {
+      if (real result = {}; parsers::json_number(value, result)) {
+        const auto added = builder.add(result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const duration_type&) noexcept {
+      if (auto result = to<duration>(value)) {
+        const auto added = builder.add(*result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const time_type&) noexcept {
+      if (auto result = to<time>(value)) {
+        const auto added = builder.add(*result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const string_type&) noexcept {
+      const auto added = builder.add(value);
+      VAST_ASSERT(added);
+    },
+    [&](const pattern_type&) noexcept {
+      const auto added = builder.add(view<pattern>{value});
+      VAST_ASSERT(added);
+    },
+    [&](const address_type&) noexcept {
+      if (auto result = to<address>(value)) {
+        const auto added = builder.add(*result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const subnet_type&) noexcept {
+      if (auto result = to<subnet>(value)) {
+        const auto added = builder.add(*result);
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const enumeration_type& et) noexcept {
+      if (auto internal = et.resolve(value)) {
+        const auto added
+          = builder.add(detail::narrow_cast<enumeration>(*internal));
+        VAST_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const list_type& lt) noexcept {
+      const auto added = builder.add(list{extract(value, lt.value_type())});
+      VAST_ASSERT(added);
+    },
+    [&](const map_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      VAST_ASSERT(added);
+    },
+    [&](const record_type&) noexcept {
+      __builtin_unreachable();
+    },
+  };
+  caf::visit(f, type);
 }
 
 } // namespace
+
+caf::error
+add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
+  auto self
+    = [&](auto&& self, const ::simdjson::dom::object& object,
+          const record_type& layout, std::string_view prefix) -> caf::error {
+    for (const auto& field : layout.fields()) {
+      auto handle_found = [&](const ::simdjson::dom::element& element) {
+        auto f = detail::overload{
+          [&](const map_type& mt) {
+            if (element.is_object()) {
+              const auto object = element.get_object().value();
+              auto result = map{};
+              result.reserve(object.size());
+              const auto kt = mt.key_type();
+              const auto vt = mt.value_type();
+              for (const auto& [k, v] : object)
+                result.emplace(extract(k, kt), extract(v, vt));
+              const auto added = builder.add(result);
+              VAST_ASSERT(added);
+            } else {
+              const auto added = builder.add(caf::none);
+              VAST_ASSERT(added);
+            }
+          },
+          [&](const record_type& rt) {
+            if (element.is_object()) {
+              self(self, element.get_object().value(), rt, "");
+            } else {
+              for (size_t i = 0; i < rt.num_leaves(); ++i) {
+                const auto added = builder.add(caf::none);
+                VAST_ASSERT(added);
+              }
+            }
+          },
+          [&](const auto&) {
+            if (element.is_object()) {
+              const auto added = builder.add(caf::none);
+              VAST_ASSERT(added);
+            } else {
+              add(element, field.type, builder);
+            }
+          },
+        };
+        caf::visit(f, field.type);
+      };
+      auto handle_not_found = [&](std::string_view next_prefix) -> caf::error {
+        if (const auto* nested = caf::get_if<record_type>(&field.type)) {
+          if (auto err = self(self, object, *nested, next_prefix))
+            return err;
+        } else {
+          const auto added = builder.add(caf::none);
+          VAST_ASSERT(added);
+        }
+        return caf::none;
+      };
+      if (prefix.empty()) {
+        auto element = object.at_key(field.name);
+        if (element.error() == ::simdjson::error_code::SUCCESS)
+          handle_found(element.value());
+        else if (auto err = handle_not_found(field.name))
+          return err;
+      } else {
+        const auto prefixed_key = fmt::format("{}.{}", prefix, field.name);
+        auto element = object.at_key(prefixed_key);
+        if (element.error() == ::simdjson::error_code::SUCCESS)
+          handle_found(element.value());
+        else if (auto err = handle_not_found(prefixed_key))
+          return err;
+      }
+    }
+    return caf::none;
+  };
+  const auto& layout = caf::get<record_type>(builder.layout());
+  return self(self, object, layout, "");
+}
+
+// -- writer ------------------------------------------------------------------
 
 writer::writer(ostream_ptr out, const caf::settings& options)
   : super{std::move(out)} {
@@ -450,34 +1137,140 @@ const char* writer::name() const {
   return "json-writer";
 }
 
-caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
-               const legacy_record_type& layout) {
-  caf::error err = caf::none;
-  for (const auto& field : legacy_record_type::each(layout)) {
-    auto lookup_result = lookup(field.key(), xs);
-    // Non-existing fields are treated as empty (unset).
-    if (lookup_result.error() != ::simdjson::error_code::SUCCESS) {
-      if (!builder.add(make_data_view(caf::none)))
-        return caf::make_error(ec::unspecified,
-                               "failed to add caf::none to table "
-                               "slice builder");
+// -- reader ------------------------------------------------------------------
+
+reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
+  : super(options) {
+  if (in != nullptr)
+    reset(std::move(in));
+  if (const auto selector_opt
+      = caf::get_if<std::string>(&options, "vast.import.json.selector")) {
+    auto split = detail::split(*selector_opt, ":");
+    VAST_ASSERT(!split.empty());
+    if (split.size() > 2 || split[0].empty()) {
+      VAST_ERROR("{} failed to parse selector '{}': must contain at most one "
+                 "':' and field name must not be empty; ignoring option");
+      selector_ = std::make_unique<default_selector>();
+    } else {
+      auto field_name = std::string{split[0]};
+      auto type_prefix = split.size() == 2 ? std::string{split[1]} : "";
+      if (!type_prefix.empty())
+        reader_name_ = fmt::format("{}-reader", type_prefix);
+      selector_ = std::make_unique<field_selector>(std::move(field_name),
+                                                   std::move(type_prefix));
+    }
+  } else {
+    selector_ = std::make_unique<default_selector>();
+  }
+}
+
+void reader::reset(std::unique_ptr<std::istream> in) {
+  VAST_ASSERT(in != nullptr);
+  input_ = std::move(in);
+  lines_ = std::make_unique<detail::line_range>(*input_);
+}
+
+caf::error reader::schema(vast::schema s) {
+  return selector_->schema(s);
+}
+
+vast::schema reader::schema() const {
+  return selector_->schema();
+}
+
+const char* reader::name() const {
+  return reader_name_.c_str();
+}
+
+vast::system::report reader::status() const {
+  using namespace std::string_literals;
+  uint64_t invalid_line = num_invalid_lines_;
+  uint64_t unknown_layout = num_unknown_layouts_;
+  if (num_invalid_lines_ > 0)
+    VAST_WARN("{} failed to parse {} of {} recent lines",
+              detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
+  if (num_unknown_layouts_ > 0)
+    VAST_WARN("{} failed to find a matching type for {} of {} recent lines",
+              detail::pretty_type_name(this), num_unknown_layouts_, num_lines_);
+  num_invalid_lines_ = 0;
+  num_unknown_layouts_ = 0;
+  num_lines_ = 0;
+  return {
+    {name() + ".invalid-line"s, invalid_line},
+    {name() + ".unknown-layout"s, unknown_layout},
+  };
+}
+
+caf::error
+reader::read_impl(size_t max_events, size_t max_slice_size, consumer& cons) {
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(max_events), VAST_ARG(max_slice_size));
+  VAST_ASSERT(max_events > 0);
+  VAST_ASSERT(max_slice_size > 0);
+  size_t produced = 0;
+  table_slice_builder_ptr bptr = nullptr;
+  while (produced < max_events) {
+    if (lines_->done())
+      return finish(cons, caf::make_error(ec::end_of_input, "input exhausted"));
+    if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
+        && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
+      VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
+      return finish(cons, ec::timeout);
+    }
+    bool timed_out = lines_->next_timeout(read_timeout_);
+    if (timed_out) {
+      VAST_DEBUG("{} stalled at line {}", detail::pretty_type_name(this),
+                 lines_->line_number());
+      return ec::stalled;
+    }
+    auto& line = lines_->get();
+    ++num_lines_;
+    if (line.empty()) {
+      // Ignore empty lines.
+      VAST_DEBUG("{} ignores empty line at {}", detail::pretty_type_name(this),
+                 lines_->line_number());
       continue;
     }
-    auto x = convert(lookup_result.value(), field.type());
-    if (!x) {
-      if (!err)
-        err = caf::make_error(ec::convert_error);
-      err.context() += x.error().context();
-      err.context() += caf::make_message("could not convert", field.key());
-      x = caf::none;
+    auto parse_result = json_parser_.parse(line);
+    if (parse_result.error() != ::simdjson::error_code::SUCCESS) {
+      if (num_invalid_lines_ == 0)
+        VAST_WARN("{} failed to parse line {}: {}",
+                  detail::pretty_type_name(this), lines_->line_number(), line);
+      ++num_invalid_lines_;
+      continue;
     }
-    if (!builder.add(*x))
-      return caf::make_error(ec::type_clash,
-                             fmt::format("unexpected type for field {} with "
-                                         "type {} for data {}",
-                                         field.key(), field.type(), *x));
+    auto get_object_result = parse_result.get_object();
+    if (get_object_result.error() != ::simdjson::error_code::SUCCESS) {
+      if (num_invalid_lines_ == 0)
+        VAST_WARN("{} failed to parse line as JSON object {}: {}",
+                  detail::pretty_type_name(this), lines_->line_number(), line);
+      ++num_invalid_lines_;
+      continue;
+    }
+    auto&& layout = (*selector_)(get_object_result.value());
+    if (!layout) {
+      if (num_unknown_layouts_ == 0)
+        VAST_WARN("{} failed to find a matching type at line {}: {}",
+                  detail::pretty_type_name(this), lines_->line_number(), line);
+      ++num_unknown_layouts_;
+      continue;
+    }
+    bptr = builder(*layout);
+    if (bptr == nullptr)
+      return caf::make_error(ec::parse_error, "unable to get a builder");
+    if (auto err = add(get_object_result.value(), *bptr))
+      return finish(cons, //
+                    caf::make_error(ec::logic_error,
+                                    fmt::format("failed to add line {} of "
+                                                "layout {} to builder: {}",
+                                                lines_->line_number(), *layout,
+                                                err)));
+    produced++;
+    batch_events_++;
+    if (bptr->rows() == max_slice_size)
+      if (auto err = finish(cons, bptr))
+        return err;
   }
-  return err;
+  return finish(cons);
 }
 
 } // namespace vast::format::json

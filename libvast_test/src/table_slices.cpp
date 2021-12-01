@@ -12,7 +12,9 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/detail/append.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/format/test.hpp"
+#include "vast/operator.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -32,8 +34,8 @@ namespace vast {
 /// @returns a list of randomnly filled table slices or an error.
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
-make_random_table_slices(size_t num_slices, size_t slice_size,
-                         legacy_record_type layout, id offset, size_t seed) {
+make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
+                         id offset, size_t seed) {
   schema sc;
   sc.add(layout);
   // We have no access to the actor system, so we can only pick the default
@@ -74,13 +76,13 @@ make_data(const table_slice& slice, size_t first_row, size_t num_rows) {
     num_rows = slice.rows() - first_row;
   std::vector<std::vector<data>> result;
   result.reserve(num_rows);
-  auto fl = flatten(slice.layout());
+  auto fl = flatten(caf::get<record_type>(slice.layout()));
   for (size_t i = 0; i < num_rows; ++i) {
     std::vector<data> xs;
     xs.reserve(slice.columns());
     for (size_t j = 0; j < slice.columns(); ++j)
       xs.emplace_back(
-        materialize(slice.at(first_row + i, j, fl.fields[j].type)));
+        materialize(slice.at(first_row + i, j, fl.field(j).type)));
     result.push_back(std::move(xs));
   }
   return result;
@@ -100,60 +102,6 @@ make_data(const std::vector<table_slice>& slices) {
 namespace fixtures {
 
 table_slices::table_slices() {
-  // Define our test layout.
-  layout = legacy_record_type{
-    {"a", legacy_bool_type{}},
-    {"b", legacy_integer_type{}},
-    {"c", legacy_count_type{}},
-    {"d", legacy_real_type{}},
-    {"e", legacy_duration_type{}},
-    {"f", legacy_time_type{}},
-    {"g", legacy_string_type{}},
-    {"h", legacy_pattern_type{}},
-    {"i", legacy_address_type{}},
-    {"j", legacy_subnet_type{}},
-    {"l", legacy_list_type{legacy_count_type{}}},
-    {"n", legacy_map_type{legacy_count_type{}, legacy_bool_type{}}},
-    // test_lists
-    {"va", legacy_list_type{legacy_bool_type{}}},
-    {"vb", legacy_list_type{legacy_integer_type{}}},
-    {"vc", legacy_list_type{legacy_count_type{}}},
-    {"vd", legacy_list_type{legacy_real_type{}}},
-    {"ve", legacy_list_type{legacy_duration_type{}}},
-    {"vf", legacy_list_type{legacy_time_type{}}},
-    {"vg", legacy_list_type{legacy_string_type{}}},
-    {"vh", legacy_list_type{legacy_pattern_type{}}},
-    {"vi", legacy_list_type{legacy_address_type{}}},
-    {"vj", legacy_list_type{legacy_subnet_type{}}},
-    // {"vl", legacy_list_type{legacy_list_type{legacy_count_type{}}}},
-    // {"vm", legacy_list_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}}},
-    // -- test_maps_left
-    {"maa", legacy_map_type{legacy_bool_type{}, legacy_bool_type{}}},
-    {"mba", legacy_map_type{legacy_integer_type{}, legacy_bool_type{}}},
-    {"mca", legacy_map_type{legacy_count_type{}, legacy_bool_type{}}},
-    {"mda", legacy_map_type{legacy_real_type{}, legacy_bool_type{}}},
-    {"mea", legacy_map_type{legacy_duration_type{}, legacy_bool_type{}}},
-    {"mfa", legacy_map_type{legacy_time_type{}, legacy_bool_type{}}},
-    {"mga", legacy_map_type{legacy_string_type{}, legacy_bool_type{}}},
-    {"mha", legacy_map_type{legacy_pattern_type{}, legacy_bool_type{}}},
-    {"mia", legacy_map_type{legacy_address_type{}, legacy_bool_type{}}},
-    {"mja", legacy_map_type{legacy_subnet_type{}, legacy_bool_type{}}},
-    // {"mla", legacy_map_type{legacy_list_type{legacy_count_type{}}, legacy_bool_type{}}},
-    // {"mna", legacy_map_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}, legacy_bool_type{}}},
-    // -- test_maps_right (intentionally no maa)
-    {"mab", legacy_map_type{legacy_bool_type{}, legacy_integer_type{}}},
-    {"mac", legacy_map_type{legacy_bool_type{}, legacy_count_type{}}},
-    {"mad", legacy_map_type{legacy_bool_type{}, legacy_real_type{}}},
-    {"mae", legacy_map_type{legacy_bool_type{}, legacy_duration_type{}}},
-    {"maf", legacy_map_type{legacy_bool_type{}, legacy_time_type{}}},
-    {"mag", legacy_map_type{legacy_bool_type{}, legacy_string_type{}}},
-    {"mah", legacy_map_type{legacy_bool_type{}, legacy_pattern_type{}}},
-    {"mai", legacy_map_type{legacy_bool_type{}, legacy_address_type{}}},
-    {"maj", legacy_map_type{legacy_bool_type{}, legacy_subnet_type{}}},
-    // {"mal", legacy_map_type{legacy_bool_type{}, legacy_list_type{legacy_count_type{}}}},
-    // {"man", legacy_map_type{legacy_bool_type{}, legacy_map_type{legacy_count_type{}, legacy_bool_type{}}}},
-	{"aas", legacy_alias_type{legacy_alias_type{legacy_string_type{}}}},
-  }.name("test");
   // A bunch of test data for nested type combinations.
   // clang-format off
   auto test_lists = ""s
@@ -227,12 +175,7 @@ void table_slices::run() {
   test_copy();
   test_manual_serialization();
   test_smart_pointer_serialization();
-  test_message_serialization();
   test_append_column_to_index();
-}
-
-caf::binary_deserializer table_slices::make_source() {
-  return caf::binary_deserializer{sys, buf};
 }
 
 caf::binary_serializer table_slices::make_sink() {
@@ -258,14 +201,12 @@ void table_slices::test_add() {
   MESSAGE(">> test table_slice_builder::add");
   auto slice = make_slice();
   CHECK_EQUAL(slice.rows(), 2u);
-  auto flat_layout = flatten(layout);
-  CHECK_EQUAL(slice.columns(), flat_layout.fields.size());
-
+  auto flat_layout = flatten(caf::get<record_type>(layout));
+  CHECK_EQUAL(slice.columns(), flat_layout.num_fields());
   for (size_t row = 0; row < slice.rows(); ++row)
     for (size_t col = 0; col < slice.columns(); ++col) {
       MESSAGE("checking value at (" << row << ',' << col << ')');
-      CHECK_EQUAL(slice.at(row, col, flat_layout.fields[col].type),
-                  at(row, col));
+      CHECK_EQUAL(slice.at(row, col), at(row, col));
     }
 }
 
@@ -292,8 +233,7 @@ void table_slices::test_manual_serialization() {
   auto sink = make_sink();
   CHECK_EQUAL(inspect(sink, slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
-  auto source = make_source();
-  CHECK_EQUAL(inspect(source, slice2), caf::none);
+  CHECK_EQUAL(vast::detail::legacy_deserialize(buf, slice2), true);
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
@@ -308,35 +248,15 @@ void table_slices::test_smart_pointer_serialization() {
   auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
-  auto source = make_source();
-  CHECK_EQUAL(source(slice2), caf::none);
+  CHECK_EQUAL(vast::detail::legacy_deserialize(buf, slice2), true);
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
 }
 
-void table_slices::test_message_serialization() {
-  MESSAGE(">> test message serialization");
-  MESSAGE("make slices");
-  auto slice1 = caf::make_message(make_slice());
-  caf::message slice2;
-  MESSAGE("save content of the first slice into the buffer");
-  auto sink = make_sink();
-  CHECK_EQUAL(sink(slice1), caf::none);
-  MESSAGE("load content for the second slice from the buffer");
-  auto source = make_source();
-  CHECK_EQUAL(source(slice2), caf::none);
-  MESSAGE("check result of serialization roundtrip");
-  REQUIRE(slice2.match_elements<table_slice>());
-  CHECK_EQUAL(slice1.get_as<table_slice>(0), slice2.get_as<table_slice>(0));
-  // FIXME: Make the table slice builders use `table_slice_encoding` as key.
-  // CHECK_EQUAL(slice2.get_as<table_slice>(0).encoding(),
-  //             builder->implementation_id());
-}
-
 void table_slices::test_append_column_to_index() {
   MESSAGE(">> test append_column_to_index");
-  auto idx = factory<value_index>::make(legacy_integer_type{}, caf::settings{});
+  auto idx = factory<value_index>::make(type{integer_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   auto slice = make_slice();
   slice.offset(0);

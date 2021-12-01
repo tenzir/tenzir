@@ -15,12 +15,12 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/spawn_container_source.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
+#include "vast/type.hpp"
 
 #include <caf/stateful_actor.hpp>
 #include <caf/test/dsl.hpp>
@@ -33,8 +33,7 @@ using namespace vast;
 namespace {
 
 template <class... Ts>
-vast::table_slice
-make_data(const vast::legacy_record_type& layout, Ts&&... ts) {
+vast::table_slice make_data(const vast::type& layout, Ts&&... ts) {
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   REQUIRE(builder->add(std::forward<Ts>(ts)...));
@@ -82,13 +81,19 @@ TEST(taxonomies) {
   self->send(aut, atom::put_v, t1);
   run();
   MESSAGE("collecting some types");
-  const vast::legacy_record_type la = vast::legacy_record_type{
-    {"fo0", vast::legacy_string_type{}},
-  }.name("a");
+  const vast::type la = vast::type{
+    "a",
+    vast::record_type{
+      {"fo0", vast::string_type{}},
+    },
+  };
   auto slices_a = std::vector{make_data(la, "bogus")};
-  const vast::legacy_record_type lx = vast::legacy_record_type{
-    {"foe", vast::legacy_count_type{}},
-  }.name("x");
+  const vast::type lx = vast::type{
+    "x",
+    vast::record_type{
+      {"foe", vast::count_type{}},
+    },
+  };
   auto slices_x = std::vector{make_data(lx, 1u)};
   vast::detail::spawn_container_source(sys, std::move(slices_a), aut);
   vast::detail::spawn_container_source(sys, std::move(slices_x), aut);
@@ -99,7 +104,11 @@ TEST(taxonomies) {
   self->send(aut, atom::resolve_v, exp);
   run();
   expression result;
-  self->receive([&](expression r) { result = r; }, error_handler());
+  self->receive(
+    [&](expression r) {
+      result = r;
+    },
+    error_handler());
   CHECK_EQUAL(result, ref);
 }
 

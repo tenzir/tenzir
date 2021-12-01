@@ -11,8 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/expression.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/system/node.hpp"
+#include "vast/type.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/fwd.hpp>
@@ -55,7 +55,7 @@ struct pivoter_state {
 
   /// A cache for the connections between a source type and the target type,
   /// to avoid multiple computations of those.
-  mutable std::unordered_map<legacy_record_type, std::optional<record_field>>
+  mutable std::unordered_map<record_type, std::optional<record_type::field_view>>
     cache;
 
   /// A tracking counter of spawned exporters. Used for lifetime management.

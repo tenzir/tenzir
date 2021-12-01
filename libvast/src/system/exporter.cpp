@@ -23,6 +23,7 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/query.hpp"
+#include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
@@ -144,10 +145,10 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
   // Construct a candidate checker if we don't have one for this type.
-  legacy_type t = slice.layout();
-  auto it = self->state.checkers.find(t);
+  auto layout = slice.layout();
+  auto it = self->state.checkers.find(layout);
   if (it == self->state.checkers.end()) {
-    auto x = tailor(self->state.expr, t);
+    auto x = tailor(self->state.expr, layout);
     if (!x) {
       VAST_ERROR("{} failed to tailor expression: {}", *self,
                  render(x.error()));
@@ -155,9 +156,9 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
       shutdown(self);
       return;
     }
-    VAST_DEBUG("{} tailored AST to {}: {}", *self, t, x);
-    std::tie(it, std::ignore) = self->state.checkers.emplace(
-      legacy_type{slice.layout()}, std::move(*x));
+    VAST_DEBUG("{} tailored AST to {}: {}", *self, layout, x);
+    std::tie(it, std::ignore)
+      = self->state.checkers.emplace(layout, std::move(*x));
   }
   auto& checker = it->second;
   // Perform candidate check, splitting the slice into subsets if needed.
@@ -270,14 +271,15 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
                   std::move(q))
         .then(
-          [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
+          [=](const query_cursor& cursor) {
             VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
                          "partitions",
-                         *self, lookup, scheduled, partitions);
-            self->state.id = lookup;
-            if (partitions > 0) {
-              self->state.query.expected = partitions;
-              self->state.query.scheduled = scheduled;
+                         *self, cursor.id, cursor.scheduled_partitions,
+                         cursor.candidate_partitions);
+            self->state.id = cursor.id;
+            if (cursor.candidate_partitions > 0) {
+              self->state.query.expected = cursor.candidate_partitions;
+              self->state.query.scheduled = cursor.scheduled_partitions;
             } else {
               shutdown(self);
             }

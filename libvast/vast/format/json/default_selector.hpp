@@ -14,10 +14,10 @@
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/format/json/selector.hpp"
 #include "vast/hash/hash_append.hpp"
 #include "vast/hash/xxhash.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
 
 #include <caf/expected.hpp>
 
@@ -26,7 +26,7 @@
 
 namespace vast::format::json {
 
-struct default_selector {
+struct default_selector final : selector {
 private:
   template <typename Prefix>
   static void
@@ -42,7 +42,7 @@ private:
     }
   }
 
-  static auto make_names_layout(const ::simdjson::dom::object& obj) {
+  static inline auto make_names_layout(const ::simdjson::dom::object& obj) {
     std::vector<std::string> entries;
     entries.reserve(100);
     auto prefix = detail::stack_vector<std::string_view, 64>{};
@@ -52,8 +52,9 @@ private:
   }
 
 public:
-  std::optional<legacy_record_type>
-  operator()(const ::simdjson::dom::object& obj) const {
+  /// Locates the type for a given JSON object.
+  inline std::optional<type>
+  operator()(const ::simdjson::dom::object& obj) const override {
     if (type_cache.empty())
       return {};
     // Iff there is only one type in the type cache, allow the JSON reader to
@@ -66,41 +67,39 @@ public:
     return {};
   }
 
-  caf::error schema(vast::schema sch) {
+  /// Sets the schema.
+  inline caf::error schema(const vast::schema& sch) override {
     if (sch.empty())
       return caf::make_error(ec::invalid_configuration,
                              "no schema provided or type "
                              "too restricted");
-    for (auto& entry : sch) {
-      if (!caf::holds_alternative<legacy_record_type>(entry))
+    for (const auto& entry : sch) {
+      if (!caf::holds_alternative<record_type>(entry))
         continue;
-      auto layout = caf::get<legacy_record_type>(entry);
+      if (entry.name().empty()) {
+        VAST_WARN("unexpectedly unnamed layout in schema: {}", entry);
+        continue;
+      }
       std::vector<std::string> cache_entry;
-      for (const auto& leaf : legacy_record_type::each(layout))
-        cache_entry.emplace_back(leaf.key());
+      const auto& layout = caf::get<record_type>(entry);
+      for (const auto& [_, index] : layout.leaves())
+        cache_entry.emplace_back(layout.key(index));
       std::sort(cache_entry.begin(), cache_entry.end());
-      type_cache.insert({std::move(cache_entry), std::move(layout)});
+      type_cache.insert({std::move(cache_entry), entry});
     }
     return caf::none;
   }
 
-  [[nodiscard]] vast::schema schema() const {
+  /// Retrieves the current schema.
+  inline vast::schema schema() const override {
     vast::schema result;
     for (const auto& [k, v] : type_cache)
       result.add(v);
     return result;
   }
 
-  static const char* category() {
-    return "json";
-  }
-
-  static const char* name() {
-    return "json-reader";
-  }
-
-  detail::flat_map<std::vector<std::string>, legacy_record_type> type_cache
-    = {};
+private:
+  detail::flat_map<std::vector<std::string>, type> type_cache = {};
 };
 
 } // namespace vast::format::json

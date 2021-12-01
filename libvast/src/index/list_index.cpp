@@ -10,13 +10,13 @@
 
 #include "vast/base.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index_factory.hpp"
 
-#include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
@@ -25,20 +25,20 @@
 
 namespace vast {
 
-list_index::list_index(vast::legacy_type t, caf::settings opts)
+list_index::list_index(vast::type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   max_size_ = caf::get_or(options(), "max-size",
                           defaults::index::max_container_elements);
   auto f = detail::overload{
     [](const auto&) {
-      return vast::legacy_type{};
+      return vast::type{};
     },
-    [](const legacy_list_type& x) {
-      return x.value_type;
+    [](const list_type& x) {
+      return x.value_type();
     },
   };
   value_type_ = caf::visit(f, value_index::type());
-  VAST_ASSERT(!caf::holds_alternative<legacy_none_type>(value_type_));
+  VAST_ASSERT(!caf::holds_alternative<none_type>(value_type_));
   size_t components = std::log10(max_size_);
   if (max_size_ % 10 != 0)
     ++components;
@@ -47,14 +47,28 @@ list_index::list_index(vast::legacy_type t, caf::settings opts)
 
 caf::error list_index::serialize(caf::serializer& sink) const {
   return caf::error::eval(
-    [&] { return value_index::serialize(sink); },
-    [&] { return sink(elements_, size_, max_size_, value_type_); });
+    [&] {
+      return value_index::serialize(sink);
+    },
+    [&] {
+      return sink(elements_, size_, max_size_, value_type_);
+    });
 }
 
 caf::error list_index::deserialize(caf::deserializer& source) {
   return caf::error::eval(
-    [&] { return value_index::deserialize(source); },
-    [&] { return source(elements_, size_, max_size_, value_type_); });
+    [&] {
+      return value_index::deserialize(source);
+    },
+    [&] {
+      return source(elements_, size_, max_size_, value_type_);
+    });
+}
+
+bool list_index::deserialize(detail::legacy_deserializer& source) {
+  if (!value_index::deserialize(source))
+    return false;
+  return source(elements_, size_, max_size_, value_type_);
 }
 
 bool list_index::append_impl(data_view x, id pos) {

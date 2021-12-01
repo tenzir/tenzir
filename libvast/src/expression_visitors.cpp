@@ -12,18 +12,16 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
-#include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/die.hpp"
 #include "vast/ids.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <algorithm>
@@ -134,8 +132,9 @@ expression aligner::operator()(const negation& n) const {
 }
 
 expression aligner::operator()(const predicate& p) const {
-  auto is_extractor
-    = [](auto& operand) { return !caf::holds_alternative<data>(operand); };
+  auto is_extractor = [](auto& operand) {
+    return !caf::holds_alternative<data>(operand);
+  };
   // Already aligned if LHS is an extractor or no extractor present.
   if (is_extractor(p.lhs) || !is_extractor(p.rhs))
     return p;
@@ -319,7 +318,7 @@ caf::expected<void>
 validator::operator()(const type_extractor& ex, const data& d) {
   // References to aliases can't be checked here because the expression parser
   // can't possible know about them. We defer the check to the type resolver.
-  if (caf::holds_alternative<legacy_none_type>(ex.type))
+  if (caf::holds_alternative<none_type>(ex.type))
     return caf::no_error;
   if (!compatible(ex.type, op_, d))
     return caf::make_error(
@@ -333,7 +332,9 @@ caf::expected<void> validator::operator()(const field_extractor&, const data&) {
   return caf::no_error;
 }
 
-type_resolver::type_resolver(const legacy_type& t) : type_{t} {
+type_resolver::type_resolver(const type& layout)
+  : layout_{caf::get<record_type>(layout)}, layout_name_{layout.name()} {
+  // nop
 }
 
 caf::expected<expression> type_resolver::operator()(caf::none_t) {
@@ -400,16 +401,11 @@ type_resolver::operator()(const meta_extractor& ex, const data& d) {
 
 caf::expected<expression>
 type_resolver::operator()(const type_extractor& ex, const data& d) {
-  if (caf::holds_alternative<legacy_none_type>(ex.type)) {
-    auto matches = [&](const legacy_type& t) {
-      const auto* p = &t;
-      while (const auto* a = caf::get_if<legacy_alias_type>(p)) {
-        if (a->name() == ex.type.name())
-          return compatible(*a, op_, d);
-        p = &a->value_type;
-      }
-      if (p->name() == ex.type.name())
-        return compatible(*p, op_, d);
+  if (caf::holds_alternative<none_type>(ex.type)) {
+    auto matches = [&](const type& t) {
+      for (const auto& name : t.names())
+        if (name == ex.type.name())
+          return compatible(t, op_, d);
       return false;
     };
     // Preserve compatibility with databases that were created beore
@@ -417,15 +413,15 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
     if (ex.type.name() == "timestamp") {
       if (!caf::holds_alternative<time>(d))
         return caf::make_error(ec::type_clash, ":timestamp", op_, d);
-      auto has_timestamp_attribute = [&](const legacy_type& t) {
-        return has_attribute(t, "timestamp");
+      auto has_timestamp_attribute = [&](const type& t) {
+        return t.attribute("timestamp").has_value();
       };
       return disjunction{resolve_extractor(matches, d),
                          resolve_extractor(has_timestamp_attribute, d)};
     }
     return resolve_extractor(matches, d);
   }
-  auto is_congruent = [&](const legacy_type& t) {
+  auto is_congruent = [&](const type& t) {
     return congruent(t, ex.type);
   };
   return resolve_extractor(is_congruent, d);
@@ -440,20 +436,12 @@ caf::expected<expression>
 type_resolver::operator()(const field_extractor& ex, const data& d) {
   std::vector<expression> connective;
   // First, interpret the field as a suffix of a record field name.
-  if (auto r = caf::get_if<legacy_record_type>(&type_)) {
-    auto suffixes = r->find_suffix(ex.field);
-    for (auto& offset : suffixes) {
-      auto f = r->at(offset);
-      if (!compatible(f->type, op_, d))
-        continue;
-      auto x = data_extractor{f->type, std::move(offset)};
-      connective.emplace_back(predicate{std::move(x), op_, d});
-    }
-    // Second, try to interpret the field as the name of a single type.
-  } else if (ex.field == type_.name()) {
-    if (!compatible(type_, op_, d))
-      return caf::make_error(ec::type_clash, type_, op_, d);
-    auto x = data_extractor{type_, {}};
+  auto suffixes = layout_.resolve_key_suffix(ex.field, layout_name_);
+  for (auto& offset : suffixes) {
+    const auto f = layout_.field(offset);
+    if (!compatible(f.type, op_, d))
+      continue;
+    auto x = data_extractor{layout_, offset};
     connective.emplace_back(predicate{std::move(x), op_, d});
   }
   if (connective.empty())
@@ -465,8 +453,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
       || op_ == relational_operator::not_in
       || op_ == relational_operator::not_ni)
     return {conjunction{std::move(connective)}};
-  else
-    return {disjunction{std::move(connective)}};
+  return {disjunction{std::move(connective)}};
 }
 
 caf::expected<expression>
@@ -474,7 +461,7 @@ type_resolver::operator()(const data& d, const field_extractor& ex) {
   return (*this)(ex, d);
 }
 
-matcher::matcher(const legacy_type& t) : type_{t} {
+matcher::matcher(const type& t) : type_{t} {
   // nop
 }
 
@@ -508,7 +495,9 @@ bool matcher::operator()(const predicate& p) {
 bool matcher::operator()(const meta_extractor& e, const data& d) {
   if (e.kind == meta_extractor::type) {
     VAST_ASSERT(caf::holds_alternative<std::string>(d));
-    return evaluate(d, op_, type_.name());
+    // TODO: It's kind of non-sensical that evaluate operates on data rather
+    // than data_view, forcing us to copy the type's name here.
+    return evaluate(d, op_, std::string{type_.name()});
   }
   return false;
 }

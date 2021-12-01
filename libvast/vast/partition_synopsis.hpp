@@ -36,7 +36,7 @@ struct partition_synopsis {
   uint64_t events;
 
   /// Synopsis data structures for types.
-  std::unordered_map<legacy_type, synopsis_ptr> type_synopses_;
+  std::unordered_map<type, synopsis_ptr> type_synopses_;
 
   /// Synopsis data structures for individual columns.
   std::unordered_map<qualified_record_field, synopsis_ptr> field_synopses_;

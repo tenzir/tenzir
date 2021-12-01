@@ -13,17 +13,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/documentation.hpp"
-#include "vast/format/arrow.hpp"
-#include "vast/format/ascii.hpp"
-#include "vast/format/csv.hpp"
-#include "vast/format/json.hpp"
-#include "vast/format/json/default_selector.hpp"
-#include "vast/format/json/suricata_selector.hpp"
-#include "vast/format/json/zeek_selector.hpp"
-#include "vast/format/null.hpp"
-#include "vast/format/syslog.hpp"
-#include "vast/format/test.hpp"
-#include "vast/format/zeek.hpp"
+#include "vast/error.hpp"
 #include "vast/plugin.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
@@ -222,10 +212,12 @@ auto make_spawn_source_command() {
                                "creates a new CSV source inside the node",
                                documentation::vast_spawn_source_csv,
                                opts("?vast.spawn.source.csv"));
-  spawn_source->add_subcommand("json",
-                               "creates a new JSON source inside the node",
-                               documentation::vast_spawn_source_json,
-                               opts("?vast.spawn.source.json"));
+  spawn_source->add_subcommand(
+    "json", "creates a new JSON source inside the node",
+    documentation::vast_spawn_source_json,
+    opts("?vast.spawn.source.json")
+      .add<std::string>("selector", "read the event type from the given field "
+                                    "(specify as '<field>[:<prefix>]')"));
   spawn_source->add_subcommand("suricata",
                                "creates a new Suricata source inside the node",
                                documentation::vast_spawn_source_suricata,
@@ -422,6 +414,7 @@ auto make_command_factory() {
 } // namespace
 
 auto make_root_command(std::string_view path) {
+  using namespace std::string_literals;
   // We're only interested in the application name, not in its path. For
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
   // interested in "vast".
@@ -522,9 +515,11 @@ std::unique_ptr<command> make_import_command() {
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
                           documentation::vast_import_csv,
                           opts("?vast.import.csv"));
-  import_->add_subcommand("json", "imports JSON with schema",
-                          documentation::vast_import_json,
-                          opts("?vast.import.json"));
+  import_->add_subcommand(
+    "json", "imports JSON with schema", documentation::vast_import_json,
+    opts("?vast.import.json")
+      .add<std::string>("selector", "read the event type from the given field "
+                                    "(specify as '<field>[:<prefix>]')"));
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
                           opts("?vast.import.suricata"));

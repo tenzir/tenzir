@@ -17,7 +17,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/test.hpp"
@@ -44,7 +44,7 @@ TEST(real with custom binner) {
   using index_type = arithmetic_index<real, precision_binner<6, 2>>;
   caf::settings opts;
   opts["base"] = "uniform64(10)";
-  auto idx = index_type{legacy_real_type{}, opts};
+  auto idx = index_type{type{real_type{}}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(-7.8)));
   REQUIRE(idx.append(make_data_view(42.123)));
@@ -65,8 +65,8 @@ TEST(real with custom binner) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
-  auto idx2 = index_type{legacy_real_type{}, opts};
-  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  auto idx2 = index_type{type{real_type{}}, opts};
+  REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
 }
@@ -76,7 +76,7 @@ TEST(duration) {
   caf::settings opts;
   opts["base"] = "uniform64(10)";
   // Default binning gives granularity of seconds.
-  auto idx = arithmetic_index<vast::duration>{legacy_duration_type{}, opts};
+  auto idx = arithmetic_index<vast::duration>{type{duration_type{}}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(milliseconds(1000))));
   REQUIRE(idx.append(make_data_view(milliseconds(2000))));
@@ -104,7 +104,7 @@ TEST(duration) {
 TEST(time) {
   caf::settings opts;
   opts["base"] = "uniform64(10)";
-  arithmetic_index<vast::time> idx{legacy_time_type{}, opts};
+  arithmetic_index<vast::time> idx{type{time_type{}}, opts};
   auto ts = to<vast::time>("2014-01-16+05:30:15");
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
@@ -134,15 +134,15 @@ TEST(time) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
-  arithmetic_index<vast::time> idx2{legacy_time_type{}, opts};
-  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  arithmetic_index<vast::time> idx2{type{time_type{}}, opts};
+  CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   eighteen = idx2.lookup(relational_operator::greater_equal,
                          make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
 }
 
 TEST(none values - arithmetic) {
-  auto idx = factory<value_index>::make(legacy_count_type{}, caf::settings{});
+  auto idx = factory<value_index>::make(type{count_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(integer{42})));

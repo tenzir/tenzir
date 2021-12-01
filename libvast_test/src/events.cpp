@@ -14,12 +14,11 @@
 #include "vast/detail/assert.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/type.hpp"
 
-#include <caf/binary_deserializer.hpp>
 #include <caf/settings.hpp>
 
 // Pull in the auto-generated serialized table slices.
@@ -41,8 +40,7 @@ struct alternating {};
 
 template <class Policy>
 std::vector<table_slice> make_integers(size_t count) {
-  auto layout
-    = legacy_record_type{{"value", legacy_integer_type{}}}.name("test.int");
+  auto layout = type{"test.int", record_type{{"value", integer_type{}}}};
   auto builder = msgpack_table_slice_builder::make(layout);
   VAST_ASSERT(builder != nullptr);
   std::vector<table_slice> result;
@@ -72,8 +70,9 @@ template <class Reader>
 std::vector<table_slice>
 extract(Reader&& reader, table_slice::size_type slice_size) {
   std::vector<table_slice> result;
-  auto add_slice
-    = [&](table_slice slice) { result.emplace_back(std::move(slice)); };
+  auto add_slice = [&](table_slice slice) {
+    result.emplace_back(std::move(slice));
+  };
   auto [err, produced]
     = reader.read(std::numeric_limits<size_t>::max(), slice_size, add_slice);
   if (err && err != ec::end_of_input)

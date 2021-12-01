@@ -14,9 +14,9 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/hash/hash.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
+#include "vast/type.hpp"
 
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
@@ -75,9 +75,9 @@ auto inspect(Inspector& f, field_extractor& x) {
 
 /// Extracts one or more values according to a given type.
 struct type_extractor : detail::totally_ordered<type_extractor> {
-  type_extractor(vast::legacy_type t = {});
+  explicit type_extractor(vast::type t = {});
 
-  vast::legacy_type type;
+  vast::type type;
 };
 
 /// @relates type_extractor
@@ -98,10 +98,11 @@ auto inspect(Inspector& f, type_extractor& x) {
 struct data_extractor : detail::totally_ordered<data_extractor> {
   data_extractor() = default;
 
-  data_extractor(vast::legacy_type t, vast::offset o);
+  data_extractor(class type t, size_t column);
+  data_extractor(const record_type& rt, const offset& o);
 
-  vast::legacy_type type;
-  vast::offset offset;
+  class type type;
+  size_t column;
 };
 
 /// @relates data_extractor
@@ -113,7 +114,7 @@ bool operator<(const data_extractor& x, const data_extractor& y);
 /// @relates data_extractor
 template <class Inspector>
 auto inspect(Inspector& f, data_extractor& x) {
-  return f(caf::meta::type_name("data_extractor"), x.type, x.offset);
+  return f(caf::meta::type_name("data_extractor"), x.type, x.column);
 }
 
 /// A predicate with two operands evaluated under a relational operator.
@@ -354,11 +355,12 @@ expression normalize(expression expr);
 caf::expected<expression> normalize_and_validate(expression expr);
 
 /// Tailors an expression to a specific type.
-/// @param expr The expression to tailor to *t*.
-/// @param t The type to tailor *expr* to.
+/// @param expr The expression to tailor to *layout*.
+/// @param layout The layout to tailor *expr* to.
+/// @pre `caf::holds_alternative<record_type>(layout)`
 /// @returns An optimized version of *expr* specifically for evaluating events
-///          of type *t*.
-caf::expected<expression> tailor(expression expr, const legacy_type& t);
+///          of type *layout*.
+caf::expected<expression> tailor(expression expr, const type& layout);
 
 /// Retrieves an expression node at a given [offset](@ref offset).
 /// @param expr The expression to lookup.
@@ -376,7 +378,7 @@ const expression* at(const expression& expr, const offset& o);
 ///          identifies a predicate in *expr* and the mapped values represent
 ///          the new predicates.
 std::vector<std::pair<offset, predicate>>
-resolve(const expression& expr, const legacy_type& t);
+resolve(const expression& expr, const type& t);
 
 } // namespace vast
 

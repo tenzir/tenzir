@@ -31,7 +31,7 @@ inline auto as_printer(std::string str) {
 }
 
 template <class T>
-  requires(std::is_arithmetic_v<T>&& concepts::different<T, bool>)
+  requires(std::is_arithmetic_v<T> && !std::same_as<T, bool>)
 auto as_printer(T x) -> literal_printer {
   return literal_printer{x};
 }

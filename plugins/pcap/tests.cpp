@@ -94,20 +94,23 @@ TEST(PCAP read 1) {
   REQUIRE_EQUAL(events_produced, 44u);
   auto&& layout = slice.layout();
   CHECK_EQUAL(layout.name(), "pcap.packet");
-  auto src_field = slice.at(43, 1, legacy_address_type{});
-  auto src = unbox(caf::get_if<view<address>>(&src_field));
+  auto src = slice.at(43, 1, address_type{});
+  REQUIRE(src);
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
-  auto community_id_column = table_slice_column::make(slice, "community_id");
-  REQUIRE(community_id_column);
+  auto idx = caf::get<record_type>(layout).resolve_key("community_id");
+  REQUIRE(idx);
+  auto community_id_column
+    = table_slice_column{slice, caf::get<record_type>(layout).flat_index(*idx)};
   for (size_t row = 0; row < 44; ++row)
-    CHECK_VARIANT_EQUAL((*community_id_column)[row], community_ids[row]);
+    CHECK_VARIANT_EQUAL(community_id_column[row], community_ids[row]);
   MESSAGE("write out read packets");
   const auto file = std::filesystem::path{"vast-unit-test-nmap-vsn.pacp"};
   caf::put(settings, "vast.export.write", file.string());
   auto writer = format::writer::make("pcap", settings);
   REQUIRE(writer);
-  auto deleter
-    = caf::detail::make_scope_guard([&] { std::filesystem::remove_all(file); });
+  auto deleter = caf::detail::make_scope_guard([&] {
+    std::filesystem::remove_all(file);
+  });
   REQUIRE_EQUAL(writer->get()->write(slice), caf::none);
 }
 
@@ -145,8 +148,9 @@ TEST(PCAP read 2) {
   caf::put(settings, "vast.export.write", file.string());
   auto writer = format::writer::make("pcap", settings);
   REQUIRE(writer);
-  auto deleter
-    = caf::detail::make_scope_guard([&] { std::filesystem::remove_all(file); });
+  auto deleter = caf::detail::make_scope_guard([&] {
+    std::filesystem::remove_all(file);
+  });
   REQUIRE_EQUAL(writer->get()->write(slice), caf::none);
 }
 

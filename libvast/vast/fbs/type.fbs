@@ -1,103 +1,141 @@
-namespace vast.fbs.v0;
+namespace vast.fbs.type.bool_type;
 
 /// A boolean value that can either be true or false.
-table BoolType {}
+table v0 {}
+
+namespace vast.fbs.type.integer_type;
 
 /// A signed integer.
-table IntType {}
+table v0 {}
+
+namespace vast.fbs.type.count_type;
 
 /// An unsigned integer.
-table CountType {}
+table v0 {}
+
+namespace vast.fbs.type.real_type;
 
 /// A floating-point value.
-table RealType {}
+table v0 {}
+
+namespace vast.fbs.type.duration_type;
 
 /// A time interval.
-table DurationType {}
+table v0 {}
+
+namespace vast.fbs.type.time_type;
 
 /// A point in time.
-table TimeType {}
+table v0 {}
+
+namespace vast.fbs.type.string_type;
 
 /// A string of characters.
-table StringType {}
+table v0 {}
+
+namespace vast.fbs.type.pattern_type;
 
 /// A regular expression.
-table PatternType {}
+table v0 {}
+
+namespace vast.fbs.type.address_type;
 
 /// An IP address (v4 or v6).
-table AddressType {}
+table v0 {}
+
+namespace vast.fbs.type.subnet_type;
 
 /// A CIDR subnet.
-table SubnetType {}
+table v0 {}
+
+namespace vast.fbs.type.enumeration_type.field;
+
+/// The field of an enumeration type.
+table v0 {
+  key: uint (key);
+  name: string (required);
+}
+
+namespace vast.fbs.type.enumeration_type;
 
 /// An enumeration type that can have one specific value.
-table EnumerationType {
-  fields: [string];
+table v0 {
+  fields: [field.v0] (required);
 }
+
+namespace vast.fbs.type.list_type;
 
 /// An ordered sequence of values.
-table VectorType {
-  type: Type;
+table v0 {
+  type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 }
 
-/// An unordered sequence of values.
-table SetType {
-  type: Type;
-}
+namespace vast.fbs.type.map_type;
 
 /// An associative mapping from keys to values.
-table MapType {
-  key_type: Type;
-  value_type: Type;
+table v0 {
+  key_type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
+  value_type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 }
 
-/// A field in a record.
-table RecordField {
-  name: string;
-  type: Type;
+namespace vast.fbs.type.record_type.field;
+
+/// A typed field with a name.
+table v0 {
+  name: string (required);
+  type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 }
+
+namespace vast.fbs.type.record_type;
 
 /// A list of fields, each of which have a name and type.
-table RecordType {
-  fields: [RecordField];
+table v0 {
+  fields: [field.v0] (required);
 }
 
-/// A type with a name.
-table AliasType {
-  type: Type;
-}
+namespace vast.fbs.type.enriched_type.attribute;
 
-/// The sum type of all possible types.
-union TypeVariant {
-  boolean: BoolType,
-  integer: IntType,
-  count: CountType,
-  real: RealType,
-  duration: DurationType,
-  time: TimeType,
-  string: StringType,
-  pattern: PatternType,
-  address: AddressType,
-  subnet: SubnetType,
-  enumeration: EnumerationType,
-  vector: VectorType,
-  set: SetType,
-  map: MapType,
-  record: RecordType,
-  alias: AliasType
-}
-
-/// A key with optional value.
-table Attribute {
-  key: string;
+/// A key-value pair type annotation.
+table v0 {
+  key: string (key);
   value: string;
 }
 
-/// The top-level type.
-table Type {
-  type: TypeVariant;
+namespace vast.fbs.type.enriched_type;
+
+/// A type with a name, attributes, or both.
+table v0 {
+  type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
   name: string;
-  attributes: [Attribute];
+  attributes: [attribute.v0];
+}
+
+namespace vast.fbs.type;
+
+/// The sum type of all possible types.
+union Type {
+  bool_type.v0,
+  integer_type.v0,
+  count_type.v0,
+  real_type.v0,
+  duration_type.v0,
+  time_type.v0,
+  string_type.v0,
+  pattern_type.v0,
+  address_type.v0,
+  subnet_type.v0,
+  enumeration_type.v0,
+  list_type.v0,
+  map_type.v0,
+  record_type.v0,
+  enriched_type.v0,
+}
+
+namespace vast.fbs;
+
+/// The sematic representation of data.
+table Type {
+  type: type.Type;
 }
 
 root_type Type;

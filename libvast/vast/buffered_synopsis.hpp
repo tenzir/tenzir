@@ -10,8 +10,11 @@
 
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/bloom_filter_synopsis.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/synopsis.hpp"
+
+#include <caf/fwd.hpp>
 
 namespace vast {
 
@@ -20,7 +23,7 @@ template <typename T>
 struct buffered_synopsis_traits {
   // Create a new bloom filter synopsis from the given parameters
   template <typename HashFunction>
-  static synopsis_ptr make(vast::legacy_type type, bloom_filter_parameters p,
+  static synopsis_ptr make(vast::type type, bloom_filter_parameters p,
                            std::vector<size_t> seeds = {})
     = delete;
 
@@ -40,8 +43,7 @@ public:
   using element_type = T;
   using view_type = view<T>;
 
-  buffered_synopsis(vast::legacy_type x, double p)
-    : synopsis{std::move(x)}, p_{p} {
+  buffered_synopsis(vast::type x, double p) : synopsis{std::move(x)}, p_{p} {
     // nop
   }
 
@@ -106,6 +108,11 @@ public:
   caf::error deserialize(caf::deserializer&) override {
     return caf::make_error(ec::logic_error, "attempted to deserialize a "
                                             "buffered_string_synopsis");
+  }
+
+  bool deserialize(vast::detail::legacy_deserializer&) override {
+    VAST_ERROR("attempted to deserialize a buffered_string_synopsis");
+    return false;
   }
 
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override {

@@ -17,8 +17,9 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/operator.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
@@ -42,7 +43,7 @@ struct fixture : fixtures::events {
 FIXTURE_SCOPE(value_index_tests, fixture)
 
 TEST(bool) {
-  auto idx = factory<value_index>::make(legacy_bool_type{}, caf::settings{});
+  auto idx = factory<value_index>::make(type{bool_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(true)));
@@ -65,7 +66,7 @@ TEST(bool) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   value_index_ptr idx2;
-  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   t = idx2->lookup(relational_operator::equal, make_data_view(true));
   CHECK_EQUAL(to_string(unbox(t)), "11010001");
 }
@@ -73,7 +74,7 @@ TEST(bool) {
 TEST(integer) {
   caf::settings opts;
   opts["base"] = "uniform(10, 20)";
-  auto idx = factory<value_index>::make(legacy_integer_type{}, std::move(opts));
+  auto idx = factory<value_index>::make(type{integer_type{}}, std::move(opts));
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(integer{-7})));
@@ -100,7 +101,7 @@ TEST(integer) {
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   value_index_ptr idx2;
-  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
+  REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   less_than_leet
     = idx2->lookup(relational_operator::less, make_data_view(integer{31337}));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");

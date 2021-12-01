@@ -25,38 +25,39 @@ using namespace std::string_literals;
 
 namespace {
 
+#if 0
 std::string_view eve_log
   = R"json({"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1}}
   {"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1},"resp_mime_types":null})json";
+#endif
 
 } // namespace
 
 FIXTURE_SCOPE(zeek_reader_tests, fixtures::deterministic_actor_system)
 
 TEST(json to data) {
-  auto layout
-    = legacy_record_type{{"b", legacy_bool_type{}},
-                         {"c", legacy_count_type{}},
-                         {"r", legacy_real_type{}},
-                         {"i", legacy_integer_type{}},
-                         {"s", legacy_string_type{}},
-                         {"snum", legacy_string_type{}},
-                         {"a", legacy_address_type{}},
-                         {"sn", legacy_subnet_type{}},
-                         {"t", legacy_time_type{}},
-                         {"d", legacy_duration_type{}},
-                         {"d2", legacy_duration_type{}},
-                         {"e", legacy_enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                         {"lc", legacy_list_type{legacy_count_type{}}},
-                         {"lt", legacy_list_type{legacy_time_type{}}},
-                         {"rec",
-                          legacy_record_type{{"c", legacy_count_type{}},
-                                             {"s", legacy_string_type{}}}},
-                         {"msa", legacy_map_type{legacy_string_type{},
-                                                 legacy_address_type{}}},
-                         {"mcs", legacy_map_type{legacy_count_type{},
-                                                 legacy_string_type{}}}}
-        .name("layout");
+  auto layout = type{
+    "layout",
+    record_type{
+      {"b", bool_type{}},
+      {"c", count_type{}},
+      {"r", real_type{}},
+      {"i", integer_type{}},
+      {"s", string_type{}},
+      {"snum", string_type{}},
+      {"a", address_type{}},
+      {"sn", subnet_type{}},
+      {"t", time_type{}},
+      {"d", duration_type{}},
+      {"d2", duration_type{}},
+      {"e", enumeration_type{{"FOO"}, {"BAR"}, {"BAZ"}}},
+      {"lc", list_type{count_type{}}},
+      {"lt", list_type{time_type{}}},
+      {"rec", record_type{{"c", count_type{}}, {"s", string_type{}}}},
+      {"msa", map_type{string_type{}, address_type{}}},
+      {"mcs", map_type{count_type{}, string_type{}}},
+    },
+  };
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   std::string_view str = R"json({
@@ -83,7 +84,7 @@ TEST(json to data) {
   CHECK(el.error() == ::simdjson::error_code::SUCCESS);
   auto obj = el.value().get_object();
   CHECK(obj.error() == ::simdjson::error_code::SUCCESS);
-  format::json::add(*builder, obj.value(), layout);
+  REQUIRE_EQUAL(vast::format::json::add(obj.value(), *builder), caf::none);
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
@@ -112,13 +113,15 @@ TEST(json to data) {
   CHECK_EQUAL(materialize(slice.at(0, 17)), data{reference});
 }
 
-TEST_DISABLED(json suricata) {
+#if 0
+TEST(json suricata) {
   using reader_type = format::json::reader<format::json::suricata_selector>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
   reader_type reader{caf::settings{}, std::move(input)};
   std::vector<table_slice> slices;
-  auto add_slice
-    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
+  auto add_slice = [&](table_slice slice) {
+    slices.emplace_back(std::move(slice));
+  };
   auto [err, num] = reader.read(2, 5, add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(num, 2u);
@@ -126,6 +129,7 @@ TEST_DISABLED(json suricata) {
   CHECK_EQUAL(slices[0].rows(), 2u);
   CHECK(slices[0].at(0, 19) == data{count{4520}});
 }
+#endif
 
 TEST(json hex number parser) {
   using namespace parsers;

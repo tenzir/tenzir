@@ -12,7 +12,6 @@
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/legacy_type.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
@@ -64,7 +63,9 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(const type_extractor& e) const {
-      return (':' << printers::type<policy::name_only>) (out_, e.type);
+      // FIXME: Use {n} for nameonly
+      out_ = fmt::format_to(out_, ":{}", e.type);
+      return true;
     }
 
     bool operator()(const field_extractor& e) const {
@@ -72,8 +73,8 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(const data_extractor& e) const {
-      auto p = printers::type<policy::name_only> << ~('@' << printers::offset);
-      return p(out_, e.type, e.offset);
+      out_ = fmt::format_to(out_, "{}@{}", e.type, e.column);
+      return true;
     }
 
     bool operator()(const data& d) const {

@@ -11,7 +11,7 @@
 #include "vast/bloom_filter.hpp"
 
 #include "vast/bloom_filter_parameters.hpp"
-#include "vast/detail/deserialize.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/hash/hash_append.hpp"
 #include "vast/hash/xxhash.hpp"
@@ -143,8 +143,8 @@ TEST(simple_hasher) {
   auto err = detail::serialize(buf, h);
   REQUIRE_EQUAL(err, caf::none);
   simple_hasher<xxh64> g;
-  err = detail::deserialize(buf, g);
-  REQUIRE_EQUAL(err, caf::none);
+  bool err2 = detail::legacy_deserialize(buf, g);
+  REQUIRE_EQUAL(err2, true);
   CHECK(h == g);
 }
 
@@ -162,8 +162,8 @@ TEST(double_hasher) {
   auto err = detail::serialize(buf, h);
   REQUIRE_EQUAL(err, caf::none);
   double_hasher<xxh64> g;
-  err = detail::deserialize(buf, g);
-  REQUIRE_EQUAL(err, caf::none);
+  bool err2 = detail::legacy_deserialize(buf, g);
+  REQUIRE_EQUAL(err2, true);
   CHECK(h == g);
 }
 
@@ -205,8 +205,8 @@ TEST(bloom filter - simple hasher and partitioning) {
   auto err = detail::serialize(buf, x);
   REQUIRE_EQUAL(err, caf::none);
   bloom_filter<xxh64, simple_hasher, policy::partitioning::yes> y;
-  err = detail::deserialize(buf, y);
-  REQUIRE_EQUAL(err, caf::none);
+  bool err2 = detail::legacy_deserialize(buf, y);
+  REQUIRE_EQUAL(err2, true);
   CHECK(x == y);
 }
 

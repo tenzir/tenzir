@@ -8,10 +8,13 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
-#include "vast/legacy_type.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
 #include <caf/error.hpp>
@@ -31,7 +34,7 @@ using value_index_ptr = std::unique_ptr<value_index>;
 /// and an explit query for nil, e.g., `x != 42 || x == nil`.
 class value_index {
 public:
-  value_index(vast::legacy_type x, caf::settings opts);
+  value_index(vast::type x, caf::settings opts);
 
   virtual ~value_index();
 
@@ -69,7 +72,7 @@ public:
   [[nodiscard]] size_type offset() const;
 
   /// @returns the type of the index.
-  [[nodiscard]] const vast::legacy_type& type() const;
+  [[nodiscard]] const vast::type& type() const;
 
   /// @returns the options of the index.
   [[nodiscard]] const caf::settings& options() const;
@@ -79,6 +82,8 @@ public:
   virtual caf::error serialize(caf::serializer& sink) const;
 
   virtual caf::error deserialize(caf::deserializer& source);
+
+  virtual bool deserialize(detail::legacy_deserializer& source);
 
 protected:
   [[nodiscard]] const ewah_bitmap& mask() const;
@@ -94,7 +99,7 @@ private:
 
   ewah_bitmap mask_;         ///< The position of all values excluding nil.
   ewah_bitmap none_;         ///< The positions of nil values.
-  const vast::legacy_type type_; ///< The type of this index.
+  const vast::type type_;    ///< The type of this index.
   const caf::settings opts_; ///< Runtime context with additional parameters.
 };
 
@@ -105,10 +110,16 @@ caf::error inspect(caf::serializer& sink, const value_index& x);
 caf::error inspect(caf::deserializer& source, value_index& x);
 
 /// @relates value_index
+bool inspect(detail::legacy_deserializer& source, value_index& x);
+
+/// @relates value_index
 caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
 
 /// @relates value_index
 caf::error inspect(caf::deserializer& source, value_index_ptr& x);
+
+/// @relates value_index
+bool inspect(detail::legacy_deserializer& source, value_index_ptr& x);
 
 /// Serialize the value index into a chunk.
 vast::chunk_ptr chunkify(const value_index_ptr& idx);

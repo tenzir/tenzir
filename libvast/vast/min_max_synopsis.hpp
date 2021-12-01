@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
 
 #include <caf/deserializer.hpp>
@@ -21,7 +22,7 @@ namespace vast {
 template <class T>
 class min_max_synopsis : public synopsis {
 public:
-  min_max_synopsis(vast::legacy_type x, T min = T{}, T max = T{})
+  min_max_synopsis(vast::type x, T min = T{}, T max = T{})
     : synopsis{std::move(x)}, min_{min}, max_{max} {
     // nop
   }
@@ -84,6 +85,10 @@ public:
   }
 
   caf::error deserialize(caf::deserializer& source) override {
+    return source(min_, max_);
+  }
+
+  bool deserialize(vast::detail::legacy_deserializer& source) override {
     return source(min_, max_);
   }
 
