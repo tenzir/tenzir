@@ -76,8 +76,8 @@ public:
         continue;
       auto layout = caf::get<legacy_record_type>(entry);
       std::vector<std::string> cache_entry;
-      for (auto& [k, v] : layout.fields)
-        cache_entry.emplace_back(k);
+      for (const auto& leaf : legacy_record_type::each(layout))
+        cache_entry.emplace_back(leaf.key());
       std::sort(cache_entry.begin(), cache_entry.end());
       type_cache.insert({std::move(cache_entry), std::move(layout)});
     }
