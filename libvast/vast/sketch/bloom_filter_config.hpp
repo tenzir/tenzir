@@ -53,6 +53,14 @@ struct bloom_filter_params {
 /// Evaluates a set of Bloom filter parameters. Some parameters can derived
 /// from a specific combination of others. If the correct parameters are
 /// provided, this function computes the remaining ones.
+///
+/// If m is given and even, the evaluation subtracts 1 to make m odd. This
+/// ensures that the parameterization can be used for filters that use worm
+/// hashing. (If m was even, each multiplication would stack zeros in the
+/// lowest bits and prevent worm hashing from being regenerative.) This
+/// "off-by-one" effect has neglible impact in nearly all applictions, except
+/// for incredibly small Bloom filters.
+///
 /// @returns The complete set of parameters
 std::optional<bloom_filter_params> evaluate(bloom_filter_config cfg);
 
