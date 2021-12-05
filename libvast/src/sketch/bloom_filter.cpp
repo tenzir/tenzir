@@ -28,7 +28,7 @@ bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
 }
 
 const bloom_filter_params& frozen_bloom_filter::parameters() const noexcept {
-  return view_.params;
+  return view_.parameters();
 }
 
 size_t mem_usage(const frozen_bloom_filter& x) noexcept {
@@ -55,7 +55,7 @@ bool bloom_filter::lookup(uint64_t digest) const noexcept {
 }
 
 const bloom_filter_params& bloom_filter::parameters() const noexcept {
-  return view_.params;
+  return view_.parameters();
 }
 
 size_t mem_usage(const bloom_filter& x) {
@@ -90,8 +90,7 @@ bloom_filter::bloom_filter(bloom_filter_params params) {
   VAST_ASSERT(params.m & 1);
   bits_.resize((params.m + 63) / 64); // integer ceiling
   std::fill(bits_.begin(), bits_.end(), 0);
-  view_.params = params;
-  view_.bits = std::span{bits_.data(), bits_.size()};
+  view_ = {params, std::span{bits_.data(), bits_.size()}};
 }
 
 } // namespace vast::sketch
