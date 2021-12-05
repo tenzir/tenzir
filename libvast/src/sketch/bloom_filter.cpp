@@ -17,6 +17,7 @@ namespace vast::sketch {
 frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
   : table_{std::move(table)} {
   VAST_ASSERT(table_ != nullptr);
+  VAST_ASSERT(table_->data() != nullptr);
   auto root = fbs::GetBloomFilter(table_->data());
   auto err = unpack(*root, view_);
   VAST_ASSERT(!err);
@@ -62,8 +63,6 @@ size_t mem_usage(const bloom_filter& x) {
 }
 
 caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
-  VAST_ASSERT(x.parameters().m > 0);
-  VAST_ASSERT(x.parameters().m & 1);
   constexpr auto fixed_size = 56;
   const auto bitvector_size = (x.parameters().m + 63) / 64;
   const auto expected_size = fixed_size + bitvector_size * sizeof(uint64_t);
@@ -87,6 +86,8 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
 }
 
 bloom_filter::bloom_filter(bloom_filter_params params) {
+  VAST_ASSERT(params.m > 0);
+  VAST_ASSERT(params.m & 1);
   bits_.resize((params.m + 63) / 64); // integer ceiling
   std::fill(bits_.begin(), bits_.end(), 0);
   view_.params = params;
