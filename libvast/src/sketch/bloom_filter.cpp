@@ -59,7 +59,7 @@ const bloom_filter_params& bloom_filter::parameters() const noexcept {
 }
 
 size_t mem_usage(const bloom_filter& x) {
-  return mem_usage(x.view_) + sizeof(x.bits_) + x.bits_.size() * 8;
+  return sizeof(x) + x.bits_.size() * 8;
 }
 
 caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
