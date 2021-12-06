@@ -20,13 +20,9 @@ namespace vast {
 
 /// A wrapper for an expression related command.
 struct query {
-  query() = default;
-  query(query&&) = default;
-  query(const query&) = default;
-  query& operator=(query&&) = default;
-  query& operator=(const query&) = default;
-  ~query() = default;
+  // -- nested type definitions ------------------------------------------------
 
+  /// A count query to collect the number of hits for the expression.
   struct count {
     enum mode { estimate, exact };
     system::receiver_actor<uint64_t> sink;
@@ -42,6 +38,7 @@ struct query {
     }
   };
 
+  /// An extract query to retrieve the events that match the expression.
   struct extract {
     enum mode { drop_ids, preserve_ids };
     system::receiver_actor<table_slice> sink;
@@ -57,25 +54,28 @@ struct query {
     }
   };
 
+  /// The query command type.
   using command = caf::variant<count, extract>;
 
+  /// The query priority type.
   enum class priority { normal, low };
 
-  uuid id = uuid::random();
+  // -- constructor & destructor -----------------------------------------------
 
-  command cmd;
-
-  expression expr = {};
-
-  vast::ids ids = {};
-
-  priority priority = priority::normal;
+  query() = default;
+  query(query&&) = default;
+  query(const query&) = default;
 
   query(command cmd, expression expr)
     : cmd(std::move(cmd)), expr(std::move(expr)) {
   }
 
-  // -- Helper functions to make query creation less boiler-platey.
+  query& operator=(query&&) = default;
+  query& operator=(const query&) = default;
+
+  ~query() = default;
+
+  // -- helper functions to make query creation less boiler-platey -------------
 
   template <class Actor>
   static query
@@ -92,7 +92,7 @@ struct query {
             std::move(expr)};
   }
 
-  // -- Helper functions to make query creation less boiler-platey.
+  // -- misc -------------------------------------------------------------------
 
   friend bool operator==(const query& lhs, const query& rhs) {
     return lhs.cmd == rhs.cmd && lhs.expr == rhs.expr
@@ -104,6 +104,23 @@ struct query {
     return f(caf::meta::type_name("vast.query"), q.cmd, q.expr, q.ids,
              q.priority);
   }
+
+  // -- data members -----------------------------------------------------------
+
+  /// The query id.
+  uuid id = uuid::random();
+
+  /// The query command.
+  command cmd;
+
+  /// The query expression.
+  expression expr = {};
+
+  /// The event ids to restrict the query evaluation to, if set.
+  vast::ids ids = {};
+
+  /// The query priority.
+  priority priority = priority::normal;
 };
 
 } // namespace vast
