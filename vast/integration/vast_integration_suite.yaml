@@ -51,21 +51,6 @@ fixtures:
     exit: | # python
       node.stop()
 
-  AgingTester:
-    enter: | # python
-      node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}',
-                     '-i', 'node',
-                     '--aging-frequency=2000min',
-                     '--aging-query=:addr == 192.168.1.104',
-                     'start'],
-                    work_dir, name='node', port=VAST_PORT,
-                    config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
-
-    exit: | # python
-      node.stop()
-
   DiskMonitorTester:
     enter: | # python
       node = Server(self.cmd,
