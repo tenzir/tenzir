@@ -116,33 +116,6 @@ bool is_singleton(std::string_view type) {
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
 }
 
-// Sends an atom to a registered actor. Blocks until the actor responds.
-caf::message send_command(const invocation& inv, caf::actor_system&) {
-  auto first = inv.arguments.begin();
-  auto last = inv.arguments.end();
-  // Expect exactly two arguments.
-  if (std::distance(first, last) != 2)
-    return make_error_msg(ec::syntax_error, "expected two arguments: receiver "
-                                            "and message atom");
-  // Get destination actor from the registry.
-  auto dst = this_node->state.registry.find_by_label(*first);
-  if (dst == nullptr)
-    return make_error_msg(ec::syntax_error,
-                          "registry contains no actor named " + *first);
-  // Dispatch to destination.
-  auto f = caf::make_function_view(caf::actor_cast<caf::actor>(dst));
-  auto send = [&](auto atom_value) {
-    if (auto res = f(atom_value))
-      return std::move(*res);
-    else
-      return caf::make_message(std::move(res.error()));
-  };
-  if (*(first + 1) == "run")
-    return send(atom::run_v);
-  return make_error_msg(ec::unimplemented,
-                        "trying to send unsupported atom: " + *(first + 1));
-}
-
 void collect_component_status(node_actor::stateful_pointer<node_state> self,
                               status_verbosity v) {
   struct extra_state {
@@ -448,7 +421,6 @@ auto make_command_factory() {
     {"dump concepts", dump_command},
     {"dump models", dump_command},
     {"kill", kill_command},
-    {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
     {"spawn archive", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
