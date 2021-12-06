@@ -61,11 +61,17 @@ struct passive_store_state {
   /// Defaulted constructor to make this a non-aggregate.
   passive_store_state() = default;
 
-  /// Holds requests that did arrive while the segment data
+  /// Holds queries that did arrive while the segment data
   /// was still being loaded from disk.
-  using request
+  using deferred_query
     = std::tuple<vast::query, caf::typed_response_promise<atom::done>>;
-  std::vector<request> deferred_requests = {};
+  std::vector<deferred_query> deferred_queries = {};
+
+  /// Holds removal requests that did arrive while the segment data
+  /// was still being loaded from disk.
+  using deferred_erasure
+    = std::tuple<ids, caf::typed_response_promise<atom::done>>;
+  std::vector<deferred_erasure> deferred_erasures = {};
 
   /// The actor handle of the filesystem actor.
   filesystem_actor fs = {};
