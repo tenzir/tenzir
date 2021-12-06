@@ -963,7 +963,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto start = std::chrono::steady_clock::now();
       self
         ->request(self->state.meta_index, caf::infinite, atom::candidates_v,
-                  query.expr, query.ids)
+                  query)
         .then(
           [=, candidates = std::move(candidates)](
             std::vector<uuid> midx_candidates) mutable {

@@ -208,9 +208,8 @@ using meta_index_actor = typed_actor_fwd<
   // Atomically remove one and merge another partition synopsis
   caf::replies_to<atom::replace, uuid, uuid,
                   std::shared_ptr<partition_synopsis>>::with<atom::ok>,
-  // Evaluate the expression.
-  caf::replies_to<atom::candidates, vast::expression,
-                  vast::ids>::with<std::vector<vast::uuid>>>
+  // Return the candidate partitions for a query.
+  caf::replies_to<atom::candidates, vast::query>::with<std::vector<vast::uuid>>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 

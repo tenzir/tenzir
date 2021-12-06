@@ -39,30 +39,30 @@ namespace {
 void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
   VAST_TRACE_SCOPE("");
   auto& st = self->state;
-  VAST_DEBUG("{} relays {} events", *self, st.query.cached);
-  while (st.query.requested > 0 && st.query.cached > 0) {
+  VAST_DEBUG("{} relays {} events", *self, st.query_status.cached);
+  while (st.query_status.requested > 0 && st.query_status.cached > 0) {
     VAST_ASSERT(!st.results.empty());
     // Fetch the next table slice. Either we grab the entire first slice in
     // st.results or we need to split it up.
     table_slice slice = {};
-    if (st.results[0].rows() <= st.query.requested) {
+    if (st.results[0].rows() <= st.query_status.requested) {
       slice = std::move(st.results[0]);
       st.results.erase(st.results.begin());
     } else {
       auto [first, second]
-        = split(std::move(st.results[0]), st.query.requested);
+        = split(std::move(st.results[0]), st.query_status.requested);
       VAST_ASSERT(first.encoding() != table_slice_encoding::none);
       VAST_ASSERT(second.encoding() != table_slice_encoding::none);
-      VAST_ASSERT(first.rows() == st.query.requested);
+      VAST_ASSERT(first.rows() == st.query_status.requested);
       slice = std::move(first);
       st.results[0] = std::move(second);
     }
     // Ship the slice and update state.
     auto rows = slice.rows();
-    VAST_ASSERT(rows <= st.query.cached);
-    st.query.cached -= rows;
-    st.query.requested -= rows;
-    st.query.shipped += rows;
+    VAST_ASSERT(rows <= st.query_status.cached);
+    st.query_status.cached -= rows;
+    st.query_status.requested -= rows;
+    st.query_status.shipped += rows;
     auto transformed = self->state.transformer.apply(std::move(slice));
     self->anon_send(st.sink, std::move(*transformed));
   }
@@ -71,10 +71,10 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
 void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
   auto& st = self->state;
   if (st.statistics_subscriber)
-    self->anon_send(st.statistics_subscriber, st.name, st.query);
+    self->anon_send(st.statistics_subscriber, st.name, st.query_status);
   if (st.accountant) {
-    auto processed = st.query.processed;
-    auto shipped = st.query.shipped;
+    auto processed = st.query_status.processed;
+    auto shipped = st.query_status.shipped;
     auto results = shipped + st.results.size();
     auto selectivity = processed != 0
                          ? detail::narrow_cast<double>(results)
@@ -85,7 +85,7 @@ void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
       {"exporter.results", results},
       {"exporter.shipped", shipped},
       {"exporter.selectivity", selectivity},
-      {"exporter.runtime", st.query.runtime},
+      {"exporter.runtime", st.query_status.runtime},
     };
     self->send(st.accountant, msg);
   }
@@ -112,29 +112,28 @@ void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
     return;
   }
   // Do nothing if we already shipped everything the client asked for.
-  if (st.query.requested == 0) {
-    VAST_DEBUG("{} shipped {} results and waits for client to request "
-               "more",
-               *self, self->state.query.shipped);
+  if (st.query_status.requested == 0) {
+    VAST_DEBUG("{} shipped {} results and waits for client to request more",
+               *self, self->state.query_status.shipped);
     return;
   }
   // Do nothing if we received everything.
-  if (st.query.received == st.query.expected) {
+  if (st.query_status.received == st.query_status.expected) {
     VAST_DEBUG("{} received hits for all {} partitions", *self,
-               st.query.expected);
+               st.query_status.expected);
     return;
   }
   // If the if-statement above isn't true then `received < expected` must hold.
   // Otherwise, we would receive results for more partitions than qualified as
   // hits by the INDEX.
-  VAST_ASSERT(st.query.received < st.query.expected);
-  auto remaining = st.query.expected - st.query.received;
+  VAST_ASSERT(st.query_status.received < st.query_status.expected);
+  auto remaining = st.query_status.expected - st.query_status.received;
   // TODO: Figure out right number of partitions to ask for. For now, we
   // bound the number by an arbitrary constant.
   auto n = std::min(remaining, size_t{2});
   // Store how many partitions we schedule with our request. When receiving
   // 'done', we add this number to `received`.
-  st.query.scheduled = n;
+  st.query_status.scheduled = n;
   // Request more hits from the INDEX.
   VAST_DEBUG("{} asks index to process {} more partitions", *self, n);
   self->send(st.index, st.id, detail::narrow<uint32_t>(n));
@@ -162,14 +161,14 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   }
   auto& checker = it->second;
   // Perform candidate check, splitting the slice into subsets if needed.
-  self->state.query.processed += slice.rows();
+  self->state.query_status.processed += slice.rows();
   auto selection = evaluate(checker, slice);
   auto selection_size = rank(selection);
   if (selection_size == 0) {
     // No rows qualify.
     return;
   }
-  self->state.query.cached += selection_size;
+  self->state.query_status.cached += selection_size;
   select(self->state.results, slice, selection);
   // Ship slices to connected SINKs.
   ship_results(self);
@@ -204,12 +203,12 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     [self](atom::extract) -> caf::result<void> {
       // Sanity check.
       VAST_DEBUG("{} got request to extract all events", *self);
-      if (self->state.query.requested == max_events) {
+      if (self->state.query_status.requested == max_events) {
         VAST_WARN("{} ignores extract request, already getting all", *self);
         return {};
       }
       // Configure state to get all remaining partition results.
-      self->state.query.requested = max_events;
+      self->state.query_status.requested = max_events;
       ship_results(self);
       request_more_hits(self);
       return {};
@@ -220,17 +219,17 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         VAST_WARN("{} ignores extract request for 0 results", *self);
         return {};
       }
-      if (self->state.query.requested == max_events) {
+      if (self->state.query_status.requested == max_events) {
         VAST_WARN("{} ignores extract request, already getting all", *self);
         return {};
       }
-      VAST_ASSERT(self->state.query.requested < max_events);
+      VAST_ASSERT(self->state.query_status.requested < max_events);
       // Configure state to get up to `requested_results` more events.
       auto n = std::min(max_events - requested_results, requested_results);
-      VAST_DEBUG("{} got a request to extract {} more results in "
-                 "addition to {} pending results",
-                 *self, n, self->state.query.requested);
-      self->state.query.requested += n;
+      VAST_DEBUG("{} got a request to extract {} more results in addition to "
+                 "{} pending results",
+                 *self, n, self->state.query_status.requested);
+      self->state.query_status.requested += n;
       ship_results(self);
       request_more_hits(self);
       return {};
@@ -278,8 +277,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                          cursor.candidate_partitions);
             self->state.id = cursor.id;
             if (cursor.candidate_partitions > 0) {
-              self->state.query.expected = cursor.candidate_partitions;
-              self->state.query.scheduled = cursor.scheduled_partitions;
+              self->state.query_status.expected = cursor.candidate_partitions;
+              self->state.query_status.scheduled = cursor.scheduled_partitions;
             } else {
               shutdown(self);
             }
@@ -335,8 +334,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     [self](table_slice slice) { //
       VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
       VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
-      self->state.query.processed += slice.rows();
-      self->state.query.cached += slice.rows();
+      self->state.query_status.processed += slice.rows();
+      self->state.query_status.cached += slice.rows();
       self->state.results.push_back(slice);
       // Ship slices to connected SINKs.
       ship_results(self);
@@ -346,15 +345,17 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // and check whether it reaches `expected`.
       caf::timespan runtime
         = std::chrono::system_clock::now() - self->state.start;
-      self->state.query.runtime = runtime;
-      self->state.query.received += self->state.query.scheduled;
-      if (self->state.query.received < self->state.query.expected) {
+      self->state.query_status.runtime = runtime;
+      self->state.query_status.received += self->state.query_status.scheduled;
+      if (self->state.query_status.received
+          < self->state.query_status.expected) {
         VAST_DEBUG("{} received hits from {}/{} partitions", *self,
-                   self->state.query.received, self->state.query.expected);
+                   self->state.query_status.received,
+                   self->state.query_status.expected);
         request_more_hits(self);
       } else {
         VAST_DEBUG("{} received all hits from {} partition(s) in {}", *self,
-                   self->state.query.expected, vast::to_string(runtime));
+                   self->state.query_status.expected, vast::to_string(runtime));
         VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
         if (self->state.accountant)
           self->send(self->state.accountant, "exporter.hits.runtime", runtime);

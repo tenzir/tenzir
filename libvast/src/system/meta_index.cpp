@@ -386,21 +386,21 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
       self->state.erase(old_partition);
       return atom::ok_v;
     },
-    [=](atom::candidates, const vast::expression& expression,
-        const vast::ids& ids) -> caf::result<std::vector<vast::uuid>> {
-      VAST_TRACE_SCOPE("{} {} {}", *self, VAST_ARG(expression), VAST_ARG(ids));
+    [=](atom::candidates,
+        const vast::query& query) -> caf::result<std::vector<vast::uuid>> {
+      VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query));
       std::vector<vast::uuid> expression_candidates;
       std::vector<vast::uuid> ids_candidates;
-      bool has_expression = expression != vast::expression{};
-      bool has_ids = !ids.empty();
+      bool has_expression = query.expr != vast::expression{};
+      bool has_ids = !query.ids.empty();
       if (!has_expression && !has_ids)
         return caf::make_error(ec::invalid_argument, "query had neither an "
                                                      "expression nor ids");
       if (has_expression) {
-        expression_candidates = self->state.lookup(expression);
+        expression_candidates = self->state.lookup(query.expr);
       }
       if (has_ids) {
-        for (auto id : select(ids)) {
+        for (auto id : select(query.ids)) {
           const auto* x = self->state.offset_map.lookup(id);
           if (x)
             ids_candidates.push_back(*x);

@@ -201,11 +201,13 @@ TEST(empty partition roundtrip) {
              [=](const caf::error& err) {
                FAIL(err);
              });
+  auto expr = vast::expression{vast::predicate{vast::field_extractor{".x"},
+                                               vast::relational_operator::equal,
+                                               vast::data{0u}}};
+  auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
+                                     std::move(expr));
   auto rp2 = self->request(meta_index, caf::infinite, vast::atom::candidates_v,
-                           vast::expression{vast::predicate{
-                             vast::field_extractor{".x"},
-                             vast::relational_operator::equal, vast::data{0u}}},
-                           vast::ids{});
+                           std::move(q));
   run();
   rp2.receive(
     [&](const std::vector<vast::uuid>& candidates) {
