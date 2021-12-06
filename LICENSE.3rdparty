@@ -68,3 +68,8 @@ Files: scripts/clang-format-diff.py
 Copyright: (c) 2003-2017 University of Illinois at Urbana-Champaign
 License: Apache-2.0-with-LLVM-exceptions
 Comment: Taken from LLVM.
+
+Files: libvast/vast/detail/worm.hpp
+Copyright: (c) Peter C. Dillinger, (c) Facebook, Inc. and its affiliates.
+License: MIT
+Comment: https://github.com/pdillinger/wormhashing
