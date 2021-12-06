@@ -183,12 +183,6 @@ auto make_pivot_command() {
   return pivot;
 }
 
-auto make_send_command() {
-  return std::make_unique<command>("send",
-                                   "sends a message to a registered actor", "",
-                                   opts("?vast.send"), false);
-}
-
 auto make_spawn_source_command() {
   auto spawn_source = std::make_unique<command>(
     "source", "creates a new source inside the node",
@@ -471,7 +465,6 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_kill_command());
   root->add_subcommand(make_peer_command());
   root->add_subcommand(make_pivot_command());
-  root->add_subcommand(make_send_command());
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
   root->add_subcommand(make_status_command());
