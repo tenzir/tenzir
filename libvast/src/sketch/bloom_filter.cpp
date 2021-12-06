@@ -32,7 +32,7 @@ const bloom_filter_params& frozen_bloom_filter::parameters() const noexcept {
 }
 
 size_t mem_usage(const frozen_bloom_filter& x) noexcept {
-  return mem_usage(x.view_), x.table_->size();
+  return mem_usage(x.view_) + x.table_->size();
 }
 
 caf::expected<bloom_filter> bloom_filter::make(bloom_filter_config cfg) {
