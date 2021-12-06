@@ -16,9 +16,6 @@
 
 namespace vast::system {
 
-// TODO: This is temporary until the functionality is unified with
-// the ERASER.
-
 /// Tries to spawn a new DISK_MONITOR.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.

@@ -444,15 +444,6 @@ tests:
         input: data/json/record-in-list.json
       - command: -N export ascii '#type == "custom"'
 
-  Zeek conn log aging:
-    tags: [import-export, aging, zeek]
-    fixture: AgingTester
-    steps:
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: export ascii 'resp_h == 192.168.1.104'
-      - command: send eraser run
-      - command: export ascii 'resp_h == 192.168.1.104'
   Spawn source:
     tags: [import, spawn-source, zeek]
     fixture: ServerTester

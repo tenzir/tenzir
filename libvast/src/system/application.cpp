@@ -373,7 +373,6 @@ auto make_command_factory() {
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn archive", remote_command},
-    {"spawn eraser", remote_command},
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
     {"spawn importer", remote_command},
@@ -453,9 +452,6 @@ auto make_root_command(std::string_view path) {
           "plugins", "plugins to load at startup; the special values 'bundled' "
                      "and 'all' enable autoloading of bundled and all plugins "
                      "respectively.")
-        .add<std::string>("aging-frequency", "interval between two aging "
-                                             "cycles")
-        .add<std::string>("aging-query", "query for aging out obsolete data")
         .add<std::string>("shutdown-grace-period",
                           "time to wait until component shutdown "
                           "finishes cleanly before inducing a hard kill")

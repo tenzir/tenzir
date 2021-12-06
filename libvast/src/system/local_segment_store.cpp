@@ -83,10 +83,6 @@ caf::result<atom::done> handle_lookup(Actor& self, const vast::query& query,
         }
       }
     },
-    [&](query::erase) {
-      // The caller should have special-cased this before calling.
-      VAST_ASSERT(false, "cant lookup an 'erase' query");
-    },
   };
   caf::visit(handle_query, query.cmd);
   return atom::done_v;
@@ -112,7 +108,10 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
   self->state.fs = std::move(fs);
   self->state.path = path;
   self->set_exit_handler([self](const caf::exit_msg&) {
-    for (auto&& [expr, rp] : std::exchange(self->state.deferred_requests, {}))
+    for (auto&& [_, rp] : std::exchange(self->state.deferred_queries, {}))
+      rp.deliver(caf::make_error(ec::lookup_error, "partition store shutting "
+                                                   "down"));
+    for (auto&& [_, rp] : std::exchange(self->state.deferred_erasures, {}))
       rp.deliver(caf::make_error(ec::lookup_error, "partition store shutting "
                                                    "down"));
   });
@@ -128,19 +127,30 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         }
         self->state.segment = std::move(*seg);
         // Delegate all deferred evaluations now that we have the partition chunk.
-        VAST_DEBUG("{} delegates {} deferred evaluations", *self,
-                   self->state.deferred_requests.size());
+        VAST_DEBUG("{} delegates {} deferred evaluations and {} deferred "
+                   "erasures",
+                   *self, self->state.deferred_queries.size(),
+                   self->state.deferred_erasures.size());
         for (auto&& [query, rp] :
-             std::exchange(self->state.deferred_requests, {})) {
+             std::exchange(self->state.deferred_queries, {})) {
           VAST_TRACE("{} delegates {} (pending: {})", *self, query,
                      rp.pending());
           rp.delegate(static_cast<store_actor>(self), std::move(query));
+        }
+        for (auto&& [ids, rp] :
+             std::exchange(self->state.deferred_erasures, {})) {
+          VAST_TRACE("{} delegates erasure of {} events (pending: {})", *self,
+                     rank(ids), rp.pending());
+          rp.delegate(static_cast<store_actor>(self), atom::erase_v,
+                      std::move(ids));
         }
       },
       [self](caf::error& err) {
         VAST_ERROR("{} could not map passive store segment into memory: {}",
                    *self, render(err));
-        for (auto&& [_, rp] : std::exchange(self->state.deferred_requests, {}))
+        for (auto&& [_, rp] : std::exchange(self->state.deferred_queries, {}))
+          rp.deliver(err);
+        for (auto&& [_, rp] : std::exchange(self->state.deferred_erasures, {}))
           rp.deliver(err);
         self->quit(std::move(err));
       });
@@ -149,15 +159,8 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       VAST_DEBUG("{} handles new query", *self);
       if (!self->state.segment) {
         auto rp = self->make_response_promise<atom::done>();
-        self->state.deferred_requests.emplace_back(query, rp);
+        self->state.deferred_queries.emplace_back(query, rp);
         return rp;
-      }
-      // Special-case handling for "erase"-queries because their
-      // implementation must be different depending on if we operate
-      // in memory or on disk.
-      if (caf::holds_alternative<query::erase>(query.cmd)) {
-        return self->delegate(static_cast<store_actor>(self), atom::erase_v,
-                              query.ids);
       }
       auto slices = self->state.segment->lookup(query.ids);
       if (!slices)
@@ -169,9 +172,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         // Treat this as an "erase" query for the purposes of storing it
         // until the segment is loaded.
         auto rp = self->make_response_promise<atom::done>();
-        auto query = query::make_erase({});
-        query.ids = std::move(xs);
-        self->state.deferred_requests.emplace_back(query, rp);
+        self->state.deferred_erasures.emplace_back(xs, rp);
         return rp;
       }
       VAST_DEBUG("{} erases {} of {} events", *self,
@@ -247,10 +248,6 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
       }
       if (!slices)
         return slices.error();
-      if (caf::holds_alternative<query::erase>(query.cmd)) {
-        return self->delegate(static_cast<store_actor>(self), atom::erase_v,
-                              query.ids);
-      }
       return handle_lookup(self, query, *slices);
     },
     [self](const atom::erase&, const ids& ids) -> caf::result<atom::done> {
