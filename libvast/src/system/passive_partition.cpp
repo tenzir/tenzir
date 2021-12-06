@@ -284,8 +284,9 @@ partition_actor::behavior_type passive_partition(
             self->quit(std::move(error));
             return;
           }
-          auto store = plugin->make_store(self->state.filesystem,
-                                          self->state.store_header);
+          auto store
+            = plugin->make_store(self->state.accountant, self->state.filesystem,
+                                 self->state.store_header);
           if (!store) {
             VAST_ERROR("{} failed to spawn store: {}", *self,
                        render(store.error()));

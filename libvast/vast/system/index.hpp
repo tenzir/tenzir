@@ -15,7 +15,6 @@
 #include "vast/fbs/index.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
-#include "vast/system/accountant.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/importer.hpp"

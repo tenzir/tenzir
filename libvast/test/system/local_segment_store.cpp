@@ -53,6 +53,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return result;
   }
 
+  vast::system::accountant_actor accountant = {};
   vast::system::filesystem_actor filesystem;
 };
 
@@ -74,14 +75,15 @@ TEST(local store roundtrip) {
   auto uuid = vast::uuid::random();
   auto plugin = vast::plugins::find<vast::store_plugin>("segment-store");
   REQUIRE(plugin);
-  auto builder_and_header = plugin->make_store_builder(filesystem, uuid);
+  auto builder_and_header
+    = plugin->make_store_builder(accountant, filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);
   auto& [builder, header] = *builder_and_header;
   vast::detail::spawn_container_source(sys, xs, builder);
   run();
   // The local store expects a single stream source, so the data should be
   // flushed to disk after the source disconnected.
-  auto store = plugin->make_store(filesystem, as_bytes(header));
+  auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
   auto ids = vast::make_ids({23});

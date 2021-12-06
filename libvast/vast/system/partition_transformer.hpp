@@ -95,7 +95,7 @@ struct partition_transformer_state {
 partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   uuid id, std::string store_id, const caf::settings& synopsis_opts,
-  const caf::settings& index_opts,
+  const caf::settings& index_opts, accountant_actor accountant,
   idspace_distributor_actor idspace_distributor, filesystem_actor fs,
   transform_ptr transform);
 

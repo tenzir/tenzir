@@ -520,7 +520,8 @@ void index_state::create_active_partition() {
   chunk_ptr store_header = chunk::make_empty();
   if (partition_local_stores) {
     store_name = store_plugin->name();
-    auto builder_and_header = store_plugin->make_store_builder(filesystem, id);
+    auto builder_and_header
+      = store_plugin->make_store_builder(accountant, filesystem, id);
     if (!builder_and_header) {
       VAST_ERROR("could not create new active partition: {}",
                  render(builder_and_header.error()));
@@ -1169,6 +1170,7 @@ index(index_actor::stateful_pointer<index_state> self,
       partition_transformer_actor sink = self->spawn(
         partition_transformer, new_partition_id, store_id,
         self->state.synopsis_opts, self->state.index_opts,
+        self->state.accountant,
         static_cast<idspace_distributor_actor>(self->state.importer),
         self->state.filesystem, transform);
       // match_everything == '"" in #type'

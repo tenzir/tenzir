@@ -256,7 +256,8 @@ public:
   using builder_and_header = std::pair<system::store_builder_actor, chunk_ptr>;
 
   /// Create a store builder actor that accepts incoming table slices.
-  /// @param fs The actor handle of a filesystem actor.
+  /// @param accountant The actor handle of the accountant.
+  /// @param fs The actor handle of a filesystem.
   /// @param id The partition id for which we want to create a store. Can
   ///           be used as a unique key by the implementation.
   /// @returns A store_builder actor and a chunk called the "header". The
@@ -264,16 +265,18 @@ public:
   ///          allow the plugin to retrieve the correct store actor when
   ///          `make_store()` below is called.
   [[nodiscard]] virtual caf::expected<builder_and_header>
-  make_store_builder(system::filesystem_actor fs,
+  make_store_builder(system::accountant_actor accountant,
+                     system::filesystem_actor fs,
                      const vast::uuid& id) const = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
   /// partition that uses this partition as a store backend.
-  /// @param fs The actor handle a filesystem actor.
+  /// @param accountant The actor handle the accountant.
+  /// @param fs The actor handle of a filesystem.
   /// @param header The store header as found in the partition flatbuffer.
   /// @returns A new store actor.
   [[nodiscard]] virtual caf::expected<system::store_actor>
-  make_store(system::filesystem_actor,
+  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
              std::span<const std::byte> header) const = 0;
 };
 

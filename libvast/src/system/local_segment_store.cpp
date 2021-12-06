@@ -19,6 +19,7 @@
 #include "vast/query.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/system/node_control.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
@@ -26,6 +27,7 @@
 #include <flatbuffers/flatbuffers.h>
 #include <fmt/format.h>
 
+#include <chrono>
 #include <span>
 #include <vector>
 
@@ -36,10 +38,11 @@ namespace {
 // Handler for `vast::query` that is shared between active and passive stores.
 // Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
-caf::result<atom::done> handle_lookup(Actor& self, const vast::query& query,
-                                      const std::vector<table_slice>& slices) {
+caf::expected<size_t> handle_lookup(Actor& self, const vast::query& query,
+                                    const std::vector<table_slice>& slices) {
   const auto& ids = query.ids;
   std::vector<expression> checkers;
+  size_t num_hits = 0ull;
   for (const auto& slice : slices) {
     if (query.expr == expression{}) {
       checkers.emplace_back();
@@ -58,6 +61,7 @@ caf::result<atom::done> handle_lookup(Actor& self, const vast::query& query,
         const auto& slice = slices.at(i);
         const auto& checker = checkers.at(i);
         auto result = count_matching(slice, checker, ids);
+        num_hits += result;
         self->send(count.sink, result);
       }
     },
@@ -70,22 +74,26 @@ caf::result<atom::done> handle_lookup(Actor& self, const vast::query& query,
           for (auto& sub_slice : select(slice, ids)) {
             if (query.expr == expression{}) {
               self->send(extract.sink, sub_slice);
+              num_hits += sub_slice.rows();
             } else {
               auto hits = evaluate(checker, sub_slice);
+              num_hits += rank(hits);
               for (auto& final_slice : select(sub_slice, hits))
                 self->send(extract.sink, final_slice);
             }
           }
         } else {
           auto final_slice = filter(slice, checker, ids);
-          if (final_slice)
+          if (final_slice) {
+            num_hits += final_slice->rows();
             self->send(extract.sink, *final_slice);
+          }
         }
       }
     },
   };
   caf::visit(handle_query, query.cmd);
-  return atom::done_v;
+  return num_hits;
 }
 
 std::filesystem::path
@@ -104,7 +112,9 @@ std::filesystem::path store_path_for_partition(const uuid& partition_id) {
 
 store_actor::behavior_type
 passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
-                    filesystem_actor fs, const std::filesystem::path& path) {
+                    accountant_actor accountant, filesystem_actor fs,
+                    const std::filesystem::path& path) {
+  self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
   self->state.path = path;
   self->set_exit_handler([self](const caf::exit_msg&) {
@@ -162,10 +172,22 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         self->state.deferred_queries.emplace_back(query, rp);
         return rp;
       }
+      auto start = std::chrono::steady_clock::now();
       auto slices = self->state.segment->lookup(query.ids);
       if (!slices)
         return slices.error();
-      return handle_lookup(self, query, *slices);
+      auto num_hits = handle_lookup(self, query, *slices);
+      if (!num_hits)
+        return num_hits.error();
+      auto runtime = std::chrono::steady_clock::now() - start;
+      auto id_str = fmt::to_string(query.id);
+      self->send(
+        self->state.accountant, "segment-store.lookup.runtime", runtime,
+        metrics_metadata{{"query", id_str}, {"store-type", "passive"}});
+      self->send(self->state.accountant, "segment-store.lookup.hits", *num_hits,
+                 metrics_metadata{{"query", id_str},
+                                  {"store-type", "passive"}});
+      return atom::done_v;
     },
     [self](atom::erase, ids xs) -> caf::result<atom::done> {
       if (!self->state.segment) {
@@ -223,9 +245,11 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
 
 local_store_actor::behavior_type
 active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
-                   filesystem_actor fs, const std::filesystem::path& path) {
+                   accountant_actor accountant, filesystem_actor fs,
+                   const std::filesystem::path& path) {
   VAST_DEBUG("spawning active local store");
   self->state.self = self;
+  self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
   self->state.path = path;
   self->state.builder
@@ -239,6 +263,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   auto result = local_store_actor::behavior_type{
     // store api
     [self](const query& query) -> caf::result<atom::done> {
+      auto start = std::chrono::steady_clock::now();
       caf::expected<std::vector<table_slice>> slices = caf::error{};
       if (self->state.builder) {
         slices = self->state.builder->lookup(query.ids);
@@ -248,7 +273,17 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
       }
       if (!slices)
         return slices.error();
-      return handle_lookup(self, query, *slices);
+      auto num_hits = handle_lookup(self, query, *slices);
+      if (!num_hits)
+        return num_hits.error();
+      auto runtime = std::chrono::steady_clock::now() - start;
+      auto id_str = fmt::to_string(query.id);
+      self->send(self->state.accountant, "segment_store.lookup.runtime",
+                 runtime,
+                 metrics_metadata{{"query", id_str}, {"store_type", "active"}});
+      self->send(self->state.accountant, "segment_store.lookup.hits", *num_hits,
+                 metrics_metadata{{"query", id_str}, {"store_type", "active"}});
+      return atom::done_v;
     },
     [self](const atom::erase&, const ids& ids) -> caf::result<atom::done> {
       // TODO: There is a race here when ids are erased while we're waiting
@@ -329,22 +364,24 @@ public:
 
   // store plugin API
   [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(filesystem_actor fs, const vast::uuid& id) const override {
+  make_store_builder(accountant_actor accountant, filesystem_actor fs,
+                     const vast::uuid& id) const override {
     auto path = store_path_for_partition(id);
     std::string path_str = path.string();
     auto header = chunk::make(std::move(path_str));
-    auto builder = fs->home_system().spawn(active_local_store, fs, path);
+    auto builder
+      = fs->home_system().spawn(active_local_store, accountant, fs, path);
     return builder_and_header{static_cast<store_builder_actor&&>(builder),
                               std::move(header)};
   }
 
   [[nodiscard]] caf::expected<system::store_actor>
-  make_store(filesystem_actor fs,
+  make_store(accountant_actor accountant, filesystem_actor fs,
              std::span<const std::byte> header) const override {
     auto path = store_path_from_header(header);
     // TODO: This should use `spawn<caf::lazy_init>`, but this leads to a
     // deadlock in unit tests.
-    return fs->home_system().spawn(passive_local_store, fs, path);
+    return fs->home_system().spawn(passive_local_store, accountant, fs, path);
   }
 };
 
