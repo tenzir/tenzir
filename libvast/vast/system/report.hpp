@@ -22,8 +22,10 @@
 namespace vast::system {
 
 /// A set of tags to attach to a metrics event.
-// This is also declared in `actors.hpp`
-using metrics_metadata = std::vector<std::pair<std::string, std::string>>;
+struct metrics_metadata : std::vector<std::pair<std::string, std::string>> {
+  using super = std::vector<std::pair<std::string, std::string>>;
+  using super::super;
+};
 
 struct data_point {
   std::string key;

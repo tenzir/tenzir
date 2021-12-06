@@ -164,10 +164,6 @@ using active_indexer_actor = typed_actor_fwd<
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// A set of tags to attach to a metrics event.
-// This is also declared in `report.hpp`
-using metrics_metadata = std::vector<std::pair<std::string, std::string>>;
-
 /// The ACCOUNTANT actor interface.
 using accountant_actor = typed_actor_fwd<
   // Update the configuration of the ACCOUNTANT.
@@ -502,7 +498,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_actor))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_master_actor))
   VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>))
-  VAST_ADD_TYPE_ID((vast::system::metrics_metadata))
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))
   VAST_ADD_TYPE_ID(
