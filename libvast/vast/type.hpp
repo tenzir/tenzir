@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/concepts.hpp"
+#include "vast/detail/generator.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -304,8 +305,8 @@ public:
   [[nodiscard]] std::string_view name() && = delete;
 
   /// Returns a view of all names of this type.
-  [[nodiscard]] std::vector<std::string_view> names() const& noexcept;
-  [[nodiscard]] std::vector<std::string_view> names() && = delete;
+  [[nodiscard]] detail::generator<std::string_view> names() const& noexcept;
+  [[nodiscard]] detail::generator<std::string_view> names() && = delete;
 
   /// Returns the value of an attribute by name, if it exists.
   /// @param key The key of the attribute.
@@ -319,9 +320,12 @@ public:
   [[nodiscard]] std::optional<std::string_view>
   attribute(const char* key) && = delete;
 
+  /// Returns whether the type has any attributes.
+  [[nodiscard]] bool has_attributes() const noexcept;
+
   /// Returns a view on all attributes.
-  [[nodiscard]] std::vector<attribute_view> attributes() const& noexcept;
-  [[nodiscard]] std::vector<attribute_view> attributes() && = delete;
+  [[nodiscard]] detail::generator<attribute_view> attributes() const& noexcept;
+  [[nodiscard]] detail::generator<attribute_view> attributes() && = delete;
 
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
@@ -769,12 +773,6 @@ class record_type final : public stateful_type_base {
   friend class type;
   friend struct caf::sum_type_access<vast::type>;
 
-  /// An iterable view over the fields of a record type.
-  struct iterable;
-
-  /// An iterable view over the leaf fields of a record type.
-  struct leaf_iterable;
-
 public:
   template <class String>
   struct basic_field {
@@ -803,6 +801,12 @@ public:
   /// A sliced view on a record type field.
   struct field_view final : basic_field<std::string_view> {
     using basic_field::basic_field;
+  };
+
+  /// A sliced view on an indexed leaf field.
+  struct leaf_view final {
+    field_view field = {}; ///< The leaf field.
+    offset index = {};     ///< The leaf field's index.
   };
 
   /// A transformation that can be applied to a record type; maps a valid offset
@@ -864,10 +868,10 @@ public:
   [[nodiscard]] record construct() const noexcept;
 
   /// Returns an iterable view over the fields of a record type.
-  [[nodiscard]] iterable fields() const noexcept;
+  [[nodiscard]] detail::generator<field_view> fields() const noexcept;
 
   /// Returns an iterable view over the leaf fields of a record type.
-  [[nodiscard]] leaf_iterable leaves() const noexcept;
+  [[nodiscard]] detail::generator<leaf_view> leaves() const noexcept;
 
   /// Returns the numnber of fields in a record.
   [[nodiscard]] size_t num_fields() const noexcept;
@@ -889,7 +893,7 @@ public:
   /// not 'x.other_y.z'.
   /// @note The key may optionally begin with a given prefix for backwards
   /// compatilibty with the old type system.
-  [[nodiscard]] std::vector<offset>
+  [[nodiscard]] detail::generator<offset>
   resolve_key_suffix(std::string_view key, std::string_view prefix
                                            = "") const noexcept;
 
@@ -940,49 +944,6 @@ public:
 
   /// Returns a new, flattened record type.
   friend record_type flatten(const record_type& type) noexcept;
-};
-
-/// An iterable over the fields of a record.
-struct record_type::iterable final : detail::range_facade<struct iterable> {
-  friend class record_type;
-  friend class detail::range_facade<struct iterable>;
-
-  /// Access a field by index.
-  [[nodiscard]] field_view operator[](size_t index) const noexcept;
-
-  /// Get the number of fields in the record field.
-  [[nodiscard]] size_t size() const noexcept;
-
-private:
-  /// Constructs an iterable from a record type.
-  explicit iterable(record_type type) noexcept;
-
-  // Range facade implementation details.
-  void next() noexcept;
-  [[nodiscard]] bool done() const noexcept;
-  [[nodiscard]] field_view get() const noexcept;
-
-  size_t index_;     ///< The index of the currently selected field.
-  record_type type_; ///< The record type we're iterating over.
-};
-
-/// An iterable over the leaf fields of a record.
-struct record_type::leaf_iterable final
-  : detail::range_facade<struct leaf_iterable> {
-  friend class record_type;
-  friend class detail::range_facade<struct leaf_iterable>;
-
-private:
-  /// Constructs a leaf_iterable from a record type.
-  explicit leaf_iterable(record_type type) noexcept;
-
-  // Range facade implementation details.
-  void next() noexcept;
-  [[nodiscard]] bool done() const noexcept;
-  [[nodiscard]] std::pair<field_view, offset> get() const noexcept;
-
-  offset index_;     ///< The offset of the currently selected leaf field.
-  record_type type_; ///< The record type we're iterating over.
 };
 
 } // namespace vast
@@ -1135,8 +1096,13 @@ struct formatter<vast::type> {
           out = format_to(out, "{}", x);
         },
         value);
-    if (const auto& attributes = value.attributes(); !attributes.empty())
-      out = format_to(out, " {}", fmt::join(attributes, " "));
+    for (bool first = false; const auto& attribute : value.attributes()) {
+      if (!first) {
+        out = format_to(out, " ");
+        first = false;
+      }
+      out = format_to(out, "{}", attribute);
+    }
     return out;
   }
 };
@@ -1254,8 +1220,17 @@ struct formatter<T> {
   template <class FormatContext>
   auto format(const vast::record_type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "record {{{}}}",
-                     fmt::join(value.fields(), ", "));
+    auto out = ctx.out();
+    out = format_to(out, "record {{");
+    for (bool first = true; auto field : value.fields()) {
+      if (first) {
+        out = format_to(out, "{}", field);
+        first = false;
+      } else {
+        out = format_to(out, ", {}", field);
+      }
+    }
+    return format_to(out, "}}");
   }
 };
 

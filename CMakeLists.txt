@@ -205,6 +205,12 @@ install(TARGETS libvast_internal EXPORT VASTTargets)
 # Require standard C++20.
 target_compile_features(libvast_internal INTERFACE cxx_std_20)
 
+# Enable coroutines for GCC < 11.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
+                                             VERSION_LESS 11)
+  target_compile_options(libvast_internal INTERFACE -fcoroutines)
+endif ()
+
 # Increase maximum number of template instantiations.
 target_compile_options(libvast_internal INTERFACE -ftemplate-backtrace-limit=0)
 

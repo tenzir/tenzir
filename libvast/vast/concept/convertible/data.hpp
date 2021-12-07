@@ -480,11 +480,14 @@ public:
 
   template <class... Ts>
   caf::error operator()(Ts&&... xs) {
-    const auto& rng = layout.fields();
+    auto rng = layout.fields();
     auto it = rng.begin();
     return caf::error::eval([&]() -> caf::error {
-      if constexpr (!caf::meta::is_annotation<Ts>::value)
-        return apply(*it++, xs);
+      if constexpr (!caf::meta::is_annotation<Ts>::value) {
+        auto result = apply(*it, xs);
+        ++it;
+        return result;
+      }
       return caf::none;
     }...);
   }

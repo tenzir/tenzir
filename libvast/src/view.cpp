@@ -252,11 +252,10 @@ bool type_check(const type& x, const data_view& y) {
       return false;
     },
     [&](const record_type& t, const view<record>& u) {
-      auto tf = t.fields();
-      if (u.size() != tf.size())
+      if (u.size() != t.num_fields())
         return false;
       for (size_t i = 0; const auto& [k, v] : u) {
-        const auto field = tf[i++];
+        const auto field = t.field(i++);
         if (field.name != k || type_check(field.type, v))
           return false;
       }

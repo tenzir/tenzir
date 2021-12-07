@@ -642,8 +642,7 @@ void inspect(caf::detail::stringification_inspector& f, type& x) {
 
 void type::assign_metadata(const type& other) noexcept {
   const auto name = other.name();
-  const auto attributes = other.attributes();
-  if (name.empty() && attributes.empty())
+  if (name.empty() && !other.has_attributes())
     return;
   const auto nested_bytes = as_bytes(table_);
   const auto reserved_size = [&]() noexcept {
@@ -658,7 +657,7 @@ void type::assign_metadata(const type& other) noexcept {
     size += reserved_string_size(name);
     return size;
   };
-  auto builder = attributes.empty()
+  auto builder = other.has_attributes()
                    ? flatbuffers::FlatBufferBuilder{reserved_size()}
                    : flatbuffers::FlatBufferBuilder{};
   const auto nested_type_offset = builder.CreateVector(
@@ -667,12 +666,11 @@ void type::assign_metadata(const type& other) noexcept {
   const auto attributes_offset = [&]() noexcept
     -> flatbuffers::Offset<flatbuffers::Vector<
       flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>> {
-    if (attributes.empty())
+    if (!other.has_attributes())
       return 0;
     auto attributes_offsets = std::vector<
       flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>{};
-    attributes_offsets.reserve(attributes.size());
-    for (const auto& attribute : attributes) {
+    for (const auto& attribute : other.attributes()) {
       const auto key_offset = builder.CreateString(attribute.key);
       const auto value_offset
         = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
@@ -723,8 +721,7 @@ std::string_view type::name() const& noexcept {
   __builtin_unreachable();
 }
 
-std::vector<std::string_view> type::names() const& noexcept {
-  auto result = std::vector<std::string_view>{};
+detail::generator<std::string_view> type::names() const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
@@ -743,16 +740,17 @@ std::vector<std::string_view> type::names() const& noexcept {
       case fbs::type::Type::list_type_v0:
       case fbs::type::Type::map_type_v0:
       case fbs::type::Type::record_type_v0:
-        return result;
+        co_return;
       case fbs::type::Type::enriched_type_v0:
         const auto* enriched_type = root->type_as_enriched_type_v0();
         if (const auto* name = enriched_type->name())
-          result.push_back(name->string_view());
+          co_yield name->string_view();
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
     }
   }
+  __builtin_unreachable();
 }
 
 std::optional<std::string_view>
@@ -793,8 +791,7 @@ type::attribute(const char* key) const& noexcept {
   __builtin_unreachable();
 }
 
-std::vector<type::attribute_view> type::attributes() const& noexcept {
-  auto result = std::vector<type::attribute_view>{};
+bool type::has_attributes() const noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
@@ -813,16 +810,52 @@ std::vector<type::attribute_view> type::attributes() const& noexcept {
       case fbs::type::Type::list_type_v0:
       case fbs::type::Type::map_type_v0:
       case fbs::type::Type::record_type_v0:
-        return result;
+        return false;
       case fbs::type::Type::enriched_type_v0:
         const auto* enriched_type = root->type_as_enriched_type_v0();
         if (const auto* attributes = enriched_type->attributes()) {
-          result.reserve(result.size() + attributes->size());
-          for (const auto& attribute : *attributes)
-            result.push_back({
-              attribute->key()->string_view(),
-              attribute->value() ? attribute->value()->string_view() : "",
-            });
+          if (attributes->begin() != attributes->end())
+            return true;
+        }
+        root = enriched_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
+  __builtin_unreachable();
+}
+
+detail::generator<type::attribute_view> type::attributes() const& noexcept {
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0:
+      case fbs::type::Type::record_type_v0:
+        co_return;
+      case fbs::type::Type::enriched_type_v0:
+        const auto* enriched_type = root->type_as_enriched_type_v0();
+        if (const auto* attributes = enriched_type->attributes()) {
+          for (const auto& attribute : *attributes) {
+            if (attribute->value() != nullptr
+                && attribute->value()->begin() != attribute->value()->end())
+              co_yield {attribute->key()->string_view(),
+                        attribute->value()->string_view()};
+            else
+              co_yield {attribute->key()->string_view(), ""};
+          }
         }
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
@@ -887,12 +920,10 @@ bool congruent(const type& x, const type& y) noexcept {
              && congruent(x.value_type(), y.value_type());
     },
     [](const record_type& x, const record_type& y) noexcept {
-      const auto xf = x.fields();
-      const auto yf = y.fields();
-      if (xf.size() != yf.size())
+      if (x.num_fields() != y.num_fields())
         return false;
-      for (size_t i = 0; i < xf.size(); ++i)
-        if (!congruent(xf[i].type, yf[i].type))
+      for (size_t i = 0; i < x.num_fields(); ++i)
+        if (!congruent(x.field(i).type, y.field(i).type))
           return false;
       return true;
     },
@@ -955,19 +986,17 @@ bool congruent(const type& x, const data& y) noexcept {
       return true;
     },
     [](const record_type& x, const list& y) noexcept {
-      const auto xf = x.fields();
-      if (xf.size() != y.size())
+      if (x.num_fields() != y.size())
         return false;
-      for (size_t i = 0; i < xf.size(); ++i)
-        if (!congruent(xf[i].type, y[i]))
+      for (size_t i = 0; i < x.num_fields(); ++i)
+        if (!congruent(x.field(i).type, y[i]))
           return false;
       return true;
     },
     [](const record_type& x, const record& y) noexcept {
-      const auto xf = x.fields();
-      if (xf.size() != y.size())
+      if (x.num_fields() != y.size())
         return false;
-      for (const auto& field : xf) {
+      for (const auto& field : x.fields()) {
         if (auto it = y.find(field.name); it != y.end()) {
           if (!congruent(field.type, it->second))
             return false;
@@ -1153,11 +1182,10 @@ bool type_check(const type& x, const data& y) noexcept {
       return false;
     },
     [&](const record_type& t, const record& u) {
-      auto tf = t.fields();
-      if (u.size() != tf.size())
+      if (u.size() != t.num_fields())
         return false;
       for (size_t i = 0; i < u.size(); ++i) {
-        const auto field = tf[i];
+        const auto field = t.field(i);
         const auto& [k, v] = as_vector(u)[i];
         if (field.name != k || type_check(field.type, v))
           return false;
@@ -1275,7 +1303,6 @@ std::span<const std::byte> as_bytes(const count_type&) noexcept {
                                       count_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-
     VAST_ASSERT(result.size() == reserved_size);
     return result;
   }();
@@ -1730,12 +1757,80 @@ record record_type::construct() const noexcept {
   return record::make_unsafe(std::move(result));
 }
 
-record_type::iterable record_type::fields() const noexcept {
-  return iterable{*this};
+detail::generator<record_type::field_view>
+record_type::fields() const noexcept {
+  const auto* record = table().type_as_record_type_v0();
+  VAST_ASSERT(record);
+  const auto* fields = record->fields();
+  VAST_ASSERT(fields);
+  for (const auto* field : *fields) {
+    co_yield {
+      field->name()->string_view(),
+      type{table_->slice(as_bytes(*field->type()))},
+    };
+  }
+  co_return;
 }
 
-record_type::leaf_iterable record_type::leaves() const noexcept {
-  return leaf_iterable{*this};
+detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
+  auto index = offset{0};
+  auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
+    table().type_as_record_type_v0()};
+  while (!index.empty()) {
+    const auto* record = history.back();
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // This is our exit condition: If we arrived at the end of a record, we need
+    // to step out one layer. We must also reset the target key at this point.
+    if (index.back() >= fields->size()) {
+      history.pop_back();
+      index.pop_back();
+      if (!index.empty())
+        ++index.back();
+      continue;
+    }
+    const auto* field = record->fields()->Get(index.back());
+    VAST_ASSERT(field);
+    const auto* field_type = resolve_transparent(field->type_nested_root());
+    VAST_ASSERT(field_type);
+    switch (field_type->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0: {
+        auto leaf = leaf_view{
+          {
+            field->name()->string_view(),
+            type{table_->slice(as_bytes(*field->type()))},
+          },
+          index,
+        };
+        co_yield std::move(leaf);
+        ++index.back();
+        break;
+      }
+      case fbs::type::Type::record_type_v0: {
+        history.emplace_back(field_type->type_as_record_type_v0());
+        index.push_back(0);
+        break;
+      }
+      case fbs::type::Type::enriched_type_v0:
+        __builtin_unreachable();
+        break;
+    }
+  }
+  co_return;
 }
 
 size_t record_type::num_fields() const noexcept {
@@ -1751,7 +1846,8 @@ size_t record_type::num_leaves() const noexcept {
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
   size_t current_flat_index = 0;
   auto index = offset{0};
-  auto history = std::vector{table().type_as_record_type_v0()};
+  auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
+    table().type_as_record_type_v0()};
   while (!index.empty()) {
     const auto* record = history.back();
     VAST_ASSERT(record);
@@ -1878,12 +1974,11 @@ record_type::resolve_key(std::string_view key) const noexcept {
   return {};
 }
 
-std::vector<offset>
+detail::generator<offset>
 record_type::resolve_key_suffix(std::string_view key,
                                 std::string_view prefix) const noexcept {
   if (key.empty())
-    return {};
-  auto result = std::vector<offset>{};
+    co_return;
   auto index = offset{0};
   auto history = std::vector{
     std::pair{
@@ -1948,7 +2043,7 @@ record_type::resolve_key_suffix(std::string_view key,
           if (remaining_key_mismatch == remaining_key.rend()
               && (field_name_mismatch == field_name->rend()
                   || *field_name_mismatch == '.')) {
-            result.push_back(index);
+            co_yield index;
             break;
           }
         }
@@ -1981,7 +2076,7 @@ record_type::resolve_key_suffix(std::string_view key,
         break;
     }
   }
-  return result;
+  co_return;
 }
 
 std::string_view record_type::key(size_t index) const& noexcept {
@@ -2140,11 +2235,10 @@ std::optional<record_type> record_type::transform(
     if (current == end)
       return self;
     auto new_fields = std::vector<struct field>{};
-    auto old_fields = self.fields();
-    new_fields.reserve(old_fields.size());
-    index.emplace_back(old_fields.size());
+    new_fields.reserve(self.num_fields());
+    index.emplace_back(self.num_fields());
     while (index.back() > 0 && current != end) {
-      const auto& old_field = old_fields[--index.back()];
+      const auto& old_field = self.field(--index.back());
       // Compare the offsets of the next target with our current offset.
       const auto [index_mismatch, current_index_mismatch]
         = std::mismatch(index.begin(), index.end(), current->index.begin(),
@@ -2189,7 +2283,7 @@ std::optional<record_type> record_type::transform(
     // In case we exited the loop earlier, we still have to add all the
     // remaining fields back to the modified record (untouched).
     while (index.back() > 0) {
-      const auto& old_field = old_fields[--index.back()];
+      const auto& old_field = self.field(--index.back());
       new_fields.push_back({
         std::string{old_field.name},
         old_field.type,
@@ -2238,8 +2332,15 @@ merge(const record_type& lhs, const record_type& rhs,
                               "field {}; failed to merge {} and {}",
                               lfield.type.name(), rfield.type.name(),
                               rfield.name, lhs, rhs));
-              const auto lhs_attributes = lfield.type.attributes();
-              const auto rhs_attributes = rfield.type.attributes();
+              auto to_vector
+                = [](detail::generator<type::attribute_view>&& rng) {
+                    auto result = std::vector<type::attribute_view>{};
+                    for (auto&& elem : std::move(rng))
+                      result.push_back(std::move(elem));
+                    return result;
+                  };
+              const auto lhs_attributes = to_vector(lfield.type.attributes());
+              const auto rhs_attributes = to_vector(rfield.type.attributes());
               const auto conflicting_attribute = std::any_of(
                 lhs_attributes.begin(), lhs_attributes.end(),
                 [&](const auto& lhs_attribute) noexcept {
@@ -2247,15 +2348,12 @@ merge(const record_type& lhs, const record_type& rhs,
                          != lhs_attribute.value;
                 });
               if (conflicting_attribute)
-                return caf::make_error(
-                  ec::logic_error,
-                  fmt::format("conflicting attributes ['{}'] and ['{}'] for "
-                              "field {}; failed to merge {} and {}",
-                              fmt::join(lhs_attributes, "', '"),
-                              fmt::join(rhs_attributes, "', '"), rfield.name,
-                              lhs, rhs));
+                return caf::make_error(ec::logic_error,
+                                       fmt::format("conflicting attributes for "
+                                                   "field {}; failed to "
+                                                   "merge {} and {}",
+                                                   rfield.name, lhs, rhs));
               auto attributes = std::vector<struct type::attribute>{};
-              attributes.reserve(lhs_attributes.size() + rhs_attributes.size());
               for (const auto& attribute : lhs_attributes)
                 attributes.push_back(
                   {std::string{attribute.key},
@@ -2283,10 +2381,9 @@ merge(const record_type& lhs, const record_type& rhs,
   };
   auto transformations = std::vector<record_type::transformation>{};
   auto additions = std::vector<struct record_type::field>{};
-  auto rfields = rhs.fields();
-  transformations.reserve(rfields.size());
+  transformations.reserve(rhs.num_fields());
   auto err = caf::error{};
-  for (auto rfield : rfields) {
+  for (auto rfield : rhs.fields()) {
     if (const auto& lindex = lhs.resolve_key(rfield.name)) {
       transformations.push_back({
         *lindex,
@@ -2314,7 +2411,7 @@ merge(const record_type& lhs, const record_type& rhs,
     return err;
   VAST_ASSERT(result);
   result = result->transform({{
-    {result->fields().size() - 1},
+    {result->num_fields() - 1},
     record_type::insert_after(std::move(additions)),
   }});
   VAST_ASSERT(result);
@@ -2329,151 +2426,6 @@ record_type flatten(const record_type& type) noexcept {
       field.type,
     });
   return record_type{fields};
-}
-
-/// Access a field by index.
-[[nodiscard]] record_type::field_view
-record_type::iterable::operator[](size_t index) const noexcept {
-  const auto* record = type_.table().type_as_record_type_v0();
-  VAST_ASSERT(record);
-  const auto* field = record->fields()->Get(index);
-  VAST_ASSERT(field);
-  return {
-    field->name()->string_view(),
-    type{type_.table_->slice(as_bytes(*field->type()))},
-  };
-}
-
-/// Get the number of fields in the record field.
-size_t record_type::iterable::size() const noexcept {
-  const auto* record = type_.table().type_as_record_type_v0();
-  VAST_ASSERT(record);
-  return record->fields()->size();
-}
-
-record_type::iterable::iterable(record_type type) noexcept
-  : index_{0}, type_{std::move(type)} {
-  // nop
-}
-
-void record_type::iterable::next() noexcept {
-  ++index_;
-}
-
-bool record_type::iterable::done() const noexcept {
-  const auto* record = type_.table().type_as_record_type_v0();
-  VAST_ASSERT(record);
-  return index_ >= record->fields()->size();
-}
-
-record_type::field_view record_type::iterable::get() const noexcept {
-  return (*this)[index_];
-}
-
-record_type::leaf_iterable::leaf_iterable(record_type type) noexcept
-  : index_(), type_{std::move(type)} {
-  // Set the index of the first leaf.
-  const auto* record = type_.table().type_as_record_type_v0();
-  VAST_ASSERT(record);
-  do {
-    index_.push_back(0);
-    record = resolve_transparent(record->fields()->begin()->type_nested_root())
-               ->type_as_record_type_v0();
-  } while (record != nullptr);
-}
-
-void record_type::leaf_iterable::next() noexcept {
-  if (index_.empty())
-    return;
-  const auto* view = &type_.table();
-  VAST_ASSERT(view);
-  auto records = std::vector{view->type_as_record_type_v0()};
-  VAST_ASSERT(records.back());
-  // Resolve everything but the last index.
-  VAST_ASSERT(!index_.empty());
-  for (size_t i = 0; i < index_.size() - 1; ++i) {
-    VAST_ASSERT(index_[i] < records.back()->fields()->size());
-    view = resolve_transparent(
-      records.back()->fields()->Get(index_[i])->type_nested_root());
-    VAST_ASSERT(view);
-    records.push_back(view->type_as_record_type_v0());
-    VAST_ASSERT(records.back());
-  }
-  // Increment the last index, and step out of nestec records until we're back
-  // in a record that we have not iterated over completely.
-  while (++index_.back() == records.back()->fields()->size()) {
-    index_.pop_back();
-    if (index_.empty())
-      return;
-    records.pop_back();
-  }
-  // Find the next valid offset by going to the next field, and recursively
-  // stepping into it until we've arrived at a leaf field.
-  while (true) {
-    VAST_ASSERT(index_.back() < records.back()->fields()->size());
-    view = resolve_transparent(
-      records.back()->fields()->Get(index_.back())->type_nested_root());
-    VAST_ASSERT(view);
-    switch (view->type_type()) {
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-        return;
-      case fbs::type::Type::record_type_v0:
-        records.push_back(view->type_as_record_type_v0());
-        VAST_ASSERT(records.back());
-        index_.push_back(0);
-        break;
-      case fbs::type::Type::enriched_type_v0:
-        __builtin_unreachable();
-        break;
-    }
-  }
-  __builtin_unreachable();
-}
-
-bool record_type::leaf_iterable::done() const noexcept {
-  return index_.empty();
-}
-
-std::pair<record_type::field_view, offset>
-record_type::leaf_iterable::get() const noexcept {
-  const auto* record = type_.table().type_as_record_type_v0();
-  VAST_ASSERT(record);
-  // Resolve everything but the last layer.
-  VAST_ASSERT(!index_.empty());
-  for (size_t i = 0; i < index_.size() - 1; ++i) {
-    VAST_ASSERT(index_[i] < record->fields()->size());
-    record = resolve_transparent(
-               record->fields()->Get(index_[i])->type_nested_root())
-               ->type_as_record_type_v0();
-    VAST_ASSERT(record);
-  }
-  // Resolve the last layer.
-  VAST_ASSERT(index_.back() < record->fields()->size());
-  const auto* field = record->fields()->Get(index_.back());
-  VAST_ASSERT(field);
-  VAST_ASSERT(
-    !resolve_transparent(field->type_nested_root())->type_as_record_type_v0(),
-    "leaf field must not be a record type");
-  return {
-    {
-      field->name()->string_view(),
-      type{type_.table_->slice(as_bytes(*field->type()))},
-    },
-    index_,
-  };
 }
 
 } // namespace vast

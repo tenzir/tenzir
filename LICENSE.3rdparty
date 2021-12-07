@@ -64,6 +64,11 @@ Copyright: (c) 2017 user763305 et al.
 License: CC-BY-SA
 Comment: See https://stackoverflow.com/a/6089413/92560
 
+Files: libvast/vast/detail/generator.hpp
+Copyright: (c) 2017 Lewis Baker
+License: MIT
+Comment: Includes code from https://github.com/lewissbaker/cppcoro
+
 Files: scripts/clang-format-diff.py
 Copyright: (c) 2003-2017 University of Illinois at Urbana-Champaign
 License: Apache-2.0-with-LLVM-exceptions

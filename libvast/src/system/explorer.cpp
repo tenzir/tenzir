@@ -139,25 +139,36 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
             return true;
         return false;
       };
-      auto leaves = caf::get<record_type>(layout).leaves();
-      auto it = std::find_if(leaves.begin(), leaves.end(), is_timestamp);
-      if (it == leaves.end()) {
+      auto timestamp_leaf = std::optional<record_type::leaf_view>{};
+      for (auto&& leaf : caf::get<record_type>(layout).leaves()) {
+        if (is_timestamp(leaf)) {
+          timestamp_leaf = std::move(leaf);
+          break;
+        }
+      }
+      if (!timestamp_leaf) {
         VAST_DEBUG("{} could not find timestamp field in {}", *self,
                    layout.name());
         return;
       }
       std::optional<table_slice_column> by_column;
       if (st.by) {
-        auto by_indices = layout_rt.resolve_key_suffix(*st.by, layout.name());
-        if (by_indices.empty()) {
+        for (auto&& by_index :
+             layout_rt.resolve_key_suffix(*st.by, layout.name())) {
+          // NOTE: We're intentionally stopping after the first instance here.
+          by_column.emplace(slice, layout_rt.flat_index(by_index));
+          break;
+        }
+        if (!by_column) {
           VAST_TRACE_SCOPE("skipping slice with {} because it has no column {}",
                            layout.name(), *st.by);
           return;
         }
-        by_column.emplace(slice, layout_rt.flat_index(by_indices[0]));
       }
-      VAST_DEBUG("{} uses {} to construct timebox", *self, it->first.name);
-      auto column = table_slice_column{slice, layout_rt.flat_index(it->second)};
+      VAST_DEBUG("{} uses {} to construct timebox", *self,
+                 timestamp_leaf->field.name);
+      auto column = table_slice_column{
+        slice, layout_rt.flat_index(timestamp_leaf->index)};
       for (size_t i = 0; i < column.size(); ++i) {
         auto data_view = column[i];
         auto x = caf::get_if<vast::time>(&data_view);
