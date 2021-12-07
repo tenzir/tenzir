@@ -53,7 +53,7 @@ TEST(serialization) {
   REQUIRE_EQUAL(detail::serialize(buf, x.chunk()), caf::none);
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, chk), true);
   REQUIRE_NOT_EQUAL(chk, nullptr);
-  auto y = segment::make(chk);
+  auto y = segment::make(std::move(chk));
   REQUIRE(y);
   CHECK_EQUAL(x.ids(), y->ids());
   CHECK_EQUAL(x.num_slices(), y->num_slices());

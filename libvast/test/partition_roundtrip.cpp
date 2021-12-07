@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#define SUITE partition_roundtrip
+
 #include "vast/fwd.hpp"
 
 #include "vast/chunk.hpp"
@@ -25,19 +27,16 @@
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
 #include <flatbuffers/flatbuffers.h>
 
-#include <span>
-
-#define SUITE flatbuffers
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-#include "vast/test/test.hpp"
-
 #include <cstddef>
 #include <filesystem>
+#include <span>
 
 vast::system::store_actor::behavior_type dummy_store() {
   return {[](const vast::query&) {

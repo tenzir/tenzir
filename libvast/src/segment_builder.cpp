@@ -56,10 +56,10 @@ segment segment_builder::finish() {
   segment_builder.add_segment_type(vast::fbs::segment::Segment::v0);
   segment_builder.add_segment(segment_v0_offset.Union());
   auto segment_offset = segment_builder.Finish();
-  fbs::FinishSegmentBuffer(builder_, segment_offset);
-  auto chk = fbs::release(builder_);
+  auto segment_flatbuffer = flatbuffer<fbs::Segment>{builder_, segment_offset,
+                                                     fbs::SegmentIdentifier()};
   reset();
-  return segment{std::move(chk)};
+  return segment{std::move(segment_flatbuffer)};
 }
 
 caf::expected<std::vector<table_slice>>

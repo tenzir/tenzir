@@ -176,8 +176,18 @@ function (VASTCompileFlatBuffers)
     add_custom_command(
       OUTPUT "${desired_file}"
       COMMAND
-        flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings
-        --gen-mutable -o "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
+        flatbuffers::flatc
+        # Generate wire format binaries for any data definitions.
+        --binary
+        # Generate C++ headers using the C++17 standard.
+        --cpp --cpp-std c++17 --scoped-enums
+        # Generate type name functions.
+        # TODO: Replace with --cpp-static-reflection once available.
+        --gen-name-strings
+        # Generate mutator functions.
+        --gen-mutable
+        # Set output directory and schema inputs.
+        -o "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
       COMMAND ${CMAKE_COMMAND} -E rename "${output_file}" "${desired_file}"
       COMMAND ${CMAKE_COMMAND} -P
               "${CMAKE_CURRENT_BINARY_DIR}/fbs-strip-suffix-${basename}.cmake"
