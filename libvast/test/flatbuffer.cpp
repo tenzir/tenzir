@@ -40,7 +40,7 @@ TEST(lifetime) {
   auto fbrtf = fbrt.slice(*fbrt->fields()->Get(0));
   CHECK_EQUAL(fbrtf->name()->string_view(), "foo");
   auto fbrtft = fbrtf.slice(*fbrtf->type_nested_root(), *fbrtf->type());
-  CHECK_EQUAL(as_bytes(fbrtft), as_bytes(address_type{}));
+  CHECK_EQUAL(as_bytes(fbrtft.chunk()), as_bytes(address_type{}));
   CHECK_EQUAL(counter, 0);
   fbt = {};
   CHECK_EQUAL(counter, 0);
@@ -64,12 +64,14 @@ TEST(serialization) {
     auto maybe_fbt = flatbuffer<fbs::Type>::make(std::move(chunk));
     REQUIRE_NOERROR(maybe_fbt);
     fbt = std::move(*maybe_fbt);
-    CHECK_ROUNDTRIP(fbt);
+    auto fbt2 = roundtrip(fbt);
+    CHECK_EQUAL(as_bytes(fbt.chunk()), as_bytes(fbt2.chunk()));
   }
   auto fbrt = fbt.slice(*fbt->type_as_record_type_v0());
   auto fbrtf = fbrt.slice(*fbrt->fields()->Get(0));
   auto fbrtft = fbrtf.slice(*fbrtf->type_nested_root(), *fbrtf->type());
-  CHECK_ROUNDTRIP(fbrtft);
+  auto fbrtft2 = roundtrip(fbrtft);
+  CHECK_EQUAL(as_bytes(fbrtft.chunk()), as_bytes(fbrtft2.chunk()));
 }
 
 FIXTURE_SCOPE_END()

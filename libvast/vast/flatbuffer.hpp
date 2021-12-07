@@ -27,30 +27,16 @@ enum class flatbuffer_type {
   child, ///< The table is sliced from a root table.
 };
 
-/// Determines whether the FlatBuffers table has buffer- or pointer-like
-/// behavior, i.e., whether comparison operators compare the buffer or the table
-/// pointer.
-enum class flatbuffer_semantics {
-  buffer,  ///< Comparison operators compare the buffer contents bytewise. This
-           ///< is only supported for root tables.
-  pointer, ///< Comparison operators compare the table pointers.
-};
-
 /// A wrapper class around a FlatBuffers table that allows for sharing the
 /// lifetime with the chunk containing the table.
 /// @tparam Table The generated FlatBuffers table type.
-/// @tparam Semantics Determins whether the table behaves like a buffer or a
-/// pointer.
 /// @tparam Type Determines whether the table is a root or a child table.
-template <class Table,
-          flatbuffer_semantics Semantics = flatbuffer_semantics::buffer,
-          flatbuffer_type Type = flatbuffer_type::root>
+template <class Table, flatbuffer_type Type = flatbuffer_type::root>
 class flatbuffer final {
 public:
   // -- member types and constants --------------------------------------------
 
-  template <class ParentTable, flatbuffer_semantics ParentSemantics,
-            flatbuffer_type ParentType>
+  template <class ParentTable, flatbuffer_type ParentType>
   friend class flatbuffer;
 
   friend struct ::fmt::formatter<flatbuffer>;
@@ -142,9 +128,8 @@ public:
   /// lifetime with another FlatBuffer pointer.
   /// @pre `parent`
   /// @pre *table* must be accessible from *parent*.
-  template <class ParentTable, flatbuffer_semantics ParentSemantics,
-            flatbuffer_type ParentType>
-  flatbuffer(flatbuffer<ParentTable, ParentSemantics, ParentType> parent,
+  template <class ParentTable, flatbuffer_type ParentType>
+  flatbuffer(flatbuffer<ParentTable, ParentType> parent,
              const Table& table) noexcept
     requires(Type == flatbuffer_type::child)
     : chunk_{std::exchange(parent.chunk_, {})}, table_{&table} {
@@ -167,11 +152,6 @@ public:
     // nop
   }
 
-  flatbuffer(std::nullptr_t) noexcept
-    requires(Semantics == flatbuffer_semantics::pointer) {
-    // nop
-  }
-
   flatbuffer& operator=(const flatbuffer& rhs) noexcept {
     if (&rhs == this)
       return *this;
@@ -183,13 +163,6 @@ public:
   flatbuffer& operator=(flatbuffer&& rhs) noexcept {
     chunk_ = std::exchange(rhs.chunk_, {});
     table_ = std::exchange(rhs.table_, {});
-    return *this;
-  }
-
-  flatbuffer& operator=(std::nullptr_t) noexcept
-    requires(Semantics == flatbuffer_semantics::pointer) {
-    chunk_ = nullptr;
-    table_ = nullptr;
     return *this;
   }
 
@@ -209,64 +182,6 @@ public:
     return table_;
   }
 
-  friend bool operator==(flatbuffer lhs, flatbuffer rhs) noexcept
-    requires(Type == flatbuffer_type::root
-             && Semantics == flatbuffer_semantics::buffer) {
-    if (&lhs == &rhs)
-      return true;
-    if (lhs && rhs) {
-      const auto lhs_bytes = as_bytes(lhs);
-      const auto rhs_bytes = as_bytes(rhs);
-      return std::equal(lhs_bytes.begin(), lhs_bytes.end(), rhs_bytes.begin(),
-                        rhs_bytes.end());
-    }
-    return static_cast<bool>(lhs) == static_cast<bool>(rhs);
-  }
-
-  friend bool operator==(const flatbuffer& lhs, const flatbuffer& rhs) noexcept
-    requires(Semantics == flatbuffer_semantics::pointer) {
-    return lhs.table_ = rhs.table_;
-  }
-
-  friend std::strong_ordering
-  operator<=>(flatbuffer lhs, flatbuffer rhs) noexcept
-    requires(Type == flatbuffer_type::root
-             && Semantics == flatbuffer_semantics::buffer) {
-    if (&lhs == &rhs)
-      return std::strong_ordering::equal;
-    if (!lhs && !rhs)
-      return std::strong_ordering::equal;
-    if (!lhs)
-      return std::strong_ordering::less;
-    if (!rhs)
-      return std::strong_ordering::greater;
-    // TODO: Replace implementation with `std::lexicographical_compare_three_way`
-    // once that is implemented for all compilers we need to support. This does
-    // the same thing essentially, just a lot less generic.
-    auto lhs_bytes = as_bytes(lhs);
-    auto rhs_bytes = as_bytes(rhs);
-    if (lhs_bytes.data() == rhs_bytes.data()
-        && lhs_bytes.size() == rhs_bytes.size())
-      return std::strong_ordering::equivalent;
-    while (!lhs_bytes.empty() && !rhs_bytes.empty()) {
-      if (lhs_bytes[0] < rhs_bytes[0])
-        return std::strong_ordering::less;
-      if (lhs_bytes[0] > rhs_bytes[0])
-        return std::strong_ordering::greater;
-      lhs_bytes = lhs_bytes.subspan(1);
-      rhs_bytes = rhs_bytes.subspan(1);
-    }
-    return !lhs_bytes.empty()   ? std::strong_ordering::greater
-           : !rhs_bytes.empty() ? std::strong_ordering::less
-                                : std::strong_ordering::equivalent;
-  }
-
-  friend std::strong_ordering
-  operator<=>(const flatbuffer& lhs, const flatbuffer& rhs) noexcept
-    requires(Semantics == flatbuffer_semantics::pointer) {
-    return lhs.table_ <=> rhs.table_;
-  }
-
   // -- accessors -------------------------------------------------------------
 
   /// Slices a nested FlatBuffers table pointer with shared lifetime.
@@ -275,7 +190,7 @@ public:
   /// table and operations that require root tables must be supported.
   /// @pre `*this != nullptr`
   template <class ChildTable>
-  [[nodiscard]] flatbuffer<ChildTable, Semantics, flatbuffer_type::child>
+  [[nodiscard]] flatbuffer<ChildTable, flatbuffer_type::child>
   slice(const ChildTable& child_table) const noexcept {
     VAST_ASSERT(*this);
     return {*this, child_table};
@@ -287,7 +202,7 @@ public:
   /// FlatBuffers table, i.e., `*(*this)->child_nested_root()` and
   /// `*(*this)->child()` respectively.
   template <class ChildTable>
-  [[nodiscard]] flatbuffer<ChildTable, Semantics, flatbuffer_type::root>
+  [[nodiscard]] flatbuffer<ChildTable, flatbuffer_type::root>
   slice(const ChildTable& child_table,
         const flatbuffers::Vector<uint8_t>& nested_flatbuffer) const noexcept {
     VAST_ASSERT(*this);
@@ -304,16 +219,6 @@ public:
   }
 
   // -- concepts --------------------------------------------------------------
-
-  /// Gets the underlying binary representation of a FlatBuffers root table.
-  /// @pre `flatbuffer != nullptr`
-  [[nodiscard]] friend std::span<const std::byte>
-  as_bytes(const flatbuffer& flatbuffer) noexcept
-    requires(Type == flatbuffer_type::root
-             && Semantics == flatbuffer_semantics::buffer) {
-    VAST_ASSERT(flatbuffer);
-    return as_bytes(*flatbuffer.chunk_);
-  }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, flatbuffer& x) ->
@@ -363,26 +268,25 @@ private:
 
 // -- deduction guides --------------------------------------------------------
 
-template <class Table, class ParentTable, flatbuffer_semantics ParentSemantics,
-          flatbuffer_type ParentType>
-flatbuffer(flatbuffer<ParentTable, ParentSemantics, ParentType>, const Table*)
-  -> flatbuffer<Table, ParentSemantics, flatbuffer_type::child>;
+template <class Table, class ParentTable, flatbuffer_type ParentType>
+flatbuffer(flatbuffer<ParentTable, ParentType>, const Table*)
+  -> flatbuffer<Table, flatbuffer_type::child>;
 
 } // namespace vast
 
 // -- formatter ---------------------------------------------------------------
 
-template <class Table, vast::flatbuffer_semantics Semantics,
-          vast::flatbuffer_type Type>
-struct fmt::formatter<vast::flatbuffer<Table, Semantics, Type>> {
+template <class Table, vast::flatbuffer_type Type>
+struct fmt::formatter<vast::flatbuffer<Table, Type>> {
   template <class ParseContext>
   auto parse(const ParseContext& ctx) -> decltype(ctx.begin()) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto format(const vast::flatbuffer<Table, Semantics, Type>& flatbuffer,
-              FormatContext& ctx) -> decltype(ctx.out()) {
+  auto
+  format(const vast::flatbuffer<Table, Type>& flatbuffer, FormatContext& ctx)
+    -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "{}({})", Table::GetFullyQualifiedName(),
                           fmt::ptr(flatbuffer.table_));
   }
