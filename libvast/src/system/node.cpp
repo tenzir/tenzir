@@ -44,7 +44,6 @@
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_counter.hpp"
 #include "vast/system/spawn_disk_monitor.hpp"
-#include "vast/system/spawn_eraser.hpp"
 #include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_exporter.hpp"
 #include "vast/system/spawn_importer.hpp"
@@ -109,39 +108,12 @@ bool is_singleton(std::string_view type) {
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
   const char* singletons[]
-    = {"accountant", "archive",  "disk-monitor", "eraser",
-       "filesystem", "importer", "index",        "type-registry"};
+    = {"accountant", "archive", "disk-monitor", "filesystem",
+       "importer",   "index",   "type-registry"};
   auto pred = [&](const char* x) {
     return x == type;
   };
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
-}
-
-// Sends an atom to a registered actor. Blocks until the actor responds.
-caf::message send_command(const invocation& inv, caf::actor_system&) {
-  auto first = inv.arguments.begin();
-  auto last = inv.arguments.end();
-  // Expect exactly two arguments.
-  if (std::distance(first, last) != 2)
-    return make_error_msg(ec::syntax_error, "expected two arguments: receiver "
-                                            "and message atom");
-  // Get destination actor from the registry.
-  auto dst = this_node->state.registry.find_by_label(*first);
-  if (dst == nullptr)
-    return make_error_msg(ec::syntax_error,
-                          "registry contains no actor named " + *first);
-  // Dispatch to destination.
-  auto f = caf::make_function_view(caf::actor_cast<caf::actor>(dst));
-  auto send = [&](auto atom_value) {
-    if (auto res = f(atom_value))
-      return std::move(*res);
-    else
-      return caf::make_message(std::move(res.error()));
-  };
-  if (*(first + 1) == "run")
-    return send(atom::run_v);
-  return make_error_msg(ec::unimplemented,
-                        "trying to send unsupported atom: " + *(first + 1));
 }
 
 void collect_component_status(node_actor::stateful_pointer<node_state> self,
@@ -409,7 +381,6 @@ auto make_component_factory() {
     {"spawn archive", lift_component_factory<spawn_archive>()},
     {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
-    {"spawn eraser", lift_component_factory<spawn_eraser>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn explorer", lift_component_factory<spawn_explorer>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
@@ -450,12 +421,10 @@ auto make_command_factory() {
     {"dump concepts", dump_command},
     {"dump models", dump_command},
     {"kill", kill_command},
-    {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
     {"spawn archive", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
-    {"spawn eraser", node_state::spawn_command},
     {"spawn explorer", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
