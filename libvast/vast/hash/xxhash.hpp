@@ -30,10 +30,6 @@ static constexpr int xxh_force_memory_access = XXH_FORCE_MEMORY_ACCESS;
 static constexpr int xxh_force_memory_access = 0;
 #endif
 
-/// Allow null pointer input when hashing data of length greater 0.
-static constexpr bool xxh_accept_null_input_pointer
-  = XXH_ACCEPT_NULL_INPUT_POINTER;
-
 class xxh64 {
 public:
   static constexpr detail::endian endian
@@ -44,8 +40,7 @@ public:
 
   static result_type
   make(std::span<const std::byte> bytes, seed_type seed = 0) noexcept {
-    VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(bytes.data() == nullptr && bytes.size() > 0));
+    VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
     return XXH64(bytes.data(), bytes.size(), seed);
   }
 
@@ -54,8 +49,7 @@ public:
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
-    VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(bytes.data() == nullptr && bytes.size() > 0));
+    VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
     XXH64_update(&state_, bytes.data(), bytes.size());
   }
 
@@ -80,15 +74,13 @@ public:
   using seed_type = XXH64_hash_t;
 
   static result_type make(std::span<const std::byte> bytes) noexcept {
-    VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(bytes.data() == nullptr && bytes.size() > 0));
+    VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
     return XXH3_64bits(bytes.data(), bytes.size());
   }
 
   static result_type
   make(std::span<const std::byte> bytes, seed_type seed) noexcept {
-    VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(bytes.data() == nullptr && bytes.size() > 0));
+    VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
     return XXH3_64bits_withSeed(bytes.data(), bytes.size(), seed);
   }
 
@@ -103,8 +95,7 @@ public:
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
-    VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(bytes.data() == nullptr && bytes.size() > 0));
+    VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
     XXH3_64bits_update(&state_, bytes.data(), bytes.size());
   }
 
@@ -129,15 +120,13 @@ public:
   using seed_type = XXH64_hash_t;
 
   static result_type make(std::span<const std::byte> bytes) noexcept {
-    VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(bytes.data() == nullptr && bytes.size() > 0));
+    VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
     return XXH3_128bits(bytes.data(), bytes.size());
   }
 
   static result_type
   make(std::span<const std::byte> bytes, seed_type seed) noexcept {
-    VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(bytes.data() == nullptr && bytes.size() > 0));
+    VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
     return XXH3_128bits_withSeed(bytes.data(), bytes.size(), seed);
   }
 
@@ -152,8 +141,7 @@ public:
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
-    VAST_ASSERT(xxh_accept_null_input_pointer
-                || !(bytes.data() == nullptr && bytes.size() > 0));
+    VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
     XXH3_128bits_update(&state_, bytes.data(), bytes.size());
   }
 

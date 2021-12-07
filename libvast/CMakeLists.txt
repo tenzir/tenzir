@@ -393,7 +393,12 @@ find_package(yaml-cpp 0.6.2 REQUIRED)
 target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 
-# Link against xxhash.
+# Link against xxHash.
+target_compile_definitions(
+  libvast
+  PUBLIC # Allow null pointer input when hashing data of length greater 0.
+         # TODO: Remove this when requiring xxHash >= 0.8.1.
+         XXH_ACCEPT_NULL_INPUT_POINTER=1)
 find_package(xxhash REQUIRED)
 provide_find_module(xxhash)
 string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(xxhash REQUIRED)")
