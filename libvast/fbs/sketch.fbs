@@ -1,0 +1,21 @@
+include "bloom_filter.fbs";
+
+namespace vast.fbs.sketch.bloom_filter;
+
+table v0 {
+  bloom_filter: BloomFilter;
+}
+
+namespace vast.fbs.sketch;
+
+union Sketch {
+  bloom_filter.v0,
+}
+
+namespace vast.fbs;
+
+table Sketch {
+  sketch: sketch.Sketch (required);
+}
+
+root_type Sketch;

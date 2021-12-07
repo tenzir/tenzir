@@ -1,0 +1,22 @@
+include "sketch.fbs";
+
+namespace vast.fbs.partition_sketch;
+
+table v0 {
+  type_sketches: [Sketch];
+  field_sketches: [Sketch];
+}
+
+union PartitionSketch {
+  v0,
+}
+
+namespace vast.fbs;
+
+table PartitionSketch {
+  partition_sketch: partition_sketch.PartitionSketch;
+}
+
+root_type PartitionSketch;
+
+file_identifier "vPSK";
