@@ -81,8 +81,9 @@ public:
         continue;
       }
       std::vector<std::string> cache_entry;
-      for (const auto& [k, v] : caf::get<record_type>(entry).fields())
-        cache_entry.emplace_back(k);
+      const auto& layout = caf::get<record_type>(entry);
+      for (const auto& [_, index] : layout.leaves())
+        cache_entry.emplace_back(layout.key(index));
       std::sort(cache_entry.begin(), cache_entry.end());
       type_cache.insert({std::move(cache_entry), entry});
     }
