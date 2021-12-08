@@ -17,6 +17,7 @@
 #include "vast/query.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
@@ -111,7 +112,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     factory<synopsis>::initialize();
     MESSAGE("register table_slice_builder factory");
     factory<table_slice_builder>::initialize();
-    meta_idx = self->spawn(meta_index);
+    meta_idx = self->spawn(meta_index, accountant_actor{});
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -271,7 +272,7 @@ TEST(meta index with bool synopsis) {
   MESSAGE("generate slice data and add it to the meta index");
   // FIXME: do we have to replace the meta index from the fixture with a new
   // one for this test?
-  auto meta_idx = self->spawn(meta_index);
+  auto meta_idx = self->spawn(meta_index, accountant_actor{});
   auto layout = type{
     "test",
     record_type{

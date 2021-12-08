@@ -1195,10 +1195,10 @@ vast::system::report reader::status() const {
   num_invalid_lines_ = 0;
   num_unknown_layouts_ = 0;
   num_lines_ = 0;
-  return {
-    {name() + ".invalid-line"s, invalid_line},
-    {name() + ".unknown-layout"s, unknown_layout},
-  };
+  return {.data = {
+            {name() + ".invalid-line"s, invalid_line},
+            {name() + ".unknown-layout"s, unknown_layout},
+          }};
 }
 
 caf::error

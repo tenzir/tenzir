@@ -98,6 +98,9 @@ struct passive_partition_state {
   std::vector<std::tuple<query, caf::typed_response_promise<atom::done>>>
     deferred_evaluations = {};
 
+  /// Actor handle of the accountant.
+  accountant_actor accountant = {};
+
   /// Actor handle of the filesystem.
   filesystem_actor filesystem = {};
 
@@ -129,12 +132,13 @@ unpack(const fbs::partition::v0& x, partition_synopsis& y);
 /// Spawns a read-only partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
+/// @param accountant the accountant to send metrics to.
+/// @param archive The legacy archive to retrieve the events from.
 /// @param filesystem The actor handle of the filesystem actor.
 /// @param path The path where the partition flatbuffer can be found.
-/// @param store The store to retrieve the events from.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  store_actor archive, filesystem_actor filesystem,
+  accountant_actor accountant, store_actor archive, filesystem_actor filesystem,
   const std::filesystem::path& path);
 
 } // namespace vast::system

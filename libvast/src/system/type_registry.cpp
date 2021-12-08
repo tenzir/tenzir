@@ -171,7 +171,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   // Register the exit handler.
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
-    if (auto telemetry = self->state.telemetry(); !telemetry.empty())
+    if (auto telemetry = self->state.telemetry(); !telemetry.data.empty())
       self->send(self->state.accountant, std::move(telemetry));
     if (auto err = self->state.save_to_disk())
       VAST_ERROR("{} failed to persist state to disk: {}", *self,
@@ -190,7 +190,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   // The behavior of the type-registry.
   return {
     [self](atom::telemetry) {
-      if (auto telemetry = self->state.telemetry(); !telemetry.empty()) {
+      if (auto telemetry = self->state.telemetry(); !telemetry.data.empty()) {
         VAST_TRACE_SCOPE("{} sends out a telemetry report to the {}", *self,
                          VAST_ARG("accountant", self->state.accountant));
         self->send(self->state.accountant, std::move(telemetry));

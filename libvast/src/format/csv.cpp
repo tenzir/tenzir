@@ -413,10 +413,10 @@ vast::system::report reader::status() const {
               detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
   num_lines_ = 0;
   num_invalid_lines_ = 0;
-  return {
-    {name() + ".num-lines"s, num_lines},
-    {name() + ".invalid-lines"s, invalid_lines},
-  };
+  return {.data = {
+            {name() + ".num-lines"s, num_lines},
+            {name() + ".invalid-lines"s, invalid_lines},
+          }};
 }
 
 caf::expected<reader::parser_type> reader::read_header(std::string_view line) {

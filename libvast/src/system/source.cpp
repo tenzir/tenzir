@@ -90,11 +90,11 @@ void source_state::initialize(const type_registry_actor& type_registry,
 
 void source_state::send_report() {
   // Send the reader-specific status report to the accountant.
-  if (auto status = reader->status(); !status.empty())
+  if (auto status = reader->status(); !status.data.empty())
     caf::unsafe_send_as(self, accountant, std::move(status));
   // Send the source-specific performance metrics to the accountant.
   auto r = performance_report{{{std::string{name}, metrics}}};
-  for (const auto& [key, m] : r) {
+  for (const auto& [key, m] : r.data) {
     if (m.events > 0) {
       if (auto rate = m.rate_per_sec(); std::isfinite(rate))
         VAST_INFO("{} source produced {} events at a rate of {} events/sec in "
@@ -115,7 +115,7 @@ void source_state::send_report() {
   for (auto&& [name, count] : std::exchange(event_counters, {}))
     caf::unsafe_send_as(self, accountant,
                         fmt::format("{}.events.{}", reader->name(), name),
-                        count);
+                        count, metrics_metadata{});
 }
 
 void source_state::filter_and_push(
@@ -190,7 +190,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     // init
     [self](caf::unit_t&) {
       caf::timestamp now = std::chrono::system_clock::now();
-      self->send(self->state.accountant, "source.start", now);
+      self->send(self->state.accountant, "source.start", now,
+                 metrics_metadata{});
     },
     // get next element
     [self](caf::unit_t&, caf::downstream<detail::framed<table_slice>>&,

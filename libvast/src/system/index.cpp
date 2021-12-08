@@ -207,7 +207,7 @@ partition_actor partition_factory::operator()(const uuid& id) const {
               != state_.persisted_partitions.end());
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
-  return state_.self->spawn(passive_partition, id,
+  return state_.self->spawn(passive_partition, id, state_.accountant,
                             static_cast<store_actor>(state_.global_store),
                             filesystem_, path);
 }
@@ -537,9 +537,11 @@ void index_state::create_active_partition() {
     store_name = "legacy_archive";
     active_partition.store = global_store;
   }
-  active_partition.actor = self->spawn(
-    ::vast::system::active_partition, id, filesystem, index_opts, synopsis_opts,
-    static_cast<store_actor>(active_partition.store), store_name, store_header);
+  active_partition.actor
+    = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
+                  index_opts, synopsis_opts,
+                  static_cast<store_actor>(active_partition.store), store_name,
+                  store_header);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
   active_partition.capacity = partition_capacity;
@@ -596,12 +598,12 @@ void index_state::decomission_active_partition() {
 // -- introspection ----------------------------------------------------------
 
 void index_state::send_report() {
-  auto msg = report{
-    {"query.backlog.normal", backlog.normal.size()},
-    {"query.backlog.low", backlog.low.size()},
-    {"query.workers.idle", idle_workers.size()},
-    {"query.workers.busy", workers - idle_workers.size()},
-  };
+  auto msg = report{.data = {
+                      {"query.backlog.normal", backlog.normal.size()},
+                      {"query.backlog.low", backlog.low.size()},
+                      {"query.workers.idle", idle_workers.size()},
+                      {"query.workers.busy", workers - idle_workers.size()},
+                    }};
   self->send(accountant, msg);
 }
 
@@ -750,7 +752,8 @@ index(index_actor::stateful_pointer<index_state> self,
     }
   }
   self->state.filesystem = std::move(filesystem);
-  self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
+  self->state.meta_index
+    = self->spawn<caf::lazy_init>(meta_index, self->state.accountant);
   self->state.dir = dir;
   self->state.synopsisdir = meta_index_dir;
   self->state.partition_capacity = partition_capacity;

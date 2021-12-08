@@ -74,6 +74,9 @@ public:
   /// A pointer to the parent actor.
   meta_index_actor::pointer self = {};
 
+  /// An actor handle to the accountant.
+  accountant_actor accountant = {};
+
   /// Maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
@@ -89,7 +92,9 @@ public:
 /// represents a list of candidate partition IDs that may contain the desired
 /// data. The META INDEX may return false positives but never false negatives.
 /// @param self The actor handle.
+/// @param accountant An actor handle to the accountant.
 meta_index_actor::behavior_type
-meta_index(meta_index_actor::stateful_pointer<meta_index_state> self);
+meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
+           accountant_actor accountant);
 
 } // namespace vast::system

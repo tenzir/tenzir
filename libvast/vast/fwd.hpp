@@ -281,16 +281,16 @@ struct component_state;
 struct component_state_map;
 struct data_point;
 struct measurement;
+struct metrics_metadata;
 struct node_state;
+struct performance_report;
 struct performance_sample;
 struct query_cursor;
 struct query_status;
+struct report;
 struct spawn_arguments;
 
 enum class status_verbosity;
-
-using performance_report = std::vector<performance_sample>;
-using report = std::vector<data_point>;
 
 } // namespace system
 
@@ -340,6 +340,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::detail::stable_map<std::string, vast::data>))
   VAST_ADD_TYPE_ID((vast::detail::stable_map<vast::data, vast::data>))
 
+  VAST_ADD_TYPE_ID((vast::system::metrics_metadata))
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_cursor))
   VAST_ADD_TYPE_ID((vast::system::query_status))

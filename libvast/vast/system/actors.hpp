@@ -172,15 +172,15 @@ using accountant_actor = typed_actor_fwd<
   // Registers the sender with the ACCOUNTANT.
   caf::reacts_to<atom::announce, std::string>,
   // Record duration metric.
-  caf::reacts_to<std::string, duration>,
+  caf::reacts_to<std::string, duration, metrics_metadata>,
   // Record time metric.
-  caf::reacts_to<std::string, time>,
+  caf::reacts_to<std::string, time, metrics_metadata>,
   // Record integer metric.
-  caf::reacts_to<std::string, integer>,
+  caf::reacts_to<std::string, integer, metrics_metadata>,
   // Record count metric.
-  caf::reacts_to<std::string, count>,
+  caf::reacts_to<std::string, count, metrics_metadata>,
   // Record real metric.
-  caf::reacts_to<std::string, real>,
+  caf::reacts_to<std::string, real, metrics_metadata>,
   // Record a metrics report.
   caf::reacts_to<report>,
   // Record a performance report.

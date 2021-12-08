@@ -125,7 +125,10 @@ struct active_partition_state {
   /// Whether VAST is configured to use partition-local stores.
   bool partition_local_stores = {};
 
-  /// Actor handle of the filesystem actor.
+  /// Actor handle of the accountant.
+  accountant_actor accountant = {};
+
+  /// Actor handle of the filesystem.
   filesystem_actor filesystem = {};
 
   /// Promise that gets satisfied after the partition state was serialized
@@ -175,7 +178,8 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 /// Spawns a partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
-/// @param filesystem The actor handle of the filesystem actor.
+/// @param accountant The actor handle of the accountant.
+/// @param filesystem The actor handle of the filesystem.
 /// @param index_opts Settings that are forwarded when creating indexers.
 /// @param synopsis_opts Settings that are forwarded when creating synopses.
 /// @param store The store to retrieve the events from.
@@ -186,8 +190,8 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 // TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts, store_actor store, std::string store_id,
-  chunk_ptr store_header);
+  uuid id, accountant_actor accountant, filesystem_actor filesystem,
+  caf::settings index_opts, caf::settings synopsis_opts, store_actor store,
+  std::string store_id, chunk_ptr store_header);
 
 } // namespace vast::system

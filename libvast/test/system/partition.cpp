@@ -62,7 +62,8 @@ TEST(load) {
   auto fs = self->spawn(mock_filesystem);
   auto path = std::filesystem::path{};
   // The mmap message to the filesystem actor will never receive a response.
-  auto aut = self->spawn(system::passive_partition, id, store, fs, path);
+  auto aut = self->spawn(system::passive_partition, id,
+                         vast::system::accountant_actor{}, store, fs, path);
   sched.run();
   self->send(aut, atom::erase_v);
   CHECK_EQUAL(sched.jobs.size(), 1u);

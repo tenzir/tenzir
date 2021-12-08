@@ -180,13 +180,14 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  store_actor legacy_archive, filesystem_actor filesystem,
-  const std::filesystem::path& path) {
+  accountant_actor accountant, store_actor legacy_archive,
+  filesystem_actor filesystem, const std::filesystem::path& path) {
   auto id_string = to_string(id);
   self->state.self = self;
   self->state.path = path;
-  self->state.archive = legacy_archive;
-  self->state.filesystem = filesystem;
+  self->state.accountant = std::move(accountant);
+  self->state.archive = std::move(legacy_archive);
+  self->state.filesystem = std::move(filesystem);
   self->state.name = "partition-" + id_string;
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -282,7 +283,8 @@ partition_actor::behavior_type passive_partition(
             self->quit(std::move(error));
             return;
           }
-          auto store = plugin->make_store(filesystem, self->state.store_header);
+          auto store = plugin->make_store(self->state.filesystem,
+                                          self->state.store_header);
           if (!store) {
             VAST_ERROR("{} failed to spawn store: {}", *self,
                        render(store.error()));

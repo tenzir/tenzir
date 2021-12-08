@@ -81,11 +81,14 @@ void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
                              / detail::narrow_cast<double>(processed)
                          : 1.0;
     auto msg = report{
+      .data = {
       {"exporter.processed", processed},
       {"exporter.results", results},
       {"exporter.shipped", shipped},
       {"exporter.selectivity", selectivity},
       {"exporter.runtime", st.query_status.runtime},
+      },
+      .metadata = {},
     };
     self->send(st.accountant, msg);
   }
@@ -341,6 +344,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       ship_results(self);
     },
     [self](atom::done) -> caf::result<void> {
+      using namespace std::string_literals;
       // Figure out if we're done by bumping the counter for `received`
       // and check whether it reaches `expected`.
       caf::timespan runtime
@@ -358,7 +362,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                    self->state.query_status.expected, vast::to_string(runtime));
         VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
         if (self->state.accountant)
-          self->send(self->state.accountant, "exporter.hits.runtime", runtime);
+          self->send(self->state.accountant, "exporter.hits.runtime", runtime,
+                     metrics_metadata{});
         shutdown(self);
       }
       return {};

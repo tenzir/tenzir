@@ -159,7 +159,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
       [&]([[maybe_unused]] const performance_report& report) {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         // Log a set of named measurements.
-        for (const auto& [name, measurement] : report) {
+        for (const auto& [name, measurement] : report.data) {
           if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
             VAST_INFO("{} processed {} events at a rate of {} events/sec in {}",
                       name, measurement.events, static_cast<uint64_t>(rate),

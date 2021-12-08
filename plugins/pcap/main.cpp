@@ -247,12 +247,14 @@ public:
       VAST_DEBUG("{} has discarded {} of {} recent packets",
                  detail::pretty_type_name(this), discard, recv);
     return {
-      {name() + ".recv"s, recv},
-      {name() + ".drop"s, drop},
-      {name() + ".ifdrop"s, ifdrop},
-      {name() + ".drop-rate"s, drop_rate},
-      {name() + ".discard"s, discard},
-      {name() + ".discard-rate"s, discard_rate},
+      .data = {
+        {name() + ".recv"s, recv},
+        {name() + ".drop"s, drop},
+        {name() + ".ifdrop"s, ifdrop},
+        {name() + ".drop-rate"s, drop_rate},
+        {name() + ".discard"s, discard},
+        {name() + ".discard-rate"s, discard_rate},
+      },
     };
   }
 
