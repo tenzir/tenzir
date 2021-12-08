@@ -17,15 +17,13 @@
 
 namespace vast::sketch {
 
-sketch::sketch(chunk_ptr flatbuffer) noexcept
-  : flatbuffer_{std::move(flatbuffer)} {
-  VAST_ASSERT(flatbuffer_);
+sketch::sketch(flatbuffer<fbs::Sketch> fb) noexcept
+  : flatbuffer_{std::move(fb)} {
 }
 
 std::optional<bool>
 sketch::lookup(relational_operator op, const data& x) const noexcept {
-  auto root = fbs::GetSketch(flatbuffer_->data());
-  switch (root->sketch_type()) {
+  switch (flatbuffer_->sketch_type()) {
     case fbs::sketch::Sketch::NONE: {
       die("sketch type must not be NONE");
     }
@@ -34,7 +32,7 @@ sketch::lookup(relational_operator op, const data& x) const noexcept {
       if (op != relational_operator::equal)
         return {};
       immutable_bloom_filter_view view;
-      auto v0 = root->sketch_as_bloom_filter_v0();
+      auto v0 = flatbuffer_->sketch_as_bloom_filter_v0();
       auto err = unpack(*v0->bloom_filter(), view);
       VAST_ASSERT(!err);
       // FIXME: Hash data exactly as we've done in the builder.
@@ -49,7 +47,7 @@ sketch::lookup(relational_operator op, const data& x) const noexcept {
 }
 
 size_t mem_usage(const sketch& x) {
-  return x.flatbuffer_->size();
+  return x.flatbuffer_.chunk()->size();
 }
 
 } // namespace vast::sketch

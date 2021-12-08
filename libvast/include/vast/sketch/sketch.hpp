@@ -11,6 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/chunk.hpp"
+#include "vast/fbs/sketch.hpp"
+#include "vast/flatbuffer.hpp"
 
 #include <cstddef>
 
@@ -20,7 +22,7 @@ namespace vast::sketch {
 class sketch {
 public:
   /// Constructs a partition sketch from a flatbuffer.
-  explicit sketch(chunk_ptr flatbuffer) noexcept;
+  explicit sketch(flatbuffer<fbs::Sketch> fb) noexcept;
 
   /// Checks whether the sketch fulfils a given predicate.
   /// @param pred The predicate to check.
@@ -32,7 +34,7 @@ public:
   friend size_t mem_usage(const sketch& x);
 
 private:
-  chunk_ptr flatbuffer_;
+  flatbuffer<fbs::Sketch> flatbuffer_;
 };
 
 } // namespace vast::sketch
