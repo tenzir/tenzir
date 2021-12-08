@@ -278,7 +278,7 @@ record flatten(const record& r) {
 namespace {
 
 void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
-           size_t max_recursion) {
+           const size_t max_recursion) {
   if (max_recursion == 0) {
     VAST_WARN("partially discarding record: recursion limit of {} exceeded",
               defaults::max_recursion);
@@ -292,7 +292,7 @@ void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
         dst[k] = record{};
         dst_rec = caf::get_if<record>(&dst[k]);
       }
-      merge(*src_rec, *dst_rec, merge_lists, --max_recursion);
+      merge(*src_rec, *dst_rec, merge_lists, max_recursion - 1);
     } else if (merge_lists == policy::merge_lists::yes
                && caf::holds_alternative<list>(v)) {
       const auto& src_list = caf::get<list>(v);
