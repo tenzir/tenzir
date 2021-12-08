@@ -202,6 +202,11 @@ active_partition_actor::behavior_type active_partition(
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
       VAST_TRACE_SCOPE("partition {} got table slice {} {}",
                        self->state.data.id, VAST_ARG(out), VAST_ARG(x));
+      // Adjust the import time range iff necessary.
+      self->state.data.synopsis->min_import_time
+        = std::min(self->state.data.synopsis->min_import_time, x.import_time());
+      self->state.data.synopsis->max_import_time
+        = std::max(self->state.data.synopsis->max_import_time, x.import_time());
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());

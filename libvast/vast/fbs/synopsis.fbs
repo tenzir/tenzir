@@ -55,6 +55,9 @@ table v0 {
 
   /// The id range of this partition.
   id_range: vast.fbs.uinterval;
+
+  /// The import time range of this partition.
+  import_time_range: vast.fbs.interval;
 }
 
 namespace vast.fbs.partition_synopsis;

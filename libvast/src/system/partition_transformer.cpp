@@ -171,6 +171,11 @@ partition_transformer_actor::behavior_type partition_transformer(
       transformed->import_time(old_import_time);
       self->state.events += transformed->rows();
       self->state.slices.push_back(std::move(*transformed));
+      // Adjust the import time range iff necessary.
+      self->state.data.synopsis->min_import_time
+        = std::min(self->state.data.synopsis->min_import_time, old_import_time);
+      self->state.data.synopsis->max_import_time
+        = std::max(self->state.data.synopsis->max_import_time, old_import_time);
     },
     [self](atom::done) {
       VAST_DEBUG("partition-transformer received all table slices");
