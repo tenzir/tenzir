@@ -159,11 +159,16 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.transform = std::move(transform);
   return {
     [self](vast::table_slice& slice) {
+      // Store the old import time before applying any transformations to the
+      // data, as for now we do not want to assign a new import time range to
+      // transformed partitions.
+      const auto old_import_time = slice.import_time();
       auto transformed = self->state.transform->apply(std::move(slice));
       if (!transformed) {
         VAST_ERROR("failed to apply transform");
         return;
       }
+      transformed->import_time(old_import_time);
       self->state.events += transformed->rows();
       self->state.slices.push_back(std::move(*transformed));
     },
