@@ -1,0 +1,4 @@
+Metrics events can now be augmented with custom keys that get added to specific
+events. These so-called meta data fields are inserted as additional fields in
+the JSON objects in the file and UDS sinks or under the `metadata` field of type
+`map<string, string` in case the metrics are written to the `self-sink`.
