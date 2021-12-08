@@ -60,10 +60,12 @@ bloom_filter_builder::build(const std::unordered_set<uint64_t>& digests) {
     = fbs::CreateSketch(builder, fbs::sketch::Sketch::bloom_filter_v0,
                         bloom_filter_v0_offset.Union());
   builder.Finish(sketch_offset);
-  auto buffer = builder.Release();
   // TODO: verify actual size
-  // VAST_ASSERT(buffer.size() == flatbuffer_size);
-  return sketch{chunk::make(std::move(buffer))};
+  // VAST_ASSERT(builder.GetSize() == flatbuffer_size);
+  auto fb = flatbuffer<fbs::Sketch>::make(builder.Release());
+  if (!fb)
+    return fb.error();
+  return sketch{std::move(*fb)};
 }
 
 } // namespace vast::sketch
