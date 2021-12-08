@@ -282,6 +282,35 @@ void table_slice::offset(id offset) noexcept {
   offset_ = offset;
 }
 
+time table_slice::import_time() const noexcept {
+  auto f = detail::overload{
+    []() noexcept {
+      return time{};
+    },
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->import_time();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
+}
+
+void table_slice::import_time(time import_time) noexcept {
+  VAST_ASSERT(chunk_->unique());
+  auto f = detail::overload{
+    []() noexcept {
+      die("cannot assign import time to invalid table slice");
+    },
+    [&](const auto& encoded) noexcept {
+      auto& mutable_state
+        = const_cast<std::add_lvalue_reference_t<std::remove_const_t<
+          std::remove_reference_t<decltype(*state(encoded, state_))>>>>(
+          *state(encoded, state_));
+      mutable_state.import_time(import_time);
+    },
+  };
+  visit(f, as_flatbuffer(chunk_));
+}
+
 size_t table_slice::instances() noexcept {
   return num_instances_;
 }

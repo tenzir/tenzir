@@ -357,6 +357,35 @@ data_view msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
   return decode(xs, t);
 }
 
+template <class FlatBuffer>
+time msgpack_table_slice<FlatBuffer>::import_time() const noexcept {
+  if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::msgpack::v0>) {
+    return {};
+  } else if constexpr (std::is_same_v<FlatBuffer,
+                                      fbs::table_slice::msgpack::v1>) {
+    return time{} + duration{slice_.import_time()};
+  } else {
+    static_assert(detail::always_false_v<FlatBuffer>, "unhandled table slice "
+                                                      "encoding");
+  }
+}
+
+template <class FlatBuffer>
+void msgpack_table_slice<FlatBuffer>::import_time(
+  [[maybe_unused]] time import_time) noexcept {
+  if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::msgpack::v0>) {
+    die("cannot set import time in msgpack.v0 table slice encoding");
+  } else if constexpr (std::is_same_v<FlatBuffer,
+                                      fbs::table_slice::msgpack::v1>) {
+    auto result = const_cast<FlatBuffer&>(slice_).mutate_import_time(
+      import_time.time_since_epoch().count());
+    VAST_ASSERT(result, "failed to mutate import time");
+  } else {
+    static_assert(detail::always_false_v<FlatBuffer>, "unhandled table slice "
+                                                      "encoding");
+  }
+}
+
 // -- template machinery -------------------------------------------------------
 
 /// Explicit template instantiations for all MessagePack encoding versions.

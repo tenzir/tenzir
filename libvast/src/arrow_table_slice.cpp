@@ -744,6 +744,33 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
 }
 
 template <class FlatBuffer>
+time arrow_table_slice<FlatBuffer>::import_time() const noexcept {
+  if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>) {
+    return {};
+  } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v1>) {
+    return time{} + duration{slice_.import_time()};
+  } else {
+    static_assert(detail::always_false_v<FlatBuffer>, "unhandled table slice "
+                                                      "encoding");
+  }
+}
+
+template <class FlatBuffer>
+void arrow_table_slice<FlatBuffer>::import_time(
+  [[maybe_unused]] time import_time) noexcept {
+  if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>) {
+    die("cannot set import time in arrow.v0 table slice encoding");
+  } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v1>) {
+    auto result = const_cast<FlatBuffer&>(slice_).mutate_import_time(
+      import_time.time_since_epoch().count());
+    VAST_ASSERT(result, "failed to mutate import time");
+  } else {
+    static_assert(detail::always_false_v<FlatBuffer>, "unhandled table slice "
+                                                      "encoding");
+  }
+}
+
+template <class FlatBuffer>
 std::shared_ptr<arrow::RecordBatch>
 arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
   return state_.record_batch;

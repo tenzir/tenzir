@@ -32,6 +32,9 @@ table v1 {
 
   /// The Arrow Recod Batch containing all data.
   record_batch: [ubyte];
+
+  /// A timestamp assigned on import, representing a `vast::time` value.
+  import_time: long;
 }
 
 namespace vast.fbs.table_slice.msgpack;
@@ -60,6 +63,9 @@ table v1 {
 
   /// The buffer that contains the MessagePack data.
   data: [ubyte];
+
+  /// A timestamp assigned on import, representing a `vast::time` value.
+  import_time: long;
 }
 
 namespace vast.fbs.table_slice;
