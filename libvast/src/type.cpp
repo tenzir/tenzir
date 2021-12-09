@@ -1801,7 +1801,7 @@ size_t record_type::num_fields() const noexcept {
 }
 
 size_t record_type::num_leaves() const noexcept {
-  auto flat_index = size_t{0};
+  auto num_leaves = size_t{0};
   auto index = offset{0};
   auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
     table().type_as_record_type_v0()};
@@ -1839,7 +1839,7 @@ size_t record_type::num_leaves() const noexcept {
       case fbs::type::Type::list_type_v0:
       case fbs::type::Type::map_type_v0: {
         ++index.back();
-        ++flat_index;
+        ++num_leaves;
         break;
       }
       case fbs::type::Type::record_type_v0: {
@@ -1852,7 +1852,7 @@ size_t record_type::num_leaves() const noexcept {
         break;
     }
   }
-  return flat_index;
+  return num_leaves;
 }
 
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
@@ -2161,19 +2161,19 @@ size_t record_type::flat_index(const offset& index) const noexcept {
   auto current_index = offset{0};
   auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
     table().type_as_record_type_v0()};
-  while (!current_index.empty()) {
+  while (true) {
     VAST_ASSERT(current_index <= index, "index out of bounds");
     const auto* record = history.back();
     VAST_ASSERT(record);
     const auto* fields = record->fields();
     VAST_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we need
-    // to step out one layer. We must also reset the target key at this point.
+    // to step out one layer.
     if (current_index.back() >= fields->size()) {
       history.pop_back();
       current_index.pop_back();
-      if (!current_index.empty())
-        ++current_index.back();
+      VAST_ASSERT(!current_index.empty());
+      ++current_index.back();
       continue;
     }
     const auto* field = record->fields()->Get(current_index.back());
@@ -2202,6 +2202,7 @@ size_t record_type::flat_index(const offset& index) const noexcept {
         break;
       }
       case fbs::type::Type::record_type_v0: {
+        VAST_ASSERT(index != current_index);
         history.emplace_back(field_type->type_as_record_type_v0());
         current_index.push_back(0);
         break;
@@ -2211,7 +2212,6 @@ size_t record_type::flat_index(const offset& index) const noexcept {
         break;
     }
   }
-  __builtin_unreachable();
 }
 
 record_type::transformation::function_type record_type::drop() noexcept {
