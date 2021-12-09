@@ -195,6 +195,12 @@ table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
 
 table_slice::~table_slice() noexcept = default;
 
+table_slice table_slice::unshare() const noexcept {
+  auto result = table_slice{chunk::copy(chunk_), verify::no};
+  result.offset_ = offset_;
+  return result;
+}
+
 // -- operators ----------------------------------------------------------------
 
 // TODO: Dispatch to optimized implementations if the encodings are the same.

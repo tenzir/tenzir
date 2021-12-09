@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <vast/fwd.hpp>
+
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/actor_system.hpp>
@@ -57,7 +59,10 @@ caf::actor spawn_container_source(caf::actor_system& system,
       [](state& st, downstream<value_type>& out, size_t hint) {
         auto n = std::min(hint, static_cast<size_t>(std::distance(st.i, st.e)));
         for (size_t pushed = 0; pushed < n; ++pushed)
-          out.push(std::move(*st.i++));
+          if constexpr (std::is_same_v<value_type, vast::table_slice>)
+            out.push((*st.i++).unshare());
+          else
+            out.push(*st.i++);
       },
       [](const state& st) {
         return st.i == st.e;

@@ -96,7 +96,10 @@ public:
   /// Destroys a table slice.
   ~table_slice() noexcept;
 
-  // -- opeerators -------------------------------------------------------------
+  /// Creates a new table slice whose underlying chunk is unique.
+  [[nodiscard]] table_slice unshare() const noexcept;
+
+  // -- operators -------------------------------------------------------------
 
   /// Compare two table slices for equality.
   friend bool

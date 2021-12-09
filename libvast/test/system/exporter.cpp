@@ -157,8 +157,9 @@ TEST(historical query with importer) {
   MESSAGE("prepare importer");
   importer_setup();
   MESSAGE("ingest conn.log via importer");
-  // We need to copy zeek_conn_log_slices here, because the importer will assign
-  // IDs to the slices it received and we mustn't mess our static test data.
+  // The container source copies the zeek_conn_log_slices, so the importer
+  // assigning IDs and timestamps to the slices it receives will not mess
+  // up our static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log, importer);
   run();
   MESSAGE("spawn exporter for historical query");
