@@ -137,9 +137,14 @@ table_slice msgpack_table_slice_builder::finish() {
   // Pack data.
   auto data_buffer = builder_.CreateVector(
     reinterpret_cast<const uint8_t*>(data_.data()), data_.size());
-  // Create MessagePack-encoded table slices.
-  auto msgpack_table_slice_buffer = fbs::table_slice::msgpack::Createv1(
-    builder_, layout_buffer, offset_table_buffer, data_buffer);
+  // Create MessagePack-encoded table slices. We need to set the import time to
+  // something other than 0, as it cannot be modified otherwise. We then later
+  // reset it to the clock's epoch.
+  constexpr int64_t stub_ns_since_epoch = 1337;
+  auto msgpack_table_slice_buffer
+    = fbs::table_slice::msgpack::Createv1(builder_, layout_buffer,
+                                          offset_table_buffer, data_buffer,
+                                          stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::msgpack_v1,
@@ -151,7 +156,9 @@ table_slice msgpack_table_slice_builder::finish() {
   msgpack_builder_.reset();
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder_);
-  return table_slice{std::move(chunk), table_slice::verify::no};
+  auto result = table_slice{std::move(chunk), table_slice::verify::no};
+  result.import_time(time{});
+  return result;
 }
 
 size_t msgpack_table_slice_builder::rows() const noexcept {

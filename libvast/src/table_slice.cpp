@@ -195,6 +195,12 @@ table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
 
 table_slice::~table_slice() noexcept = default;
 
+table_slice table_slice::unshare() const noexcept {
+  auto result = table_slice{chunk::copy(chunk_), verify::no};
+  result.offset_ = offset_;
+  return result;
+}
+
 // -- operators ----------------------------------------------------------------
 
 // TODO: Dispatch to optimized implementations if the encodings are the same.
@@ -280,6 +286,35 @@ id table_slice::offset() const noexcept {
 
 void table_slice::offset(id offset) noexcept {
   offset_ = offset;
+}
+
+time table_slice::import_time() const noexcept {
+  auto f = detail::overload{
+    []() noexcept {
+      return time{};
+    },
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->import_time();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
+}
+
+void table_slice::import_time(time import_time) noexcept {
+  VAST_ASSERT(chunk_->unique());
+  auto f = detail::overload{
+    []() noexcept {
+      die("cannot assign import time to invalid table slice");
+    },
+    [&](const auto& encoded) noexcept {
+      auto& mutable_state
+        = const_cast<std::add_lvalue_reference_t<std::remove_const_t<
+          std::remove_reference_t<decltype(*state(encoded, state_))>>>>(
+          *state(encoded, state_));
+      mutable_state.import_time(import_time);
+    },
+  };
+  visit(f, as_flatbuffer(chunk_));
 }
 
 size_t table_slice::instances() noexcept {
@@ -613,6 +648,8 @@ struct row_evaluator {
       }
       return neg ? !result : result;
     }
+    if (e.kind == meta_extractor::age)
+      return evaluate(slice_.import_time(), op_, d);
     return false;
   }
 

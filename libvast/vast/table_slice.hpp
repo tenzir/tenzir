@@ -96,7 +96,10 @@ public:
   /// Destroys a table slice.
   ~table_slice() noexcept;
 
-  // -- opeerators -------------------------------------------------------------
+  /// Creates a new table slice whose underlying chunk is unique.
+  [[nodiscard]] table_slice unshare() const noexcept;
+
+  // -- operators -------------------------------------------------------------
 
   /// Compare two table slices for equality.
   friend bool
@@ -125,6 +128,13 @@ public:
 
   /// Sets the offset in the ID space.
   void offset(id offset) noexcept;
+
+  /// @returns The import timestamp.
+  [[nodiscard]] time import_time() const noexcept;
+
+  /// Sets the import timestamp.
+  /// @pre The underlying chunk must be unique.
+  void import_time(time import_time) noexcept;
 
   /// @returns The number of in-memory table slices.
   static size_t instances() noexcept;

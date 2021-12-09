@@ -95,6 +95,12 @@ public:
   at(table_slice::size_type row, table_slice::size_type column,
      const type& t) const;
 
+  /// @returns The import timestamp.
+  [[nodiscard]] time import_time() const noexcept;
+
+  /// Sets the import timestamp.
+  void import_time(time import_time) noexcept;
+
 private:
   // -- implementation details -------------------------------------------------
 

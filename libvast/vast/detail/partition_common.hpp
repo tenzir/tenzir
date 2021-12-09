@@ -49,6 +49,9 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       if (evaluate(name, op, x))
         row_ids |= ids;
     }
+  } else if (ex.kind == meta_extractor::age) {
+    for (const auto& [_, ids] : state.type_ids())
+      row_ids |= ids;
   } else if (ex.kind == meta_extractor::field) {
     auto s = caf::get_if<std::string>(&x);
     if (!s) {

@@ -119,6 +119,10 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   ps_builder.add_synopses(synopses_vector);
   vast::fbs::uinterval id_range{x.offset, x.offset + x.events};
   ps_builder.add_id_range(&id_range);
+  vast::fbs::interval import_time_range{
+    x.min_import_time.time_since_epoch().count(),
+    x.max_import_time.time_since_epoch().count()};
+  ps_builder.add_import_time_range(&import_time_range);
   return ps_builder.Finish();
 }
 
@@ -154,6 +158,10 @@ unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
     return caf::make_error(ec::format_error, "missing id range");
   ps.offset = x.id_range()->begin();
   ps.events = x.id_range()->end() - x.id_range()->begin();
+  if (x.import_time_range()) {
+    ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
+    ps.max_import_time = time{} + duration{x.import_time_range()->end()};
+  }
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);
@@ -168,6 +176,10 @@ caf::error unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps,
   VAST_ASSERT(!x.id_range());
   ps.offset = offset;
   ps.events = events;
+  if (x.import_time_range()) {
+    ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
+    ps.max_import_time = time{} + duration{x.import_time_range()->end()};
+  }
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);

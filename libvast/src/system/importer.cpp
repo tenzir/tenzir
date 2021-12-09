@@ -57,6 +57,7 @@ public:
       auto rows = slice.rows();
       events += rows;
       slice.offset(state.next_id(rows));
+      slice.import_time(time::clock::now());
       out.push(std::move(slice));
     }
     t.stop(events);

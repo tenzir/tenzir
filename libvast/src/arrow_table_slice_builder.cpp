@@ -547,9 +547,14 @@ table_slice arrow_table_slice_builder::finish() {
         .ValueOrDie();
   auto record_batch_buffer = builder_.CreateVector(flat_record_batch->data(),
                                                    flat_record_batch->size());
-  // Create Arrow-encoded table slices.
-  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv1(
-    builder_, layout_buffer, schema_buffer, record_batch_buffer);
+  // Create Arrow-encoded table slices. We need to set the import time to
+  // something other than 0, as it cannot be modified otherwise. We then later
+  // reset it to the clock's epoch.
+  constexpr int64_t stub_ns_since_epoch = 1337;
+  auto arrow_table_slice_buffer
+    = fbs::table_slice::arrow::Createv1(builder_, layout_buffer, schema_buffer,
+                                        record_batch_buffer,
+                                        stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::arrow_v1,
@@ -559,7 +564,9 @@ table_slice arrow_table_slice_builder::finish() {
   rows_ = {};
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder_);
-  return table_slice{std::move(chunk), table_slice::verify::no};
+  auto result = table_slice{std::move(chunk), table_slice::verify::no};
+  result.import_time(time{});
+  return result;
 }
 
 table_slice arrow_table_slice_builder::create(
@@ -589,9 +596,14 @@ table_slice arrow_table_slice_builder::create(
         .ValueOrDie();
   auto record_batch_buffer = builder.CreateVector(flat_record_batch->data(),
                                                   flat_record_batch->size());
-  // Create Arrow-encoded table slices.
-  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv1(
-    builder, layout_buffer, schema_buffer, record_batch_buffer);
+  // Create Arrow-encoded table slices. We need to set the import time to
+  // something other than 0, as it cannot be modified otherwise. We then later
+  // reset it to the clock's epoch.
+  constexpr int64_t stub_ns_since_epoch = 1337;
+  auto arrow_table_slice_buffer
+    = fbs::table_slice::arrow::Createv1(builder, layout_buffer, schema_buffer,
+                                        record_batch_buffer,
+                                        stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::arrow_v1,
@@ -599,7 +611,9 @@ table_slice arrow_table_slice_builder::create(
   fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder);
-  return table_slice{std::move(chunk), table_slice::verify::no};
+  auto result = table_slice{std::move(chunk), table_slice::verify::no};
+  result.import_time(time{});
+  return result;
 }
 
 size_t arrow_table_slice_builder::rows() const noexcept {
