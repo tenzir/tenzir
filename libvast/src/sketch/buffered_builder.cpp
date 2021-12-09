@@ -152,8 +152,11 @@ private:
     if constexpr (std::is_same_v<type_class, arrow::NullType>) {
       return arrow::Status::TypeError("null type not supported");
     } else if constexpr (std::is_same_v<type_class, arrow::BooleanType>) {
-      auto ts = array.true_count();
-      auto fs = array.false_count();
+      // Map false to 0 and true to 1.
+      if (array.false_count() > 0)
+        digests_.insert(0);
+      if (array.true_count() > 0)
+        digests_.insert(1);
     } else {
       for (auto i = 0; i < array.length(); ++i) {
         if (!array.IsNull(i)) {
@@ -171,8 +174,10 @@ private:
                                                 arrow::DoubleType>) {
             digest = hash(static_cast<double>(array.Value(i)));
           } else if constexpr (std::is_same_v<type_class, arrow::TimestampType>) {
-            // TODO:
-            digest = hash(static_cast<double>(array.Value(i)));
+            const auto& ts
+              = static_cast<const arrow::TimestampType&>(*array.type());
+            auto seed = static_cast<default_hash::seed_type>(ts.unit());
+            digest = seeded_hash<default_hash>{seed}(array.Value(i));
           } else if constexpr (std::is_same_v<type_class,
                                               arrow::FixedSizeBinaryType>) {
             // We cover IP addresses and subnets using this type currently.
