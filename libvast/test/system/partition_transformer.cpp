@@ -61,6 +61,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     self->send_exit(importer, caf::exit_reason::user_shutdown);
   }
 
+  vast::system::accountant_actor accountant = {};
   vast::system::idspace_distributor_actor importer;
   vast::system::filesystem_actor filesystem;
 };
@@ -80,9 +81,10 @@ TEST(identity transform / done before persist) {
   auto identity_step = vast::make_transform_step("identity", caf::settings{});
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
-  auto transformer = self->spawn(vast::system::partition_transformer, uuid,
-                                 store_id, synopsis_opts, index_opts, importer,
-                                 filesystem, std::move(transform));
+  auto transformer
+    = self->spawn(vast::system::partition_transformer, uuid, store_id,
+                  synopsis_opts, index_opts, accountant, importer, filesystem,
+                  std::move(transform));
   REQUIRE(transformer);
   // Stream data
   size_t events = 0;
@@ -152,9 +154,10 @@ TEST(delete transform / persist before done) {
   auto delete_step = vast::make_transform_step("delete", plugin_opts);
   REQUIRE_NOERROR(delete_step);
   transform->add_step(std::move(*delete_step));
-  auto transformer = self->spawn(vast::system::partition_transformer, uuid,
-                                 store_id, synopsis_opts, index_opts, importer,
-                                 filesystem, std::move(transform));
+  auto transformer
+    = self->spawn(vast::system::partition_transformer, uuid, store_id,
+                  synopsis_opts, index_opts, accountant, importer, filesystem,
+                  std::move(transform));
   REQUIRE(transformer);
   // Stream data
   auto partition_path = std::filesystem::path{"/partition.fbs"};
@@ -233,10 +236,10 @@ TEST(partition transform via the index) {
   const auto num_query_supervisors = 10;
   const auto meta_index_fp_rate = 0.01;
   auto index
-    = self->spawn(vast::system::index, filesystem, archive, index_dir,
-                  vast::defaults::system::store_backend, partition_capacity,
-                  in_mem_partitions, taste_count, num_query_supervisors,
-                  index_dir, meta_index_fp_rate);
+    = self->spawn(vast::system::index, accountant, filesystem, archive,
+                  index_dir, vast::defaults::system::store_backend,
+                  partition_capacity, in_mem_partitions, taste_count,
+                  num_query_supervisors, index_dir, meta_index_fp_rate);
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();

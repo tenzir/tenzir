@@ -12,7 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
-#include "vast/ids.hpp"
+#include "vast/query.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/query_status.hpp"
@@ -37,8 +37,8 @@ struct exporter_state {
 
   // -- member variables -------------------------------------------------------
 
-  /// Stores the user-defined export query.
-  expression expr = {};
+  /// Stores the query.
+  struct query query = {};
 
   /// Stores a handle to the INDEX for querying results.
   index_actor index = {};

@@ -119,7 +119,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   uuid id, std::string store_id, const caf::settings& synopsis_opts,
-  const caf::settings& index_opts,
+  const caf::settings& index_opts, accountant_actor accountant,
   idspace_distributor_actor idspace_distributor, filesystem_actor fs,
   transform_ptr transform) {
   const auto* store_plugin = plugins::find<vast::store_plugin>(store_id);
@@ -129,7 +129,8 @@ partition_transformer_actor::behavior_type partition_transformer(
                                store_id));
     return partition_transformer_actor::behavior_type::make_empty_behavior();
   }
-  auto builder_and_header = store_plugin->make_store_builder(fs, id);
+  auto builder_and_header
+    = store_plugin->make_store_builder(accountant, fs, id);
   if (!builder_and_header) {
     self->quit(caf::make_error(ec::invalid_argument,
                                "could not create store builder for backend {}",

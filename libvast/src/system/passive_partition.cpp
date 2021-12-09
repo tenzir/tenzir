@@ -34,6 +34,7 @@
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/local_segment_store.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
@@ -283,8 +284,9 @@ partition_actor::behavior_type passive_partition(
             self->quit(std::move(error));
             return;
           }
-          auto store = plugin->make_store(self->state.filesystem,
-                                          self->state.store_header);
+          auto store
+            = plugin->make_store(self->state.accountant, self->state.filesystem,
+                                 self->state.store_header);
           if (!store) {
             VAST_ERROR("{} failed to spawn store: {}", *self,
                        render(store.error()));
@@ -344,13 +346,24 @@ partition_actor::behavior_type passive_partition(
         rp.delegate(self->state.store, query);
         return rp;
       }
+      auto start = std::chrono::steady_clock::now();
       auto triples = detail::evaluate(self->state, query.expr);
       if (triples.empty())
         return atom::done_v;
       auto eval = self->spawn(evaluator, query.expr, triples);
       self->request(eval, caf::infinite, atom::run_v)
         .then(
-          [self, rp, query = std::move(query)](const ids& hits) mutable {
+          [self, rp, start, query = std::move(query)](const ids& hits) mutable {
+            duration runtime = std::chrono::steady_clock::now() - start;
+            auto id_str = fmt::to_string(query.id);
+            self->send(self->state.accountant, "partition.lookup.runtime",
+                       runtime,
+                       metrics_metadata{{"query", id_str},
+                                        {"partition-type", "passive"}});
+            self->send(self->state.accountant, "partition.lookup.hits",
+                       rank(hits),
+                       metrics_metadata{{"query", std::move(id_str)},
+                                        {"partition-type", "passive"}});
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
             auto* count = caf::get_if<query::count>(&query.cmd);

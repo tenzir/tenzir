@@ -35,6 +35,7 @@
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/local_segment_store.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
@@ -493,6 +494,7 @@ active_partition_actor::behavior_type active_partition(
         rp.delegate(self->state.store, std::move(query));
         return rp;
       }
+      auto start = std::chrono::steady_clock::now();
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
       auto triples = detail::evaluate(self->state, query.expr);
@@ -503,7 +505,17 @@ active_partition_actor::behavior_type active_partition(
       auto eval = self->spawn(evaluator, query.expr, triples);
       self->request(eval, caf::infinite, atom::run_v)
         .then(
-          [self, rp, query = std::move(query)](const ids& hits) mutable {
+          [self, rp, start, query = std::move(query)](const ids& hits) mutable {
+            duration runtime = std::chrono::steady_clock::now() - start;
+            auto id_str = fmt::to_string(query.id);
+            self->send(self->state.accountant, "partition.lookup.runtime",
+                       runtime,
+                       metrics_metadata{{"query", id_str},
+                                        {"partition-type", "active"}});
+            self->send(self->state.accountant, "partition.lookup.hits",
+                       rank(hits),
+                       metrics_metadata{{"query", std::move(id_str)},
+                                        {"partition-type", "active"}});
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
             auto* count = caf::get_if<query::count>(&query.cmd);

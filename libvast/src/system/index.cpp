@@ -520,7 +520,8 @@ void index_state::create_active_partition() {
   chunk_ptr store_header = chunk::make_empty();
   if (partition_local_stores) {
     store_name = store_plugin->name();
-    auto builder_and_header = store_plugin->make_store_builder(filesystem, id);
+    auto builder_and_header
+      = store_plugin->make_store_builder(accountant, filesystem, id);
     if (!builder_and_header) {
       VAST_ERROR("could not create new active partition: {}",
                  render(builder_and_header.error()));
@@ -708,10 +709,10 @@ index_state::status(status_verbosity v) const {
 
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, archive_actor archive,
-      const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      accountant_actor accountant, filesystem_actor filesystem,
+      archive_actor archive, const std::filesystem::path& dir,
+      std::string store_backend, size_t partition_capacity,
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
   VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
@@ -751,6 +752,7 @@ index(index_actor::stateful_pointer<index_state> self,
       return index_actor::behavior_type::make_empty_behavior();
     }
   }
+  self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.meta_index
     = self->spawn<caf::lazy_init>(meta_index, self->state.accountant);
@@ -1169,6 +1171,7 @@ index(index_actor::stateful_pointer<index_state> self,
       partition_transformer_actor sink = self->spawn(
         partition_transformer, new_partition_id, store_id,
         self->state.synopsis_opts, self->state.index_opts,
+        self->state.accountant,
         static_cast<idspace_distributor_actor>(self->state.importer),
         self->state.filesystem, transform);
       // match_everything == '"" in #type'

@@ -36,7 +36,10 @@ struct active_store_state {
   //  been written to disk.
   local_store_actor self = {};
 
-  /// Actor handle of the filesystem actor.
+  /// Actor handle of the accountant.
+  accountant_actor accountant = {};
+
+  /// Actor handle of the filesystem.
   filesystem_actor fs = {};
 
   /// The path to where the store will be written.
@@ -73,6 +76,9 @@ struct passive_store_state {
     = std::tuple<ids, caf::typed_response_promise<atom::done>>;
   std::vector<deferred_erasure> deferred_erasures = {};
 
+  /// Actor handle of the accountant.
+  accountant_actor accountant = {};
+
   /// The actor handle of the filesystem actor.
   filesystem_actor fs = {};
 
@@ -93,10 +99,12 @@ std::filesystem::path store_path_for_partition(const vast::uuid&);
 
 local_store_actor::behavior_type
 active_local_store(local_store_actor::stateful_pointer<active_store_state>,
-                   filesystem_actor fs, const std::filesystem::path& path);
+                   accountant_actor accountant, filesystem_actor fs,
+                   const std::filesystem::path& path);
 
 store_actor::behavior_type
 passive_local_store(store_actor::stateful_pointer<passive_store_state>,
-                    filesystem_actor fs, const std::filesystem::path& path);
+                    accountant_actor accountant, filesystem_actor fs,
+                    const std::filesystem::path& path);
 
 } // namespace vast::system
