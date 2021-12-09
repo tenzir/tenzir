@@ -40,7 +40,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   const auto indexdir = args.dir / args.label;
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
-    index, filesystem, archive, indexdir,
+    index, accountant, filesystem, archive, indexdir,
     // TODO: Pass these options as a vast::data object instead.
     opt("vast.store-backend", std::string{sd::store_backend}),
     opt("vast.max-partition-size", sd::max_partition_size),
@@ -50,8 +50,6 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     std::filesystem::path{opt("vast.meta-index-dir", indexdir.string())},
     opt("vast.meta-index-fp-rate", sd::string_synopsis_fp_rate));
   VAST_VERBOSE("{} spawned the index", *self);
-  if (accountant)
-    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);
 }
 

@@ -236,10 +236,10 @@ TEST(partition transform via the index) {
   const auto num_query_supervisors = 10;
   const auto meta_index_fp_rate = 0.01;
   auto index
-    = self->spawn(vast::system::index, filesystem, archive, index_dir,
-                  vast::defaults::system::store_backend, partition_capacity,
-                  in_mem_partitions, taste_count, num_query_supervisors,
-                  index_dir, meta_index_fp_rate);
+    = self->spawn(vast::system::index, accountant, filesystem, archive,
+                  index_dir, vast::defaults::system::store_backend,
+                  partition_capacity, in_mem_partitions, taste_count,
+                  num_query_supervisors, index_dir, meta_index_fp_rate);
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();

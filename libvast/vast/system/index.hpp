@@ -327,6 +327,7 @@ struct index_state {
 };
 
 /// Indexes events in horizontal partitions.
+/// @param accountant The accountant actor.
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
 /// @param dir The directory of the index.
@@ -339,10 +340,10 @@ struct index_state {
 //  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, archive_actor archive,
-      const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      accountant_actor accountant, filesystem_actor filesystem,
+      archive_actor archive, const std::filesystem::path& dir,
+      std::string store_backend, size_t partition_capacity,
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate);
 
 } // namespace vast::system

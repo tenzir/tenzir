@@ -709,10 +709,10 @@ index_state::status(status_verbosity v) const {
 
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      filesystem_actor filesystem, archive_actor archive,
-      const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      accountant_actor accountant, filesystem_actor filesystem,
+      archive_actor archive, const std::filesystem::path& dir,
+      std::string store_backend, size_t partition_capacity,
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
   VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
@@ -752,6 +752,7 @@ index(index_actor::stateful_pointer<index_state> self,
       return index_actor::behavior_type::make_empty_behavior();
     }
   }
+  self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.meta_index
     = self->spawn<caf::lazy_init>(meta_index, self->state.accountant);
