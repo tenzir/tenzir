@@ -58,8 +58,9 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(const meta_extractor& e) const {
-      return printers::str(out_,
-                           e.kind == meta_extractor::type ? "#type" : "#field");
+      return printers::str(out_, e.kind == meta_extractor::type    ? "#type"
+                                 : e.kind == meta_extractor::field ? "#field"
+                                                                   : "#age");
     }
 
     bool operator()(const type_extractor& e) const {

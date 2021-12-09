@@ -271,6 +271,46 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
+          } else if (lhs.kind == meta_extractor::age) {
+            result_type result;
+            for (const auto& [part_id, part_syn] : synopses) {
+              const auto t = caf::get<time>(d);
+              bool add = false;
+              switch (x.op) {
+                case relational_operator::match:
+                case relational_operator::not_match:
+                case relational_operator::in:
+                case relational_operator::not_in:
+                case relational_operator::ni:
+                case relational_operator::not_ni:
+                  VAST_ASSERT(false, "unexpected operator");
+                  break;
+                case relational_operator::equal:
+                  add = t >= part_syn.min_import_time
+                        && t <= part_syn.max_import_time;
+                  break;
+                case relational_operator::not_equal:
+                  add = t < part_syn.min_import_time
+                        || t > part_syn.max_import_time;
+                  break;
+                case relational_operator::less:
+                  add = part_syn.min_import_time < t;
+                  break;
+                case relational_operator::less_equal:
+                  add = part_syn.min_import_time <= t;
+                  break;
+                case relational_operator::greater:
+                  add = part_syn.max_import_time > t;
+                  break;
+                case relational_operator::greater_equal:
+                  add = part_syn.max_import_time >= t;
+                  break;
+              }
+              if (add)
+                result.push_back(part_id);
+            }
+            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+            return result;
           } else if (lhs.kind == meta_extractor::field) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.

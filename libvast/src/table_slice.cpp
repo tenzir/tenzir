@@ -642,6 +642,8 @@ struct row_evaluator {
       }
       return neg ? !result : result;
     }
+    if (e.kind == meta_extractor::age)
+      return evaluate(slice_.import_time(), op_, d);
     return false;
   }
 
