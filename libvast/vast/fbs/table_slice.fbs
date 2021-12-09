@@ -33,7 +33,8 @@ table v1 {
   /// The Arrow Recod Batch containing all data.
   record_batch: [ubyte];
 
-  /// A timestamp assigned on import, representing a `vast::time` value.
+  /// A timestamp assigned on import, representing nanoseconds since the UNIX
+  /// epoch.
   import_time: long;
 }
 
@@ -64,7 +65,8 @@ table v1 {
   /// The buffer that contains the MessagePack data.
   data: [ubyte];
 
-  /// A timestamp assigned on import, representing a `vast::time` value.
+  /// A timestamp assigned on import, representing nanoseconds since the UNIX
+  /// epoch.
   import_time: long;
 }
 

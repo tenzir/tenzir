@@ -140,8 +140,11 @@ table_slice msgpack_table_slice_builder::finish() {
   // Create MessagePack-encoded table slices. We need to set the import time to
   // something other than 0, as it cannot be modified otherwise. We then later
   // reset it to the clock's epoch.
-  auto msgpack_table_slice_buffer = fbs::table_slice::msgpack::Createv1(
-    builder_, layout_buffer, offset_table_buffer, data_buffer, 1337);
+  constexpr int64_t stub_ns_since_epoch = 1337;
+  auto msgpack_table_slice_buffer
+    = fbs::table_slice::msgpack::Createv1(builder_, layout_buffer,
+                                          offset_table_buffer, data_buffer,
+                                          stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::msgpack_v1,
