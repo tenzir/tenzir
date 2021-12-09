@@ -283,15 +283,9 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 case relational_operator::not_in:
                 case relational_operator::ni:
                 case relational_operator::not_ni:
-                  VAST_ASSERT(false, "unexpected operator");
-                  break;
                 case relational_operator::equal:
-                  add = t >= part_syn.min_import_time
-                        && t <= part_syn.max_import_time;
-                  break;
                 case relational_operator::not_equal:
-                  add = t < part_syn.min_import_time
-                        || t > part_syn.max_import_time;
+                  VAST_ASSERT(false, "unexpected operator");
                   break;
                 case relational_operator::less:
                   add = part_syn.min_import_time < t;

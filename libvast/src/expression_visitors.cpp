@@ -313,9 +313,7 @@ validator::operator()(const meta_extractor& ex, const data& d) {
   }
   if (ex.kind == meta_extractor::age) {
     if (!caf::holds_alternative<time>(d)
-        || !(op_ == relational_operator::equal
-             || op_ == relational_operator::not_equal
-             || op_ == relational_operator::less
+        || !(op_ == relational_operator::less
              || op_ == relational_operator::less_equal
              || op_ == relational_operator::greater
              || op_ == relational_operator::greater_equal))
