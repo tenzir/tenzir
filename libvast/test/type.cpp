@@ -449,6 +449,12 @@ TEST(record_type flat index computation) {
        {"b", bool_type{}},
      }},
   };
+  CHECK_EQUAL(x.num_fields(), 2u);
+  CHECK_EQUAL(x.num_leaves(), 6u);
+  CHECK_EQUAL(caf::get<record_type>(x.field(0).type).num_fields(), 3u);
+  CHECK_EQUAL(caf::get<record_type>(x.field(0).type).num_leaves(), 5u);
+  CHECK_EQUAL(caf::get<record_type>(x.field(1).type).num_fields(), 1u);
+  CHECK_EQUAL(caf::get<record_type>(x.field(1).type).num_leaves(), 1u);
   CHECK_EQUAL(x.flat_index(offset({0, 0, 0})), 0u);
   CHECK_EQUAL(x.flat_index(offset({0, 0, 1})), 1u);
   CHECK_EQUAL(x.flat_index(offset({0, 1, 0, 0})), 2u);

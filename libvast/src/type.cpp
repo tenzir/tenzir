@@ -191,45 +191,6 @@ void construct_record_type(stateful_type_base& self, const T& begin,
   self = type{std::move(chunk)};
 }
 
-size_t flat_size(const fbs::Type* view) noexcept {
-  VAST_ASSERT(view);
-  switch (view->type_type()) {
-    case fbs::type::Type::NONE:
-    case fbs::type::Type::bool_type_v0:
-    case fbs::type::Type::integer_type_v0:
-    case fbs::type::Type::count_type_v0:
-    case fbs::type::Type::real_type_v0:
-    case fbs::type::Type::duration_type_v0:
-    case fbs::type::Type::time_type_v0:
-    case fbs::type::Type::string_type_v0:
-    case fbs::type::Type::pattern_type_v0:
-    case fbs::type::Type::address_type_v0:
-    case fbs::type::Type::subnet_type_v0:
-    case fbs::type::Type::enumeration_type_v0:
-    case fbs::type::Type::list_type_v0:
-    case fbs::type::Type::map_type_v0:
-      return 1;
-    case fbs::type::Type::record_type_v0: {
-      const auto* record = view->type_as_record_type_v0();
-      VAST_ASSERT(record);
-      auto result = size_t{0};
-      for (const auto& field : *record->fields()) {
-        VAST_ASSERT(field);
-        VAST_ASSERT(field->type());
-        result += flat_size(field->type_nested_root());
-      }
-      return result;
-    }
-    case fbs::type::Type::enriched_type_v0: {
-      const auto* enriched = view->type_as_enriched_type_v0();
-      VAST_ASSERT(enriched);
-      VAST_ASSERT(enriched->type());
-      return flat_size(enriched->type_nested_root());
-    }
-  }
-  __builtin_unreachable();
-}
-
 } // namespace
 
 // -- type --------------------------------------------------------------------
@@ -1840,7 +1801,58 @@ size_t record_type::num_fields() const noexcept {
 }
 
 size_t record_type::num_leaves() const noexcept {
-  return flat_size(&table());
+  auto num_leaves = size_t{0};
+  auto index = offset{0};
+  auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
+    table().type_as_record_type_v0()};
+  while (!index.empty()) {
+    const auto* record = history.back();
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // This is our exit condition: If we arrived at the end of a record, we need
+    // to step out one layer. We must also reset the target key at this point.
+    if (index.back() >= fields->size()) {
+      history.pop_back();
+      index.pop_back();
+      if (!index.empty())
+        ++index.back();
+      continue;
+    }
+    const auto* field = record->fields()->Get(index.back());
+    VAST_ASSERT(field);
+    const auto* field_type = resolve_transparent(field->type_nested_root());
+    VAST_ASSERT(field_type);
+    switch (field_type->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0: {
+        ++index.back();
+        ++num_leaves;
+        break;
+      }
+      case fbs::type::Type::record_type_v0: {
+        history.emplace_back(field_type->type_as_record_type_v0());
+        index.push_back(0);
+        break;
+      }
+      case fbs::type::Type::enriched_type_v0:
+        __builtin_unreachable();
+        break;
+    }
+  }
+  return num_leaves;
 }
 
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
@@ -2144,23 +2156,62 @@ record_type::field_view record_type::field(const offset& index) const noexcept {
 }
 
 size_t record_type::flat_index(const offset& index) const noexcept {
-  VAST_ASSERT(!index.empty(), "offset must not be empty");
-  auto result = size_t{0};
-  const auto* record = table().type_as_record_type_v0();
-  for (size_t i = 0; i < index.size(); ++i) {
+  VAST_ASSERT(!index.empty(), "index must not be empty");
+  auto flat_index = size_t{0};
+  auto current_index = offset{0};
+  auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
+    table().type_as_record_type_v0()};
+  while (true) {
+    VAST_ASSERT(current_index <= index, "index out of bounds");
+    const auto* record = history.back();
     VAST_ASSERT(record);
     const auto* fields = record->fields();
     VAST_ASSERT(fields);
-    // Add the flat size of the fields up until before the record type the
-    // offset tells us to recurse into.
-    VAST_ASSERT(index[i] < fields->size(), "index out of bounds");
-    for (size_t j = 0; j < index[i]; ++j)
-      result += flat_size(fields->Get(j)->type_nested_root());
-    // Recurse into the next layer, but don't count that record type itself.
-    record = resolve_transparent(fields->Get(index[i])->type_nested_root())
-               ->type_as_record_type_v0();
+    // This is our exit condition: If we arrived at the end of a record, we need
+    // to step out one layer.
+    if (current_index.back() >= fields->size()) {
+      history.pop_back();
+      current_index.pop_back();
+      VAST_ASSERT(!current_index.empty());
+      ++current_index.back();
+      continue;
+    }
+    const auto* field = record->fields()->Get(current_index.back());
+    VAST_ASSERT(field);
+    const auto* field_type = resolve_transparent(field->type_nested_root());
+    VAST_ASSERT(field_type);
+    switch (field_type->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type_v0:
+      case fbs::type::Type::integer_type_v0:
+      case fbs::type::Type::count_type_v0:
+      case fbs::type::Type::real_type_v0:
+      case fbs::type::Type::duration_type_v0:
+      case fbs::type::Type::time_type_v0:
+      case fbs::type::Type::string_type_v0:
+      case fbs::type::Type::pattern_type_v0:
+      case fbs::type::Type::address_type_v0:
+      case fbs::type::Type::subnet_type_v0:
+      case fbs::type::Type::enumeration_type_v0:
+      case fbs::type::Type::list_type_v0:
+      case fbs::type::Type::map_type_v0: {
+        if (index == current_index)
+          return flat_index;
+        ++current_index.back();
+        ++flat_index;
+        break;
+      }
+      case fbs::type::Type::record_type_v0: {
+        VAST_ASSERT(index != current_index);
+        history.emplace_back(field_type->type_as_record_type_v0());
+        current_index.push_back(0);
+        break;
+      }
+      case fbs::type::Type::enriched_type_v0:
+        __builtin_unreachable();
+        break;
+    }
   }
-  return result;
 }
 
 record_type::transformation::function_type record_type::drop() noexcept {
