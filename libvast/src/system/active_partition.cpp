@@ -506,10 +506,10 @@ active_partition_actor::behavior_type active_partition(
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, rp, start, query = std::move(query)](const ids& hits) mutable {
-            auto eval_time = std::chrono::steady_clock::now() - start;
+            duration runtime = std::chrono::steady_clock::now() - start;
             auto id_str = fmt::to_string(query.id);
             self->send(self->state.accountant, "partition.lookup.runtime",
-                       eval_time,
+                       runtime,
                        metrics_metadata{{"query", id_str},
                                         {"partition-type", "active"}});
             self->send(self->state.accountant, "partition.lookup.hits",

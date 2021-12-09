@@ -180,7 +180,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       auto num_hits = handle_lookup(self, query, *slices);
       if (!num_hits)
         return num_hits.error();
-      auto runtime = std::chrono::steady_clock::now() - start;
+      duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
       self->send(
         self->state.accountant, "segment-store.lookup.runtime", runtime,
@@ -277,7 +277,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
       auto num_hits = handle_lookup(self, query, *slices);
       if (!num_hits)
         return num_hits.error();
-      auto runtime = std::chrono::steady_clock::now() - start;
+      duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
       self->send(self->state.accountant, "segment_store.lookup.runtime",
                  runtime,

@@ -426,7 +426,7 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
         result = std::move(expression_candidates);
       else
         result = std::move(ids_candidates);
-      auto runtime = std::chrono::steady_clock::now() - start;
+      duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
       self->send(self->state.accountant, "meta-index.lookup.runtime", runtime,
                  metrics_metadata{{"query", id_str}});
