@@ -162,11 +162,25 @@ struct accountant_state_impl {
     printer.print(iter, std::pair{"key"sv, make_data_view(key)});
     *iter++ = ',';
     printer.print(iter, std::pair{"value"sv, make_data_view(x)});
-    for (const auto& [meta_key, meta_value] : metadata) {
+    if (!metadata.empty()) {
       *iter++ = ',';
-      printer.print(iter, meta_key);
+      printer.print(iter, "metadata"sv);
       *iter++ = ':';
-      printer.print(iter, meta_value);
+      *iter++ = ' ';
+      *iter++ = '{';
+      auto print_separator = false;
+      for (const auto& [meta_key, meta_value] : metadata) {
+        if (print_separator) {
+          *iter++ = ',';
+        } else {
+          print_separator = true;
+        }
+        printer.print(iter, meta_key);
+        *iter++ = ':';
+        *iter++ = ' ';
+        printer.print(iter, meta_value);
+      }
+      *iter++ = '}';
     }
     *iter++ = '}';
     *iter++ = '\n';
