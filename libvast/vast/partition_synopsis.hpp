@@ -36,10 +36,10 @@ struct partition_synopsis {
   uint64_t events;
 
   /// The minimum import timestamp of all contained table slices.
-  time min_import_time = {};
+  time min_import_time = time::max();
 
   /// The maximum import timestamp of all contained table slices.
-  time max_import_time = {};
+  time max_import_time = time::min();
 
   /// Synopsis data structures for types.
   std::unordered_map<type, synopsis_ptr> type_synopses_;
