@@ -26,7 +26,7 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   auto offset = layout_rt.resolve_key(fieldname_);
   if (!offset)
     return std::move(slice);
-  auto columnn_index = layout_rt.flat_index(*offset);
+  auto column_index = layout_rt.flat_index(*offset);
   auto adjusted_layout_rt
     = layout_rt.transform({{*offset, record_type::drop()}});
   if (!adjusted_layout_rt)
@@ -39,7 +39,7 @@ caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
   builder_ptr->reserve(slice.rows());
   for (size_t i = 0; i < slice.rows(); ++i) {
     for (size_t j = 0; j < slice.columns(); ++j) {
-      if (j == columnn_index)
+      if (j == column_index)
         continue;
       if (!builder_ptr->add(slice.at(i, j)))
         return caf::make_error(ec::unspecified, "delete step: unknown error "
