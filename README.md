@@ -60,7 +60,7 @@ The network telemetry engine for data-driven security investigations.
 Linux users can download our [latest static
 build](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz)
 based on maser via browser or cURL. The latest stable version can be found on our
-[releases](https://github.com/tenzir/vast/releases) page.
+[releases][release-url] page.
 
 ```sh
 curl -L -O https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
@@ -158,6 +158,7 @@ proceedings][nsdi-proceedings].
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [since-release-url]: https://github.com/tenzir/vast/compare/2021.06.24...master
+[release-url]
 [installation-url]: https://docs.tenzir.com/vast/installation/overview
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
