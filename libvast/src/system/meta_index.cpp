@@ -276,33 +276,13 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
           } else if (lhs.kind == meta_extractor::age) {
             result_type result;
             for (const auto& [part_id, part_syn] : synopses) {
-              const auto t = caf::get<time>(d);
-              bool add = false;
-              switch (x.op) {
-                case relational_operator::match:
-                case relational_operator::not_match:
-                case relational_operator::in:
-                case relational_operator::not_in:
-                case relational_operator::ni:
-                case relational_operator::not_ni:
-                case relational_operator::equal:
-                case relational_operator::not_equal:
-                  VAST_ASSERT(false, "unexpected operator");
-                  break;
-                case relational_operator::less:
-                  add = part_syn.min_import_time < t;
-                  break;
-                case relational_operator::less_equal:
-                  add = part_syn.min_import_time <= t;
-                  break;
-                case relational_operator::greater:
-                  add = part_syn.max_import_time > t;
-                  break;
-                case relational_operator::greater_equal:
-                  add = part_syn.max_import_time >= t;
-                  break;
-              }
-              if (add)
+              VAST_ASSERT(part_syn.min_import_time <= part_syn.max_import_time);
+              auto ts = time_synopsis{
+                part_syn.min_import_time,
+                part_syn.max_import_time,
+              };
+              auto add = ts.lookup(x.op, caf::get<vast::time>(d));
+              if (!add || *add)
                 result.push_back(part_id);
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));

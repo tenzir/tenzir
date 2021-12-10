@@ -14,6 +14,7 @@
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/passive_partition.hpp"
+#include "vast/time_synopsis.hpp"
 #include "vast/type.hpp"
 
 namespace vast::detail {
@@ -50,8 +51,26 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
         row_ids |= ids;
     }
   } else if (ex.kind == meta_extractor::age) {
-    for (const auto& [_, ids] : state.type_ids())
-      row_ids |= ids;
+    // For a passive partition, this already went through a time synopsis in
+    // the meta index, but for the active partition we create an ad-hoc time
+    // synopsis here to do the lookup.
+    if constexpr (std::is_same_v<PartitionState,
+                                 system::active_partition_state>) {
+      if (const auto* t = caf::get_if<time>(&x)) {
+        auto ts = time_synopsis{
+          state.data.synopsis->min_import_time,
+          state.data.synopsis->max_import_time,
+        };
+        auto add = ts.lookup(op, *t);
+        if (!add || *add)
+          for (const auto& [_, ids] : state.type_ids())
+            row_ids |= ids;
+      }
+    } else {
+      for (const auto& [_, ids] : state.type_ids())
+        row_ids |= ids;
+    }
+
   } else if (ex.kind == meta_extractor::field) {
     auto s = caf::get_if<std::string>(&x);
     if (!s) {
