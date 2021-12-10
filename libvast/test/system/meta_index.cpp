@@ -11,6 +11,7 @@
 #include "vast/system/meta_index.hpp"
 
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
@@ -50,6 +51,8 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
   result.add(ts, synopsis_opts);
   result.offset = ts.offset();
   result.events = ts.rows();
+  result.min_import_time = ts.import_time();
+  result.max_import_time = ts.import_time();
   return result;
 }
 
@@ -127,6 +130,12 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     for (size_t i = 0; i < num_partitions; ++i) {
       auto name = i % 2 == 0 ? "foo"s : "foobar"s;
       auto& part = mock_partitions.emplace_back(std::move(name), ids[i], i);
+      if (i % 2 == 0)
+        part.slice.import_time( //
+          caf::get<vast::time>(unbox(to<data>("1975-01-02"))));
+      else
+        part.slice.import_time( //
+          caf::get<vast::time>(unbox(to<data>("2015-01-02"))));
       auto ps = std::make_shared<partition_synopsis>(
         make_partition_synopsis(part.slice));
       merge(meta_idx, part.id, ps);
@@ -186,10 +195,10 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     return slice(ids.size());
   }
 
-  auto lookup(meta_index_actor& meta_idx, std::string_view expr) {
+  auto lookup(meta_index_actor& meta_idx, expression expr) {
     std::vector<uuid> result;
     auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
-                                       unbox(to<expression>(expr)));
+                                       std::move(expr));
     auto rp
       = self->request(meta_idx, caf::infinite, vast::atom::candidates_v, q);
     run();
@@ -202,6 +211,14 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       });
     std::sort(result.begin(), result.end());
     return result;
+  }
+
+  auto lookup(meta_index_actor& meta_idx, std::string_view expr) {
+    return lookup(meta_idx, unbox(to<expression>(expr)));
+  }
+
+  auto lookup(expression expr) {
+    return lookup(meta_idx, std::move(expr));
   }
 
   auto lookup(std::string_view expr) {
@@ -266,6 +283,35 @@ TEST(attribute extractor - type) {
   CHECK_EQUAL(lookup("#type ~ /f.*/"), ids);
   CHECK_EQUAL(lookup("#type ~ /x/"), empty());
   CHECK_EQUAL(lookup("#type !~ /x/"), ids);
+}
+
+TEST(attribute extractor - age) {
+  const auto foo = std::vector<uuid>{ids[0], ids[2]};
+  const auto foobar = std::vector<uuid>{ids[1], ids[3]};
+  const auto y2k = unbox(to<data>("2000-01-01"));
+  const auto y2021 = unbox(to<data>("2021-01-01"));
+  const auto y2030 = unbox(to<data>("2030-01-01"));
+  const auto older_than_y2k = expression{predicate{
+    meta_extractor{meta_extractor::age}, relational_operator::less, y2k}};
+  const auto newer_than_y2k
+    = expression{predicate{meta_extractor{meta_extractor::age},
+                           relational_operator::greater_equal, y2k}};
+  const auto older_than_y2021 = expression{predicate{
+    meta_extractor{meta_extractor::age}, relational_operator::less, y2021}};
+  const auto newer_than_y2021
+    = expression{predicate{meta_extractor{meta_extractor::age},
+                           relational_operator::greater_equal, y2021}};
+  const auto older_than_y2030 = expression{predicate{
+    meta_extractor{meta_extractor::age}, relational_operator::less, y2030}};
+  const auto newer_than_y2030
+    = expression{predicate{meta_extractor{meta_extractor::age},
+                           relational_operator::greater_equal, y2030}};
+  CHECK_EQUAL(lookup(older_than_y2k), foo);
+  CHECK_EQUAL(lookup(newer_than_y2k), foobar);
+  CHECK_EQUAL(lookup(older_than_y2021), ids);
+  CHECK_EQUAL(lookup(newer_than_y2021), empty());
+  CHECK_EQUAL(lookup(older_than_y2030), ids);
+  CHECK_EQUAL(lookup(newer_than_y2030), empty());
 }
 
 TEST(meta index with bool synopsis) {

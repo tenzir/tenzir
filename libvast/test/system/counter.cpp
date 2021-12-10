@@ -53,7 +53,9 @@ caf::behavior mock_client(mock_client_actor* self) {
             CHECK(!self->state.received_done);
             self->state.count += x;
           },
-          [=](atom::done) { self->state.received_done = true; }};
+          [=](atom::done) {
+            self->state.received_done = true;
+          }};
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -161,6 +163,78 @@ TEST(count IP point query with partition - local stores) {
   auto& client_state = deref<mock_client_actor>(client).state;
   // The magic number 133 was taken from the first unit test.
   CHECK_EQUAL(client_state.count, 133u);
+  CHECK_EQUAL(client_state.received_done, true);
+  self->send_exit(index, caf::exit_reason::user_shutdown);
+  self->send_exit(counter, caf::exit_reason::user_shutdown);
+}
+
+TEST(count meta extractor age 1) {
+  // Create an index with partition-local store backend.
+  auto indexdir = directory / "index2";
+  auto index
+    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
+                  indexdir, "segment-store", defaults::import::table_slice_size,
+                  100, 3, 1, indexdir, 0.01);
+  // Fill the INDEX with 400 rows from the Zeek conn log.
+  auto slices = take(zeek_conn_log_full, 4);
+  for (auto& slice : slices) {
+    slice = slice.unshare();
+    slice.import_time(time::clock::now());
+  }
+  detail::spawn_container_source(sys, slices, index);
+  auto counter
+    = sys.spawn(system::counter,
+                expression{predicate{meta_extractor{meta_extractor::age},
+                                     relational_operator::less,
+                                     data{vast::time{time::clock::now()}}}},
+                index,
+                /*skip_candidate_check = */ false);
+  run();
+  anon_send(counter, atom::run_v, client);
+  sched.run_once();
+  // Once started, the COUNTER reaches out to the INDEX.
+  expect((query), from(counter).to(index));
+  run();
+  auto& client_state = deref<mock_client_actor>(client).state;
+  // We're expecting the full 400 events here; import time must be lower than
+  // current time.
+  CHECK_EQUAL(client_state.count, 400u);
+  CHECK_EQUAL(client_state.received_done, true);
+  self->send_exit(index, caf::exit_reason::user_shutdown);
+  self->send_exit(counter, caf::exit_reason::user_shutdown);
+}
+
+TEST(count meta extractor age 2) {
+  // Create an index with partition-local store backend.
+  auto indexdir = directory / "index2";
+  auto index
+    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
+                  indexdir, "segment-store", defaults::import::table_slice_size,
+                  100, 3, 1, indexdir, 0.01);
+  // Fill the INDEX with 400 rows from the Zeek conn log.
+  auto slices = take(zeek_conn_log_full, 4);
+  for (auto& slice : slices) {
+    slice = slice.unshare();
+    slice.import_time(time::clock::now());
+  }
+  detail::spawn_container_source(sys, slices, index);
+  auto counter = sys.spawn(
+    system::counter,
+    expression{
+      predicate{meta_extractor{meta_extractor::age}, relational_operator::less,
+                data{vast::time{time::clock::now()} - std::chrono::hours{2}}}},
+    index,
+    /*skip_candidate_check = */ false);
+  run();
+  anon_send(counter, atom::run_v, client);
+  sched.run_once();
+  // Once started, the COUNTER reaches out to the INDEX.
+  expect((query), from(counter).to(index));
+  run();
+  auto& client_state = deref<mock_client_actor>(client).state;
+  // We're expecting the zero events here, because all data was imported
+  // more recently than 2 hours before current time.
+  CHECK_EQUAL(client_state.count, 0u);
   CHECK_EQUAL(client_state.received_done, true);
   self->send_exit(index, caf::exit_reason::user_shutdown);
   self->send_exit(counter, caf::exit_reason::user_shutdown);
