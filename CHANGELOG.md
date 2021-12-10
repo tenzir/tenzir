@@ -21,7 +21,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - JSON field selectors are now configurable instead of being hard-coded for Suricata Eve JSON and Zeek Streaming JSON. E.g., `vast import json --selector=event_type:suricata` is now equivalent to `vast import suricata`. This allows for easier integration of JSONL data containing a field that indicates its type.
   [#1974](https://github.com/tenzir/vast/pull/1974)
 
-- Metrics events now optionally contain a metadata field that is a key-value mapping of string to string, allowing for finer-grained introspection. For now this enables correlation of metrics events and individual queries. A set of new metrics for query lookup use this feature to include the query ID. I.e.: ``` {   "ts": "2021-12-09T12:47:09.079148669",   "version": "2021.11.18-269-gba9f97bf77-dirty",   "actor": "meta-index",   "key": "meta-index.lookup.runtime",   "value": 0.070954,   "metadata": {     "query": "7E18BF00-0C8C-4841-B8A4-C8EAEB9E9203"   } } ```
+- Metrics events now optionally contain a metadata field that is a key-value mapping of string to string, allowing for finer-grained introspection. For now this enables correlation of metrics events and individual queries. A set of new metrics for query lookup use this feature to include the query ID.
   [#1987](https://github.com/tenzir/vast/pull/1987)
   [#1992](https://github.com/tenzir/vast/pull/1992)
 
