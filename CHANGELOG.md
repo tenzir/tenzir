@@ -6,15 +6,12 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [2021.12.16-rc1]
+## [2021.12.16-rc2]
 
 ### :warning: Changes
 
 - VAST's internal type system has a new on-disk data representation. While we still support reading older databases, reverting to an older version of VAST will not be possible after this change. Alongside this change, we've implemented numerous fixes and streamlined handling of field name lookups, which now more consistently handles the dot-separator. E.g., the query `#field == "ip"` still matches the field `source.ip`, but no longer the field `source_ip`. The change is also performance-relevant in the long-term: For data persisted from previous versions of VAST we convert to the new type system on the fly, and for newly ingested data we now have near zero-cost deserialization for types, which should result in an overall speedup once the old data is rotated out by the disk monitor.
   [#1888](https://github.com/tenzir/vast/pull/1888)
-
-- Experimental query-based aging no longer exists, including the options `vast.aging-frequency` and `vast.aging-query`.
-  [#1993](https://github.com/tenzir/vast/pull/1993)
 
 ### :gift: Features
 
@@ -24,7 +21,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - JSON field selectors are now configurable instead of being hard-coded for Suricata Eve JSON and Zeek Streaming JSON. E.g., `vast import json --selector=event_type:suricata` is now equivalent to `vast import suricata`. This allows for easier integration of JSONL data containing a field that indicates its type.
   [#1974](https://github.com/tenzir/vast/pull/1974)
 
-- Metrics events now optionally contain a metadata field that is a key-value mapping of string to string, allowing for finer-grained introspection. For now this enables correlation of metrics events and individual queries. A set of new metrics for query lookup use this feature to include the query ID. I.e.: ``` {   "ts": "2021-12-09T12:47:09.079148669",   "version": "2021.11.18-269-gba9f97bf77-dirty",   "actor": "meta-index",   "key": "meta-index.lookup.runtime",   "value": 0.070954,   "metadata": {     "query": "7E18BF00-0C8C-4841-B8A4-C8EAEB9E9203"   } } ```
+- Metrics events now optionally contain a metadata field that is a key-value mapping of string to string, allowing for finer-grained introspection. For now this enables correlation of metrics events and individual queries. A set of new metrics for query lookup use this feature to include the query ID.
   [#1987](https://github.com/tenzir/vast/pull/1987)
   [#1992](https://github.com/tenzir/vast/pull/1992)
 
@@ -1482,7 +1479,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[2021.12.16-rc1]: https://github.com/tenzir/vast/releases/tag/2021.12.16-rc1
+[2021.12.16-rc2]: https://github.com/tenzir/vast/releases/tag/2021.12.16-rc2
 [2021.11.18]: https://github.com/tenzir/vast/releases/tag/2021.11.18
 [2021.09.30]: https://github.com/tenzir/vast/releases/tag/2021.09.30
 [2021.08.26]: https://github.com/tenzir/vast/releases/tag/2021.08.26
