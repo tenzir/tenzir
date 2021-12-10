@@ -338,7 +338,7 @@ TEST(meta index messages) {
   // so this selects everything but the first partition.
   auto expr = unbox(to<expression>("content == \"foo\" && :timestamp >= @25"));
   // Sending an expression should return candidate partition ids
-  auto q = query::make_count(self, query::count::exact, expr);
+  auto q = query::make_erase(expr);
   auto expr_response
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();

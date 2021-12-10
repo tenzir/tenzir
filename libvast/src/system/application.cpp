@@ -183,6 +183,12 @@ auto make_pivot_command() {
   return pivot;
 }
 
+auto make_send_command() {
+  return std::make_unique<command>("send",
+                                   "sends a message to a registered actor", "",
+                                   opts("?vast.send"), false);
+}
+
 auto make_spawn_source_command() {
   auto spawn_source = std::make_unique<command>(
     "source", "creates a new source inside the node",
@@ -367,6 +373,7 @@ auto make_command_factory() {
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn archive", remote_command},
+    {"spawn eraser", remote_command},
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
     {"spawn importer", remote_command},
@@ -446,6 +453,9 @@ auto make_root_command(std::string_view path) {
           "plugins", "plugins to load at startup; the special values 'bundled' "
                      "and 'all' enable autoloading of bundled and all plugins "
                      "respectively.")
+        .add<std::string>("aging-frequency", "interval between two aging "
+                                             "cycles")
+        .add<std::string>("aging-query", "query for aging out obsolete data")
         .add<std::string>("shutdown-grace-period",
                           "time to wait until component shutdown "
                           "finishes cleanly before inducing a hard kill")
@@ -465,6 +475,7 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_kill_command());
   root->add_subcommand(make_peer_command());
   root->add_subcommand(make_pivot_command());
+  root->add_subcommand(make_send_command());
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
   root->add_subcommand(make_status_command());
