@@ -114,6 +114,12 @@ vast:
   # The maximum size per segment, in MiB.
   max-segment-size: 1024
 
+  # Interval between two aging cycles.
+  aging-frequency: 24h
+
+  # Query for aging out obsolete data.
+  aging-query:
+
   # Keep track of performance metrics.
   enable-metrics: false
 

@@ -16,15 +16,12 @@
 
 namespace vast::system {
 
-// TODO: This is temporary until the functionality is unified with
-// the ERASER.
-
-/// Tries to spawn a new DISK_MONITOR.
+/// Tries to spawn the ERASER.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
 caf::expected<caf::actor>
-spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
-                   spawn_arguments& args);
+spawn_eraser(node_actor::stateful_pointer<node_state> self,
+             spawn_arguments& args);
 
 } // namespace vast::system

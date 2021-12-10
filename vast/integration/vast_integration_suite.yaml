@@ -51,6 +51,21 @@ fixtures:
     exit: | # python
       node.stop()
 
+  AgingTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f'127.0.0.1:{VAST_PORT}',
+                     '-i', 'node',
+                     '--aging-frequency=2000min',
+                     '--aging-query=:addr == 192.168.1.104',
+                     'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=self.config_file)
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
   DiskMonitorTester:
     enter: | # python
       node = Server(self.cmd,
@@ -429,6 +444,15 @@ tests:
         input: data/json/record-in-list.json
       - command: -N export ascii '#type == "custom"'
 
+  Zeek conn log aging:
+    tags: [import-export, aging, zeek]
+    fixture: AgingTester
+    steps:
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: export ascii 'resp_h == 192.168.1.104'
+      - command: send eraser run
+      - command: export ascii 'resp_h == 192.168.1.104'
   Spawn source:
     tags: [import, spawn-source, zeek]
     fixture: ServerTester
