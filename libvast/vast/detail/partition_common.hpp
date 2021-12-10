@@ -51,9 +51,9 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
         row_ids |= ids;
     }
   } else if (ex.kind == meta_extractor::age) {
-    // For the passive partition we can trust the eval from the meta index, but
-    // we cannot rely on that for the active partition. We create a time
-    // synopsis ad-hoc to do the lookup for us.
+    // For a passive partition, this already went through a time synopsis in
+    // the meta index, but for the active partition we create an ad-hoc time
+    // synopsis here to do the lookup.
     if constexpr (std::is_same_v<PartitionState,
                                  system::active_partition_state>) {
       if (const auto* t = caf::get_if<time>(&x)) {

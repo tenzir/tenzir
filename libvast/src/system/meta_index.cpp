@@ -282,12 +282,8 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 part_syn.max_import_time,
               };
               auto add = ts.lookup(x.op, caf::get<vast::time>(d));
-              if (!add || *add) {
-                VAST_WARN("yes: part {} w/ range [{}, {}]", part_id,
-                          data{part_syn.min_import_time},
-                          data{part_syn.max_import_time});
+              if (!add || *add)
                 result.push_back(part_id);
-              }
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;

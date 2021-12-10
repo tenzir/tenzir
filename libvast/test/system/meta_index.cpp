@@ -285,6 +285,8 @@ TEST(attribute extractor - type) {
   CHECK_EQUAL(lookup("#type !~ /x/"), ids);
 }
 
+// Test the import timestamp meta extractor. Half the test data was set to
+// 1975, and the other half to 2015 in the fixture.
 TEST(attribute extractor - age) {
   const auto foo = std::vector<uuid>{ids[0], ids[2]};
   const auto foobar = std::vector<uuid>{ids[1], ids[3]};
