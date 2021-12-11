@@ -147,7 +147,9 @@ struct accountant_state_impl {
   to_json_line(const caf::actor_id actor_id, time ts, const std::string& key,
                real x, const metrics_metadata& metadata) {
     using namespace std::string_view_literals;
-    json_printer<policy::oneline, policy::human_readable_durations> printer;
+    json_printer<policy::oneline, policy::human_readable_durations,
+                 policy::include_nulls>
+      printer;
     std::vector<char> buf;
     auto iter = std::back_inserter(buf);
     *iter++ = '{';

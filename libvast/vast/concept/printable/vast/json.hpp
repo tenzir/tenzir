@@ -16,8 +16,11 @@
 #include "vast/concept/printable/string.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/escapers.hpp"
+#include "vast/policy/omit_nulls.hpp"
 #include "vast/time.hpp"
 #include "vast/view.hpp"
+
+#include <fmt/format.h>
 
 namespace vast {
 
@@ -33,10 +36,11 @@ struct human_readable_durations {};
 
 } // namespace policy
 
-template <class TreePolicy, class DurationPolicy, int Indent = 2,
-          int Padding = 0>
+template <class TreePolicy, class DurationPolicy, class NullPolicy,
+          int Indent = 2, int Padding = 0>
 struct json_printer
-  : printer_base<json_printer<TreePolicy, DurationPolicy, Indent, Padding>> {
+  : printer_base<
+      json_printer<TreePolicy, DurationPolicy, NullPolicy, Indent, Padding>> {
   inline static constexpr bool tree = std::is_same_v<TreePolicy, policy::tree>;
   inline static constexpr bool human_readable_durations
     = std::is_same_v<DurationPolicy, policy::human_readable_durations>;
@@ -181,19 +185,31 @@ struct json_printer
         if (!printers::any.print(out_, '\n'))
           return false;
       }
+      bool print_comma = false;
       while (begin != end) {
-        if (!indent())
-          return false;
-        if (!(*this)(begin->first))
-          return false;
-        if (!str.print(out_, ": "))
-          return false;
-        if (!caf::visit(*this, begin->second))
-          return false;
-        ++begin;
-        if (begin != end)
+        auto omit_null
+          = std::is_same_v<
+              NullPolicy,
+              policy::
+                omit_nulls> && caf::holds_alternative<caf::none_t>(begin->second);
+        if (print_comma && !omit_null) {
           if (!str.print(out_, tree ? ",\n" : ", "))
             return false;
+          print_comma = false;
+        }
+        if (omit_null) {
+          ++begin;
+        } else {
+          if (!indent())
+            return false;
+          if (!(*this)(begin->first))
+            return false;
+          if (!str.print(out_, ": "))
+            return false;
+          if (!caf::visit(*this, begin->second))
+            return false;
+          print_comma = ++begin != end;
+        }
       }
       if constexpr (tree) {
         --depth_;
@@ -264,8 +280,8 @@ struct json_printer
 
 namespace printers {
 
-template <class TreePolicy, class DurationPolicy>
-auto json = json_printer<TreePolicy, DurationPolicy>{};
+template <class TreePolicy, class DurationPolicy, class NullPolicy>
+auto json = json_printer<TreePolicy, DurationPolicy, NullPolicy>{};
 
 } // namespace printers
 } // namespace vast

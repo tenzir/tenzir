@@ -117,14 +117,15 @@ auto make_export_command() {
   export_->add_subcommand("ascii", "exports query results in ASCII format",
                           documentation::vast_export_ascii,
                           opts("?vast.export.ascii"));
-  export_->add_subcommand("json", "exports query results in JSON format",
-                          documentation::vast_export_json,
-                          opts("?vast.export.json")
-                            .add<bool>("flatten", "flatten nested objects into "
-                                                  "the top-level")
-                            .add<bool>("numeric-durations",
-                                       "render durations as numbers as opposed "
-                                       "to human-readable strings"));
+  export_->add_subcommand(
+    "json", "exports query results in JSON format",
+    documentation::vast_export_json,
+    opts("?vast.export.json")
+      .add<bool>("flatten", "flatten nested objects into "
+                            "the top-level")
+      .add<bool>("numeric-durations", "render durations as numbers as opposed "
+                                      "to human-readable strings")
+      .add<bool>("omit-nulls", "omit null fields in JSON objects"));
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,

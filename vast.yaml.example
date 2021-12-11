@@ -237,6 +237,9 @@ vast:
       # Render durations as numbers as opposed to human-readable strings.
       numeric-durations: false
 
+      # Omit null fields in JSON objects.
+      omit-nulls: false
+
     # The `vast export pcap` command exports events in the PCAP format.
     pcap:
       # Flush to disk after this many packets.

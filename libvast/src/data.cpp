@@ -485,8 +485,9 @@ record strip(const record& xs) {
 caf::expected<std::string> to_json(const data& x) {
   std::string str;
   auto out = std::back_inserter(str);
-  if (json_printer<policy::tree, policy::human_readable_durations, 2>{}.print(
-        out, x))
+  if (json_printer<policy::tree, policy::human_readable_durations,
+                   policy::include_nulls, 2>{}
+        .print(out, x))
     return str;
   return caf::make_error(ec::parse_error, "cannot convert to json");
 }

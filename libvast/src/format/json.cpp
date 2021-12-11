@@ -1118,19 +1118,36 @@ writer::writer(ostream_ptr out, const caf::settings& options)
   flatten_ = get_or(options, "vast.export.json.flatten", false);
   numeric_durations_
     = get_or(options, "vast.export.json.numeric-durations", false);
+  omit_nulls_ = get_or(options, "vast.export.json.omit-nulls", false);
 }
 
 caf::error writer::write(const table_slice& x) {
   auto run = [&](const auto& printer) {
-    if (flatten_)
+    if (flatten_ && omit_nulls_)
+      return print<policy::include_field_names, policy::flatten_layout,
+                   policy::omit_nulls>(printer, x, {", ", ": ", "{", "}"});
+    if (flatten_ && !omit_nulls_)
       return print<policy::include_field_names, policy::flatten_layout>(
         printer, x, {", ", ": ", "{", "}"});
+    if (!flatten_ && omit_nulls_)
+      return print<policy::include_field_names, policy::omit_nulls>(
+        printer, x, {", ", ": ", "{", "}"});
+    VAST_ASSERT(!flatten_ && !omit_nulls_);
     return print<policy::include_field_names>(printer, x,
                                               {", ", ": ", "{", "}"});
   };
-  if (numeric_durations_)
-    return run(json_printer<policy::oneline, policy::numeric_durations>{});
-  return run(json_printer<policy::oneline, policy::human_readable_durations>{});
+  if (numeric_durations_ && omit_nulls_)
+    return run(json_printer<policy::oneline, policy::numeric_durations,
+                            policy::omit_nulls>{});
+  if (numeric_durations_ && !omit_nulls_)
+    return run(json_printer<policy::oneline, policy::numeric_durations,
+                            policy::include_nulls>{});
+  if (!numeric_durations_ && omit_nulls_)
+    return run(json_printer<policy::oneline, policy::human_readable_durations,
+                            policy::omit_nulls>{});
+  VAST_ASSERT(!numeric_durations_ && !omit_nulls_);
+  return run(json_printer<policy::oneline, policy::human_readable_durations,
+                          policy::include_nulls>{});
 }
 
 const char* writer::name() const {
