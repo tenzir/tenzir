@@ -16,6 +16,7 @@
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/query.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_processor.hpp"
 #include "vast/test/fixtures/actor_system.hpp"

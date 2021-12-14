@@ -314,9 +314,6 @@ struct index_state {
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
 
-  /// The false positive rate for the meta index.
-  double meta_index_fp_rate = {};
-
   /// Config options to be used for new synopses; passed to active partitions.
   caf::settings synopsis_opts;
 
@@ -335,16 +332,18 @@ struct index_state {
 /// @param partition_capacity The maximum number of events per partition.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param num_workers The maximum amount of concurrent lookups.
-/// @param meta_index_fp_rate The false positive rate for the meta index.
+/// @param synopsis_fp_rate The false positive rate for new address and string
+/// synopses.
 /// @pre `partition_capacity > 0
 //  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
-      archive_actor archive, const std::filesystem::path& dir,
-      std::string store_backend, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
-      const std::filesystem::path& meta_index_dir, double meta_index_fp_rate);
+      archive_actor archive, meta_index_actor meta_index,
+      const std::filesystem::path& dir, std::string store_backend,
+      size_t partition_capacity, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
+      const std::filesystem::path& meta_index_dir, double synopsis_fp_rate);
 
 } // namespace vast::system
 
