@@ -13,6 +13,7 @@
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
@@ -26,6 +27,10 @@
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
+
+#include <arrow/builder.h>
+#include <arrow/record_batch.h>
+#include <arrow/table_builder.h>
 
 #include <cstddef>
 #include <span>
@@ -126,6 +131,23 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
     static_assert(detail::always_false_v<slice_type>, "cannot access table "
                                                       "slice state");
   }
+}
+
+bool supports_arrow_fast_path(const table_slice& slice) noexcept {
+  const auto* table = fbs::GetTableSlice(as_bytes(slice).data());
+  switch (table->table_slice_type()) {
+    case fbs::table_slice::TableSlice::NONE:
+    case fbs::table_slice::TableSlice::msgpack_v0:
+    case fbs::table_slice::TableSlice::msgpack_v1:
+    case fbs::table_slice::TableSlice::arrow_v0:
+      return false;
+    case fbs::table_slice::TableSlice::arrow_v1:
+      // We support the fast path only for the _latest_ Arrow encoding;
+      // otherwise we cannot correctly make use of the direct creation of table
+      // slices from record batches, which assumes the latest Arrow encoding.
+      return true;
+  }
+  __builtin_unreachable();
 }
 
 } // namespace
@@ -455,6 +477,61 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     result.emplace_back(slice);
     return;
   }
+  // Check if we support the Arrow fast path.
+  if (supports_arrow_fast_path(slice)) {
+    auto row_ranges = std::vector<id_range>{};
+    auto num_rows = 0;
+    for (auto id : select(intersection)) {
+      VAST_ASSERT(id >= slice.offset());
+      auto row = id - slice.offset();
+      VAST_ASSERT(row < slice.rows());
+      ++num_rows;
+      if (row_ranges.empty() || row_ranges.back().last != row)
+        row_ranges.emplace_back(row, row + 1);
+      else
+        row_ranges.back().last = row + 1;
+    }
+    VAST_ASSERT(!row_ranges.empty());
+    const auto batch = as_record_batch(slice);
+    auto batch_builder = std::unique_ptr<arrow::RecordBatchBuilder>{};
+    if (auto status = arrow::RecordBatchBuilder::Make(
+          batch->schema(), arrow::default_memory_pool(), num_rows,
+          &batch_builder);
+        !status.ok()) {
+      VAST_ERROR("select arrow fast path failed to create builder: {}",
+                 status.message());
+      return;
+    }
+    for (const auto& row_range : row_ranges) {
+      const auto offset = detail::narrow_cast<int>(row_range.first);
+      const auto count = detail::narrow_cast<int>(row_range.last) - offset;
+      for (int column_index = 0; column_index < batch->num_columns();
+           ++column_index) {
+        const auto old_column = batch->column(column_index);
+        if (auto status
+            = batch_builder->GetField(column_index)
+                ->AppendArraySlice(*old_column->data(), offset, count);
+            !status.ok()) {
+          VAST_ERROR("select arrow fast path failed to append array slice: {}",
+                     status.message());
+          return;
+        }
+      }
+      auto new_batch = std::shared_ptr<arrow::RecordBatch>{};
+      const auto reset_builders = true;
+      if (auto status = batch_builder->Flush(reset_builders, &new_batch);
+          !status.ok()) {
+        VAST_ERROR("select arrow fast path failed to create record batch: {}",
+                   status.message());
+        return;
+      }
+      auto new_slice
+        = arrow_table_slice_builder::create(new_batch, slice.layout());
+      new_slice.offset(slice.offset() + offset);
+      result.emplace_back(std::move(new_slice));
+    }
+    return;
+  }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
     []() noexcept -> table_slice_encoding {
@@ -711,6 +788,69 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
       return {};
     expr = std::move(*tailored_expr);
   }
+  // Do the candidate check.
+  auto check = [&](size_t row) {
+    // If no expression was provided, we rely on the provided hints only.
+    if (!has_expr)
+      return true;
+    // Check if the expression was unable to be tailored to the type.
+    if (expr == expression{})
+      return false;
+    return caf::visit(row_evaluator{slice, row}, expr);
+  };
+  // Check if we support the Arrow fast path.
+  if (supports_arrow_fast_path(slice)) {
+    // Do the candidate check ahead of time to select the required rows.
+    auto row_ranges = std::vector<id_range>{};
+    auto num_rows = 0;
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      auto row = id - offset;
+      VAST_ASSERT(row < slice.rows());
+      if (check(row)) {
+        ++num_rows;
+        if (row_ranges.empty() || row_ranges.back().last != row)
+          row_ranges.emplace_back(row, row + 1);
+        else
+          row_ranges.back().last = row + 1;
+      }
+    }
+    if (row_ranges.empty())
+      return {};
+    const auto batch = as_record_batch(slice);
+    auto batch_builder = std::unique_ptr<arrow::RecordBatchBuilder>{};
+    if (auto status = arrow::RecordBatchBuilder::Make(
+          batch->schema(), arrow::default_memory_pool(), num_rows,
+          &batch_builder);
+        !status.ok()) {
+      VAST_ERROR("filter arrow fast path failed to create builder: {}",
+                 status.message());
+      return {};
+    }
+    for (int column_index = 0; column_index < batch->num_columns();
+         ++column_index) {
+      const auto old_column = batch->column(column_index);
+      for (const auto& row_range : row_ranges) {
+        const auto offset = detail::narrow_cast<int>(row_range.first);
+        const auto count = detail::narrow_cast<int>(row_range.last) - offset;
+        if (auto status
+            = batch_builder->GetField(column_index)
+                ->AppendArraySlice(*old_column->data(), offset, count);
+            !status.ok()) {
+          VAST_ERROR("filter arrow fast path failed to append array slice: {}",
+                     status.message());
+          return {};
+        }
+      }
+    }
+    auto new_batch = std::shared_ptr<arrow::RecordBatch>{};
+    if (auto status = batch_builder->Flush(&new_batch); !status.ok()) {
+      VAST_ERROR("filter arrow fast path failed to create record batch: {}",
+                 status.message());
+      return {};
+    }
+    return arrow_table_slice_builder::create(new_batch, slice.layout());
+  }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
     []() noexcept -> table_slice_encoding {
@@ -726,15 +866,6 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   auto builder
     = factory<table_slice_builder>::make(implementation_id, slice.layout());
   VAST_ASSERT(builder);
-  auto check = [&](size_t row) {
-    // If no expression was provided, we rely on the provided hints only.
-    if (!has_expr)
-      return true;
-    // Check if the expression was unable to be tailored to the type.
-    if (expr == expression{})
-      return false;
-    return caf::visit(row_evaluator{slice, row}, expr);
-  };
   const auto& layout = caf::get<record_type>(slice.layout());
   const auto column_types = [&]() noexcept {
     auto result = std::vector<type>{};
