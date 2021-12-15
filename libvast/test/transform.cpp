@@ -95,22 +95,26 @@ struct transforms_fixture {
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
 
 TEST(delete_ step) {
-  auto slice = make_transforms_testdata();
-  vast::delete_step delete_step("uid");
+  auto [slice, expected_slice] = make_proj_and_del_testdata();
+  vast::delete_step delete_step({"desc", "note"});
   auto deleted = delete_step.apply(vast::table_slice{slice});
   REQUIRE_NOERROR(deleted);
-  CHECK_EQUAL(caf::get<vast::record_type>(deleted->layout()).num_fields(),
-              2ull);
-  vast::delete_step invalid_delete_step("xxx");
+  REQUIRE_EQUAL(*deleted, expected_slice);
+  vast::delete_step invalid_delete_step({"xxx"});
   auto not_deleted = invalid_delete_step.apply(vast::table_slice{slice});
+  REQUIRE_NOERROR(not_deleted);
+  REQUIRE_EQUAL(*not_deleted, slice);
   // The default format is Arrow, so we do one more test where we force
   // MessagePack.
-  auto msgpack_slice
-    = make_transforms_testdata(vast::table_slice_encoding::msgpack);
+  auto [msgpack_slice, expected_slice2]
+    = make_proj_and_del_testdata(vast::table_slice_encoding::msgpack);
   auto msgpack_deleted = delete_step.apply(vast::table_slice{msgpack_slice});
   REQUIRE(msgpack_deleted);
-  CHECK_EQUAL(
-    caf::get<vast::record_type>(msgpack_deleted->layout()).num_fields(), 2ull);
+  REQUIRE_EQUAL(*msgpack_deleted, expected_slice2);
+  auto msgpack_not_deleted
+    = invalid_delete_step.apply(vast::table_slice{msgpack_slice});
+  REQUIRE_NOERROR(msgpack_not_deleted);
+  REQUIRE_EQUAL(*msgpack_not_deleted, msgpack_slice);
 }
 
 TEST(project step) {
@@ -161,7 +165,8 @@ TEST(anonymize step) {
 TEST(transform with multiple steps) {
   vast::transform transform("test_transform", {"testdata"});
   transform.add_step(std::make_unique<vast::replace_step>("uid", "xxx"));
-  transform.add_step(std::make_unique<vast::delete_step>("index"));
+  transform.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   auto slice = make_transforms_testdata();
   auto transformed = transform.apply(std::move(slice));
   REQUIRE_NOERROR(transformed);
@@ -200,8 +205,10 @@ TEST(transformation engine - single matching transform) {
   transforms.emplace_back("t2", std::vector<std::string>{"foo"});
   auto& transform1 = transforms.at(0);
   auto& transform2 = transforms.at(1);
-  transform1.add_step(std::make_unique<vast::delete_step>("uid"));
-  transform2.add_step(std::make_unique<vast::delete_step>("index"));
+  transform1.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"uid"}));
+  transform2.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   vast::transformation_engine engine(std::move(transforms));
   auto slice = make_transforms_testdata();
   auto transformed = engine.apply(std::move(slice));
@@ -220,8 +227,10 @@ TEST(transformation engine - multiple matching transforms) {
   transforms.emplace_back("t2", std::vector<std::string>{"testdata"});
   auto& transform1 = transforms.at(0);
   auto& transform2 = transforms.at(1);
-  transform1.add_step(std::make_unique<vast::delete_step>("uid"));
-  transform2.add_step(std::make_unique<vast::delete_step>("index"));
+  transform1.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"uid"}));
+  transform2.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   vast::transformation_engine engine(std::move(transforms));
   auto slice = make_transforms_testdata();
   auto transformed = engine.apply(std::move(slice));

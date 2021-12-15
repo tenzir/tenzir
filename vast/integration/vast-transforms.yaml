@@ -7,10 +7,12 @@ vast:
   transforms:
     remove_flow:
       - delete:
-          field: flow_id
+          fields:
+            - flow_id
     remove_action:
       - delete:
-          field: alert.action
+          fields:
+            - alert.action
     replace_rrname:
       - replace:
           field: dns.rrname

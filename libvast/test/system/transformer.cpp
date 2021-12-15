@@ -31,7 +31,8 @@ vast:
   transforms:
     delete_uid:
       - delete:
-          field: uid
+          fields:
+            - uid
     replace_uid:
       - replace:
           field: uid
@@ -47,7 +48,6 @@ vast:
         location: client
         events: [vast.test]
 )_";
-
 }
 
 vast::system::stream_sink_actor<vast::table_slice>::behavior_type

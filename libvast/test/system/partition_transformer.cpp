@@ -148,7 +148,7 @@ TEST(delete transform / persist before done) {
   auto synopsis_opts = caf::settings{};
   auto index_opts = caf::settings{};
   auto plugin_opts = caf::settings{};
-  plugin_opts["field"] = "uid";
+  plugin_opts["fields"] = std::vector<std::string>{"uid"};
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto delete_step = vast::make_transform_step("delete", plugin_opts);
