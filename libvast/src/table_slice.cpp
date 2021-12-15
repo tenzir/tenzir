@@ -16,6 +16,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/experimental_table_slice.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
@@ -49,6 +50,8 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     std::is_nothrow_invocable<Visitor>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v1&>,
+    std::is_nothrow_invocable<Visitor,
+                              const fbs::table_slice::arrow::experimental&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v1&>>) {
   if (!x)
@@ -68,6 +71,9 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     case fbs::table_slice::TableSlice::msgpack_v1:
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_msgpack_v1());
+    case fbs::table_slice::TableSlice::arrow_experimental:
+      return std::invoke(std::forward<Visitor>(visitor),
+                         *x->table_slice_as_arrow_experimental());
   }
   // GCC-8 fails to recognize that this can never be reached, so we just call a
   // [[noreturn]] function.
@@ -122,6 +128,9 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
   } else if constexpr (std::is_same_v<slice_type,
                                       fbs::table_slice::msgpack::v1>) {
     return std::forward<State>(state).msgpack_v1;
+  } else if constexpr (std::is_same_v<slice_type,
+                                      fbs::table_slice::arrow::experimental>) {
+    return std::forward<State>(state).experimental;
   } else {
     static_assert(detail::always_false_v<slice_type>, "cannot access table "
                                                       "slice state");
@@ -378,8 +387,10 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
       // decay+decltype workaround:
       //   if constexpr (state(encoding, slice.state_)->encoding
       //                 == table_slice_encoding::arrow) { ... }
-      if constexpr (std::decay_t<decltype(*state(encoded, slice.state_))>::encoding
-                    == table_slice_encoding::arrow) {
+      constexpr auto encoding
+        = std::decay_t<decltype(*state(encoded, slice.state_))>::encoding;
+      if constexpr (encoding == table_slice_encoding::arrow
+                    || encoding == table_slice_encoding::experimental) {
         // Get the record batch first, then create a copy that shares the
         // lifetime with the chunk and the original record batch. Capturing the
         // chunk guarantees that the table slice is valid as long as the
