@@ -156,7 +156,7 @@ proceedings][nsdi-proceedings].
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [since-release-url]: https://github.com/tenzir/vast/compare/2021.06.24...master
-[release-url]: https://github.com/tenzir/vast/releases
+[latest-release]: https://github.com/tenzir/vast/releases/latest
 [installation-url]: https://docs.tenzir.com/vast/installation/overview
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
