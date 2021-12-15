@@ -55,10 +55,10 @@ The network telemetry engine for data-driven security investigations.
 
 ## Get VAST
 
-Linux users can download our [latest static
-build](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz)
-based on maser via browser or cURL. The latest stable version can be found on our
-[releases][release-url] page.
+We offer pre-packaged versions of VAST for download:
+- **stable*: see the artifacts of the latest official [VAST release][latest-release] 
+- **development**: we offer a [static
+build](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz) of the master branch for Linux
 
 ```sh
 curl -L -O https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
