@@ -12,6 +12,7 @@
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_encoding.hpp"
 
 #include <arrow/type.h>
 
@@ -22,7 +23,12 @@ caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
   const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
   VAST_ASSERT(arrow_step || generic_step);
   if (arrow_step)
-    return (*arrow_step)(std::move(slice));
+    // Call arrow step if the slice uses arrow encoding or when table slice is
+    // not using arrow encoding but there is no generic step to call (the slice
+    // will be converted to arrow in that case).
+    if (slice.encoding() == table_slice_encoding::arrow
+        || (!generic_step && slice.encoding() != table_slice_encoding::arrow))
+      return (*arrow_step)(std::move(slice));
   return (*generic_step)(std::move(slice));
 }
 
