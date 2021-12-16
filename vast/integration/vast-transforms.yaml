@@ -17,6 +17,9 @@ vast:
       - replace:
           field: dns.rrname
           value: "foobar.net"
+    select_row:
+      - select:
+          expression: "dest_port>53"
     hash_uid:
       - hash:
           field: fileinfo.filename
@@ -59,3 +62,7 @@ vast:
       - transform: remove_action
         events: [suricata.alert]
         location: server
+
+      - transform: select_row
+        events: [suricata.dns]
+        location: client
