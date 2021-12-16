@@ -55,9 +55,10 @@ The network telemetry engine for data-driven security investigations.
 
 ## Get VAST
 
-Linux users can download our [latest static binary
-release](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz)
-via browser or cURL.
+We offer pre-packaged versions of VAST for download:
+- **stable**: see the artifacts of the latest official [VAST release][latest-release] 
+- **development**: we offer a [static
+build](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz) of the master branch for Linux
 
 ```sh
 curl -L -O https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
@@ -155,6 +156,7 @@ proceedings][nsdi-proceedings].
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [since-release-url]: https://github.com/tenzir/vast/compare/2021.06.24...master
+[latest-release]: https://github.com/tenzir/vast/releases/latest
 [installation-url]: https://docs.tenzir.com/vast/installation/overview
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
