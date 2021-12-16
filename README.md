@@ -56,7 +56,7 @@ The network telemetry engine for data-driven security investigations.
 ## Get VAST
 
 We offer pre-packaged versions of VAST for download:
-- **stable*: see the artifacts of the latest official [VAST release][latest-release] 
+- **stable**: see the artifacts of the latest official [VAST release][latest-release] 
 - **development**: we offer a [static
 build](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz) of the master branch for Linux
 
