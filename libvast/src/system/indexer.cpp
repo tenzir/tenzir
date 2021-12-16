@@ -59,9 +59,9 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
           // implementation so we're keeping it for now.
           if (self->state.has_skip_attribute)
             return;
-          for (auto& column : columns)
-            for (size_t i = 0; i < column.size(); ++i)
-              self->state.idx->append(column[i], column.slice().offset() + i);
+          for (const auto& column : columns)
+            column.slice().append_column_to_index(column.index(),
+                                                  *self->state.idx);
         },
         [=](caf::unit_t&, const caf::error& err) {
           VAST_TRACE("indexer is closing stream");
