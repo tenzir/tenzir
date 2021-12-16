@@ -15,6 +15,8 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
+#include "vast/fbs/type_registry.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/legacy_type.hpp"
@@ -81,21 +83,39 @@ record type_registry_state::status(status_verbosity v) const {
 }
 
 std::filesystem::path type_registry_state::filename() const {
-  return dir / name;
+  return dir / fmt::format("{}.reg", name);
 }
 
 caf::error type_registry_state::save_to_disk() const {
-  std::vector<char> buffer;
-  caf::binary_serializer sink{self->system(), buffer};
-  std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
-  for (const auto& [k, vs] : data) {
-    auto entry = detail::stable_set<legacy_type>{};
-    for (const auto& v : vs)
-      entry.emplace(v.to_legacy_type());
-    intermediate.emplace(k, entry);
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  auto entry_offsets
+    = std::vector<flatbuffers::Offset<fbs::type_registry::Entry>>{};
+  for (const auto& [key, types] : data) {
+    const auto key_offset = builder.CreateString(key);
+    auto type_offsets
+      = std::vector<flatbuffers::Offset<fbs::type_registry::TypeBuffer>>{};
+    type_offsets.reserve(types.size());
+    for (const auto& type : types) {
+      const auto type_bytes = as_bytes(type);
+      const auto type_offset = fbs::type_registry::CreateTypeBuffer(
+        builder, builder.CreateVector(
+                   reinterpret_cast<const uint8_t*>(type_bytes.data()),
+                   type_bytes.size()));
+      type_offsets.push_back(type_offset);
+    }
+    const auto types_offset = builder.CreateVector(type_offsets);
+    const auto entry_offset
+      = fbs::type_registry::CreateEntry(builder, key_offset, types_offset);
+    entry_offsets.push_back(entry_offset);
   }
-  if (auto error = sink(intermediate))
-    return error;
+  const auto entries_offset = builder.CreateVector(entry_offsets);
+  const auto type_registry_v0_offset
+    = fbs::type_registry::Createv0(builder, entries_offset);
+  const auto type_registry_offset = fbs::CreateTypeRegistry(
+    builder, fbs::type_registry::TypeRegistry::type_registry_v0,
+    type_registry_v0_offset.Union());
+  fbs::FinishTypeRegistryBuffer(builder, type_registry_offset);
+  auto buffer = builder.Release();
   return io::save(filename(), as_bytes(buffer));
 }
 
@@ -111,27 +131,61 @@ caf::error type_registry_state::load_from_disk() {
     VAST_DEBUG("{} found no directory to load from", *self);
     return caf::none;
   }
-  const auto fname = filename();
-  const auto file_exists = std::filesystem::exists(fname, err);
-  if (err)
-    return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to find file {}: {}", fname,
-                                       err.message()));
-  if (file_exists) {
-    auto buffer = io::read(fname);
-    if (!buffer)
-      return buffer.error();
-    std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
-    if (!detail::legacy_deserialize(*buffer, intermediate))
-      return caf::make_error(ec::parse_error, "failed to load type-registry "
-                                              "state");
-    for (const auto& [k, vs] : intermediate) {
-      auto entry = type_set{};
-      for (const auto& v : vs)
-        entry.emplace(type::from_legacy_type(v));
-      data.emplace(k, entry);
+  // Support the legacy CAF-serialized state, and delete it afterwards.
+  {
+    const auto fname = dir / name;
+    const auto file_exists = std::filesystem::exists(fname, err);
+    if (err)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to find file {}: {}", fname,
+                                         err.message()));
+    if (file_exists) {
+      auto buffer = io::read(fname);
+      if (!buffer)
+        return buffer.error();
+      std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
+      if (!detail::legacy_deserialize(*buffer, intermediate))
+        return caf::make_error(ec::parse_error, "failed to load legacy "
+                                                "type-registry state");
+      for (const auto& [k, vs] : intermediate) {
+        auto entry = type_set{};
+        for (const auto& v : vs)
+          entry.emplace(type::from_legacy_type(v));
+        data.emplace(k, entry);
+      }
+      VAST_DEBUG("{} loaded state from disk", *self);
+      if (!std::filesystem::remove(fname, err) || err)
+        VAST_DEBUG("failed to delete legacy type-registry state");
+      return caf::none;
     }
-    VAST_DEBUG("{} loaded state from disk", *self);
+  }
+  // Support the new FlatBuffers state.
+  {
+    const auto fname = filename();
+    const auto file_exists = std::filesystem::exists(fname, err);
+    if (err)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to find file {}: {}", fname,
+                                         err.message()));
+    if (file_exists) {
+      auto buffer = io::read(fname);
+      if (!buffer)
+        return buffer.error();
+      auto maybe_flatbuffer
+        = flatbuffer<fbs::TypeRegistry>::make(chunk::make(std::move(*buffer)));
+      if (!maybe_flatbuffer)
+        return maybe_flatbuffer.error();
+      const auto flatbuffer = std::move(*maybe_flatbuffer);
+      for (const auto& entry :
+           *flatbuffer->type_as_type_registry_v0()->entries()) {
+        auto types = type_set{};
+        for (const auto& value : *entry->values())
+          types.emplace(
+            type{flatbuffer.chunk()->slice(as_bytes(*value->buffer()))});
+        data.emplace(entry->key()->string_view(), std::move(types));
+      }
+      VAST_DEBUG("{} loaded state from disk", *self);
+    }
   }
   return caf::none;
 }
