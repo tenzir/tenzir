@@ -38,6 +38,26 @@ table v1 {
   import_time: long;
 }
 
+/// A table slice encoded with Apache Arrow (unstable).
+table experimental {
+  /// The schema of the data.
+  /// TODO: The schema is already included in the record batch, but it cannot be
+  /// mapped 1-to-1 to VAST types. This can be resolved by using extension types
+  /// for Arrow. Additionally, this is currently CAF binary; make this a
+  /// separarate table.
+  layout: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
+
+  /// The Arrow Schema containing the Record Batch layout.
+  schema: [ubyte];
+
+  /// The Arrow Recod Batch containing all data.
+  record_batch: [ubyte];
+
+  /// A timestamp assigned on import, representing nanoseconds since the UNIX
+  /// epoch.
+  import_time: long;
+}
+
 namespace vast.fbs.table_slice.msgpack;
 
 /// A table slice encoded with MessagePack.
@@ -78,6 +98,7 @@ union TableSlice {
   msgpack.v0,
   arrow.v1,
   msgpack.v1,
+  arrow.experimental,
 }
 
 namespace vast.fbs;
