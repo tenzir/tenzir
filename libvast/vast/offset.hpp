@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/detail/stack_vector.hpp"
+#include "vast/hash/hash.hpp"
 
 #include <caf/meta/type_name.hpp>
 
@@ -34,3 +35,14 @@ struct offset : detail::stack_vector<size_t, 64> {
 };
 
 } // namespace vast
+
+namespace std {
+
+template <>
+struct hash<vast::offset> {
+  size_t operator()(const vast::offset& x) const noexcept {
+    return vast::hash(x);
+  }
+};
+
+} // namespace std

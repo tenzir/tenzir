@@ -7,10 +7,12 @@ vast:
   transforms:
     remove_flow:
       - delete:
-          field: flow_id
+          fields:
+            - flow_id
     remove_action:
       - delete:
-          field: alert.action
+          fields:
+            - alert.action
     replace_rrname:
       - replace:
           field: dns.rrname
@@ -19,6 +21,13 @@ vast:
       - hash:
           field: fileinfo.filename
           out: filename_hash
+    project_fields:
+      - project:
+          fields:
+            - ip
+            - alert.category
+            - timestamp
+            - alert.action
 
   transform-triggers:
     import:
@@ -41,6 +50,10 @@ vast:
 
       - transform: hash_uid
         events: [suricata.fileinfo]
+        location: client
+
+      - transform: project_fields
+        events: [suricata.alert]
         location: client
 
       - transform: remove_action

@@ -16,6 +16,7 @@
 #include "vast/test/test.hpp"
 #include "vast/transform_steps/delete.hpp"
 #include "vast/transform_steps/hash.hpp"
+#include "vast/transform_steps/project.hpp"
 #include "vast/transform_steps/replace.hpp"
 #include "vast/uuid.hpp"
 
@@ -26,6 +27,24 @@ const auto testdata_layout = vast::type{
   vast::record_type{
     {"uid", vast::string_type{}},
     {"desc", vast::string_type{}},
+    {"index", vast::integer_type{}},
+  },
+};
+
+const auto testdata_layout2 = vast::type{
+  "testdata",
+  vast::record_type{
+    {"uid", vast::string_type{}},
+    {"desc", vast::string_type{}},
+    {"index", vast::integer_type{}},
+    {"note", vast::string_type{}},
+  },
+};
+
+const auto testresult_layout2 = vast::type{
+  "testdata",
+  vast::record_type{
+    {"uid", vast::string_type{}},
     {"index", vast::integer_type{}},
   },
 };
@@ -49,27 +68,73 @@ struct transforms_fixture {
     }
     return builder->finish();
   }
+
+  /// Creates a table slice with four fields and another with two of the same
+  /// fields.
+  static std::pair<vast::table_slice, vast::table_slice>
+  make_proj_and_del_testdata(vast::table_slice_encoding encoding
+                             = vast::defaults::import::table_slice_type) {
+    auto builder = vast::factory<vast::table_slice_builder>::make(
+      encoding, testdata_layout2);
+    REQUIRE(builder);
+    auto builder2 = vast::factory<vast::table_slice_builder>::make(
+      encoding, testresult_layout2);
+    REQUIRE(builder2);
+    for (int i = 0; i < 10; ++i) {
+      auto uuid = vast::uuid::random();
+      auto str = fmt::format("{}", uuid);
+      auto str2 = fmt::format("test-datum {}", i);
+      auto str3 = fmt::format("note {}", i);
+      REQUIRE(builder->add(str, str2, vast::integer{i}, str3));
+      REQUIRE(builder2->add(str, vast::integer{i}));
+    }
+    return {builder->finish(), builder2->finish()};
+  }
 };
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
 
 TEST(delete_ step) {
-  auto slice = make_transforms_testdata();
-  vast::delete_step delete_step("uid");
+  auto [slice, expected_slice] = make_proj_and_del_testdata();
+  vast::delete_step delete_step({"desc", "note"});
   auto deleted = delete_step.apply(vast::table_slice{slice});
   REQUIRE_NOERROR(deleted);
-  CHECK_EQUAL(caf::get<vast::record_type>(deleted->layout()).num_fields(),
-              2ull);
-  vast::delete_step invalid_delete_step("xxx");
+  REQUIRE_EQUAL(*deleted, expected_slice);
+  vast::delete_step invalid_delete_step({"xxx"});
   auto not_deleted = invalid_delete_step.apply(vast::table_slice{slice});
+  REQUIRE_NOERROR(not_deleted);
+  REQUIRE_EQUAL(*not_deleted, slice);
   // The default format is Arrow, so we do one more test where we force
   // MessagePack.
-  auto msgpack_slice
-    = make_transforms_testdata(vast::table_slice_encoding::msgpack);
+  auto [msgpack_slice, expected_slice2]
+    = make_proj_and_del_testdata(vast::table_slice_encoding::msgpack);
   auto msgpack_deleted = delete_step.apply(vast::table_slice{msgpack_slice});
   REQUIRE(msgpack_deleted);
-  CHECK_EQUAL(
-    caf::get<vast::record_type>(msgpack_deleted->layout()).num_fields(), 2ull);
+  REQUIRE_EQUAL(*msgpack_deleted, expected_slice2);
+  auto msgpack_not_deleted
+    = invalid_delete_step.apply(vast::table_slice{msgpack_slice});
+  REQUIRE_NOERROR(msgpack_not_deleted);
+  REQUIRE_EQUAL(*msgpack_not_deleted, msgpack_slice);
+}
+
+TEST(project step) {
+  vast::project_step project_step({"index", "uid"});
+  vast::project_step invalid_project_step({"xxx"});
+  // Arrow test:
+  auto [slice, expected_slice] = make_proj_and_del_testdata();
+  auto projected = project_step.apply(vast::table_slice{slice});
+  REQUIRE_NOERROR(projected);
+  REQUIRE_EQUAL(*projected, expected_slice);
+  auto not_projected = invalid_project_step.apply(vast::table_slice{slice});
+  REQUIRE_EQUAL(*not_projected, slice);
+  // Non-Arrow test(MessagePack):
+  auto [slice2, expected_slice2]
+    = make_proj_and_del_testdata(vast::table_slice_encoding::msgpack);
+  auto projected2 = project_step.apply(vast::table_slice{slice2});
+  REQUIRE_NOERROR(projected2);
+  REQUIRE_EQUAL(*projected2, expected_slice2);
+  auto not_projected2 = invalid_project_step.apply(vast::table_slice{slice2});
+  REQUIRE_EQUAL(*not_projected2, slice2);
 }
 
 TEST(replace step) {
@@ -100,7 +165,8 @@ TEST(anonymize step) {
 TEST(transform with multiple steps) {
   vast::transform transform("test_transform", {"testdata"});
   transform.add_step(std::make_unique<vast::replace_step>("uid", "xxx"));
-  transform.add_step(std::make_unique<vast::delete_step>("index"));
+  transform.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   auto slice = make_transforms_testdata();
   auto transformed = transform.apply(std::move(slice));
   REQUIRE_NOERROR(transformed);
@@ -139,8 +205,10 @@ TEST(transformation engine - single matching transform) {
   transforms.emplace_back("t2", std::vector<std::string>{"foo"});
   auto& transform1 = transforms.at(0);
   auto& transform2 = transforms.at(1);
-  transform1.add_step(std::make_unique<vast::delete_step>("uid"));
-  transform2.add_step(std::make_unique<vast::delete_step>("index"));
+  transform1.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"uid"}));
+  transform2.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   vast::transformation_engine engine(std::move(transforms));
   auto slice = make_transforms_testdata();
   auto transformed = engine.apply(std::move(slice));
@@ -159,8 +227,10 @@ TEST(transformation engine - multiple matching transforms) {
   transforms.emplace_back("t2", std::vector<std::string>{"testdata"});
   auto& transform1 = transforms.at(0);
   auto& transform2 = transforms.at(1);
-  transform1.add_step(std::make_unique<vast::delete_step>("uid"));
-  transform2.add_step(std::make_unique<vast::delete_step>("index"));
+  transform1.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"uid"}));
+  transform2.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   vast::transformation_engine engine(std::move(transforms));
   auto slice = make_transforms_testdata();
   auto transformed = engine.apply(std::move(slice));
