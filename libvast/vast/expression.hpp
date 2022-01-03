@@ -35,7 +35,7 @@ class expression;
 
 /// Extracts meta data from an event.
 struct meta_extractor : detail::totally_ordered<meta_extractor> {
-  enum kind { type, field, age };
+  enum kind { type, field, import_time };
 
   meta_extractor() = default;
 

@@ -273,7 +273,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
-          } else if (lhs.kind == meta_extractor::age) {
+          } else if (lhs.kind == meta_extractor::import_time) {
             result_type result;
             for (const auto& [part_id, part_syn] : synopses) {
               VAST_ASSERT(part_syn.min_import_time <= part_syn.max_import_time);
