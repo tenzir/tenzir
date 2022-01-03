@@ -18,6 +18,7 @@
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
+#include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
 
 namespace vast::system {

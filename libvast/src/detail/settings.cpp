@@ -12,6 +12,8 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/logger.hpp"
 
+#include <caf/expected.hpp>
+
 namespace vast::detail {
 
 namespace {

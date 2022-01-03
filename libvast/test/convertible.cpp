@@ -27,6 +27,8 @@ using namespace vast::test;
 
 template <class From, class To = From>
 struct X {
+  constexpr inline static bool use_deep_to_string_formatter = true;
+
   To value;
 
   template <class Inspector>
@@ -48,18 +50,6 @@ struct X {
     }
   }
 };
-
-namespace fmt {
-
-template <class From, class To>
-struct formatter<X<From, To>> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const X<From, To>& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
-  }
-};
-
-} // namespace fmt
 
 template <class Type>
 auto test_basic = [](auto v) {
@@ -595,6 +585,8 @@ TEST(list of record to map monoid) {
 }
 
 struct OptVec {
+  constexpr inline static bool use_deep_to_string_formatter = true;
+
   caf::optional<std::vector<std::string>> ovs = {};
   caf::optional<uint64_t> ou = 0;
 
@@ -613,6 +605,8 @@ struct OptVec {
 };
 
 struct SMap {
+  constexpr inline static bool use_deep_to_string_formatter = true;
+
   vast::detail::stable_map<std::string, OptVec> xs;
 
   template <class Inspector>
@@ -627,26 +621,6 @@ struct SMap {
     return result;
   }
 };
-
-namespace fmt {
-
-template <>
-struct formatter<OptVec> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const OptVec& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
-  }
-};
-
-template <>
-struct formatter<SMap> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const SMap& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
-  }
-};
-
-} // namespace fmt
 
 TEST(record with list to optional vector) {
   auto x = SMap{};

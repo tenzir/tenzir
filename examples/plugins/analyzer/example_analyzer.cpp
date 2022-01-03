@@ -17,6 +17,7 @@
 #include <caf/actor_cast.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/attach_stream_sink.hpp>
+#include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 

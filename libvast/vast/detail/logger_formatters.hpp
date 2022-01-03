@@ -26,28 +26,99 @@
 
 #include <caf/deep_to_string.hpp>
 #include <caf/detail/pretty_type_name.hpp>
-#include <caf/detail/stringification_inspector.hpp>
-
-#include <filesystem>
-#include <span>
-
-// TODO: Find a way that removes the need to include these in every translation
-// unit, e.g., by introducing a helper function that calls handle.name().
-#include <caf/event_based_actor.hpp>
-#include <caf/io/broker.hpp>
-#include <caf/scoped_actor.hpp>
-#include <caf/stateful_actor.hpp>
 #include <fmt/chrono.h>
 #include <fmt/ostream.h>
 #include <fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
 #include <cstddef>
+#include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <type_traits>
 
+namespace vast {
+
+// -- use_deep_to_string_formatter --------------------------------------------
+
+template <class T>
+struct use_deep_to_string_formatter : std::false_type {};
+
+template <class T>
+  requires(T::use_deep_to_string_formatter == true)
+struct use_deep_to_string_formatter<T> : std::true_type {};
+
+template <>
+struct use_deep_to_string_formatter<caf::config_value> : std::true_type {};
+
+template <>
+struct use_deep_to_string_formatter<caf::actor> : std::true_type {};
+
+template <>
+struct use_deep_to_string_formatter<caf::actor_addr> : std::true_type {};
+
+template <>
+struct use_deep_to_string_formatter<caf::actor_control_block> : std::true_type {
+};
+
+template <class... Sigs>
+struct use_deep_to_string_formatter<caf::typed_actor<Sigs...>>
+  : std::true_type {};
+
+template <>
+struct use_deep_to_string_formatter<caf::io::broker> : std::true_type {};
+
+// -- use_name_member_formatter -----------------------------------------------
+
+template <class T>
+struct use_name_member_formatter : std::false_type {};
+
+template <class T>
+  requires(T::use_name_member_formatter == true)
+struct use_name_member_formatter<T> : std::true_type {};
+
+template <class State, class Base>
+struct use_name_member_formatter<caf::stateful_actor<State, Base>>
+  : std::true_type {};
+
+template <class... Sigs>
+struct use_name_member_formatter<caf::typed_event_based_actor<Sigs...>>
+  : std::true_type {};
+
+template <>
+struct use_name_member_formatter<caf::blocking_actor> : std::true_type {};
+
+template <>
+struct use_name_member_formatter<caf::event_based_actor> : std::true_type {};
+
+} // namespace vast
+
 namespace fmt {
+
+template <class T>
+  requires(vast::use_deep_to_string_formatter<T>::value)
+struct formatter<T> : formatter<std::string_view> {
+  template <class FormatContext>
+  constexpr auto format(const T& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return formatter<std::string_view>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+template <class T>
+  requires(vast::use_name_member_formatter<T>::value)
+struct formatter<T> : formatter<std::string_view> {
+  template <class FormatContext>
+  constexpr auto format(const T& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    constexpr bool has_name_member_function = requires {
+      { value.name() } -> std::convertible_to<std::string_view>;
+    };
+    static_assert(has_name_member_function || vast::detail::always_false_v<T>);
+    return formatter<std::string_view>::format(value.name(), ctx);
+  }
+};
 
 template <class T>
 struct formatter<vast::detail::single_arg_wrapper<T>> {
@@ -78,19 +149,6 @@ struct formatter<vast::detail::range_arg_wrapper<T>> {
   }
 };
 
-template <>
-struct formatter<caf::config_value> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::config_value& value, FormatContext& ctx) {
-    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
-  }
-};
-
 template <class T>
 struct formatter<caf::intrusive_ptr<T>> {
   template <class ParseContext>
@@ -118,22 +176,6 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
     if (!value)
       return format_to(ctx.out(), "*{}", "nullptr");
     return format_to(ctx.out(), "*{}", ptr(value.get()));
-  }
-};
-
-template <>
-struct formatter<caf::actor> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const caf::actor& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
-  }
-};
-
-template <>
-struct formatter<caf::actor_addr> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const caf::actor_addr& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
   }
 };
 
@@ -248,72 +290,6 @@ struct formatter<caf::downstream<T>> {
   auto format(const caf::downstream<T>&, FormatContext& ctx) {
     return format_to(ctx.out(), "caf.downstream<{}>",
                      caf::detail::pretty_type_name(typeid(T)));
-  }
-};
-
-template <class Actor>
-  requires(caf::is_actor_handle<Actor>::value)
-struct formatter<Actor> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const Actor& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
-  }
-};
-
-template <>
-struct formatter<caf::blocking_actor> : formatter<std::string_view> {
-  template <class FormatContext>
-  auto format(const caf::blocking_actor& value, FormatContext& ctx) {
-    return formatter<std::string_view>::format(value.name(), ctx);
-  }
-};
-
-template <>
-struct formatter<caf::event_based_actor> : formatter<std::string_view> {
-  template <class FormatContext>
-  auto format(const caf::event_based_actor& value, FormatContext& ctx) {
-    return formatter<std::string_view>::format(value.name(), ctx);
-  }
-};
-
-template <class... Sigs>
-struct formatter<caf::typed_event_based_actor<Sigs...>>
-  : formatter<std::string_view> {
-  template <class FormatContext>
-  auto format(const caf::typed_event_based_actor<Sigs...>& value,
-              FormatContext& ctx) {
-    return formatter<std::string_view>::format(value.name(), ctx);
-  }
-};
-
-template <class State, class Base>
-struct formatter<caf::stateful_actor<State, Base>>
-  : formatter<std::string_view> {
-  template <class FormatContext>
-  auto
-  format(const caf::stateful_actor<State, Base>& value, FormatContext& ctx) {
-    return formatter<std::string_view>::format(value.name(), ctx);
-  }
-};
-
-template <>
-struct formatter<caf::actor_control_block> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::actor_control_block& value, FormatContext& ctx) {
-    return format_to(ctx.out(), "{}", value.id());
-  }
-};
-
-template <>
-struct formatter<caf::io::broker> : formatter<std::string_view> {
-  template <class FormatContext>
-  auto format(const caf::io::broker& value, FormatContext& ctx) {
-    return formatter<std::string_view>::format(value.name(), ctx);
   }
 };
 

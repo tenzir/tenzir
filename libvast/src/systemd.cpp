@@ -12,6 +12,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 
 namespace vast::systemd {
 

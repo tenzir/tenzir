@@ -137,7 +137,7 @@ struct symbol_resolver {
             return caf::make_error( //
               ec::parse_error,
               fmt::format("cannot delete non-existing field {} from type {}",
-                          fmt::join(path, "."), to_string(acc)));
+                          fmt::join(path, "."), type::from_legacy_type(acc)));
           acc = *std::move(acc_removed);
         } else
           // Invalid operation.

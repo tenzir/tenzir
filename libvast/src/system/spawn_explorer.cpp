@@ -21,6 +21,7 @@
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/config_value.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/local_actor.hpp>
 #include <caf/settings.hpp>
