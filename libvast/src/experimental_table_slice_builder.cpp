@@ -96,16 +96,13 @@ struct column_builder_trait<time_type>
   }
 };
 
-// Arrow does not have a duration type. There is TIME32/TIME64, but they
-// represent the time of day, i.e., nano- or milliseconds since midnight.
-// Hence, we fall back to storing the duration is 64-bit integer.
 template <>
 struct column_builder_trait<duration_type>
-  : column_builder_trait_base<duration_type, arrow::Int64Type> {
-  using super = column_builder_trait_base<duration_type, arrow::Int64Type>;
+  : column_builder_trait_base<duration_type, arrow::DurationType> {
+  using super = column_builder_trait_base<duration_type, arrow::DurationType>;
 
   static auto make_arrow_type() {
-    return super::type_singleton();
+    return arrow::duration(arrow::TimeUnit::NANO);
   }
 
   static bool

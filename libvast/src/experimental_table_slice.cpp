@@ -139,11 +139,8 @@ template <class TypeClass>
 struct decodable<integer_type, arrow::NumericArray<TypeClass>>
   : std::true_type {};
 
-template <class TypeClass>
-  requires(std::is_integral_v<typename TypeClass::c_type>&&
-             std::is_signed_v<typename TypeClass::c_type>)
-struct decodable<duration_type, arrow::NumericArray<TypeClass>>
-  : std::true_type {};
+template <>
+struct decodable<duration_type, arrow::DurationArray> : std::true_type {};
 
 template <class TypeClass>
   requires(
@@ -203,7 +200,7 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
   switch (arr.type_id()) {
     default: {
       VAST_WARN("{} got an unrecognized Arrow type ID", __func__);
-      break;
+      return;
     }
     // -- handle basic types ---------------------------------------------------
     case arrow::Type::BOOL: {
@@ -214,6 +211,9 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
     }
     case arrow::Type::TIMESTAMP: {
       return dispatch(static_cast<const arrow::TimestampArray&>(arr));
+    }
+    case arrow::Type::DURATION: {
+      return dispatch(static_cast<const arrow::DurationArray&>(arr));
     }
     case arrow::Type::FIXED_SIZE_BINARY: {
       using array_type = arrow::FixedSizeBinaryArray;
@@ -298,9 +298,28 @@ auto enumeration_at = [](const auto& arr, int64_t row) {
   return static_cast<enumeration>(arr.Value(row));
 };
 
-auto duration_at = [](const auto& arr, int64_t row) {
-  return duration{arr.Value(row)};
-};
+auto duration_at(const arrow::DurationArray& arr, int64_t row) {
+  auto ts_value = arr.Value(row);
+  const auto& ts_type = static_cast<const arrow::DurationType&>(*arr.type());
+  switch (ts_type.unit()) {
+    case arrow::TimeUnit::NANO: {
+      return duration{ts_value};
+    }
+    case arrow::TimeUnit::MICRO: {
+      auto x = std::chrono::microseconds{ts_value};
+      return std::chrono::duration_cast<duration>(x);
+    }
+    case arrow::TimeUnit::MILLI: {
+      auto x = std::chrono::milliseconds{ts_value};
+      return std::chrono::duration_cast<duration>(x);
+    }
+    case arrow::TimeUnit::SECOND: {
+      auto x = std::chrono::seconds{ts_value};
+      return std::chrono::duration_cast<duration>(x);
+    }
+  }
+  die("unhandled duration column time unit");
+}
 
 auto string_at(const arrow::StringArray& arr, int64_t row) {
   auto offset = arr.value_offset(row);
@@ -411,14 +430,14 @@ public:
   void operator()(const arrow::NumericArray<T>& arr, const U&) {
     if (arr.IsNull(row_))
       return;
-    if constexpr (detail::is_any_v<U, real_type, integer_type, count_type,
-                                   enumeration_type>) {
-      using view_type = view<type_to_data_t<U>>;
-      result_ = static_cast<view_type>(arr.Value(row_));
-    } else {
-      static_assert(std::is_same_v<U, duration_type>);
-      result_ = duration_at(arr, row_);
-    }
+    using view_type = view<type_to_data_t<U>>;
+    result_ = static_cast<view_type>(arr.Value(row_));
+  }
+
+  void operator()(const arrow::DurationArray& arr, const duration_type&) {
+    if (arr.IsNull(row_))
+      return;
+    result_ = duration_at(arr, row_);
   }
 
   template <class T>
@@ -530,8 +549,7 @@ public:
     apply(arr, enumeration_at);
   }
 
-  template <class T>
-  void operator()(const arrow::NumericArray<T>& arr, const duration_type&) {
+  void operator()(const arrow::DurationArray& arr, const duration_type&) {
     apply(arr, duration_at);
   }
 
