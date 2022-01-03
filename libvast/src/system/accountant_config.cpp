@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/accountant/config.hpp"
+#include "vast/system/accountant_config.hpp"
 
 #include "vast/component_config.hpp"
 #include "vast/concept/parseable/detail/posix.hpp"
