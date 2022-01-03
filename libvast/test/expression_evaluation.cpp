@@ -73,7 +73,7 @@ TEST(evaluation - type extractor - string + duration) {
   // head -n 108 conn.log | awk '$8 == "http" && $9 > 30'
   auto expr = make_conn_expr("\"http\" in :string && :duration > 30s");
   auto ids = evaluate(expr, zeek_conn_log_slice);
-  CHECK_EQUAL(rank(ids), 1u);
+  REQUIRE_EQUAL(rank(ids), 1u);
   auto id = select(ids, 1);
   REQUIRE_EQUAL(id, 97u);
   CHECK_EQUAL(zeek_conn_log_slice.at(id, 1), make_data_view("jM8ATYNKqZg"));

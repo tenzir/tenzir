@@ -33,7 +33,7 @@ using namespace std::string_view_literals;
 namespace {
 
 template <class... Ts>
-auto make_slice(record_type layout, Ts&&... xs) {
+auto make_slice(const record_type& layout, Ts&&... xs) {
   auto builder = experimental_table_slice_builder::make(type{"stub", layout});
   auto ok = builder->add(std::forward<Ts>(xs)...);
   if (!ok)
