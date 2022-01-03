@@ -16,6 +16,7 @@
 #include "vast/format/zeek.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/system/index.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/memory_filesystem.hpp"
@@ -230,6 +231,7 @@ TEST(partition transform via the index) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
   auto archive = self->spawn(mock_archive);
+  auto meta_index = self->spawn(vast::system::meta_index, accountant);
   const auto partition_capacity = 8;
   const auto in_mem_partitions = 10;
   const auto taste_count = 1;
@@ -237,7 +239,7 @@ TEST(partition transform via the index) {
   const auto meta_index_fp_rate = 0.01;
   auto index
     = self->spawn(vast::system::index, accountant, filesystem, archive,
-                  index_dir, vast::defaults::system::store_backend,
+                  meta_index, index_dir, vast::defaults::system::store_backend,
                   partition_capacity, in_mem_partitions, taste_count,
                   num_query_supervisors, index_dir, meta_index_fp_rate);
   self->send(index, vast::atom::importer_v, importer);

@@ -19,6 +19,7 @@
 #include "vast/die.hpp"
 #include "vast/expression.hpp"
 #include "vast/operator.hpp"
+#include "vast/partition_synopsis.hpp"
 #include "vast/pattern.hpp"
 #include "vast/plugin.hpp"
 #include "vast/port.hpp"

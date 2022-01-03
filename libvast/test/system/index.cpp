@@ -51,10 +51,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto index_dir = directory / "index";
     archive
       = self->spawn(system::archive, archive_dir, segments, max_segment_size);
+    meta_index = self->spawn(system::meta_index, system::accountant_actor{});
     index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                        index_dir, defaults::system::store_backend, slice_size,
-                        in_mem_partitions, taste_count, num_query_supervisors,
-                        index_dir, meta_index_fp_rate);
+                        meta_index, index_dir, defaults::system::store_backend,
+                        slice_size, in_mem_partitions, taste_count,
+                        num_query_supervisors, index_dir, meta_index_fp_rate);
   }
 
   ~fixture() {
@@ -138,6 +139,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   // Handle to the INDEX actor.
   system::index_actor index;
   system::archive_actor archive;
+  system::meta_index_actor meta_index;
 };
 
 } // namespace

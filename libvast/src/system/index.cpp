@@ -713,14 +713,15 @@ index_state::status(status_verbosity v) const {
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
-      archive_actor archive, const std::filesystem::path& dir,
-      std::string store_backend, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
-      const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
+      archive_actor archive, meta_index_actor meta_index,
+      const std::filesystem::path& dir, std::string store_backend,
+      size_t partition_capacity, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
+      const std::filesystem::path& meta_index_dir, double synopsis_fp_rate) {
   VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
                    VAST_ARG(taste_partitions), VAST_ARG(num_workers),
-                   VAST_ARG(meta_index_dir), VAST_ARG(meta_index_fp_rate));
+                   VAST_ARG(meta_index_dir), VAST_ARG(synopsis_fp_rate));
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                *self, dir, partition_capacity, max_inmem_partitions);
@@ -728,8 +729,8 @@ index(index_actor::stateful_pointer<index_state> self,
   // These options must be kept in sync with vast/address_synopsis.hpp and
   // vast/string_synopsis.hpp respectively.
   self->state.synopsis_opts["max-partition-size"] = partition_capacity;
-  self->state.synopsis_opts["address-synopsis-fp-rate"] = meta_index_fp_rate;
-  self->state.synopsis_opts["string-synopsis-fp-rate"] = meta_index_fp_rate;
+  self->state.synopsis_opts["address-synopsis-fp-rate"] = synopsis_fp_rate;
+  self->state.synopsis_opts["string-synopsis-fp-rate"] = synopsis_fp_rate;
   // The global archive gets hard-coded special treatment for backwards
   // compatibility.
   self->state.partition_local_stores = store_backend != "archive";
@@ -757,15 +758,13 @@ index(index_actor::stateful_pointer<index_state> self,
   }
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
-  self->state.meta_index
-    = self->spawn<caf::lazy_init>(meta_index, self->state.accountant);
+  self->state.meta_index = std::move(meta_index);
   self->state.dir = dir;
   self->state.synopsisdir = meta_index_dir;
   self->state.partition_capacity = partition_capacity;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
-  self->state.meta_index_fp_rate = meta_index_fp_rate;
   self->state.meta_index_bytes = 0;
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
