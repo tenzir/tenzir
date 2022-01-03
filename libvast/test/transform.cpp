@@ -18,6 +18,7 @@
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/project.hpp"
 #include "vast/transform_steps/replace.hpp"
+#include "vast/transform_steps/select.hpp"
 #include "vast/uuid.hpp"
 
 using namespace std::literals;
@@ -90,6 +91,35 @@ struct transforms_fixture {
     }
     return {builder->finish(), builder2->finish()};
   }
+
+  /// Creates a table slice with ten rows, a second having only the row with
+  /// index==2 and a third having only the rows with index>5.
+  static std::tuple<vast::table_slice, vast::table_slice, vast::table_slice>
+  make_select_testdata(vast::table_slice_encoding encoding
+                       = vast::defaults::import::table_slice_type) {
+    auto builder = vast::factory<vast::table_slice_builder>::make(
+      encoding, testdata_layout);
+    REQUIRE(builder);
+    auto builder2 = vast::factory<vast::table_slice_builder>::make(
+      encoding, testdata_layout);
+    REQUIRE(builder2);
+    auto builder3 = vast::factory<vast::table_slice_builder>::make(
+      encoding, testdata_layout);
+    REQUIRE(builder3);
+    for (int i = 0; i < 10; ++i) {
+      auto uuid = vast::uuid::random();
+      auto str = fmt::format("{}", uuid);
+      auto str2 = fmt::format("test-datum {}", i);
+      REQUIRE(builder->add(str, str2, vast::integer{i}));
+      if (i == 2) {
+        REQUIRE(builder2->add(str, str2, vast::integer{i}));
+      }
+      if (i > 5) {
+        REQUIRE(builder3->add(str, str2, vast::integer{i}));
+      }
+    }
+    return {builder->finish(), builder2->finish(), builder3->finish()};
+  }
 };
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
@@ -148,6 +178,22 @@ TEST(replace step) {
   CHECK_EQUAL(caf::get<vast::record_type>(replaced->layout()).field(0).name,
               "uid");
   CHECK_EQUAL((*replaced).at(0, 0), vast::data_view{"xxx"sv});
+}
+
+TEST(select step) {
+  auto [slice, single_row_slice, multi_row_slice]
+    = make_select_testdata(vast::table_slice_encoding::msgpack);
+  vast::select_step select_step("index==+2");
+  auto selected = select_step.apply(vast::table_slice{slice});
+  REQUIRE_NOERROR(selected);
+  CHECK_EQUAL(*selected, single_row_slice);
+  vast::select_step select_step2("index>+5");
+  auto selected2 = select_step2.apply(vast::table_slice{slice});
+  REQUIRE_NOERROR(selected2);
+  CHECK_EQUAL(*selected2, multi_row_slice);
+  vast::select_step select_step3("index>+9");
+  auto selected3 = select_step3.apply(vast::table_slice{slice});
+  CHECK_EQUAL(!selected3, true); // REQUIRE_ERROR
 }
 
 TEST(anonymize step) {

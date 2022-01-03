@@ -135,10 +135,10 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
     for (auto idx : indices) {
       const auto& t = transforms_.at(idx);
       std::tie(layout, batch) = t.apply(std::move(layout), std::move(batch));
-      if (batch->num_rows() != static_cast<int>(size))
-        return caf::make_error(ec::invalid_result, "adding or deleting rows in "
-                                                   "a transform is currently "
-                                                   "not supported");
+      if (batch->num_rows() > static_cast<int>(size))
+        return caf::make_error(ec::invalid_result, "adding rows in a transform "
+                                                   "is currently not "
+                                                   "supported");
       if (!batch)
         return caf::make_error(ec::convert_error, "error while applying arrow "
                                                   "transform");
@@ -152,10 +152,9 @@ caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
     auto transformed = t.apply(std::move(x));
     if (!transformed)
       return transformed.error();
-    if (transformed->rows() != size)
-      return caf::make_error(ec::invalid_result, "adding or deleting rows in a "
-                                                 "transform is currently not "
-                                                 "supported");
+    if (transformed->rows() > size)
+      return caf::make_error(ec::invalid_result, "adding rows in a transform "
+                                                 "is currently not supported");
     x = std::move(*transformed);
   }
   x.offset(offset);

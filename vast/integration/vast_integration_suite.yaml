@@ -507,6 +507,7 @@ tests:
       - command: export json '#type == "suricata.fileinfo"'
       - command: export json '#type == "suricata.alert"'
       - command: --config=@./vast-transforms.yaml export json '#type == "suricata.alert"'
+      - command: --config=@./vast-transforms.yaml export json '#type == "suricata.dns"'
   # The output of the 'hash' step currently depends on whether or
   # not we apply arrow transforms on arrow table slices, so we only
   # enable it on builds that have arrow enabled.
