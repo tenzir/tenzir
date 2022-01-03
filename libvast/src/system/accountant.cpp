@@ -8,7 +8,6 @@
 
 #include "vast/system/accountant.hpp"
 
-#include "vast/accountant/config.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
@@ -20,6 +19,7 @@
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/accountant_config.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"

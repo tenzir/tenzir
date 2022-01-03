@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/accountant/config.hpp"
 #include "vast/atoms.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
@@ -36,6 +35,7 @@
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/accountant_config.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
