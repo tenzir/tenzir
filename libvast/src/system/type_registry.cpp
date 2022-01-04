@@ -92,12 +92,11 @@ caf::error type_registry_state::save_to_disk() const {
     = std::vector<flatbuffers::Offset<fbs::type_registry::Entry>>{};
   for (const auto& [key, types] : data) {
     const auto key_offset = builder.CreateString(key);
-    auto type_offsets
-      = std::vector<flatbuffers::Offset<fbs::type_registry::TypeBuffer>>{};
+    auto type_offsets = std::vector<flatbuffers::Offset<fbs::TypeBuffer>>{};
     type_offsets.reserve(types.size());
     for (const auto& type : types) {
       const auto type_bytes = as_bytes(type);
-      const auto type_offset = fbs::type_registry::CreateTypeBuffer(
+      const auto type_offset = fbs::CreateTypeBuffer(
         builder, builder.CreateVector(
                    reinterpret_cast<const uint8_t*>(type_bytes.data()),
                    type_bytes.size()));

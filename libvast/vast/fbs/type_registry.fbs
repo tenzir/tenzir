@@ -2,13 +2,9 @@ include "type.fbs";
 
 namespace vast.fbs.type_registry;
 
-table TypeBuffer {
-  buffer: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
-}
-
 table Entry {
   key: string (required);
-  values: [TypeBuffer];
+  values: [vast.fbs.TypeBuffer];
 }
 
 table v0 {
