@@ -153,6 +153,10 @@ caf::error type_registry_state::load_from_disk() {
         data.emplace(k, entry);
       }
       VAST_DEBUG("{} loaded state from disk", *self);
+      // We save the new state already now before removing the old state just to
+      // be save against crashes.
+      if (auto err = save_to_disk())
+        return err;
       if (!std::filesystem::remove(fname, err) || err)
         VAST_DEBUG("failed to delete legacy type-registry state");
       return caf::none;
