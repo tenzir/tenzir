@@ -373,6 +373,31 @@ TEST(record batch roundtrip - adding column) {
   CHECK_VARIANT_EQUAL(slice2.at(3, 1, string_type{}), "3"sv);
 }
 
+auto schema_roundtrip(const record_type& rt) {
+  const auto& arrow_schema = make_arrow_schema(rt);
+  const auto& restored_rt = make_record_type(*arrow_schema);
+  if (rt != restored_rt) // CHECK_EQUAL doesn't cut it
+    std::cout << fmt::format("`{}` != `{}`", rt, restored_rt);
+  CHECK_EQUAL(rt, restored_rt);
+}
+
+TEST(experimental arrow schema roundtrip) {
+  // simplest case: record with a single field and a basic type
+  schema_roundtrip(record_type{{"a", integer_type{}}});
+
+  // multiple simple fields
+  schema_roundtrip(
+    record_type{{"one", integer_type{}}, {"two", string_type{}}});
+
+  const auto bool_with_attrs
+    = type{bool_type{}, {{"first", "value"}, {"second"}}};
+  schema_roundtrip(record_type{{"a", bool_with_attrs}});
+
+  const auto bool_with_name
+    = type{"my_bool", bool_type{}, {{"first", "value"}, {"second"}}};
+  schema_roundtrip(record_type{{"a", bool_with_name}});
+}
+
 FIXTURE_SCOPE(experimental_table_slice_tests, fixtures::table_slices)
 
 TEST_TABLE_SLICE(experimental_table_slice_builder, experimental)

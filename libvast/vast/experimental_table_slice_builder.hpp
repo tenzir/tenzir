@@ -134,4 +134,14 @@ std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t);
 /// @returns An arrow representation of `t`.
 std::shared_ptr<arrow::DataType> make_experimental_type(const type& t);
 
+/// Converts a VAST `record_type` to an Arrow `Schema`.
+/// @param rt The type to convert.
+/// @returns An arrow representation of `rt`.
+std::shared_ptr<arrow::Schema> make_arrow_schema(const record_type& rt);
+
+/// Converts an Arrow `Schema` to a VAST `record_type`.
+/// @param arrow_schema The record type to convert.
+/// @returns A vast representation of `arrow_schema`.
+record_type make_record_type(const arrow::Schema& arrow_schema);
+
 } // namespace vast

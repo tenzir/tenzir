@@ -704,4 +704,81 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
   return caf::visit(f, t);
 }
 
+std::vector<struct type::attribute> make_vast_attributes(
+  const std::shared_ptr<const arrow::KeyValueMetadata>& metadata) {
+  if (!metadata)
+    return {};
+  std::vector<struct type::attribute> attrs{};
+  for (int i = 0; i < metadata->size(); ++i) {
+    // hack: we're storing the name as a "reserved name" attribute,
+    // because arrow doesn't have the concept of additionally naming types
+    if (metadata->key(i) != "_name") {
+      // interpreting "" as empty, not sure if that properly matches vast
+      // semantics.
+      std::optional<std::string> value = (metadata->value(i).empty())
+                                           ? std::nullopt
+                                           : std::optional{metadata->value(i)};
+      attrs.emplace_back(metadata->key(i), value);
+    }
+  }
+  return attrs;
+}
+
+type type_from_arrow(const std::shared_ptr<arrow::Field>& arrow_field) {
+  const auto attrs = make_vast_attributes(arrow_field->metadata());
+  const auto name
+    = ((arrow_field->metadata() && arrow_field->metadata()->Contains("_name"))
+         ? arrow_field->metadata()->Get("_name").ValueUnsafe()
+         : "");
+
+  switch (arrow_field->type()->id()) {
+    case arrow::Type::NA:
+      return type{name, none_type{}};
+    case arrow::Type::BOOL:
+      return type{name, bool_type{}, attrs};
+    case arrow::Type::INT64:
+      return type{name, integer_type{}, attrs};
+    case arrow::Type::STRING:
+      return type{name, string_type{}, attrs};
+    default:
+      VAST_ASSERT(false, arrow_field->ToString().c_str());
+      return type{name, none_type{}, attrs};
+  }
+}
+
+std::shared_ptr<const arrow::KeyValueMetadata>
+make_arrow_metadata(const type& t) {
+  if (!t.has_attributes())
+    return nullptr;
+  auto metadata = std::make_shared<arrow::KeyValueMetadata>();
+  for (const auto [key, value] : t.attributes()) {
+    metadata->Append(std::string{key}, std::string{value});
+  }
+
+  if (!t.name().empty())
+    metadata->Append("_name", std::string{t.name()});
+
+  return metadata;
+}
+
+std::shared_ptr<arrow::Schema> make_arrow_schema(const record_type& rt) {
+  std::vector<std::shared_ptr<arrow::Field>> arrow_fields;
+  for (const auto& f : rt.fields()) {
+    auto field_ptr
+      = arrow::field(std::string{f.name}, make_experimental_type(f.type),
+                     make_arrow_metadata(f.type));
+    arrow_fields.emplace_back(field_ptr);
+  }
+  auto metadata = arrow::key_value_metadata({});
+  return arrow::schema(arrow_fields);
+}
+
+record_type make_record_type(const arrow::Schema& arrow_schema) {
+  std::vector<struct record_type::field> fields{};
+  for (const auto& field : arrow_schema.fields()) {
+    fields.emplace_back(field->name(), type_from_arrow(field));
+  }
+  return record_type{fields};
+}
+
 } // namespace vast
