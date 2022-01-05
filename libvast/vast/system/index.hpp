@@ -327,11 +327,16 @@ struct index_state {
 /// @param accountant The accountant actor.
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
+/// @param archive The legacy archive actor. To be removed eventually (tm).
+/// @param meta_index The meta index actor.
 /// @param dir The directory of the index.
 /// @param store_backend The store backend to use for new partitions.
 /// @param partition_capacity The maximum number of events per partition.
+/// @param max_inmem_partitions The maximum number of passive partitions loaded
+/// into memory.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param num_workers The maximum amount of concurrent lookups.
+/// @param meta_index_dir The directory used by the meta index.
 /// @param synopsis_fp_rate The false positive rate for new address and string
 /// synopses.
 /// @pre `partition_capacity > 0

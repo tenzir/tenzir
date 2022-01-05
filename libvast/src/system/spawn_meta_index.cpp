@@ -8,24 +8,12 @@
 
 #include "vast/system/spawn_meta_index.hpp"
 
-#include "vast/defaults.hpp"
-#include "vast/error.hpp"
-#include "vast/logger.hpp"
-#include "vast/si_literals.hpp"
-#include "vast/system/index.hpp"
+#include "vast/query.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/table_slice.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/actor_cast.hpp>
-#include <caf/config_value.hpp>
-#include <caf/expected.hpp>
-#include <caf/local_actor.hpp>
-#include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
-
-using namespace vast::binary_byte_literals;
 
 namespace vast::system {
 
