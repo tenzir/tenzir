@@ -19,6 +19,7 @@
 #include "vast/system/spawn_arguments.hpp"
 
 #include <caf/actor.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/send.hpp>

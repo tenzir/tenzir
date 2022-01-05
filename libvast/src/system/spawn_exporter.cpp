@@ -20,6 +20,7 @@
 #include "vast/system/transformer.hpp"
 
 #include <caf/actor.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/send.hpp>
 #include <caf/settings.hpp>

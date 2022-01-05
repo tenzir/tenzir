@@ -15,6 +15,7 @@
 #include "vast/system/pivoter.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
+#include <caf/event_based_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {

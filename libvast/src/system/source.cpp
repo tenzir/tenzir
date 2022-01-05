@@ -30,6 +30,7 @@
 
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
+#include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>
