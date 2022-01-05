@@ -133,9 +133,17 @@ union Type {
 
 namespace vast.fbs;
 
-/// The sematic representation of data.
+/// The semantic representation of data.
 table Type {
   type: type.Type;
+}
+
+/// A slicable type.
+/// NOTE: This is for use in FlatBuffers schemas other than this one; it's
+/// intentionally unused in this file to save up to 24 bytes of offset tables
+/// per nested type.
+table TypeBuffer {
+  buffer: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 }
 
 root_type Type;

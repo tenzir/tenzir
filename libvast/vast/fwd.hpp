@@ -219,6 +219,7 @@ struct FlatTableSlice;
 struct Segment;
 struct TableSlice;
 struct Type;
+struct TypeRegistry;
 
 namespace table_slice {
 
