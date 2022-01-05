@@ -8,6 +8,8 @@
 
 #include "vast/wah_bitmap.hpp"
 
+#include "vast/fbs/bitmap.hpp"
+
 #include <caf/detail/scope_guard.hpp>
 
 #include <iostream>
@@ -121,10 +123,11 @@ void wah_bitmap::flip() {
   if (blocks_.empty())
     return;
   for (auto& block : blocks_)
-    block ^= (word_type::is_fill(block) ? word_type::msb1 : word_type::all) >> 1;
+    block
+      ^= (word_type::is_fill(block) ? word_type::msb1 : word_type::all) >> 1;
   // Undo flipping of unused bits in last block.
-  auto mask =
-    word_type::lsb_mask(word_type::literal_word_size - num_last_) << num_last_;
+  auto mask = word_type::lsb_mask(word_type::literal_word_size - num_last_)
+              << num_last_;
   blocks_.back() ^= mask;
 }
 
@@ -135,7 +138,8 @@ void wah_bitmap::merge_active_word() {
     blocks_.push_back(word_type::none);
     num_last_ = 0;
   });
-  auto is_fill = word_type::all_or_none(blocks_.back(), word_type::literal_word_size);
+  auto is_fill
+    = word_type::all_or_none(blocks_.back(), word_type::literal_word_size);
   if (!is_fill)
     return;
   // If there's no other word than the active word, we have nothing to merge.
@@ -149,7 +153,8 @@ void wah_bitmap::merge_active_word() {
   if (fill_type) {
     // All 1s.
     auto& prev = *(blocks_.rbegin() + 1);
-    if (word_type::is_fill(prev, true) && word_type::fill_words(prev) < word_type::max_fill_words) {
+    if (word_type::is_fill(prev, true)
+        && word_type::fill_words(prev) < word_type::max_fill_words) {
       prev = word_type::make_fill(true, word_type::fill_words(prev) + 1);
       blocks_.pop_back();
     } else {
@@ -158,7 +163,8 @@ void wah_bitmap::merge_active_word() {
   } else {
     // All 0s.
     auto& prev = *(blocks_.rbegin() + 1);
-    if (word_type::is_fill(prev, false) && word_type::fill_words(prev) < word_type::max_fill_words) {
+    if (word_type::is_fill(prev, false)
+        && word_type::fill_words(prev) < word_type::max_fill_words) {
       prev = word_type::make_fill(false, word_type::fill_words(prev) + 1);
       blocks_.pop_back();
     } else {
@@ -171,10 +177,23 @@ bool operator==(const wah_bitmap& x, const wah_bitmap& y) {
   return x.blocks_ == y.blocks_ && x.num_bits_ == y.num_bits_;
 }
 
+auto pack(flatbuffers::FlatBufferBuilder& builder, const wah_bitmap& from)
+  -> flatbuffers::Offset<fbs::bitmap::WAHBitmap> {
+  return fbs::bitmap::CreateWAHBitmapDirect(builder, &from.blocks_,
+                                            from.num_last_, from.num_bits_);
+}
+
+auto unpack(const fbs::bitmap::WAHBitmap& from, wah_bitmap& to) -> caf::error {
+  to.blocks_.reserve(from.blocks()->size());
+  to.blocks_.insert(to.blocks_.end(), from.blocks()->begin(),
+                    from.blocks()->end());
+  to.num_last_ = from.num_last();
+  to.num_bits_ = from.num_bits();
+  return caf::none;
+}
+
 wah_bitmap_range::wah_bitmap_range(const wah_bitmap& bm)
-  : bm_{&bm},
-    begin_{bm.blocks_.begin()},
-    end_{bm.blocks_.end()} {
+  : bm_{&bm}, begin_{bm.blocks_.begin()}, end_{bm.blocks_.end()} {
   if (begin_ != end_)
     scan();
 }

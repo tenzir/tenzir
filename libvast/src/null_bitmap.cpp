@@ -8,6 +8,8 @@
 
 #include "vast/null_bitmap.hpp"
 
+#include "vast/fbs/bitmap.hpp"
+
 namespace vast {
 
 null_bitmap::null_bitmap(size_type n, bool bit) {
@@ -44,6 +46,23 @@ void null_bitmap::flip() {
 
 bool operator==(const null_bitmap& x, const null_bitmap& y) {
   return x.bitvector_ == y.bitvector_;
+}
+
+auto pack(flatbuffers::FlatBufferBuilder& builder, const null_bitmap& from)
+  -> flatbuffers::Offset<fbs::bitmap::NullBitmap> {
+  const auto bitvector_offset = fbs::bitmap::detail::CreateBitVectorDirect(
+    builder, &from.bitvector_.blocks_, from.bitvector_.size_);
+  return fbs::bitmap::CreateNullBitmap(builder, bitvector_offset);
+}
+
+auto unpack(const fbs::bitmap::NullBitmap& from, null_bitmap& to)
+  -> caf::error {
+  to.bitvector_.blocks_.reserve(from.bit_vector()->blocks()->size());
+  to.bitvector_.blocks_.insert(to.bitvector_.blocks_.end(),
+                               from.bit_vector()->blocks()->begin(),
+                               from.bit_vector()->blocks()->end());
+  to.bitvector_.size_ = from.bit_vector()->size();
+  return caf::none;
 }
 
 null_bitmap_range::null_bitmap_range(const null_bitmap& bm)

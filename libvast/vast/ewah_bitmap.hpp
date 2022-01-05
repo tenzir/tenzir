@@ -21,15 +21,15 @@ struct ewah_word : word<Block> {
   static constexpr auto clean_dirty_divide = word<Block>::width / 2 - 1;
 
   /// The mask to apply to a marker word to extract the counter of dirty words.
-  static constexpr auto marker_dirty_mask =
-    ~(word<Block>::all << clean_dirty_divide);
+  static constexpr auto marker_dirty_mask
+    = ~(word<Block>::all << clean_dirty_divide);
 
   /// The maximum value of the counter of dirty words.
   static constexpr auto marker_dirty_max = marker_dirty_mask;
 
   /// The mask to apply to a marker word to extract the counter of clean words.
-  static constexpr auto marker_clean_mask =
-    ~(marker_dirty_mask | word<Block>::msb1);
+  static constexpr auto marker_clean_mask
+    = ~(marker_dirty_mask | word<Block>::msb1);
 
   /// The maximum value of the counter of clean words.
   static constexpr auto marker_clean_max
@@ -115,9 +115,16 @@ public:
   friend bool operator==(const ewah_bitmap& x, const ewah_bitmap& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, ewah_bitmap& bm) {
+  friend auto inspect(Inspector& f, ewah_bitmap& bm) {
     return f(bm.blocks_, bm.last_marker_, bm.num_bits_);
   }
+
+  friend auto
+  pack(flatbuffers::FlatBufferBuilder& builder, const ewah_bitmap& from)
+    -> flatbuffers::Offset<fbs::bitmap::EWAHBitmap>;
+
+  friend auto unpack(const fbs::bitmap::EWAHBitmap& from, ewah_bitmap& to)
+    -> caf::error;
 
 private:
   /// Incorporates the most recent (complete) dirty block.

@@ -43,6 +43,9 @@ namespace flatbuffers {
 
 class FlatBufferBuilder;
 
+template <class T>
+struct Offset;
+
 } // namespace flatbuffers
 
 // -- caf ----------------------------------------------------------------------
@@ -90,6 +93,7 @@ class list_type;
 class map_type;
 class msgpack_table_slice_builder;
 class none_type;
+class null_bitmap;
 class pattern;
 class pattern_type;
 class plugin;
@@ -215,11 +219,20 @@ using enumeration = uint8_t;
 
 namespace fbs {
 
+struct Bitmap;
 struct FlatTableSlice;
 struct Segment;
 struct TableSlice;
 struct Type;
 struct TypeRegistry;
+
+namespace bitmap {
+
+struct EWAHBitmap;
+struct NullBitmap;
+struct WAHBitmap;
+
+} // namespace bitmap
 
 namespace table_slice {
 

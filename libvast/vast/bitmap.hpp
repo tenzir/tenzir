@@ -82,6 +82,13 @@ public:
     return f(bm.bitmap_);
   }
 
+  // -- flatbuffers -----------------------------------------------------------
+
+  friend auto pack(flatbuffers::FlatBufferBuilder& builder, const bitmap& from)
+    -> flatbuffers::Offset<fbs::Bitmap>;
+
+  friend auto unpack(const fbs::Bitmap& from, bitmap& to) -> caf::error;
+
 private:
   variant bitmap_;
 };
@@ -107,7 +114,6 @@ bitmap_bit_range bit_range(const bitmap& bm);
 } // namespace vast
 
 namespace caf {
-
 template <>
 struct sum_type_access<vast::bitmap> : default_sum_type_access<vast::bitmap> {};
 

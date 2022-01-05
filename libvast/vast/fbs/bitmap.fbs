@@ -1,0 +1,36 @@
+namespace vast.fbs.bitmap.detail;
+
+table BitVector {
+  blocks: [ulong] (required);
+  size: ulong;
+}
+
+namespace vast.fbs.bitmap;
+
+table EWAHBitmap {
+  blocks: [ulong] (required);
+  last_marker: ulong;
+  num_bits: ulong;
+}
+
+table NullBitmap {
+  bit_vector: detail.BitVector (required);
+}
+
+table WAHBitmap {
+  blocks: [ulong] (required);
+  num_last: ulong;
+  num_bits: ulong;
+}
+
+union Bitmap {
+  ewah: EWAHBitmap,
+  null: NullBitmap,
+  wah: WAHBitmap,
+}
+
+namespace vast.fbs;
+
+table Bitmap {
+  bitmap: bitmap.Bitmap (required);
+}
