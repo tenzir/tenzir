@@ -39,13 +39,20 @@ transformer_stream_stage_ptr attach_transform_stage(
         self->send_exit(self, caf::make_error(ec::end_of_input));
         return;
       }
-      auto transformed = self->state.transforms.apply(std::move(x.body));
+      auto add_failed = self->state.transforms.add(std::move(x.body));
+      if (add_failed) {
+        VAST_ERROR("add failed {}", add_failed);
+        return;
+      }
+      auto transformed = self->state.transforms.finish();
       if (!transformed) {
         VAST_ERROR("discarding data: error in transformation step. {}",
                    transformed.error());
         return;
       }
-      out.push(std::move(*transformed));
+      for (auto& t : *transformed) {
+        out.push(std::move(t));
+      }
     },
     [=](caf::unit_t&, const caf::error&) {
       // nop

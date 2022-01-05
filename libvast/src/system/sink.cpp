@@ -74,13 +74,18 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
         VAST_INFO("{} received first result with a latency of {}",
                   self->state.name, to_string(time_since_flush));
       }
-      auto transformed = self->state.transforms.apply(std::move(slice));
+      auto add_failed = self->state.transforms.add(std::move(slice));
+      if (add_failed) {
+        VAST_ERROR("add failed {}", add_failed);
+        return;
+      }
+      auto transformed = self->state.transforms.finish();
       if (!transformed) {
         VAST_WARN("discarding slice; error in output transformation: {}",
                   transformed.error());
         return;
       }
-      slice = std::move(*transformed);
+      slice = std::move((*transformed)[0]);
       auto reached_max_events = [&] {
         VAST_INFO("{} reached limit of {} events", *self,
                   self->state.max_events);

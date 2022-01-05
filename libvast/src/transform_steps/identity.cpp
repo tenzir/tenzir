@@ -17,15 +17,16 @@
 
 namespace vast {
 
-caf::expected<table_slice>
-identity_step::operator()(table_slice&& slice) const {
-  return std::move(slice);
+caf::error identity_step::add(vast::id offset, type layout,
+                              std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_DEBUG("identity_step add");
+  transformed_.emplace_back(offset, layout, std::move(batch));
+  return caf::none;
 }
 
-caf::expected<std::pair<vast::type, std::shared_ptr<arrow::RecordBatch>>>
-identity_step::operator()(vast::type layout,
-                          std::shared_ptr<arrow::RecordBatch> batch) const {
-  return std::make_pair(std::move(layout), std::move(batch));
+caf::expected<batch_vector> identity_step::finish() {
+  VAST_DEBUG("identity_step finished");
+  return std::exchange(transformed_, {});
 }
 
 class identity_step_plugin final : public virtual transform_plugin {

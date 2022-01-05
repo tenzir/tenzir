@@ -8,6 +8,7 @@
 
 #include "vast/transform_steps/select.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/error.hpp"
@@ -39,17 +40,34 @@ select_step::select_step(std::string expr) : expression_(caf::no_error) {
   }
 }
 
-caf::expected<table_slice> select_step::operator()(table_slice&& slice) const {
-  if (!expression_)
+caf::error select_step::add(vast::id offset, type layout,
+                            std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_DEBUG("select_step add");
+  if (!expression_) {
+    transformed_.clear();
     return expression_.error();
-  auto tailored_expr = tailor(*expression_, slice.layout());
-  if (!tailored_expr)
+  }
+  auto tailored_expr = tailor(*expression_, layout);
+  if (!tailored_expr) {
+    transformed_.clear();
     return tailored_expr.error();
-  auto new_slice = filter(slice, *tailored_expr);
-  if (new_slice)
-    return *new_slice;
+  }
+  auto new_slice
+    = filter(arrow_table_slice_builder::create(batch, layout), *tailored_expr);
+  if (new_slice) {
+    auto as_batch = as_record_batch(
+      *new_slice); // FIXME: ask: keepalive batch until create is called()
+    transformed_.emplace_back(offset, new_slice->layout(), std::move(as_batch));
+    return caf::none;
+  }
+  transformed_.clear();
   return caf::make_error(ec::invalid_result, "the filter function did not "
                                              "return a slice");
+}
+
+caf::expected<batch_vector> select_step::finish() {
+  VAST_DEBUG("select_step finished");
+  return std::exchange(transformed_, {});
 }
 
 class select_step_plugin final : public virtual transform_plugin {

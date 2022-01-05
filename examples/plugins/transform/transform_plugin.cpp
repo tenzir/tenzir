@@ -20,31 +20,27 @@ namespace vast::plugins {
 // We derive from `arrow_transform_step` to signal to VAST that we
 // implemented special code that can handle arrow-encoded table slices
 // natively.
-class example_transform_step : public generic_transform_step,
-                               public arrow_transform_step {
+class example_transform_step : public transform_step {
 public:
   example_transform_step() = default;
 
-  // This handler receives a generic table slice in any encoding. It can be
-  // inefficient to modify table slices on this level, on the other hand
-  // VAST never needs to perform a conversion before calling this transform.
-  [[nodiscard]] caf::expected<table_slice>
-  operator()(table_slice&& slice) const override {
+  /// Applies the transformation to a record batch(arrow encoding) with a
+  /// corresponding vast layout.
+  [[nodiscard]] caf::error
+  add(vast::id offset, type layout,
+      std::shared_ptr<arrow::RecordBatch> batch) override {
     // Transform the table slice here.
-    return std::move(slice);
+    transformed_.emplace_back(offset, std::move(layout), std::move(batch));
+    return caf::none;
   }
 
-  // A variant of the transform specialized to table slices encoded in
-  // arrow format. Note that with this we don't necessarily need to generic
-  // implemenetation above, because the `arrow_transform_step` already defines
-  // a function that takes a generic table slice and transforms it to
-  // arrow format. Many operations can be expressed more efficiently
-  [[nodiscard]] caf::expected<
-    std::pair<vast::type, std::shared_ptr<arrow::RecordBatch>>>
-  operator()(vast::type layout,
-             std::shared_ptr<arrow::RecordBatch> batch) const override {
-    return std::make_pair(std::move(layout), std::move(batch));
+  /// Retrieves the result of the transformation.
+  [[nodiscard]] caf::expected<batch_vector> finish() override {
+    return std::exchange(transformed_, {});
   }
+
+private:
+  batch_vector transformed_;
 };
 
 // The plugin definition itself is below.

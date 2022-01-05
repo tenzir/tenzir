@@ -13,7 +13,15 @@
 #include <arrow/record_batch.h>
 #include <caf/expected.hpp>
 
+#include <queue>
+
 namespace vast {
+
+using arrow_batch
+  = std::tuple<vast::id, vast::type, std::shared_ptr<arrow::RecordBatch>>;
+using batch_queue = std::deque<arrow_batch>;
+using slice_queue = std::deque<table_slice>;
+using batch_vector = std::vector<arrow_batch>;
 
 /// An individual transform step. This is mainly used in the plugin API,
 /// later code deals with a complete `transform`.
@@ -21,47 +29,17 @@ class transform_step {
 public:
   virtual ~transform_step() = default;
 
-  /// Apply the transformation step to the passed table slice,
-  /// if neccessary converting the data to a format the step implementation can
-  /// natively handle.
-  [[nodiscard]] caf::expected<table_slice> apply(table_slice&&) const;
+  /// Applies the transformation to a record batch with a corresponding vast
+  /// layout.
+  [[nodiscard]] virtual caf::error
+  add(vast::id offset, type layout, std::shared_ptr<arrow::RecordBatch> batch)
+    = 0;
+
+  /// Retrieves the result of the transformation.
+  [[nodiscard]] virtual caf::expected<batch_vector> finish() = 0;
 };
 
 using transform_step_ptr = std::unique_ptr<transform_step>;
-
-// A transform step that operates on a generic table slice.
-// While the implementation is free to look at the encoding of
-// the slice and dispatch to specialized functions, this overload
-// requires the result of the step to be serialized back into
-// a finished table slice, while the variants below can pass around
-// intermediate state between the steps.
-class generic_transform_step : public virtual transform_step {
-public:
-  [[nodiscard]] virtual caf::expected<table_slice>
-  operator()(table_slice&&) const = 0;
-};
-
-// TODO: This will become useful once we implement filtering transforms,
-//       where msgpack encoding allows for higher performance.
-// class msgpack_transform_step : public virtual transform_step {
-//   [...]
-// };
-
-class arrow_transform_step : public virtual transform_step {
-public:
-  /// Convenience overload that converts the table slice into arrow format and
-  /// passes it to the user-defined handler.
-  [[nodiscard]] caf::expected<table_slice> operator()(table_slice&&) const;
-
-  /// Takes a record batch with a corresponding vast layout and transforms it
-  /// into a new batch with a new layout.
-  //  TODO: When we have implemented a way to recover the `layout` from the
-  //  metadata stored in a record batch, we can drop the record type from
-  //  this function signature.
-  [[nodiscard]] virtual caf::expected<
-    std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
-  operator()(type layout, std::shared_ptr<arrow::RecordBatch> batch) const = 0;
-};
 
 caf::expected<transform_step_ptr>
 make_transform_step(const std::string& name, const caf::settings& opts);

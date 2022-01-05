@@ -63,8 +63,20 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
     st.query_status.cached -= rows;
     st.query_status.requested -= rows;
     st.query_status.shipped += rows;
-    auto transformed = self->state.transformer.apply(std::move(slice));
-    self->anon_send(st.sink, std::move(*transformed));
+    auto add_failed = self->state.transformer.add(std::move(slice));
+    if (add_failed) {
+      VAST_ERROR("add failed {}", add_failed);
+      return;
+    }
+    auto transformed = self->state.transformer.finish();
+    if (!transformed) {
+      VAST_ERROR("discarding data: error in transformation step. {}",
+                 transformed.error());
+      return;
+    }
+    for (auto& t : *transformed) {
+      self->anon_send(st.sink, std::move(t));
+    }
   }
 }
 

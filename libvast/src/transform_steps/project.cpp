@@ -56,47 +56,35 @@ project_step::adjust_layout(const vast::type& layout) const {
   return std::pair{std::move(adjusted_layout), std::move(flat_index_to_keep)};
 }
 
-caf::expected<table_slice> project_step::operator()(table_slice&& slice) const {
-  // adjust layout
-  const auto& layout = slice.layout();
+caf::error project_step::add(vast::id offset, type layout,
+                             std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_DEBUG("project_step add");
   auto layout_result = adjust_layout(layout);
   if (!layout_result) {
-    if (layout_result.error())
+    if (layout_result.error()) {
+      transformed_.clear();
       return layout_result.error();
-    return slice;
-  }
-  // remove columns
-  const auto& [adjusted_layout, to_keep] = *layout_result;
-  auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), adjusted_layout);
-  builder_ptr->reserve(slice.rows());
-  for (size_t i = 0; i < slice.rows(); ++i) {
-    for (const auto j : to_keep) {
-      if (!builder_ptr->add(slice.at(i, j)))
-        return caf::make_error(ec::unspecified, "project step: unknown error "
-                                                "in table slice builder");
     }
-  }
-  return builder_ptr->finish();
-}
-
-caf::expected<std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
-project_step::operator()(type layout,
-                         std::shared_ptr<arrow::RecordBatch> batch) const {
-  auto layout_result = adjust_layout(layout);
-  if (!layout_result) {
-    if (layout_result.error())
-      return layout_result.error();
-    return std::make_pair(std::move(layout), std::move(batch));
+    transformed_.emplace_back(offset, layout, std::move(batch));
+    return caf::none;
   }
   // remove columns
   auto& [adjusted_layout, to_keep] = *layout_result;
   auto result = batch->SelectColumns(to_keep);
-  if (!result.ok())
+  if (!result.ok()) {
+    transformed_.clear();
     return caf::make_error(ec::unspecified,
                            fmt::format("failed to select columns: {}",
                                        result.status().ToString()));
-  return std::make_pair(std::move(adjusted_layout), result.MoveValueUnsafe());
+  }
+  transformed_.emplace_back(offset, std::move(adjusted_layout),
+                            result.MoveValueUnsafe());
+  return caf::none;
+}
+
+caf::expected<batch_vector> project_step::finish() {
+  VAST_DEBUG("project_step finished");
+  return std::exchange(transformed_, {});
 }
 
 class project_step_plugin final : public virtual transform_plugin {
