@@ -136,8 +136,9 @@ caf::error type_registry_state::load_from_disk() {
     const auto file_exists = std::filesystem::exists(fname, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to find file {}: {}", fname,
-                                         err.message()));
+                             fmt::format("failed while trying to find file {}: "
+                                         "{}",
+                                         fname, err.message()));
     if (file_exists) {
       auto buffer = io::read(fname);
       if (!buffer)
@@ -168,8 +169,9 @@ caf::error type_registry_state::load_from_disk() {
     const auto file_exists = std::filesystem::exists(fname, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to find file {}: {}", fname,
-                                         err.message()));
+                             fmt::format("failed while trying to find file {}: "
+                                         "{}",
+                                         fname, err.message()));
     if (file_exists) {
       auto buffer = io::read(fname);
       if (!buffer)
