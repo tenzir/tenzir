@@ -17,6 +17,7 @@
 #include "vast/concept/printable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/escapers.hpp"
 #include "vast/test/test.hpp"
@@ -351,6 +352,35 @@ TEST(time) {
   CHECK_TO_STRING(vast::time{1ms}, "1970-01-01T00:00:00.001");
   CHECK_TO_STRING(vast::time{1us}, "1970-01-01T00:00:00.000001");
   CHECK_TO_STRING(vast::time{1502658642123456us}, "2017-08-13T21:10:42.123456");
+}
+
+// -- JSON --------------------------------------------------------------------
+
+template <class Printer, class T>
+void check_to_json(Printer& p, const T& x, const char* str) {
+  const auto to_json = [&](auto x) {
+    std::string str;
+    auto out = std::back_inserter(str);
+    REQUIRE(p.print(out, x));
+    return str;
+  };
+  CHECK_EQUAL(to_json(x), str);
+  CHECK_EQUAL(to_json(make_view(x)), str);
+  if constexpr (!std::is_same_v<decltype(x), data>) {
+    data dx{x};
+    CHECK_EQUAL(to_json(dx), str);
+    CHECK_EQUAL(to_json(make_view(dx)), str);
+  }
+}
+
+TEST(JSON - omit - nulls) {
+  auto p = json_printer<policy::oneline, policy::human_readable_durations,
+                        policy::omit_nulls, 2>{};
+  check_to_json(p, vast::record{{"a", 42u}, {"b", caf::none}, {"c", caf::none}},
+                "{\"a\": 42}");
+  check_to_json(
+    p, vast::record{{"a", vast::record{{"b", caf::none}}}, {"c", caf::none}},
+    "{\"a\": {}}");
 }
 
 // -- API ---------------------------------------------------------------------
