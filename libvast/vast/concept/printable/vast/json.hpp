@@ -186,30 +186,22 @@ struct json_printer
           return false;
       }
       bool print_comma = false;
-      while (begin != end) {
-        auto omit_null
-          = std::is_same_v<
-              NullPolicy,
-              policy::
-                omit_nulls> && caf::holds_alternative<caf::none_t>(begin->second);
-        if (print_comma && !omit_null) {
+      for (; begin != end; ++begin) {
+        if (caf::holds_alternative<caf::none_t>(begin->second)
+            && std::is_same_v<NullPolicy, policy::omit_nulls>)
+          continue;
+        if (print_comma)
           if (!str.print(out_, tree ? ",\n" : ", "))
             return false;
-          print_comma = false;
-        }
-        if (omit_null) {
-          ++begin;
-        } else {
-          if (!indent())
-            return false;
-          if (!(*this)(begin->first))
-            return false;
-          if (!str.print(out_, ": "))
-            return false;
-          if (!caf::visit(*this, begin->second))
-            return false;
-          print_comma = ++begin != end;
-        }
+        if (!indent())
+          return false;
+        if (!(*this)(begin->first))
+          return false;
+        if (!str.print(out_, ": "))
+          return false;
+        if (!caf::visit(*this, begin->second))
+          return false;
+        print_comma = true;
       }
       if constexpr (tree) {
         --depth_;
