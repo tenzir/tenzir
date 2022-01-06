@@ -210,6 +210,10 @@ struct index_state {
   /// Decommissions the active partition.
   void decomission_active_partition();
 
+  /// Adds a new partition creation listener.
+  void
+  add_partition_creation_listener(partition_creation_listener_actor listener);
+
   // -- introspection ----------------------------------------------------------
 
   /// Flushes collected metrics to the accountant.
@@ -300,6 +304,10 @@ struct index_state {
 
   /// List of actors that wait for the next flush event.
   std::vector<flush_listener_actor> flush_listeners = {};
+
+  /// List of actors that want to be notified about new partitions.
+  std::vector<partition_creation_listener_actor> partition_creation_listeners
+    = {};
 
   /// Actor handle of the store actor.
   archive_actor global_store = {};

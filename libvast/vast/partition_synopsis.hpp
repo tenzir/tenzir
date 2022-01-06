@@ -13,6 +13,7 @@
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast {
 
@@ -20,6 +21,7 @@ namespace vast {
 struct partition_synopsis final {
   partition_synopsis() = default;
   partition_synopsis(partition_synopsis&&) = default;
+  partition_synopsis(const partition_synopsis&);
 
   partition_synopsis& operator=(partition_synopsis&&) = default;
 
@@ -66,6 +68,13 @@ struct partition_synopsis final {
   FRIEND_ATTRIBUTE_NODISCARD friend caf::error
   unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
          partition_synopsis& ps, uint64_t offset, uint64_t events);
+};
+
+using partition_synopsis_ptr = std::shared_ptr<partition_synopsis>;
+
+struct partition_synopsis_pair {
+  vast::uuid uuid;
+  partition_synopsis_ptr synopsis;
 };
 
 } // namespace vast

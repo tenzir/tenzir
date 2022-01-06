@@ -146,6 +146,7 @@ struct negation;
 struct legacy_none_type;
 struct offset;
 struct partition_synopsis;
+struct partition_synopsis_pair;
 struct legacy_pattern_type;
 struct predicate;
 struct qualified_record_field;
