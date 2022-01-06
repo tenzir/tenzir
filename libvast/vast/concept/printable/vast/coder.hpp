@@ -37,11 +37,10 @@ struct vector_coder_printer
 };
 
 template <class Coder>
-  requires(
-    std::is_base_of_v<vector_coder<typename Coder::bitlegacy_map_type>, Coder>)
+  requires(std::is_base_of_v<vector_coder<typename Coder::bitmap_type>, Coder>)
 struct printer_registry<Coder> {
   using type
-    = vector_coder_printer<typename Coder::bitlegacy_map_type, policy::expanded>;
+    = vector_coder_printer<typename Coder::bitmap_type, policy::expanded>;
 };
 
 namespace printers {
