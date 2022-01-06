@@ -15,6 +15,7 @@
 #include "vast/format/json/selector.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
+#include "vast/policy/omit_nulls.hpp"
 #include "vast/schema.hpp"
 #include "vast/view.hpp"
 
@@ -46,6 +47,7 @@ public:
 private:
   bool flatten_ = false;
   bool numeric_durations_ = false;
+  bool omit_nulls_ = false;
 };
 
 /// A reader for JSON data. It operates with a *selector* to determine the

@@ -13,6 +13,7 @@
 #include "vast/format/writer.hpp"
 #include "vast/policy/flatten_layout.hpp"
 #include "vast/policy/include_field_names.hpp"
+#include "vast/policy/omit_nulls.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_row.hpp"
 #include "vast/type.hpp"
@@ -89,6 +90,15 @@ protected:
     append(le.begin_of_line);
     auto start = 0;
     for (const auto& f : layout.fields()) {
+      if constexpr (detail::is_any_v<policy::omit_nulls, Policies...>) {
+        if (caf::holds_alternative<caf::none_t>(row[pos])) {
+          if (const auto* r = caf::get_if<record_type>(&f.type))
+            pos += r->num_leaves();
+          else
+            ++pos;
+          continue;
+        }
+      }
       if (!!start++)
         append(le.separator);
       if (const auto& r = caf::get_if<record_type>(&f.type)) {
