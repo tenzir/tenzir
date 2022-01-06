@@ -379,7 +379,7 @@ tests:
   # arrow import / export roundtrip based on experimental table slices.
   Arrow Experimental:
     condition: version | jq -e '."Apache Arrow"'
-    tags: [export, arrow]
+    tags: [import, export, arrow]
     steps:
       - command: -N import --batch-encoding=experimental zeek
         input: data/zeek/conn.log.gz
