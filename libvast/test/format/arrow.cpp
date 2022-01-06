@@ -36,7 +36,7 @@ using namespace std::chrono;
 using namespace std::string_literals;
 using namespace vast;
 
-#define REQUIRE_OK(expr) REQUIRE(expr.ok());
+#define REQUIRE_OK(expr) REQUIRE((expr).ok());
 
 // Needed to initialize the table slice builder factories.
 FIXTURE_SCOPE(arrow_tests, fixtures::events)
@@ -55,8 +55,10 @@ TEST(arrow batch) {
   // Write conn log slices (as record batches) to the stream.
   for (auto& slice : zeek_conn_log)
     writer.write(slice);
-  // Cause the writer to close its current Arrow writer by switching the layout.
-  REQUIRE(writer.layout(::arrow::schema({})));
+
+  // closing the stream so we can start reading back the data.
+  REQUIRE_OK(stream->Close());
+
   // Deserialize record batches, store them in arrow_table_slice objects, and
   // compare to the original slices.
   std::shared_ptr<arrow::Buffer> buf;
