@@ -19,6 +19,7 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 
+#include <arrow/api.h>
 #include <arrow/util/config.h>
 #include <caf/none.hpp>
 
@@ -47,10 +48,12 @@ writer::~writer() {
 caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
     return caf::make_error(ec::logic_error, "invalid arrow output stream");
-  if (!this->layout(slice.layout()))
-    return caf::make_error(ec::logic_error, "failed to update layout");
-  // Get the Record Batch and print it.
   auto batch = as_record_batch(slice);
+  if (const auto& layout = slice.layout(); current_layout_ != layout) {
+    if (!this->layout(batch->schema()))
+      return caf::make_error(ec::logic_error, "failed to update layout");
+    current_layout_ = layout;
+  }
   VAST_ASSERT(batch != nullptr);
   if (auto status = current_batch_writer_->WriteRecordBatch(*batch);
       !status.ok())
@@ -63,22 +66,13 @@ const char* writer::name() const {
   return "arrow-writer";
 }
 
-bool writer::layout(const type& layout) {
-  if (current_layout_ == layout)
-    return true;
+bool writer::layout(const std::shared_ptr<::arrow::Schema>& schema) {
   if (current_batch_writer_ != nullptr) {
     if (!current_batch_writer_->Close().ok())
       return false;
     current_batch_writer_ = nullptr;
   }
-  current_layout_ = layout;
-  auto schema = make_arrow_schema(layout);
-  current_builder_ = arrow_table_slice_builder::make(layout);
-#if ARROW_VERSION_MAJOR >= 2
   auto writer_result = ::arrow::ipc::MakeStreamWriter(out_.get(), schema);
-#else
-  auto writer_result = ::arrow::ipc::NewStreamWriter(out_.get(), schema);
-#endif
   if (writer_result.ok()) {
     current_batch_writer_ = std::move(*writer_result);
     return true;
