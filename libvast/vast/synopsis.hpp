@@ -38,6 +38,9 @@ public:
 
   virtual ~synopsis();
 
+  /// Returns a copy of this synopsis.
+  [[nodiscard]] virtual synopsis_ptr clone() const = 0;
+
   // -- API --------------------------------------------------------------------
 
   /// Adds data from a table slice.
