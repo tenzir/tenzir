@@ -46,7 +46,7 @@ public:
     out_ = std::move(ptr);
   }
 
-  bool layout(const type& layout);
+  bool layout(const std::shared_ptr<::arrow::Schema>& schema);
 
 private:
   output_stream_ptr out_;

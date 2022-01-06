@@ -376,6 +376,19 @@ tests:
         input: data/suricata/eve.json
       - command: -N export arrow '#type == "suricata.http"'
         transformation: python @./misc/scripts/print-arrow.py
+  # arrow import / export roundtrip based on experimental table slices.
+  Arrow Experimental:
+    condition: version | jq -e '."Apache Arrow"'
+    tags: [import, export, arrow]
+    steps:
+      - command: -N import --batch-encoding=experimental zeek
+        input: data/zeek/conn.log.gz
+      - command: -N export -n 10 arrow '#type == "zeek.conn"'
+        transformation: python @./misc/scripts/print-arrow.py
+      - command: -N import --batch-encoding=experimental suricata
+        input: data/suricata/eve.json
+      - command: -N export arrow '#type == "suricata.http"'
+        transformation: python @./misc/scripts/print-arrow.py
   Import syslog:
     tags: [syslog, import]
     steps:
