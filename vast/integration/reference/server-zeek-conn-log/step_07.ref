@@ -20,6 +20,8 @@
 {"path":["index","workers","busy"],"type":"number"}
 {"path":["index","workers","count"],"type":"number"}
 {"path":["index","workers","idle"],"type":"number"}
+{"path":["meta-index","memory-usage"],"type":"number"}
+{"path":["meta-index","num-partitions"],"type":"number"}
 {"path":["system","config-files",0],"type":"string"}
 {"path":["system","current-memory-usage"],"type":"number"}
 {"path":["system","database-path"],"type":"string"}

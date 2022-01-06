@@ -67,12 +67,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     archive = self->spawn(system::archive, directory / "archive",
                           defaults::system::segments,
                           defaults::system::max_segment_size);
+    meta_index = self->spawn(system::meta_index, system::accountant_actor{});
     // We use the old global archive for this test setup, since we cannot easily
     // reproduce a partially filled archive with partition-local store: All
     // data that goes to an active partition also goes to its store.
     index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                        indexdir, "archive", defaults::import::table_slice_size,
-                        100, 3, 1, indexdir, 0.01);
+                        meta_index, indexdir, "archive",
+                        defaults::import::table_slice_size, 100, 3, 1, indexdir,
+                        0.01);
     client = sys.spawn(mock_client);
     // Fill the INDEX with 400 rows from the Zeek conn log.
     detail::spawn_container_source(sys, take(zeek_conn_log_full, 4), index);
@@ -83,6 +85,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   ~fixture() {
     self->send_exit(aut, caf::exit_reason::user_shutdown);
+    self->send_exit(meta_index, caf::exit_reason::user_shutdown);
     self->send_exit(index, caf::exit_reason::user_shutdown);
   }
 
@@ -99,6 +102,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   system::filesystem_actor fs;
   system::index_actor index;
+  system::meta_index_actor meta_index;
   system::archive_actor archive;
   caf::actor client;
   caf::actor aut;
@@ -143,10 +147,10 @@ TEST(count IP point query with candidate check) {
 TEST(count IP point query with partition - local stores) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index2";
-  auto index
-    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                  indexdir, "segment-store", defaults::import::table_slice_size,
-                  100, 3, 1, indexdir, 0.01);
+  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
+                           archive, meta_index, indexdir, "segment-store",
+                           defaults::import::table_slice_size, 100, 3, 1,
+                           indexdir, 0.01);
   // Fill the INDEX with 400 rows from the Zeek conn log.
   detail::spawn_container_source(sys, take(zeek_conn_log_full, 4), index);
   MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
@@ -165,16 +169,17 @@ TEST(count IP point query with partition - local stores) {
   CHECK_EQUAL(client_state.count, 133u);
   CHECK_EQUAL(client_state.received_done, true);
   self->send_exit(index, caf::exit_reason::user_shutdown);
+  self->send_exit(meta_index, caf::exit_reason::user_shutdown);
   self->send_exit(counter, caf::exit_reason::user_shutdown);
 }
 
 TEST(count meta extractor age 1) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index2";
-  auto index
-    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                  indexdir, "segment-store", defaults::import::table_slice_size,
-                  100, 3, 1, indexdir, 0.01);
+  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
+                           archive, meta_index, indexdir, "segment-store",
+                           defaults::import::table_slice_size, 100, 3, 1,
+                           indexdir, 0.01);
   // Fill the INDEX with 400 rows from the Zeek conn log.
   auto slices = take(zeek_conn_log_full, 4);
   for (auto& slice : slices) {
@@ -207,10 +212,10 @@ TEST(count meta extractor age 1) {
 TEST(count meta extractor age 2) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index2";
-  auto index
-    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                  indexdir, "segment-store", defaults::import::table_slice_size,
-                  100, 3, 1, indexdir, 0.01);
+  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
+                           archive, meta_index, indexdir, "segment-store",
+                           defaults::import::table_slice_size, 100, 3, 1,
+                           indexdir, 0.01);
   // Fill the INDEX with 400 rows from the Zeek conn log.
   auto slices = take(zeek_conn_log_full, 4);
   for (auto& slice : slices) {

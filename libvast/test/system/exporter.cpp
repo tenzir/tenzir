@@ -43,6 +43,7 @@ struct fixture : fixture_base {
     self->send_exit(importer, caf::exit_reason::user_shutdown);
     self->send_exit(exporter, caf::exit_reason::user_shutdown);
     self->send_exit(index, caf::exit_reason::user_shutdown);
+    self->send_exit(meta_index, caf::exit_reason::user_shutdown);
     self->send_exit(archive, caf::exit_reason::user_shutdown);
     run();
   }
@@ -56,12 +57,16 @@ struct fixture : fixture_base {
     archive = self->spawn(system::archive, directory / "archive", 1, 1024);
   }
 
+  void spawn_meta_index() {
+    meta_index = self->spawn(system::meta_index, system::accountant_actor{});
+  }
+
   void spawn_index() {
     auto fs = self->spawn(system::posix_filesystem, directory);
     auto indexdir = directory / "index";
     index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                        indexdir, defaults::system::store_backend, 10000, 5, 5,
-                        1, indexdir, 0.01);
+                        meta_index, indexdir, defaults::system::store_backend,
+                        10000, 5, 5, 1, indexdir, 0.01);
   }
 
   void spawn_importer() {
@@ -80,6 +85,8 @@ struct fixture : fixture_base {
       spawn_type_registry();
     if (!archive)
       spawn_archive();
+    if (!meta_index)
+      spawn_meta_index();
     if (!index)
       spawn_index();
     if (!importer)
@@ -129,6 +136,7 @@ struct fixture : fixture_base {
   }
 
   system::type_registry_actor type_registry;
+  system::meta_index_actor meta_index;
   system::index_actor index;
   system::archive_actor archive;
   system::importer_actor importer;
@@ -143,6 +151,7 @@ FIXTURE_SCOPE(exporter_tests, fixture)
 TEST(historical query without importer) {
   MESSAGE("spawn index and archive");
   spawn_archive();
+  spawn_meta_index();
   spawn_index();
   run();
   MESSAGE("ingest conn.log into archive and index");
