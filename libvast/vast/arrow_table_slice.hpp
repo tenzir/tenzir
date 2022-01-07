@@ -107,6 +107,12 @@ public:
   /// Sets the import timestamp.
   void import_time(time import_time) noexcept;
 
+  /// Produces a new table slice consisting only of events addressed in `hints`
+  /// that match the given expression.
+  friend std::optional<table_slice>
+  filter(const arrow_table_slice<fbs::table_slice::arrow::v1>& slice,
+         const expression& expr, const ids& hints, id offset);
+
   /// @returns A shared pointer to the underlying Arrow Record Batch.
   [[nodiscard]] std::shared_ptr<arrow::RecordBatch>
   record_batch() const noexcept;

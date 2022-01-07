@@ -762,32 +762,12 @@ ids evaluate(const expression& expr, const table_slice& slice) {
   return result;
 }
 
+namespace {
 std::optional<table_slice>
-filter(const table_slice& slice, expression expr, const ids& hints) {
+filter_generic(const table_slice& slice, expression expr, const ids& selection,
+               id offset, table_slice_encoding implementation_id) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
-  auto slice_ids = make_ids({{offset, offset + slice.rows()}});
-  auto selection = slice_ids;
-  if (!hints.empty())
-    selection &= hints;
-  // Do no rows qualify?
-  auto selection_rank = rank(selection);
-  if (selection_rank == 0)
-    return std::nullopt;
   const auto has_expr = expr != expression{};
-  if (!has_expr) {
-    // Do all rows qualify?
-    if (rank(slice_ids) == selection_rank)
-      return slice;
-  } else {
-    // Tailor the expression to the type; this is required for using the
-    // row_evaluator, which expects field and type extractors to be resolved
-    // already.
-    auto tailored_expr = tailor(expr, slice.layout());
-    if (!tailored_expr)
-      return {};
-    expr = std::move(*tailored_expr);
-  }
   // Do the candidate check.
   auto check = [&](size_t row) {
     // If no expression was provided, we rely on the provided hints only.
@@ -798,70 +778,6 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
       return false;
     return caf::visit(row_evaluator{slice, row}, expr);
   };
-  // Check if we support the Arrow fast path.
-  if (supports_arrow_fast_path(slice)) {
-    // Do the candidate check ahead of time to select the required rows.
-    auto row_ranges = std::vector<id_range>{};
-    auto num_rows = 0;
-    for (auto id : select(selection)) {
-      VAST_ASSERT(id >= offset);
-      auto row = id - offset;
-      VAST_ASSERT(row < slice.rows());
-      if (check(row)) {
-        ++num_rows;
-        if (row_ranges.empty() || row_ranges.back().last != row)
-          row_ranges.emplace_back(row, row + 1);
-        else
-          row_ranges.back().last = row + 1;
-      }
-    }
-    if (row_ranges.empty())
-      return {};
-    const auto batch = as_record_batch(slice);
-    auto batch_builder = std::unique_ptr<arrow::RecordBatchBuilder>{};
-    if (auto status = arrow::RecordBatchBuilder::Make(
-          batch->schema(), arrow::default_memory_pool(), num_rows,
-          &batch_builder);
-        !status.ok()) {
-      VAST_ERROR("filter arrow fast path failed to create builder: {}",
-                 status.message());
-      return {};
-    }
-    for (int column_index = 0; column_index < batch->num_columns();
-         ++column_index) {
-      const auto old_column = batch->column(column_index);
-      for (const auto& row_range : row_ranges) {
-        const auto offset = detail::narrow_cast<int>(row_range.first);
-        const auto count = detail::narrow_cast<int>(row_range.last) - offset;
-        if (auto status
-            = batch_builder->GetField(column_index)
-                ->AppendArraySlice(*old_column->data(), offset, count);
-            !status.ok()) {
-          VAST_ERROR("filter arrow fast path failed to append array slice: {}",
-                     status.message());
-          return {};
-        }
-      }
-    }
-    auto new_batch = std::shared_ptr<arrow::RecordBatch>{};
-    if (auto status = batch_builder->Flush(&new_batch); !status.ok()) {
-      VAST_ERROR("filter arrow fast path failed to create record batch: {}",
-                 status.message());
-      return {};
-    }
-    return arrow_table_slice_builder::create(new_batch, slice.layout());
-  }
-  // Get the desired encoding, and the already serialized layout.
-  auto f = detail::overload{
-    []() noexcept -> table_slice_encoding {
-      die("cannot filter an invalid table slice");
-    },
-    [&](const auto& encoded) noexcept {
-      return builder_id(state(encoded, slice.state_)->encoding);
-    },
-  };
-  table_slice_encoding implementation_id
-    = visit(f, as_flatbuffer(slice.chunk_));
   // Start slicing and dicing.
   auto builder
     = factory<table_slice_builder>::make(implementation_id, slice.layout());
@@ -893,6 +809,63 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   auto new_slice = builder->finish();
   VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
   return new_slice;
+}
+
+} // namespace
+
+std::optional<table_slice>
+filter(const table_slice& slice, expression expr, const ids& hints) {
+  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
+  // TODO: It would be better if we could shift the hints to the right by
+  // `offset` and anchor the `slice_ids` at 0. This would remove the id
+  // space contect from the remainder of this computation.
+  auto slice_ids = make_ids({{offset, offset + slice.rows()}});
+  auto selection = slice_ids;
+  if (!hints.empty())
+    selection &= hints;
+  // Do no rows qualify?
+  auto selection_rank = rank(selection);
+  if (selection_rank == 0)
+    return std::nullopt;
+  const auto has_expr = expr != expression{};
+  if (!has_expr) {
+    // Do all rows qualify?
+    if (rank(slice_ids) == selection_rank)
+      return slice;
+  } else {
+    // Tailor the expression to the type; this is required for using the
+    // row_evaluator, which expects field and type extractors to be resolved
+    // already.
+    auto tailored_expr = tailor(expr, slice.layout());
+    if (!tailored_expr)
+      return {};
+    expr = std::move(*tailored_expr);
+  }
+  auto f = detail::overload{
+    []() noexcept -> std::optional<table_slice> {
+      return std::nullopt;
+    },
+    [&](const fbs::table_slice::arrow::v1& encoded) noexcept {
+      return filter(*state(encoded, slice.state_), expr, selection, offset);
+    },
+    [&](const auto&) noexcept {
+      // Get the desired encoding, and the already serialized layout.
+      auto f = detail::overload{
+        []() noexcept -> table_slice_encoding {
+          die("cannot filter an invalid table slice");
+        },
+        [&](const auto& encoded) noexcept {
+          return builder_id(state(encoded, slice.state_)->encoding);
+        },
+      };
+      table_slice_encoding implementation_id
+        = visit(f, as_flatbuffer(slice.chunk_));
+      return filter_generic(slice, std::move(expr), selection, offset,
+                            implementation_id);
+    },
+  };
+  return visit(f, as_flatbuffer(slice.chunk_));
 }
 
 std::optional<table_slice>

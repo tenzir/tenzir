@@ -15,6 +15,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
+#include "vast/expression.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/legacy_type.hpp"
@@ -768,6 +769,175 @@ void arrow_table_slice<FlatBuffer>::import_time(
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled table slice "
                                                       "encoding");
   }
+}
+
+namespace {
+
+struct row_evaluator {
+  row_evaluator(const arrow_table_slice<fbs::table_slice::arrow::v1>& slice,
+                size_t row)
+    : slice_{slice}, row_{row} {
+    // nop
+  }
+
+  template <class T>
+  bool operator()(const data& d, const T& x) {
+    return (*this)(x, d);
+  }
+
+  template <class T, class U>
+  bool operator()(const T&, const U&) {
+    return false;
+  }
+
+  bool operator()(caf::none_t) {
+    return false;
+  }
+
+  bool operator()(const conjunction& c) {
+    return std::all_of(c.begin(), c.end(), [&](const auto& op) {
+      return caf::visit(*this, op);
+    });
+  }
+
+  bool operator()(const disjunction& d) {
+    return std::any_of(d.begin(), d.end(), [&](const auto& op) {
+      return caf::visit(*this, op);
+    });
+  }
+
+  bool operator()(const negation& n) {
+    return !caf::visit(*this, n.expr());
+  }
+
+  bool operator()(const predicate& p) {
+    op_ = p.op;
+    return caf::visit(*this, p.lhs, p.rhs);
+  }
+
+  bool operator()(const meta_extractor& e, const data& d) {
+    // TODO: Transform this AST node into a constant-time lookup node (e.g.,
+    // data_extractor). It's not necessary to iterate over the schema for
+    // every row; this should happen upfront.
+    const auto layout = slice_.layout();
+    // TODO: type and field queries don't produce false positives in the
+    // partition. Is there actually any reason to do the check here?
+    if (e.kind == meta_extractor::type)
+      return evaluate(std::string{layout.name()}, op_, d);
+    if (e.kind == meta_extractor::field) {
+      const auto* s = caf::get_if<std::string>(&d);
+      if (!s) {
+        VAST_WARN("#field can only compare with string");
+        return false;
+      }
+      auto result = false;
+      auto neg = is_negated(op_);
+      // auto abs_op = neg ? negate(op_) : op_;
+      for (const auto& layout_rt = caf::get<record_type>(layout);
+           const auto& [field, index] : layout_rt.leaves()) {
+        const auto fqn
+          = fmt::format("{}.{}", layout.name(), layout_rt.key(index));
+        // This is essentially s->ends_with(fqn), except that it also checks the
+        // dot separators correctly (modulo quoting).
+        const auto [fqn_mismatch, s_mismatch]
+          = std::mismatch(fqn.rbegin(), fqn.rend(), s->rbegin(), s->rend());
+        if (s_mismatch == s->rend()
+            && (fqn_mismatch == fqn.rend() || *fqn_mismatch == '.')) {
+          result = true;
+          break;
+        }
+      }
+      return neg ? !result : result;
+    }
+    if (e.kind == meta_extractor::age)
+      return evaluate(slice_.import_time(), op_, d);
+    return false;
+  }
+
+  bool operator()(const type_extractor&, const data&) {
+    die("type extractor should have been resolved at this point");
+  }
+
+  bool operator()(const field_extractor&, const data&) {
+    die("field extractor should have been resolved at this point");
+  }
+
+  bool operator()(const data_extractor& e, const data& d) {
+    auto lhs = to_canonical(e.type, slice_.at(row_, e.column, e.type));
+    auto rhs = make_data_view(d);
+    return evaluate_view(lhs, op_, rhs);
+  }
+
+  const arrow_table_slice<fbs::table_slice::arrow::v1>& slice_;
+  size_t row_;
+  relational_operator op_ = {};
+};
+
+} // namespace
+
+std::optional<table_slice>
+filter(const arrow_table_slice<fbs::table_slice::arrow::v1>& slice,
+       const expression& expr, const ids& selection, id offset) {
+  const auto has_expr = expr != expression{};
+  // Do the candidate check.
+  auto check = [&](size_t row) {
+    // If no expression was provided, we rely on the provided hints only.
+    if (!has_expr)
+      return true;
+    // Check if the expression was unable to be tailored to the type.
+    if (expr == expression{})
+      return false;
+    return caf::visit(row_evaluator{slice, row}, expr);
+  };
+  auto row_ranges = std::vector<id_range>{};
+  auto num_rows = 0;
+  for (auto id : select(selection)) {
+    VAST_ASSERT(id >= offset);
+    auto row = id - offset;
+    VAST_ASSERT(row < slice.rows());
+    if (check(row)) {
+      ++num_rows;
+      if (row_ranges.empty() || row_ranges.back().last != row)
+        row_ranges.emplace_back(row, row + 1);
+      else
+        row_ranges.back().last = row + 1;
+    }
+  }
+  if (row_ranges.empty())
+    return {};
+  const auto batch = slice.record_batch();
+  auto batch_builder = std::unique_ptr<arrow::RecordBatchBuilder>{};
+  if (auto status = arrow::RecordBatchBuilder::Make(
+        batch->schema(), arrow::default_memory_pool(), num_rows,
+        &batch_builder);
+      !status.ok()) {
+    VAST_ERROR("filter arrow fast path failed to create builder: {}",
+               status.message());
+    return {};
+  }
+  for (int column_index = 0; column_index < batch->num_columns();
+       ++column_index) {
+    const auto old_column = batch->column(column_index);
+    for (const auto& row_range : row_ranges) {
+      const auto offset = detail::narrow_cast<int>(row_range.first);
+      const auto count = detail::narrow_cast<int>(row_range.last) - offset;
+      if (auto status
+          = batch_builder->GetField(column_index)
+              ->AppendArraySlice(*old_column->data(), offset, count);
+          !status.ok()) {
+        VAST_ERROR("filter arrow fast path failed to append array slice: {}",
+                   status.message());
+        return {};
+      }
+    }
+  }
+  auto new_batch = std::shared_ptr<arrow::RecordBatch>{};
+  if (auto status = batch_builder->Flush(&new_batch); !status.ok()) {
+    VAST_ERROR("filter arrow fast path failed to create record batch: {}",
+               status.message());
+    return {};
+  }
+  return arrow_table_slice_builder::create(new_batch, slice.layout());
 }
 
 template <class FlatBuffer>
