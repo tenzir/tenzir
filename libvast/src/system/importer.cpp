@@ -270,9 +270,11 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     if (self->state.stage) {
       self->state.stage->shutdown();
       self->state.stage->out().push(detail::framed<table_slice>::make_eof());
-      self->state.stage->out().force_emit_batches();
-      self->state.stage->out().close();
+      // We need to `fan_out_flush()` before we close, otherwise `close()`
+      // will delete all clean output paths and we might lose the eof.
       self->state.stage->out().fan_out_flush();
+      self->state.stage->out().close();
+      self->state.stage->out().force_emit_batches();
       // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
       // for reasoning.
       auto dummy = self->spawn(dummy_transformer_sink);
@@ -285,8 +287,9 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
-  self->state.transformer = self->spawn(transformer, "input_transformer",
-                                        std::move(input_transformations));
+  self->state.transformer
+    = self->spawn(component_transformer, "input_transformer",
+                  std::move(input_transformations));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", *self);
     self->quit(std::move(err));

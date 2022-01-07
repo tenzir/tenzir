@@ -37,6 +37,11 @@ struct transformer_state {
   /// Name of this transformer.
   std::string transformer_name;
 
+  /// Whether the source requires us to shutdown the stream stage.
+  /// This will usually be the case for transformers attached to node
+  /// components with persistent stream stages, ie. the importer.
+  bool source_requires_shutdown;
+
   /// The cached status response.
   record status;
 
@@ -47,9 +52,17 @@ struct transformer_state {
 /// An actor containing a transform_stream_stage, which is just a stream
 /// stream stage that applies a `transformation_engine` to every table slice.
 /// @param self The actor handle.
+/// @param transforms The set of transforms to be applied.
 transformer_actor::behavior_type
 transformer(transformer_actor::stateful_pointer<transformer_state> self,
             std::string name, std::vector<transform>&&);
+
+/// A transformer actor that is attached to a system component. This behaves
+/// identical to the regular `transformer` except for a slightly different
+/// logic during system shutdown.
+transformer_actor::behavior_type component_transformer(
+  transformer_actor::stateful_pointer<transformer_state> self, std::string name,
+  std::vector<transform>&&);
 
 /// An actor that hosts a no-op stream sink for table slices, that the SOURCE
 /// and IMPORTER attach to their respective TRANSFORMER actors on shutdown.

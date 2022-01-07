@@ -172,9 +172,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     if (self->state.mgr) {
       self->state.mgr->shutdown();
       self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
-      self->state.mgr->out().force_emit_batches();
-      self->state.mgr->out().close();
       self->state.mgr->out().fan_out_flush();
+      self->state.mgr->out().close();
+      self->state.mgr->out().force_emit_batches();
       // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
       // for reasoning.
       auto dummy = self->spawn(dummy_transformer_sink);
