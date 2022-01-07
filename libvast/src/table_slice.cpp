@@ -659,7 +659,7 @@ struct row_evaluator {
       }
       return neg ? !result : result;
     }
-    if (e.kind == meta_extractor::age)
+    if (e.kind == meta_extractor::import_time)
       return evaluate(slice_.import_time(), op_, d);
     return false;
   }

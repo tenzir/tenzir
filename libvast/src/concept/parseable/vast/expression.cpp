@@ -129,6 +129,7 @@ static auto make_predicate_parser() {
     = (parsers::data >> !(field_char | '.')) ->* to_data_operand
     | "#type"_p  ->* [] { return meta_extractor{meta_extractor::type}; }
     | "#field"_p ->* [] { return meta_extractor{meta_extractor::field}; }
+    | "#import_time"_p ->* [] { return meta_extractor{meta_extractor::import_time}; }
     | ':' >> parsers::legacy_type ->* to_type_extractor
     | field ->* to_field_extractor
     ;

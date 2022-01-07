@@ -311,7 +311,7 @@ validator::operator()(const meta_extractor& ex, const data& d) {
                                          "#field {} {}",
                                          op_, d));
   }
-  if (ex.kind == meta_extractor::age) {
+  if (ex.kind == meta_extractor::import_time) {
     if (!caf::holds_alternative<time>(d)
         || !(op_ == relational_operator::less
              || op_ == relational_operator::less_equal
