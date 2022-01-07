@@ -34,3 +34,7 @@ namespace vast.fbs;
 table Coder {
   coder: coder.Coder (required);
 }
+
+table BitmapIndex {
+  coder: Coder (required);
+}

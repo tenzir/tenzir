@@ -14,6 +14,7 @@
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/test/test.hpp"
 #include "vast/time.hpp"
@@ -35,6 +36,15 @@ TEST(bool bitmap index) {
               "10010");
   CHECK_EQUAL(to_string(bmi.lookup(relational_operator::not_equal, true)),
               "01101");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, bmi));
+  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  bitmap_index<bool, singleton_coder<null_bitmap>> bmi2;
+  REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
+  CHECK_EQUAL(bmi, bmi2);
 }
 
 TEST(appending multiple values) {
@@ -45,9 +55,18 @@ TEST(appending multiple values) {
   CHECK(to_string(bmi.lookup(relational_operator::less, 10)) == "1111111111");
   CHECK(to_string(bmi.lookup(relational_operator::equal, 7)) == "1111000000");
   CHECK(to_string(bmi.lookup(relational_operator::equal, 3)) == "0000111111");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, bmi));
+  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  bitmap_index<uint8_t, range_coder<null_bitmap>> bmi2{};
+  REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
+  CHECK_EQUAL(bmi, bmi2);
 }
 
-TEST(multi-level range-coded bitmap index) {
+TEST(multi - level range - coded bitmap index) {
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto bmi = bitmap_index<int8_t, coder_type>{base::uniform<8>(2)};
   bmi.append(42);
@@ -88,9 +107,18 @@ TEST(multi-level range-coded bitmap index) {
               "11111");
   CHECK_EQUAL(to_string(bmi.lookup(relational_operator::greater_equal, 22)),
               "11101");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, bmi));
+  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  auto bmi2 = bitmap_index<int8_t, coder_type>{};
+  REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
+  CHECK_EQUAL(bmi, bmi2);
 }
 
-TEST(multi-level range-coded bitmap index 2) {
+TEST(multi - level range - coded bitmap index 2) {
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto bmi = bitmap_index<uint16_t, coder_type>{base::uniform(9, 7)};
   bmi.append(80);
@@ -140,9 +168,18 @@ TEST(multi-level range-coded bitmap index 2) {
   CHECK(bmi.lookup(relational_operator::greater, 80) == greater_eighty);
   CHECK(bmi.lookup(relational_operator::greater, 31337) == all_zeros);
   CHECK(bmi.lookup(relational_operator::greater, 31338) == all_zeros);
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, bmi));
+  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  auto bmi2 = bitmap_index<uint16_t, coder_type>{};
+  REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
+  CHECK_EQUAL(bmi, bmi2);
 }
 
-TEST(bitslice-coded bitmap index) {
+TEST(bitslice - coded bitmap index) {
   bitmap_index<int16_t, bitslice_coder<null_bitmap>> bmi{8};
   bmi.append(0);
   bmi.append(1);
@@ -168,6 +205,15 @@ TEST(bitslice-coded bitmap index) {
                                                                         "0");
   CHECK_EQUAL(to_string(bmi.lookup(relational_operator::not_equal, 3)), "111101"
                                                                         "1");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, bmi));
+  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  bitmap_index<int16_t, bitslice_coder<null_bitmap>> bmi2{};
+  REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
+  CHECK_EQUAL(bmi, bmi2);
 }
 
 namespace {
@@ -209,13 +255,13 @@ auto append_test() {
   return bmi2;
 }
 
-} // namespace <anonymous>
+} // namespace
 
-TEST(equality-coder append) {
+TEST(equality - coder append) {
   append_test<equality_coder<null_bitmap>>();
 }
 
-TEST(range-coder append) {
+TEST(range - coder append) {
   auto bmi = append_test<range_coder<null_bitmap>>();
   CHECK(to_string(bmi.lookup(relational_operator::greater_equal, 42))
         == "111111111111");
@@ -227,11 +273,11 @@ TEST(range-coder append) {
         == "101000011010");
 }
 
-TEST(bitslice-coder append) {
+TEST(bitslice - coder append) {
   append_test<bitslice_coder<null_bitmap>>();
 }
 
-TEST(fractional precision-binner) {
+TEST(fractional precision - binner) {
   using binner = precision_binner<2, 3>;
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto bmi = bitmap_index<double, coder_type, binner>{base::uniform<64>(2)};
@@ -292,7 +338,7 @@ TEST(decimal binner with time) {
                                                                          "0");
 }
 
-TEST(decimal binner with floating-point) {
+TEST(decimal binner with floating - point) {
   using binner = decimal_binner<1>;
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto bmi = bitmap_index<double, coder_type, binner>{base::uniform<64>(2)};
