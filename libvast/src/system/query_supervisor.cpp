@@ -40,6 +40,8 @@ query_supervisor_state::query_supervisor_state(
 query_supervisor_actor::behavior_type query_supervisor(
   query_supervisor_actor::stateful_pointer<query_supervisor_state> self,
   query_supervisor_master_actor master) {
+  VAST_TRACE_SCOPE("query_supervisor {} {}", VAST_ARG(self->id()),
+                   VAST_ARG(master));
   // Ask master for initial work.
   self->state.master = std::move(master);
   self->send(self->state.master, atom::worker_v, self);

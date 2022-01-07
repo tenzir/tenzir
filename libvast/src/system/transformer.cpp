@@ -55,7 +55,7 @@ transformer_stream_stage_ptr attach_transform_stage(
 transformer_actor::behavior_type
 transformer(transformer_actor::stateful_pointer<transformer_state> self,
             std::string name, std::vector<transform>&& transforms) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(name));
+  VAST_TRACE_SCOPE("transformer {} {}", VAST_ARG(self->id()), VAST_ARG(name));
   self->state.transformer_name = std::move(name);
   auto transform_names = list{};
   for (const auto& t : transforms)
@@ -92,6 +92,7 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
 
 stream_sink_actor<table_slice>::behavior_type
 dummy_transformer_sink(stream_sink_actor<table_slice>::pointer self) {
+  VAST_TRACE_SCOPE("dummy transformer sink {}", VAST_ARG(self->id()));
   return {
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {

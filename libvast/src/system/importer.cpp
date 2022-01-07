@@ -252,7 +252,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, const store_builder_actor& store,
          index_actor index, const type_registry_actor& type_registry,
          std::vector<transform>&& input_transformations) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(dir));
+  VAST_TRACE_SCOPE("importer {} {}", VAST_ARG(self->id()), VAST_ARG(dir));
   for (const auto& x : input_transformations)
     VAST_VERBOSE("{} loaded import transformation {}", *self, x.name());
   self->state.dir = dir;
@@ -319,7 +319,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
                 static_cast<stream_sink_actor<table_slice>>(self->state.index))
       .then([](const caf::outbound_stream_slot<table_slice>&) {},
             [self](caf::error& error) {
-              VAST_ERROR("failed to connect store to the importer: {}", error);
+              VAST_ERROR("failed to connect index to the importer: {}", error);
               self->quit(std::move(error));
             });
   }

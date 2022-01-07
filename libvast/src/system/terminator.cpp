@@ -25,6 +25,8 @@ template <class Policy>
 caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
                          std::chrono::milliseconds grace_period,
                          std::chrono::milliseconds kill_timeout) {
+  VAST_TRACE_SCOPE("terminator {} {} {}", VAST_ARG(self->id()),
+                   VAST_ARG(grace_period), VAST_ARG(kill_timeout));
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
     VAST_DEBUG("{} received DOWN from actor {}", *self, msg.source);
@@ -89,6 +91,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
         // that corresponds to our EXIT message. (When monitoring an already
         // terminated actor, CAF dispatches the DOWN immediately.)
         auto& next = remaining.back();
+        VAST_DEBUG("{} sends exit to {}", *self, next->id());
         self->monitor(next);
         self->send_exit(next, caf::exit_reason::user_shutdown);
       } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
