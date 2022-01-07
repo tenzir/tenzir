@@ -161,6 +161,9 @@ unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
   if (x.import_time_range()) {
     ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
     ps.max_import_time = time{} + duration{x.import_time_range()->end()};
+  } else {
+    ps.min_import_time = time{};
+    ps.max_import_time = time{};
   }
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
@@ -179,6 +182,9 @@ caf::error unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps,
   if (x.import_time_range()) {
     ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
     ps.max_import_time = time{} + duration{x.import_time_range()->end()};
+  } else {
+    ps.min_import_time = time{};
+    ps.max_import_time = time{};
   }
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
