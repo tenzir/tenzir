@@ -59,6 +59,13 @@ public:
 
   friend null_bitmap_range bit_range(const null_bitmap& bm);
 
+  friend auto
+  pack(flatbuffers::FlatBufferBuilder& builder, const null_bitmap& from)
+    -> flatbuffers::Offset<fbs::bitmap::NullBitmap>;
+
+  friend auto unpack(const fbs::bitmap::NullBitmap& from, null_bitmap& to)
+    -> caf::error;
+
 private:
   bitvector_type bitvector_;
 };

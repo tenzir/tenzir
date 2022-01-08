@@ -8,6 +8,8 @@
 
 #include "vast/ewah_bitmap.hpp"
 
+#include "vast/fbs/bitmap.hpp"
+
 namespace vast {
 
 ewah_bitmap::ewah_bitmap(size_type n, bool bit) {
@@ -88,12 +90,14 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
   // If we have currently no dirty blocks and the current marker is of the same
   // type, we reuse it. We also reuse the very first marker if it's still
   // empty.
-  if ((last_marker_ == blocks_.size() - 1 && word_type::marker_type(marker) == bit)
+  if ((last_marker_ == blocks_.size() - 1
+       && word_type::marker_type(marker) == bit)
       || (last_marker_ == 0 && marker == 0)) {
     auto marker_clean_length = word_type::marker_num_clean(marker);
     auto available = word_type::marker_clean_max - marker_clean_length;
     auto new_blocks = std::min(available, clean_blocks);
-    marker = word_type::marker_num_clean(marker, marker_clean_length + new_blocks);
+    marker
+      = word_type::marker_num_clean(marker, marker_clean_length + new_blocks);
     marker = word_type::marker_type(marker, bit);
     clean_blocks -= new_blocks;
   }
@@ -203,7 +207,8 @@ void ewah_bitmap::integrate_last_block() {
       blocks_.pop_back();
     } else {
       // Replace the last block with a new marker.
-      auto m = word_type::marker_num_clean(word_type::marker_type(0, last_block_type), 1);
+      auto m = word_type::marker_num_clean(
+        word_type::marker_type(0, last_block_type), 1);
       last_block = m;
       last_marker_ = blocks_.size() - 1;
     }
@@ -239,8 +244,23 @@ bool operator==(const ewah_bitmap& x, const ewah_bitmap& y) {
   return x.blocks_ == y.blocks_ && x.num_bits_ == y.num_bits_;
 }
 
-ewah_bitmap_range::ewah_bitmap_range(const ewah_bitmap& bm)
-  : bm_{&bm} {
+auto pack(flatbuffers::FlatBufferBuilder& builder, const ewah_bitmap& from)
+  -> flatbuffers::Offset<fbs::bitmap::EWAHBitmap> {
+  return fbs::bitmap::CreateEWAHBitmapDirect(builder, &from.blocks_,
+                                             from.last_marker_, from.num_bits_);
+}
+
+auto unpack(const fbs::bitmap::EWAHBitmap& from, ewah_bitmap& to)
+  -> caf::error {
+  to.blocks_.reserve(from.blocks()->size());
+  to.blocks_.insert(to.blocks_.end(), from.blocks()->begin(),
+                    from.blocks()->end());
+  to.last_marker_ = from.last_marker();
+  to.num_bits_ = from.num_bits();
+  return caf::none;
+}
+
+ewah_bitmap_range::ewah_bitmap_range(const ewah_bitmap& bm) : bm_{&bm} {
   if (!bm_->empty())
     scan();
 }
@@ -276,7 +296,8 @@ void ewah_bitmap_range::scan() {
       ++next_;
       scan();
     } else {
-      auto data = word_type::marker_type(block) ? word_type::all : word_type::none;
+      auto data
+        = word_type::marker_type(block) ? word_type::all : word_type::none;
       auto length = num_clean * word_type::width;
       // If no dirty blocks follow this marker and we have not reached the
       // final dirty block yet, we know that the next block must be a marker as

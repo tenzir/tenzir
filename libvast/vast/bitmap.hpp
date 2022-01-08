@@ -82,6 +82,13 @@ public:
     return f(bm.bitmap_);
   }
 
+  // -- flatbuffers -----------------------------------------------------------
+
+  friend auto pack(flatbuffers::FlatBufferBuilder& builder, const bitmap& from)
+    -> flatbuffers::Offset<fbs::Bitmap>;
+
+  friend auto unpack(const fbs::Bitmap& from, bitmap& to) -> caf::error;
+
 private:
   variant bitmap_;
 };

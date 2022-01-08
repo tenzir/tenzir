@@ -70,7 +70,7 @@ class wah_bitmap_range;
 /// The implementation must maintain the following invariant: there is always
 /// an incomplete word at the end of the block sequence.
 class wah_bitmap : public bitmap_base<wah_bitmap>,
-                    detail::equality_comparable<wah_bitmap> {
+                   detail::equality_comparable<wah_bitmap> {
   friend wah_bitmap_range;
 
 public:
@@ -106,9 +106,16 @@ public:
   friend bool operator==(const wah_bitmap& x, const wah_bitmap& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, wah_bitmap& bm) {
+  friend auto inspect(Inspector& f, wah_bitmap& bm) {
     return f(bm.blocks_, bm.num_last_, bm.num_bits_);
   }
+
+  friend auto
+  pack(flatbuffers::FlatBufferBuilder& builder, const wah_bitmap& from)
+    -> flatbuffers::Offset<fbs::bitmap::WAHBitmap>;
+
+  friend auto unpack(const fbs::bitmap::WAHBitmap& from, wah_bitmap& to)
+    -> caf::error;
 
 private:
   void merge_active_word();
@@ -141,5 +148,3 @@ private:
 wah_bitmap_range bit_range(const wah_bitmap& bm);
 
 } // namespace vast
-
-

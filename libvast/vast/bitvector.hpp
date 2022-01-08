@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/bits.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
@@ -35,10 +37,10 @@ class bitvector_iterator;
 /// of the interface defined in §23.3.12.
 template <class Block = size_t, class Allocator = std::allocator<Block>>
 class bitvector : detail::equality_comparable<bitvector<Block, Allocator>> {
-  static_assert(std::is_unsigned_v<Block>,
-                "Block must be unsigned for well-defined bit operations");
-  static_assert(!std::is_same_v<Block, bool>,
-                "Block cannot be bool; you may want std::vector<bool> instead");
+  static_assert(std::is_unsigned_v<Block>, "Block must be unsigned for "
+                                           "well-defined bit operations");
+  static_assert(!std::is_same_v<Block, bool>, "Block cannot be bool; you may "
+                                              "want std::vector<bool> instead");
 
 public:
   using value_type = bool;
@@ -132,15 +134,15 @@ public:
   void pop_back();
 
   // TODO: provide implementation as needed
-  //template <class... Ts>
-  //iterator emplace(const_iterator i, Ts&&... xs);
-  //iterator insert(const_iterator i, const value_type& x);
-  //iterator insert(const_iterator i, size_type n, const value_type& x);
-  //template <class InputIterator>
-  //iterator insert(const_iterator i, InputIterator first, InputIterator last);
-  //iterator insert(const_iterator i, std::initializer_list<value_type> list);
-  //iterator erase(const_iterator i);
-  //iterator erase(const_iterator first, const_iterator last);
+  // template <class... Ts>
+  // iterator emplace(const_iterator i, Ts&&... xs);
+  // iterator insert(const_iterator i, const value_type& x);
+  // iterator insert(const_iterator i, size_type n, const value_type& x);
+  // template <class InputIterator>
+  // iterator insert(const_iterator i, InputIterator first, InputIterator last);
+  // iterator insert(const_iterator i, std::initializer_list<value_type> list);
+  // iterator erase(const_iterator i);
+  // iterator erase(const_iterator first, const_iterator last);
 
   void swap(bitvector& other);
 
@@ -189,6 +191,13 @@ public:
     return f(b.blocks_, b.size_);
   }
 
+  friend auto
+  pack(flatbuffers::FlatBufferBuilder& builder, const null_bitmap& from)
+    -> flatbuffers::Offset<fbs::bitmap::NullBitmap>;
+
+  friend auto unpack(const fbs::bitmap::NullBitmap& from, null_bitmap& to)
+    -> caf::error;
+
 private:
   static size_type bits_to_blocks(size_type n) {
     return n == 0 ? 0 : 1 + ((n - 1) / word_type::width);
@@ -224,14 +233,14 @@ public:
   }
 
   constexpr reference& operator=(bool x) noexcept {
-    x ? *block_ |= mask_ : *block_ &= ~mask_;
+    x ? * block_ |= mask_ : * block_ &= ~mask_;
     return *this;
   }
 
   constexpr reference(const reference& other) noexcept = default;
 
   constexpr reference& operator=(const reference& other) noexcept {
-    other ? *block_ |= mask_ : *block_ &= ~mask_;
+    other ? * block_ |= mask_ : * block_ &= ~mask_;
     return *this;
   }
 
@@ -247,7 +256,7 @@ public:
 
 private:
   // The standard defines it, but why do we need it?
-  //reference() noexcept;
+  // reference() noexcept;
 
   constexpr reference(block* x, block mask) : block_{x}, mask_{mask} {
   }
@@ -265,15 +274,13 @@ bitvector<Block, Allocator>::bitvector() : bitvector{Allocator{}} {
 
 template <class Block, class Allocator>
 bitvector<Block, Allocator>::bitvector(const Allocator& alloc)
-  : blocks_{alloc},
-    size_{0} {
+  : blocks_{alloc}, size_{0} {
   // nop
 }
 
 template <class Block, class Allocator>
 bitvector<Block, Allocator>::bitvector(size_type n, const Allocator& alloc)
-  : blocks_(bits_to_blocks(n), 0, alloc),
-    size_{n} {
+  : blocks_(bits_to_blocks(n), 0, alloc), size_{n} {
   // nop
 }
 
@@ -295,24 +302,21 @@ bitvector<Block, Allocator>::bitvector(InputIterator first, InputIterator last,
 template <class Block, class Allocator>
 bitvector<Block, Allocator>::bitvector(const bitvector& other,
                                        const Allocator& alloc)
-  : blocks_{other.blocks_, alloc},
-    size_{other.size_} {
+  : blocks_{other.blocks_, alloc}, size_{other.size_} {
   // nop
 }
 
 template <class Block, class Allocator>
 bitvector<Block, Allocator>::bitvector(bitvector&& other,
                                        const Allocator& alloc)
-  : blocks_{std::move(other.blocks_), alloc},
-    size_{std::move(other.size_)} {
+  : blocks_{std::move(other.blocks_), alloc}, size_{std::move(other.size_)} {
   // nop
 }
 
 template <class Block, class Allocator>
 bitvector<Block, Allocator>::bitvector(std::initializer_list<value_type> list,
                                        const Allocator& alloc)
-  : blocks_{alloc},
-    size_{0} {
+  : blocks_{alloc}, size_{0} {
   assign(list.begin(), list.end());
 }
 
@@ -330,17 +334,14 @@ namespace detail {
 template <class Bitvector>
 class bitvector_iterator
   : public iterator_facade<
-      bitvector_iterator<Bitvector>,
-      typename Bitvector::value_type,
+      bitvector_iterator<Bitvector>, typename Bitvector::value_type,
       std::random_access_iterator_tag,
-      std::conditional_t<
-        std::is_const_v<Bitvector>,
-        typename Bitvector::const_reference,
-        typename Bitvector::reference
-      >,
-      typename Bitvector::size_type
-    > {
+      std::conditional_t<std::is_const_v<Bitvector>,
+                         typename Bitvector::const_reference,
+                         typename Bitvector::reference>,
+      typename Bitvector::size_type> {
   friend Bitvector;
+
 public:
   bitvector_iterator() = default;
 
@@ -651,7 +652,7 @@ bool operator==(const bitvector<Block, Allocator>& x,
 
 template <class Block, class Allocator>
 const typename bitvector<Block, Allocator>::block_vector&
-bitvector<Block, Allocator>::blocks() const noexcept{
+bitvector<Block, Allocator>::blocks() const noexcept {
   return blocks_;
 }
 
@@ -701,9 +702,8 @@ rank(const bitvector<Block, Allocator>& bv) {
   auto n = bv.size();
   auto p = bv.blocks().data();
   for (; n >= word_type::width; ++p, n -= word_type::width)
-    result += Bit
-      ? word_type::popcount(*p)
-      : word_type::width - word_type::popcount(*p);
+    result += Bit ? word_type::popcount(*p)
+                  : word_type::width - word_type::popcount(*p);
   if (n > 0) {
     auto last = word_type::popcount(*p & word_type::lsb_mask(n));
     result += Bit ? last : n - last;
@@ -712,4 +712,3 @@ rank(const bitvector<Block, Allocator>& bv) {
 }
 
 } // namespace vast
-
