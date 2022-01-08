@@ -112,33 +112,22 @@ auto pack(flatbuffers::FlatBufferBuilder& builder, const bitmap& from)
 }
 
 auto unpack(const fbs::Bitmap& from, bitmap& to) -> caf::error {
+  auto do_unpack
+    = [&](const auto& from_concrete, auto to_concrete) -> caf::error {
+    if (auto err = unpack(from_concrete, to_concrete))
+      return err;
+    to.bitmap_ = std::move(to_concrete);
+    return caf::none;
+  };
   switch (from.bitmap_type()) {
     case fbs::bitmap::Bitmap::NONE:
       return caf::make_error(ec::logic_error, "invalid vast.fbs.Bitmap type");
-    case fbs::bitmap::Bitmap::ewah: {
-      const auto& from_ewah = *from.bitmap_as_ewah();
-      auto to_ewah = ewah_bitmap{};
-      if (auto err = unpack(from_ewah, to_ewah))
-        return err;
-      to.bitmap_ = std::move(to_ewah);
-      return caf::none;
-    }
-    case fbs::bitmap::Bitmap::null: {
-      const auto& from_null = *from.bitmap_as_null();
-      auto to_null = null_bitmap{};
-      if (auto err = unpack(from_null, to_null))
-        return err;
-      to.bitmap_ = std::move(to_null);
-      return caf::none;
-    }
-    case fbs::bitmap::Bitmap::wah: {
-      const auto& from_wah = *from.bitmap_as_wah();
-      auto to_wah = wah_bitmap{};
-      if (auto err = unpack(from_wah, to_wah))
-        return err;
-      to.bitmap_ = std::move(to_wah);
-      return caf::none;
-    }
+    case fbs::bitmap::Bitmap::ewah:
+      return do_unpack(*from.bitmap_as_ewah(), ewah_bitmap{});
+    case fbs::bitmap::Bitmap::null:
+      return do_unpack(*from.bitmap_as_null(), null_bitmap{});
+    case fbs::bitmap::Bitmap::wah:
+      return do_unpack(*from.bitmap_as_wah(), wah_bitmap{});
   }
   __builtin_unreachable();
 }

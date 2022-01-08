@@ -114,6 +114,7 @@ bitmap_bit_range bit_range(const bitmap& bm);
 } // namespace vast
 
 namespace caf {
+
 template <>
 struct sum_type_access<vast::bitmap> : default_sum_type_access<vast::bitmap> {};
 
