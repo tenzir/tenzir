@@ -123,7 +123,7 @@ expression prune_all(expression e) {
   return result;
 }
 
-std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
+meta_index_result meta_index_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
   auto pruned = prune_all(expr);
   auto result = lookup_impl(pruned);
@@ -132,7 +132,13 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
   VAST_DEBUG("meta index lookup found {} candidates in {} microseconds",
              result.size(), delta.count());
   VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
-  return result;
+  // TODO: This is correct because every exact result can be regarded as a
+  // probabilistic result with zero false positives, but it is a
+  // pessimization.
+  // We should analyze the query here to see whether it's probabilistic or
+  // exact. An exact query consists of a disjunction of exact synopses or
+  // an explicit set of ids.
+  return meta_index_result{meta_index_result::probabilistic, std::move(result)};
 }
 
 std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
@@ -405,19 +411,23 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
       self->state.erase(old_partition);
       return atom::ok_v;
     },
-    [=](atom::candidates, vast::expression expr,
-        vast::ids ids) -> caf::result<meta_index_result> {
-      auto query = vast::query{};
-      query.expr = std::move(expr);
-      query.ids = std::move(ids);
-      query.id = vast::uuid::nil();
-      return self->delegate(static_cast<meta_index_actor>(self),
-                            atom::candidates_v, std::move(query));
+    [=](atom::candidates, vast::uuid lookup_id,
+        const vast::expression& expr) -> caf::result<meta_index_result> {
+      auto start = std::chrono::steady_clock::now();
+      auto result = self->state.lookup(expr);
+      duration runtime = std::chrono::steady_clock::now() - start;
+      auto id_str = fmt::to_string(lookup_id);
+      self->send(self->state.accountant, "meta-index.lookup.runtime", runtime,
+                 metrics_metadata{{"query", id_str}});
+      self->send(self->state.accountant, "meta-index.lookup.candidates",
+                 result.partitions.size(),
+                 metrics_metadata{{"query", std::move(id_str)}});
+      return result;
     },
     [=](atom::candidates,
         const vast::query& query) -> caf::result<meta_index_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query));
-      std::vector<vast::uuid> expression_candidates;
+      meta_index_result expression_candidates;
       std::vector<vast::uuid> ids_candidates;
       bool has_expression = query.expr != vast::expression{};
       bool has_ids = !query.ids.empty();
@@ -439,27 +449,26 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
           = std::unique(ids_candidates.begin(), ids_candidates.end());
         ids_candidates.erase(new_end, ids_candidates.end());
       }
-      std::vector<vast::uuid> result;
+      std::vector<vast::uuid> result_candidates;
       if (has_expression && has_ids)
-        std::set_intersection(expression_candidates.begin(),
-                              expression_candidates.end(),
+        std::set_intersection(expression_candidates.partitions.begin(),
+                              expression_candidates.partitions.end(),
                               ids_candidates.begin(), ids_candidates.end(),
-                              std::back_inserter(result));
+                              std::back_inserter(result_candidates));
       else if (has_expression)
-        result = std::move(expression_candidates);
+        result_candidates = std::move(expression_candidates.partitions);
       else
-        result = std::move(ids_candidates);
+        result_candidates = std::move(ids_candidates);
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
       self->send(self->state.accountant, "meta-index.lookup.runtime", runtime,
                  metrics_metadata{{"query", id_str}});
       self->send(self->state.accountant, "meta-index.lookup.candidates",
-                 result.size(), metrics_metadata{{"query", std::move(id_str)}});
-      // TODO: This reproduces the previous behavior, but it is a pessimization:
-      // We should analyze the query here to see whether it's probabilistic or
-      // exact.
+                 result_candidates.size(),
+                 metrics_metadata{{"query", std::move(id_str)}});
+
       return meta_index_result{meta_index_result::probabilistic,
-                               std::move(result)};
+                               std::move(result_candidates)};
     },
     [=](atom::status, status_verbosity v) {
       record result;

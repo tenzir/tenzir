@@ -209,10 +209,9 @@ using meta_index_actor = typed_actor_fwd<
   caf::replies_to<atom::replace, uuid, uuid,
                   std::shared_ptr<partition_synopsis>>::with<atom::ok>,
   // Return the candidate partitions for an expression.
-  caf::replies_to<atom::candidates, vast::expression,
-                  vast::ids>::with<meta_index_result>,
+  caf::replies_to<atom::candidates, vast::uuid,
+                  vast::expression>::with<meta_index_result>,
   // Return the candidate partitions for a query.
-  // The meta index will only look at the expression and ids subfields.
   caf::replies_to<atom::candidates, vast::query>::with<meta_index_result>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;

@@ -718,7 +718,7 @@ index(index_actor::stateful_pointer<index_state> self,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double synopsis_fp_rate) {
-  VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
+  VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
                    VAST_ARG(taste_partitions), VAST_ARG(num_workers),
@@ -931,10 +931,10 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::resolve,
-           vast::expression expr) -> caf::result<meta_index_result> {
-      auto query = query::make_erase(expr);
+           vast::expression& expr) -> caf::result<meta_index_result> {
+      auto lookup_id = vast::uuid::random();
       return self->delegate(self->state.meta_index, atom::candidates_v,
-                            std::move(query));
+                            lookup_id, std::move(expr));
     },
     [self](atom::internal, vast::query query,
            query_supervisor_actor worker) -> caf::result<query_cursor> {
