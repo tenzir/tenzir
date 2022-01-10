@@ -17,6 +17,7 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -268,13 +269,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
     if (self->state.stage) {
-      self->state.stage->shutdown();
       self->state.stage->out().push(detail::framed<table_slice>::make_eof());
-      // We need to `fan_out_flush()` before we close, otherwise `close()`
-      // will delete all clean output paths and we might lose the eof.
-      self->state.stage->out().fan_out_flush();
-      self->state.stage->out().close();
-      self->state.stage->out().force_emit_batches();
+      detail::shutdown_stream_stage(self->state.stage);
       // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
       // for reasoning.
       auto dummy = self->spawn(dummy_transformer_sink);

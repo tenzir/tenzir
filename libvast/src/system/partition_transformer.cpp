@@ -8,6 +8,7 @@
 
 #include "vast/system/partition_transformer.hpp"
 
+#include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
@@ -206,9 +207,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         self->state.stage->out().push(slice);
       }
       self->state.finalize_data();
-      self->state.stage->out().fan_out_flush();
-      self->state.stage->out().close();
-      self->state.stage->out().force_emit_batches();
+      detail::shutdown_stream_stage(self->state.stage);
       auto stream_data = partition_transformer_state::stream_data{};
       [&] {
         { // Pack partition
