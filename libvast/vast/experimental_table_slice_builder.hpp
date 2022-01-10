@@ -13,6 +13,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
+#include <arrow/type.h>
 #include <flatbuffers/flatbuffers.h>
 
 #include <memory>
@@ -134,4 +135,20 @@ std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t);
 /// @returns An arrow representation of `t`.
 std::shared_ptr<arrow::DataType> make_experimental_type(const type& t);
 
+/// Converts a VAST `type` to an Arrow `Field`.
+//  @param name The field name.
+/// @param t The type to convert.
+/// @returns An arrow representation of `t`.
+std::shared_ptr<arrow::Field>
+make_experimental_field(const std::string& name, const type& t);
+
+/// Converts an Arrow `Schema` to a VAST `type`.
+/// @param arrow_schema The Arrow schema to convert.
+/// @returns A VAST type representation of `arrow_schema`.
+type make_vast_type(const arrow::Schema& arrow_schema);
+
+/// Converts an Arrow `Field` to a VAST `type`
+/// @param arrow_field Te arrow field to convert.
+/// @return A VAST type representation of `arrow_field`
+type make_vast_type(const arrow::Field& arrow_field);
 } // namespace vast
