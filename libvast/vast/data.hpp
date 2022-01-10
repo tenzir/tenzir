@@ -171,6 +171,11 @@ public:
     return !is_equal(lhs, rhs);
   }
 
+  friend flatbuffers::Offset<fbs::Data>
+  pack(flatbuffers::FlatBufferBuilder& builder, const data& value);
+
+  friend caf::error unpack(const fbs::Data& from, data& to);
+
   /// @cond PRIVATE
 
   [[nodiscard]] variant& get_data() {
