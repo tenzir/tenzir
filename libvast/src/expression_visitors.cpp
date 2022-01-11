@@ -318,9 +318,9 @@ validator::operator()(const meta_extractor& ex, const data& d) {
              || op_ == relational_operator::greater
              || op_ == relational_operator::greater_equal))
       return caf::make_error(ec::syntax_error,
-                             fmt::format("age attribute extractor only "
+                             fmt::format("import_time attribute extractor only "
                                          "supports time comparisons "
-                                         "#age {} {}",
+                                         "#import_time {} {}",
                                          op_, d));
   }
   return caf::no_error;
