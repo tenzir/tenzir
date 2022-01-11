@@ -35,7 +35,7 @@ TEST(lifetime) {
     fbt = std::move(*maybe_fbt);
     CHECK_EQUAL(counter, 0);
   }
-  auto fbrt = fbt.slice(*fbt->type_as_record_type_v0());
+  auto fbrt = fbt.slice(*fbt->type_as_record_type());
   REQUIRE_EQUAL(fbrt->fields()->size(), 1u);
   auto fbrtf = fbrt.slice(*fbrt->fields()->Get(0));
   CHECK_EQUAL(fbrtf->name()->string_view(), "foo");
@@ -67,7 +67,7 @@ TEST(serialization) {
     auto fbt2 = roundtrip(fbt);
     CHECK_EQUAL(as_bytes(fbt.chunk()), as_bytes(fbt2.chunk()));
   }
-  auto fbrt = fbt.slice(*fbt->type_as_record_type_v0());
+  auto fbrt = fbt.slice(*fbt->type_as_record_type());
   auto fbrtf = fbrt.slice(*fbrt->fields()->Get(0));
   auto fbrtft = fbrtf.slice(*fbrtf->type_nested_root(), *fbrtf->type());
   auto fbrtft2 = roundtrip(fbrtft);
