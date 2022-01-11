@@ -47,24 +47,24 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
   while (transparent == type::transparent::yes) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
         transparent = type::transparent::no;
         break;
-      case fbs::type::Type::enriched_type_v0:
-        root = root->type_as_enriched_type_v0()->type_nested_root();
+      case fbs::type::Type::enriched_type:
+        root = root->type_as_enriched_type()->type_nested_root();
         VAST_ASSERT(root);
         break;
     }
@@ -81,23 +81,23 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
         return result;
-      case fbs::type::Type::enriched_type_v0: {
-        const auto* enriched = root->type_as_enriched_type_v0();
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched = root->type_as_enriched_type();
         VAST_ASSERT(enriched);
         root = enriched->type_nested_root();
         VAST_ASSERT(root);
@@ -122,7 +122,7 @@ void construct_enumeration_type(stateful_type_base& self, const T* begin,
   // determined.
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto field_offsets
-    = std::vector<flatbuffers::Offset<fbs::type::enumeration_type::field::v0>>{};
+    = std::vector<flatbuffers::Offset<fbs::type::detail::EnumerationField>>{};
   field_offsets.reserve(end - begin);
   uint32_t next_key = 0;
   for (const auto* it = begin; it != end; ++it) {
@@ -131,13 +131,13 @@ void construct_enumeration_type(stateful_type_base& self, const T* begin,
     next_key = key + 1;
     const auto name_offset = builder.CreateString(it->name);
     field_offsets.emplace_back(
-      fbs::type::enumeration_type::field::Createv0(builder, key, name_offset));
+      fbs::type::detail::CreateEnumerationField(builder, key, name_offset));
   }
   const auto fields_offset = builder.CreateVectorOfSortedTables(&field_offsets);
   const auto enumeration_type_offset
-    = fbs::type::enumeration_type::Createv0(builder, fields_offset);
+    = fbs::type::CreateEnumerationType(builder, fields_offset);
   const auto type_offset
-    = fbs::CreateType(builder, fbs::type::Type::enumeration_type_v0,
+    = fbs::CreateType(builder, fbs::type::Type::enumeration_type,
                       enumeration_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
@@ -169,21 +169,21 @@ void construct_record_type(stateful_type_base& self, const T& begin,
   }();
   auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
   auto field_offsets
-    = std::vector<flatbuffers::Offset<fbs::type::record_type::field::v0>>{};
+    = std::vector<flatbuffers::Offset<fbs::type::detail::RecordField>>{};
   field_offsets.reserve(end - begin);
   for (auto it = begin; it != end; ++it) {
     const auto type_bytes = as_bytes(it->type);
     const auto name_offset = builder.CreateString(it->name);
     const auto type_offset = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(type_bytes.data()), type_bytes.size());
-    field_offsets.emplace_back(fbs::type::record_type::field::Createv0(
-      builder, name_offset, type_offset));
+    field_offsets.emplace_back(
+      fbs::type::detail::CreateRecordField(builder, name_offset, type_offset));
   }
   const auto fields_offset = builder.CreateVector(field_offsets);
   const auto record_type_offset
-    = fbs::type::record_type::Createv0(builder, fields_offset);
+    = fbs::type::CreateRecordType(builder, fields_offset);
   const auto type_offset = fbs::CreateType(
-    builder, fbs::type::Type::record_type_v0, record_type_offset.Union());
+    builder, fbs::type::Type::record_type, record_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
   VAST_ASSERT(result.size() == reserved_size);
@@ -227,8 +227,8 @@ type::type(chunk_ptr&& table) noexcept {
 type::type(std::string_view name, const type& nested,
            const std::vector<struct attribute>& attributes) noexcept {
   if (name.empty() && attributes.empty()) {
-    // This special case exists for easier conversion of legacy types, which did
-    // not require an legacy alias type wrapping to have a name.
+    // This special case fbs::type::Type::exists for easier conversion of legacy
+    // types, which did not require an legacy alias type wrapping to have a name.
     *this = nested;
   } else {
     const auto nested_bytes = as_bytes(nested);
@@ -252,27 +252,26 @@ type::type(std::string_view name, const type& nested,
       nested_bytes.size());
     const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
     const auto attributes_offset = [&]() noexcept
-      -> flatbuffers::Offset<flatbuffers::Vector<
-        flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>> {
+      -> flatbuffers::Offset<
+        flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
       if (attributes.empty())
         return 0;
-      auto attributes_offsets = std::vector<
-        flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>{};
+      auto attributes_offsets
+        = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
       attributes_offsets.reserve(attributes.size());
       for (const auto& attribute : attributes) {
         const auto key_offset = builder.CreateString(attribute.key);
         const auto value_offset
           = attribute.value ? builder.CreateString(*attribute.value) : 0;
-        attributes_offsets.emplace_back(
-          fbs::type::enriched_type::attribute::Createv0(builder, key_offset,
-                                                        value_offset));
+        attributes_offsets.emplace_back(fbs::type::detail::CreateAttribute(
+          builder, key_offset, value_offset));
       }
       return builder.CreateVectorOfSortedTables(&attributes_offsets);
     }();
-    const auto enriched_type_offset = fbs::type::enriched_type::Createv0(
+    const auto enriched_type_offset = fbs::type::detail::CreateEnrichedType(
       builder, nested_type_offset, name_offset, attributes_offset);
     const auto type_offset = fbs::CreateType(
-      builder, fbs::type::Type::enriched_type_v0, enriched_type_offset.Union());
+      builder, fbs::type::Type::enriched_type, enriched_type_offset.Union());
     builder.Finish(type_offset);
     auto result = builder.Release();
     table_ = chunk::make(std::move(result));
@@ -625,26 +624,25 @@ void type::assign_metadata(const type& other) noexcept {
     reinterpret_cast<const uint8_t*>(nested_bytes.data()), nested_bytes.size());
   const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
   const auto attributes_offset = [&]() noexcept
-    -> flatbuffers::Offset<flatbuffers::Vector<
-      flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>> {
+    -> flatbuffers::Offset<
+      flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
     if (!other.has_attributes())
       return 0;
-    auto attributes_offsets = std::vector<
-      flatbuffers::Offset<fbs::type::enriched_type::attribute::v0>>{};
+    auto attributes_offsets
+      = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
     for (const auto& attribute : other.attributes()) {
       const auto key_offset = builder.CreateString(attribute.key);
       const auto value_offset
         = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
       attributes_offsets.emplace_back(
-        fbs::type::enriched_type::attribute::Createv0(builder, key_offset,
-                                                      value_offset));
+        fbs::type::detail::CreateAttribute(builder, key_offset, value_offset));
     }
     return builder.CreateVectorOfSortedTables(&attributes_offsets);
   }();
-  const auto enriched_type_offset = fbs::type::enriched_type::Createv0(
+  const auto enriched_type_offset = fbs::type::detail::CreateEnrichedType(
     builder, nested_type_offset, name_offset, attributes_offset);
   const auto type_offset = fbs::CreateType(
-    builder, fbs::type::Type::enriched_type_v0, enriched_type_offset.Union());
+    builder, fbs::type::Type::enriched_type, enriched_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
   table_ = chunk::make(std::move(result));
@@ -655,28 +653,29 @@ std::string_view type::name() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
         return "";
-      case fbs::type::Type::enriched_type_v0:
-        const auto* enriched_type = root->type_as_enriched_type_v0();
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* name = enriched_type->name())
           return name->string_view();
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
+      }
     }
   }
   __builtin_unreachable();
@@ -687,28 +686,29 @@ detail::generator<std::string_view> type::names() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
         co_return;
-      case fbs::type::Type::enriched_type_v0:
-        const auto* enriched_type = root->type_as_enriched_type_v0();
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* name = enriched_type->name())
           co_yield name->string_view();
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
+      }
     }
   }
   __builtin_unreachable();
@@ -720,23 +720,23 @@ type::attribute(const char* key) const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
         return std::nullopt;
-      case fbs::type::Type::enriched_type_v0:
-        const auto* enriched_type = root->type_as_enriched_type_v0();
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* attributes = enriched_type->attributes()) {
           if (const auto* attribute = attributes->LookupByKey(key)) {
             if (const auto* value = attribute->value())
@@ -747,6 +747,7 @@ type::attribute(const char* key) const& noexcept {
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
+      }
     }
   }
   __builtin_unreachable();
@@ -757,23 +758,23 @@ bool type::has_attributes() const noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
         return false;
-      case fbs::type::Type::enriched_type_v0:
-        const auto* enriched_type = root->type_as_enriched_type_v0();
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* attributes = enriched_type->attributes()) {
           if (attributes->begin() != attributes->end())
             return true;
@@ -781,6 +782,7 @@ bool type::has_attributes() const noexcept {
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
+      }
     }
   }
   __builtin_unreachable();
@@ -791,23 +793,23 @@ detail::generator<type::attribute_view> type::attributes() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0:
-      case fbs::type::Type::record_type_v0:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
         co_return;
-      case fbs::type::Type::enriched_type_v0:
-        const auto* enriched_type = root->type_as_enriched_type_v0();
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* attributes = enriched_type->attributes()) {
           for (const auto& attribute : *attributes) {
             if (attribute->value() != nullptr
@@ -821,6 +823,7 @@ detail::generator<type::attribute_view> type::attributes() const& noexcept {
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
+      }
     }
   }
   __builtin_unreachable();
@@ -830,23 +833,23 @@ bool is_container(const type& type) noexcept {
   const auto& root = type.table(type::transparent::yes);
   switch (root.type_type()) {
     case fbs::type::Type::NONE:
-    case fbs::type::Type::bool_type_v0:
-    case fbs::type::Type::integer_type_v0:
-    case fbs::type::Type::count_type_v0:
-    case fbs::type::Type::real_type_v0:
-    case fbs::type::Type::duration_type_v0:
-    case fbs::type::Type::time_type_v0:
-    case fbs::type::Type::string_type_v0:
-    case fbs::type::Type::pattern_type_v0:
-    case fbs::type::Type::address_type_v0:
-    case fbs::type::Type::subnet_type_v0:
-    case fbs::type::Type::enumeration_type_v0:
+    case fbs::type::Type::bool_type:
+    case fbs::type::Type::integer_type:
+    case fbs::type::Type::count_type:
+    case fbs::type::Type::real_type:
+    case fbs::type::Type::duration_type:
+    case fbs::type::Type::time_type:
+    case fbs::type::Type::string_type:
+    case fbs::type::Type::pattern_type:
+    case fbs::type::Type::address_type:
+    case fbs::type::Type::subnet_type:
+    case fbs::type::Type::enumeration_type:
       return false;
-    case fbs::type::Type::list_type_v0:
-    case fbs::type::Type::map_type_v0:
-    case fbs::type::Type::record_type_v0:
+    case fbs::type::Type::list_type:
+    case fbs::type::Type::map_type:
+    case fbs::type::Type::record_type:
       return true;
-    case fbs::type::Type::enriched_type_v0:
+    case fbs::type::Type::enriched_type:
       __builtin_unreachable();
   }
   __builtin_unreachable();
@@ -1205,15 +1208,15 @@ caf::none_t none_type::construct() noexcept {
 // -- bool_type ---------------------------------------------------------------
 
 static_assert(bool_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::bool_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::bool_type));
 
 std::span<const std::byte> as_bytes(const bool_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto bool_type = fbs::type::bool_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::bool_type_v0,
-                                      bool_type.Union());
+    const auto bool_type = fbs::type::CreateBoolType(builder);
+    const auto type
+      = fbs::CreateType(builder, fbs::type::Type::bool_type, bool_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
     VAST_ASSERT(result.size() == reserved_size);
@@ -1229,14 +1232,14 @@ bool bool_type::construct() noexcept {
 // -- integer_type ------------------------------------------------------------
 
 static_assert(integer_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::integer_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::integer_type));
 
 std::span<const std::byte> as_bytes(const integer_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto integer_type = fbs::type::integer_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::integer_type_v0,
+    const auto integer_type = fbs::type::CreateIntegerType(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::integer_type,
                                       integer_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
@@ -1253,14 +1256,14 @@ integer integer_type::construct() noexcept {
 // -- count_type --------------------------------------------------------------
 
 static_assert(count_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::count_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::count_type));
 
 std::span<const std::byte> as_bytes(const count_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto count_type = fbs::type::count_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::count_type_v0,
+    const auto count_type = fbs::type::CreateCountType(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::count_type,
                                       count_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
@@ -1277,15 +1280,15 @@ count count_type::construct() noexcept {
 // -- real_type ---------------------------------------------------------------
 
 static_assert(real_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::real_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::real_type));
 
 std::span<const std::byte> as_bytes(const real_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto real_type = fbs::type::real_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::real_type_v0,
-                                      real_type.Union());
+    const auto real_type = fbs::type::CreateRealType(builder);
+    const auto type
+      = fbs::CreateType(builder, fbs::type::Type::real_type, real_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
 
@@ -1302,15 +1305,15 @@ real real_type::construct() noexcept {
 // -- duration_type -----------------------------------------------------------
 
 static_assert(duration_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::duration_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::duration_type));
 
 std::span<const std::byte> as_bytes(const duration_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto duration_type = fbs::type::duration_type::Createv0(builder);
-    const auto type = fbs::CreateType(
-      builder, fbs::type::Type::duration_type_v0, duration_type.Union());
+    const auto duration_type = fbs::type::CreateDurationType(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::duration_type,
+                                      duration_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
 
@@ -1327,15 +1330,15 @@ duration duration_type::construct() noexcept {
 // -- time_type ---------------------------------------------------------------
 
 static_assert(time_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::time_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::time_type));
 
 std::span<const std::byte> as_bytes(const time_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto time_type = fbs::type::time_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::time_type_v0,
-                                      time_type.Union());
+    const auto time_type = fbs::type::CreateDurationType(builder);
+    const auto type
+      = fbs::CreateType(builder, fbs::type::Type::time_type, time_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
 
@@ -1352,14 +1355,14 @@ time time_type::construct() noexcept {
 // -- string_type --------------------------------------------------------------
 
 static_assert(string_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::string_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::string_type));
 
 std::span<const std::byte> as_bytes(const string_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto string_type = fbs::type::string_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::string_type_v0,
+    const auto string_type = fbs::type::CreateStringType(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::string_type,
                                       string_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
@@ -1377,14 +1380,14 @@ std::string string_type::construct() noexcept {
 // -- pattern_type ------------------------------------------------------------
 
 static_assert(pattern_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::pattern_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::pattern_type));
 
 std::span<const std::byte> as_bytes(const pattern_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto pattern_type = fbs::type::pattern_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::pattern_type_v0,
+    const auto pattern_type = fbs::type::CreatePatternType(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::pattern_type,
                                       pattern_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
@@ -1402,14 +1405,14 @@ pattern pattern_type::construct() noexcept {
 // -- address_type ------------------------------------------------------------
 
 static_assert(address_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::address_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::address_type));
 
 std::span<const std::byte> as_bytes(const address_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto address_type = fbs::type::address_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::address_type_v0,
+    const auto address_type = fbs::type::CreateAddressType(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::address_type,
                                       address_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
@@ -1427,14 +1430,14 @@ address address_type::construct() noexcept {
 // -- subnet_type -------------------------------------------------------------
 
 static_assert(subnet_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::subnet_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::subnet_type));
 
 std::span<const std::byte> as_bytes(const subnet_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto subnet_type = fbs::type::subnet_type::Createv0(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::subnet_type_v0,
+    const auto subnet_type = fbs::type::CreateSubnetType(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::subnet_type,
                                       subnet_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
@@ -1487,33 +1490,33 @@ const fbs::Type& enumeration_type::table() const noexcept {
   const auto* table = fbs::GetType(repr.data());
   VAST_ASSERT(table);
   VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::enumeration_type_v0);
+  VAST_ASSERT(table->type_type() == fbs::type::Type::enumeration_type);
   return *table;
 }
 
 static_assert(enumeration_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::enumeration_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::enumeration_type));
 
 std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
   return as_bytes_complex(x);
 }
 
 enumeration enumeration_type::construct() const noexcept {
-  const auto* fields = table().type_as_enumeration_type_v0()->fields();
+  const auto* fields = table().type_as_enumeration_type()->fields();
   VAST_ASSERT(fields);
   VAST_ASSERT(fields->size() > 0);
   const auto value = fields->Get(0)->key();
   // TODO: Currently, enumeration can not holds keys that don't fit a uint8_t;
   // when switching to a strong typedef for enumeration we should change that.
-  // An example use case is NetFlow, where many enumeration values require
-  // usage of a uint16_t, which for now we would need to model as strings in
-  // schemas.
+  // An example use case fbs::type::Type::is NetFlow, where many enumeration
+  // values require usage of a uint16_t, which for now we would need to model as
+  // strings in schemas.
   VAST_ASSERT(value <= std::numeric_limits<enumeration>::max());
   return static_cast<enumeration>(value);
 }
 
 std::string_view enumeration_type::field(uint32_t key) const& noexcept {
-  const auto* fields = table().type_as_enumeration_type_v0()->fields();
+  const auto* fields = table().type_as_enumeration_type()->fields();
   VAST_ASSERT(fields);
   if (const auto* field = fields->LookupByKey(key))
     return field->name()->string_view();
@@ -1522,7 +1525,7 @@ std::string_view enumeration_type::field(uint32_t key) const& noexcept {
 
 std::vector<enumeration_type::field_view>
 enumeration_type::fields() const& noexcept {
-  const auto* fields = table().type_as_enumeration_type_v0()->fields();
+  const auto* fields = table().type_as_enumeration_type()->fields();
   VAST_ASSERT(fields);
   auto result = std::vector<field_view>{};
   result.reserve(fields->size());
@@ -1533,7 +1536,7 @@ enumeration_type::fields() const& noexcept {
 
 std::optional<uint32_t>
 enumeration_type::resolve(std::string_view key) const noexcept {
-  const auto* fields = table().type_as_enumeration_type_v0()->fields();
+  const auto* fields = table().type_as_enumeration_type()->fields();
   VAST_ASSERT(fields);
   for (const auto& field : *fields)
     if (field->name()->string_view() == key)
@@ -1557,12 +1560,12 @@ list_type::list_type(const type& value_type) noexcept {
   const auto value_type_bytes = as_bytes(value_type);
   const auto reserved_size = 44 + value_type_bytes.size();
   auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-  const auto list_type_offset = fbs::type::list_type::Createv0(
+  const auto list_type_offset = fbs::type::CreateListType(
     builder, builder.CreateVector(
                reinterpret_cast<const uint8_t*>(value_type_bytes.data()),
                value_type_bytes.size()));
-  const auto type_offset = fbs::CreateType(
-    builder, fbs::type::Type::list_type_v0, list_type_offset.Union());
+  const auto type_offset = fbs::CreateType(builder, fbs::type::Type::list_type,
+                                           list_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
   VAST_ASSERT(result.size() == reserved_size);
@@ -1574,12 +1577,12 @@ const fbs::Type& list_type::table() const noexcept {
   const auto* table = fbs::GetType(repr.data());
   VAST_ASSERT(table);
   VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::list_type_v0);
+  VAST_ASSERT(table->type_type() == fbs::type::Type::list_type);
   return *table;
 }
 
 static_assert(list_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::list_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::list_type));
 
 std::span<const std::byte> as_bytes(const list_type& x) noexcept {
   return as_bytes_complex(x);
@@ -1590,7 +1593,7 @@ list list_type::construct() noexcept {
 }
 
 type list_type::value_type() const noexcept {
-  const auto* view = table().type_as_list_type_v0()->type();
+  const auto* view = table().type_as_list_type()->type();
   VAST_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
@@ -1619,10 +1622,10 @@ map_type::map_type(const type& key_type, const type& value_type) noexcept {
   const auto value_type_offset = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(value_type_bytes.data()),
     value_type_bytes.size());
-  const auto map_type_offset = fbs::type::map_type::Createv0(
-    builder, key_type_offset, value_type_offset);
-  const auto type_offset = fbs::CreateType(
-    builder, fbs::type::Type::map_type_v0, map_type_offset.Union());
+  const auto map_type_offset
+    = fbs::type::CreateMapType(builder, key_type_offset, value_type_offset);
+  const auto type_offset = fbs::CreateType(builder, fbs::type::Type::map_type,
+                                           map_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
   VAST_ASSERT(result.size() == reserved_size);
@@ -1634,12 +1637,12 @@ const fbs::Type& map_type::table() const noexcept {
   const auto* table = fbs::GetType(repr.data());
   VAST_ASSERT(table);
   VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::map_type_v0);
+  VAST_ASSERT(table->type_type() == fbs::type::Type::map_type);
   return *table;
 }
 
 static_assert(map_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::map_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::map_type));
 
 std::span<const std::byte> as_bytes(const map_type& x) noexcept {
   return as_bytes_complex(x);
@@ -1650,13 +1653,13 @@ map map_type::construct() noexcept {
 }
 
 type map_type::key_type() const noexcept {
-  const auto* view = table().type_as_map_type_v0()->key_type();
+  const auto* view = table().type_as_map_type()->key_type();
   VAST_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
 
 type map_type::value_type() const noexcept {
-  const auto* view = table().type_as_map_type_v0()->value_type();
+  const auto* view = table().type_as_map_type()->value_type();
   VAST_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
@@ -1691,12 +1694,12 @@ const fbs::Type& record_type::table() const noexcept {
   const auto* table = fbs::GetType(repr.data());
   VAST_ASSERT(table);
   VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::record_type_v0);
+  VAST_ASSERT(table->type_type() == fbs::type::Type::record_type);
   return *table;
 }
 
 static_assert(record_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::record_type_v0));
+              == static_cast<uint8_t>(fbs::type::Type::record_type));
 
 std::span<const std::byte> as_bytes(const record_type& x) noexcept {
   return as_bytes_complex(x);
@@ -1720,7 +1723,7 @@ record record_type::construct() const noexcept {
 
 detail::generator<record_type::field_view>
 record_type::fields() const noexcept {
-  const auto* record = table().type_as_record_type_v0();
+  const auto* record = table().type_as_record_type();
   VAST_ASSERT(record);
   const auto* fields = record->fields();
   VAST_ASSERT(fields);
@@ -1735,8 +1738,8 @@ record_type::fields() const noexcept {
 
 detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
   auto index = offset{0};
-  auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
-    table().type_as_record_type_v0()};
+  auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
+    table().type_as_record_type()};
   while (!index.empty()) {
     const auto* record = history.back();
     VAST_ASSERT(record);
@@ -1757,19 +1760,19 @@ detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0: {
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
         auto leaf = leaf_view{
           {
             field->name()->string_view(),
@@ -1781,12 +1784,12 @@ detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
         ++index.back();
         break;
       }
-      case fbs::type::Type::record_type_v0: {
-        history.emplace_back(field_type->type_as_record_type_v0());
+      case fbs::type::Type::record_type: {
+        history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
         break;
       }
-      case fbs::type::Type::enriched_type_v0:
+      case fbs::type::Type::enriched_type:
         __builtin_unreachable();
         break;
     }
@@ -1795,7 +1798,7 @@ detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
 }
 
 size_t record_type::num_fields() const noexcept {
-  const auto* record = table().type_as_record_type_v0();
+  const auto* record = table().type_as_record_type();
   VAST_ASSERT(record);
   return record->fields()->size();
 }
@@ -1803,8 +1806,8 @@ size_t record_type::num_fields() const noexcept {
 size_t record_type::num_leaves() const noexcept {
   auto num_leaves = size_t{0};
   auto index = offset{0};
-  auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
-    table().type_as_record_type_v0()};
+  auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
+    table().type_as_record_type()};
   while (!index.empty()) {
     const auto* record = history.back();
     VAST_ASSERT(record);
@@ -1825,29 +1828,29 @@ size_t record_type::num_leaves() const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0: {
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
         ++index.back();
         ++num_leaves;
         break;
       }
-      case fbs::type::Type::record_type_v0: {
-        history.emplace_back(field_type->type_as_record_type_v0());
+      case fbs::type::Type::record_type: {
+        history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
         break;
       }
-      case fbs::type::Type::enriched_type_v0:
+      case fbs::type::Type::enriched_type:
         __builtin_unreachable();
         break;
     }
@@ -1858,8 +1861,8 @@ size_t record_type::num_leaves() const noexcept {
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
   size_t current_flat_index = 0;
   auto index = offset{0};
-  auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
-    table().type_as_record_type_v0()};
+  auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
+    table().type_as_record_type()};
   while (!index.empty()) {
     const auto* record = history.back();
     VAST_ASSERT(record);
@@ -1880,31 +1883,31 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0: {
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
         if (current_flat_index == flat_index)
           return index;
         ++current_flat_index;
         ++index.back();
         break;
       }
-      case fbs::type::Type::record_type_v0: {
-        history.emplace_back(field_type->type_as_record_type_v0());
+      case fbs::type::Type::record_type: {
+        history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
         break;
       }
-      case fbs::type::Type::enriched_type_v0:
+      case fbs::type::Type::enriched_type:
         __builtin_unreachable();
         break;
     }
@@ -1916,7 +1919,7 @@ std::optional<offset>
 record_type::resolve_key(std::string_view key) const noexcept {
   auto index = offset{0};
   auto history = std::vector{std::pair{
-    table().type_as_record_type_v0(),
+    table().type_as_record_type(),
     key,
   }};
   while (!index.empty()) {
@@ -1941,25 +1944,25 @@ record_type::resolve_key(std::string_view key) const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0: {
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
         if (remaining_key == field_name->string_view())
           return index;
         ++index.back();
         break;
       }
-      case fbs::type::Type::record_type_v0: {
+      case fbs::type::Type::record_type: {
         auto [remaining_key_mismatch, field_name_mismatch]
           = std::mismatch(remaining_key.begin(), remaining_key.end(),
                           field_name->begin(), field_name->end());
@@ -1969,7 +1972,7 @@ record_type::resolve_key(std::string_view key) const noexcept {
         if (field_name_mismatch == field_name->end()
             && remaining_key_mismatch != remaining_key.end()
             && *remaining_key_mismatch == '.') {
-          history.emplace_back(field_type->type_as_record_type_v0(),
+          history.emplace_back(field_type->type_as_record_type(),
                                remaining_key.substr(1 + remaining_key_mismatch
                                                     - remaining_key.begin()));
           index.push_back(0);
@@ -1978,7 +1981,7 @@ record_type::resolve_key(std::string_view key) const noexcept {
         }
         break;
       }
-      case fbs::type::Type::enriched_type_v0:
+      case fbs::type::Type::enriched_type:
         __builtin_unreachable();
         break;
     }
@@ -1994,7 +1997,7 @@ record_type::resolve_key_suffix(std::string_view key,
   auto index = offset{0};
   auto history = std::vector{
     std::pair{
-      table().type_as_record_type_v0(),
+      table().type_as_record_type(),
       std::vector{key},
     },
   };
@@ -2033,19 +2036,19 @@ record_type::resolve_key_suffix(std::string_view key,
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0: {
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
         for (const auto& remaining_key : remaining_keys) {
           // TODO: Once we no longer support flattening types, we can switch to
           // an equality comparison between field_name and remaining_key here.
@@ -2062,10 +2065,10 @@ record_type::resolve_key_suffix(std::string_view key,
         ++index.back();
         break;
       }
-      case fbs::type::Type::record_type_v0: {
+      case fbs::type::Type::record_type: {
         using history_entry = decltype(history)::value_type;
         auto next = history_entry{
-          field_type->type_as_record_type_v0(),
+          field_type->type_as_record_type(),
           history[0].second,
         };
         for (const auto& remaining_key : remaining_keys) {
@@ -2083,7 +2086,7 @@ record_type::resolve_key_suffix(std::string_view key,
         index.push_back(0);
         break;
       }
-      case fbs::type::Type::enriched_type_v0:
+      case fbs::type::Type::enriched_type:
         __builtin_unreachable();
         break;
     }
@@ -2092,7 +2095,7 @@ record_type::resolve_key_suffix(std::string_view key,
 }
 
 std::string_view record_type::key(size_t index) const& noexcept {
-  const auto* record = table().type_as_record_type_v0();
+  const auto* record = table().type_as_record_type();
   VAST_ASSERT(record);
   VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
   const auto* field = record->fields()->Get(index);
@@ -2102,7 +2105,7 @@ std::string_view record_type::key(size_t index) const& noexcept {
 
 std::string record_type::key(const offset& index) const noexcept {
   auto result = std::string{};
-  const auto* record = table().type_as_record_type_v0();
+  const auto* record = table().type_as_record_type();
   VAST_ASSERT(record);
   for (size_t i = 0; i < index.size() - 1; ++i) {
     VAST_ASSERT(index[i] < record->fields()->size());
@@ -2111,7 +2114,7 @@ std::string record_type::key(const offset& index) const noexcept {
     fmt::format_to(std::back_inserter(result), "{}.",
                    field->name()->string_view());
     record
-      = resolve_transparent(field->type_nested_root())->type_as_record_type_v0();
+      = resolve_transparent(field->type_nested_root())->type_as_record_type();
     VAST_ASSERT(record);
   }
   VAST_ASSERT(index.back() < record->fields()->size());
@@ -2123,7 +2126,7 @@ std::string record_type::key(const offset& index) const noexcept {
 }
 
 record_type::field_view record_type::field(size_t index) const noexcept {
-  const auto* record = table().type_as_record_type_v0();
+  const auto* record = table().type_as_record_type();
   VAST_ASSERT(record);
   VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
   const auto* field = record->fields()->Get(index);
@@ -2137,13 +2140,13 @@ record_type::field_view record_type::field(size_t index) const noexcept {
 
 record_type::field_view record_type::field(const offset& index) const noexcept {
   VAST_ASSERT(!index.empty(), "offset must not be empty");
-  const auto* record = table().type_as_record_type_v0();
+  const auto* record = table().type_as_record_type();
   VAST_ASSERT(record);
   for (size_t i = 0; i < index.size() - 1; ++i) {
     VAST_ASSERT(index[i] < record->fields()->size(), "index out of bounds");
     record
       = resolve_transparent(record->fields()->Get(index[i])->type_nested_root())
-          ->type_as_record_type_v0();
+          ->type_as_record_type();
     VAST_ASSERT(record, "offset contains excess indices");
   }
   VAST_ASSERT(index.back() < record->fields()->size(), "index out of bounds");
@@ -2159,8 +2162,8 @@ size_t record_type::flat_index(const offset& index) const noexcept {
   VAST_ASSERT(!index.empty(), "index must not be empty");
   auto flat_index = size_t{0};
   auto current_index = offset{0};
-  auto history = detail::stack_vector<const fbs::type::record_type::v0*, 64>{
-    table().type_as_record_type_v0()};
+  auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
+    table().type_as_record_type()};
   while (true) {
     VAST_ASSERT(current_index <= index, "index out of bounds");
     const auto* record = history.back();
@@ -2182,32 +2185,32 @@ size_t record_type::flat_index(const offset& index) const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type_v0:
-      case fbs::type::Type::integer_type_v0:
-      case fbs::type::Type::count_type_v0:
-      case fbs::type::Type::real_type_v0:
-      case fbs::type::Type::duration_type_v0:
-      case fbs::type::Type::time_type_v0:
-      case fbs::type::Type::string_type_v0:
-      case fbs::type::Type::pattern_type_v0:
-      case fbs::type::Type::address_type_v0:
-      case fbs::type::Type::subnet_type_v0:
-      case fbs::type::Type::enumeration_type_v0:
-      case fbs::type::Type::list_type_v0:
-      case fbs::type::Type::map_type_v0: {
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
         if (index == current_index)
           return flat_index;
         ++current_index.back();
         ++flat_index;
         break;
       }
-      case fbs::type::Type::record_type_v0: {
+      case fbs::type::Type::record_type: {
         VAST_ASSERT(index != current_index);
-        history.emplace_back(field_type->type_as_record_type_v0());
+        history.emplace_back(field_type->type_as_record_type());
         current_index.push_back(0);
         break;
       }
-      case fbs::type::Type::enriched_type_v0:
+      case fbs::type::Type::enriched_type:
         __builtin_unreachable();
         break;
     }
@@ -2331,8 +2334,8 @@ std::optional<record_type> record_type::transform(
         });
       }
     }
-    // In case we exited the loop earlier, we still have to add all the
-    // remaining fields back to the modified record (untouched).
+    // In case fbs::type::Type::we exited the loop earlier, we still have to add
+    // all the remaining fields back to the modified record (untouched).
     while (index.back() > 0) {
       const auto& old_field = self.field(--index.back());
       new_fields.push_back({
