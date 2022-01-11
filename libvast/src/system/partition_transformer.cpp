@@ -166,10 +166,14 @@ partition_transformer_actor::behavior_type partition_transformer(
       const auto old_import_time = slice.import_time();
       auto transformed = self->state.transform->apply(std::move(slice));
       if (!transformed) {
-        VAST_ERROR("failed to apply transform");
+        VAST_ERROR("failed to apply transform: {}", transformed.error());
         return;
       }
-      transformed->import_time(old_import_time);
+      // If the transform is a no-op we may get back the original table slice
+      // that's still mapped as read-only, but in this case we also don't need
+      // to adjust the import time.
+      if (transformed->import_time() != old_import_time)
+        transformed->import_time(old_import_time);
       self->state.events += transformed->rows();
       self->state.slices.push_back(std::move(*transformed));
       // Adjust the import time range iff necessary.
