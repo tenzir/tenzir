@@ -19,6 +19,7 @@ Checks: >
   -llvm-header-guard,
   -modernize-use-trailing-return-type,
   -readability-braces-around-statements,
+  -readability-else-after-return,
   -readability-function-cognitive-complexity,
   -readability-magic-numbers,
   -readability-named-parameter,

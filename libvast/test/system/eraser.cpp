@@ -84,13 +84,16 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::query_supervisor_actor&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
-    [=](atom::apply, transform_ptr, uuid) -> atom::done {
+    [=](atom::apply, transform_ptr, uuid) -> vast::uuid {
       FAIL("no mock implementation available");
     },
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
-    [=](vast::query&) -> caf::result<system::query_cursor> {
+    [=](atom::resolve, vast::expression) -> system::meta_index_result {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::evaluate, vast::query&) -> caf::result<system::query_cursor> {
       auto query_id = unbox(to<uuid>(uuid_str));
       self->state.client = caf::actor_cast<caf::actor>(self->current_sender());
       self->send(self, query_id, 3u);
@@ -144,7 +147,7 @@ TEST(eraser on mock INDEX) {
   for (int i = 0; i < 2; ++i) {
     sched.trigger_timeouts();
     expect((atom::run), from(aut).to(aut));
-    expect((vast::query), from(aut).to(index));
+    expect((atom::evaluate, vast::query), from(aut).to(index));
     expect((uuid, uint32_t), from(_).to(index).with(query_id, 3u));
     expect((system::query_cursor), from(index).to(aut));
     expect((atom::done), from(_).to(aut));

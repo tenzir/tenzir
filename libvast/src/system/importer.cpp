@@ -252,7 +252,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, const store_builder_actor& store,
          index_actor index, const type_registry_actor& type_registry,
          std::vector<transform>&& input_transformations) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(dir));
+  VAST_TRACE_SCOPE("importer {} {}", VAST_ARG(self->id()), VAST_ARG(dir));
   for (const auto& x : input_transformations)
     VAST_VERBOSE("{} loaded import transformation {}", *self, x.name());
   self->state.dir = dir;
@@ -270,9 +270,11 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     if (self->state.stage) {
       self->state.stage->shutdown();
       self->state.stage->out().push(detail::framed<table_slice>::make_eof());
-      self->state.stage->out().force_emit_batches();
-      self->state.stage->out().close();
+      // We need to `fan_out_flush()` before we close, otherwise `close()`
+      // will delete all clean output paths and we might lose the eof.
       self->state.stage->out().fan_out_flush();
+      self->state.stage->out().close();
+      self->state.stage->out().force_emit_batches();
       // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
       // for reasoning.
       auto dummy = self->spawn(dummy_transformer_sink);
@@ -285,8 +287,9 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
-  self->state.transformer = self->spawn(transformer, "input_transformer",
-                                        std::move(input_transformations));
+  self->state.transformer
+    = self->spawn(component_transformer, "input_transformer",
+                  std::move(input_transformations));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", *self);
     self->quit(std::move(err));
@@ -319,7 +322,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
                 static_cast<stream_sink_actor<table_slice>>(self->state.index))
       .then([](const caf::outbound_stream_slot<table_slice>&) {},
             [self](caf::error& error) {
-              VAST_ERROR("failed to connect store to the importer: {}", error);
+              VAST_ERROR("failed to connect index to the importer: {}", error);
               self->quit(std::move(error));
             });
   }

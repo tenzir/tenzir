@@ -12,6 +12,7 @@
 
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/query_cursor.hpp"
 
 #include <caf/event_based_actor.hpp>
@@ -55,7 +56,7 @@ query_processor::~query_processor() = default;
 
 void query_processor::start(vast::query query, index_actor index) {
   index_ = std::move(index);
-  self_->send(index_, std::move(query));
+  self_->send(index_, atom::evaluate_v, std::move(query));
   transition_to(await_query_id);
 }
 

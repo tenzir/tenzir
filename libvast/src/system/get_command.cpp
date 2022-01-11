@@ -66,7 +66,7 @@ run(caf::scoped_actor& self, index_actor index, const invocation& inv) {
     // archive to stream its results.
     auto q = query::make_extract(self, query::extract::drop_ids, expression{});
     q.ids = std::move(ids);
-    self->send(index, std::move(q));
+    self->send(index, atom::evaluate_v, std::move(q));
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.

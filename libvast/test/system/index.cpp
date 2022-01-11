@@ -68,7 +68,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   system::query_cursor query(std::string_view expr) {
-    self->send(index,
+    self->send(index, atom::evaluate_v,
                vast::query::make_extract(self, query::extract::preserve_ids,
                                          unbox(to<expression>(expr))));
     run();

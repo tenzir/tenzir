@@ -182,8 +182,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             std::move(q));
     run();
     rp.receive(
-      [&](std::vector<vast::uuid> partitions) {
-        result = std::move(partitions);
+      [&](meta_index_result mdx_result) {
+        result = std::move(mdx_result.partitions);
       },
       [=](const caf::error& e) {
         FAIL(render(e));
@@ -203,8 +203,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       = self->request(meta_idx, caf::infinite, vast::atom::candidates_v, q);
     run();
     rp.receive(
-      [&](std::vector<vast::uuid> partitions) {
-        result = std::move(partitions);
+      [&](meta_index_result candidates) {
+        result = std::move(candidates.partitions);
       },
       [=](const caf::error& e) {
         FAIL(render(e));
@@ -394,9 +394,9 @@ TEST(meta index messages) {
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   expr_response.receive(
-    [this](const std::vector<vast::uuid>& candidates) {
+    [this](const meta_index_result& candidates) {
       auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
-      CHECK_EQUAL(candidates, expected);
+      CHECK_EQUAL(candidates.partitions, expected);
     },
     [](const caf::error& e) {
       auto msg = fmt::format("unexpected error {}", render(e));
@@ -409,9 +409,9 @@ TEST(meta index messages) {
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   ids_response.receive(
-    [this](const std::vector<vast::uuid>& candidates) {
+    [this](const meta_index_result& candidates) {
       auto expected = std::vector<uuid>{ids[0], ids[1]};
-      CHECK_EQUAL(candidates, expected);
+      CHECK_EQUAL(candidates.partitions, expected);
     },
     [](const caf::error& e) {
       auto msg = fmt::format("unexpected error {}", render(e));
@@ -424,9 +424,9 @@ TEST(meta index messages) {
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   both_response.receive(
-    [this](const std::vector<vast::uuid>& candidates) {
+    [this](const meta_index_result& candidates) {
       auto expected = std::vector<uuid>{ids[1]};
-      CHECK_EQUAL(candidates, expected);
+      CHECK_EQUAL(candidates.partitions, expected);
     },
     [](const caf::error& e) {
       auto msg = fmt::format("unexpected error {}", render(e));
@@ -439,7 +439,7 @@ TEST(meta index messages) {
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   neither_response.receive(
-    [](const std::vector<vast::uuid>&) {
+    [](const meta_index_result&) {
       FAIL("expected an error");
     },
     [](const caf::error&) {

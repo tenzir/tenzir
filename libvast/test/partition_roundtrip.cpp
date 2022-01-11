@@ -211,7 +211,8 @@ TEST(empty partition roundtrip) {
                            std::move(q));
   run();
   rp2.receive(
-    [&](const std::vector<vast::uuid>& candidates) {
+    [&](const vast::system::meta_index_result& result) {
+      const auto& candidates = result.partitions;
       REQUIRE_EQUAL(candidates.size(), 1ull);
       CHECK_EQUAL(candidates[0], state.data.id);
     },

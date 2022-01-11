@@ -30,6 +30,7 @@
 #include "vast/subnet.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/component_registry.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"

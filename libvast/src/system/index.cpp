@@ -718,7 +718,8 @@ index(index_actor::stateful_pointer<index_state> self,
       size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double synopsis_fp_rate) {
-  VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
+  VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
+                   VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
                    VAST_ARG(taste_partitions), VAST_ARG(num_workers),
                    VAST_ARG(meta_index_dir), VAST_ARG(synopsis_fp_rate));
@@ -913,7 +914,7 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} adds flush listener", *self);
       self->state.add_flush_listener(std::move(listener));
     },
-    [self](vast::query query) -> caf::result<query_cursor> {
+    [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
       if (!self->state.accept_queries) {
         VAST_VERBOSE("{} delays query {} because it is still starting up",
                      *self, query);
@@ -928,6 +929,12 @@ index(index_actor::stateful_pointer<index_state> self,
       auto rp = self->make_response_promise<query_cursor>();
       self->state.backlog.emplace(std::move(query), rp);
       return rp;
+    },
+    [self](atom::resolve,
+           vast::expression& expr) -> caf::result<meta_index_result> {
+      auto lookup_id = vast::uuid::random();
+      return self->delegate(self->state.meta_index, atom::candidates_v,
+                            lookup_id, std::move(expr));
     },
     [self](atom::internal, vast::query query,
            query_supervisor_actor worker) -> caf::result<query_cursor> {
@@ -969,8 +976,9 @@ index(index_actor::stateful_pointer<index_state> self,
         ->request(self->state.meta_index, caf::infinite, atom::candidates_v,
                   query)
         .then(
-          [=, candidates = std::move(candidates)](
-            std::vector<uuid> midx_candidates) mutable {
+          [=, candidates
+              = std::move(candidates)](meta_index_result& midx_result) mutable {
+            auto& midx_candidates = midx_result.partitions;
             VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
                        *self, candidates, midx_candidates);
             candidates.insert(candidates.end(), midx_candidates.begin(),
@@ -1158,7 +1166,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.importer = std::move(idspace_distributor);
     },
     [self](atom::apply, transform_ptr transform,
-           vast::uuid old_partition_id) -> caf::result<atom::done> {
+           vast::uuid old_partition_id) -> caf::result<vast::uuid> {
       VAST_DEBUG("{} applies a transform to partition {}", *self,
                  old_partition_id);
       if (!self->state.store_plugin)
@@ -1197,7 +1205,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
                  std::move(actors),
                  caf::actor_cast<receiver_actor<atom::done>>(sink));
-      auto rp = self->make_response_promise<atom::done>();
+      auto rp = self->make_response_promise<vast::uuid>();
       self
         ->request(sink, caf::infinite, atom::persist_v,
                   self->state.partition_path(new_partition_id),
@@ -1210,13 +1218,21 @@ index(index_actor::stateful_pointer<index_state> self,
             // statistics here.
             self
               ->request(self->state.meta_index, caf::infinite, atom::replace_v,
-                        old_partition_id, new_partition_id, std::move(synopsis))
+                        old_partition_id, new_partition_id, synopsis)
               .then(
                 [self, rp, old_partition_id,
                  new_partition_id](atom::ok) mutable {
                   self->state.persisted_partitions.insert(new_partition_id);
-                  rp.delegate(static_cast<index_actor>(self), atom::erase_v,
-                              old_partition_id);
+                  self
+                    ->request(static_cast<index_actor>(self), caf::infinite,
+                              atom::erase_v, old_partition_id)
+                    .then(
+                      [=](atom::done) mutable {
+                        rp.deliver(new_partition_id);
+                      },
+                      [=](const caf::error& e) mutable {
+                        rp.deliver(e);
+                      });
                 },
                 [rp](const caf::error& e) mutable {
                   rp.deliver(e);

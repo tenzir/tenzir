@@ -178,6 +178,8 @@ active_partition_actor::behavior_type active_partition(
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
   caf::settings index_opts, caf::settings synopsis_opts, store_actor store,
   std::string store_id, chunk_ptr header) {
+  VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
+                   VAST_ARG(id));
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.accountant = std::move(accountant);

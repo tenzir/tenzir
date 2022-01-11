@@ -308,13 +308,9 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
             return caf::make_error(ec::parse_error,
                                    "failed to extract concepts from file",
                                    file.string(), err.context());
-          for (auto& [name, definition] : concepts) {
+          for (auto& [name, definition] : concepts)
             VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
                        definition.fields.size());
-            for (auto& field : definition.fields)
-              VAST_TRACE("{} uses concept mapping {} -> {}", *self, name,
-                         field);
-          }
           if (auto err = convert(yaml, models, models_data_layout))
             return caf::make_error(ec::parse_error,
                                    "failed to extract models from file",

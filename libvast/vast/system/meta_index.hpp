@@ -61,7 +61,7 @@ public:
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.
-  [[nodiscard]] std::vector<uuid> lookup(const expression& expr) const;
+  [[nodiscard]] meta_index_result lookup(const expression& expr) const;
 
   [[nodiscard]] std::vector<uuid> lookup_impl(const expression& expr) const;
 
@@ -86,6 +86,22 @@ public:
   /// Maps ids to the corresponding partitions.
   //  TODO: Maybe this should be moved into it a standalone actor.
   detail::range_map<id, uuid> offset_map = {};
+};
+
+/// The result of a meta-index query.
+struct meta_index_result {
+  enum {
+    exact,
+    probabilistic,
+  } kind;
+
+  std::vector<uuid> partitions;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, meta_index_result& x) {
+    return f(caf::meta::type_name("vast.system.meta_index_result"), x.kind,
+             x.partitions);
+  }
 };
 
 /// The META INDEX is the first index actor that queries hit. The result

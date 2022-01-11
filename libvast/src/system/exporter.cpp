@@ -266,7 +266,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      self->request(self->state.index, caf::infinite, self->state.query)
+      self
+        ->request(self->state.index, caf::infinite, atom::evaluate_v,
+                  self->state.query)
         .then(
           [=](const query_cursor& cursor) {
             VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
