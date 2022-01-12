@@ -722,12 +722,20 @@ type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
       return type{count_type{}};
     case arrow::Type::DOUBLE:
       return type{real_type{}};
-    case arrow::Type::DURATION:
+    case arrow::Type::DURATION: {
+      const auto& t = std::static_pointer_cast<arrow::DurationType>(arrow_type);
+      if (t->unit() != arrow::TimeUnit::NANO)
+        die(fmt::format("unhandled Arrow type: Duration[{}]", t->unit()));
       return type{duration_type{}};
+    }
     case arrow::Type::STRING:
       return type{string_type{}};
-    case arrow::Type::TIMESTAMP:
+    case arrow::Type::TIMESTAMP: {
+      const auto& t = std::static_pointer_cast<arrow::TimestampType>(arrow_type);
+      if (t->unit() != arrow::TimeUnit::NANO)
+        die(fmt::format("unhandled Arrow type: Timestamp[{}]", t->unit()));
       return type{time_type{}};
+    }
     case arrow::Type::FIXED_SIZE_BINARY: {
       const auto& t
         = std::static_pointer_cast<arrow::FixedSizeBinaryType>(arrow_type);
