@@ -374,13 +374,13 @@ TEST(record batch roundtrip - adding column) {
 }
 
 auto field_roundtrip(const type& t) {
-  const auto& arrow_field = make_experimental_field("x", t);
-  const auto& restored_t = make_vast_type(*arrow_field);
-  if (t != restored_t) { // CHECK_EQUAL doesn't cut it
-    fmt::print(stderr, "`{}` != `{}`\n", t, restored_t);
+  const auto& arrow_field = make_experimental_field({"x", t});
+  const auto& restored_f = make_vast_type(*arrow_field);
+  if (t != restored_f.type) { // CHECK_EQUAL doesn't cut it
+    fmt::print(stderr, "`{}` != `{}`\n", t, restored_f);
     fmt::print(stderr, "arrow schema: {}\n", arrow_field->ToString(true));
   }
-  CHECK_EQUAL(t, restored_t);
+  CHECK_EQUAL(t, restored_f.type);
 }
 
 TEST(arrow primitive type to field roundtrip) {

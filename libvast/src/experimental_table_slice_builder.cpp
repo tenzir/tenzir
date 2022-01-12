@@ -526,12 +526,7 @@ table_slice experimental_table_slice_builder::finish() {
   auto layout_buffer = builder_.CreateVector(
     reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
   // Pack schema.
-#if ARROW_VERSION_MAJOR >= 2
   auto flat_schema = arrow::ipc::SerializeSchema(*schema_).ValueOrDie();
-#else
-  auto flat_schema
-    = arrow::ipc::SerializeSchema(*schema_, nullptr).ValueOrDie();
-#endif
   auto schema_buffer
     = builder_.CreateVector(flat_schema->data(), flat_schema->size());
   // Pack record batch.
@@ -661,21 +656,20 @@ bool experimental_table_slice_builder::add_impl(data_view x) {
 
 std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t) {
   VAST_ASSERT(caf::holds_alternative<record_type>(t));
-  const auto& rt = caf::get<record_type>(t);
+  const auto& rt = flatten(caf::get<record_type>(t));
   std::vector<std::shared_ptr<arrow::Field>> arrow_fields;
   arrow_fields.reserve(rt.num_leaves());
-  for (const auto& [field, index] : rt.leaves()) {
-    arrow_fields.emplace_back(
-      make_experimental_field(rt.key(index), field.type));
+  for (const auto& field : rt.fields()) {
+    arrow_fields.emplace_back(make_experimental_field(field));
   }
   auto metadata = arrow::key_value_metadata({{"name", std::string{t.name()}}});
   return std::make_shared<arrow::Schema>(arrow_fields, metadata);
 }
 
 std::shared_ptr<arrow::Field>
-make_experimental_field(const std::string& name, const type& t) {
-  const auto& arrow_type = make_experimental_type(t);
-  return arrow::field(name, arrow_type);
+make_experimental_field(const record_type::field_view& field) {
+  const auto& arrow_type = make_experimental_type(field.type);
+  return arrow::field(std::string{field.name}, arrow_type);
 }
 
 std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
@@ -731,7 +725,8 @@ type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
     case arrow::Type::STRING:
       return type{string_type{}};
     case arrow::Type::TIMESTAMP: {
-      const auto& t = std::static_pointer_cast<arrow::TimestampType>(arrow_type);
+      const auto& t
+        = std::static_pointer_cast<arrow::TimestampType>(arrow_type);
       if (t->unit() != arrow::TimeUnit::NANO)
         die(fmt::format("unhandled Arrow type: Timestamp[{}]", t->unit()));
       return type{time_type{}};
@@ -745,9 +740,7 @@ type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
         case 17:
           return type{subnet_type{}};
         default:
-          VAST_ASSERT(
-            false,
-            fmt::format("unhandled Arrow type: FIXEDBINARY[{}]", width).c_str());
+          die(fmt::format("unhandled Arrow type: FIXEDBINARY[{}]", width));
       }
       return type{time_type{}};
     }
@@ -759,33 +752,25 @@ type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
     case arrow::Type::STRUCT: {
       std::vector<struct record_type::field> field_types;
       field_types.reserve(arrow_type->num_fields());
-      for (const auto& f : arrow_type->fields()) {
-        field_types.emplace_back(f->name(), make_vast_type(*f));
-      }
-
+      for (const auto& f : arrow_type->fields())
+        field_types.emplace_back(make_vast_type(*f));
       return type{record_type{field_types}};
     }
-
     default:
-      VAST_ASSERT(
-        false,
-        fmt::format("unhandled Arrow type: {}", arrow_type->ToString()).c_str());
-      return type{none_type{}};
+      die(fmt::format("unhandled Arrow type: {}", arrow_type->ToString()));
   }
 }
 
 // NOLINTNEXTLINE(misc-no-recursion)
-type make_vast_type(const arrow::Field& arrow_field) {
-  return make_vast_type(arrow_field.type());
+struct record_type::field make_vast_type(const arrow::Field& arrow_field) {
+  return {arrow_field.name(), make_vast_type(arrow_field.type())};
 }
 
 type make_vast_type(const arrow::Schema& arrow_schema) {
   std::vector<struct record_type::field> field_types;
   field_types.reserve(arrow_schema.num_fields());
-  for (const auto& f : arrow_schema.fields()) {
-    field_types.emplace_back(f->name(), make_vast_type(*f));
-  }
-
+  for (const auto& f : arrow_schema.fields())
+    field_types.emplace_back(make_vast_type(*f));
   return type{record_type{field_types}};
 }
 

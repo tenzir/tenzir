@@ -140,7 +140,7 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t);
 /// @param t The type to convert.
 /// @returns An arrow representation of `t`.
 std::shared_ptr<arrow::Field>
-make_experimental_field(const std::string& name, const type& t);
+make_experimental_field(const record_type::field_view& field);
 
 /// Converts an Arrow `Schema` to a VAST `type`.
 /// @param arrow_schema The Arrow schema to convert.
@@ -150,5 +150,5 @@ type make_vast_type(const arrow::Schema& arrow_schema);
 /// Converts an Arrow `Field` to a VAST `type`
 /// @param arrow_field Te arrow field to convert.
 /// @return A VAST type representation of `arrow_field`
-type make_vast_type(const arrow::Field& arrow_field);
+struct record_type::field make_vast_type(const arrow::Field& arrow_field);
 } // namespace vast
