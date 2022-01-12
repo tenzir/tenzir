@@ -14,7 +14,6 @@
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
-#include "vast/index/address_index.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
 
@@ -48,7 +47,14 @@ private:
 
   size_t memusage_impl() const override;
 
-  address_index network_;
+  flatbuffers::Offset<fbs::ValueIndex>
+  pack_impl(flatbuffers::FlatBufferBuilder& builder,
+            flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase>
+              base_offset) override;
+
+  caf::error unpack_impl(const fbs::ValueIndex& from) override;
+
+  value_index_ptr network_;
   prefix_index length_;
 };
 

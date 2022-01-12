@@ -170,7 +170,8 @@ TEST(regression - manual address bitmap index from bitmaps) {
 TEST(regression - manual address bitmap index from 4 byte indexes) {
   using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   std::array<byte_index, 4> idx;
-  idx.fill(byte_index{8});
+  for (auto& elem : idx)
+    elem = byte_index{8};
   size_t row_id = 0;
   MESSAGE("populating index");
   for (auto& slice : zeek_conn_log_full) {

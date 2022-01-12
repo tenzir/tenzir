@@ -12,6 +12,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/fbs/value_index.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/logger.hpp"
 #include "vast/type.hpp"
@@ -129,6 +130,41 @@ size_t list_index::memusage_impl() const {
       acc += element->memusage();
   acc += size_.memusage();
   return acc;
+}
+
+flatbuffers::Offset<fbs::ValueIndex> list_index::pack_impl(
+  flatbuffers::FlatBufferBuilder& builder,
+  flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase> base_offset) {
+  auto element_offsets = std::vector<flatbuffers::Offset<fbs::ValueIndex>>{};
+  element_offsets.reserve(elements_.size());
+  for (const auto& element : elements_)
+    element_offsets.emplace_back(pack(builder, element));
+  const auto size_bitmap_index_offset = pack(builder, size_);
+  const auto list_index_offset
+    = fbs::value_index::CreateListIndexDirect(builder, base_offset,
+                                              &element_offsets, max_size_,
+                                              size_bitmap_index_offset);
+  return fbs::CreateValueIndex(builder, fbs::value_index::ValueIndex::list,
+                               list_index_offset.Union());
+}
+
+caf::error list_index::unpack_impl(const fbs::ValueIndex& from) {
+  const auto* from_list = from.value_index_as_list();
+  VAST_ASSERT(from_list);
+  elements_.clear();
+  elements_.reserve(from_list->elements()->size());
+  for (const auto* element : *from_list->elements()) {
+    auto& to = elements_.emplace_back();
+    if (auto err = unpack(*element, to))
+      return err;
+  }
+  max_size_ = from_list->max_size();
+  if (auto err = unpack(*from_list->size_bitmap_index(), size_))
+    return err;
+  // The value type can simply be retreived from the base classes' type, not
+  // sure why it is stored separately. — DL
+  value_type_ = caf::get<list_type>(type()).value_type();
+  return caf::none;
 }
 
 } // namespace vast

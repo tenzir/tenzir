@@ -19,6 +19,8 @@
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/fbs/value_index.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/operator.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/events.hpp"
@@ -69,6 +71,19 @@ TEST(bool) {
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   t = idx2->lookup(relational_operator::equal, make_data_view(true));
   CHECK_EQUAL(to_string(unbox(t)), "11010001");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  const auto idx_offset = pack(builder, idx);
+  builder.Finish(idx_offset);
+  auto maybe_fb = flatbuffer<fbs::ValueIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  auto idx3 = value_index_ptr{};
+  REQUIRE_EQUAL(unpack(*fb, idx3), caf::none);
+  CHECK_EQUAL(idx->type(), idx3->type());
+  CHECK_EQUAL(idx->options(), idx3->options());
+  t = idx3->lookup(relational_operator::equal, make_data_view(true));
+  CHECK_EQUAL(to_string(unbox(t)), "11010001");
 }
 
 TEST(integer) {
@@ -104,6 +119,20 @@ TEST(integer) {
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   less_than_leet
     = idx2->lookup(relational_operator::less, make_data_view(integer{31337}));
+  CHECK(to_string(unbox(less_than_leet)) == "1111011");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  const auto idx_offset = pack(builder, idx);
+  builder.Finish(idx_offset);
+  auto maybe_fb = flatbuffer<fbs::ValueIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  auto idx3 = value_index_ptr{};
+  REQUIRE_EQUAL(unpack(*fb, idx3), caf::none);
+  CHECK_EQUAL(idx->type(), idx3->type());
+  CHECK_EQUAL(idx->options(), idx3->options());
+  less_than_leet
+    = idx3->lookup(relational_operator::less, make_data_view(integer{31337}));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
 }
 

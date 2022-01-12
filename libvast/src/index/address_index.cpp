@@ -8,8 +8,10 @@
 
 #include "vast/index/address_index.hpp"
 
+#include "vast/detail/assert.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/fbs/value_index.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
 
@@ -22,7 +24,8 @@ namespace vast {
 
 address_index::address_index(vast::type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
-  bytes_.fill(byte_index{8});
+  for (auto& byte : bytes_)
+    byte = byte_index{8};
 }
 
 caf::error address_index::serialize(caf::serializer& sink) const {
@@ -130,6 +133,36 @@ size_t address_index::memusage_impl() const {
   for (const auto& byte_index : bytes_)
     acc += byte_index.memusage();
   return acc;
+}
+
+flatbuffers::Offset<fbs::ValueIndex> address_index::pack_impl(
+  flatbuffers::FlatBufferBuilder& builder,
+  flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase> base_offset) {
+  auto byte_index_offsets
+    = std::vector<flatbuffers::Offset<fbs::BitmapIndex>>{};
+  byte_index_offsets.reserve(bytes_.size());
+  for (const auto& byte_index : bytes_)
+    byte_index_offsets.emplace_back(pack(builder, byte_index));
+  const auto v4_index_offset = pack(builder, v4_);
+  const auto address_index_offset = fbs::value_index::CreateAddressIndexDirect(
+    builder, base_offset, &byte_index_offsets, v4_index_offset);
+  return fbs::CreateValueIndex(builder, fbs::value_index::ValueIndex::address,
+                               address_index_offset.Union());
+}
+
+caf::error address_index::unpack_impl(const fbs::ValueIndex& from) {
+  const auto* from_address = from.value_index_as_address();
+  VAST_ASSERT(from_address);
+  if (from_address->byte_indexes()->size() != bytes_.size())
+    return caf::make_error(ec::format_error,
+                           fmt::format("unexpected number of byte indexes in "
+                                       "address index: expected {}, got {}",
+                                       bytes_.size(),
+                                       from_address->byte_indexes()->size()));
+  for (size_t i = 0; i < bytes_.size(); ++i)
+    if (auto err = unpack(*from_address->byte_indexes()->Get(i), bytes_[i]))
+      return err;
+  return unpack(*from_address->v4_index(), v4_);
 }
 
 } // namespace vast

@@ -225,6 +225,7 @@ struct Segment;
 struct TableSlice;
 struct Type;
 struct TypeRegistry;
+struct ValueIndex;
 
 namespace bitmap {
 
@@ -260,6 +261,24 @@ struct experimental;
 } // namespace arrow
 
 } // namespace table_slice
+
+namespace value_index {
+
+struct AddressIndex;
+struct ArithmeticIndex;
+struct EnumerationIndex;
+struct HashIndex;
+struct ListIndex;
+struct StringIndex;
+struct SubnetIndex;
+
+namespace detail {
+
+struct ValueIndexBase;
+
+} // namespace detail
+
+} // namespace value_index
 
 } // namespace fbs
 

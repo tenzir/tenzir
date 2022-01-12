@@ -10,6 +10,7 @@
 
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/fbs/value_index.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
 
@@ -79,6 +80,24 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
 
 size_t enumeration_index::memusage_impl() const {
   return index_.memusage();
+}
+
+flatbuffers::Offset<fbs::ValueIndex> enumeration_index::pack_impl(
+  flatbuffers::FlatBufferBuilder& builder,
+  flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase> base_offset) {
+  const auto index_offset = pack(builder, index_);
+  const auto enumeration_index_offset
+    = fbs::value_index::CreateEnumerationIndex(builder, base_offset,
+                                               index_offset);
+  return fbs::CreateValueIndex(builder,
+                               fbs::value_index::ValueIndex::enumeration,
+                               enumeration_index_offset.Union());
+}
+
+caf::error enumeration_index::unpack_impl(const fbs::ValueIndex& from) {
+  const auto* from_enumeration = from.value_index_as_enumeration();
+  VAST_ASSERT(from_enumeration);
+  return unpack(*from_enumeration->index(), index_);
 }
 
 } // namespace vast

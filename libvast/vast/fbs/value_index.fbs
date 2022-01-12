@@ -1,0 +1,78 @@
+include "coder.fbs";
+include "data.fbs";
+include "type.fbs";
+
+namespace vast.fbs.value_index.detail;
+
+table ValueIndexBase {
+  mask: bitmap.EWAHBitmap (required);
+  none: bitmap.EWAHBitmap (required);
+  type: TypeBuffer (required);
+  options: Data (required);
+}
+
+table HashIndexSeed {
+  key: Data (required);
+  value: ulong;
+}
+
+namespace vast.fbs.value_index;
+
+table ArithmeticIndex {
+  base: detail.ValueIndexBase (required);
+  bitmap_index: BitmapIndex (required);
+}
+
+table ListIndex {
+  base: detail.ValueIndexBase (required);
+  elements: [vast.fbs.ValueIndex] (required);
+  max_size: ulong;
+  size_bitmap_index: BitmapIndex (required);
+}
+
+table StringIndex {
+  base: detail.ValueIndexBase (required);
+  max_length: ulong;
+  length_index: BitmapIndex (required);
+  char_indexes: [BitmapIndex] (required);
+}
+
+table HashIndex {
+  base: detail.ValueIndexBase (required);
+  digests: [ubyte] (required);
+  unique_digests: [ubyte] (required);
+  seeds: [detail.HashIndexSeed] (required);
+}
+
+table AddressIndex {
+  base: detail.ValueIndexBase (required);
+  byte_indexes: [BitmapIndex] (required);
+  v4_index: BitmapIndex (required);
+}
+
+table SubnetIndex {
+  base: detail.ValueIndexBase (required);
+  address_index: vast.fbs.ValueIndex (required);
+  prefix_index: BitmapIndex (required);
+}
+
+table EnumerationIndex {
+  base: detail.ValueIndexBase (required);
+  index: BitmapIndex (required);
+}
+
+union ValueIndex {
+  arithmetic: ArithmeticIndex,
+  address: AddressIndex,
+  enumeration: EnumerationIndex,
+  hash: HashIndex,
+  list: ListIndex,
+  subnet: SubnetIndex,
+  string: StringIndex,
+}
+
+namespace vast.fbs;
+
+table ValueIndex {
+  value_index: value_index.ValueIndex (required);
+}
