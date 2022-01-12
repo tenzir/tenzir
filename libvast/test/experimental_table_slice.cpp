@@ -407,7 +407,6 @@ TEST(arrow primitive type to field roundtrip) {
   // currently a value of type count, indistinguishable from a normal count
   // field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
   field_roundtrip(type{list_type{integer_type{}}});
-  // impossible to distinguish from list_type<stuct<key, value>>:
   field_roundtrip(type{map_type{integer_type{}, address_type{}}});
   field_roundtrip(
     type{record_type{{"key", integer_type{}}, {"value", address_type{}}}});
