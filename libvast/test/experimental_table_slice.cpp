@@ -75,6 +75,18 @@ integer operator"" _i(unsigned long long int x) {
 
 } // namespace
 
+// may be useful to have in a shared place, not a unit test.
+void inspect(caf::detail::stringification_inspector& f,
+             const arrow::Schema& x) {
+  auto str = x.ToString(true);
+  f(str);
+}
+
+void inspect(caf::detail::stringification_inspector& f, const arrow::Field& x) {
+  auto str = x.ToString(true);
+  f(str);
+}
+
 #define CHECK_OK(expression)                                                   \
   if (!(expression).ok())                                                      \
     FAIL("!! " #expression);
@@ -371,6 +383,67 @@ TEST(record batch roundtrip - adding column) {
   CHECK_VARIANT_EQUAL(slice2.at(1, 1, string_type{}), "1"sv);
   CHECK_VARIANT_EQUAL(slice2.at(2, 1, string_type{}), "2"sv);
   CHECK_VARIANT_EQUAL(slice2.at(3, 1, string_type{}), "3"sv);
+}
+
+auto field_roundtrip(const type& t) {
+  const auto& arrow_field = make_experimental_field({"x", t});
+  const auto& restored_t = make_vast_type(*arrow_field->type());
+  CHECK_EQUAL(t, restored_t);
+}
+
+TEST(arrow primitive type to field roundtrip) {
+  field_roundtrip(type{none_type{}});
+  field_roundtrip(type{bool_type{}});
+  field_roundtrip(type{integer_type{}});
+  field_roundtrip(type{count_type{}});
+  field_roundtrip(type{real_type{}});
+  field_roundtrip(type{duration_type{}});
+  field_roundtrip(type{time_type{}});
+  field_roundtrip(type{string_type{}});
+  // does not work yet: cannot be distinguished from string
+  // field_roundtrip(type{pattern_type{}});
+  field_roundtrip(type{address_type{}});
+  field_roundtrip(type{subnet_type{}});
+  // currently a value of type count, indistinguishable from a normal count
+  // field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
+  field_roundtrip(type{list_type{integer_type{}}});
+  // impossible to distinguish from list_type<stuct<key, value>>:
+  // field_roundtrip(type{map_type{integer_type{}, address_type{}}});
+  field_roundtrip(
+    type{record_type{{"key", integer_type{}}, {"value", address_type{}}}});
+  field_roundtrip(
+    type{record_type{{"a", string_type{}}, {"b", address_type{}}}});
+  field_roundtrip(type{record_type{
+    {"a", string_type{}},
+    {"b", record_type{{"hits", count_type{}}, {"net", subnet_type{}}}}}});
+}
+
+auto schema_roundtrip(const type& t) {
+  const auto& arrow_schema = make_experimental_schema(t);
+  const auto& restored_t = make_vast_type(*arrow_schema);
+  CHECK_EQUAL(t, restored_t);
+}
+
+TEST(arrow record type to schema roundtrip) {
+  schema_roundtrip(type{record_type{{"a", integer_type{}}}});
+  schema_roundtrip(type{record_type{
+    {"a", integer_type{}},
+    {"b", bool_type{}},
+    {"c", integer_type{}},
+    {"d", count_type{}},
+    {"e", real_type{}},
+    {"f", duration_type{}},
+    {"g", time_type{}},
+    {"h", string_type{}},
+    {"i", address_type{}},
+    {"j", subnet_type{}},
+    {"k", list_type{integer_type{}}},
+  }});
+
+  // unsupported: recursive top-level records are flattened in arrow schema
+  // schema_roundtrip(type{
+  //     record_type{
+  //       {"inner", record_type{{"value", subnet_type{}}}}}});
 }
 
 FIXTURE_SCOPE(experimental_table_slice_tests, fixtures::table_slices)
