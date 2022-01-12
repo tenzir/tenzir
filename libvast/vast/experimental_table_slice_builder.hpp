@@ -150,5 +150,6 @@ type make_vast_type(const arrow::Schema& arrow_schema);
 /// Converts an Arrow `DataType` to a VAST `type`
 /// @param arrow_type The arrow type to convert.
 /// @return A VAST type representation of `arrow_field`
-type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type);
+type make_vast_type(const arrow::DataType& arrow_type);
+
 } // namespace vast

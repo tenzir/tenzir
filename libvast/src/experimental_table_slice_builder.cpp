@@ -704,8 +704,8 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
 }
 
 // NOLINTNEXTLINE(misc-no-recursion)
-type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
-  switch (arrow_type->id()) {
+type make_vast_type(const arrow::DataType& arrow_type) {
+  switch (arrow_type.id()) {
     case arrow::Type::NA:
       return type{none_type{}};
     case arrow::Type::BOOL:
@@ -717,24 +717,23 @@ type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
     case arrow::Type::DOUBLE:
       return type{real_type{}};
     case arrow::Type::DURATION: {
-      const auto& t = std::static_pointer_cast<arrow::DurationType>(arrow_type);
-      if (t->unit() != arrow::TimeUnit::NANO)
-        die(fmt::format("unhandled Arrow type: Duration[{}]", t->unit()));
+      const auto& t = static_cast<const arrow::DurationType&>(arrow_type);
+      if (t.unit() != arrow::TimeUnit::NANO)
+        die(fmt::format("unhandled Arrow type: Duration[{}]", t.unit()));
       return type{duration_type{}};
     }
     case arrow::Type::STRING:
       return type{string_type{}};
     case arrow::Type::TIMESTAMP: {
-      const auto& t
-        = std::static_pointer_cast<arrow::TimestampType>(arrow_type);
-      if (t->unit() != arrow::TimeUnit::NANO)
-        die(fmt::format("unhandled Arrow type: Timestamp[{}]", t->unit()));
+      const auto& t = static_cast<const arrow::TimestampType&>(arrow_type);
+      if (t.unit() != arrow::TimeUnit::NANO)
+        die(fmt::format("unhandled Arrow type: Timestamp[{}]", t.unit()));
       return type{time_type{}};
     }
     case arrow::Type::FIXED_SIZE_BINARY: {
       const auto& t
-        = std::static_pointer_cast<arrow::FixedSizeBinaryType>(arrow_type);
-      switch (auto width = t->byte_width(); width) {
+        = static_cast<const arrow::FixedSizeBinaryType&>(arrow_type);
+      switch (auto width = t.byte_width(); width) {
         case 16:
           return type{address_type{}};
         case 17:
@@ -745,19 +744,19 @@ type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
       return type{time_type{}};
     }
     case arrow::Type::LIST: {
-      const auto& t = std::static_pointer_cast<arrow::ListType>(arrow_type);
-      const auto& embedded_type = make_vast_type(t->value_type());
+      const auto& t = static_cast<const arrow::ListType&>(arrow_type);
+      const auto& embedded_type = make_vast_type(*t.value_type());
       return type{list_type{embedded_type}};
     }
     case arrow::Type::STRUCT: {
       std::vector<record_type::field_view> field_types;
-      field_types.reserve(arrow_type->num_fields());
-      for (const auto& f : arrow_type->fields())
-        field_types.emplace_back(f->name(), make_vast_type(f->type()));
+      field_types.reserve(arrow_type.num_fields());
+      for (const auto& f : arrow_type.fields())
+        field_types.emplace_back(f->name(), make_vast_type(*f->type()));
       return type{record_type{field_types}};
     }
     default:
-      die(fmt::format("unhandled Arrow type: {}", arrow_type->ToString()));
+      die(fmt::format("unhandled Arrow type: {}", arrow_type.ToString()));
   }
 }
 
@@ -765,7 +764,7 @@ type make_vast_type(const arrow::Schema& arrow_schema) {
   std::vector<record_type::field_view> field_types;
   field_types.reserve(arrow_schema.num_fields());
   for (const auto& f : arrow_schema.fields())
-    field_types.emplace_back(f->name(), make_vast_type(f->type()));
+    field_types.emplace_back(f->name(), make_vast_type(*f->type()));
   return type{record_type{field_types}};
 }
 

@@ -75,6 +75,18 @@ integer operator"" _i(unsigned long long int x) {
 
 } // namespace
 
+// may be useful to have in a shared place, not a unit test.
+void inspect(caf::detail::stringification_inspector& f,
+             const arrow::Schema& x) {
+  auto str = x.ToString(true);
+  f(str);
+}
+
+void inspect(caf::detail::stringification_inspector& f, const arrow::Field& x) {
+  auto str = x.ToString(true);
+  f(str);
+}
+
 #define CHECK_OK(expression)                                                   \
   if (!(expression).ok())                                                      \
     FAIL("!! " #expression);
@@ -375,11 +387,7 @@ TEST(record batch roundtrip - adding column) {
 
 auto field_roundtrip(const type& t) {
   const auto& arrow_field = make_experimental_field({"x", t});
-  const auto& restored_t = make_vast_type(arrow_field->type());
-  if (t != restored_t) { // CHECK_EQUAL doesn't cut it
-    fmt::print(stderr, "`{}` != `{}`\n", t, restored_t);
-    fmt::print(stderr, "arrow schema: {}\n", arrow_field->ToString(true));
-  }
+  const auto& restored_t = make_vast_type(*arrow_field->type());
   CHECK_EQUAL(t, restored_t);
 }
 
@@ -413,10 +421,6 @@ TEST(arrow primitive type to field roundtrip) {
 auto schema_roundtrip(const type& t) {
   const auto& arrow_schema = make_experimental_schema(t);
   const auto& restored_t = make_vast_type(*arrow_schema);
-  if (t != restored_t) { // CHECK_EQUAL doesn't cut it
-    fmt::print(stderr, "`{}` != `{}`\n", t, restored_t);
-    fmt::print(stderr, "arrow schema: {}\n", arrow_schema->ToString(true));
-  }
   CHECK_EQUAL(t, restored_t);
 }
 
