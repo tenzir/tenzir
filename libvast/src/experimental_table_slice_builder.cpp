@@ -675,21 +675,21 @@ make_experimental_field(const record_type::field_view& field) {
 std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
   using data_type_ptr = std::shared_ptr<arrow::DataType>;
   auto f = detail::overload{
-    [=](const auto& x) -> data_type_ptr {
+    [](const auto& x) -> data_type_ptr {
       using trait = column_builder_trait<std::decay_t<decltype(x)>>;
       return trait::make_arrow_type();
     },
-    [=](const list_type& x) -> data_type_ptr {
+    [](const list_type& x) -> data_type_ptr {
       return arrow::list(make_experimental_type(x.value_type()));
     },
-    [=](const map_type& x) -> data_type_ptr {
+    [](const map_type& x) -> data_type_ptr {
       // A map in arrow is a list of structs holding key/value pairs.
       std::vector fields{
         arrow::field("key", make_experimental_type(x.key_type())),
         arrow::field("value", make_experimental_type(x.value_type()))};
       return arrow::list(arrow::struct_(fields));
     },
-    [=](const record_type& x) -> data_type_ptr {
+    [](const record_type& x) -> data_type_ptr {
       std::vector<std::shared_ptr<arrow::Field>> fields;
       fields.reserve(x.num_fields());
       for (const auto& field : x.fields()) {
@@ -750,10 +750,10 @@ type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
       return type{list_type{embedded_type}};
     }
     case arrow::Type::STRUCT: {
-      std::vector<struct record_type::field> field_types;
+      std::vector<record_type::field_view> field_types;
       field_types.reserve(arrow_type->num_fields());
       for (const auto& f : arrow_type->fields())
-        field_types.emplace_back(make_vast_type(*f));
+        field_types.emplace_back(f->name(), make_vast_type(f->type()));
       return type{record_type{field_types}};
     }
     default:
@@ -761,16 +761,11 @@ type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type) {
   }
 }
 
-// NOLINTNEXTLINE(misc-no-recursion)
-struct record_type::field make_vast_type(const arrow::Field& arrow_field) {
-  return {arrow_field.name(), make_vast_type(arrow_field.type())};
-}
-
 type make_vast_type(const arrow::Schema& arrow_schema) {
-  std::vector<struct record_type::field> field_types;
+  std::vector<record_type::field_view> field_types;
   field_types.reserve(arrow_schema.num_fields());
   for (const auto& f : arrow_schema.fields())
-    field_types.emplace_back(make_vast_type(*f));
+    field_types.emplace_back(f->name(), make_vast_type(f->type()));
   return type{record_type{field_types}};
 }
 

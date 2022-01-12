@@ -147,8 +147,8 @@ make_experimental_field(const record_type::field_view& field);
 /// @returns A VAST type representation of `arrow_schema`.
 type make_vast_type(const arrow::Schema& arrow_schema);
 
-/// Converts an Arrow `Field` to a VAST `type`
-/// @param arrow_field Te arrow field to convert.
+/// Converts an Arrow `DataType` to a VAST `type`
+/// @param arrow_type The arrow type to convert.
 /// @return A VAST type representation of `arrow_field`
-struct record_type::field make_vast_type(const arrow::Field& arrow_field);
+type make_vast_type(const std::shared_ptr<arrow::DataType>& arrow_type);
 } // namespace vast
