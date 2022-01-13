@@ -238,6 +238,7 @@ public:
   friend caf::error
   unpack(const fbs::coder::VectorCoder& from, vector_coder& to) {
     to.size_ = from.size();
+    to.bitmaps_.clear();
     to.bitmaps_.reserve(from.bitmaps()->size());
     for (const auto* from_bitmap : *from.bitmaps()) {
       using concrete_bitmap_type = std::conditional_t<
@@ -691,8 +692,6 @@ public:
       base_normalized.emplace_back(static_cast<uint64_t>(base_value));
     const auto base_offset
       = fbs::coder::detail::CreateBaseDirect(builder, &base_normalized);
-    const auto xs_offset = builder.CreateVector(
-      reinterpret_cast<const uint64_t*>(value.xs_.data()), value.xs_.size());
     constexpr auto coder_type
       = is_singleton_coder<Coder>::value ? fbs::coder::Coder::singleton
         : std::disjunction_v<is_equality_coder<Coder>, is_range_coder<Coder>,
@@ -705,7 +704,7 @@ public:
       coder_offsets.emplace_back(
         fbs::CreateCoder(builder, coder_type, pack(builder, coder).Union()));
     const auto coders_offset = builder.CreateVector(coder_offsets);
-    return fbs::coder::CreateMultiLevelCoder(builder, base_offset, xs_offset,
+    return fbs::coder::CreateMultiLevelCoder(builder, base_offset,
                                              coders_offset);
   }
 
@@ -716,14 +715,13 @@ public:
     for (const auto& base_value : *from.base()->values())
       base_values.emplace_back(static_cast<value_type>(base_value));
     to.base_ = vast::base{std::move(base_values)};
-    to.xs_.reserve(from.xs()->size());
-    to.xs_.insert(to.xs_.end(), from.xs()->begin(), from.xs()->end());
     using concrete_coder_type = std::conditional_t<
       is_singleton_coder<Coder>::value, fbs::coder::SingletonCoder,
       std::conditional_t<
         std::disjunction_v<is_equality_coder<Coder>, is_range_coder<Coder>,
                            is_bitslice_coder<Coder>>,
         fbs::coder::VectorCoder, fbs::coder::MultiLevelCoder>>;
+    to.coders_.clear();
     to.coders_.reserve(from.coders()->size());
     for (const auto& from_coder : *from.coders()) {
       const auto* from_concrete_coder
@@ -742,7 +740,8 @@ public:
 private:
   void init() {
     VAST_ASSERT(base_.well_defined());
-    xs_.resize(base_.size()), coders_.resize(base_.size());
+    xs_.resize(base_.size());
+    coders_.resize(base_.size());
     init_coders(coders_); // dispatch on coder_type
     VAST_ASSERT(coders_.size() == base_.size());
   }

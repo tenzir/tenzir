@@ -184,6 +184,7 @@ auto pack(flatbuffers::FlatBufferBuilder& builder, const wah_bitmap& from)
 }
 
 auto unpack(const fbs::bitmap::WAHBitmap& from, wah_bitmap& to) -> caf::error {
+  to.blocks_.clear();
   to.blocks_.reserve(from.blocks()->size());
   to.blocks_.insert(to.blocks_.end(), from.blocks()->begin(),
                     from.blocks()->end());

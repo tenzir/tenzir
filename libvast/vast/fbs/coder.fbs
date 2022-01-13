@@ -19,7 +19,6 @@ table VectorCoder {
 
 table MultiLevelCoder {
   base: detail.Base (required);
-  xs: [ulong] (required);
   coders: [Coder] (required);
 }
 
