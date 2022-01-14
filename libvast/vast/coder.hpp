@@ -8,9 +8,14 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/base.hpp"
+#include "vast/bitmap.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/error.hpp"
+#include "vast/fbs/coder.hpp"
 #include "vast/operator.hpp"
 
 #include <caf/meta/load_callback.hpp>
@@ -29,66 +34,66 @@ namespace vast {
 /// decoding step is a function of specific relational operator, as supported
 /// by the coder. A coder is an append-only data structure. Users have the
 /// ability to control the position/offset where to begin encoding of values.
-template <class Bitmap>
-struct coder {
-  using bitlegacy_map_type = Bitmap;
-  using size_type = typename Bitmap::size_type;
-  using value_type = size_t;
-
-  /// Returns the number of bitmaps stored by the coder.
-  Bitmap& bitmap_count() const noexcept;
-
-  /// Accesses individual bitmaps. The implementation may lazily fill a bitmap
-  /// before returning it.
-  /// @returns the bitmap for `x`.
-  Bitmap& bitmap_at(size_t index);
-
-  /// Accesses individual bitmaps. The implementation may lazily fill a bitmap
-  /// before returning it.
-  /// @returns the bitmap for `x`.
-  const Bitmap& bitmap_at(size_t index) const;
-
-  /// Encodes a single values multiple times.
-  /// @tparam An unsigned integral type.
-  /// @param x The value to encode.
-  /// @param n The number of time to add *x*.
-  /// @pre `Bitmap::max_size - size() >= n`
-  void encode(value_type x, size_type n = 1);
-
-  /// Decodes a value under a relational operator.
-  /// @param x The value to decode.
-  /// @param op The relation operator under which to decode *x*.
-  /// @returns The bitmap for lookup *? op x* where *?* represents the value in
-  ///          the coder.
-  Bitmap decode(relational_operator op, value_type x) const;
-
-  /// Instructs the coder to add undefined values for the sake of increasing
-  /// the number of elements.
-  /// @param n The number of elements to skip.
-  void skip(size_type n);
-
-  /// Appends another coder to this instance.
-  /// @param other The coder to append.
-  /// @pre `size() + other.size() < Bitmap::max_size`
-  void append(const coder& other);
-
-  /// Retrieves the number entries in the coder, i.e., the number of rows.
-  /// @returns The size of the coder measured in number of entries.
-  size_type size() const;
-
-  /// Retrieves the amout of memory that is occupied by the coder.
-  /// @returns The size of the coder measured in heap bytes used.
-  [[nodiscard]] size_t memusage() const;
-
-  /// Retrieves the coder-specific bitmap storage.
-  auto& storage() const;
-};
+// template <class Bitmap>
+// struct coder {
+//   using bitmap_type = Bitmap;
+//   using size_type = typename Bitmap::size_type;
+//   using value_type = size_t;
+//
+//   /// Returns the number of bitmaps stored by the coder.
+//   size_type bitmap_count() const noexcept;
+//
+//   /// Accesses individual bitmaps. The implementation may lazily fill a bitmap
+//   /// before returning it.
+//   /// @returns the bitmap for `x`.
+//   Bitmap& bitmap_at(size_t index);
+//
+//   /// Accesses individual bitmaps. The implementation may lazily fill a bitmap
+//   /// before returning it.
+//   /// @returns the bitmap for `x`.
+//   const Bitmap& bitmap_at(size_t index) const;
+//
+//   /// Encodes a single values multiple times.
+//   /// @tparam An unsigned integral type.
+//   /// @param x The value to encode.
+//   /// @param n The number of time to add *x*.
+//   /// @pre `Bitmap::max_size - size() >= n`
+//   void encode(value_type x, size_type n = 1);
+//
+//   /// Decodes a value under a relational operator.
+//   /// @param x The value to decode.
+//   /// @param op The relation operator under which to decode *x*.
+//   /// @returns The bitmap for lookup *? op x* where *?* represents the value in
+//   ///          the coder.
+//   Bitmap decode(relational_operator op, value_type x) const;
+//
+//   /// Instructs the coder to add undefined values for the sake of increasing
+//   /// the number of elements.
+//   /// @param n The number of elements to skip.
+//   void skip(size_type n);
+//
+//   /// Appends another coder to this instance.
+//   /// @param other The coder to append.
+//   /// @pre `size() + other.size() < Bitmap::max_size`
+//   void append(const coder& other);
+//
+//   /// Retrieves the number entries in the coder, i.e., the number of rows.
+//   /// @returns The size of the coder measured in number of entries.
+//   size_type size() const;
+//
+//   /// Retrieves the amout of memory that is occupied by the coder.
+//   /// @returns The size of the coder measured in heap bytes used.
+//   [[nodiscard]] size_t memusage() const;
+//
+//   /// Retrieves the coder-specific bitmap storage.
+//   auto& storage() const;
+// };
 
 /// A coder that wraps a single bitmap (and can thus only stores 2 values).
 template <class Bitmap>
 class singleton_coder : detail::equality_comparable<singleton_coder<Bitmap>> {
 public:
-  using bitlegacy_map_type = Bitmap;
+  using bitmap_type = Bitmap;
   using size_type = typename Bitmap::size_type;
   using value_type = bool;
 
@@ -96,12 +101,12 @@ public:
     return 1;
   }
 
-  bitlegacy_map_type& bitmap_at(size_t index) {
+  bitmap_type& bitmap_at(size_t index) {
     VAST_ASSERT(index == 0);
     return bitmap_;
   }
 
-  [[nodiscard]] const bitlegacy_map_type& bitmap_at(size_t index) const {
+  [[nodiscard]] const bitmap_type& bitmap_at(size_t index) const {
     VAST_ASSERT(index == 0);
     return bitmap_;
   }
@@ -147,8 +152,30 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, singleton_coder& sc) {
+  friend auto inspect(Inspector& f, singleton_coder& sc) {
     return f(sc.bitmap_);
+  }
+
+  friend flatbuffers::Offset<fbs::coder::SingletonCoder>
+  pack(flatbuffers::FlatBufferBuilder& builder, const singleton_coder& value) {
+    const auto bitmap_offset = pack(builder, bitmap{value.bitmap_});
+    return fbs::coder::CreateSingletonCoder(builder, bitmap_offset);
+  }
+
+  friend caf::error
+  unpack(const fbs::coder::SingletonCoder& from, singleton_coder& to) {
+    using concrete_bitmap_type = std::conditional_t<
+      std::is_same_v<Bitmap, ewah_bitmap>, fbs::bitmap::EWAHBitmap,
+      std::conditional_t<std::is_same_v<Bitmap, null_bitmap>,
+                         fbs::bitmap::NullBitmap,
+                         std::conditional_t<std::is_same_v<Bitmap, wah_bitmap>,
+                                            fbs::bitmap::WAHBitmap, void>>>;
+    static_assert(!std::is_void_v<concrete_bitmap_type>);
+    if (const auto* from_concrete
+        = from.bitmap()->bitmap_as<concrete_bitmap_type>())
+      return unpack(*from_concrete, to.bitmap_);
+    return caf::make_error(ec::logic_error,
+                           "invalid vast.fbs.coder.SingletonCoder bitmap type");
   }
 
 private:
@@ -158,7 +185,7 @@ private:
 template <class Bitmap>
 class vector_coder : detail::equality_comparable<vector_coder<Bitmap>> {
 public:
-  using bitlegacy_map_type = Bitmap;
+  using bitmap_type = Bitmap;
   using size_type = typename Bitmap::size_type;
   using value_type = size_t;
 
@@ -198,6 +225,42 @@ public:
     return f(ec.size_, ec.bitmaps_);
   }
 
+  friend flatbuffers::Offset<fbs::coder::VectorCoder>
+  pack(flatbuffers::FlatBufferBuilder& builder, const vector_coder& value) {
+    auto bitmap_offsets = std::vector<flatbuffers::Offset<fbs::Bitmap>>{};
+    bitmap_offsets.reserve(value.bitmaps_.size());
+    for (const auto& bm : value.bitmaps_)
+      bitmap_offsets.emplace_back(pack(builder, bitmap{bm}));
+    return fbs::coder::CreateVectorCoderDirect(builder, value.size_,
+                                               &bitmap_offsets);
+  }
+
+  friend caf::error
+  unpack(const fbs::coder::VectorCoder& from, vector_coder& to) {
+    to.size_ = from.size();
+    to.bitmaps_.clear();
+    to.bitmaps_.reserve(from.bitmaps()->size());
+    for (const auto* from_bitmap : *from.bitmaps()) {
+      using concrete_bitmap_type = std::conditional_t<
+        std::is_same_v<Bitmap, ewah_bitmap>, fbs::bitmap::EWAHBitmap,
+        std::conditional_t<std::is_same_v<Bitmap, null_bitmap>,
+                           fbs::bitmap::NullBitmap,
+                           std::conditional_t<std::is_same_v<Bitmap, wah_bitmap>,
+                                              fbs::bitmap::WAHBitmap, void>>>;
+      static_assert(!std::is_void_v<concrete_bitmap_type>);
+      const auto* from_concrete
+        = from_bitmap->bitmap_as<concrete_bitmap_type>();
+      if (!from_concrete)
+        return caf::make_error(
+          ec::logic_error, "invalid vast.fbs.coder.VectorCoder bitmap type");
+      auto to_concrete = Bitmap{};
+      if (auto err = unpack(*from_concrete, to_concrete))
+        return err;
+      to.bitmaps_.emplace_back(std::move(to_concrete));
+    }
+    return caf::none;
+  }
+
 protected:
   void append(const vector_coder& other, bool bit) {
     VAST_ASSERT(bitmaps_.size() == other.bitmaps_.size());
@@ -218,23 +281,23 @@ class equality_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
 
-  using typename super::bitlegacy_map_type;
+  using typename super::bitmap_type;
   using typename super::size_type;
   using typename super::value_type;
 
   using super::super;
 
-  bitlegacy_map_type& lazy_bitmap_at(size_t index) const {
+  bitmap_type& lazy_bitmap_at(size_t index) const {
     auto& result = this->bitmaps_[index];
     result.append_bits(false, this->size_ - result.size());
     return result;
   }
 
-  bitlegacy_map_type& bitmap_at(size_t index) {
+  bitmap_type& bitmap_at(size_t index) {
     return lazy_bitmap_at(index);
   }
 
-  const bitlegacy_map_type& bitmap_at(size_t index) const {
+  const bitmap_type& bitmap_at(size_t index) const {
     return lazy_bitmap_at(index);
   }
 
@@ -301,32 +364,42 @@ public:
   void append(const equality_coder& other) {
     super::append(other, false);
   }
+
+  friend flatbuffers::Offset<fbs::coder::VectorCoder>
+  pack(flatbuffers::FlatBufferBuilder& builder, const equality_coder& value) {
+    return pack(builder, static_cast<const vector_coder<Bitmap>&>(value));
+  }
+
+  friend caf::error
+  unpack(const fbs::coder::VectorCoder& from, equality_coder& to) {
+    return unpack(from, static_cast<vector_coder<Bitmap>&>(to));
+  }
 };
 
-/// Encodes a value according to an inequalty. Given a value *x* and an index
-/// *i* in *[0,N)*, all bits are 0 for i < x and 1 for i >= x.
+/// Encodes a value according to an inequalty. Given a value *x* and an
+/// index *i* in *[0,N)*, all bits are 0 for i < x and 1 for i >= x.
 template <class Bitmap>
 class range_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
 
-  using typename super::bitlegacy_map_type;
+  using typename super::bitmap_type;
   using typename super::size_type;
   using typename super::value_type;
 
   using super::super;
 
-  bitlegacy_map_type& lazy_bitmap_at(size_t index) const {
+  bitmap_type& lazy_bitmap_at(size_t index) const {
     auto& result = this->bitmaps_[index];
     result.append_bits(true, this->size_ - result.size());
     return result;
   }
 
-  bitlegacy_map_type& bitmap_at(size_t index) {
+  bitmap_type& bitmap_at(size_t index) {
     return lazy_bitmap_at(index);
   }
 
-  const bitlegacy_map_type& bitmap_at(size_t index) const {
+  const bitmap_type& bitmap_at(size_t index) const {
     return lazy_bitmap_at(index);
   }
 
@@ -390,6 +463,16 @@ public:
   void append(const range_coder& other) {
     super::append(other, true);
   }
+
+  friend flatbuffers::Offset<fbs::coder::VectorCoder>
+  pack(flatbuffers::FlatBufferBuilder& builder, const range_coder& value) {
+    return pack(builder, static_cast<const vector_coder<Bitmap>&>(value));
+  }
+
+  friend caf::error
+  unpack(const fbs::coder::VectorCoder& from, range_coder& to) {
+    return unpack(from, static_cast<vector_coder<Bitmap>&>(to));
+  }
 };
 
 /// Maintains one bitmap per *bit* of the value to encode.
@@ -400,23 +483,23 @@ class bitslice_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
 
-  using typename super::bitlegacy_map_type;
+  using typename super::bitmap_type;
   using typename super::size_type;
   using typename super::value_type;
 
   using super::super;
 
-  bitlegacy_map_type& lazy_bitmap_at(size_t index) const {
+  bitmap_type& lazy_bitmap_at(size_t index) const {
     auto& result = this->bitmaps_[index];
     result.append_bits(false, this->size_ - result.size());
     return result;
   }
 
-  bitlegacy_map_type& bitmap_at(size_t index) {
+  bitmap_type& bitmap_at(size_t index) {
     return lazy_bitmap_at(index);
   }
 
-  const bitlegacy_map_type& bitmap_at(size_t index) const {
+  const bitmap_type& bitmap_at(size_t index) const {
     return lazy_bitmap_at(index);
   }
 
@@ -492,6 +575,16 @@ public:
   void append(const bitslice_coder& other) {
     super::append(other, false);
   }
+
+  friend flatbuffers::Offset<fbs::coder::VectorCoder>
+  pack(flatbuffers::FlatBufferBuilder& builder, const bitslice_coder& value) {
+    return pack(builder, static_cast<const vector_coder<Bitmap>&>(value));
+  }
+
+  friend caf::error
+  unpack(const fbs::coder::VectorCoder& from, bitslice_coder& to) {
+    return unpack(from, static_cast<vector_coder<Bitmap>&>(to));
+  }
 };
 
 template <class T>
@@ -526,7 +619,7 @@ class multi_level_coder
   : detail::equality_comparable<multi_level_coder<Coder>> {
 public:
   using coder_type = Coder;
-  using bitlegacy_map_type = typename coder_type::bitlegacy_map_type;
+  using bitmap_type = typename coder_type::bitmap_type;
   using size_type = typename coder_type::size_type;
   using value_type = typename coder_type::value_type;
 
@@ -547,7 +640,7 @@ public:
   }
 
   auto decode(relational_operator op, value_type x) const {
-    return coders_.empty() ? bitlegacy_map_type{} : decode(coders_, op, x);
+    return coders_.empty() ? bitmap_type{} : decode(coders_, op, x);
   }
 
   void skip(size_type n) {
@@ -578,8 +671,8 @@ public:
     return coders_;
   }
 
-  friend bool operator==(const multi_level_coder& x,
-                         const multi_level_coder& y) {
+  friend bool
+  operator==(const multi_level_coder& x, const multi_level_coder& y) {
     return x.base_ == y.base_ && x.coders_ == y.coders_;
   }
 
@@ -588,10 +681,66 @@ public:
     return f(mlc.base_, mlc.xs_, mlc.coders_);
   }
 
+  friend flatbuffers::Offset<fbs::coder::MultiLevelCoder>
+  pack(flatbuffers::FlatBufferBuilder& builder,
+       const multi_level_coder& value) {
+    static_assert(sizeof(value_type) <= sizeof(uint64_t),
+                  "value_type too large to be normalized to 64 bit");
+    auto base_normalized = std::vector<uint64_t>{};
+    base_normalized.reserve(value.base_.size());
+    for (const auto& base_value : value.base_)
+      base_normalized.emplace_back(static_cast<uint64_t>(base_value));
+    const auto base_offset
+      = fbs::coder::detail::CreateBaseDirect(builder, &base_normalized);
+    constexpr auto coder_type
+      = is_singleton_coder<Coder>::value ? fbs::coder::Coder::singleton
+        : std::disjunction_v<is_equality_coder<Coder>, is_range_coder<Coder>,
+                             is_bitslice_coder<Coder>>
+          ? fbs::coder::Coder::vector
+          : fbs::coder::Coder::multi_level;
+    auto coder_offsets = std::vector<flatbuffers::Offset<fbs::Coder>>{};
+    coder_offsets.reserve(value.coders_.size());
+    for (const auto& coder : value.coders_)
+      coder_offsets.emplace_back(
+        fbs::CreateCoder(builder, coder_type, pack(builder, coder).Union()));
+    const auto coders_offset = builder.CreateVector(coder_offsets);
+    return fbs::coder::CreateMultiLevelCoder(builder, base_offset,
+                                             coders_offset);
+  }
+
+  friend caf::error
+  unpack(const fbs::coder::MultiLevelCoder& from, multi_level_coder& to) {
+    auto base_values = std::vector<value_type>{};
+    base_values.reserve(from.base()->values()->size());
+    for (const auto& base_value : *from.base()->values())
+      base_values.emplace_back(static_cast<value_type>(base_value));
+    to.base_ = vast::base{std::move(base_values)};
+    using concrete_coder_type = std::conditional_t<
+      is_singleton_coder<Coder>::value, fbs::coder::SingletonCoder,
+      std::conditional_t<
+        std::disjunction_v<is_equality_coder<Coder>, is_range_coder<Coder>,
+                           is_bitslice_coder<Coder>>,
+        fbs::coder::VectorCoder, fbs::coder::MultiLevelCoder>>;
+    to.coders_.clear();
+    to.coders_.reserve(from.coders()->size());
+    for (const auto& from_coder : *from.coders()) {
+      const auto* from_concrete_coder
+        = from_coder->coder_as<concrete_coder_type>();
+      if (!from_concrete_coder)
+        return caf::make_error(
+          ec::logic_error, "invalid vast.fbs.coder.MultiLevelCoder coder type");
+      auto to_coder = Coder{};
+      if (auto err = unpack(*from_concrete_coder, to_coder))
+        return err;
+      to.coders_.emplace_back(std::move(to_coder));
+    }
+    return caf::none;
+  }
+
 private:
   void init() {
     VAST_ASSERT(base_.well_defined());
-    xs_.resize(base_.size()),
+    xs_.resize(base_.size());
     coders_.resize(base_.size());
     init_coders(coders_); // dispatch on coder_type
     VAST_ASSERT(coders_.size() == base_.size());
@@ -603,15 +752,15 @@ private:
   // conjunction/disjunction of the others. While this decreases space
   // requirements by a factor of 1/b, it increases query time by b-1.
 
-  void init_coders(std::vector<singleton_coder<bitlegacy_map_type>>&) {
+  void init_coders(std::vector<singleton_coder<bitmap_type>>&) {
     // Nothing to for singleton coders.
   }
 
-  void init_coders(std::vector<range_coder<bitlegacy_map_type>>& coders) {
+  void init_coders(std::vector<range_coder<bitmap_type>>& coders) {
     // For range coders it suffices to use b-1 bitmaps because the last
     // bitmap always consists of all 1s and is hence superfluous.
     for (auto i = 0u; i < base_.size(); ++i)
-      coders[i] = range_coder<bitlegacy_map_type>{base_[i] - 1};
+      coders[i] = range_coder<bitmap_type>{base_[i] - 1};
   }
 
   template <class C>
@@ -622,31 +771,33 @@ private:
   }
 
   // Range-Eval-Opt
-  auto decode(const std::vector<range_coder<bitlegacy_map_type>>& coders,
+  auto decode(const std::vector<range_coder<bitmap_type>>& coders,
               relational_operator op, value_type x) const {
     VAST_ASSERT(
       !(op == relational_operator::in || op == relational_operator::not_in));
     // All coders must have the same number of elements.
-    auto pred = [n=size()](auto c) { return c.size() == n; };
+    auto pred = [n = size()](auto c) {
+      return c.size() == n;
+    };
     VAST_ASSERT(std::all_of(coders.begin(), coders.end(), pred));
     // Check boundaries first.
     if (x == 0) {
       if (op == relational_operator::less) // A < min => false
-        return bitlegacy_map_type{size(), false};
+        return bitmap_type{size(), false};
       else if (op == relational_operator::greater_equal) // A >= min => true
-        return bitlegacy_map_type{size(), true};
+        return bitmap_type{size(), true};
     } else if (op == relational_operator::less
                || op == relational_operator::greater_equal) {
       --x;
     }
     base_.decompose(x, xs_);
-    bitlegacy_map_type result{size(), true};
+    bitmap_type result{size(), true};
     auto get_bitmap = [&](size_t coder_index, size_t bitmap_index) -> auto& {
       return coders[coder_index].bitmap_at(bitmap_index);
     };
     switch (op) {
       default:
-        return bitlegacy_map_type{size(), false};
+        return bitmap_type{size(), false};
       case relational_operator::less:
       case relational_operator::less_equal:
       case relational_operator::greater:
@@ -679,12 +830,12 @@ private:
     return result;
   }
 
-  // If we don't have a range_coder, we only support simple equality queries at
-  // this point.
+  // If we don't have a range_coder, we only support simple equality queries
+  // at this point.
   template <class C>
     requires(is_equality_coder<C>::value || is_bitslice_coder<C>::value)
   auto decode(const std::vector<C>& coders, relational_operator op,
-              value_type x) const -> bitlegacy_map_type {
+              value_type x) const -> bitmap_type {
     VAST_ASSERT(op == relational_operator::equal
                 || op == relational_operator::not_equal);
     base_.decompose(x, xs_);
@@ -709,4 +860,3 @@ template <class C>
 struct is_multi_level_coder<multi_level_coder<C>> : std::true_type {};
 
 } // namespace vast
-

@@ -234,6 +234,14 @@ struct WAHBitmap;
 
 } // namespace bitmap
 
+namespace coder {
+
+struct SingletonCoder;
+struct VectorCoder;
+struct MultiLevelCoder;
+
+} // namespace coder
+
 namespace table_slice {
 
 namespace msgpack {

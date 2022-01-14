@@ -17,9 +17,13 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/order.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/fbs/coder.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
+
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 
@@ -50,7 +54,7 @@ void fill(Coder& c, Ts... xs) {
 
 } // namespace
 
-TEST(bitwise total ordering (integral)) {
+TEST(bitwise total ordering(integral)) {
   using detail::order;
   MESSAGE("unsigned identities");
   CHECK(order(0u) == 0);
@@ -62,7 +66,7 @@ TEST(bitwise total ordering (integral)) {
   CHECK(order(i) == 2147483652);
 }
 
-TEST(bitwise total ordering (floating point)) {
+TEST(bitwise total ordering(floating point)) {
   using detail::order;
   std::string d;
   MESSAGE("permutation");
@@ -86,15 +90,23 @@ TEST(bitwise total ordering (floating point)) {
   CHECK(order(10.0) < order(1111.2));
 }
 
-TEST(singleton-coder) {
+TEST(singleton - coder) {
   singleton_coder<null_bitmap> c;
   fill(c, true, false, false, true, false);
   CHECK_DECODE(relational_operator::equal, true, "10010");
   CHECK_DECODE(relational_operator::not_equal, true, "01101");
   CHECK_DECODE(relational_operator::not_equal, false, "10010");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, c));
+  auto fb
+    = unbox(flatbuffer<fbs::coder::SingletonCoder>::make(builder.Release()));
+  REQUIRE(fb);
+  singleton_coder<null_bitmap> c2;
+  REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
+  CHECK_EQUAL(c, c2);
 }
 
-TEST(equality-coder) {
+TEST(equality - coder) {
   equality_coder<null_bitmap> c{10};
   fill(c, 8, 9, 0, 1, 4);
   CHECK_DECODE(relational_operator::less, 0, "00000");
@@ -157,9 +169,16 @@ TEST(equality-coder) {
   CHECK_DECODE(relational_operator::greater_equal, 7, "11000");
   CHECK_DECODE(relational_operator::greater_equal, 8, "11000");
   CHECK_DECODE(relational_operator::greater_equal, 9, "01000");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, c));
+  auto fb = unbox(flatbuffer<fbs::coder::VectorCoder>::make(builder.Release()));
+  REQUIRE(fb);
+  equality_coder<null_bitmap> c2;
+  REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
+  CHECK_EQUAL(c, c2);
 }
 
-TEST(range-coder) {
+TEST(range - coder) {
   range_coder<null_bitmap> c{8};
   fill(c, 4, 7, 4, 3, 3, 3, 3, 3, 3, 0, 1);
   CHECK_DECODE(relational_operator::less, 0, "00000000000");
@@ -210,9 +229,16 @@ TEST(range-coder) {
   CHECK_DECODE(relational_operator::greater_equal, 5, "01000000000");
   CHECK_DECODE(relational_operator::greater_equal, 6, "01000000000");
   CHECK_DECODE(relational_operator::greater_equal, 7, "01000000000");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, c));
+  auto fb = unbox(flatbuffer<fbs::coder::VectorCoder>::make(builder.Release()));
+  REQUIRE(fb);
+  range_coder<null_bitmap> c2;
+  REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
+  CHECK_EQUAL(c, c2);
 }
 
-TEST(bitslice-coder) {
+TEST(bitslice - coder) {
   bitslice_coder<null_bitmap> c{6};
   fill(c, 4, 5, 2, 3, 0, 1);
   CHECK_DECODE(relational_operator::equal, 0, "000010");
@@ -227,9 +253,16 @@ TEST(bitslice-coder) {
   CHECK_DECODE(relational_operator::in, 3, "000100");
   CHECK_DECODE(relational_operator::in, 4, "110000");
   CHECK_DECODE(relational_operator::in, 5, "010000");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, c));
+  auto fb = unbox(flatbuffer<fbs::coder::VectorCoder>::make(builder.Release()));
+  REQUIRE(fb);
+  bitslice_coder<null_bitmap> c2;
+  REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
+  CHECK_EQUAL(c, c2);
 }
 
-TEST(bitslice-coder 2) {
+TEST(bitslice - coder 2) {
   bitslice_coder<null_bitmap> c{8};
   fill(c, 0, 1, 3, 9, 10, 77, 99, 100, 128);
   CHECK_DECODE(relational_operator::less, 0, "000000000");
@@ -334,11 +367,20 @@ TEST(bitslice-coder 2) {
   CHECK_DECODE(relational_operator::greater_equal, 101, "000000001");
   CHECK_DECODE(relational_operator::greater_equal, 127, "000000001");
   CHECK_DECODE(relational_operator::greater_equal, 128, "000000001");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, c));
+  auto fb = unbox(flatbuffer<fbs::coder::VectorCoder>::make(builder.Release()));
+  REQUIRE(fb);
+  bitslice_coder<null_bitmap> c2;
+  REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
+  CHECK_EQUAL(c, c2);
 }
 
 TEST(uniform bases) {
   auto u = base::uniform(42, 10);
-  auto is42 = [](auto x) { return x == 42; };
+  auto is42 = [](auto x) {
+    return x == 42;
+  };
   CHECK(std::all_of(u.begin(), u.end(), is42));
   CHECK_EQUAL(u.size(), 10u);
   CHECK_EQUAL(base::uniform<8>(2).size(), 8u);
@@ -380,7 +422,7 @@ TEST(value decomposition) {
   CHECK_EQUAL(x, 23);
 }
 
-TEST(multi-level equality coder) {
+TEST(multi - level equality coder) {
   auto c = multi_level_coder<equality_coder<null_bitmap>>{base{10, 10}};
   fill(c, 42, 84, 42, 21, 30);
   CHECK_DECODE(relational_operator::equal, 20, "00000");
@@ -407,9 +449,17 @@ TEST(multi-level equality coder) {
   CHECK_DECODE(relational_operator::not_equal, 83, "11111");
   CHECK_DECODE(relational_operator::not_equal, 84, "10111");
   CHECK_DECODE(relational_operator::not_equal, 85, "11111");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, c));
+  auto fb
+    = unbox(flatbuffer<fbs::coder::MultiLevelCoder>::make(builder.Release()));
+  REQUIRE(fb);
+  multi_level_coder<equality_coder<null_bitmap>> c2;
+  REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
+  CHECK_EQUAL(c, c2);
 }
 
-TEST(multi-level range coder) {
+TEST(multi - level range coder) {
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto c = coder_type{base::uniform(10, 3)};
   fill(c, 0, 6, 9, 10, 77, 99, 100, 255, 254);
@@ -467,6 +517,14 @@ TEST(multi-level range coder) {
     str[i] = '1';
     CHECK_EQUAL(to_string(c.decode(relational_operator::less_equal, i)), str);
   }
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  builder.Finish(pack(builder, c));
+  auto fb
+    = unbox(flatbuffer<fbs::coder::MultiLevelCoder>::make(builder.Release()));
+  REQUIRE(fb);
+  multi_level_coder<range_coder<null_bitmap>> c2;
+  REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
+  CHECK_EQUAL(c, c2);
 }
 
 TEST(serialization range coder) {
@@ -493,7 +551,7 @@ TEST(serialization range coder) {
   CHECK_DECODE(relational_operator::greater, 13, "11111");
 }
 
-TEST(serialization multi-level coder) {
+TEST(serialization multi - level coder) {
   using coder_type = multi_level_coder<equality_coder<null_bitmap>>;
   auto x = coder_type{base{10, 10}};
   fill(x, 42, 84, 42, 21, 30);

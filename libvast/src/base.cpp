@@ -23,8 +23,9 @@ base::base(std::initializer_list<value_type> xs) : values_{std::move(xs)} {
 }
 
 bool base::well_defined() const {
-  return !values_.empty()
-    && std::all_of(begin(), end(), [](auto x) { return x >= 2; });
+  return !values_.empty() && std::all_of(begin(), end(), [](auto x) {
+    return x >= 2;
+  });
 }
 
 bool base::empty() const {
@@ -45,6 +46,10 @@ typename base::value_type& base::operator[](size_t i) {
 
 typename base::value_type base::operator[](size_t i) const {
   return values_[i];
+}
+
+const typename base::value_type* base::data() const {
+  return values_.data();
 }
 
 typename base::iterator base::begin() {

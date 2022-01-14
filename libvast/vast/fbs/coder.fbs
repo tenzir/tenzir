@@ -1,0 +1,39 @@
+include "bitmap.fbs";
+
+namespace vast.fbs.coder.detail;
+
+table Base {
+  values: [ulong] (required);
+}
+
+namespace vast.fbs.coder;
+
+table SingletonCoder {
+  bitmap: Bitmap (required);
+}
+
+table VectorCoder {
+  size: ulong;
+  bitmaps: [Bitmap] (required);
+}
+
+table MultiLevelCoder {
+  base: detail.Base (required);
+  coders: [Coder] (required);
+}
+
+union Coder {
+  singleton: SingletonCoder,
+  vector: VectorCoder,
+  multi_level: MultiLevelCoder,
+}
+
+namespace vast.fbs;
+
+table Coder {
+  coder: coder.Coder (required);
+}
+
+table BitmapIndex {
+  coder: Coder (required);
+}

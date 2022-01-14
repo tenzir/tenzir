@@ -12,6 +12,7 @@
 #include "vast/binner.hpp"
 #include "vast/coder.hpp"
 #include "vast/detail/order.hpp"
+#include "vast/fbs/coder.hpp"
 
 #include <type_traits>
 
@@ -24,20 +25,18 @@ class bitmap;
 /// @tparam Base The base determining the value decomposition
 /// @tparam Coder The encoding/decoding policy.
 /// @tparam Binner The pre-processing policy to perform on values.
-template <
-  class T,
-  class Coder = multi_level_coder<range_coder<bitmap>>,
-  class Binner = identity_binner
->
+template <class T, class Coder = multi_level_coder<range_coder<bitmap>>,
+          class Binner = identity_binner>
 class bitmap_index
   : detail::equality_comparable<bitmap_index<T, Coder, Binner>> {
   static_assert(!std::is_same<T, bool>{} || is_singleton_coder<Coder>{},
                 "boolean bitmap index requires singleton coder");
+
 public:
   using value_type = T;
   using coder_type = Coder;
   using binner_type = Binner;
-  using bitlegacy_map_type = typename coder_type::bitlegacy_map_type;
+  using bitmap_type = typename coder_type::bitmap_type;
   using size_type = typename coder_type::size_type;
 
   bitmap_index() = default;
@@ -78,8 +77,7 @@ public:
   /// @param op The relational operator to use for looking up *x*.
   /// @param x The value to find the bitmap for.
   /// @returns The bitmap for all values *v* where *op(v,x)* is `true`.
-  [[nodiscard]] bitlegacy_map_type
-  lookup(relational_operator op, value_type x) const {
+  [[nodiscard]] bitmap_type lookup(relational_operator op, value_type x) const {
     auto binned = binner_type::bin(x);
     // In case the binning causes a loss of precision, the comparison value
     // has to be adjusted by 1. E.g. a query for `dat > 1.1` will be
@@ -128,6 +126,33 @@ public:
     return f(bmi.coder_);
   }
 
+  friend flatbuffers::Offset<fbs::BitmapIndex>
+  pack(flatbuffers::FlatBufferBuilder& builder, const bitmap_index& value) {
+    constexpr auto coder_type
+      = is_singleton_coder<Coder>::value ? fbs::coder::Coder::singleton
+        : std::disjunction_v<is_equality_coder<Coder>, is_range_coder<Coder>,
+                             is_bitslice_coder<Coder>>
+          ? fbs::coder::Coder::vector
+          : fbs::coder::Coder::multi_level;
+    const auto coder_offset = fbs::CreateCoder(
+      builder, coder_type, pack(builder, value.coder_).Union());
+    return fbs::CreateBitmapIndex(builder, coder_offset);
+  }
+
+  friend caf::error unpack(const fbs::BitmapIndex& from, bitmap_index& to) {
+    using concrete_coder_type = std::conditional_t<
+      is_singleton_coder<Coder>::value, fbs::coder::SingletonCoder,
+      std::conditional_t<
+        std::disjunction_v<is_equality_coder<Coder>, is_range_coder<Coder>,
+                           is_bitslice_coder<Coder>>,
+        fbs::coder::VectorCoder, fbs::coder::MultiLevelCoder>>;
+    if (const auto* from_concrete
+        = from.coder()->coder_as<concrete_coder_type>())
+      return unpack(*from_concrete, to.coder_);
+    return caf::make_error(ec::logic_error, "invalid vast.fbs.BitmapIndex "
+                                            "coder type");
+  }
+
 private:
   template <class U, class B>
   static constexpr bool shiftable
@@ -146,4 +171,3 @@ private:
 };
 
 } // namespace vast
-

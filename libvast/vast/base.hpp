@@ -103,6 +103,8 @@ public:
   value_type& operator[](size_t i);
   value_type operator[](size_t i) const;
 
+  const value_type* data() const;
+
   iterator begin();
   [[nodiscard]] const_iterator begin() const;
 

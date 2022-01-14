@@ -57,6 +57,7 @@ auto pack(flatbuffers::FlatBufferBuilder& builder, const null_bitmap& from)
 
 auto unpack(const fbs::bitmap::NullBitmap& from, null_bitmap& to)
   -> caf::error {
+  to.bitvector_.blocks_.clear();
   to.bitvector_.blocks_.reserve(from.bit_vector()->blocks()->size());
   to.bitvector_.blocks_.insert(to.bitvector_.blocks_.end(),
                                from.bit_vector()->blocks()->begin(),
