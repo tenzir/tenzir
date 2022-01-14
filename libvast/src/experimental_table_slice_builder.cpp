@@ -343,56 +343,46 @@ class map_column_builder
 public:
   // There is no MapBuilder in Arrow. A map is simply a list of structs
   // (key-value pairs).
-  using arrow_builder_type = arrow::ListBuilder;
-
-  using data_type = view<map>;
+  using arrow_builder_type = arrow::MapBuilder;
 
   map_column_builder(arrow::MemoryPool* pool,
-                     std::shared_ptr<arrow::DataType> struct_type,
                      std::unique_ptr<column_builder> key_builder,
-                     std::unique_ptr<column_builder> val_builder)
+                     std::unique_ptr<column_builder> item_builder)
     : key_builder_(std::move(key_builder)),
-      val_builder_(std::move(val_builder)) {
-    std::vector fields{key_builder_->arrow_builder(),
-                       val_builder_->arrow_builder()};
-    kvp_builder_ = std::make_shared<arrow::StructBuilder>(struct_type, pool,
-                                                          std::move(fields));
-    list_builder_ = std::make_shared<arrow::ListBuilder>(pool, kvp_builder_);
+      item_builder_(std::move(item_builder)) {
+    map_builder_ = std::make_shared<arrow::MapBuilder>(
+      pool, key_builder_->arrow_builder(), item_builder_->arrow_builder());
   }
 
   bool add(data_view x) override {
     if (caf::holds_alternative<view<caf::none_t>>(x))
-      return list_builder_->AppendNull().ok();
-    if (!list_builder_->Append().ok())
+      return map_builder_->AppendNull().ok();
+    VAST_ASSERT(caf::holds_alternative<view<map>>(x));
+    auto m = caf::get<view<map>>(x);
+    if (!map_builder_->Append().ok())
       return false;
-    if (auto xptr = caf::get_if<data_type>(&x)) {
-      for (auto kvp : **xptr)
-        if (!kvp_builder_->Append().ok() || !key_builder_->add(kvp.first)
-            || !val_builder_->add(kvp.second))
-          return false;
-      return true;
+    for (auto entry : *m) {
+      if (!key_builder_->add(entry.first) || !item_builder_->add(entry.second))
+        return false;
     }
-    return false;
+    return true;
   }
 
   std::shared_ptr<arrow::Array> finish() override {
-    std::shared_ptr<arrow::Array> result;
-    if (!list_builder_->Finish(&result).ok())
-      die("failed to finish Arrow column builder");
-    return result;
+    auto res = map_builder_->Finish();
+    return res.ValueOrDie();
   }
 
   [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
   arrow_builder() const override {
-    return list_builder_;
+    return map_builder_;
   }
 
 private:
-  std::shared_ptr<arrow::StructBuilder> kvp_builder_;
-  std::shared_ptr<arrow_builder_type> list_builder_;
+  std::shared_ptr<arrow::MapBuilder> map_builder_;
 
   std::unique_ptr<column_builder> key_builder_;
-  std::unique_ptr<column_builder> val_builder_;
+  std::unique_ptr<column_builder> item_builder_;
 };
 
 class record_column_builder
@@ -479,9 +469,8 @@ experimental_table_slice_builder::column_builder::make(
       auto key_builder = column_builder::make(x.key_type(), pool);
       auto value_builder = column_builder::make(x.value_type(), pool);
       record_type fields{{"key", x.key_type()}, {"value", x.value_type()}};
-      return std::make_unique<map_column_builder>(
-        pool, make_experimental_type(type{fields}), std::move(key_builder),
-        std::move(value_builder));
+      return std::make_unique<map_column_builder>(pool, std::move(key_builder),
+                                                  std::move(value_builder));
     },
     [=](const record_type& x) -> std::unique_ptr<column_builder> {
       auto field_builders = std::vector<std::unique_ptr<column_builder>>{};
@@ -683,11 +672,8 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
       return arrow::list(make_experimental_type(x.value_type()));
     },
     [](const map_type& x) -> data_type_ptr {
-      // A map in arrow is a list of structs holding key/value pairs.
-      std::vector fields{
-        arrow::field("key", make_experimental_type(x.key_type())),
-        arrow::field("value", make_experimental_type(x.value_type()))};
-      return arrow::list(arrow::struct_(fields));
+      return arrow::map(make_experimental_type(x.key_type()),
+                        make_experimental_type(x.value_type()));
     },
     [](const record_type& x) -> data_type_ptr {
       std::vector<std::shared_ptr<arrow::Field>> fields;
@@ -742,6 +728,13 @@ type make_vast_type(const arrow::DataType& arrow_type) {
           die(fmt::format("unhandled Arrow type: FIXEDBINARY[{}]", width));
       }
       return type{time_type{}};
+    }
+    case arrow::Type::MAP: {
+      const auto& t = static_cast<const arrow::MapType&>(arrow_type);
+      return type{map_type{
+        make_vast_type(*t.key_type()),
+        make_vast_type(*t.item_type()),
+      }};
     }
     case arrow::Type::LIST: {
       const auto& t = static_cast<const arrow::ListType&>(arrow_type);

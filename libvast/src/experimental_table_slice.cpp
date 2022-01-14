@@ -175,7 +175,7 @@ template <>
 struct decodable<list_type, arrow::ListArray> : std::true_type {};
 
 template <>
-struct decodable<map_type, arrow::ListArray> : std::true_type {};
+struct decodable<map_type, arrow::MapArray> : std::true_type {};
 
 template <>
 struct decodable<record_type, arrow::StructArray> : std::true_type {};
@@ -220,6 +220,9 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
       return dispatch(static_cast<const array_type&>(arr));
     }
     // -- handle container types -----------------------------------------------
+    case arrow::Type::MAP: {
+      return dispatch(static_cast<const arrow::MapArray&>(arr));
+    }
     case arrow::Type::LIST: {
       return dispatch(static_cast<const arrow::ListArray&>(arr));
     }
@@ -477,16 +480,16 @@ public:
     result_ = timestamp_at(arr, row_);
   }
 
-  template <class T>
-  void operator()(const arrow::ListArray& arr, const T& t) {
+  void operator()(const arrow::ListArray& arr, const list_type& t) {
     if (arr.IsNull(row_))
       return;
-    if constexpr (std::is_same_v<T, list_type>) {
-      result_ = list_at(t.value_type(), arr, row_);
-    } else {
-      static_assert(std::is_same_v<T, map_type>);
-      result_ = map_at(t.key_type(), t.value_type(), arr, row_);
-    }
+    result_ = list_at(t.value_type(), arr, row_);
+  }
+
+  void operator()(const arrow::MapArray& arr, const map_type& t) {
+    if (arr.IsNull(row_))
+      return;
+    result_ = map_at(t.key_type(), t.value_type(), arr, row_);
   }
 
   void operator()(const arrow::StructArray& arr, const record_type& t) {
@@ -573,20 +576,16 @@ public:
     apply(arr, timestamp_at);
   }
 
-  template <class T>
-  void operator()(const arrow::ListArray& arr, const T& t) {
-    if constexpr (std::is_same_v<T, list_type>) {
-      auto f = [&](const auto& arr, int64_t row) {
-        return list_at(t.value_type(), arr, row);
-      };
-      apply(arr, f);
-    } else {
-      static_assert(std::is_same_v<T, map_type>);
-      auto f = [&](const auto& arr, int64_t row) {
-        return map_at(t.key_type(), t.value_type(), arr, row);
-      };
-      apply(arr, f);
-    }
+  void operator()(const arrow::ListArray& arr, const list_type& t) {
+    apply(arr, [&](const auto& arr, int64_t row) {
+      return list_at(t.value_type(), arr, row);
+    });
+  }
+
+  void operator()(const arrow::MapArray& arr, const map_type& t) {
+    apply(arr, [&](const auto& arr, int64_t row) {
+      return map_at(t.key_type(), t.value_type(), arr, row);
+    });
   }
 
   void operator()(const arrow::StructArray& arr, const record_type& t) {
