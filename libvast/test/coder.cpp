@@ -23,6 +23,8 @@
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
+#include <caf/test/dsl.hpp>
+
 using namespace vast;
 
 #define CHECK_DECODE(op, val, res)                                             \
@@ -96,10 +98,8 @@ TEST(singleton - coder) {
   CHECK_DECODE(relational_operator::not_equal, false, "10010");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, c));
-  auto maybe_fb
-    = flatbuffer<fbs::coder::SingletonCoder>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb
+    = unbox(flatbuffer<fbs::coder::SingletonCoder>::make(builder.Release()));
   REQUIRE(fb);
   singleton_coder<null_bitmap> c2;
   REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
@@ -171,9 +171,7 @@ TEST(equality - coder) {
   CHECK_DECODE(relational_operator::greater_equal, 9, "01000");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, c));
-  auto maybe_fb = flatbuffer<fbs::coder::VectorCoder>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::coder::VectorCoder>::make(builder.Release()));
   REQUIRE(fb);
   equality_coder<null_bitmap> c2;
   REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
@@ -233,9 +231,7 @@ TEST(range - coder) {
   CHECK_DECODE(relational_operator::greater_equal, 7, "01000000000");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, c));
-  auto maybe_fb = flatbuffer<fbs::coder::VectorCoder>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::coder::VectorCoder>::make(builder.Release()));
   REQUIRE(fb);
   range_coder<null_bitmap> c2;
   REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
@@ -259,9 +255,7 @@ TEST(bitslice - coder) {
   CHECK_DECODE(relational_operator::in, 5, "010000");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, c));
-  auto maybe_fb = flatbuffer<fbs::coder::VectorCoder>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::coder::VectorCoder>::make(builder.Release()));
   REQUIRE(fb);
   bitslice_coder<null_bitmap> c2;
   REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
@@ -375,9 +369,7 @@ TEST(bitslice - coder 2) {
   CHECK_DECODE(relational_operator::greater_equal, 128, "000000001");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, c));
-  auto maybe_fb = flatbuffer<fbs::coder::VectorCoder>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::coder::VectorCoder>::make(builder.Release()));
   REQUIRE(fb);
   bitslice_coder<null_bitmap> c2;
   REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
@@ -459,10 +451,8 @@ TEST(multi - level equality coder) {
   CHECK_DECODE(relational_operator::not_equal, 85, "11111");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, c));
-  auto maybe_fb
-    = flatbuffer<fbs::coder::MultiLevelCoder>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb
+    = unbox(flatbuffer<fbs::coder::MultiLevelCoder>::make(builder.Release()));
   REQUIRE(fb);
   multi_level_coder<equality_coder<null_bitmap>> c2;
   REQUIRE_EQUAL(unpack(*fb, c2), caf::none);
@@ -529,10 +519,8 @@ TEST(multi - level range coder) {
   }
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, c));
-  auto maybe_fb
-    = flatbuffer<fbs::coder::MultiLevelCoder>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb
+    = unbox(flatbuffer<fbs::coder::MultiLevelCoder>::make(builder.Release()));
   REQUIRE(fb);
   multi_level_coder<range_coder<null_bitmap>> c2;
   REQUIRE_EQUAL(unpack(*fb, c2), caf::none);

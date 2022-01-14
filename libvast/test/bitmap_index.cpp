@@ -19,6 +19,8 @@
 #include "vast/test/test.hpp"
 #include "vast/time.hpp"
 
+#include <caf/test/dsl.hpp>
+
 using namespace vast;
 using namespace std::chrono_literals;
 
@@ -38,9 +40,7 @@ TEST(bool bitmap index) {
               "01101");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, bmi));
-  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::BitmapIndex>::make(builder.Release()));
   REQUIRE(fb);
   bitmap_index<bool, singleton_coder<null_bitmap>> bmi2;
   REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
@@ -57,9 +57,7 @@ TEST(appending multiple values) {
   CHECK(to_string(bmi.lookup(relational_operator::equal, 3)) == "0000111111");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, bmi));
-  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::BitmapIndex>::make(builder.Release()));
   REQUIRE(fb);
   bitmap_index<uint8_t, range_coder<null_bitmap>> bmi2{};
   REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
@@ -109,9 +107,7 @@ TEST(multi - level range - coded bitmap index) {
               "11101");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, bmi));
-  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::BitmapIndex>::make(builder.Release()));
   REQUIRE(fb);
   auto bmi2 = bitmap_index<int8_t, coder_type>{};
   REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
@@ -170,9 +166,7 @@ TEST(multi - level range - coded bitmap index 2) {
   CHECK(bmi.lookup(relational_operator::greater, 31338) == all_zeros);
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, bmi));
-  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::BitmapIndex>::make(builder.Release()));
   REQUIRE(fb);
   auto bmi2 = bitmap_index<uint16_t, coder_type>{};
   REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);
@@ -207,9 +201,7 @@ TEST(bitslice - coded bitmap index) {
                                                                         "1");
   auto builder = flatbuffers::FlatBufferBuilder{};
   builder.Finish(pack(builder, bmi));
-  auto maybe_fb = flatbuffer<fbs::BitmapIndex>::make(builder.Release());
-  REQUIRE_NOERROR(maybe_fb);
-  auto fb = *maybe_fb;
+  auto fb = unbox(flatbuffer<fbs::BitmapIndex>::make(builder.Release()));
   REQUIRE(fb);
   bitmap_index<int16_t, bitslice_coder<null_bitmap>> bmi2{};
   REQUIRE_EQUAL(unpack(*fb, bmi2), caf::none);

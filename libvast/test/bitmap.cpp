@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#define SUITE bitmap
+
 #include "vast/bitmap.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
@@ -15,9 +17,9 @@
 #include "vast/flatbuffer.hpp"
 #include "vast/ids.hpp"
 #include "vast/null_bitmap.hpp"
-
-#define SUITE bitmap
 #include "vast/test/test.hpp"
+
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 using namespace std::string_literals;
@@ -429,9 +431,7 @@ struct bitmap_test_harness {
       auto builder = flatbuffers::FlatBufferBuilder{};
       const auto bm_offset = pack(builder, bitmap{ref});
       builder.Finish(bm_offset);
-      auto maybe_fb = flatbuffer<fbs::Bitmap>::make(builder.Release());
-      REQUIRE_NOERROR(maybe_fb);
-      auto fb = *maybe_fb;
+      auto fb = unbox(flatbuffer<fbs::Bitmap>::make(builder.Release()));
       REQUIRE(fb);
       auto bm = bitmap{};
       REQUIRE_EQUAL(unpack(*fb, bm), caf::none);
