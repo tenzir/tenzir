@@ -730,10 +730,10 @@ type make_vast_type(const arrow::DataType& arrow_type) {
       return type{time_type{}};
     }
     case arrow::Type::MAP: {
-      const auto& t = std::static_pointer_cast<arrow::MapType>(arrow_type);
+      const auto& t = static_cast<const arrow::MapType&>(arrow_type);
       return type{map_type{
-        make_vast_type(t->key_type()),
-        make_vast_type(t->item_type()),
+        make_vast_type(*t.key_type()),
+        make_vast_type(*t.item_type()),
       }};
     }
     case arrow::Type::LIST: {
