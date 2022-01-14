@@ -890,6 +890,12 @@ index(index_actor::stateful_pointer<index_state> self,
   for (size_t i = 0; i < num_workers; ++i)
     self->spawn(query_supervisor,
                 caf::actor_cast<query_supervisor_master_actor>(self));
+  // Start metrics loop.
+  if (self->state.accountant) {
+    self->send(self->state.accountant, atom::announce_v, self->name());
+    self->delayed_send(self, defaults::system::telemetry_rate,
+                       atom::telemetry_v);
+  }
   return {
     [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", *self, partition_id);
@@ -899,16 +905,10 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} got a new stream source", *self);
       return self->state.stage->add_inbound_path(in);
     },
-    [self](accountant_actor accountant) {
-      namespace defs = defaults::system;
-      self->state.accountant = std::move(accountant);
-      self->send(self->state.accountant, atom::announce_v, self->name());
-      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
-    },
     [self](atom::telemetry) {
-      namespace defs = defaults::system;
       self->state.send_report();
-      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         atom::telemetry_v);
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_DEBUG("{} adds flush listener", *self);

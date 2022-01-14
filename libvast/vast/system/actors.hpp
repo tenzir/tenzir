@@ -246,8 +246,6 @@ using importer_actor = typed_actor_fwd<
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
   caf::reacts_to<atom::done, uuid>,
-  // Registers the INDEX with the ACCOUNTANT.
-  caf::reacts_to<accountant_actor>,
   // INTERNAL: Telemetry loop handler.
   caf::reacts_to<atom::telemetry>,
   // Subscribes a FLUSH LISTENER to the INDEX.
