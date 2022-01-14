@@ -68,9 +68,6 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](caf::stream<table_slice>) -> caf::inbound_stream_slot<table_slice> {
       FAIL("no mock implementation available");
     },
-    [=](system::accountant_actor&) {
-      FAIL("no mock implementation available");
-    },
     [=](atom::telemetry) {
       FAIL("no mock implementation available");
     },
