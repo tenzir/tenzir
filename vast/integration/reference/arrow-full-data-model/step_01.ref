@@ -1,0 +1,19 @@
+  child 0, item: int64
+-- schema metadata --
+a: fixed_size_binary[16]
+b: bool
+bar.x: bool
+c: uint64
+d: int64
+done with all readers
+done with current reader, rows: 2
+e: uint64
+i: int64
+l: list<item: int64>
+n: fixed_size_binary[17]
+name: 'all_types'
+open next reader
+open next reader
+r: double
+s: string
+t: timestamp[ns]

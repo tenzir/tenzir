@@ -1,0 +1,22 @@
+type baz = bool
+
+type all_types = record {
+  b: bool,
+  i: int,
+  c: count,
+  r: real,
+  d: duration,
+  t: time,
+  s: string,
+  a: addr,
+  n: subnet,
+  e: enum { A, B },
+  l: list<int>,
+  bar: record {
+    x: baz,
+  }
+  // active indexer instantiated (and failing) despite #skip
+  // p: pattern #skip,
+  // active indexer instantiated (and failing) despite #skip
+  // m: map<int, real> #skip, 
+}
