@@ -1,26 +1,48 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #pragma once
+
+#include "vast/detail/specialization_of.hpp"
 
 #include <caf/stream_stage.hpp>
 
-#include <type_traits>
+namespace vast::detail {
 
-template <template <class...> class Template, class Instantiation>
-struct is_specialization_of : std::false_type {};
-
-template <template <class...> class Template, class... Args>
-struct is_specialization_of<Template, Template<Args...>> : std::true_type {};
-
-template <typename StreamStage>
-void shutdown_stream_stage(StreamStage& stage) requires(
-  is_specialization_of<caf::stream_stage, StreamStage>::value) {
-  // First we call `shutdown()` to notify all upstream
+/// Properly flushes and shuts down a `caf::stream_stage` connected to
+/// a `caf::broadcast_downstream_manager`.
+template <typename In,
+          detail::specialization_of<caf::broadcast_downstream_manager>
+            DownstreamManager>
+void shutdown_stream_stage(caf::stream_stage_ptr<In, DownstreamManager>& stage) {
+  if (!stage)
+    return;
+  // First we call `shutdown()` to notify all upstream connections
+  // that this stage is closed and will not accept any new messages.
   stage->shutdown();
-  // First, we move
+  // Then, we copy all data from the global input buffer to each
+  // path-specific output buffer.
   stage->out().fan_out_flush();
-  // Next, we need to `close()`
-  // Note that this will remove all clean outbound paths, so we need
-  // to call `fan_out_flush()` beforehand or we might lose the data
-  // from the global buffer.
+  // Next, we `close()` the outbound paths to notify downstream
+  // connections that this stage is closed.
+  // This will remove all clean outbound paths, so we need to call
+  // `fan_out_flush()` before, but it will keep all paths that still
+  // have data. No new data will be pushed from the global buffer to
+  // closing paths.
   stage->out().close();
+  // Finally we call `force_emit_batches()` to move messages from the
+  // outbound path buffers to the inboxes of the receiving actors.
+  // The 'force_' here means that caf should ignore the batch size
+  // and capacity of the channel and push both overfull and underfull
+  // batches. Technically just `emit_batches()` would have the same
+  // effect since the buffered downstream manager always forces batches
+  // if all paths are closing.
   stage->out().force_emit_batches();
 }
+
+} // namespace vast::detail

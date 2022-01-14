@@ -24,6 +24,7 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
+#include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/index.hpp"
@@ -832,10 +833,7 @@ index(index_actor::stateful_pointer<index_state> self,
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
     // Flush buffered batches and end stream.
-    self->state.stage->shutdown(); // closes inbound paths
-    self->state.stage->out().fan_out_flush();
-    self->state.stage->out().close(); // closes outbound paths
-    self->state.stage->out().force_emit_batches();
+    detail::shutdown_stream_stage(self->state.stage);
     // Bring down active partition.
     if (self->state.active_partition.actor)
       self->state.decomission_active_partition();

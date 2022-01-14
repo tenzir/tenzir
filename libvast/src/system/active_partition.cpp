@@ -22,6 +22,7 @@
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/partition_common.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"
@@ -271,9 +272,7 @@ active_partition_actor::behavior_type active_partition(
                msg.reason);
     if (self->state.streaming_initiated
         && self->state.stage->inbound_paths().empty()) {
-      self->state.stage->out().fan_out_flush();
-      self->state.stage->out().close();
-      self->state.stage->out().force_emit_batches();
+      detail::shutdown_stream_stage(self->state.stage);
     }
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
@@ -339,9 +338,7 @@ active_partition_actor::behavior_type active_partition(
                  self->state.indexers.size());
       if (self->state.streaming_initiated
           && self->state.stage->inbound_paths().empty()) {
-        self->state.stage->out().fan_out_flush();
-        self->state.stage->out().close();
-        self->state.stage->out().force_emit_batches();
+        detail::shutdown_stream_stage(self->state.stage);
       } else {
         using namespace std::chrono_literals;
         self->delayed_send(self, 50ms, atom::internal_v, atom::persist_v,
