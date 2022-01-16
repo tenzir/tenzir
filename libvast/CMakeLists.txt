@@ -58,7 +58,7 @@ VASTCompileFlatBuffers(
 
 # -- arrow ---------------------------------------------------------------------
 
-find_package(Arrow 0.17 REQUIRED CONFIG)
+find_package(Arrow 6.0 REQUIRED CONFIG)
 mark_as_advanced(
   BROTLI_COMMON_LIBRARY
   BROTLI_DEC_LIBRARY

@@ -20,13 +20,8 @@
 #include "vast/type.hpp"
 
 #include <arrow/api.h>
+#include <arrow/io/stdio.h>
 #include <caf/none.hpp>
-
-#if ARROW_VERSION_MAJOR < 5
-#  include <arrow/util/io_util.h>
-#else
-#  include <arrow/io/stdio.h>
-#endif
 
 #include <stdexcept>
 
