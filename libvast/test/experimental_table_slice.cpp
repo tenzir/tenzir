@@ -6,24 +6,33 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/detail/type_traits.hpp"
+
+#include <arrow/extension_type.h>
 #define SUITE experimental_table_slice
 
-#include "vast/experimental_table_slice.hpp"
-
+#include "vast/arrow_extension_types.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/experimental_table_slice.hpp"
 #include "vast/experimental_table_slice_builder.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
 
 #include <arrow/api.h>
+#include <arrow/array/builder_binary.h>
+#include <arrow/extension_type.h>
+#include <arrow/type.h>
+#include <arrow/type_fwd.h>
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
+
+#include <utility>
 
 using namespace vast;
 using namespace std::chrono_literals;
@@ -77,13 +86,20 @@ integer operator"" _i(unsigned long long int x) {
 
 // may be useful to have in a shared place, not a unit test.
 void inspect(caf::detail::stringification_inspector& f,
-             const arrow::Schema& x) {
-  auto str = x.ToString(true);
+             const arrow::Schema& schema) {
+  auto str = schema.ToString(true);
   f(str);
 }
 
-void inspect(caf::detail::stringification_inspector& f, const arrow::Field& x) {
-  auto str = x.ToString(true);
+void inspect(caf::detail::stringification_inspector& f,
+             const arrow::Field& field) {
+  auto str = field.ToString(true);
+  f(str);
+}
+
+void inspect(caf::detail::stringification_inspector& f,
+             const arrow::DataType& arrow_type) {
+  auto str = arrow_type.ToString();
   f(str);
 }
 
@@ -117,7 +133,21 @@ TEST(single column - count) {
 }
 
 TEST(single column - enumeration) {
+  register_extension_types();
   auto t = enumeration_type{{"foo"}, {"bar"}, {"baz"}};
+  auto slice = make_single_column_slice(t, 2_e, 1_e, 0_e, 2_e, caf::none);
+  REQUIRE_EQUAL(slice.rows(), 5u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 2_e);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_e);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), 0_e);
+  CHECK_VARIANT_EQUAL(slice.at(3, 0, t), 2_e);
+  CHECK_VARIANT_EQUAL(slice.at(4, 0, t), std::nullopt);
+  CHECK_ROUNDTRIP(slice);
+}
+
+TEST(single column - enum2) {
+  register_extension_types();
+  auto t = enumeration_type{{"a"}, {"b"}, {"c"}, {"d"}};
   auto slice = make_single_column_slice(t, 0_e, 1_e, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 0_e);
@@ -405,7 +435,7 @@ TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{address_type{}});
   field_roundtrip(type{subnet_type{}});
   // currently a value of type count, indistinguishable from a normal count
-  // field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
+  field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
   field_roundtrip(type{list_type{integer_type{}}});
   field_roundtrip(type{map_type{integer_type{}, address_type{}}});
   field_roundtrip(
@@ -443,6 +473,31 @@ TEST(arrow record type to schema roundtrip) {
   // schema_roundtrip(type{
   //     record_type{
   //       {"inner", record_type{{"value", subnet_type{}}}}}});
+}
+
+std::shared_ptr<arrow::Array>
+buildStringArray(const std::vector<std::string>& xs) {
+  arrow::StringBuilder string_builder{};
+  for (const auto& x : xs)
+    CHECK_OK(string_builder.Append(x));
+  const auto& array = string_builder.Finish().ValueOrDie();
+  return array;
+}
+
+std::shared_ptr<arrow::Array> buildInt16Array(const std::vector<char>& xs) {
+  arrow::Int16Builder int16_builder{};
+  for (const auto& x : xs)
+    CHECK_OK(int16_builder.Append(x));
+  const auto& array = int16_builder.Finish().ValueOrDie();
+  return array;
+}
+
+std::shared_ptr<arrow::Array> buildInt8Array(const std::vector<char>& xs) {
+  arrow::Int8Builder int8_builder{};
+  for (const auto& x : xs)
+    CHECK_OK(int8_builder.Append(x));
+  const auto& array = int8_builder.Finish().ValueOrDie();
+  return array;
 }
 
 FIXTURE_SCOPE(experimental_table_slice_tests, fixtures::table_slices)

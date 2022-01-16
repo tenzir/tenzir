@@ -8,6 +8,7 @@
 
 #include "vast/experimental_table_slice_builder.hpp"
 
+#include "vast/arrow_extension_types.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
@@ -22,6 +23,8 @@
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
+#include <arrow/ipc/writer.h>
+#include <arrow/type_fwd.h>
 #include <arrow/util/config.h>
 
 namespace vast {
@@ -143,18 +146,52 @@ struct column_builder_trait<pattern_type>
   }
 };
 
-template <>
-struct column_builder_trait<enumeration_type>
-  : column_builder_trait_base<enumeration_type, arrow::UInt64Type> {
-  using super = column_builder_trait_base<enumeration_type, arrow::UInt64Type>;
+class enum_column_builder
+  : public experimental_table_slice_builder::column_builder {
+public:
+  // arrow::StringDictionaryBuilder would be appropriate, but requires data
+  // to be appended as string, however the table slice only receives the uint8
+  using arrow_builder_type = arrow::Int8Builder;
 
-  static auto make_arrow_type() {
-    return super::type_singleton();
+  enum_column_builder(enumeration_type enum_type)
+    : enum_type_{std::move(enum_type)},
+      arr_builder_{std::make_shared<arrow::Int8Builder>()} {
   }
 
-  static bool
-  append(typename super::BuilderType& builder, typename super::view_type x) {
-    return builder.Append(x).ok();
+  bool add(data_view x) override {
+    if (auto* xptr = caf::get_if<view<enumeration>>(&x))
+      return arr_builder_->Append(*xptr).ok();
+    if (caf::holds_alternative<view<caf::none_t>>(x))
+      return arr_builder_->AppendNull().ok();
+    return false;
+  }
+
+  std::shared_ptr<arrow::Array> finish() override {
+    if (auto index_array = arr_builder_->Finish(); index_array.ok())
+      return std::make_shared<arrow::DictionaryArray>(
+        arrow::dictionary(arrow::int8(), arrow::utf8()),
+        index_array.ValueUnsafe(), make_field_array());
+    die("failed to finish Arrow enum builders");
+  }
+
+  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
+  arrow_builder() const override {
+    return arr_builder_;
+  }
+
+private:
+  enumeration_type enum_type_;
+  std::shared_ptr<arrow::Int8Builder> arr_builder_;
+
+  [[nodiscard]] std::shared_ptr<arrow::Array> make_field_array() const {
+    arrow::StringBuilder string_builder{};
+    for (const auto& f : enum_type_.fields())
+      if (!string_builder.Append(std::string{f.name}).ok())
+        die("failed to build Arrow enum field array");
+    if (auto array = string_builder.Finish(); array.ok()) {
+      return *array;
+    }
+    die("failed to finish Arrow enum field array");
   }
 };
 
@@ -341,8 +378,6 @@ using column_builder_impl_t
 class map_column_builder
   : public experimental_table_slice_builder::column_builder {
 public:
-  // There is no MapBuilder in Arrow. A map is simply a list of structs
-  // (key-value pairs).
   using arrow_builder_type = arrow::MapBuilder;
 
   map_column_builder(arrow::MemoryPool* pool,
@@ -472,6 +507,9 @@ experimental_table_slice_builder::column_builder::make(
       return std::make_unique<map_column_builder>(pool, std::move(key_builder),
                                                   std::move(value_builder));
     },
+    [&](const enumeration_type& x) -> std::unique_ptr<column_builder> {
+      return std::make_unique<enum_column_builder>(x);
+    },
     [=](const record_type& x) -> std::unique_ptr<column_builder> {
       auto field_builders = std::vector<std::unique_ptr<column_builder>>{};
       field_builders.reserve(x.num_fields());
@@ -515,9 +553,6 @@ table_slice experimental_table_slice_builder::finish() {
   auto layout_buffer = builder_.CreateVector(
     reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
   // Pack schema.
-  auto flat_schema = arrow::ipc::SerializeSchema(*schema_).ValueOrDie();
-  auto schema_buffer
-    = builder_.CreateVector(flat_schema->data(), flat_schema->size());
   // Pack record batch.
   auto columns = std::vector<std::shared_ptr<arrow::Array>>{};
   columns.reserve(column_builders_.size());
@@ -525,10 +560,12 @@ table_slice experimental_table_slice_builder::finish() {
     columns.emplace_back(builder->finish());
   auto record_batch
     = arrow::RecordBatch::Make(schema_, rows_, std::move(columns));
-  auto flat_record_batch
-    = arrow::ipc::SerializeRecordBatch(*record_batch,
-                                       arrow::ipc::IpcWriteOptions::Defaults())
-        .ValueOrDie();
+  auto record_batch_sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto stream_writer
+    = arrow::ipc::MakeStreamWriter(record_batch_sink, schema_).ValueOrDie();
+  stream_writer->WriteRecordBatch(*record_batch);
+
+  auto flat_record_batch = record_batch_sink->Finish().ValueOrDie();
   auto record_batch_buffer = builder_.CreateVector(flat_record_batch->data(),
                                                    flat_record_batch->size());
   // Create Arrow-encoded table slices. We need to set the import time to
@@ -536,8 +573,7 @@ table_slice experimental_table_slice_builder::finish() {
   // reset it to the clock's epoch.
   constexpr int64_t stub_ns_since_epoch = 1337;
   auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createexperimental(
-    builder_, layout_buffer, schema_buffer, record_batch_buffer,
-    stub_ns_since_epoch);
+    builder_, layout_buffer, record_batch_buffer, stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder_,
@@ -563,11 +599,6 @@ table_slice experimental_table_slice_builder::create(
   const auto layout_bytes = as_bytes(layout);
   auto layout_buffer = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
-  // Pack schema.
-  auto flat_schema
-    = arrow::ipc::SerializeSchema(*record_batch->schema()).ValueOrDie();
-  auto schema_buffer
-    = builder.CreateVector(flat_schema->data(), flat_schema->size());
   // Pack record batch.
   auto flat_record_batch
     = arrow::ipc::SerializeRecordBatch(*record_batch,
@@ -580,8 +611,7 @@ table_slice experimental_table_slice_builder::create(
   // reset it to the clock's epoch.
   constexpr int64_t stub_ns_since_epoch = 1337;
   auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createexperimental(
-    builder, layout_buffer, schema_buffer, record_batch_buffer,
-    stub_ns_since_epoch);
+    builder, layout_buffer, record_batch_buffer, stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder,
@@ -663,6 +693,9 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
       using trait = column_builder_trait<std::decay_t<decltype(x)>>;
       return trait::make_arrow_type();
     },
+    [](const enumeration_type& x) {
+      return make_arrow_enum(x);
+    },
     [](const list_type& x) -> data_type_ptr {
       return arrow::list(make_experimental_type(x.value_type()));
     },
@@ -742,6 +775,15 @@ type make_vast_type(const arrow::DataType& arrow_type) {
       for (const auto& f : arrow_type.fields())
         field_types.emplace_back(f->name(), make_vast_type(*f->type()));
       return type{record_type{field_types}};
+    }
+    case arrow::Type::EXTENSION: {
+      const auto& t = static_cast<const arrow::ExtensionType&>(arrow_type);
+      if (t.extension_name() == "vast.enum") {
+        const auto& et = static_cast<const EnumType&>(arrow_type);
+        return type{et.enum_type_};
+      }
+      die(
+        fmt::format("unhandled Arrow extension type: {}", t.extension_name()));
     }
     default:
       die(fmt::format("unhandled Arrow type: {}", arrow_type.ToString()));

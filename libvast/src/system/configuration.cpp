@@ -8,6 +8,7 @@
 
 #include "vast/system/configuration.hpp"
 
+#include "vast/arrow_extension_types.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
@@ -70,6 +71,7 @@ configuration::configuration() {
   factory<synopsis>::initialize();
   factory<table_slice_builder>::initialize();
   factory<value_index>::initialize();
+  register_extension_types();
 }
 
 caf::error configuration::parse(int argc, char** argv) {

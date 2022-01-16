@@ -6,7 +6,7 @@ bar.x: bool
 c: uint64
 d: int64
 done with all readers
-done with current reader, rows: 2
+done with current reader, rows: 4
 e: uint64
 i: int64
 l: list<item: int64>

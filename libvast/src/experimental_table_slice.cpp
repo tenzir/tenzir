@@ -25,6 +25,7 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -149,12 +150,8 @@ template <class TypeClass>
 struct decodable<count_type, arrow::NumericArray<TypeClass>> : std::true_type {
 };
 
-template <class TypeClass>
-  requires(
-    std::is_integral_v<
-      typename TypeClass::c_type> && !std::is_signed_v<typename TypeClass::c_type>)
-struct decodable<enumeration_type, arrow::NumericArray<TypeClass>>
-  : std::true_type {};
+template <>
+struct decodable<enumeration_type, arrow::DictionaryArray> : std::true_type {};
 
 template <>
 struct decodable<address_type, arrow::FixedSizeBinaryArray> : std::true_type {};
@@ -199,7 +196,8 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
   };
   switch (arr.type_id()) {
     default: {
-      VAST_WARN("{} got an unrecognized Arrow type ID", __func__);
+      VAST_WARN("{} got unrecognized Arrow type ID '{}' ({})", __func__,
+                arr.type_id(), arr.type()->ToString());
       return;
     }
     // -- handle basic types ---------------------------------------------------
@@ -276,6 +274,18 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
       using array_type = arrow::NumericArray<arrow::UInt64Type>;
       return dispatch(static_cast<const array_type&>(arr));
     }
+    case arrow::Type::EXTENSION: {
+      const auto& t
+        = reinterpret_cast<const arrow::ExtensionType&>(*arr.type());
+      if (t.extension_name() == "vast.enum") {
+        const auto& ext_arr
+          = reinterpret_cast<const arrow::ExtensionArray&>(arr);
+        return dispatch(
+          reinterpret_cast<const arrow::DictionaryArray&>(*ext_arr.storage()));
+      }
+      die(fmt::format("Unable to handle extension type '{}'",
+                      t.extension_name()));
+    }
   }
 }
 
@@ -297,8 +307,9 @@ auto count_at = [](const auto& arr, int64_t row) {
   return static_cast<count>(arr.Value(row));
 };
 
-auto enumeration_at = [](const auto& arr, int64_t row) {
-  return static_cast<enumeration>(arr.Value(row));
+auto enumeration_at = [](const arrow::DictionaryArray& arr, int64_t row) {
+  const auto& b = reinterpret_cast<const arrow::Int8Array&>(*arr.indices());
+  return static_cast<enumeration>(b.Value(row));
 };
 
 auto duration_at(const arrow::DurationArray& arr, int64_t row) {
@@ -437,6 +448,12 @@ public:
     result_ = static_cast<view_type>(arr.Value(row_));
   }
 
+  void operator()(const arrow::DictionaryArray& arr, const enumeration_type&) {
+    if (arr.IsNull(row_))
+      return;
+    result_ = enumeration_at(arr, row_);
+  }
+
   void operator()(const arrow::DurationArray& arr, const duration_type&) {
     if (arr.IsNull(row_))
       return;
@@ -547,8 +564,7 @@ public:
     apply(arr, count_at);
   }
 
-  template <class T>
-  void operator()(const arrow::NumericArray<T>& arr, const enumeration_type&) {
+  void operator()(const arrow::DictionaryArray& arr, const enumeration_type&) {
     apply(arr, enumeration_at);
   }
 
@@ -609,7 +625,7 @@ public:
     // nop
   }
 
-  virtual ~record_batch_listener() noexcept override = default;
+  ~record_batch_listener() noexcept override = default;
 
 private:
   arrow::Status OnRecordBatchDecoded(
@@ -637,18 +653,10 @@ public:
     // nop
   }
 
-  template <class FlatSchema, class FlatRecordBatch>
+  template <class FlatRecordBatch>
   std::shared_ptr<arrow::RecordBatch>
-  decode(const FlatSchema& flat_schema,
-         const FlatRecordBatch& flat_record_batch) noexcept {
+  decode(const FlatRecordBatch& flat_record_batch) noexcept {
     VAST_ASSERT(!record_batch_);
-    if (auto status
-        = decoder_.Consume(flat_schema->data(), flat_schema->size());
-        !status.ok()) {
-      VAST_ERROR("{} failed to decode Arrow Schema: {}", __func__,
-                 status.ToString());
-      return {};
-    }
     if (auto status = decoder_.Consume(flat_record_batch->data(),
                                        flat_record_batch->size());
         !status.ok()) {
@@ -681,7 +689,7 @@ experimental_table_slice::experimental_table_slice(
   state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
   VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
   auto decoder = record_batch_decoder{};
-  state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
+  state_.record_batch = decoder.decode(slice.record_batch());
 }
 
 experimental_table_slice::~experimental_table_slice() noexcept {
@@ -739,6 +747,7 @@ data_view experimental_table_slice::at(table_slice::size_type row,
     t));
   auto&& batch = record_batch();
   VAST_ASSERT(batch);
+  // VAST_WARN("thomas was here 3 {}", batch->ToString());
   auto array = batch->column(detail::narrow_cast<int>(column));
   return value_at(t, *array, row);
 }

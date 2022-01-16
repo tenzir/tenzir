@@ -47,9 +47,6 @@ table experimental {
   /// separarate table.
   layout: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 
-  /// The Arrow Schema containing the Record Batch layout.
-  schema: [ubyte];
-
   /// The Arrow Recod Batch containing all data.
   record_batch: [ubyte];
 

@@ -10,7 +10,7 @@ type all_types = record {
   s: string,
   a: addr,
   n: subnet,
-  e: enum { A, B },
+  e: enum { A, B, C },
   l: list<int>,
   bar: record {
     x: baz,
