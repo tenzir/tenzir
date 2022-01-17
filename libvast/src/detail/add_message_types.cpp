@@ -56,11 +56,11 @@ void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_types<caf::id_block::vast_types>();
   cfg.add_message_types<caf::id_block::vast_atoms>();
   cfg.add_message_types<caf::id_block::vast_actors>();
+  auto old_blocks = std::vector<plugin_type_id_block>{
+    {caf::id_block::vast_types::begin, caf::id_block::vast_actors::end}};
+  // Check for type ID conflicts between dynamic plugins.
   for (const auto& [new_block, assigner] :
        plugins::get_static_type_id_blocks()) {
-    // Check for type ID conflicts between static plugins.
-    static auto old_blocks = std::vector<plugin_type_id_block>{
-      {caf::id_block::vast_types::begin, caf::id_block::vast_actors::end}};
     for (const auto& old_block : old_blocks)
       if (new_block.begin < old_block.end && old_block.begin < new_block.end)
         die("cannot assign overlapping plugin type ID blocks");
