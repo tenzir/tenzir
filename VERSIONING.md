@@ -148,4 +148,4 @@ default branch has an associated annotated tag of the name `YYYY.MM.DD`.
 ### Until 2019: Initial Releases
 
 The 0.1 and 0.2 releases of VAST were the initial releases of VAST in 2019. They
-have associated annotates tags named `0.1` and `0.2` respectively.
+have associated annotated tags named `0.1` and `0.2` respectively.
