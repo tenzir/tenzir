@@ -526,12 +526,7 @@ table_slice arrow_table_slice_builder::finish() {
   auto layout_buffer = builder_.CreateVector(
     reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
   // Pack schema.
-#if ARROW_VERSION_MAJOR >= 2
   auto flat_schema = arrow::ipc::SerializeSchema(*schema_).ValueOrDie();
-#else
-  auto flat_schema
-    = arrow::ipc::SerializeSchema(*schema_, nullptr).ValueOrDie();
-#endif
   auto schema_buffer
     = builder_.CreateVector(flat_schema->data(), flat_schema->size());
   // Pack record batch.
@@ -580,13 +575,8 @@ table_slice arrow_table_slice_builder::create(
   auto layout_buffer = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
   // Pack schema.
-#if ARROW_VERSION_MAJOR >= 2
   auto flat_schema
     = arrow::ipc::SerializeSchema(*record_batch->schema()).ValueOrDie();
-#else
-  auto flat_schema
-    = arrow::ipc::SerializeSchema(*record_batch->schema(), nullptr).ValueOrDie();
-#endif
   auto schema_buffer
     = builder.CreateVector(flat_schema->data(), flat_schema->size());
   // Pack record batch.
