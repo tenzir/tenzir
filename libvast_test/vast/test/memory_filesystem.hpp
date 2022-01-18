@@ -29,14 +29,14 @@ inline vast::system::filesystem_actor::behavior_type memory_filesystem() {
       -> caf::result<vast::chunk_ptr> {
       auto chunk = chunks->find(path);
       if (chunk == chunks->end())
-        return caf::make_error(vast::ec::filesystem_error, "unknown file");
+        return caf::make_error(vast::ec::no_such_file, "unknown file");
       return chunk->second;
     },
     [chunks](vast::atom::mmap, const std::filesystem::path& path)
       -> caf::result<vast::chunk_ptr> {
       auto chunk = chunks->find(path);
       if (chunk == chunks->end())
-        return caf::make_error(vast::ec::filesystem_error, "unknown file");
+        return caf::make_error(vast::ec::no_such_file, "unknown file");
       return chunk->second;
     },
     [chunks](vast::atom::erase, std::filesystem::path& path) {
