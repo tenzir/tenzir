@@ -6,6 +6,10 @@
 
   outputs = { self, nixpkgs, flake-utils }: {
     overlay = import ./nix/overlay.nix;
+    nixosModule = {
+      imports = [ ./nix/module.nix ];
+      nixpkgs.overlays = [ self.overlay ];
+    };
   } // flake-utils.lib.eachDefaultSystem (system:
     let pkgs = import nixpkgs { inherit system; overlays = [ self.overlay ]; }; in
     rec {
