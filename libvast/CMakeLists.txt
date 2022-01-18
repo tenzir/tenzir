@@ -530,7 +530,7 @@ endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
-  TARGETS libvast
+  TARGETS libvast libvast_native_plugins
   EXPORT VASTTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
