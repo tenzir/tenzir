@@ -346,7 +346,7 @@ target_compile_definitions(libvast_native_plugins
                            PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
 set_target_properties(libvast_native_plugins PROPERTIES OUTPUT_NAME
                                                         vast_native_plugins)
-add_library(vast::native_plugins ALIAS libvast_native_plugins)
+add_library(vast::libvast_native_plugins ALIAS libvast_native_plugins)
 
 target_link_libraries(libvast PRIVATE libvast_internal)
 target_link_libraries(libvast_native_plugins PRIVATE libvast libvast_internal)
