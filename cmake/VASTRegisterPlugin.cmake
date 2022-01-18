@@ -567,6 +567,8 @@ function (VASTRegisterPlugin)
                                                         vast::internal)
     VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                ${PLUGIN_TARGET}-static)
+    VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
+                               vast::libvast_native_plugins)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
