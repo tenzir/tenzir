@@ -127,12 +127,6 @@ Due to `libvast`'s unstable ABI, VAST plugins distributed as dynamic libraries
 must link against the exact same version of `libvast` as the `vast` binary
 itself.
 
-## Release Cadence
-
-Tenzir aims to release VAST on the last Thursday of every month, with a release
-candidate available the week before and development entering a feature freeze
-period for one week. This is a guideline rather than a fixed release date.
-
 ## Previous Versioning Schemes
 
 Prior to 2022, VAST releases used other versioning schemes.
