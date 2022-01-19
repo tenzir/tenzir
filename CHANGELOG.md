@@ -6,6 +6,35 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [v1.0.0-rc1]
+
+### :warning: Changes
+
+- VAST no longer uses calendar-based versioning. Instead, it uses a semantic versioning scheme. A new VERSIONING.md document installed alongside VAST explores the semantics in-depth.
+  [#2035](https://github.com/tenzir/vast/pull/2035)
+
+- Plugins now have a separate version. The build scaffolding installs README.md and CHANGELOG.md files in the plugin source tree root automatically.
+  [#2035](https://github.com/tenzir/vast/pull/2035)
+
+### :gift: Features
+
+- VAST has a new transform step: `project`, which keeps the fields with configured key suffixes and removes the rest from the input. At the same time, the `delete` transform step can remove not only one but multiple fields from the input based on the configured key suffixes.
+  [#2000](https://github.com/tenzir/vast/pull/2000)
+
+- The new `--omit-nulls` option to the `vast export json` command causes VAST to skip over fields in JSON objects whose value is `null` when rendering them.
+  [#2004](https://github.com/tenzir/vast/pull/2004)
+
+- VAST has a new transform step: `select`, which keeps rows matching the configured expression and removes the rest from the input.
+  [#2014](https://github.com/tenzir/vast/pull/2014)
+
+- The `#import_time` meta extractor allows for querying events based on the time they arrived at the VAST server process. It may only be used for comparisons with [time value literals](https://docs.tenzir.com/vast/query-language/values/#time), e.g., `vast export json '#import_time > 1 hour ago'` exports all events that were imported within the last hour as NDJSON.
+  [#2019](https://github.com/tenzir/vast/pull/2019)
+
+### :beetle: Bug Fixes
+
+- The index now emits the metrics `query.backlog.{low,normal}` and `query.workers.{idle,busy}` reliably.
+  [#2032](https://github.com/tenzir/vast/pull/2032)
+
 ## [2021.12.16]
 
 ### :warning: Changes
@@ -1479,6 +1508,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[v1.0.0-rc1]: https://github.com/tenzir/vast/releases/tag/v1.0.0-rc1
 [2021.12.16]: https://github.com/tenzir/vast/releases/tag/2021.12.16
 [2021.11.18]: https://github.com/tenzir/vast/releases/tag/2021.11.18
 [2021.09.30]: https://github.com/tenzir/vast/releases/tag/2021.09.30
