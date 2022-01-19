@@ -354,11 +354,17 @@ target_link_libraries(libvast_native_plugins PRIVATE libvast libvast_internal)
 set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
                                          ON)
 
+# Set the libvast SOVERSION to '<256 * (major + 7) + minor>.<patch>' to indicate
+# that libvast is considered to have an unstable API and ABI. The +7 is a
+# remnant of VAST using CalVer before 2022, with the last CalVer release having
+# the SOVERSION 2022.12, and it enforces that v1.0.0 has a larger SOVERSION than
+# the last CalVer release.
+math(EXPR VAST_SOVERSION_MAJOR
+     "256 * (${VAST_VERSION_MAJOR} + 7) + ${VAST_VERSION_MINOR}")
+set(VAST_SOVERSION_MINOR "${VAST_VERSION_PATCH}")
 set_target_properties(
-  libvast
-  PROPERTIES SOVERSION "${VAST_VERSION_MAJOR}"
-             VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}"
-             OUTPUT_NAME vast)
+  libvast PROPERTIES SOVERSION "${VAST_SOVERSION_MAJOR}.${VAST_SOVERSION_MINOR}"
+                     OUTPUT_NAME vast)
 
 target_include_directories(
   libvast
