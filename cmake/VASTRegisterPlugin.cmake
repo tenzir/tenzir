@@ -531,6 +531,19 @@ function (VASTRegisterPlugin)
       "plugin/${PLUGIN_TARGET}.yaml")
   endif ()
 
+  # Install README.md and CHANGELOG.md files to <docdir>/plugin/<plugin>, if
+  # they exist at the plugin project root.
+  if (NOT VAST_CMAKE_INSTALL_DOCDIR)
+    set(VAST_CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
+  endif ()
+  foreach (doc IN ITEMS "README.md" "CHANGELOG.md")
+    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${doc}")
+      install(
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/${doc}"
+        DESTINATION "${VAST_CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}")
+    endif ()
+  endforeach ()
+
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
     # Install the bundled schema files to <datadir>/vast.
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
