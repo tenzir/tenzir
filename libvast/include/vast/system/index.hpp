@@ -127,22 +127,29 @@ struct query_backlog {
 };
 
 struct query_state {
-  /// The UUID of the query.
-  vast::uuid id;
-
   /// The query expression.
   vast::query query;
 
-  /// Unscheduled partitions.
-  std::vector<uuid> partitions;
+  /// The query client.
+  receiver_actor<atom::done> client;
 
-  /// The assigned query worker.
-  query_supervisor_actor worker;
+  /// The number of partitions that need to be evaluated for this query.
+  uint32_t candidate_partitions = 0;
+
+  /// The number of partitions that have been reqested by the client.
+  uint32_t requested_partitions = 0;
+
+  /// The number of partitions that the query was sent to.
+  uint32_t scheduled_partitions = 0;
+
+  /// The number of partitions that are processed already.
+  uint32_t completed_partitions = 0;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.id, x.query,
-             caf::meta::omittable_if_empty(), x.partitions, x.worker);
+    return f(caf::meta::type_name("query_state"), x.query, x.client,
+             x.candidate_partitions, x.requested_partitions,
+             x.scheduled_partitions, x.completed_partitions);
   }
 };
 
@@ -259,21 +266,30 @@ struct index_state {
   size_t max_inmem_partitions = {};
 
   /// The number of partitions initially returned for a query.
-  size_t taste_partitions = {};
+  uint32_t taste_partitions = {};
 
   /// The set of received but unprocessed queries.
   query_backlog backlog = {};
 
-  /// Maps query IDs to pending lookup state.
-  std::unordered_map<uuid, query_state> pending = {};
+  /// Maps query IDs to pending queries lookup state.
+  std::unordered_map<uuid, query_state> pending_queries = {};
+
+  /// Maps candidate partition IDs to the queries .
+  std::unordered_map<uuid, std::vector<uuid>> pending_partitions = {};
 
   /// Maps exporter actor address to known query ID for monitoring
   /// purposes.
   std::unordered_map<caf::actor_addr, std::unordered_set<uuid>> monitored_queries
     = {};
 
-  /// The number of query supervisors.
-  size_t workers = 0;
+  /// The maximum number of partitions to serve queries at the same time.
+  /// Assigned from the `max-queries` config option.
+  /// TODO: Rename that option appropriately and deprecate the old name.
+  size_t max_concurrent_partition_lookups = 0;
+
+  /// A counter to track the number of partitions that are currently serving
+  /// lookups.
+  size_t running_partition_lookups = 0;
 
   /// Caches idle workers.
   detail::stable_set<query_supervisor_actor> idle_workers = {};
