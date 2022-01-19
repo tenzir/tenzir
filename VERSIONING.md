@@ -115,13 +115,12 @@ E.g., the `libvast` C++ library shared object name for VAST
 
 ## Plugin Versioning
 
-Plugin versions are optional. If unspecified, VAST's build system re-uses VAST's
-version number. We encourage plugin authors to version their plugins separately,
-and to follow the guidelines laid out in this document.
-
 The plugin version components exactly mirror the version components of VAST. The
 build system uses [`git-describe`] with the last commit to the plugin's source
 tree.
+
+We encourage plugin authors to version their plugins separately, and to follow
+the guidelines laid out in this document.
 
 Due to `libvast`'s unstable ABI, VAST plugins distributed as dynamic libraries
 must link against the exact same version of `libvast` as the `vast` binary
