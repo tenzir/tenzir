@@ -6,7 +6,7 @@ set -euo pipefail
 if (( $# != 1 )) || [[ "$1" == "--help" ]]; then
   >&2 {
     echo "Usage: $0 <version>"
-    echo "  version: The new version, e.g., 2021.04.29 or 2021.04.29-rc1"
+    echo "  version: The new version, e.g., v1.0.0 or v1.0.0-rc1"
   }
   exit 1
 fi
@@ -31,6 +31,8 @@ build_dir=$(mktemp -d 2>/dev/null || mktemp -d -t "build-${new_version}")
 
 # Determine the last version including release candidates, the last version
 # excluding release candidates and the new version.
+# TODO: Starting with the 1.1 release, we can add --match='v[0-9]*' to further
+# restrict the git-describe usages here.
 last_rc_version="$(git -C "${source_dir}" describe --abbrev=0)"
 last_version="$(git -C "${source_dir}" describe --abbrev=0 --exclude='*-rc*')"
 new_version="$1"

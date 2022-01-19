@@ -66,7 +66,7 @@ VAST's build system uses [`git-describe`][git-describe] for versioning.
 Specifically, it runs:
 
 ```
-git describe --abbrev=10 --long --dirty
+git describe --abbrev=10 --long --dirty --match='v[0-9]*'
 ```
 
 This includes a count of commits since the last release, the exact commit hash

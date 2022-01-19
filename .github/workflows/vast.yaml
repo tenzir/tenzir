@@ -429,7 +429,7 @@ jobs:
 
       - name: Configure Environment
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe --tags)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
@@ -672,7 +672,7 @@ jobs:
       - name: Determine VAST Package Name
         id: configure
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe --tags)-$(uname -s)-release-gcc" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')-$(uname -s)-release-gcc" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
       - name: Download VAST
         uses: actions/download-artifact@v2
@@ -744,11 +744,11 @@ jobs:
         run: |
           # Since the Docker build does not have the Git context, we set
           # version fallbacks manually here.
-          vast_tag=$(git describe --tags --long --dirty --abbrev=10)
+          vast_tag=$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')
           VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -DVAST_VERSION_TAG:STRING=${vast_tag}"
           for plugin in $(ls plugins); do
             var="VAST_PLUGIN_${plugin^^}_REVISION"
-            value="$(git rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "plugins/${plugin}")"
+            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "plugins/${plugin}")"
             VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
@@ -777,8 +777,9 @@ jobs:
           docker tag tenzir/vast-deps:latest "tenzir/vast-deps:${GITHUB_SHA}"
           docker push "tenzir/vast-deps:${GITHUB_SHA}"
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            docker tag tenzir/vast-deps:latest "tenzir/vast-deps:$(git describe --tags)"
-            docker push "tenzir/vast-deps:$(git describe --tags)"
+            release_tag=$(git describe --abbrev=0 --match='v[0-9]*')
+            docker tag tenzir/vast-deps:latest "tenzir/vast-deps:${release_tag}"
+            docker push "tenzir/vast-deps:${release_tag}"
           fi
       - name: Publish Development Docker Image
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
@@ -787,8 +788,9 @@ jobs:
           docker tag tenzir/vast-dev:latest "tenzir/vast-dev:${GITHUB_SHA}"
           docker push "tenzir/vast-dev:${GITHUB_SHA}"
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            docker tag tenzir/vast-dev:latest "tenzir/vast-dev:$(git describe --tags)"
-            docker push "tenzir/vast-dev:$(git describe --tags)"
+            release_tag=$(git describe --abbrev=0 --match='v[0-9]*')
+            docker tag tenzir/vast-deps:latest "tenzir/vast-dev:${release_tag}"
+            docker push "tenzir/vast-dev:${release_tag}"
           fi
       - name: Publish Production Docker Image
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
@@ -797,8 +799,9 @@ jobs:
           docker tag tenzir/vast:latest "tenzir/vast:${GITHUB_SHA}"
           docker push "tenzir/vast:${GITHUB_SHA}"
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            docker tag tenzir/vast:latest "tenzir/vast:$(git describe --tags)"
-            docker push "tenzir/vast:$(git describe --tags)"
+            release_tag=$(git describe --abbrev=0 --match='v[0-9]*')
+            docker tag tenzir/vast-deps:latest "tenzir/vast:${release_tag}"
+            docker push "tenzir/vast:${release_tag}"
           fi
 
   build-nix:

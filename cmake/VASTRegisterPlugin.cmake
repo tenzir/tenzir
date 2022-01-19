@@ -434,6 +434,7 @@ function (VASTRegisterPlugin)
         RESULT_VARIABLE PLUGIN_REVISION_RESULT
 	ERROR_QUIET)
       if (PLUGIN_REVISION_RESULT EQUAL 0)
+        string(PREPEND PLUGIN_REVISION \"g\")
         execute_process(
           COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" diff-index
                   --quiet HEAD -- \"${PROJECT_SOURCE_DIR}\"
