@@ -191,7 +191,7 @@ jobs:
 
       - name: Configure Environment
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe --tags)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
