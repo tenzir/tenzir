@@ -10,13 +10,13 @@ auto deserialize(const std::string& json_) {
   // simdjson requires additional padding on the string
   simdjson::padded_string json{json_};
 
-  simdjson::ondemand::parser parser;
-  auto doc = parser.iterate(json);
+  simdjson::dom::parser parser;
+  auto doc = parser.parse(json);
   std::vector<struct vast::enumeration_type::field> enum_fields{};
 
   for (auto f : doc.get_object()) {
-    std::string_view key = f.unescaped_key();
-    enum_fields.emplace_back(std::string{key}, f.value().get_uint64());
+    std::string_view key = f.key;
+    enum_fields.emplace_back(std::string{key}, f.value.get_uint64());
   }
 
   return enumeration_type{enum_fields};
