@@ -75,7 +75,9 @@ in {
     # https://github.com/NixOS/nixpkgs/issues/130963
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
   });
-  vast-source = final.nix-gitignore.gitignoreSource [] ./..;
+  vast-source = final.nix-gitignore.gitignoreSource [
+    "nix" "flake.nix" "flake.lock" "shell.nix"
+  ] ./..;
   vast = (final.callPackage ./vast {inherit stdenv;}).overrideAttrs (old: {
     # https://github.com/NixOS/nixpkgs/issues/130963
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
