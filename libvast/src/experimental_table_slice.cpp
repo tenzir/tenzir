@@ -689,7 +689,7 @@ experimental_table_slice::experimental_table_slice(
   state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
   VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
   auto decoder = record_batch_decoder{};
-  state_.record_batch = decoder.decode(slice.record_batch());
+  state_.record_batch = decoder.decode(slice.arrow_ipc());
 }
 
 experimental_table_slice::~experimental_table_slice() noexcept {

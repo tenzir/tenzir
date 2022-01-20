@@ -47,8 +47,8 @@ table experimental {
   /// separarate table.
   layout: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
 
-  /// The Arrow Recod Batch containing all data.
-  record_batch: [ubyte];
+  /// The Arrow IPC data
+  arrow_ipc: [ubyte];
 
   /// A timestamp assigned on import, representing nanoseconds since the UNIX
   /// epoch.

@@ -560,20 +560,20 @@ table_slice experimental_table_slice_builder::finish() {
     columns.emplace_back(builder->finish());
   auto record_batch
     = arrow::RecordBatch::Make(schema_, rows_, std::move(columns));
-  auto record_batch_sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto stream_writer
-    = arrow::ipc::MakeStreamWriter(record_batch_sink, schema_).ValueOrDie();
+    = arrow::ipc::MakeStreamWriter(ipc_ostream, schema_).ValueOrDie();
   stream_writer->WriteRecordBatch(*record_batch);
 
-  auto flat_record_batch = record_batch_sink->Finish().ValueOrDie();
-  auto record_batch_buffer = builder_.CreateVector(flat_record_batch->data(),
-                                                   flat_record_batch->size());
+  auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
+  auto fbs_ipc_buffer
+    = builder_.CreateVector(arrow_ipc_buffer->data(), arrow_ipc_buffer->size());
   // Create Arrow-encoded table slices. We need to set the import time to
   // something other than 0, as it cannot be modified otherwise. We then later
   // reset it to the clock's epoch.
   constexpr int64_t stub_ns_since_epoch = 1337;
   auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createexperimental(
-    builder_, layout_buffer, record_batch_buffer, stub_ns_since_epoch);
+    builder_, layout_buffer, fbs_ipc_buffer, stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder_,
