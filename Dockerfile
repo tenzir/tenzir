@@ -57,7 +57,8 @@ COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
-COPY LICENSE LICENSE.3rdparty README.md BANNER CMakeLists.txt vast.yaml.example ./
+COPY BANNER CMakeLists.txt LICENSE LICENSE.3rdparty README.md VERSIONING.md \
+     vast.yaml.example ./
 
 # Resolve repository-internal symlinks.
 # TODO: We should try to get rid of these long-term, as Docker does not work

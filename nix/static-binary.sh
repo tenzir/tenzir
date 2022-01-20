@@ -19,8 +19,8 @@ usage() {
 
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
-desc="$(git -C ${dir} describe --tags --long --abbrev=10 --dirty)"
-artifact_name="$(git -C ${dir} describe --abbrev=10)"
+desc="$(git -C ${dir} describe --abbrev=10 --long --dirty --match='v[0-9]*')"
+artifact_name="$(git -C ${dir} describe --abbrev=10 --match='v[0-9]*')"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 echo "rev is ${vast_rev}"
 
@@ -67,7 +67,7 @@ plugin_version() {
   local plugin="$1"
   local name="${plugin##*/}"
   local key="VAST_PLUGIN_${name^^}_REVISION"
-  local value="$(git -C "${plugin}" rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "${plugin}")"
+  local value="g$(git -C "${plugin}" rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "${plugin}")"
   echo "-D${key}=${value}"
 }
 
@@ -78,7 +78,7 @@ done
 
 if [ "${USE_HEAD}" == "on" ]; then
   source_json="$(nix-prefetch-github --rev=${vast_rev} tenzir vast)"
-  desc="$(git -C ${dir} describe --tags --long --abbrev=10 HEAD)"
+  desc="$(git -C ${dir} describe --abbrev=10 --long --match='v[0-9]*' HEAD)"
   read -r -d '' exp <<EOF
   with import ${dir} {};
   pkgsStatic."${target}".override {

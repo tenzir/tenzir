@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.18...3.22 FATAL_ERROR)
 
 project(
   example-transform
+  VERSION 1.0.0
   DESCRIPTION "Example transform plugin for VAST"
-  VERSION 0.1
   LANGUAGES CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the

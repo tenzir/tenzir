@@ -410,8 +410,23 @@ function (VASTRegisterPlugin)
                                PUBLIC $<BUILD_INTERFACE:${include_directories}>)
   endif ()
 
-  # Determine the plugin version. We use the CMake project version if it is set,
-  # and then optionally append the Git revision that last touched the project.
+  # Require that the CMake project version is set and has the appropriate
+  # format.
+  if (NOT PROJECT_VERSION)
+    message(
+      FATAL_ERROR
+        "PROJECT_VERSION must be specified before call to VASTRegisterPlugin")
+  endif ()
+  if (NOT PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(
+      FATAL_ERROR
+        "PROJECT_VERSION does not match expected format: <major>.<minor>.<patch>"
+    )
+  endif ()
+
+  # Determine the plugin version. We use the CMake project version, and then
+  # optionally append the Git revision that last touched the project,
+  # essentially reconstructing git-describe except for the revision count.
   string(MAKE_C_IDENTIFIER "vast_plugin_${PLUGIN_TARGET}_version"
                            PLUGIN_TARGET_IDENTIFIER)
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
@@ -434,6 +449,7 @@ function (VASTRegisterPlugin)
         RESULT_VARIABLE PLUGIN_REVISION_RESULT
 	ERROR_QUIET)
       if (PLUGIN_REVISION_RESULT EQUAL 0)
+        string(PREPEND PLUGIN_REVISION \"g\")
         execute_process(
           COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" diff-index
                   --quiet HEAD -- \"${PROJECT_SOURCE_DIR}\"
@@ -443,23 +459,14 @@ function (VASTRegisterPlugin)
         endif ()
       endif ()
     endif ()
-    set(PROJECT_VERSION \"${PROJECT_VERSION}\")
     if (NOT PLUGIN_REVISION)
       set(PLUGIN_REVISION \"${VAST_PLUGIN_REVISION_FALLBACK}\")
     endif ()
-    if (PROJECT_VERSION AND PLUGIN_REVISION)
-      set(VAST_PLUGIN_VERSION \"\${PROJECT_VERSION}-\${PLUGIN_REVISION}\")
-    elseif (PROJECT_VERSION)
-      set(VAST_PLUGIN_VERSION \"\${PROJECT_VERSION}\")
-    elseif (PLUGIN_REVISION)
-      set(VAST_PLUGIN_VERSION \"\${PLUGIN_REVISION}\")
-    else ()
-      set(VAST_PLUGIN_VERSION \"unspecified\")
-    endif ()
+    set(VAST_PLUGIN_VERSION \"v${PROJECT_VERSION}-\${PLUGIN_REVISION}\")
     configure_file(\"${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in\"
                   \"${CMAKE_CURRENT_BINARY_DIR}/config.cpp\" @ONLY)")
   set_source_files_properties(
-    ${PLUGIN_ENTRYPOINT}
+    "${PLUGIN_ENTRYPOINT}"
     PROPERTIES COMPILE_DEFINITIONS
                "VAST_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}")
   add_custom_target(
@@ -523,6 +530,19 @@ function (VASTRegisterPlugin)
       "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example"
       "plugin/${PLUGIN_TARGET}.yaml")
   endif ()
+
+  # Install README.md and CHANGELOG.md files to <docdir>/plugin/<plugin>, if
+  # they exist at the plugin project root.
+  if (NOT VAST_CMAKE_INSTALL_DOCDIR)
+    set(VAST_CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
+  endif ()
+  foreach (doc IN ITEMS "README.md" "CHANGELOG.md")
+    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${doc}")
+      install(
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/${doc}"
+        DESTINATION "${VAST_CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}")
+    endif ()
+  endforeach ()
 
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
     # Install the bundled schema files to <datadir>/vast.

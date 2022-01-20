@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.18...3.22 FATAL_ERROR)
 
 project(
   broker
+  VERSION 1.0.0
   DESCRIPTION "Broker plugin for VAST"
   LANGUAGES CXX)
 

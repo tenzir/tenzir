@@ -7,7 +7,8 @@ if (NOT VAST_VERSION_TAG)
     find_package(Git QUIET)
     if (Git_FOUND)
       execute_process(
-        COMMAND "${GIT_EXECUTABLE}" describe --tags --long --dirty --abbrev=10
+        COMMAND "${GIT_EXECUTABLE}" describe --abbrev=10 --long --dirty
+                "--match=v[0-9]*"
         WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/.."
         OUTPUT_VARIABLE VAST_VERSION_TAG
         OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -28,10 +29,10 @@ if (NOT VAST_VERSION_TAG)
 endif ()
 
 # We accept:
-# (1) 2021.03.25(-dirty)
-# (2) 2021.03.25-rc1(-dirty)
-# (3) 2021.03.25-13-g3c8009fe4(-dirty)
-# (4) 2021.03.25-rc1-13-g3c8009fe4(-dirty)
+# (1) v1.0.0(-dirty)
+# (2) v1.0.0-rc1(-dirty)
+# (3) v1.0.0-13-g3c8009fe4(-dirty)
+# (4) v1.0.0-rc1-13-g3c8009fe4(-dirty)
 
 list(LENGTH "${VAST_VERSION_TAG}" version_tag_list_len)
 if (NOT version_tag_list_len EQUAL 0)
@@ -39,7 +40,10 @@ if (NOT version_tag_list_len EQUAL 0)
 endif ()
 unset(version_tag_list_len)
 
-string(REPLACE "-" ";" version_list "${VAST_VERSION_TAG}")
+# Strip the v prefix from the version tag, if it exists.
+string(REGEX REPLACE "^v" "" version_list "${VAST_VERSION_TAG}")
+
+string(REPLACE "-" ";" version_list "${version_list}")
 # The version string can optionally have a "-dirty" suffix, we strip it now to
 # get consistent reverse indexing.
 list(GET version_list -1 version_list_last)
