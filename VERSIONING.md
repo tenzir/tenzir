@@ -100,14 +100,12 @@ The API and ABI of the C++ library `libvast` are considered unstable, i.e., the
 `vast` binary `v1.3.4` will function with `libvast` C++ library `v1.3.4` only,
 and not with `v1.3.5`.
 
-The shared object number of `libvast` increases with every release to indicate
-that every release is considered a breaking change to the ABI. It is calculated
-as follows from the VAST version:
+The shared object version number of `libvast` increases with every release to
+indicate that every release is considered a breaking change to the ABI. It is
+calculated as follows from the VAST version:
 
 ```
-SO number = 1'000'000 * major
-          +     1'000 * minor
-          +           * patch
+SO version = <256 * (major + 7) + minor>.<patch>
 ```
 
 E.g., the `libvast` C++ library shared object name for VAST
