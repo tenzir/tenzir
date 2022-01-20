@@ -4,9 +4,9 @@ let
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if prev.stdenv.isDarwin then final.llvmPackages_12.stdenv else prev.gcc11Stdenv;
 in {
-  musl = prev.musl.overrideAttrs (old: {
-    CFLAGS = old.CFLAGS ++ [ "-fno-omit-frame-pointer" ];
-  });
+  #musl = prev.musl.overrideAttrs (old: {
+  #  CFLAGS = old.CFLAGS ++ [ "-fno-omit-frame-pointer" ];
+  #});
   nix-gitDescribe = final.callPackage ./gitDescribe.nix {};
   arrow-cpp = (prev.arrow-cpp.override {enableShared = !isStatic;}).overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ [
