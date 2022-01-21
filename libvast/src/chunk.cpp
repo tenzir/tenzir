@@ -16,6 +16,7 @@
 #include "vast/io/save.hpp"
 #include "vast/logger.hpp"
 
+#include <arrow/buffer.h>
 #include <caf/deserializer.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/serializer.hpp>
@@ -145,6 +146,20 @@ chunk_ptr chunk::slice(view_type view) const {
   return make(view, [this]() noexcept {
     this->deref();
   });
+}
+
+// -- free functions ----------------------------------------------------------
+
+std::shared_ptr<arrow::Buffer> as_arrow_buffer(chunk_ptr chunk) noexcept {
+  if (!chunk)
+    return nullptr;
+  auto buffer = arrow::Buffer::Wrap(chunk->data(), chunk->size());
+  auto* const buffer_data = buffer.get();
+  return {buffer_data, [chunk = std::move(chunk),
+                        buffer = std::move(buffer)](arrow::Buffer*) noexcept {
+            static_cast<void>(chunk);
+            static_cast<void>(buffer);
+          }};
 }
 
 // -- concepts -----------------------------------------------------------------

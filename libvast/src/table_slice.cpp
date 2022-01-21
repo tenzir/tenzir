@@ -156,7 +156,15 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
         auto state = std::make_unique<std::decay_t<decltype(*state_ptr)>>(
           encoded, chunk_);
         state_ptr = state.get();
-        chunk_->add_deletion_step([state = std::move(state)]() noexcept {
+        const auto bytes = as_bytes(chunk_);
+        // We create a second chunk with an intentionally decoupled reference
+        // count here that we bind to the lifetime of the original chunk. This
+        // avoids cyclic references between the table slice and its
+        // encoding-specific state.
+        chunk_ = chunk::make(bytes, [state = std::move(state),
+                                     chunk = std::move(chunk_)]() noexcept {
+          static_cast<void>(state);
+          static_cast<void>(chunk);
           --num_instances_;
         });
       },
@@ -399,20 +407,7 @@ std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
           auto copy = rebuild(slice, encoding);
           return to_record_batch(copy);
         }
-        // Get the record batch first, then create a copy that shares the
-        // lifetime with the chunk and the original record batch. Capturing the
-        // chunk guarantees that the table slice is valid as long as the
-        // returned record batch is valid, and capturing the batch ensures that
-        // guarantee for the underlying Arrow Buffer object.
-        auto batch = state(encoded, slice.state_)->record_batch();
-        const auto data = batch.get();
-        auto result = std::shared_ptr<arrow::RecordBatch>{
-          data,
-          [batch = std::move(batch), slice](arrow::RecordBatch*) noexcept {
-            static_cast<void>(batch);
-            static_cast<void>(slice);
-          }};
-        return result;
+        return state(encoded, slice.state_)->record_batch();
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
         auto copy = rebuild(slice, table_slice_encoding::arrow);

@@ -30,6 +30,7 @@ namespace arrow {
 
 class Array;
 class ArrayBuilder;
+class Buffer;
 class DataType;
 class MemoryPool;
 class RecordBatch;

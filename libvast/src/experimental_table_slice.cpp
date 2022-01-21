@@ -649,13 +649,10 @@ public:
     // nop
   }
 
-  template <class FlatRecordBatch>
   std::shared_ptr<arrow::RecordBatch>
-  decode(const FlatRecordBatch& flat_record_batch) noexcept {
+  decode(const std::shared_ptr<arrow::Buffer>& flat_record_batch) noexcept {
     VAST_ASSERT(!record_batch_);
-    if (auto status = decoder_.Consume(flat_record_batch->data(),
-                                       flat_record_batch->size());
-        !status.ok()) {
+    if (auto status = decoder_.Consume(flat_record_batch); !status.ok()) {
       VAST_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
                  status.ToString());
       return {};
@@ -685,7 +682,8 @@ experimental_table_slice::experimental_table_slice(
   state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
   VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
   auto decoder = record_batch_decoder{};
-  state_.record_batch = decoder.decode(slice.arrow_ipc());
+  state_.record_batch = decoder.decode(
+    as_arrow_buffer(parent->slice(as_bytes(*slice.arrow_ipc()))));
 }
 
 experimental_table_slice::~experimental_table_slice() noexcept {

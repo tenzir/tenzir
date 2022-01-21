@@ -619,21 +619,16 @@ public:
     // nop
   }
 
-  template <class FlatSchema, class FlatRecordBatch>
   std::shared_ptr<arrow::RecordBatch>
-  decode(const FlatSchema& flat_schema,
-         const FlatRecordBatch& flat_record_batch) noexcept {
+  decode(const std::shared_ptr<arrow::Buffer>& flat_schema,
+         const std::shared_ptr<arrow::Buffer>& flat_record_batch) noexcept {
     VAST_ASSERT(!record_batch_);
-    if (auto status
-        = decoder_.Consume(flat_schema->data(), flat_schema->size());
-        !status.ok()) {
+    if (auto status = decoder_.Consume(flat_schema); !status.ok()) {
       VAST_ERROR("{} failed to decode Arrow Schema: {}", __func__,
                  status.ToString());
       return {};
     }
-    if (auto status = decoder_.Consume(flat_record_batch->data(),
-                                       flat_record_batch->size());
-        !status.ok()) {
+    if (auto status = decoder_.Consume(flat_record_batch); !status.ok()) {
       VAST_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
                  status.ToString());
       return {};
@@ -662,7 +657,9 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
       die("failed to deserialize layout: " + render(err));
     state_.layout = type::from_legacy_type(intermediate);
     auto decoder = record_batch_decoder{};
-    state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
+    state_.record_batch = decoder.decode(
+      as_arrow_buffer(parent->slice(as_bytes(*slice.schema()))),
+      as_arrow_buffer(parent->slice(as_bytes(*slice.record_batch()))));
   } else {
     // We decouple the sliced type from the layout intentionally. This is an
     // absolute must because we store the state in the deletion step of the
@@ -672,7 +669,9 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
     VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
     auto decoder = record_batch_decoder{};
-    state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
+    state_.record_batch = decoder.decode(
+      as_arrow_buffer(parent->slice(as_bytes(*slice.schema()))),
+      as_arrow_buffer(parent->slice(as_bytes(*slice.record_batch()))));
   }
 }
 
