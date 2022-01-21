@@ -779,7 +779,7 @@ type make_vast_type(const arrow::DataType& arrow_type) {
     case arrow::Type::EXTENSION: {
       const auto& t = static_cast<const arrow::ExtensionType&>(arrow_type);
       if (t.extension_name() == "vast.enum") {
-        const auto& et = static_cast<const EnumType&>(arrow_type);
+        const auto& et = static_cast<const enum_extension_type&>(arrow_type);
         return type{et.enum_type_};
       }
       die(

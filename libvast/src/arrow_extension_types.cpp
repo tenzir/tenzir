@@ -41,29 +41,29 @@ std::string serialize(const enumeration_type& t) {
 
 } // namespace
 
-std::string EnumType::extension_name() const {
+std::string enum_extension_type::extension_name() const {
   return "vast.enum";
 }
 
 std::shared_ptr<arrow::Array>
-EnumType::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
+enum_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
   VAST_ASSERT(data->type->id() == arrow::Type::EXTENSION);
   VAST_ASSERT(ExtensionEquals(static_cast<const ExtensionType&>(*data->type)));
   return std::make_shared<arrow::ExtensionArray>(data);
 }
 
 arrow::Result<std::shared_ptr<arrow::DataType>>
-EnumType::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
-                      const std::string& serialized) const {
+enum_extension_type::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
+                                 const std::string& serialized) const {
   if (!storage_type->Equals(*storage_type_)) {
     return arrow::Status::Invalid("Invalid storage type for VAST enum "
                                   "dictionary: ",
                                   storage_type->ToString());
   }
-  return std::make_shared<EnumType>(deserialize(serialized));
+  return std::make_shared<enum_extension_type>(deserialize(serialized));
 }
 
-std::string EnumType::Serialize() const {
+std::string enum_extension_type::Serialize() const {
   return serialize(enum_type_);
 }
 
@@ -73,8 +73,8 @@ void register_extension_types() {
     VAST_WARN("unable to regiser extension type; {}", t);
 }
 
-std::shared_ptr<EnumType> make_arrow_enum(enumeration_type t) {
-  return std::make_shared<EnumType>(t);
+std::shared_ptr<enum_extension_type> make_arrow_enum(enumeration_type t) {
+  return std::make_shared<enum_extension_type>(t);
 }
 
 } // namespace vast
