@@ -19,9 +19,11 @@ public:
   delete_step(std::vector<std::string> fields);
 
   /// Deletes fields from an arrow record batch.
-  /// @returns The new layout and the record batch without the deleted fields.
   caf::error add(vast::id offset, type layout,
                  std::shared_ptr<arrow::RecordBatch> batch) override;
+
+  /// Retrieves the results of the delete transformation.
+  /// @returns The batches with the new layout but without the deleted fields.
   caf::expected<batch_vector> finish() override;
 
 private:
@@ -34,6 +36,7 @@ private:
   /// The key suffixes of the fields to delete.
   const std::vector<std::string> fields_;
 
+  /// The slices being transformed.
   batch_vector transformed_;
 };
 

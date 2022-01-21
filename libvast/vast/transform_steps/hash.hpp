@@ -27,6 +27,8 @@ private:
   std::string field_;
   std::string out_;
   std::optional<std::string> salt_;
+
+  /// The slices being transformed.
   batch_vector transformed_;
 };
 

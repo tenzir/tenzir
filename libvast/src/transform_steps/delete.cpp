@@ -54,7 +54,7 @@ delete_step::adjust_layout(const vast::type& layout) const {
 
 caf::error delete_step::add(vast::id offset, type layout,
                             std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("delete_step add offset {}", offset);
+  VAST_DEBUG("delete step adds the batch with offset: {}", offset);
   auto layout_result = adjust_layout(layout);
   if (!layout_result) {
     if (layout_result.error()) {
@@ -78,7 +78,7 @@ caf::error delete_step::add(vast::id offset, type layout,
 }
 
 caf::expected<batch_vector> delete_step::finish() {
-  VAST_DEBUG("delete_step finished");
+  VAST_DEBUG("delete step finished transformation");
   return std::exchange(transformed_, {});
 }
 

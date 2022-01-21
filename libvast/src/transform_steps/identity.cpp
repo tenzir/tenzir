@@ -19,13 +19,13 @@ namespace vast {
 
 caf::error identity_step::add(vast::id offset, type layout,
                               std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("identity_step add");
+  VAST_DEBUG("identity step adds the batch with offset: {}", offset);
   transformed_.emplace_back(offset, layout, std::move(batch));
   return caf::none;
 }
 
 caf::expected<batch_vector> identity_step::finish() {
-  VAST_DEBUG("identity_step finished");
+  VAST_DEBUG("identity step finished transformation");
   return std::exchange(transformed_, {});
 }
 

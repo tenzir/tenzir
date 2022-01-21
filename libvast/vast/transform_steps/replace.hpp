@@ -26,6 +26,7 @@ private:
   std::string field_;
   vast::data value_;
 
+  /// The slices being transformed.
   batch_vector transformed_;
 };
 

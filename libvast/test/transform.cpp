@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#define SUITE transform
+
 #include "vast/transform.hpp"
 
 #include "vast/arrow_table_slice_builder.hpp"
@@ -25,8 +27,6 @@
 #include <arrow/array/data.h>
 
 #include <string_view>
-
-#define SUITE transform
 
 using namespace std::literals;
 
@@ -176,7 +176,7 @@ TEST(project step) {
     slice.offset(), slice.layout(), as_record_batch(slice));
   REQUIRE(!invalid_add_failed);
   auto not_projected = invalid_project_step.finish();
-  REQUIRE_NOERROR(not_projected); // FIXME: Check it if needed, or REQUIRE_ERROR
+  REQUIRE_NOERROR(not_projected);
   REQUIRE_EQUAL(not_projected->size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(not_projected), slice);
 }
@@ -248,9 +248,9 @@ TEST(transform with multiple steps) {
   transform.add_step(
     std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   auto slice = make_transforms_testdata();
-  auto add_failed = transform.add_slice(std::move(slice));
+  auto add_failed = transform.add(std::move(slice));
   REQUIRE(!add_failed);
-  auto transformed = transform.finish_slice();
+  auto transformed = transform.finish();
   REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->size(), 1ull);
   REQUIRE_EQUAL(
@@ -265,9 +265,9 @@ TEST(transform with multiple steps) {
     vast::defaults::import::table_slice_type, wrong_layout);
   REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));
   auto wrong_slice = builder->finish();
-  auto add2_failed = transform.add_slice(std::move(wrong_slice));
-  REQUIRE(!add2_failed); // FIXME: It is not required to fail, or succeed!
-  auto not_transformed = transform.finish_slice();
+  auto add2_failed = transform.add(std::move(wrong_slice));
+  REQUIRE(!add2_failed);
+  auto not_transformed = transform.finish();
   REQUIRE_NOERROR(not_transformed);
   REQUIRE_EQUAL(not_transformed->size(), 1ull);
   REQUIRE_EQUAL(
@@ -282,12 +282,9 @@ TEST(transform with multiple steps) {
   CHECK_EQUAL(
     caf::get<vast::record_type>((*not_transformed)[0].layout()).field(2).name,
     "index");
-  CHECK_EQUAL((*not_transformed)[0].at(0, 0),
-              vast::data_view{"asdf"sv}); // FIXME change
-  CHECK_EQUAL((*not_transformed)[0].at(0, 1),
-              vast::data_view{"jklo"sv}); // FIXME change
-  CHECK_EQUAL((*not_transformed)[0].at(0, 2),
-              vast::data{vast::integer{23}}); // FIXME change
+  CHECK_EQUAL((*not_transformed)[0].at(0, 0), vast::data_view{"asdf"sv});
+  CHECK_EQUAL((*not_transformed)[0].at(0, 1), vast::data_view{"jklo"sv});
+  CHECK_EQUAL((*not_transformed)[0].at(0, 2), vast::data{vast::integer{23}});
 }
 
 TEST(transformation engine - single matching transform) {

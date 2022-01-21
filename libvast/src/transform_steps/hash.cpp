@@ -30,7 +30,7 @@ hash_step::hash_step(const std::string& fieldname, const std::string& out,
 
 caf::error hash_step::add(vast::id offset, type layout,
                           std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("hash_step add");
+  VAST_DEBUG("hash step adds the batch with offset: {}", offset);
   // Get the target field if it exists.
   const auto& layout_rt = caf::get<record_type>(layout);
   auto column_offset = layout_rt.resolve_key(field_);
@@ -74,7 +74,7 @@ caf::error hash_step::add(vast::id offset, type layout,
 }
 
 caf::expected<batch_vector> hash_step::finish() {
-  VAST_DEBUG("hash_step finished");
+  VAST_DEBUG("hash step finished transformation");
   return std::exchange(transformed_, {});
 }
 

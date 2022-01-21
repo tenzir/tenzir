@@ -42,7 +42,7 @@ select_step::select_step(std::string expr) : expression_(caf::no_error) {
 
 caf::error select_step::add(vast::id offset, type layout,
                             std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("select_step add");
+  VAST_DEBUG("select step adds the batch with offset: {}", offset);
   if (!expression_) {
     transformed_.clear();
     return expression_.error();
@@ -52,11 +52,12 @@ caf::error select_step::add(vast::id offset, type layout,
     transformed_.clear();
     return tailored_expr.error();
   }
+  // TODO: Replace this with an Arrow-native filter function as soon as we are
+  // able to directly evaluate expressions on a record batch.
   auto new_slice
     = filter(arrow_table_slice_builder::create(batch, layout), *tailored_expr);
   if (new_slice) {
-    auto as_batch = as_record_batch(
-      *new_slice); // FIXME: ask: keepalive batch until create is called()
+    auto as_batch = as_record_batch(*new_slice);
     transformed_.emplace_back(offset, new_slice->layout(), std::move(as_batch));
     return caf::none;
   }
@@ -66,7 +67,7 @@ caf::error select_step::add(vast::id offset, type layout,
 }
 
 caf::expected<batch_vector> select_step::finish() {
-  VAST_DEBUG("select_step finished");
+  VAST_DEBUG("select step finished transformation");
   return std::exchange(transformed_, {});
 }
 

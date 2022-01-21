@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/ids.hpp"
 #include "vast/transform_step.hpp"
 #include "vast/type.hpp"
 
@@ -18,11 +19,11 @@ namespace vast {
 class offset_range {
 public:
   void add(vast::id offset, table_slice::size_type rows);
-  bool contains(vast::id offset, table_slice::size_type rows);
+  bool contains(vast::id offset, table_slice::size_type rows) const;
   void clear();
 
 private:
-  std::vector<std::pair<vast::id, table_slice::size_type>> ranges_;
+  std::vector<id_range> ranges_;
 };
 
 class transform {
@@ -39,25 +40,33 @@ public:
 
   void add_step(transform_step_ptr step);
 
-  // FIXME: Convinence function
-  [[nodiscard]] caf::error add_slice(table_slice&&);
-  // FIXME: Convinence function
-  // The result is not ordered by offset
-  [[nodiscard]] caf::expected<std::vector<table_slice>> finish_slice();
+  /// Adds the table to the internal queue of batches to be transformed.
+  [[nodiscard]] caf::error add(table_slice&&);
+
+  /// Applies transformations to the batches in the internal queue.
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish();
 
   [[nodiscard]] const std::vector<std::string>& event_types() const;
 
   [[nodiscard]] const std::string& name() const;
 
 private:
-  [[nodiscard]] caf::error add(vast::id offset, vast::type layout,
-                               std::shared_ptr<arrow::RecordBatch> batch);
+  /// Add the batch to the internal queue of batches to be transformed.
+  [[nodiscard]] caf::error add_batch(vast::id offset, vast::type layout,
+                                     std::shared_ptr<arrow::RecordBatch> batch);
 
-  [[nodiscard]] caf::expected<batch_vector> finish();
+  /// Applies transformations to the batches in the internal queue.
+  /// @note The result vector may not be ordered by offset.
+  [[nodiscard]] caf::expected<batch_vector> finish_batch();
 
-  caf::error process_queue(const transform_step_ptr& step, batch_queue& queue);
+  /// Applies the transform step to every batch in the queue.
+  caf::error process_queue(const transform_step_ptr& step);
 
-  // Grant access to the transformation engine so it can check the fast path.
+  /// Clears the internal state, so that a new add/finish run can be started.
+  // void clear_slices();
+
+  /// Grant access to the transformation engine so it can call
+  /// add_batch/finsih_batch.
   friend class transformation_engine;
 
   /// Name assigned to this transformation.
@@ -69,15 +78,13 @@ private:
   /// Triggers for this transform
   std::vector<std::string> event_types_;
 
-  /// Transformed slices
-  batch_queue to_transform_; // FIXME: write doc
+  /// The slices being transformed.
+  batch_queue to_transform_;
 
+  /// The id ranges of the slices being transformed.
   offset_range range_;
-
-  void clear_slices();
 };
 
-// TODO: Find a more descriptive name for this class.
 class transformation_engine {
 public:
   // member functions
@@ -86,8 +93,11 @@ public:
   transformation_engine() = default;
   explicit transformation_engine(std::vector<transform>&&);
 
-  /// Apply relevant transformations to the table slice.
+  /// Starts applying relevant transformations to the table.
   caf::error add(table_slice&&);
+
+  /// Finishes applying transformations to the added tables.
+  /// @returns The transformed slices sorted by offset in ascending order.
   caf::expected<std::vector<table_slice>> finish();
 
   /// Get a list of the transformations.
@@ -99,17 +109,17 @@ private:
   /// Apply relevant transformations to the table slice.
   caf::expected<table_slice> transform_slice(table_slice&& x);
 
-  /// The set of transforms
+  /// The set of transforms.
   std::vector<transform> transforms_;
 
-  /// event type -> applicable transforms
+  /// Mapping from event type to applicable transforms.
   std::unordered_map<std::string, std::vector<size_t>> layout_mapping_;
 
+  /// The slices being transformed.
   std::unordered_map<vast::type, slice_queue> to_transform_;
 
+  /// The id ranges of the slices being transformed.
   offset_range range_;
-
-  void clear_slices();
 };
 
 } // namespace vast

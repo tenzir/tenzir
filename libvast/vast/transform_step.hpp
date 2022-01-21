@@ -29,13 +29,15 @@ class transform_step {
 public:
   virtual ~transform_step() = default;
 
-  /// Applies the transformation to a record batch with a corresponding vast
+  /// Starts applyings the transformation to a batch with a corresponding vast
   /// layout.
   [[nodiscard]] virtual caf::error
   add(vast::id offset, type layout, std::shared_ptr<arrow::RecordBatch> batch)
     = 0;
 
-  /// Retrieves the result of the transformation.
+  /// Retrieves the result of the transformation, resets the internal state.
+  /// TODO: add another function abort() to free up internal resources.
+  /// NOTE: If there is nothing to transform return an empty vector.
   [[nodiscard]] virtual caf::expected<batch_vector> finish() = 0;
 };
 

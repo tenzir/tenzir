@@ -24,8 +24,8 @@ class example_transform_step : public transform_step {
 public:
   example_transform_step() = default;
 
-  /// Applies the transformation to a record batch(arrow encoding) with a
-  /// corresponding vast layout.
+  /// Applies the transformation to an Arrow Record Batch with a corresponding
+  /// VAST layout.
   [[nodiscard]] caf::error
   add(vast::id offset, type layout,
       std::shared_ptr<arrow::RecordBatch> batch) override {
@@ -40,6 +40,7 @@ public:
   }
 
 private:
+  /// The slices being transformed.
   batch_vector transformed_;
 };
 

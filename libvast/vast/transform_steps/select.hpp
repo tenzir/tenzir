@@ -29,6 +29,8 @@ public:
 
 private:
   caf::expected<vast::expression> expression_;
+
+  /// The slices being transformed.
   batch_vector transformed_;
 };
 

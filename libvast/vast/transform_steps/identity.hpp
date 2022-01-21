@@ -22,6 +22,7 @@ public:
   caf::expected<batch_vector> finish() override;
 
 private:
+  /// The slices being transformed.
   batch_vector transformed_;
 };
 

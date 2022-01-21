@@ -36,6 +36,8 @@ private:
 
   /// The key suffixes of the fields to keep.
   const std::vector<std::string> fields_;
+
+  /// The slices being transformed.
   batch_vector transformed_;
 };
 
