@@ -77,7 +77,7 @@ delete_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   return caf::none;
 }
 
-caf::expected<batch_vector> delete_step::finish() {
+caf::expected<std::vector<transform_batch>> delete_step::finish() {
   VAST_DEBUG("delete step finished transformation");
   return std::exchange(transformed_, {});
 }
@@ -94,7 +94,7 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<transform_step_ptr>
+  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const caf::settings& opts) const override {
     auto fields = caf::get_if<std::vector<std::string>>(&opts, "fields");
     if (!fields)

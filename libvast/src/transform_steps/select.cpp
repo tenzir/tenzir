@@ -66,7 +66,7 @@ select_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
                                              "return a slice");
 }
 
-caf::expected<batch_vector> select_step::finish() {
+caf::expected<std::vector<transform_batch>> select_step::finish() {
   VAST_DEBUG("select step finished transformation");
   return std::exchange(transformed_, {});
 }
@@ -83,7 +83,7 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<transform_step_ptr>
+  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const caf::settings& opts) const override {
     auto expr = caf::get_if<std::string>(&opts, "expression");
     if (!expr)

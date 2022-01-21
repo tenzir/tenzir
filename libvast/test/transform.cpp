@@ -129,13 +129,14 @@ struct transforms_fixture {
   }
 };
 
-vast::type layout(caf::expected<vast::batch_vector> batches) {
-  return std::get<0>((*batches)[0]);
+vast::type layout(caf::expected<std::vector<vast::transform_batch>> batches) {
+  return (*batches)[0].layout;
 }
 
-vast::table_slice as_table_slice(caf::expected<vast::batch_vector> batches) {
-  return vast::arrow_table_slice_builder::create(std::get<1>((*batches)[0]),
-                                                 std::get<0>((*batches)[0]));
+vast::table_slice
+as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
+  return vast::arrow_table_slice_builder::create((*batches)[0].batch,
+                                                 (*batches)[0].layout);
 }
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
@@ -318,16 +319,17 @@ TEST(transformation engine - multiple matching transforms) {
   transform2.add_step(
     std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   vast::transformation_engine engine(std::move(transforms));
-  auto slice = make_transforms_testdata();
+  auto slice = make_transforms_testdata(vast::table_slice_encoding::msgpack);
+  REQUIRE_EQUAL(slice.encoding(), vast::table_slice_encoding::msgpack);
   auto add_failed = engine.add(std::move(slice));
   REQUIRE(!add_failed);
   auto transformed = engine.finish();
   REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->size(), 1ull);
+  REQUIRE_EQUAL((*transformed)[0].encoding(),
+                vast::table_slice_encoding::arrow);
   CHECK_EQUAL(
     caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 1ull);
 }
-
-// FIXME: Test transformation_engine / transform with msgpack
 
 FIXTURE_SCOPE_END()

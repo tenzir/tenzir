@@ -27,7 +27,7 @@ transform::transform(std::string name, std::vector<std::string>&& event_types)
   : name_(std::move(name)), event_types_(std::move(event_types)) {
 }
 
-void transform::add_step(transform_step_ptr step) {
+void transform::add_step(std::unique_ptr<transform_step> step) {
   steps_.emplace_back(std::move(step));
 }
 
@@ -69,7 +69,8 @@ caf::error transform::add_batch(vast::type layout,
   return caf::none;
 }
 
-caf::error transform::process_queue(const transform_step_ptr& step) {
+caf::error
+transform::process_queue(const std::unique_ptr<transform_step>& step) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {
@@ -105,7 +106,7 @@ caf::error transform::process_queue(const transform_step_ptr& step) {
   return caf::none;
 }
 
-caf::expected<batch_vector> transform::finish_batch() {
+caf::expected<std::vector<transform_batch>> transform::finish_batch() {
   VAST_DEBUG("applying {} transform {}", steps_.size(), name_);
   for (const auto& step : steps_) {
     auto failed = process_queue(step);
@@ -114,7 +115,7 @@ caf::expected<batch_vector> transform::finish_batch() {
       return failed;
     }
   }
-  batch_vector result{};
+  std::vector<transform_batch> result{};
   while (!to_transform_.empty()) {
     result.emplace_back(std::move(to_transform_.front()));
     to_transform_.pop_front();
@@ -139,7 +140,8 @@ caf::error transformation_engine::add(table_slice&& x) {
 }
 
 caf::error
-transformation_engine::process_queue(transform& transform, batch_queue& queue) {
+transformation_engine::process_queue(transform& transform,
+                                     std::deque<transform_batch>& queue) {
   caf::error failed{};
   const auto size = queue.size();
   for (size_t i = 0; i < size; ++i) {
@@ -172,7 +174,7 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
   // to its underlying table slice, but the RecordBatches created by the
   // transform step will most likely reference some of same underlying data.
   std::vector<std::shared_ptr<arrow::RecordBatch>> keep_alive{};
-  std::unordered_map<vast::type, batch_queue> batches{};
+  std::unordered_map<vast::type, std::deque<transform_batch>> batches{};
   std::vector<table_slice> result{};
   for (auto& [layout, queue] : to_transform) {
     // TODO: Consider using a tsl robin map instead for transparent key lookup.

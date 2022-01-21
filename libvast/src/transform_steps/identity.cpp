@@ -24,7 +24,7 @@ identity_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   return caf::none;
 }
 
-caf::expected<batch_vector> identity_step::finish() {
+caf::expected<std::vector<transform_batch>> identity_step::finish() {
   VAST_DEBUG("identity step finished transformation");
   return std::exchange(transformed_, {});
 }
@@ -41,7 +41,7 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<transform_step_ptr>
+  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const caf::settings&) const override {
     return std::make_unique<identity_step>();
   }

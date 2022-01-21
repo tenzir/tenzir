@@ -27,21 +27,20 @@ public:
   /// Applies the transformation to an Arrow Record Batch with a corresponding
   /// VAST layout.
   [[nodiscard]] caf::error
-  add(vast::id offset, type layout,
-      std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
     // Transform the table slice here.
-    transformed_.emplace_back(offset, std::move(layout), std::move(batch));
+    transformed_.emplace_back(std::move(layout), std::move(batch));
     return caf::none;
   }
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<batch_vector> finish() override {
+  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  batch_vector transformed_;
+  std::vector<transform_batch> transformed_;
 };
 
 // The plugin definition itself is below.
@@ -69,7 +68,7 @@ public:
   // This is called once for every time this transform step appears in a
   // transform definition. The configuration for the step is opaquely
   // passed as the first argument.
-  [[nodiscard]] caf::expected<transform_step_ptr>
+  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const caf::settings&) const override {
     return std::make_unique<vast::plugins::example_transform_step>();
   }

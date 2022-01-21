@@ -20,7 +20,7 @@ public:
 
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
-  [[nodiscard]] caf::expected<batch_vector> finish() override;
+  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override;
 
 private:
   std::string field_;
@@ -28,7 +28,7 @@ private:
   std::optional<std::string> salt_;
 
   /// The slices being transformed.
-  batch_vector transformed_;
+  std::vector<transform_batch> transformed_;
 };
 
 } // namespace vast

@@ -198,7 +198,6 @@ using ids = bitmap; // temporary; until we have a real type for 'ids'
 using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using transform_ptr = std::shared_ptr<transform>;
-using transform_step_ptr = std::unique_ptr<transform_step>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.

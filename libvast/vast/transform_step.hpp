@@ -17,10 +17,13 @@
 
 namespace vast {
 
-using arrow_batch = std::tuple<vast::type, std::shared_ptr<arrow::RecordBatch>>;
-using batch_queue = std::deque<arrow_batch>;
-using slice_queue = std::deque<table_slice>;
-using batch_vector = std::vector<arrow_batch>;
+struct transform_batch {
+  transform_batch(type layout, std::shared_ptr<arrow::RecordBatch> batch)
+    : layout(std::move(layout)), batch(std::move(batch)) {
+  }
+  vast::type layout;
+  std::shared_ptr<arrow::RecordBatch> batch;
+};
 
 /// An individual transform step. This is mainly used in the plugin API,
 /// later code deals with a complete `transform`.
@@ -37,12 +40,11 @@ public:
   /// Retrieves the result of the transformation, resets the internal state.
   /// TODO: add another function abort() to free up internal resources.
   /// NOTE: If there is nothing to transform return an empty vector.
-  [[nodiscard]] virtual caf::expected<batch_vector> finish() = 0;
+  [[nodiscard]] virtual caf::expected<std::vector<transform_batch>> finish()
+    = 0;
 };
 
-using transform_step_ptr = std::unique_ptr<transform_step>;
-
-caf::expected<transform_step_ptr>
+caf::expected<std::unique_ptr<transform_step>>
 make_transform_step(const std::string& name, const caf::settings& opts);
 
 } // namespace vast

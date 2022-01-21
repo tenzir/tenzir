@@ -78,7 +78,7 @@ replace_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   return caf::none;
 }
 
-caf::expected<batch_vector> replace_step::finish() {
+caf::expected<std::vector<transform_batch>> replace_step::finish() {
   VAST_DEBUG("replace step finished transformation");
   auto retval = std::move(transformed_);
   transformed_.clear();
@@ -97,7 +97,7 @@ public:
   };
 
   // Transform Plugin API
-  [[nodiscard]] caf::expected<transform_step_ptr>
+  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const caf::settings& opts) const override {
     auto field = caf::get_if<std::string>(&opts, "field");
     if (!field)

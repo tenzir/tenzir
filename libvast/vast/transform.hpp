@@ -28,7 +28,7 @@ public:
   transform& operator=(const transform&) = delete;
   transform& operator=(transform&&) = default;
 
-  void add_step(transform_step_ptr step);
+  void add_step(std::unique_ptr<transform_step> step);
 
   /// Adds the table to the internal queue of batches to be transformed.
   [[nodiscard]] caf::error add(table_slice&&);
@@ -48,10 +48,10 @@ private:
 
   /// Applies transformations to the batches in the internal queue.
   /// @note The offsets of the slices may not be preserved.
-  [[nodiscard]] caf::expected<batch_vector> finish_batch();
+  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish_batch();
 
   /// Applies the transform step to every batch in the queue.
-  caf::error process_queue(const transform_step_ptr& step);
+  caf::error process_queue(const std::unique_ptr<transform_step>& step);
 
   /// Grant access to the transformation engine so it can call
   /// add_batch/finsih_batch.
@@ -61,13 +61,13 @@ private:
   std::string name_;
 
   /// Sequence of transformation steps
-  std::vector<transform_step_ptr> steps_;
+  std::vector<std::unique_ptr<transform_step>> steps_;
 
   /// Triggers for this transform
   std::vector<std::string> event_types_;
 
   /// The slices being transformed.
-  batch_queue to_transform_;
+  std::deque<transform_batch> to_transform_;
 };
 
 class transformation_engine {
@@ -89,7 +89,8 @@ public:
   const std::vector<transform>& transforms();
 
 private:
-  static caf::error process_queue(transform& transform, batch_queue& queue);
+  static caf::error
+  process_queue(transform& transform, std::deque<transform_batch>& queue);
 
   /// Apply relevant transformations to the table slice.
   caf::expected<table_slice> transform_slice(table_slice&& x);
@@ -101,7 +102,7 @@ private:
   std::unordered_map<std::string, std::vector<size_t>> layout_mapping_;
 
   /// The slices being transformed.
-  std::unordered_map<vast::type, slice_queue> to_transform_;
+  std::unordered_map<vast::type, std::deque<table_slice>> to_transform_;
 };
 
 } // namespace vast

@@ -25,7 +25,7 @@ public:
   /// @returns The new layout and the projected record batch.
   caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
-  caf::expected<batch_vector> finish() override;
+  caf::expected<std::vector<transform_batch>> finish() override;
 
 private:
   /// Adjust the layout according to the projection.
@@ -38,7 +38,7 @@ private:
   const std::vector<std::string> fields_;
 
   /// The slices being transformed.
-  batch_vector transformed_;
+  std::vector<transform_batch> transformed_;
 };
 
 } // namespace vast

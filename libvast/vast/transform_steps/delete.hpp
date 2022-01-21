@@ -24,7 +24,7 @@ public:
 
   /// Retrieves the results of the delete transformation.
   /// @returns The batches with the new layout but without the deleted fields.
-  caf::expected<batch_vector> finish() override;
+  caf::expected<std::vector<transform_batch>> finish() override;
 
 private:
   /// Adjust the layout by deleting columns.
@@ -37,7 +37,7 @@ private:
   const std::vector<std::string> fields_;
 
   /// The slices being transformed.
-  batch_vector transformed_;
+  std::vector<transform_batch> transformed_;
 };
 
 } // namespace vast
