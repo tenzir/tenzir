@@ -284,7 +284,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   });
   self->state.stage = make_importer_stage(self);
   self->state.transformer
-    = self->spawn(component_transformer, "input_transformer",
+    = self->spawn(importer_transformer, "input_transformer",
                   std::move(input_transformations));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", *self);

@@ -40,9 +40,9 @@ select_step::select_step(std::string expr) : expression_(caf::no_error) {
   }
 }
 
-caf::error select_step::add(vast::id offset, type layout,
-                            std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("select step adds the batch with offset: {}", offset);
+caf::error
+select_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_TRACE("select step adds batch");
   if (!expression_) {
     transformed_.clear();
     return expression_.error();
@@ -58,7 +58,7 @@ caf::error select_step::add(vast::id offset, type layout,
     = filter(arrow_table_slice_builder::create(batch, layout), *tailored_expr);
   if (new_slice) {
     auto as_batch = as_record_batch(*new_slice);
-    transformed_.emplace_back(offset, new_slice->layout(), std::move(as_batch));
+    transformed_.emplace_back(new_slice->layout(), std::move(as_batch));
     return caf::none;
   }
   transformed_.clear();

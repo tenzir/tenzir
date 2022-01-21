@@ -19,8 +19,7 @@ public:
             const std::optional<std::string>& salt = std::nullopt);
 
   [[nodiscard]] caf::error
-  add(vast::id offset, type layout,
-      std::shared_ptr<arrow::RecordBatch> batch) override;
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
   [[nodiscard]] caf::expected<batch_vector> finish() override;
 
 private:

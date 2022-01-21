@@ -25,13 +25,13 @@ replace_step::replace_step(const std::string& fieldname,
   VAST_ASSERT(is_basic(value_));
 }
 
-caf::error replace_step::add(vast::id offset, type layout,
-                             std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("replace step adds the batch with offset: {}", offset);
+caf::error
+replace_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_TRACE("replace step adds batch");
   const auto& layout_rt = caf::get<record_type>(layout);
   auto column_offset = layout_rt.resolve_key(field_);
   if (!column_offset) {
-    transformed_.emplace_back(offset, layout, std::move(batch));
+    transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
   }
   auto column_index = layout_rt.flat_index(*column_offset);
@@ -74,8 +74,7 @@ caf::error replace_step::add(vast::id offset, type layout,
   VAST_ASSERT(adjusted_layout_rt); // replacing a field cannot fail.
   auto adjusted_layout = type{*adjusted_layout_rt};
   adjusted_layout.assign_metadata(layout);
-  transformed_.emplace_back(offset, std::move(adjusted_layout),
-                            std::move(batch));
+  transformed_.emplace_back(std::move(adjusted_layout), std::move(batch));
   return caf::none;
 }
 

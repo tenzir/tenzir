@@ -17,10 +17,10 @@
 
 namespace vast {
 
-caf::error identity_step::add(vast::id offset, type layout,
-                              std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("identity step adds the batch with offset: {}", offset);
-  transformed_.emplace_back(offset, layout, std::move(batch));
+caf::error
+identity_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_TRACE("identity step adds batch");
+  transformed_.emplace_back(layout, std::move(batch));
   return caf::none;
 }
 

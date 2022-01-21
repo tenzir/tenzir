@@ -16,16 +16,6 @@
 
 namespace vast {
 
-class offset_range {
-public:
-  void add(vast::id offset, table_slice::size_type rows);
-  bool contains(vast::id offset, table_slice::size_type rows) const;
-  void clear();
-
-private:
-  std::vector<id_range> ranges_;
-};
-
 class transform {
 public:
   transform(std::string name, std::vector<std::string>&& event_types);
@@ -44,6 +34,7 @@ public:
   [[nodiscard]] caf::error add(table_slice&&);
 
   /// Applies transformations to the batches in the internal queue.
+  /// @note The offsets of the slices may not be preserved.
   [[nodiscard]] caf::expected<std::vector<table_slice>> finish();
 
   [[nodiscard]] const std::vector<std::string>& event_types() const;
@@ -52,18 +43,15 @@ public:
 
 private:
   /// Add the batch to the internal queue of batches to be transformed.
-  [[nodiscard]] caf::error add_batch(vast::id offset, vast::type layout,
-                                     std::shared_ptr<arrow::RecordBatch> batch);
+  [[nodiscard]] caf::error
+  add_batch(vast::type layout, std::shared_ptr<arrow::RecordBatch> batch);
 
   /// Applies transformations to the batches in the internal queue.
-  /// @note The result vector may not be ordered by offset.
+  /// @note The offsets of the slices may not be preserved.
   [[nodiscard]] caf::expected<batch_vector> finish_batch();
 
   /// Applies the transform step to every batch in the queue.
   caf::error process_queue(const transform_step_ptr& step);
-
-  /// Clears the internal state, so that a new add/finish run can be started.
-  // void clear_slices();
 
   /// Grant access to the transformation engine so it can call
   /// add_batch/finsih_batch.
@@ -80,9 +68,6 @@ private:
 
   /// The slices being transformed.
   batch_queue to_transform_;
-
-  /// The id ranges of the slices being transformed.
-  offset_range range_;
 };
 
 class transformation_engine {
@@ -97,7 +82,7 @@ public:
   caf::error add(table_slice&&);
 
   /// Finishes applying transformations to the added tables.
-  /// @returns The transformed slices sorted by offset in ascending order.
+  /// @note The offsets of the slices may not be preserved.
   caf::expected<std::vector<table_slice>> finish();
 
   /// Get a list of the transformations.
@@ -117,9 +102,6 @@ private:
 
   /// The slices being transformed.
   std::unordered_map<vast::type, slice_queue> to_transform_;
-
-  /// The id ranges of the slices being transformed.
-  offset_range range_;
 };
 
 } // namespace vast

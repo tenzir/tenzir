@@ -21,8 +21,7 @@ public:
   /// Applies the transformation to a record batch with a corresponding vast
   /// layout.
   [[nodiscard]] caf::error
-  add(vast::id offset, type layout,
-      std::shared_ptr<arrow::RecordBatch> batch) override;
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
 
   /// Retrieves the result of the transformation.
   [[nodiscard]] caf::expected<batch_vector> finish() override;

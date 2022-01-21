@@ -23,21 +23,6 @@
 
 namespace vast {
 
-void offset_range::add(vast::id offset, table_slice::size_type rows) {
-  ranges_.emplace_back(offset, offset + rows);
-}
-
-bool offset_range::contains(vast::id offset,
-                            table_slice::size_type rows) const {
-  return std::any_of(ranges_.begin(), ranges_.end(), [&](auto r) {
-    return offset >= r.first && offset + rows <= r.last;
-  });
-}
-
-void offset_range::clear() {
-  ranges_.clear();
-}
-
 transform::transform(std::string name, std::vector<std::string>&& event_types)
   : name_(std::move(name)), event_types_(std::move(event_types)) {
 }
@@ -56,9 +41,8 @@ const std::vector<std::string>& transform::event_types() const {
 
 caf::error transform::add(table_slice&& x) {
   VAST_DEBUG("transform {} adds a slice", name_);
-  range_.add(x.offset(), x.rows());
   auto batch = as_record_batch(x);
-  return add_batch(x.offset(), x.layout(), batch);
+  return add_batch(x.layout(), batch);
 }
 
 caf::expected<std::vector<table_slice>> transform::finish() {
@@ -66,33 +50,22 @@ caf::expected<std::vector<table_slice>> transform::finish() {
              steps_.size());
   auto guard = caf::detail::make_scope_guard([this]() {
     this->to_transform_.clear();
-    this->range_.clear();
   });
   std::vector<table_slice> result{};
   auto finished = finish_batch();
   if (!finished)
     return std::move(finished.error());
-  for (auto& [offset, layout, batch] : *finished) {
+  for (auto& [layout, batch] : *finished) {
     auto slice = arrow_table_slice_builder::create(batch, layout);
-    slice.offset(offset);
-    if (!range_.contains(slice.offset(), slice.rows())) {
-      return caf::make_error(ec::invalid_result, "transform returned a slice "
-                                                 "with an offset outside the "
-                                                 "input offsets");
-    }
-    result.push_back(slice);
+    result.push_back(std::move(slice));
   }
-  std::sort(result.begin(), result.end(),
-            [](const table_slice& a, const table_slice& b) {
-              return a.offset() < b.offset();
-            }); // FIXME: Unit test for the correct order
   return result;
 }
 
-caf::error transform::add_batch(vast::id offset, vast::type layout,
+caf::error transform::add_batch(vast::type layout,
                                 std::shared_ptr<arrow::RecordBatch> batch) {
   VAST_DEBUG("add arrow data to transform {}", name_);
-  to_transform_.emplace_back(offset, std::move(layout), std::move(batch));
+  to_transform_.emplace_back(std::move(layout), std::move(batch));
   return caf::none;
 }
 
@@ -100,7 +73,7 @@ caf::error transform::process_queue(const transform_step_ptr& step) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {
-    auto [offset, layout, batch] = std::move(to_transform_.front());
+    auto [layout, batch] = std::move(to_transform_.front());
     to_transform_.pop_front();
     // TODO: Add a private method `unchecked_apply()` that the transformation
     // engine can call directly to avoid repeating the check.
@@ -108,10 +81,10 @@ caf::error transform::process_queue(const transform_step_ptr& step) {
                   std::string{layout.name()})
         == event_types_.end()) {
       // The transform does not change slices of unconfigured event types.
-      to_transform_.emplace_back(offset, std::move(layout), std::move(batch));
+      to_transform_.emplace_back(std::move(layout), std::move(batch));
       continue;
     }
-    if (auto err = step->add(offset, std::move(layout), std::move(batch))) {
+    if (auto err = step->add(std::move(layout), std::move(batch))) {
       failed = caf::make_error(
         static_cast<vast::ec>(err.code()),
         fmt::format("transform aborts because of an error: {}", err));
@@ -160,7 +133,6 @@ transformation_engine::transformation_engine(std::vector<transform>&& transforms
 /// Apply relevant transformations to the table slice.
 caf::error transformation_engine::add(table_slice&& x) {
   VAST_DEBUG("transformation engine adds a slice");
-  range_.add(x.offset(), x.rows());
   auto layout = x.layout();
   to_transform_[layout].emplace_back(std::move(x));
   return caf::none;
@@ -171,9 +143,9 @@ transformation_engine::process_queue(transform& transform, batch_queue& queue) {
   caf::error failed{};
   const auto size = queue.size();
   for (size_t i = 0; i < size; ++i) {
-    auto [offset, layout, batch] = std::move(queue.front());
+    auto [layout, batch] = std::move(queue.front());
     queue.pop_front();
-    if (auto err = transform.add_batch(offset, layout, batch)) {
+    if (auto err = transform.add_batch(layout, batch)) {
       failed = err;
       while (!queue.empty())
         queue.pop_front();
@@ -194,7 +166,6 @@ transformation_engine::process_queue(transform& transform, batch_queue& queue) {
 /// Apply relevant transformations to the table slice.
 caf::expected<std::vector<table_slice>> transformation_engine::finish() {
   VAST_DEBUG("transformation engine retrieves results");
-  const auto range = std::exchange(range_, {});
   auto to_transform = std::exchange(to_transform_, {});
   // NOTE: It's important that `batch` is kept alive until `create()`
   // is finished: If a copy was made, `batch` will hold the only reference
@@ -215,10 +186,10 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     auto& bq = batches[layout];
     for (auto& s : queue) {
       auto b = as_record_batch(s);
-      bq.emplace_back(s.offset(), layout, b);
+      bq.emplace_back(layout, b);
     }
     queue.clear();
-    for (auto& [offset, layout, batch] : bq)
+    for (auto& [layout, batch] : bq)
       keep_alive.push_back(batch);
     const auto& indices = matching->second;
     VAST_INFO("transformation engine applies {} transforms on received table "
@@ -232,22 +203,12 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     }
   }
   for (auto& [layout, queue] : batches) {
-    for (auto& [offset, layout, batch] : queue) {
+    for (auto& [layout, batch] : queue) {
       auto slice = arrow_table_slice_builder::create(batch, layout);
-      slice.offset(offset);
-      if (!range.contains(slice.offset(), slice.rows())) {
-        return caf::make_error(ec::invalid_result, "transform returned a slice "
-                                                   "with an offset outside the "
-                                                   "input offsets");
-      }
       result.emplace_back(slice);
     }
     queue.clear();
   }
-  std::sort(result.begin(), result.end(),
-            [](const table_slice& a, const table_slice& b) {
-              return a.offset() < b.offset();
-            }); // FIXME: Unit test for the correct order
   return result;
 }
 

@@ -17,8 +17,8 @@ class identity_step : public transform_step {
 public:
   identity_step() = default;
 
-  caf::error add(vast::id offset, type layout,
-                 std::shared_ptr<arrow::RecordBatch> batch) override;
+  caf::error
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
   caf::expected<batch_vector> finish() override;
 
 private:

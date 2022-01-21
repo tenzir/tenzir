@@ -19,8 +19,8 @@ public:
   delete_step(std::vector<std::string> fields);
 
   /// Deletes fields from an arrow record batch.
-  caf::error add(vast::id offset, type layout,
-                 std::shared_ptr<arrow::RecordBatch> batch) override;
+  caf::error
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
 
   /// Retrieves the results of the delete transformation.
   /// @returns The batches with the new layout but without the deleted fields.

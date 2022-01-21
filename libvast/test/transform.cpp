@@ -130,12 +130,12 @@ struct transforms_fixture {
 };
 
 vast::type layout(caf::expected<vast::batch_vector> batches) {
-  return std::get<1>((*batches)[0]);
+  return std::get<0>((*batches)[0]);
 }
 
 vast::table_slice as_table_slice(caf::expected<vast::batch_vector> batches) {
-  return vast::arrow_table_slice_builder::create(std::get<2>((*batches)[0]),
-                                                 std::get<1>((*batches)[0]));
+  return vast::arrow_table_slice_builder::create(std::get<1>((*batches)[0]),
+                                                 std::get<0>((*batches)[0]));
 }
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
@@ -143,16 +143,15 @@ FIXTURE_SCOPE(transform_tests, transforms_fixture)
 TEST(delete_ step) {
   auto [slice, expected_slice] = make_proj_and_del_testdata();
   vast::delete_step delete_step({"desc", "note"});
-  auto add_failed
-    = delete_step.add(slice.offset(), slice.layout(), as_record_batch(slice));
+  auto add_failed = delete_step.add(slice.layout(), as_record_batch(slice));
   REQUIRE(!add_failed);
   auto deleted = delete_step.finish();
   REQUIRE_NOERROR(deleted);
   REQUIRE_EQUAL(deleted->size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(deleted), expected_slice);
   vast::delete_step invalid_delete_step({"xxx"});
-  auto invalid_add_failed = invalid_delete_step.add(
-    slice.offset(), slice.layout(), as_record_batch(slice));
+  auto invalid_add_failed
+    = invalid_delete_step.add(slice.layout(), as_record_batch(slice));
   REQUIRE(!invalid_add_failed);
   auto not_deleted = invalid_delete_step.finish();
   REQUIRE_NOERROR(not_deleted);
@@ -165,15 +164,14 @@ TEST(project step) {
   vast::project_step invalid_project_step({"xxx"});
   // Arrow test:
   auto [slice, expected_slice] = make_proj_and_del_testdata();
-  auto add_failed
-    = project_step.add(slice.offset(), slice.layout(), as_record_batch(slice));
+  auto add_failed = project_step.add(slice.layout(), as_record_batch(slice));
   REQUIRE(!add_failed);
   auto projected = project_step.finish();
   REQUIRE_NOERROR(projected);
   REQUIRE_EQUAL(projected->size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(projected), expected_slice);
-  auto invalid_add_failed = invalid_project_step.add(
-    slice.offset(), slice.layout(), as_record_batch(slice));
+  auto invalid_add_failed
+    = invalid_project_step.add(slice.layout(), as_record_batch(slice));
   REQUIRE(!invalid_add_failed);
   auto not_projected = invalid_project_step.finish();
   REQUIRE_NOERROR(not_projected);
@@ -184,8 +182,7 @@ TEST(project step) {
 TEST(replace step) {
   auto slice = make_transforms_testdata();
   vast::replace_step replace_step("uid", "xxx");
-  auto add_failed
-    = replace_step.add(slice.offset(), slice.layout(), as_record_batch(slice));
+  auto add_failed = replace_step.add(slice.layout(), as_record_batch(slice));
   REQUIRE(!add_failed);
   auto replaced = replace_step.finish();
   REQUIRE_NOERROR(replaced);
@@ -203,24 +200,21 @@ TEST(select step) {
   auto [slice, single_row_slice, multi_row_slice]
     = make_select_testdata(vast::table_slice_encoding::msgpack);
   vast::select_step select_step("index==+2");
-  auto add_failed
-    = select_step.add(slice.offset(), slice.layout(), as_record_batch(slice));
+  auto add_failed = select_step.add(slice.layout(), as_record_batch(slice));
   REQUIRE(!add_failed);
   auto selected = select_step.finish();
   REQUIRE_NOERROR(selected);
   REQUIRE_EQUAL(selected->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected), single_row_slice);
   vast::select_step select_step2("index>+5");
-  auto add2_failed
-    = select_step2.add(slice.offset(), slice.layout(), as_record_batch(slice));
+  auto add2_failed = select_step2.add(slice.layout(), as_record_batch(slice));
   REQUIRE(!add2_failed);
   auto selected2 = select_step2.finish();
   REQUIRE_NOERROR(selected2);
   REQUIRE_EQUAL(selected2->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected2), multi_row_slice);
   vast::select_step select_step3("index>+9");
-  auto add3_failed
-    = select_step3.add(slice.offset(), slice.layout(), as_record_batch(slice));
+  auto add3_failed = select_step3.add(slice.layout(), as_record_batch(slice));
   REQUIRE(add3_failed);
   auto selected3 = select_step3.finish();
   REQUIRE_NOERROR(selected3);
@@ -229,8 +223,7 @@ TEST(select step) {
 TEST(anonymize step) {
   auto slice = make_transforms_testdata();
   vast::hash_step hash_step("uid", "hashed_uid");
-  auto add_failed
-    = hash_step.add(slice.offset(), slice.layout(), as_record_batch(slice));
+  auto add_failed = hash_step.add(slice.layout(), as_record_batch(slice));
   REQUIRE(!add_failed);
   auto anonymized = hash_step.finish();
   REQUIRE_NOERROR(anonymized);

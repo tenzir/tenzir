@@ -56,16 +56,16 @@ project_step::adjust_layout(const vast::type& layout) const {
   return std::pair{std::move(adjusted_layout), std::move(flat_index_to_keep)};
 }
 
-caf::error project_step::add(vast::id offset, type layout,
-                             std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("project step adds the batch with offset: {}", offset);
+caf::error
+project_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_DEBUG("project step adds batch");
   auto layout_result = adjust_layout(layout);
   if (!layout_result) {
     if (layout_result.error()) {
       transformed_.clear();
       return layout_result.error();
     }
-    transformed_.emplace_back(offset, layout, std::move(batch));
+    transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
   }
   // remove columns
@@ -77,7 +77,7 @@ caf::error project_step::add(vast::id offset, type layout,
                            fmt::format("failed to select columns: {}",
                                        result.status().ToString()));
   }
-  transformed_.emplace_back(offset, std::move(adjusted_layout),
+  transformed_.emplace_back(std::move(adjusted_layout),
                             result.MoveValueUnsafe());
   return caf::none;
 }

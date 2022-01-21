@@ -17,8 +17,7 @@
 
 namespace vast {
 
-using arrow_batch
-  = std::tuple<vast::id, vast::type, std::shared_ptr<arrow::RecordBatch>>;
+using arrow_batch = std::tuple<vast::type, std::shared_ptr<arrow::RecordBatch>>;
 using batch_queue = std::deque<arrow_batch>;
 using slice_queue = std::deque<table_slice>;
 using batch_vector = std::vector<arrow_batch>;
@@ -32,7 +31,7 @@ public:
   /// Starts applyings the transformation to a batch with a corresponding vast
   /// layout.
   [[nodiscard]] virtual caf::error
-  add(vast::id offset, type layout, std::shared_ptr<arrow::RecordBatch> batch)
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch)
     = 0;
 
   /// Retrieves the result of the transformation, resets the internal state.

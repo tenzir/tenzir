@@ -28,14 +28,14 @@ hash_step::hash_step(const std::string& fieldname, const std::string& out,
   : field_(fieldname), out_(out), salt_(salt) {
 }
 
-caf::error hash_step::add(vast::id offset, type layout,
-                          std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("hash step adds the batch with offset: {}", offset);
+caf::error
+hash_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_TRACE("hash step adds batch");
   // Get the target field if it exists.
   const auto& layout_rt = caf::get<record_type>(layout);
   auto column_offset = layout_rt.resolve_key(field_);
   if (!column_offset) {
-    transformed_.emplace_back(offset, layout, std::move(batch));
+    transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
   }
   auto column_index = layout_rt.flat_index(*column_offset);
@@ -57,7 +57,7 @@ caf::error hash_step::add(vast::id offset, type layout,
   auto result_batch
     = batch->AddColumn(batch->num_columns(), out_, hashes_column);
   if (!result_batch.ok()) {
-    transformed_.emplace_back(offset, std::move(layout), nullptr);
+    transformed_.emplace_back(std::move(layout), nullptr);
     return caf::none;
   }
   // Adjust layout.
@@ -68,7 +68,7 @@ caf::error hash_step::add(vast::id offset, type layout,
   VAST_ASSERT(adjusted_layout_rt); // adding a field cannot fail.
   auto adjusted_layout = type{*adjusted_layout_rt};
   adjusted_layout.assign_metadata(layout);
-  transformed_.emplace_back(offset, std::move(adjusted_layout),
+  transformed_.emplace_back(std::move(adjusted_layout),
                             result_batch.ValueOrDie());
   return caf::none;
 }
