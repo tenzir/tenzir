@@ -1,5 +1,7 @@
 #include "vast/arrow_extension_types.hpp"
 
+#include "vast/detail/narrow.hpp"
+
 #include <simdjson.h>
 
 namespace vast {
@@ -16,7 +18,8 @@ auto deserialize(const std::string& json_) {
 
   for (auto f : doc.get_object()) {
     std::string_view key = f.key;
-    enum_fields.emplace_back(std::string{key}, f.value.get_uint64());
+    enum_fields.emplace_back(
+      std::string{key}, detail::narrow_cast<uint32_t>(f.value.get_uint64()));
   }
 
   return enumeration_type{enum_fields};
