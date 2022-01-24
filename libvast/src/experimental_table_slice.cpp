@@ -156,7 +156,7 @@ template <>
 struct decodable<address_type, arrow::FixedSizeBinaryArray> : std::true_type {};
 
 template <>
-struct decodable<subnet_type, arrow::FixedSizeBinaryArray> : std::true_type {};
+struct decodable<subnet_type, arrow::StructArray> : std::true_type {};
 
 template <>
 struct decodable<string_type, arrow::StringArray> : std::true_type {};
@@ -275,16 +275,16 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
     }
     case arrow::Type::EXTENSION: {
       const auto& t = static_cast<const arrow::ExtensionType&>(*arr.type());
-      if (t.extension_name() == "vast.enum") {
-        const auto& ext_arr = static_cast<const arrow::ExtensionArray&>(arr);
+      const auto& ext_arr = static_cast<const arrow::ExtensionArray&>(arr);
+      if (t.extension_name() == "vast.enum")
         return dispatch(
           static_cast<const arrow::DictionaryArray&>(*ext_arr.storage()));
-      }
-      if (t.extension_name() == address_extension_type::id) {
-        const auto& ext_arr = static_cast<const arrow::ExtensionArray&>(arr);
+      if (t.extension_name() == address_extension_type::id)
         return dispatch(
           static_cast<const arrow::FixedSizeBinaryArray&>(*ext_arr.storage()));
-      }
+      if (t.extension_name() == subnet_extension_type::id)
+        return dispatch(
+          static_cast<const arrow::StructArray&>(*ext_arr.storage()));
       die(fmt::format("Unable to handle extension type '{}'",
                       t.extension_name()));
     }
@@ -355,10 +355,16 @@ auto address_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
   return address::v6(span);
 }
 
-auto subnet_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
-  auto bytes = arr.raw_values() + (row * 17);
-  auto span = std::span<const uint8_t, 16>{bytes, 16};
-  return subnet{address::v6(span), bytes[16]};
+auto subnet_at(const arrow::StructArray& arr, int64_t row) {
+  const auto& length_array = arr.field(0);
+  const auto& ext_arr
+    = static_pointer_cast<arrow::ExtensionArray>(arr.field(1));
+  const auto& address_array = *ext_arr->storage();
+  auto addr = address_at(
+    static_cast<const arrow::FixedSizeBinaryArray&>(address_array), row);
+  auto len
+    = count_at(static_cast<const arrow::UInt8Array&>(*length_array), row);
+  return subnet{addr, uint8_t(len)};
 }
 
 auto timestamp_at(const arrow::TimestampArray& arr, int64_t row) {
@@ -475,7 +481,7 @@ public:
     result_ = address_at(arr, row_);
   }
 
-  void operator()(const arrow::FixedSizeBinaryArray& arr, const subnet_type&) {
+  void operator()(const arrow::StructArray& arr, const subnet_type&) {
     if (arr.IsNull(row_))
       return;
     result_ = subnet_at(arr, row_);
@@ -578,7 +584,7 @@ public:
     apply(arr, address_at);
   }
 
-  void operator()(const arrow::FixedSizeBinaryArray& arr, const subnet_type&) {
+  void operator()(const arrow::StructArray& arr, const subnet_type&) {
     apply(arr, subnet_at);
   }
 

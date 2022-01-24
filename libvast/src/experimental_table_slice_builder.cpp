@@ -242,35 +242,6 @@ struct column_builder_trait<address_type>
   }
 };
 
-template <>
-struct column_builder_trait<subnet_type>
-  : arrow::TypeTraits<arrow::FixedSizeBinaryType> {
-  // -- member types -----------------------------------------------------------
-
-  using super = arrow::TypeTraits<arrow::FixedSizeBinaryType>;
-
-  using data_type = subnet;
-
-  using view_type = view<data_type>;
-
-  using meta_type = subnet_type;
-
-  // -- static member functions ------------------------------------------------
-
-  static auto make_arrow_type() {
-    return std::make_shared<arrow::FixedSizeBinaryType>(17);
-  }
-
-  static bool append(typename super::BuilderType& builder, view_type x) {
-    std::array<uint8_t, 17> data;
-    auto bytes = as_bytes(x.network());
-    VAST_ASSERT(bytes.size() == 16);
-    std::memcpy(&data, bytes.data(), bytes.size());
-    data[16] = x.length();
-    return builder.Append(data).ok();
-  }
-};
-
 template <class Trait>
 class column_builder_impl final
   : public experimental_table_slice_builder::column_builder {
@@ -477,6 +448,53 @@ private:
   std::vector<std::unique_ptr<column_builder>> field_builders_;
 };
 
+class subnet_column_builder
+  : public experimental_table_slice_builder::column_builder {
+public:
+  using data_type = view<subnet>;
+  using view_type = view<data_type>;
+
+  subnet_column_builder(arrow::MemoryPool* pool)
+    : length_builder_(std::make_shared<arrow::UInt8Builder>()),
+      address_builder_(std::make_shared<arrow::FixedSizeBinaryBuilder>(
+        address_extension_type::arrow_type, pool)) {
+    std::vector<std::shared_ptr<arrow::ArrayBuilder>> fields{length_builder_,
+                                                             address_builder_};
+    subnet_builder_ = std::make_shared<arrow::StructBuilder>(
+      subnet_extension_type::arrow_type, pool, fields);
+  }
+
+  bool add(data_view data) override {
+    if (caf::holds_alternative<view<caf::none_t>>(data))
+      return subnet_builder_->AppendNull().ok();
+    if (auto* dataptr = caf::get_if<view_type>(&data)) {
+      const auto* addr_ptr
+        = reinterpret_cast<const char*>(as_bytes(dataptr->network()).data());
+      return subnet_builder_->Append().ok()
+             && length_builder_->Append(dataptr->length()).ok()
+             && address_builder_->Append(addr_ptr).ok();
+    }
+    return false;
+  }
+
+  std::shared_ptr<arrow::Array> finish() override {
+    std::shared_ptr<arrow::Array> result;
+    if (!subnet_builder_->Finish(&result).ok())
+      die("failed to finish Arrow subnet column builder");
+    return result;
+  }
+
+  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
+  arrow_builder() const override {
+    return subnet_builder_;
+  }
+
+private:
+  std::shared_ptr<arrow::UInt8Builder> length_builder_;
+  std::shared_ptr<arrow::FixedSizeBinaryBuilder> address_builder_;
+  std::shared_ptr<arrow::StructBuilder> subnet_builder_;
+};
+
 } // namespace
 
 // -- member types -------------------------------------------------------------
@@ -503,6 +521,9 @@ experimental_table_slice_builder::column_builder::make(
       record_type fields{{"key", x.key_type()}, {"value", x.value_type()}};
       return std::make_unique<map_column_builder>(pool, std::move(key_builder),
                                                   std::move(value_builder));
+    },
+    [&](const subnet_type&) -> std::unique_ptr<column_builder> {
+      return std::make_unique<subnet_column_builder>(pool);
     },
     [&](const enumeration_type& x) -> std::unique_ptr<column_builder> {
       return std::make_unique<enum_column_builder>(x);
@@ -694,7 +715,10 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
       return make_arrow_enum(x);
     },
     [](const address_type&) {
-      return std::make_shared<address_extension_type>();
+      return make_arrow_address();
+    },
+    [](const subnet_type&) {
+      return make_arrow_subnet();
     },
     [](const list_type& x) -> data_type_ptr {
       return arrow::list(make_experimental_type(x.value_type()));
@@ -782,6 +806,8 @@ type make_vast_type(const arrow::DataType& arrow_type) {
       }
       if (t.extension_name() == address_extension_type::id)
         return type{address_type{}};
+      if (t.extension_name() == subnet_extension_type::id)
+        return type{subnet_type{}};
       die(
         fmt::format("unhandled Arrow extension type: {}", t.extension_name()));
     }
