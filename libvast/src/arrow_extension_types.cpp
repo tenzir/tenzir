@@ -1,6 +1,7 @@
 #include "vast/arrow_extension_types.hpp"
 
 #include "vast/detail/narrow.hpp"
+#include "vast/die.hpp"
 
 #include <simdjson.h>
 
@@ -69,10 +70,15 @@ std::string enum_extension_type::Serialize() const {
   return serialize(enum_type_);
 }
 
+void register_extension_type(std::shared_ptr<arrow::ExtensionType> t) {
+  if (auto et = arrow::GetExtensionType(t->extension_name()); !et)
+    if(!arrow::RegisterExtensionType(t).ok())
+      die(fmt::format("unable to register extension type; {}",
+                    t->extension_name()));
+}
+
 void register_extension_types() {
-  if (const auto& t = make_arrow_enum(enumeration_type{{}});
-      !arrow::RegisterExtensionType(t).ok())
-    die("unable to register extension type; {}", t);
+  register_extension_type(make_arrow_enum(enumeration_type{{}}));
 }
 
 std::shared_ptr<enum_extension_type> make_arrow_enum(enumeration_type t) {

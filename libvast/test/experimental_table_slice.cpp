@@ -133,7 +133,6 @@ TEST(single column - count) {
 }
 
 TEST(single column - enumeration) {
-  register_extension_types();
   auto t = enumeration_type{{"foo"}, {"bar"}, {"baz"}};
   auto slice = make_single_column_slice(t, 2_e, 1_e, 0_e, 2_e, caf::none);
   REQUIRE_EQUAL(slice.rows(), 5u);
@@ -146,7 +145,6 @@ TEST(single column - enumeration) {
 }
 
 TEST(single column - enum2) {
-  register_extension_types();
   auto t = enumeration_type{{"a"}, {"b"}, {"c"}, {"d"}};
   auto slice = make_single_column_slice(t, 0_e, 1_e, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
