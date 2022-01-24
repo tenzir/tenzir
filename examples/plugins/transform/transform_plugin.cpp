@@ -17,9 +17,6 @@ namespace vast::plugins {
 // The main job of a transform plugin is to create a `transform_step`
 // when required. A transform step is a function that gets a table
 // slice and returns the slice with a transformation applied.
-// We derive from `arrow_transform_step` to signal to VAST that we
-// implemented special code that can handle arrow-encoded table slices
-// natively.
 class example_transform_step : public transform_step {
 public:
   example_transform_step() = default;

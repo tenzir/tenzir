@@ -84,6 +84,12 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
   self->state.source_requires_shutdown = false;
   self->state.status["transforms"] = std::move(transform_names);
   self->state.transforms = transformation_engine{std::move(transforms)};
+  if (auto err = self->state.transforms.validate(
+        transformation_engine::allow_aggregate_transforms::no)) {
+    VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
+    self->quit();
+    return transformer_actor::behavior_type::make_empty_behavior();
+  }
   self->state.stage = attach_transform_stage(self);
   return {
     [self](const stream_sink_actor<table_slice>& out)

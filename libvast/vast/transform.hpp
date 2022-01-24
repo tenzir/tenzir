@@ -30,6 +30,9 @@ public:
 
   void add_step(std::unique_ptr<transform_step> step);
 
+  /// Returns true if any of the transform steps is aggregate.
+  [[nodiscard]] bool is_aggregate() const;
+
   /// Adds the table to the internal queue of batches to be transformed.
   [[nodiscard]] caf::error add(table_slice&&);
 
@@ -72,11 +75,21 @@ private:
 
 class transformation_engine {
 public:
+  /// Controls the validation of the Transformation Engine.
+  enum class allow_aggregate_transforms {
+    yes, /// Allows the usage of aggregate transform steps.
+    no,  /// Forbids using aggregate transform steps.
+  };
+
   // member functions
 
   /// Constructor.
   transformation_engine() = default;
   explicit transformation_engine(std::vector<transform>&&);
+
+  /// Returns an error if any of the transforms is an aggregate and
+  /// aggregates are not allowed.
+  caf::error validate(enum allow_aggregate_transforms);
 
   /// Starts applying relevant transformations to the table.
   caf::error add(table_slice&&);

@@ -51,6 +51,12 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
   using namespace std::chrono;
   self->state.writer = std::move(writer);
   self->state.transforms = transformation_engine{std::move(transforms)};
+  if (auto err = self->state.transforms.validate(
+        transformation_engine::allow_aggregate_transforms::no)) {
+    VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
+    self->quit();
+    return {};
+  }
   self->state.name = self->state.writer->name();
   self->state.last_flush = steady_clock::now();
   if (max_events > 0) {

@@ -16,6 +16,7 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -90,6 +91,10 @@ struct partition_transformer_state {
   /// has arrived. Depending on what happens first, a different set of
   /// variables need to be stored in the meantime.
   std::variant<std::monostate, stream_data, path_data> persist;
+
+  /// The original import times of the added slices. The pointers to the `data`
+  /// members of the slices are the identifier keys.
+  std::unordered_map<const std::byte*, vast::time> original_import_times = {};
 };
 
 partition_transformer_actor::behavior_type partition_transformer(

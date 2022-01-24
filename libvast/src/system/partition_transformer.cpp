@@ -157,6 +157,7 @@ partition_transformer_actor::behavior_type partition_transformer(
     [](caf::unit_t&, const caf::error&) { /* nop */ });
   self->state.stage->add_outbound_path(self->state.store_builder);
   self->state.fs = std::move(fs);
+  // transform can be an aggregate transform here
   self->state.transform = std::move(transform);
   return {
     [self](vast::table_slice& slice) {
@@ -164,10 +165,19 @@ partition_transformer_actor::behavior_type partition_transformer(
       // data, as for now we do not want to assign a new import time range to
       // transformed partitions.
       const auto old_import_time = slice.import_time();
+      const auto* slice_identity = as_bytes(slice).data();
+      self->state.original_import_times[slice_identity] = old_import_time;
       if (auto err = self->state.transform->add(std::move(slice))) {
         VAST_ERROR("partition_transformer failed to add slice: {}", err);
         return;
       }
+      // Adjust the import time range iff necessary.
+      self->state.data.synopsis->min_import_time
+        = std::min(self->state.data.synopsis->min_import_time, old_import_time);
+      self->state.data.synopsis->max_import_time
+        = std::max(self->state.data.synopsis->max_import_time, old_import_time);
+    },
+    [self](atom::done) {
       auto transformed = self->state.transform->finish();
       if (!transformed) {
         VAST_ERROR("partition_transformer failed to finish transform: {}",
@@ -178,18 +188,13 @@ partition_transformer_actor::behavior_type partition_transformer(
         // If the transform is a no-op we may get back the original table slice
         // that's still mapped as read-only, but in this case we also don't need
         // to adjust the import time.
-        if (slice.import_time() != old_import_time)
-          slice.import_time(old_import_time);
+        const auto* slice_identity = as_bytes(slice).data();
+        if (!self->state.original_import_times.contains(slice_identity))
+          slice.import_time(self->state.data.synopsis->max_import_time);
+        self->state.original_import_times.clear();
         self->state.events += slice.rows();
         self->state.slices.push_back(std::move(slice));
       }
-      // Adjust the import time range iff necessary.
-      self->state.data.synopsis->min_import_time
-        = std::min(self->state.data.synopsis->min_import_time, old_import_time);
-      self->state.data.synopsis->max_import_time
-        = std::max(self->state.data.synopsis->max_import_time, old_import_time);
-    },
-    [self](atom::done) {
       VAST_DEBUG("partition-transformer received all table slices");
       self
         ->request(self->state.idspace_distributor, caf::infinite,
