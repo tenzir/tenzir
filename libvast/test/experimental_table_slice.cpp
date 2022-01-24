@@ -475,31 +475,6 @@ TEST(arrow record type to schema roundtrip) {
   //       {"inner", record_type{{"value", subnet_type{}}}}}});
 }
 
-std::shared_ptr<arrow::Array>
-buildStringArray(const std::vector<std::string>& xs) {
-  arrow::StringBuilder string_builder{};
-  for (const auto& x : xs)
-    CHECK_OK(string_builder.Append(x));
-  const auto& array = string_builder.Finish().ValueOrDie();
-  return array;
-}
-
-std::shared_ptr<arrow::Array> buildInt16Array(const std::vector<char>& xs) {
-  arrow::Int16Builder int16_builder{};
-  for (const auto& x : xs)
-    CHECK_OK(int16_builder.Append(x));
-  const auto& array = int16_builder.Finish().ValueOrDie();
-  return array;
-}
-
-std::shared_ptr<arrow::Array> buildInt8Array(const std::vector<char>& xs) {
-  arrow::Int8Builder int8_builder{};
-  for (const auto& x : xs)
-    CHECK_OK(int8_builder.Append(x));
-  const auto& array = int8_builder.Finish().ValueOrDie();
-  return array;
-}
-
 FIXTURE_SCOPE(experimental_table_slice_tests, fixtures::table_slices)
 
 TEST_TABLE_SLICE(experimental_table_slice_builder, experimental)
