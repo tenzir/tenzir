@@ -35,4 +35,6 @@ CheckOptions:
     value:           true
   - key:             cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
     value:           true
+  - key:             performance-unnecessary-value-param.AllowedTypes
+    value:           std::exception_ptr
 ...

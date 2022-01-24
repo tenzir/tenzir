@@ -10,6 +10,10 @@
 
 #include "vast/detail/type_traits.hpp"
 
+#include <caf/actor_traits.hpp>
+#include <caf/is_actor_handle.hpp>
+#include <caf/is_typed_actor.hpp>
+
 #include <concepts>
 #include <cstddef>
 #include <iterator>
@@ -123,5 +127,42 @@ concept semigroup = requires(const T& x, const T& y) {
 /// mappend(x, T{}) == mappend(T{}, x) == x
 template <class T>
 concept monoid = semigroup<T> && std::is_default_constructible_v<T>;
+
+/// An actor handle.
+template <class T>
+concept actor_handle
+  = !caf::actor_traits<T>::is_incomplete || caf::is_actor_handle<T>::value;
+
+/// A dynamically typed actor handle.
+template <class T>
+concept dynamically_typed_actor_handle = requires {
+  actor_handle<T>;
+  requires caf::actor_traits<T>::is_dynamically_typed ||(
+    caf::is_actor_handle<T>::value && !caf::is_typed_actor<T>::value);
+};
+
+/// A statically typed actor handle.
+template <class T>
+concept statically_typed_actor_handle = requires {
+  actor_handle<T>;
+  caf::actor_traits<T>::is_statically_typed || caf::is_typed_actor<T>::value;
+};
+
+/// A blocking actor handle.
+template <class T>
+concept blocking_actor_handle
+  = actor_handle<T> && caf::actor_traits<T>::is_blocking;
+
+/// A non-blocking actor handle.
+template <class T>
+concept non_blocking_actor_handle
+  = actor_handle<T> && caf::actor_traits<T>::is_non_blocking;
+
+/// Checks whether Instance is a specialization of Template. Does not support
+/// NTTPs.
+template <class Instance, template <class...> class Template>
+concept specialization_of = requires(Instance instance) {
+  {[]<class... Args>(const Template<Args...>&){}(instance)};
+};
 
 } // namespace vast::concepts
