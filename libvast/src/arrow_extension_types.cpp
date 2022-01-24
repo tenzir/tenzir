@@ -47,13 +47,14 @@ enum_extension_type::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
   simdjson::padded_string json{serialized};
   simdjson::dom::parser parser;
   auto doc = parser.parse(json);
+  // TODO: use field_view as soon as simdjson::ondemand hits (one less copy)
   std::vector<struct vast::enumeration_type::field> enum_fields{};
   for (auto f : doc.get_object()) {
     std::string_view key = f.key;
     if (!f.value.is<uint64_t>())
       return arrow::Status::SerializationError(f.value, " is not an uint64_t");
-    enum_fields.emplace_back(
-      std::string{key}, detail::narrow_cast<uint32_t>(f.value.get_uint64()));
+    enum_fields.push_back(
+      {std::string{key}, detail::narrow_cast<uint32_t>(f.value.get_uint64())});
   }
   return std::make_shared<enum_extension_type>(enumeration_type{enum_fields});
 }

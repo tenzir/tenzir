@@ -17,19 +17,32 @@ public:
   explicit enum_extension_type(enumeration_type enum_type);
   std::string extension_name() const override;
 
+  /// Compare two extension types for equality, based on the wrapped enum.
+  /// @param other An extension type to test for equality.
   bool ExtensionEquals(const ExtensionType& other) const override;
 
+  /// Create a string representation that contains the wrapped enum.
   std::string ToString() const override;
 
+  /// Wrap built-in Array type in an ExtensionArray instance
+  /// @param data the physical storage for the extension type
   std::shared_ptr<arrow::Array>
   MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
 
+  /// Create an instance of enum_extension_type given the actual storage type
+  /// and the serialized representation
+  /// @param storage_type the physical storage type of the extension
+  /// @param serialized the json representation describing the enum fields.
   arrow::Result<std::shared_ptr<DataType>>
   Deserialize(std::shared_ptr<DataType> storage_type,
               const std::string& serialized) const override;
 
+  /// Create a serialized json representation of the underlying enum fields.
+  /// @return the serialized representation.
   std::string Serialize() const override;
 
+  /// Get the wrapped `enumeration_type`.
+  /// @return the VAST `enumeration_type` represented by this Arrow type.
   enumeration_type get_enum_type() const;
 
 private:

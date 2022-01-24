@@ -563,7 +563,9 @@ table_slice experimental_table_slice_builder::finish() {
   auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto stream_writer
     = arrow::ipc::MakeStreamWriter(ipc_ostream, schema_).ValueOrDie();
-  stream_writer->WriteRecordBatch(*record_batch);
+  auto status = stream_writer->WriteRecordBatch(*record_batch);
+  if (!status.ok())
+    VAST_ERROR("failed to write record batch: {}", status);
   auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
   auto fbs_ipc_buffer
     = builder_.CreateVector(arrow_ipc_buffer->data(), arrow_ipc_buffer->size());
