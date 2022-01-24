@@ -22,10 +22,7 @@
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
-#include <arrow/ipc/api.h>
 #include <arrow/ipc/writer.h>
-#include <arrow/type_fwd.h>
-#include <arrow/util/config.h>
 
 namespace vast {
 
@@ -674,9 +671,8 @@ std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t) {
   const auto& rt = flatten(caf::get<record_type>(t));
   std::vector<std::shared_ptr<arrow::Field>> arrow_fields;
   arrow_fields.reserve(rt.num_leaves());
-  for (const auto& field : rt.fields()) {
+  for (const auto& field : rt.fields())
     arrow_fields.emplace_back(make_experimental_field(field));
-  }
   auto metadata = arrow::key_value_metadata({{"name", std::string{t.name()}}});
   return std::make_shared<arrow::Schema>(arrow_fields, metadata);
 }
@@ -696,6 +692,9 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
     },
     [](const enumeration_type& x) {
       return make_arrow_enum(x);
+    },
+    [](const address_type&) {
+      return std::make_shared<address_extension_type>();
     },
     [](const list_type& x) -> data_type_ptr {
       return arrow::list(make_experimental_type(x.value_type()));
@@ -749,8 +748,6 @@ type make_vast_type(const arrow::DataType& arrow_type) {
       const auto& t
         = static_cast<const arrow::FixedSizeBinaryType&>(arrow_type);
       switch (auto width = t.byte_width(); width) {
-        case 16:
-          return type{address_type{}};
         case 17:
           return type{subnet_type{}};
         default:
@@ -783,6 +780,8 @@ type make_vast_type(const arrow::DataType& arrow_type) {
         const auto& et = static_cast<const enum_extension_type&>(arrow_type);
         return type{et.get_enum_type()};
       }
+      if (t.extension_name() == address_extension_type::id)
+        return type{address_type{}};
       die(
         fmt::format("unhandled Arrow extension type: {}", t.extension_name()));
     }

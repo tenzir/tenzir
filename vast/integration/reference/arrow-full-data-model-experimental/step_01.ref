@@ -1,5 +1,8 @@
   -- field metadata --
+  -- field metadata --
+  ARROW:extension:metadata: 'vast.address'
   ARROW:extension:metadata: '{ "A": 0, "B": 1, "C": 2}'
+  ARROW:extension:name: 'vast.address'
   ARROW:extension:name: 'vast.enum'
   child 0, item: int64
 -- schema metadata --

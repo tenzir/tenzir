@@ -43,3 +43,15 @@ TEST(enum extension type equality) {
   CHECK(!t1.ExtensionEquals(t4));
   CHECK(!t1.ExtensionEquals(t5));
 }
+
+TEST(address type serde roundtrip) {
+  const auto& arrow_type = std::make_shared<vast::address_extension_type>();
+  const auto serialized = arrow_type->Serialize();
+  const auto& standin = std::make_shared<vast::address_extension_type>();
+  const auto& deserialized
+    = standin->Deserialize(arrow::fixed_size_binary(16), serialized)
+        .ValueOrDie();
+  CHECK(arrow_type->Equals(*deserialized, true));
+
+  CHECK(!standin->Deserialize(arrow::fixed_size_binary(23), serialized).ok());
+}
