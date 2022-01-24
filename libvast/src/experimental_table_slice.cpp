@@ -25,7 +25,6 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 
-#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -308,7 +307,7 @@ auto count_at = [](const auto& arr, int64_t row) {
 };
 
 auto enumeration_at = [](const arrow::DictionaryArray& arr, int64_t row) {
-  const auto& b = reinterpret_cast<const arrow::Int8Array&>(*arr.indices());
+  const auto& b = static_cast<const arrow::Int8Array&>(*arr.indices());
   return static_cast<enumeration>(b.Value(row));
 };
 
@@ -747,7 +746,6 @@ data_view experimental_table_slice::at(table_slice::size_type row,
     t));
   auto&& batch = record_batch();
   VAST_ASSERT(batch);
-  // VAST_WARN("thomas was here 3 {}", batch->ToString());
   auto array = batch->column(detail::narrow_cast<int>(column));
   return value_at(t, *array, row);
 }

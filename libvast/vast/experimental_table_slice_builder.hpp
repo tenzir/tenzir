@@ -13,7 +13,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
-#include <arrow/api.h>
 #include <arrow/type.h>
 #include <flatbuffers/flatbuffers.h>
 

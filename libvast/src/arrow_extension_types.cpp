@@ -37,8 +37,7 @@ std::string serialize(const enumeration_type& t) {
       fmt::format_to(inserter, ", ");
     fmt::format_to(inserter, "\"{}\": {}", f.name, f.key);
   }
-  fmt::format_to(inserter, "}} ");
-
+  fmt::format_to(inserter, "}}");
   return fmt::to_string(out);
 }
 
@@ -73,7 +72,7 @@ std::string enum_extension_type::Serialize() const {
 void register_extension_types() {
   if (const auto& t = make_arrow_enum(enumeration_type{{}});
       !arrow::RegisterExtensionType(t).ok())
-    VAST_WARN("unable to regiser extension type; {}", t);
+    die("unable to register extension type; {}", t);
 }
 
 std::shared_ptr<enum_extension_type> make_arrow_enum(enumeration_type t) {

@@ -49,4 +49,5 @@ void register_extension_types();
 /// @param t The enumeration type to represent.
 /// @returns An arrow extension type for the specific enumeration.
 std::shared_ptr<enum_extension_type> make_arrow_enum(enumeration_type t);
+
 } // namespace vast

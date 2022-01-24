@@ -153,7 +153,7 @@ public:
   // to be appended as string, however the table slice only receives the uint8
   using arrow_builder_type = arrow::Int8Builder;
 
-  enum_column_builder(enumeration_type enum_type)
+  explicit enum_column_builder(enumeration_type enum_type)
     : enum_type_{std::move(enum_type)},
       arr_builder_{std::make_shared<arrow::Int8Builder>()} {
   }
@@ -564,7 +564,6 @@ table_slice experimental_table_slice_builder::finish() {
   auto stream_writer
     = arrow::ipc::MakeStreamWriter(ipc_ostream, schema_).ValueOrDie();
   stream_writer->WriteRecordBatch(*record_batch);
-
   auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
   auto fbs_ipc_buffer
     = builder_.CreateVector(arrow_ipc_buffer->data(), arrow_ipc_buffer->size());
