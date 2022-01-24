@@ -720,6 +720,9 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
     [](const subnet_type&) {
       return make_arrow_subnet();
     },
+    [](const pattern_type&) {
+      return make_arrow_pattern();
+    },
     [](const list_type& x) -> data_type_ptr {
       return arrow::list(make_experimental_type(x.value_type()));
     },
@@ -808,6 +811,8 @@ type make_vast_type(const arrow::DataType& arrow_type) {
         return type{address_type{}};
       if (t.extension_name() == subnet_extension_type::id)
         return type{subnet_type{}};
+      if (t.extension_name() == pattern_extension_type::id)
+        return type{pattern_type{}};
       die(
         fmt::format("unhandled Arrow extension type: {}", t.extension_name()));
     }

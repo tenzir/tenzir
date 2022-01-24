@@ -62,3 +62,7 @@ TEST(address type serde roundtrip) {
 TEST(subnet type serde roundtrip) {
   serde_roundtrip<vast::subnet_extension_type>();
 }
+
+TEST(pattern type serde roundtrip) {
+  serde_roundtrip<vast::pattern_extension_type>();
+}

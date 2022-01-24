@@ -420,8 +420,7 @@ TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{duration_type{}});
   field_roundtrip(type{time_type{}});
   field_roundtrip(type{string_type{}});
-  // does not work yet: cannot be distinguished from string
-  // field_roundtrip(type{pattern_type{}});
+  field_roundtrip(type{pattern_type{}});
   field_roundtrip(type{address_type{}});
   field_roundtrip(type{subnet_type{}});
   // currently a value of type count, indistinguishable from a normal count
