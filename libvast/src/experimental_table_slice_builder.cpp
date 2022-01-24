@@ -151,11 +151,11 @@ class enum_column_builder
 public:
   // arrow::StringDictionaryBuilder would be appropriate, but requires data
   // to be appended as string, however the table slice only receives the uint8
-  using arrow_builder_type = arrow::Int8Builder;
+  using arrow_builder_type = arrow::Int16Builder;
 
   explicit enum_column_builder(enumeration_type enum_type)
     : enum_type_{std::move(enum_type)},
-      arr_builder_{std::make_shared<arrow::Int8Builder>()} {
+      arr_builder_{std::make_shared<arrow::Int16Builder>()} {
   }
 
   bool add(data_view x) override {
@@ -169,7 +169,7 @@ public:
   std::shared_ptr<arrow::Array> finish() override {
     if (auto index_array = arr_builder_->Finish(); index_array.ok())
       return std::make_shared<arrow::DictionaryArray>(
-        arrow::dictionary(arrow::int8(), arrow::utf8()),
+        arrow::dictionary(arrow::int16(), arrow::utf8()),
         index_array.ValueUnsafe(), make_field_array());
     die("failed to finish Arrow enum builders");
   }
@@ -181,7 +181,7 @@ public:
 
 private:
   enumeration_type enum_type_;
-  std::shared_ptr<arrow::Int8Builder> arr_builder_;
+  std::shared_ptr<arrow::Int16Builder> arr_builder_;
 
   [[nodiscard]] std::shared_ptr<arrow::Array> make_field_array() const {
     arrow::StringBuilder string_builder{};
@@ -779,7 +779,7 @@ type make_vast_type(const arrow::DataType& arrow_type) {
       const auto& t = static_cast<const arrow::ExtensionType&>(arrow_type);
       if (t.extension_name() == "vast.enum") {
         const auto& et = static_cast<const enum_extension_type&>(arrow_type);
-        return type{et.enum_type_};
+        return type{et.get_enum_type()};
       }
       die(
         fmt::format("unhandled Arrow extension type: {}", t.extension_name()));

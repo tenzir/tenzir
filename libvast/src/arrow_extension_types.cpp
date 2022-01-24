@@ -7,42 +7,22 @@
 
 namespace vast {
 
-namespace {
-
-auto deserialize(const std::string& json_) {
-  // simdjson requires additional padding on the string
-  simdjson::padded_string json{json_};
-
-  simdjson::dom::parser parser;
-  auto doc = parser.parse(json);
-  std::vector<struct vast::enumeration_type::field> enum_fields{};
-
-  for (auto f : doc.get_object()) {
-    std::string_view key = f.key;
-    enum_fields.emplace_back(
-      std::string{key}, detail::narrow_cast<uint32_t>(f.value.get_uint64()));
-  }
-
-  return enumeration_type{enum_fields};
+enum_extension_type::enum_extension_type(enumeration_type enum_type)
+  : arrow::ExtensionType(arrow::dictionary(arrow::int16(), arrow::utf8())),
+    enum_type_(std::move(enum_type)) {
 }
 
-std::string serialize(const enumeration_type& t) {
-  auto out = fmt::memory_buffer();
-  auto inserter = std::back_inserter(out);
-  fmt::format_to(inserter, "{{ ");
-  bool first = true;
-  for (const auto& f : t.fields()) {
-    if (first)
-      first = false;
-    else
-      fmt::format_to(inserter, ", ");
-    fmt::format_to(inserter, "\"{}\": {}", f.name, f.key);
+bool enum_extension_type::ExtensionEquals(const ExtensionType& other) const {
+  if (other.extension_name() == this->extension_name()) {
+    return this->enum_type_
+           == static_cast<const enum_extension_type&>(other).enum_type_;
   }
-  fmt::format_to(inserter, "}}");
-  return fmt::to_string(out);
+  return false;
 }
 
-} // namespace
+std::string enum_extension_type::ToString() const {
+  return fmt::format("{} <{}>", this->extension_name(), this->enum_type_);
+}
 
 std::string enum_extension_type::extension_name() const {
   return "vast.enum";
@@ -63,18 +43,46 @@ enum_extension_type::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
                                   "dictionary: ",
                                   storage_type->ToString());
   }
-  return std::make_shared<enum_extension_type>(deserialize(serialized));
+  // simdjson requires additional padding on the string
+  simdjson::padded_string json{serialized};
+  simdjson::dom::parser parser;
+  auto doc = parser.parse(json);
+  std::vector<struct vast::enumeration_type::field> enum_fields{};
+  for (auto f : doc.get_object()) {
+    std::string_view key = f.key;
+    if (!f.value.is<uint64_t>())
+      return arrow::Status::SerializationError(f.value, " is not an uint64_t");
+    enum_fields.emplace_back(
+      std::string{key}, detail::narrow_cast<uint32_t>(f.value.get_uint64()));
+  }
+  return std::make_shared<enum_extension_type>(enumeration_type{enum_fields});
 }
 
 std::string enum_extension_type::Serialize() const {
-  return serialize(enum_type_);
+  auto out = std::string{};
+  auto inserter = std::back_inserter(out);
+  fmt::format_to(inserter, "{{ ");
+  bool first = true;
+  for (const auto& f : enum_type_.fields()) {
+    if (first)
+      first = false;
+    else
+      fmt::format_to(inserter, ", ");
+    fmt::format_to(inserter, "\"{}\": {}", f.name, f.key);
+  }
+  fmt::format_to(inserter, "}}");
+  return out;
 }
 
-void register_extension_type(std::shared_ptr<arrow::ExtensionType> t) {
+enumeration_type enum_extension_type::get_enum_type() const {
+  return this->enum_type_;
+}
+
+void register_extension_type(const std::shared_ptr<arrow::ExtensionType>& t) {
   if (auto et = arrow::GetExtensionType(t->extension_name()); !et)
-    if(!arrow::RegisterExtensionType(t).ok())
+    if (!arrow::RegisterExtensionType(t).ok())
       die(fmt::format("unable to register extension type; {}",
-                    t->extension_name()));
+                      t->extension_name()));
 }
 
 void register_extension_types() {

@@ -5,7 +5,7 @@
 #include "vast/test/test.hpp"
 
 auto arrow_enum_roundtrip(const vast::enumeration_type& et) {
-  const auto& dict_type = arrow::dictionary(arrow::int8(), arrow::utf8());
+  const auto& dict_type = arrow::dictionary(arrow::int16(), arrow::utf8());
   const auto& arrow_type = std::make_shared<vast::enum_extension_type>(et);
   const auto serialized = arrow_type->Serialize();
   const auto& standin
@@ -19,6 +19,15 @@ TEST(arrow enum extension type roundtrip) {
   using vast::enumeration_type;
   arrow_enum_roundtrip(enumeration_type{{"true"}, {"false"}});
   arrow_enum_roundtrip(enumeration_type{{"1"}, {"2"}, {"3"}, {"4"}});
+}
+
+TEST(arrow enum parse error) {
+  const auto& standin
+    = vast::enum_extension_type(vast::enumeration_type{{"stub"}});
+
+  auto r = standin.Deserialize(arrow::dictionary(arrow::int16(), arrow::utf8()),
+                               R"({ "a": "no_int" })");
+  CHECK(r.status().IsSerializationError());
 }
 
 TEST(enum extension type equality) {

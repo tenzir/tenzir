@@ -22,7 +22,6 @@
 #include "vast/value_index.hpp"
 
 #include <arrow/api.h>
-#include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 
 #include <type_traits>
@@ -274,13 +273,11 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
       return dispatch(static_cast<const array_type&>(arr));
     }
     case arrow::Type::EXTENSION: {
-      const auto& t
-        = reinterpret_cast<const arrow::ExtensionType&>(*arr.type());
+      const auto& t = static_cast<const arrow::ExtensionType&>(*arr.type());
       if (t.extension_name() == "vast.enum") {
-        const auto& ext_arr
-          = reinterpret_cast<const arrow::ExtensionArray&>(arr);
+        const auto& ext_arr = static_cast<const arrow::ExtensionArray&>(arr);
         return dispatch(
-          reinterpret_cast<const arrow::DictionaryArray&>(*ext_arr.storage()));
+          static_cast<const arrow::DictionaryArray&>(*ext_arr.storage()));
       }
       die(fmt::format("Unable to handle extension type '{}'",
                       t.extension_name()));
@@ -307,7 +304,7 @@ auto count_at = [](const auto& arr, int64_t row) {
 };
 
 auto enumeration_at = [](const arrow::DictionaryArray& arr, int64_t row) {
-  const auto& b = static_cast<const arrow::Int8Array&>(*arr.indices());
+  const auto& b = static_cast<const arrow::Int16Array&>(*arr.indices());
   return static_cast<enumeration>(b.Value(row));
 };
 

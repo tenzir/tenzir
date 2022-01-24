@@ -6,30 +6,22 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/detail/type_traits.hpp"
-
-#include <arrow/extension_type.h>
 #define SUITE experimental_table_slice
+
+#include "vast/experimental_table_slice.hpp"
 
 #include "vast/arrow_extension_types.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/narrow.hpp"
-#include "vast/experimental_table_slice.hpp"
 #include "vast/experimental_table_slice_builder.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
 
-#include <arrow/api.h>
-#include <arrow/array/builder_binary.h>
-#include <arrow/extension_type.h>
-#include <arrow/type.h>
+#include <arrow/record_batch.h>
 #include <arrow/type_fwd.h>
-#include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
 
 #include <utility>
