@@ -10,20 +10,21 @@
 
 #include "vast/experimental_table_slice.hpp"
 
+#include "vast/arrow_extension_types.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/experimental_table_slice_builder.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
 
-#include <arrow/api.h>
-#include <caf/make_copy_on_write.hpp>
+#include <arrow/record_batch.h>
+#include <arrow/type_fwd.h>
 #include <caf/test/dsl.hpp>
+
+#include <utility>
 
 using namespace vast;
 using namespace std::chrono_literals;
@@ -77,13 +78,20 @@ integer operator"" _i(unsigned long long int x) {
 
 // may be useful to have in a shared place, not a unit test.
 void inspect(caf::detail::stringification_inspector& f,
-             const arrow::Schema& x) {
-  auto str = x.ToString(true);
+             const arrow::Schema& schema) {
+  auto str = schema.ToString(true);
   f(str);
 }
 
-void inspect(caf::detail::stringification_inspector& f, const arrow::Field& x) {
-  auto str = x.ToString(true);
+void inspect(caf::detail::stringification_inspector& f,
+             const arrow::Field& field) {
+  auto str = field.ToString(true);
+  f(str);
+}
+
+void inspect(caf::detail::stringification_inspector& f,
+             const arrow::DataType& arrow_type) {
+  auto str = arrow_type.ToString();
   f(str);
 }
 
@@ -118,6 +126,18 @@ TEST(single column - count) {
 
 TEST(single column - enumeration) {
   auto t = enumeration_type{{"foo"}, {"bar"}, {"baz"}};
+  auto slice = make_single_column_slice(t, 2_e, 1_e, 0_e, 2_e, caf::none);
+  REQUIRE_EQUAL(slice.rows(), 5u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 2_e);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_e);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), 0_e);
+  CHECK_VARIANT_EQUAL(slice.at(3, 0, t), 2_e);
+  CHECK_VARIANT_EQUAL(slice.at(4, 0, t), std::nullopt);
+  CHECK_ROUNDTRIP(slice);
+}
+
+TEST(single column - enum2) {
+  auto t = enumeration_type{{"a"}, {"b"}, {"c"}, {"d"}};
   auto slice = make_single_column_slice(t, 0_e, 1_e, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 0_e);
@@ -405,7 +425,7 @@ TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{address_type{}});
   field_roundtrip(type{subnet_type{}});
   // currently a value of type count, indistinguishable from a normal count
-  // field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
+  field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
   field_roundtrip(type{list_type{integer_type{}}});
   field_roundtrip(type{map_type{integer_type{}, address_type{}}});
   field_roundtrip(

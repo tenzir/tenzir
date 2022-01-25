@@ -364,6 +364,23 @@ tests:
       - command: dump concepts
         transformation: jq '.[] | select(.concept.name == "net.app") | .concept.fields | map(split(".")[0]) | unique'
       - command: dump --yaml models
+  # arrow import / export roundtrip based on arrow (old) table slices.
+  Arrow Full Data Model Experimental:
+    condition: version | jq -e '."Apache Arrow"'
+    tags: [export, arrow]
+    steps:
+      - command: -N import --batch-encoding=experimental --schema-file="@./misc/schema/all-types.schema" --type=all_types json
+        input: data/json/all-types.json
+      - command: -N export arrow '#type == "all_types"'
+        transformation: python @./misc/scripts/print-arrow.py
+  Arrow Full Data Model:
+    condition: version | jq -e '."Apache Arrow"'
+    tags: [export, arrow]
+    steps:
+      - command: -N import --batch-encoding=arrow --schema-file="@./misc/schema/all-types.schema" --type=all_types json
+        input: data/json/all-types.json
+      - command: -N export arrow '#type == "all_types"'
+        transformation: python @./misc/scripts/print-arrow.py
   Arrow:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
@@ -372,7 +389,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: -N export -n 10 arrow '#type == "zeek.conn"'
         transformation: python @./misc/scripts/print-arrow.py
-      - command: -N import suricata
+      - command: -N import --batch-encoding=arrow suricata
         input: data/suricata/eve.json
       - command: -N export arrow '#type == "suricata.http"'
         transformation: python @./misc/scripts/print-arrow.py

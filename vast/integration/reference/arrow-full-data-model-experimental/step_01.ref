@@ -1,0 +1,22 @@
+  -- field metadata --
+  ARROW:extension:metadata: '{ "A": 0, "B": 1, "C": 2}'
+  ARROW:extension:name: 'vast.enum'
+  child 0, item: int64
+-- schema metadata --
+a: fixed_size_binary[16]
+b: bool
+bar.x: bool
+c: uint64
+d: duration[ns]
+done with all readers
+done with current reader, rows: 4
+e: dictionary<values=string, indices=int16, ordered=0>
+i: int64
+l: list<item: int64>
+n: fixed_size_binary[17]
+name: 'all_types'
+open next reader
+open next reader
+r: double
+s: string
+t: timestamp[ns]
