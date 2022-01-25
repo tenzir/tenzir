@@ -151,10 +151,10 @@ get_schema_dirs(const caf::actor_system_config& cfg) {
     else if (auto home = detail::locked_getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".config" / "vast"
                     / "schema");
-    if (auto dirs = caf::get_if<std::vector<std::string>>( //
-          &cfg, "vast.schema-dirs"))
-      result.insert(dirs->begin(), dirs->end());
   }
+  if (auto dirs = caf::get_if<std::vector<std::string>>( //
+        &cfg, "vast.schema-dirs"))
+    result.insert(dirs->begin(), dirs->end());
   return result;
 }
 

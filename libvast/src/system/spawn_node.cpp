@@ -47,7 +47,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
                                        db_dir, err.message()));
   const auto dir_exists = std::filesystem::exists(abs_dir, err);
   if (!dir_exists) {
-    if (auto created_dir = std::filesystem::create_directory(abs_dir, err);
+    if (auto created_dir = std::filesystem::create_directories(abs_dir, err);
         !created_dir)
       return caf::make_error(ec::filesystem_error,
                              fmt::format("unable to create db-directory {}: {}",
