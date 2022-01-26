@@ -13,6 +13,7 @@
 #include "vast/address_synopsis.hpp"
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
+#include "vast/co_result.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/table_slice.hpp"
@@ -302,7 +303,8 @@ active_partition_actor::behavior_type active_partition(
       indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
     shutdown<policy::parallel>(self, std::move(indexers));
   });
-  return {
+  return co_lift_behavior(
+    self,
     [self](atom::erase) -> caf::result<atom::done> {
       // Erase is sent by the disk monitor to erase this partition
       // from disk, but an active partition does not have any files
@@ -488,53 +490,44 @@ active_partition_actor::behavior_type active_partition(
             });
       }
     },
-    [self](vast::query query) -> caf::result<atom::done> {
-      auto rp = self->make_response_promise<atom::done>();
+    [self](vast::query query) noexcept -> co_result<atom::done> {
       // Don't bother with with indexers, etc. if we already have an id set.
       if (!query.ids.empty()) {
-        // TODO: Depending on the selectivity of the query and the rank of the
-        // ids, it may still be beneficial to load some of the indexers to prune
-        // the ids before hitting the store.
-        rp.delegate(self->state.store, std::move(query));
-        return rp;
+        // TODO: Depending on the selectivity of the query and the rank of
+        // the ids, it may still be beneficial to load some of the indexers
+        // to prune the ids before hitting the store.
+        co_return co_await co_delegate(*self, self->state.store,
+                                       std::move(query));
       }
       auto start = std::chrono::steady_clock::now();
-      // TODO: We should do a candidate check using `self->state.synopsis` and
-      // return early if that doesn't yield any results.
+      // TODO: We should do a candidate check using `self->state.synopsis`
+      // and return early if that doesn't yield any results.
       auto triples = detail::evaluate(self->state, query.expr);
-      if (triples.empty()) {
-        rp.deliver(atom::done_v);
-        return rp;
-      }
+      if (triples.empty())
+        co_return atom::done_v;
       auto eval = self->spawn(evaluator, query.expr, triples);
-      self->request(eval, caf::infinite, atom::run_v)
-        .then(
-          [self, rp, start, query = std::move(query)](const ids& hits) mutable {
-            duration runtime = std::chrono::steady_clock::now() - start;
-            auto id_str = fmt::to_string(query.id);
-            self->send(self->state.accountant, "partition.lookup.runtime",
-                       runtime,
-                       metrics_metadata{{"query", id_str},
-                                        {"partition-type", "active"}});
-            self->send(self->state.accountant, "partition.lookup.hits",
-                       rank(hits),
-                       metrics_metadata{{"query", std::move(id_str)},
-                                        {"partition-type", "active"}});
-            // TODO: Use the first path if the expression can be evaluated
-            // exactly.
-            auto* count = caf::get_if<query::count>(&query.cmd);
-            if (count && count->mode == query::count::estimate) {
-              self->send(count->sink, rank(hits));
-              rp.deliver(atom::done_v);
-            } else {
-              query.ids = hits;
-              rp.delegate(self->state.store, std::move(query));
-            }
-          },
-          [rp](caf::error& err) mutable {
-            rp.deliver(std::move(err));
-          });
-      return rp;
+      auto hits
+        = co_await co_request_then(*self, eval, caf::infinite, atom::run_v);
+      if (!hits)
+        co_return hits.error();
+      duration runtime = std::chrono::steady_clock::now() - start;
+      auto id_str = fmt::to_string(query.id);
+      self->send(self->state.accountant, "partition.lookup.runtime", runtime,
+                 metrics_metadata{{"query", id_str},
+                                  {"partition-type", "active"}});
+      self->send(self->state.accountant, "partition.lookup.hits", rank(*hits),
+                 metrics_metadata{{"query", std::move(id_str)},
+                                  {"partition-type", "active"}});
+      // TODO: Use the first path if the expression can be evaluated
+      // exactly.
+      auto* count = caf::get_if<query::count>(&query.cmd);
+      if (count && count->mode == query::count::estimate) {
+        self->send(count->sink, rank(*hits));
+        co_return atom::done_v;
+      }
+      query.ids = std::move(*hits);
+      co_return co_await co_delegate(*self, self->state.store,
+                                     std::move(query));
     },
     [self](atom::status,
            status_verbosity v) -> caf::typed_response_promise<record> {
@@ -578,8 +571,7 @@ active_partition_actor::behavior_type active_partition(
       if (v >= status_verbosity::debug)
         detail::fill_status_map(rs->content, self);
       return rs->promise;
-    },
-  };
+    });
 }
 
 } // namespace vast::system
