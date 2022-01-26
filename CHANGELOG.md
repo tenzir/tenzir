@@ -6,9 +6,12 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [v1.0.0-rc1]
+## [v1.0.0-rc2]
 
 ### :warning: Changes
+
+- Building VAST now requires Arrow >= 6.0.
+  [#2033](https://github.com/tenzir/vast/pull/2033)
 
 - VAST no longer uses calendar-based versioning. Instead, it uses a semantic versioning scheme. A new VERSIONING.md document installed alongside VAST explores the semantics in-depth.
   [#2035](https://github.com/tenzir/vast/pull/2035)
@@ -34,6 +37,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The index now emits the metrics `query.backlog.{low,normal}` and `query.workers.{idle,busy}` reliably.
   [#2032](https://github.com/tenzir/vast/pull/2032)
+
+- VAST no longer ignores the `--schema-dirs` option when using `--bare-mode`.
+  [#2046](https://github.com/tenzir/vast/pull/2046)
+
+- Starting VAST no longer fails if creating the database directory requires creating intermediate directories.
+  [#2046](https://github.com/tenzir/vast/pull/2046)
 
 ## [2021.12.16]
 
@@ -1508,7 +1517,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[v1.0.0-rc1]: https://github.com/tenzir/vast/releases/tag/v1.0.0-rc1
+[v1.0.0-rc2]: https://github.com/tenzir/vast/releases/tag/v1.0.0-rc2
 [2021.12.16]: https://github.com/tenzir/vast/releases/tag/2021.12.16
 [2021.11.18]: https://github.com/tenzir/vast/releases/tag/2021.11.18
 [2021.09.30]: https://github.com/tenzir/vast/releases/tag/2021.09.30
