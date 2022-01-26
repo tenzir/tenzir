@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/chunk.hpp"
+#include "vast/co_result.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -894,7 +895,8 @@ index(index_actor::stateful_pointer<index_state> self,
     self->delayed_send(self, defaults::system::telemetry_rate,
                        atom::telemetry_v);
   }
-  return {
+  return co_lift_behavior(
+    self,
     [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", *self, partition_id);
     },
@@ -1059,104 +1061,80 @@ index(index_actor::stateful_pointer<index_state> self,
         self->state.pending.erase(iter);
       return {};
     },
-    [self](atom::erase, uuid partition_id) -> caf::result<atom::done> {
+    [self](atom::erase, uuid partition_id) noexcept -> co_result<atom::done> {
       VAST_VERBOSE("{} erases partition {}", *self, partition_id);
-      auto rp = self->make_response_promise<atom::done>();
       auto path = self->state.partition_path(partition_id);
       auto synopsis_path = self->state.partition_synopsis_path(partition_id);
       bool adjust_stats = true;
       if (self->state.persisted_partitions.count(partition_id) == 0u) {
         std::error_code err{};
         const auto file_exists = std::filesystem::exists(path, err);
-        if (!file_exists) {
-          rp.deliver(caf::make_error(
-            ec::logic_error, fmt::format("unknown partition for path {}: {}",
-                                         path, err.message())));
-          return rp;
-        }
-        // As a special case, if the partition exists on disk we just continue
-        // normally here, since this indicates a previous erasure did not go
-        // through cleanly.
+        if (!file_exists)
+          co_return caf::make_error(ec::logic_error,
+                                    fmt::format("unknown partition for "
+                                                "path {}: {}",
+                                                path, err.message()));
+        // As a special case, if the partition exists on disk we just
+        // continue normally here, since this indicates a previous erasure
+        // did not go through cleanly.
         adjust_stats = false;
       }
-      self
-        ->request(self->state.meta_index, caf::infinite, atom::erase_v,
-                  partition_id)
-        .then(
-          [self, partition_id, path, synopsis_path, rp,
-           adjust_stats](atom::ok) mutable {
-            auto partition_actor
-              = self->state.inmem_partitions.eject(partition_id);
-            self->state.persisted_partitions.erase(partition_id);
-            self
-              ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
-                        path)
-              .then(
-                [=](const chunk_ptr& chunk) mutable {
-                  if (!chunk) {
-                    rp.deliver(caf::make_error( //
-                      ec::filesystem_error,
-                      fmt::format("failed to load the state for partition {}",
-                                  path)));
-                    return;
-                  }
-                  // Adjust layout stats by subtracting the events of the
-                  // removed partition.
-                  const auto* partition = fbs::GetPartition(chunk->data());
-                  if (partition->partition_type()
-                      != fbs::partition::Partition::v0) {
-                    rp.deliver(caf::make_error(ec::format_error, "unexpected "
-                                                                 "format "
-                                                                 "version"));
-                    return;
-                  }
-                  vast::ids all_ids;
-                  const auto* partition_v0 = partition->partition_as_v0();
-                  for (const auto* partition_stats :
-                       *partition_v0->type_ids()) {
-                    const auto* name = partition_stats->name();
-                    vast::ids ids;
-                    if (auto error
-                        = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
-                      rp.deliver(caf::make_error(ec::format_error,
-                                                 "could not deserialize "
-                                                 "ids: "
-                                                   + render(error)));
-                      return;
-                    }
-                    all_ids |= ids;
-                    if (adjust_stats)
-                      self->state.stats.layouts[name->str()].count -= rank(ids);
-                  }
-                  // Note that mmap's will increase the reference count of a
-                  // file, so unlinking should not affect indexers that are
-                  // currently loaded and answering a query.
-                  self
-                    ->request(self->state.filesystem, caf::infinite,
-                              atom::erase_v, synopsis_path)
-                    .then([](atom::done) { /* nop */ },
-                          [synopsis_path](const caf::error& err) {
-                            VAST_WARN("index could not unlink partition "
-                                      "synopsis at {}: {}",
-                                      synopsis_path, err);
-                          });
-                  // TODO: We could send `all_ids` as the second argument
-                  // here, which doesn't really make sense from an interface
-                  // perspective but would save the partition from recomputing
-                  // the same bitmap.
-                  rp.delegate(partition_actor, atom::erase_v);
-                },
-                [=](caf::error& err) mutable {
-                  rp.deliver(std::move(err));
-                });
-          },
-          [partition_id, rp](caf::error& err) mutable {
-            VAST_WARN("index encountered an error trying to erase "
-                      "partition {} from the meta index: {}",
-                      partition_id, err);
-            rp.deliver(std::move(err));
-          });
-      return rp;
+      auto erase_result
+        = co_await co_request_then(*self, self->state.meta_index, caf::infinite,
+                                   atom::erase_v, partition_id);
+      if (!erase_result) {
+        VAST_WARN("index encountered an error trying to erase "
+                  "partition {} from the meta index: {}",
+                  partition_id, erase_result.error());
+        co_return erase_result.error();
+      }
+      auto partition_actor = self->state.inmem_partitions.eject(partition_id);
+      self->state.persisted_partitions.erase(partition_id);
+      auto mmap_result = co_await co_request_then(
+        *self, self->state.filesystem, caf::infinite, atom::mmap_v, path);
+      if (!mmap_result)
+        co_return mmap_result.error();
+      auto chunk = std::move(*mmap_result);
+      if (!chunk)
+        co_return caf::make_error(ec::filesystem_error,
+                                  fmt::format("failed to load the "
+                                              "state for partition {}",
+                                              path));
+      // Adjust layout stats by subtracting the events of the
+      // removed partition.
+      const auto* partition = fbs::GetPartition(chunk->data());
+      if (partition->partition_type() != fbs::partition::Partition::v0)
+        co_return caf::make_error(ec::format_error, "unexpected format "
+                                                    "version");
+      vast::ids all_ids;
+      const auto* partition_v0 = partition->partition_as_v0();
+      for (const auto* partition_stats : *partition_v0->type_ids()) {
+        const auto* name = partition_stats->name();
+        vast::ids ids;
+        if (auto error = fbs::deserialize_bytes(partition_stats->ids(), ids))
+          co_return caf::make_error(ec::format_error,
+                                    fmt::format("could not deserialize ids: {}",
+                                                error));
+        all_ids |= ids;
+        if (adjust_stats)
+          self->state.stats.layouts[name->str()].count -= rank(ids);
+      }
+      // TODO: We could send `all_ids` as the second argument
+      // here, which doesn't really make sense from an interface
+      // perspective but would save the partition from recomputing
+      // the same bitmap.
+      auto tag = co_await co_delegate(*self, partition_actor, atom::erase_v);
+      // Note that mmap's will increase the reference count of a
+      // file, so unlinking should not affect indexers that are
+      // currently loaded and answering a query.
+      auto synopsis_erase_result
+        = co_await co_request_then(*self, self->state.filesystem, caf::infinite,
+                                   atom::erase_v, synopsis_path);
+      if (!erase_result)
+        VAST_WARN("index could not unlink partition "
+                  "synopsis at {}: {}",
+                  synopsis_path, synopsis_erase_result.error());
+      co_return tag;
     },
     // We can't pass this as spawn argument since the importer already
     // needs to know the index actor when spawning.
@@ -1197,7 +1175,8 @@ index(index_actor::stateful_pointer<index_state> self,
       if (actors.empty()) {
         self->send(self, atom::worker_v, lookup.worker);
         return caf::make_error(ec::invalid_argument,
-                               fmt::format("invalid partition id: {}",
+                               fmt::format("invalid "
+                                           "partition id: {}",
                                            old_partition_id));
       }
       self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
@@ -1263,8 +1242,7 @@ index(index_actor::stateful_pointer<index_state> self,
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) { //
       return self->state.status(v);
-    },
-  };
+    });
 }
 
 } // namespace vast::system
