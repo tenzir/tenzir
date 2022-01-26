@@ -68,14 +68,14 @@ caf::error validate(const disk_monitor_config& config) {
   return {};
 }
 
-caf::expected<size_t> disk_monitor_state::compute_dbdir_size() const {
+caf::expected<size_t> compute_dbdir_size(std::filesystem::path dbdir,
+                                         const disk_monitor_config& config) {
   caf::expected<size_t> result = 0;
   if (!config.scan_binary) {
     return detail::recursive_size(dbdir);
   }
   const auto& command = fmt::format("{} {}", *config.scan_binary, dbdir);
-  VAST_VERBOSE("{} executing command '{}' to determine size of dbdir", name,
-               command);
+  VAST_VERBOSE("executing command '{}' to determine size of dbdir", command);
   auto cmd_output = detail::execute_blocking(command);
   if (!cmd_output)
     return cmd_output.error();
@@ -83,9 +83,9 @@ caf::expected<size_t> disk_monitor_state::compute_dbdir_size() const {
     cmd_output->pop_back();
   if (!parsers::count(*cmd_output, result.value())) {
     result = caf::make_error(ec::parse_error,
-                             fmt::format("{} failed to interpret output "
+                             fmt::format("failed to interpret output "
                                          "'{}' of command '{}'",
-                                         name, *cmd_output, command));
+                                         *cmd_output, command));
   }
   return result;
 }
@@ -97,17 +97,18 @@ bool disk_monitor_state::purging() const {
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
-             const std::filesystem::path& dbdir, index_actor index) {
-  VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(config.high_water_mark),
-                   VAST_ARG(config.low_water_mark), VAST_ARG(dbdir));
+             const std::filesystem::path& db_dir, index_actor index) {
+  VAST_TRACE_SCOPE("disk_monitor {} {} {} {}", VAST_ARG(self->id()),
+                   VAST_ARG(config.high_water_mark),
+                   VAST_ARG(config.low_water_mark), VAST_ARG(db_dir));
   using namespace std::string_literals;
   if (auto error = validate(config)) {
     self->quit(error);
     return disk_monitor_actor::behavior_type::make_empty_behavior();
   }
   self->state.config = config;
-  self->state.dbdir = dbdir;
-  self->state.index = index;
+  self->state.dbdir = db_dir;
+  self->state.index = std::move(index);
   self->send(self, atom::ping_v);
   return {
     [self](atom::ping) {
@@ -118,12 +119,12 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                    *self);
         return;
       }
-      auto size = self->state.compute_dbdir_size();
       // TODO: This is going to do one syscall per file in the database
       // directory. This feels a bit wasteful, but in practice we didn't
       // see noticeable overhead even on large-ish databases.
       // Nonetheless, if this becomes relevant we should switch to using
       // `inotify()` or similar to do real-time tracking of the db size.
+      auto size = compute_dbdir_size(self->state.dbdir, self->state.config);
       if (!size) {
         VAST_WARN("{} failed to calculate recursive size of {}: {}", *self,
                   self->state.dbdir, size.error());
@@ -161,7 +162,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           continue;
         if (entry.path().extension() == ".mdx")
           continue;
-        uuid id;
+        uuid id = {};
         if (!parsers::uuid(partition, id)) {
           VAST_VERBOSE("{} failed to find partition {}", *self, partition);
           continue;
@@ -200,7 +201,9 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           .then(
             [=](atom::done) {
               if (--self->state.pending_partitions == 0) {
-                if (const auto size = self->state.compute_dbdir_size(); !size) {
+                if (const auto size
+                    = compute_dbdir_size(self->state.dbdir, self->state.config);
+                    !size) {
                   VAST_WARN("{} failed to calculate size of {}: {}", *self,
                             self->state.dbdir, size.error());
                 } else {
