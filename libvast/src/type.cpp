@@ -788,6 +788,53 @@ bool type::has_attributes() const noexcept {
   __builtin_unreachable();
 }
 
+detail::generator<std::pair<std::string_view, std::vector<type::attribute_view>>>
+type::names_and_attributes() const& noexcept {
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
+        co_return;
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
+        std::vector<attribute_view> attrs{};
+        if (const auto* attributes = enriched_type->attributes()) {
+          for (const auto& attribute : *attributes) {
+            if (attribute->value() != nullptr
+                && attribute->value()->begin() != attribute->value()->end())
+              attrs.emplace_back(attribute->key()->string_view(),
+                                 attribute->value()->string_view());
+            else
+              attrs.emplace_back(attribute->key()->string_view(), "");
+          }
+        }
+        if (enriched_type->name())
+          co_yield std::make_pair(enriched_type->name()->string_view(), attrs);
+        else
+          co_yield std::make_pair("", attrs);
+        root = enriched_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+      }
+    }
+  }
+  __builtin_unreachable();
+}
+
 detail::generator<type::attribute_view> type::attributes() const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {

@@ -308,6 +308,12 @@ public:
   [[nodiscard]] detail::generator<std::string_view> names() const& noexcept;
   [[nodiscard]] detail::generator<std::string_view> names() && = delete;
 
+  /// Returns a view of all names of this type, alongside all type attributes
+  /// that have been defined on the same nesting level as the associated name.
+  [[nodiscard]] detail::generator<
+    std::pair<std::string_view, std::vector<attribute_view>>>
+  names_and_attributes() const& noexcept;
+
   /// Returns the value of an attribute by name, if it exists.
   /// @param key The key of the attribute.
   /// @note If an attribute exists and its value is empty, the result contains
