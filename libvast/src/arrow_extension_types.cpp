@@ -1,9 +1,68 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include "vast/arrow_extension_types.hpp"
 
 #include "vast/detail/narrow.hpp"
 #include "vast/die.hpp"
 
+#include <caf/sum_type_access.hpp>
+
 #include <simdjson.h>
+
+namespace caf {
+
+int sum_type_access<arrow::DataType>::index_from_type(
+  const arrow::DataType& x) noexcept {
+  static constexpr int extension_id = -1;
+  static constexpr int unknown_id = -2;
+  static const auto table = []<class... Ts, int... Indices>(
+    caf::detail::type_list<Ts...>,
+    std::integer_sequence<int, Indices...>) noexcept {
+    std::array<int, arrow::Type::type::MAX_ID> tbl{};
+    tbl.fill(unknown_id);
+    (static_cast<void>(tbl[Ts::type_id]
+                       = is_extension_type<Ts>::value ? extension_id : Indices),
+     ...);
+    return tbl;
+  }
+  (types{},
+   std::make_integer_sequence<int, caf::detail::tl_size<types>::value>());
+  static const auto extension_table = []<class... Ts, int... Indices>(
+    caf::detail::type_list<Ts...>, std::integer_sequence<int, Indices...>) {
+    std::array<std::pair<std::string_view, int>,
+               detail::tl_size<extension_types>::value>
+      tbl{};
+    (static_cast<void>(tbl[Indices]
+                       = {Ts::vast_id, detail::tl_index_of<types, Ts>::value}),
+     ...);
+    return tbl;
+  }
+  (extension_types{},
+   std::make_integer_sequence<int,
+                              caf::detail::tl_size<extension_types>::value>());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+  auto result = table[x.id()];
+  VAST_ASSERT(result != unknown_id,
+              "unexpected Arrow type id is not in "
+              "caf::sum_type_access<arrow::DataType>::types");
+  if (result == extension_id) {
+    for (const auto& [id, index] : extension_table) {
+      if (id == static_cast<const arrow::ExtensionType&>(x).extension_name())
+        return index;
+    }
+    VAST_ASSERT(false, "unexpected Arrow extension type name is not in "
+                       "caf::sum_type_access<arrow::DataType>::types");
+  }
+  return result;
+}
+
+} // namespace caf
 
 namespace vast {
 
@@ -25,7 +84,7 @@ std::string enum_extension_type::ToString() const {
 }
 
 std::string enum_extension_type::extension_name() const {
-  return "vast.enum";
+  return vast_id;
 }
 
 std::shared_ptr<arrow::Array>
@@ -84,7 +143,7 @@ address_extension_type::address_extension_type()
 }
 
 std::string address_extension_type::extension_name() const {
-  return id;
+  return vast_id;
 }
 
 bool address_extension_type::ExtensionEquals(const ExtensionType& other) const {
@@ -99,7 +158,7 @@ address_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const 
 arrow::Result<std::shared_ptr<arrow::DataType>>
 address_extension_type::Deserialize(std::shared_ptr<DataType> storage_type,
                                     const std::string& serialized) const {
-  if (serialized != id)
+  if (serialized != vast_id)
     return arrow::Status::Invalid("Type identifier did not match");
   if (!storage_type->Equals(this->storage_type_))
     return arrow::Status::Invalid("Storage type did not match "
@@ -108,10 +167,8 @@ address_extension_type::Deserialize(std::shared_ptr<DataType> storage_type,
 }
 
 std::string address_extension_type::Serialize() const {
-  return id;
+  return vast_id;
 }
-
-const std::string address_extension_type::id = "vast.address";
 
 const std::shared_ptr<arrow::DataType> address_extension_type::arrow_type
   = arrow::fixed_size_binary(16);
@@ -125,7 +182,7 @@ bool subnet_extension_type::ExtensionEquals(const ExtensionType& other) const {
 }
 
 std::string subnet_extension_type::extension_name() const {
-  return id;
+  return vast_id;
 }
 
 std::shared_ptr<arrow::Array>
@@ -134,13 +191,13 @@ subnet_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
 }
 
 std::string subnet_extension_type::Serialize() const {
-  return id;
+  return vast_id;
 }
 
 arrow::Result<std::shared_ptr<arrow::DataType>>
 subnet_extension_type::Deserialize(std::shared_ptr<DataType> storage_type,
                                    const std::string& serialized) const {
-  if (serialized != id)
+  if (serialized != vast_id)
     return arrow::Status::Invalid("Type identifier did not match");
   if (!storage_type->Equals(this->storage_type_))
     return arrow::Status::Invalid(
@@ -152,16 +209,12 @@ const std::shared_ptr<arrow::DataType> subnet_extension_type::arrow_type
   = arrow::struct_({arrow::field("length", arrow::uint8()),
                     arrow::field("address", make_arrow_address())});
 
-const std::string subnet_extension_type::id = "vast.subnet";
-
-const std::string pattern_extension_type::id = "vast.pattern";
-
 pattern_extension_type::pattern_extension_type()
   : arrow::ExtensionType(arrow_type) {
 }
 
 std::string pattern_extension_type::extension_name() const {
-  return id;
+  return vast_id;
 }
 
 bool pattern_extension_type::ExtensionEquals(const ExtensionType& other) const {
@@ -176,7 +229,7 @@ pattern_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const 
 arrow::Result<std::shared_ptr<arrow::DataType>>
 pattern_extension_type::Deserialize(std::shared_ptr<DataType> storage_type,
                                     const std::string& serialized) const {
-  if (serialized != id)
+  if (serialized != vast_id)
     return arrow::Status::Invalid("Type identifier did not match");
   if (!storage_type->Equals(this->storage_type_))
     return arrow::Status::Invalid("Storage type did not match "
@@ -185,7 +238,7 @@ pattern_extension_type::Deserialize(std::shared_ptr<DataType> storage_type,
 }
 
 std::string pattern_extension_type::Serialize() const {
-  return id;
+  return vast_id;
 }
 
 const std::shared_ptr<arrow::DataType> pattern_extension_type::arrow_type

@@ -1,6 +1,6 @@
-#include "vast/arrow_extension_types.hpp"
-
 #define SUITE arrow_extension_types
+
+#include "vast/arrow_extension_types.hpp"
 
 #include "vast/test/test.hpp"
 
@@ -65,4 +65,34 @@ TEST(subnet type serde roundtrip) {
 
 TEST(pattern type serde roundtrip) {
   serde_roundtrip<vast::pattern_extension_type>();
+}
+template <class... T>
+auto is_type() {
+  return []<class... U>(const U&...) {
+    return (std::is_same_v<T, U> && ...);
+  };
+}
+
+TEST(sum type) {
+  // Returns a visitor that checks whether the expected concrete types are the
+  // types resulting in the visitation.
+  CHECK(caf::visit(is_type<arrow::NullType>(), *arrow::null()));
+  CHECK(caf::visit(is_type<arrow::Int64Type>(), *arrow::int64()));
+  CHECK(caf::visit(
+    is_type<vast::address_extension_type>(),
+    static_cast<const arrow::DataType&>(vast::address_extension_type())));
+  CHECK(caf::visit(
+    is_type<vast::pattern_extension_type>(),
+    static_cast<const arrow::DataType&>(vast::pattern_extension_type())));
+  CHECK(caf::visit(is_type<arrow::Int64Type, arrow::NullType>(),
+                   *arrow::int64(), *arrow::null()));
+
+  CHECK(
+    caf::visit(is_type<std::shared_ptr<arrow::Int64Type>>(), arrow::int64()));
+  CHECK(caf::visit(is_type<std::shared_ptr<arrow::Int64Type>,
+                           std::shared_ptr<arrow::NullType>>(),
+                   arrow::int64(), arrow::null()));
+  auto n = arrow::null();
+  CHECK(caf::get_if<std::shared_ptr<arrow::NullType>>(&n).has_value());
+  CHECK(!caf::get_if<std::shared_ptr<arrow::Int64Type>>(&n).has_value());
 }

@@ -239,7 +239,7 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
       using array_type = arrow::NumericArray<arrow::DoubleType>;
       return dispatch(static_cast<const array_type&>(arr));
     }
-    // -- lift singed values to integer ----------------------------------
+    // -- lift signed values to integer ----------------------------------
     case arrow::Type::INT8: {
       using array_type = arrow::NumericArray<arrow::Int8Type>;
       return dispatch(static_cast<const array_type&>(arr));
@@ -276,16 +276,16 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
     case arrow::Type::EXTENSION: {
       const auto& t = static_cast<const arrow::ExtensionType&>(*arr.type());
       const auto& ext_arr = static_cast<const arrow::ExtensionArray&>(arr);
-      if (t.extension_name() == "vast.enum")
+      if (t.extension_name() == enum_extension_type::vast_id)
         return dispatch(
           static_cast<const arrow::DictionaryArray&>(*ext_arr.storage()));
-      if (t.extension_name() == address_extension_type::id)
+      if (t.extension_name() == address_extension_type::vast_id)
         return dispatch(
           static_cast<const arrow::FixedSizeBinaryArray&>(*ext_arr.storage()));
-      if (t.extension_name() == subnet_extension_type::id)
+      if (t.extension_name() == subnet_extension_type::vast_id)
         return dispatch(
           static_cast<const arrow::StructArray&>(*ext_arr.storage()));
-      if (t.extension_name() == pattern_extension_type::id)
+      if (t.extension_name() == pattern_extension_type::vast_id)
         return dispatch(
           static_cast<const arrow::StringArray&>(*ext_arr.storage()));
       die(fmt::format("Unable to handle extension type '{}'",
