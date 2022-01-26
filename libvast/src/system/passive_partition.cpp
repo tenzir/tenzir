@@ -13,6 +13,7 @@
 #include "vast/address_synopsis.hpp"
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
+#include "vast/co_result.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/table_slice.hpp"
@@ -320,12 +321,16 @@ partition_actor::behavior_type passive_partition(
         // Quit the partition.
         self->quit(std::move(err));
       });
-  return {
-    [self](vast::query query) -> caf::result<atom::done> {
+  return co_lift_behavior(
+    self,
+    [self](vast::query query) noexcept -> co_result<atom::done> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query));
-      if (!self->state.partition_chunk)
-        return std::get<1>(self->state.deferred_evaluations.emplace_back(
-          std::move(query), self->make_response_promise<atom::done>()));
+      if (!self->state.partition_chunk) {
+        auto [rp, tag] = co_await co_make_response_promise<atom::done>(*self);
+        self->state.deferred_evaluations.emplace_back(std::move(query),
+                                                      std::move(rp));
+        co_return tag;
+      }
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       VAST_ASSERT(self->state.deferred_evaluations.empty());
@@ -333,52 +338,47 @@ partition_actor::behavior_type passive_partition(
       // the terminator is running. Since we require every partition to have at
       // least one indexer, we can use this to check.
       if (self->state.indexers.empty())
-        return caf::make_error(ec::system_error, "can not handle query because "
-                                                 "shutdown was requested");
-      auto rp = self->make_response_promise<atom::done>();
+        co_return caf::make_error(ec::system_error,
+                                  "can not handle query because "
+                                  "shutdown was requested");
       // Don't bother with the indexers etc. if we already know the ids
       // we want to retrieve.
       if (!query.ids.empty()) {
         if (query.expr != vast::expression{})
-          return caf::make_error(ec::invalid_argument, "query may only contain "
-                                                       "either expression or "
-                                                       "ids");
-        rp.delegate(self->state.store, query);
-        return rp;
+          co_return caf::make_error(ec::invalid_argument,
+                                    "query may only contain "
+                                    "either expression or "
+                                    "ids");
+        co_return co_await co_delegate(*self, self->state.store,
+                                       std::move(query));
       }
       auto start = std::chrono::steady_clock::now();
       auto triples = detail::evaluate(self->state, query.expr);
       if (triples.empty())
-        return atom::done_v;
+        co_return atom::done_v;
       auto eval = self->spawn(evaluator, query.expr, triples);
-      self->request(eval, caf::infinite, atom::run_v)
-        .then(
-          [self, rp, start, query = std::move(query)](const ids& hits) mutable {
-            duration runtime = std::chrono::steady_clock::now() - start;
-            auto id_str = fmt::to_string(query.id);
-            self->send(self->state.accountant, "partition.lookup.runtime",
-                       runtime,
-                       metrics_metadata{{"query", id_str},
-                                        {"partition-type", "passive"}});
-            self->send(self->state.accountant, "partition.lookup.hits",
-                       rank(hits),
-                       metrics_metadata{{"query", std::move(id_str)},
-                                        {"partition-type", "passive"}});
-            // TODO: Use the first path if the expression can be evaluated
-            // exactly.
-            auto* count = caf::get_if<query::count>(&query.cmd);
-            if (count && count->mode == query::count::estimate) {
-              self->send(count->sink, rank(hits));
-              rp.deliver(atom::done_v);
-            } else {
-              query.ids = hits;
-              rp.delegate(self->state.store, std::move(query));
-            }
-          },
-          [rp](caf::error& err) mutable {
-            rp.deliver(std::move(err));
-          });
-      return rp;
+      auto hits
+        = co_await co_request_then(*self, eval, caf::infinite, atom::run_v);
+      if (!hits)
+        co_return hits.error();
+      duration runtime = std::chrono::steady_clock::now() - start;
+      auto id_str = fmt::to_string(query.id);
+      self->send(self->state.accountant, "partition.lookup.runtime", runtime,
+                 metrics_metadata{{"query", id_str},
+                                  {"partition-type", "passive"}});
+      self->send(self->state.accountant, "partition.lookup.hits", rank(*hits),
+                 metrics_metadata{{"query", std::move(id_str)},
+                                  {"partition-type", "passive"}});
+      // TODO: Use the first path if the expression can be evaluated
+      // exactly.
+      auto* count = caf::get_if<query::count>(&query.cmd);
+      if (count && count->mode == query::count::estimate) {
+        self->send(count->sink, rank(*hits));
+        co_return atom::done_v;
+      }
+      query.ids = std::move(*hits);
+      co_return co_await co_delegate(*self, self->state.store,
+                                     std::move(query));
     },
     [self](atom::erase) -> caf::result<atom::done> {
       if (!self->state.partition_chunk) {
@@ -430,8 +430,7 @@ partition_actor::behavior_type passive_partition(
         result["memory-usage"] = *x + mem_indexers + sizeof(self->state);
       }
       return result;
-    },
-  };
+    });
 }
 
 } // namespace vast::system
