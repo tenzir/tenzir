@@ -57,7 +57,7 @@ select_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   auto new_slice
     = filter(arrow_table_slice_builder::create(batch, layout), *tailored_expr);
   if (new_slice) {
-    auto as_batch = as_record_batch(*new_slice);
+    auto as_batch = to_record_batch(*new_slice);
     transformed_.emplace_back(new_slice->layout(), std::move(as_batch));
     return caf::none;
   }

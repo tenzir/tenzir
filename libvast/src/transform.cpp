@@ -41,7 +41,7 @@ const std::vector<std::string>& transform::event_types() const {
 
 caf::error transform::add(table_slice&& x) {
   VAST_DEBUG("transform {} adds a slice", name_);
-  auto batch = as_record_batch(x);
+  auto batch = to_record_batch(x);
   return add_batch(x.layout(), batch);
 }
 
@@ -187,7 +187,7 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     }
     auto& bq = batches[layout];
     for (auto& s : queue) {
-      auto b = as_record_batch(s);
+      auto b = to_record_batch(s);
       bq.emplace_back(layout, b);
     }
     queue.clear();

@@ -377,7 +377,7 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
-std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
+std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
   auto f = detail::overload{
     []() noexcept -> std::shared_ptr<arrow::RecordBatch> {
       die("cannot access record batch of invalid table slice");
@@ -391,6 +391,14 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         = std::decay_t<decltype(*state(encoded, slice.state_))>::encoding;
       if constexpr (encoding == table_slice_encoding::arrow
                     || encoding == table_slice_encoding::experimental) {
+        // If we have a record batch, but it is from an older table slice
+        // encoding, we must still rebuild the table slice. Otherwise, creating
+        // a new table slice from the returned record batch leads to undefined
+        // behavior.
+        if (!state(encoded, slice.state_)->is_latest_version) {
+          auto copy = rebuild(slice, encoding);
+          return to_record_batch(copy);
+        }
         // Get the record batch first, then create a copy that shares the
         // lifetime with the chunk and the original record batch. Capturing the
         // chunk guarantees that the table slice is valid as long as the
@@ -408,7 +416,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
         auto copy = rebuild(slice, table_slice_encoding::arrow);
-        return as_record_batch(copy);
+        return to_record_batch(copy);
       }
     },
   };
