@@ -377,7 +377,7 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
-std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
+std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
   auto f = detail::overload{
     []() noexcept -> std::shared_ptr<arrow::RecordBatch> {
       die("cannot access record batch of invalid table slice");
@@ -397,7 +397,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         // behavior.
         if (!state(encoded, slice.state_)->is_latest_version) {
           auto copy = rebuild(slice, encoding);
-          return as_record_batch(copy);
+          return to_record_batch(copy);
         }
         // Get the record batch first, then create a copy that shares the
         // lifetime with the chunk and the original record batch. Capturing the
@@ -416,7 +416,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
         auto copy = rebuild(slice, table_slice_encoding::arrow);
-        return as_record_batch(copy);
+        return to_record_batch(copy);
       }
     },
   };

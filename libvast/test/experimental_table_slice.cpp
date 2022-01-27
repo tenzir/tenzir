@@ -363,7 +363,7 @@ TEST(record batch roundtrip) {
     table_slice_encoding::experimental);
   auto t = count_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
-  auto batch = as_record_batch(slice1);
+  auto batch = to_record_batch(slice1);
   auto slice2 = table_slice{batch, slice1.layout()};
   CHECK_EQUAL(slice1, slice2);
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, t), 0_c);
@@ -376,7 +376,7 @@ TEST(record batch roundtrip - adding column) {
   factory<table_slice_builder>::add<experimental_table_slice_builder>(
     table_slice_encoding::experimental);
   auto slice1 = make_single_column_slice(count_type{}, 0_c, 1_c, 2_c, 3_c);
-  auto batch = as_record_batch(slice1);
+  auto batch = to_record_batch(slice1);
   auto cb = experimental_table_slice_builder::column_builder::make(
     type{string_type{}}, arrow::default_memory_pool());
   cb->add("0"sv);

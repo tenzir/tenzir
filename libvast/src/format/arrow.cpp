@@ -42,7 +42,7 @@ writer::~writer() {
 caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
     return caf::make_error(ec::logic_error, "invalid arrow output stream");
-  auto batch = as_record_batch(slice);
+  auto batch = to_record_batch(slice);
   if (const auto& layout = slice.layout(); current_layout_ != layout) {
     if (!this->layout(batch->schema()))
       return caf::make_error(ec::logic_error, "failed to update layout");

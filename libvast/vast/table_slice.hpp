@@ -178,7 +178,7 @@ public:
   /// @returns The pointer to the Record Batch.
   /// @param slice The table slice to convert.
   friend std::shared_ptr<arrow::RecordBatch>
-  as_record_batch(const table_slice& slice);
+  to_record_batch(const table_slice& slice);
 
   /// Creates a typed view on a given set of columns of a table slice.
   /// @note This function is defined and documented in 'vast/project.hpp'.
