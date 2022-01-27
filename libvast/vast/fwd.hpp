@@ -220,6 +220,7 @@ using enumeration = uint8_t;
 namespace fbs {
 
 struct Bitmap;
+struct Data;
 struct FlatTableSlice;
 struct Segment;
 struct TableSlice;

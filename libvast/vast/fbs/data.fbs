@@ -1,0 +1,94 @@
+namespace vast.fbs.data;
+
+struct Boolean {
+  value: bool;
+}
+
+struct Integer {
+  value: long;
+}
+
+struct Count {
+  value: ulong;
+}
+
+struct Real {
+  value: double;
+}
+
+struct Duration {
+  ns: long;
+}
+
+struct Time {
+  time_since_epoch: Duration;
+}
+
+table String {
+  value: string;
+}
+
+table Pattern {
+  value: string;
+}
+
+struct Address {
+  bytes: [ubyte:16];
+}
+
+struct Subnet {
+  address: Address;
+  length: ubyte;
+}
+
+struct Enumeration {
+  value: uint;
+}
+
+table List {
+  values: [vast.fbs.Data] (required);
+}
+
+table MapEntry {
+  key: vast.fbs.Data (required);
+  value: vast.fbs.Data (required);
+}
+
+table Map {
+  entries: [MapEntry] (required);
+}
+
+table RecordField {
+  name: string (required);
+  data: vast.fbs.Data (required);
+}
+
+table Record {
+  fields: [RecordField] (required);
+}
+
+/// The sum data of all possible types.
+union Data {
+  boolean: Boolean,
+  integer: Integer,
+  count: Count,
+  real: Real,
+  duration: Duration,
+  time: Time,
+  string: String,
+  pattern: Pattern,
+  address: Address,
+  subnet: Subnet,
+  enumeration: Enumeration,
+  list: List,
+  map: Map,
+  record: Record,
+}
+
+namespace vast.fbs;
+
+table Data {
+  data: data.Data;
+}
+
+root_type Data;

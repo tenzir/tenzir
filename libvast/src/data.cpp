@@ -21,6 +21,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
@@ -42,6 +43,233 @@ bool operator==(const data& lhs, const data& rhs) {
 
 bool operator<(const data& lhs, const data& rhs) {
   return lhs.data_ < rhs.data_;
+}
+
+flatbuffers::Offset<fbs::Data>
+pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
+  auto f = detail::overload{
+    [&](caf::none_t) -> flatbuffers::Offset<fbs::Data> {
+      return fbs::CreateData(builder);
+    },
+    [&](const bool& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(fbs::data::Boolean{value});
+      return fbs::CreateData(builder, fbs::data::Data::boolean,
+                             value_offset.Union());
+    },
+    [&](const integer& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset
+        = builder.CreateStruct(fbs::data::Integer{value.value});
+      return fbs::CreateData(builder, fbs::data::Data::integer,
+                             value_offset.Union());
+    },
+    [&](const count& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(fbs::data::Count{value});
+      return fbs::CreateData(builder, fbs::data::Data::count,
+                             value_offset.Union());
+    },
+    [&](const real& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(fbs::data::Real{value});
+      return fbs::CreateData(builder, fbs::data::Data::real,
+                             value_offset.Union());
+    },
+    [&](const duration& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset
+        = builder.CreateStruct(fbs::data::Duration{value.count()});
+      return fbs::CreateData(builder, fbs::data::Data::duration,
+                             value_offset.Union());
+    },
+    [&](const time& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(
+        fbs::data::Time{fbs::data::Duration{value.time_since_epoch().count()}});
+      return fbs::CreateData(builder, fbs::data::Data::time,
+                             value_offset.Union());
+    },
+    [&](const std::string& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset
+        = fbs::data::CreateString(builder, builder.CreateString(value));
+      return fbs::CreateData(builder, fbs::data::Data::string,
+                             value_offset.Union());
+    },
+    [&](const pattern& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = fbs::data::CreatePattern(
+        builder, builder.CreateString(value.string()));
+      return fbs::CreateData(builder, fbs::data::Data::pattern,
+                             value_offset.Union());
+    },
+    [&](const address& value) -> flatbuffers::Offset<fbs::Data> {
+      auto address_buffer = fbs::data::Address{};
+      std::memcpy(address_buffer.mutable_bytes()->data(),
+                  as_bytes(value).data(), 16);
+      const auto value_offset = builder.CreateStruct(address_buffer);
+      return fbs::CreateData(builder, fbs::data::Data::address,
+                             value_offset.Union());
+    },
+    [&](const subnet& value) -> flatbuffers::Offset<fbs::Data> {
+      auto subnet_buffer
+        = fbs::data::Subnet{fbs::data::Address{}, value.length()};
+      std::memcpy(subnet_buffer.mutable_address().mutable_bytes()->data(),
+                  as_bytes(value.network()).data(), 16);
+      const auto value_offset = builder.CreateStruct(subnet_buffer);
+      return fbs::CreateData(builder, fbs::data::Data::subnet,
+                             value_offset.Union());
+    },
+    [&](const enumeration& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset
+        = builder.CreateStruct(fbs::data::Enumeration{value});
+      return fbs::CreateData(builder, fbs::data::Data::enumeration,
+                             value_offset.Union());
+    },
+    [&](const list& values) -> flatbuffers::Offset<fbs::Data> {
+      auto value_offsets = std::vector<flatbuffers::Offset<fbs::Data>>{};
+      value_offsets.reserve(values.size());
+      for (const auto& value : values)
+        value_offsets.emplace_back(pack(builder, value));
+      const auto value_offset
+        = fbs::data::CreateListDirect(builder, &value_offsets);
+      return fbs::CreateData(builder, fbs::data::Data::list,
+                             value_offset.Union());
+    },
+    [&](const map& entries) -> flatbuffers::Offset<fbs::Data> {
+      auto entry_offsets
+        = std::vector<flatbuffers::Offset<fbs::data::MapEntry>>{};
+      entry_offsets.reserve(entries.size());
+      for (const auto& [key, value] : entries) {
+        const auto key_offset = pack(builder, key);
+        const auto value_offset = pack(builder, value);
+        entry_offsets.emplace_back(
+          fbs::data::CreateMapEntry(builder, key_offset, value_offset));
+      }
+      const auto value_offset
+        = fbs::data::CreateMapDirect(builder, &entry_offsets);
+      return fbs::CreateData(builder, fbs::data::Data::map,
+                             value_offset.Union());
+    },
+    [&](const record& fields) -> flatbuffers::Offset<fbs::Data> {
+      auto field_offsets
+        = std::vector<flatbuffers::Offset<fbs::data::RecordField>>{};
+      field_offsets.reserve(fields.size());
+      for (const auto& [name, value] : fields) {
+        const auto key_offset = builder.CreateSharedString(name);
+        const auto value_offset = pack(builder, value);
+        field_offsets.emplace_back(
+          fbs::data::CreateRecordField(builder, key_offset, value_offset));
+      }
+      const auto value_offset
+        = fbs::data::CreateRecordDirect(builder, &field_offsets);
+      return fbs::CreateData(builder, fbs::data::Data::record,
+                             value_offset.Union());
+    },
+  };
+  return caf::visit(f, value);
+}
+
+caf::error unpack(const fbs::Data& from, data& to) {
+  switch (from.data_type()) {
+    case fbs::data::Data::NONE: {
+      to = data{};
+      return caf::none;
+    }
+    case fbs::data::Data::boolean: {
+      to = bool{from.data_as_boolean()->value()};
+      return caf::none;
+    }
+    case fbs::data::Data::integer: {
+      to = integer{from.data_as_integer()->value()};
+      return caf::none;
+    }
+    case fbs::data::Data::count: {
+      to = count{from.data_as_count()->value()};
+      return caf::none;
+    }
+    case fbs::data::Data::real: {
+      to = real{from.data_as_real()->value()};
+      return caf::none;
+    }
+    case fbs::data::Data::duration: {
+      to = duration{from.data_as_duration()->ns()};
+      return caf::none;
+    }
+    case fbs::data::Data::time: {
+      to = time{} + duration{from.data_as_time()->time_since_epoch().ns()};
+      return caf::none;
+    }
+    case fbs::data::Data::string: {
+      to = from.data_as_string()->value()->str();
+      return caf::none;
+    }
+    case fbs::data::Data::pattern: {
+      to = pattern{from.data_as_pattern()->value()->str()};
+      return caf::none;
+    }
+    case fbs::data::Data::address: {
+      auto address_buffer = address{};
+      static_assert(sizeof(address)
+                    == sizeof(*from.data_as_address()->bytes()));
+      std::memcpy(&address_buffer, from.data_as_address()->bytes()->data(),
+                  sizeof(address));
+      to = address_buffer;
+      return caf::none;
+    }
+    case fbs::data::Data::subnet: {
+      auto address_buffer = address{};
+      static_assert(sizeof(address)
+                    == sizeof(*from.data_as_subnet()->address().bytes()));
+      std::memcpy(&address_buffer,
+                  from.data_as_subnet()->address().bytes()->data(),
+                  sizeof(address));
+      to = subnet{address_buffer, from.data_as_subnet()->length()};
+      return caf::none;
+    }
+    case fbs::data::Data::enumeration: {
+      to
+        = detail::narrow_cast<enumeration>(from.data_as_enumeration()->value());
+      return caf::none;
+    }
+    case fbs::data::Data::list: {
+      auto list_buffer = list{};
+      list_buffer.reserve(from.data_as_list()->values()->size());
+      for (const auto* value : *from.data_as_list()->values()) {
+        VAST_ASSERT(value);
+        auto element_buffer = data{};
+        if (auto err = unpack(*value, element_buffer))
+          return err;
+        list_buffer.emplace_back(std::move(element_buffer));
+      }
+      to = std::move(list_buffer);
+      return caf::none;
+    }
+    case fbs::data::Data::map: {
+      auto map_buffer = map::vector_type{};
+      map_buffer.reserve(from.data_as_map()->entries()->size());
+      for (const auto* entry : *from.data_as_map()->entries()) {
+        VAST_ASSERT(entry);
+        auto key_buffer = data{};
+        if (auto err = unpack(*entry->key(), key_buffer))
+          return err;
+        auto value_buffer = data{};
+        if (auto err = unpack(*entry->value(), value_buffer))
+          return err;
+        map_buffer.emplace_back(std::move(key_buffer), std::move(value_buffer));
+      }
+      to = map{map::make_unsafe(std::move(map_buffer))};
+      return caf::none;
+    }
+    case fbs::data::Data::record: {
+      auto record_buffer = record::vector_type{};
+      record_buffer.reserve(from.data_as_record()->fields()->size());
+      for (const auto* field : *from.data_as_record()->fields()) {
+        VAST_ASSERT(field);
+        auto data_buffer = data{};
+        if (auto err = unpack(*field->data(), data_buffer))
+          return err;
+        record_buffer.emplace_back(field->name()->str(),
+                                   std::move(data_buffer));
+      }
+      to = record{record::make_unsafe(std::move(record_buffer))};
+      return caf::none;
+    }
+  }
+  __builtin_unreachable();
 }
 
 bool evaluate(const data& lhs, relational_operator op, const data& rhs) {

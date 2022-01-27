@@ -19,6 +19,8 @@
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/fbs/data.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/operator.hpp"
 #include "vast/test/test.hpp"
 
@@ -364,4 +366,38 @@ TEST(nesting depth) {
   CHECK_EQUAL(depth(final), defaults::max_recursion + 2);
   auto flattened = flatten(final);
   CHECK_EQUAL(depth(flattened), 1ull);
+}
+
+TEST(pack / unpack) {
+  auto x = data{record{
+    {"none", caf::none},
+    {"bool", bool{true}},
+    {"integer", integer{2}},
+    {"count", count{3u}},
+    {"real", real{4.0}},
+    {"duration", duration{5}},
+    {"time", vast::time{} + duration{6}},
+    {"string", std::string{"7"}},
+    {"pattern", pattern{"7"}},
+    {"address", unbox(to<address>("0.0.0.8"))},
+    {"subnet", unbox(to<subnet>("0.0.0.9/24"))},
+    {"enumeration", enumeration{10}},
+    {"list", list{count{11}}},
+    {"map", map{{std::string{"key"}, count{12}}}},
+    {"record",
+     record{
+       {"nested_real", real{13.0}},
+       {"nested_record", record{}},
+     }},
+  }};
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  const auto offset = pack(builder, x);
+  builder.Finish(offset);
+  auto maybe_flatbuffer = flatbuffer<fbs::Data>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_flatbuffer);
+  auto flatbuffer = *maybe_flatbuffer;
+  REQUIRE(maybe_flatbuffer);
+  auto x2 = data{};
+  REQUIRE_EQUAL(unpack(*flatbuffer, x2), caf::none);
+  CHECK_EQUAL(x, x2);
 }
