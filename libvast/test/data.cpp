@@ -384,7 +384,11 @@ TEST(pack / unpack) {
     {"enumeration", enumeration{10}},
     {"list", list{count{11}}},
     {"map", map{{std::string{"key"}, count{12}}}},
-    {"record", record{}},
+    {"record",
+     record{
+       {"nested_real", real{13.0}},
+       {"nested_record", record{}},
+     }},
   }};
   auto builder = flatbuffers::FlatBufferBuilder{};
   const auto offset = pack(builder, x);
