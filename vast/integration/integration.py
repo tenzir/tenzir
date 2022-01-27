@@ -555,6 +555,7 @@ def run(args, test_dec):
     def match(x, names):
         forced = list(names)
         return any(re.search(k, x.lower()) for k in forced)
+
     tests = test_dec["tests"]
     selected_tests = {}
     explicit_tests = {}
@@ -625,9 +626,7 @@ def main():
     parser.add_argument(
         "-t", "--test", nargs="+", help="The test(s) to run (runs all tests if unset)"
     )
-    parser.add_argument(
-        "--disable", nargs="+", help="Test(s) that won't be run"
-    )
+    parser.add_argument("--disable", nargs="+", help="Test(s) that won't be run")
     parser.add_argument(
         "-u", "--update", action="store_true", help="Update baseline for tests"
     )
