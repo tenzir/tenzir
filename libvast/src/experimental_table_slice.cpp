@@ -285,6 +285,9 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
       if (t.extension_name() == subnet_extension_type::id)
         return dispatch(
           static_cast<const arrow::StructArray&>(*ext_arr.storage()));
+      if (t.extension_name() == pattern_extension_type::id)
+        return dispatch(
+          static_cast<const arrow::StringArray&>(*ext_arr.storage()));
       die(fmt::format("Unable to handle extension type '{}'",
                       t.extension_name()));
     }
