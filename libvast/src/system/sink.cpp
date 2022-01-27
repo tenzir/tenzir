@@ -74,13 +74,16 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
         VAST_INFO("{} received first result with a latency of {}",
                   self->state.name, to_string(time_since_flush));
       }
-      auto transformed = self->state.transforms.apply(std::move(slice));
+      if (auto err = self->state.transforms.add(std::move(slice))) {
+        VAST_ERROR("sink failed to add slice: {}", err);
+        return;
+      }
+      auto transformed = self->state.transforms.finish();
       if (!transformed) {
         VAST_WARN("discarding slice; error in output transformation: {}",
                   transformed.error());
         return;
       }
-      slice = std::move(*transformed);
       auto reached_max_events = [&] {
         VAST_INFO("{} reached limit of {} events", *self,
                   self->state.max_events);
@@ -88,24 +91,32 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
         self->state.send_report();
         self->quit();
       };
-      // Drop excess elements.
-      auto remaining = self->state.max_events - self->state.processed;
-      if (remaining == 0)
-        return reached_max_events();
-      if (slice.rows() > remaining)
-        slice = truncate(std::move(slice), remaining);
-      // Handle events.
       auto t = timer::start(self->state.measurement);
-      if (auto err = self->state.writer->write(slice)) {
-        VAST_ERROR("{} {}", *self, render(err));
-        self->quit(std::move(err));
-        return;
+      table_slice::size_type starting_rows = self->state.processed;
+      for (auto& slice : *transformed) {
+        // Drop excess elements.
+        auto remaining = self->state.max_events - self->state.processed;
+        if (remaining == 0) {
+          t.stop(self->state.processed - starting_rows);
+          return reached_max_events();
+        }
+        if (slice.rows() > remaining)
+          slice = truncate(std::move(slice), remaining);
+        // Handle events.
+        if (auto err = self->state.writer->write(slice)) {
+          VAST_ERROR("{} {}", *self, render(err));
+          t.stop(self->state.processed - starting_rows);
+          self->quit(std::move(err));
+          return;
+        }
+        // Stop when reaching configured limit.
+        self->state.processed += slice.rows();
+        if (self->state.processed >= self->state.max_events) {
+          t.stop(self->state.processed - starting_rows);
+          return reached_max_events();
+        }
       }
-      t.stop(slice.rows());
-      // Stop when reaching configured limit.
-      self->state.processed += slice.rows();
-      if (self->state.processed >= self->state.max_events)
-        return reached_max_events();
+      t.stop(self->state.processed - starting_rows);
       // Force flush if necessary.
       if (time_since_flush > self->state.flush_interval) {
         self->state.writer->flush();

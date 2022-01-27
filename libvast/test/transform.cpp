@@ -19,7 +19,14 @@
 #include "vast/transform_steps/project.hpp"
 #include "vast/transform_steps/replace.hpp"
 #include "vast/transform_steps/select.hpp"
+#include "vast/type.hpp"
 #include "vast/uuid.hpp"
+
+#include <arrow/array/array_base.h>
+#include <arrow/array/array_binary.h>
+#include <arrow/array/data.h>
+
+#include <string_view>
 
 using namespace std::literals;
 
@@ -67,19 +74,19 @@ struct transforms_fixture {
       auto str = fmt::format("{}", uuid);
       REQUIRE(builder->add(str, "test-datum", vast::integer{i}));
     }
-    return builder->finish();
+    vast::table_slice slice = builder->finish();
+    return slice;
   }
 
   /// Creates a table slice with four fields and another with two of the same
   /// fields.
-  static std::pair<vast::table_slice, vast::table_slice>
-  make_proj_and_del_testdata(vast::table_slice_encoding encoding
-                             = vast::defaults::import::table_slice_type) {
+  static std::tuple<vast::table_slice, vast::table_slice>
+  make_proj_and_del_testdata() {
     auto builder = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout2);
+      vast::defaults::import::table_slice_type, testdata_layout2);
     REQUIRE(builder);
     auto builder2 = vast::factory<vast::table_slice_builder>::make(
-      encoding, testresult_layout2);
+      vast::defaults::import::table_slice_type, testresult_layout2);
     REQUIRE(builder2);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
@@ -92,8 +99,8 @@ struct transforms_fixture {
     return {builder->finish(), builder2->finish()};
   }
 
-  /// Creates a table slice with ten rows, a second having only the row with
-  /// index==2 and a third having only the rows with index>5.
+  /// Creates a table slice with ten rows(type, record_batch), a second having
+  /// only the row with index==2 and a third having only the rows with index>5.
   static std::tuple<vast::table_slice, vast::table_slice, vast::table_slice>
   make_select_testdata(vast::table_slice_encoding encoding
                        = vast::defaults::import::table_slice_type) {
@@ -122,29 +129,35 @@ struct transforms_fixture {
   }
 };
 
+vast::type layout(caf::expected<std::vector<vast::transform_batch>> batches) {
+  return (*batches)[0].layout;
+}
+
+vast::table_slice
+as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
+  return vast::arrow_table_slice_builder::create((*batches)[0].batch,
+                                                 (*batches)[0].layout);
+}
+
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
 
 TEST(delete_ step) {
   auto [slice, expected_slice] = make_proj_and_del_testdata();
   vast::delete_step delete_step({"desc", "note"});
-  auto deleted = delete_step.apply(vast::table_slice{slice});
+  auto add_failed = delete_step.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(!add_failed);
+  auto deleted = delete_step.finish();
   REQUIRE_NOERROR(deleted);
-  REQUIRE_EQUAL(*deleted, expected_slice);
+  REQUIRE_EQUAL(deleted->size(), 1ull);
+  REQUIRE_EQUAL(as_table_slice(deleted), expected_slice);
   vast::delete_step invalid_delete_step({"xxx"});
-  auto not_deleted = invalid_delete_step.apply(vast::table_slice{slice});
+  auto invalid_add_failed
+    = invalid_delete_step.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(!invalid_add_failed);
+  auto not_deleted = invalid_delete_step.finish();
   REQUIRE_NOERROR(not_deleted);
-  REQUIRE_EQUAL(*not_deleted, slice);
-  // The default format is Arrow, so we do one more test where we force
-  // MessagePack.
-  auto [msgpack_slice, expected_slice2]
-    = make_proj_and_del_testdata(vast::table_slice_encoding::msgpack);
-  auto msgpack_deleted = delete_step.apply(vast::table_slice{msgpack_slice});
-  REQUIRE(msgpack_deleted);
-  REQUIRE_EQUAL(*msgpack_deleted, expected_slice2);
-  auto msgpack_not_deleted
-    = invalid_delete_step.apply(vast::table_slice{msgpack_slice});
-  REQUIRE_NOERROR(msgpack_not_deleted);
-  REQUIRE_EQUAL(*msgpack_not_deleted, msgpack_slice);
+  REQUIRE_EQUAL(not_deleted->size(), 1ull);
+  REQUIRE_EQUAL(as_table_slice(not_deleted), slice);
 }
 
 TEST(project step) {
@@ -152,60 +165,75 @@ TEST(project step) {
   vast::project_step invalid_project_step({"xxx"});
   // Arrow test:
   auto [slice, expected_slice] = make_proj_and_del_testdata();
-  auto projected = project_step.apply(vast::table_slice{slice});
+  auto add_failed = project_step.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(!add_failed);
+  auto projected = project_step.finish();
   REQUIRE_NOERROR(projected);
-  REQUIRE_EQUAL(*projected, expected_slice);
-  auto not_projected = invalid_project_step.apply(vast::table_slice{slice});
-  REQUIRE_EQUAL(*not_projected, slice);
-  // Non-Arrow test(MessagePack):
-  auto [slice2, expected_slice2]
-    = make_proj_and_del_testdata(vast::table_slice_encoding::msgpack);
-  auto projected2 = project_step.apply(vast::table_slice{slice2});
-  REQUIRE_NOERROR(projected2);
-  REQUIRE_EQUAL(*projected2, expected_slice2);
-  auto not_projected2 = invalid_project_step.apply(vast::table_slice{slice2});
-  REQUIRE_EQUAL(*not_projected2, slice2);
+  REQUIRE_EQUAL(projected->size(), 1ull);
+  REQUIRE_EQUAL(as_table_slice(projected), expected_slice);
+  auto invalid_add_failed
+    = invalid_project_step.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(!invalid_add_failed);
+  auto not_projected = invalid_project_step.finish();
+  REQUIRE_NOERROR(not_projected);
+  REQUIRE_EQUAL(not_projected->size(), 1ull);
+  REQUIRE_EQUAL(as_table_slice(not_projected), slice);
 }
 
 TEST(replace step) {
   auto slice = make_transforms_testdata();
   vast::replace_step replace_step("uid", "xxx");
-  auto replaced = replace_step.apply(vast::table_slice{slice});
-  REQUIRE(replaced);
+  auto add_failed = replace_step.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(!add_failed);
+  auto replaced = replace_step.finish();
   REQUIRE_NOERROR(replaced);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(replaced->layout()).num_fields(),
-                3ull);
-  CHECK_EQUAL(caf::get<vast::record_type>(replaced->layout()).field(0).name,
-              "uid");
-  CHECK_EQUAL((*replaced).at(0, 0), vast::data_view{"xxx"sv});
+  REQUIRE_EQUAL(replaced->size(), 1ull);
+  REQUIRE_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
+    3ull);
+  CHECK_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(0).name,
+    "uid");
+  CHECK_EQUAL((as_table_slice(replaced)).at(0, 0), vast::data_view{"xxx"sv});
 }
 
 TEST(select step) {
   auto [slice, single_row_slice, multi_row_slice]
     = make_select_testdata(vast::table_slice_encoding::msgpack);
   vast::select_step select_step("index==+2");
-  auto selected = select_step.apply(vast::table_slice{slice});
+  auto add_failed = select_step.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(!add_failed);
+  auto selected = select_step.finish();
   REQUIRE_NOERROR(selected);
-  CHECK_EQUAL(*selected, single_row_slice);
+  REQUIRE_EQUAL(selected->size(), 1ull);
+  CHECK_EQUAL(as_table_slice(selected), single_row_slice);
   vast::select_step select_step2("index>+5");
-  auto selected2 = select_step2.apply(vast::table_slice{slice});
+  auto add2_failed = select_step2.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(!add2_failed);
+  auto selected2 = select_step2.finish();
   REQUIRE_NOERROR(selected2);
-  CHECK_EQUAL(*selected2, multi_row_slice);
+  REQUIRE_EQUAL(selected2->size(), 1ull);
+  CHECK_EQUAL(as_table_slice(selected2), multi_row_slice);
   vast::select_step select_step3("index>+9");
-  auto selected3 = select_step3.apply(vast::table_slice{slice});
-  CHECK_EQUAL(!selected3, true); // REQUIRE_ERROR
+  auto add3_failed = select_step3.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(add3_failed);
+  auto selected3 = select_step3.finish();
+  REQUIRE_NOERROR(selected3);
 }
 
 TEST(anonymize step) {
   auto slice = make_transforms_testdata();
   vast::hash_step hash_step("uid", "hashed_uid");
-  auto anonymized = hash_step.apply(vast::table_slice{slice});
+  auto add_failed = hash_step.add(slice.layout(), as_record_batch(slice));
+  REQUIRE(!add_failed);
+  auto anonymized = hash_step.finish();
   REQUIRE_NOERROR(anonymized);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(anonymized->layout()).num_fields(),
+  REQUIRE_EQUAL(anonymized->size(), 1ull);
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).num_fields(),
                 4ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(anonymized->layout()).field(3).name,
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(*anonymized)).field(3).name,
                 "hashed_uid");
-  // TODO: Not sure how we can check that the data was correctly hashed.
+  // TODO: not sure how we can check that the data was correctly hashed.
 }
 
 TEST(transform with multiple steps) {
@@ -214,35 +242,43 @@ TEST(transform with multiple steps) {
   transform.add_step(
     std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   auto slice = make_transforms_testdata();
-  auto transformed = transform.apply(std::move(slice));
+  auto add_failed = transform.add(std::move(slice));
+  REQUIRE(!add_failed);
+  auto transformed = transform.finish();
   REQUIRE_NOERROR(transformed);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(transformed->layout()).num_fields(),
-                2ull);
-  CHECK_EQUAL(caf::get<vast::record_type>(transformed->layout()).field(0).name,
-              "uid");
-  CHECK_EQUAL((*transformed).at(0, 0), vast::data_view{"xxx"sv});
+  REQUIRE_EQUAL(transformed->size(), 1ull);
+  REQUIRE_EQUAL(
+    caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
+  CHECK_EQUAL(
+    caf::get<vast::record_type>((*transformed)[0].layout()).field(0).name, "ui"
+                                                                           "d");
+  CHECK_EQUAL(((*transformed)[0]).at(0, 0), vast::data_view{"xxx"sv});
   auto wrong_layout = vast::type{"stub", testdata_layout};
   wrong_layout.assign_metadata(vast::type{"foo", vast::none_type{}});
   auto builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, wrong_layout);
   REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));
   auto wrong_slice = builder->finish();
-  auto not_transformed = transform.apply(std::move(wrong_slice));
+  auto add2_failed = transform.add(std::move(wrong_slice));
+  REQUIRE(!add2_failed);
+  auto not_transformed = transform.finish();
   REQUIRE_NOERROR(not_transformed);
+  REQUIRE_EQUAL(not_transformed->size(), 1ull);
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>(not_transformed->layout()).num_fields(), 3ull);
+    caf::get<vast::record_type>((*not_transformed)[0].layout()).num_fields(),
+    3ull);
   CHECK_EQUAL(
-    caf::get<vast::record_type>(not_transformed->layout()).field(0).name, "ui"
-                                                                          "d");
+    caf::get<vast::record_type>((*not_transformed)[0].layout()).field(0).name,
+    "uid");
   CHECK_EQUAL(
-    caf::get<vast::record_type>(not_transformed->layout()).field(1).name, "des"
-                                                                          "c");
+    caf::get<vast::record_type>((*not_transformed)[0].layout()).field(1).name,
+    "desc");
   CHECK_EQUAL(
-    caf::get<vast::record_type>(not_transformed->layout()).field(2).name, "inde"
-                                                                          "x");
-  CHECK_EQUAL((*not_transformed).at(0, 0), vast::data_view{"asdf"sv});
-  CHECK_EQUAL((*not_transformed).at(0, 1), vast::data_view{"jklo"sv});
-  CHECK_EQUAL((*not_transformed).at(0, 2), vast::data{vast::integer{23}});
+    caf::get<vast::record_type>((*not_transformed)[0].layout()).field(2).name,
+    "index");
+  CHECK_EQUAL((*not_transformed)[0].at(0, 0), vast::data_view{"asdf"sv});
+  CHECK_EQUAL((*not_transformed)[0].at(0, 1), vast::data_view{"jklo"sv});
+  CHECK_EQUAL((*not_transformed)[0].at(0, 2), vast::data{vast::integer{23}});
 }
 
 TEST(transformation engine - single matching transform) {
@@ -257,14 +293,19 @@ TEST(transformation engine - single matching transform) {
     std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   vast::transformation_engine engine(std::move(transforms));
   auto slice = make_transforms_testdata();
-  auto transformed = engine.apply(std::move(slice));
+  auto add_failed = engine.add(std::move(slice));
+  REQUIRE(!add_failed);
+  auto transformed = engine.finish();
+  REQUIRE_EQUAL(transformed->size(), 1ull);
   // We expect that only one transformation has been applied.
-  REQUIRE_EQUAL(caf::get<vast::record_type>(transformed->layout()).num_fields(),
-                2ull);
-  CHECK_EQUAL(caf::get<vast::record_type>(transformed->layout()).field(0).name,
-              "desc");
-  CHECK_EQUAL(caf::get<vast::record_type>(transformed->layout()).field(1).name,
-              "index");
+  REQUIRE_EQUAL(
+    caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
+  CHECK_EQUAL(
+    caf::get<vast::record_type>((*transformed)[0].layout()).field(0).name, "des"
+                                                                           "c");
+  CHECK_EQUAL(
+    caf::get<vast::record_type>((*transformed)[0].layout()).field(1).name,
+    "index");
 }
 
 TEST(transformation engine - multiple matching transforms) {
@@ -278,11 +319,17 @@ TEST(transformation engine - multiple matching transforms) {
   transform2.add_step(
     std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   vast::transformation_engine engine(std::move(transforms));
-  auto slice = make_transforms_testdata();
-  auto transformed = engine.apply(std::move(slice));
+  auto slice = make_transforms_testdata(vast::table_slice_encoding::msgpack);
+  REQUIRE_EQUAL(slice.encoding(), vast::table_slice_encoding::msgpack);
+  auto add_failed = engine.add(std::move(slice));
+  REQUIRE(!add_failed);
+  auto transformed = engine.finish();
   REQUIRE_NOERROR(transformed);
-  CHECK_EQUAL(caf::get<vast::record_type>(transformed->layout()).num_fields(),
-              1ull);
+  REQUIRE_EQUAL(transformed->size(), 1ull);
+  REQUIRE_EQUAL((*transformed)[0].encoding(),
+                vast::table_slice_encoding::arrow);
+  CHECK_EQUAL(
+    caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 1ull);
 }
 
 FIXTURE_SCOPE_END()

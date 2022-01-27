@@ -13,16 +13,17 @@
 namespace vast {
 
 // Does nothing with the input.
-class identity_step : public generic_transform_step,
-                      public arrow_transform_step {
+class identity_step : public transform_step {
 public:
   identity_step() = default;
 
-  caf::expected<table_slice> operator()(table_slice&& slice) const override;
+  caf::error
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
+  caf::expected<std::vector<transform_batch>> finish() override;
 
-  caf::expected<std::pair<vast::type, std::shared_ptr<arrow::RecordBatch>>>
-  operator()(vast::type layout,
-             std::shared_ptr<arrow::RecordBatch> batch) const override;
+private:
+  /// The slices being transformed.
+  std::vector<transform_batch> transformed_;
 };
 
 } // namespace vast

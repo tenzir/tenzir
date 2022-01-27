@@ -39,13 +39,34 @@ transformer_stream_stage_ptr attach_transform_stage(
         self->send_exit(self, caf::make_error(ec::end_of_input));
         return;
       }
-      auto transformed = self->state.transforms.apply(std::move(x.body));
-      if (!transformed) {
-        VAST_ERROR("discarding data: error in transformation step. {}",
-                   transformed.error());
+      auto offset = x.body.offset();
+      auto rows = x.body.rows();
+      if (auto err = self->state.transforms.add(std::move(x.body))) {
+        VAST_WARN("{} skips slice because add failed: {}",
+                  self->state.transformer_name, err);
         return;
       }
-      out.push(std::move(*transformed));
+      auto transformed = self->state.transforms.finish();
+      if (!transformed) {
+        VAST_WARN("{} skips slice because of an error in transform: {}",
+                  self->state.transformer_name, transformed.error());
+        return;
+      }
+      if (self->state.reassign_offset_ranges) {
+        auto next_offset = offset;
+        for (auto& t1 : *transformed) {
+          t1.offset(next_offset);
+          next_offset += t1.rows();
+        }
+        if (next_offset > offset + rows) {
+          VAST_WARN(caf::make_error(ec::invalid_result,
+                                    "transform returned a slice "
+                                    "with an offset outside the "));
+          return;
+        }
+      }
+      for (auto& t2 : *transformed)
+        out.push(std::move(t2));
     },
     [=](caf::unit_t&, const caf::error&) {
       // nop
@@ -127,11 +148,12 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
     }};
 }
 
-transformer_actor::behavior_type component_transformer(
-  transformer_actor::stateful_pointer<transformer_state> self, std::string name,
-  std::vector<transform>&& transforms) {
+transformer_actor::behavior_type
+importer_transformer(transformer_actor::stateful_pointer<transformer_state> self,
+                     std::string name, std::vector<transform>&& transforms) {
   auto handle = transformer(self, std::move(name), std::move(transforms));
   self->state.source_requires_shutdown = true;
+  self->state.reassign_offset_ranges = true;
   return handle;
 }
 

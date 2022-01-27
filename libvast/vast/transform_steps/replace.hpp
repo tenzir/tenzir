@@ -12,21 +12,22 @@
 
 namespace vast {
 
-class replace_step : public generic_transform_step,
-                     public arrow_transform_step {
+class replace_step : public transform_step {
 public:
   replace_step(const std::string& fieldname, const vast::data& value);
 
-  caf::expected<table_slice> operator()(table_slice&& slice) const override;
-
-  [[nodiscard]] caf::expected<
-    std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
-  operator()(type layout,
-             std::shared_ptr<arrow::RecordBatch> batch) const override;
+  /// Projects an arrow record batch.
+  /// @returns The new layout and the projected record batch.
+  caf::error
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
+  caf::expected<std::vector<transform_batch>> finish() override;
 
 private:
   std::string field_;
   vast::data value_;
+
+  /// The slices being transformed.
+  std::vector<transform_batch> transformed_;
 };
 
 } // namespace vast

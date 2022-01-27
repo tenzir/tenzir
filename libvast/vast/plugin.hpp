@@ -243,7 +243,7 @@ public:
   /// slices. This will be called when constructing plugins from the
   /// VAST configuration.
   /// @param options The settings configured for this step.
-  [[nodiscard]] virtual caf::expected<transform_step_ptr>
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const caf::settings& options) const = 0;
 };
 

@@ -15,46 +15,20 @@
 #include "vast/table_slice_encoding.hpp"
 
 #include <arrow/type.h>
+#include <caf/expected.hpp>
+#include <caf/none.hpp>
+#include <caf/type_id.hpp>
+
+#include <algorithm>
 
 namespace vast {
 
-caf::expected<table_slice> transform_step::apply(table_slice&& slice) const {
-  const auto* generic_step = dynamic_cast<const generic_transform_step*>(this);
-  const auto* arrow_step = dynamic_cast<const arrow_transform_step*>(this);
-  VAST_ASSERT(arrow_step || generic_step);
-  if (arrow_step)
-    // Call arrow step if the slice uses arrow encoding or when table slice is
-    // not using arrow encoding but there is no generic step to call (the slice
-    // will be converted to arrow in that case).
-    if (slice.encoding() == table_slice_encoding::arrow
-        || (!generic_step && slice.encoding() != table_slice_encoding::arrow))
-      return (*arrow_step)(std::move(slice));
-  return (*generic_step)(std::move(slice));
-}
-
-caf::expected<table_slice>
-arrow_transform_step::operator()(table_slice&& x) const {
-  // NOTE: It's important that `batch` is kept alive until `create()`
-  // is finished: If a copy was made, `batch` will hold the only reference
-  // to its underlying table slice, but the RecordBatches created by the
-  // transform step will most likely reference some of same underlying data.
-  auto batch = as_record_batch(x);
-  auto result = (*this)(x.layout(), batch);
-  if (!result)
-    return result.error();
-  return arrow_table_slice_builder::create(result->second, result->first);
-}
-
 transform::transform(std::string name, std::vector<std::string>&& event_types)
-  : name_(std::move(name)),
-    arrow_fast_path_(true),
-    event_types_(std::move(event_types)) {
+  : name_(std::move(name)), event_types_(std::move(event_types)) {
 }
 
-void transform::add_step(transform_step_ptr step) {
+void transform::add_step(std::unique_ptr<transform_step> step) {
   steps_.emplace_back(std::move(step));
-  arrow_fast_path_
-    = arrow_fast_path_ && dynamic_cast<arrow_transform_step*>(step.get());
 }
 
 const std::string& transform::name() const {
@@ -65,40 +39,89 @@ const std::vector<std::string>& transform::event_types() const {
   return event_types_;
 }
 
-caf::expected<table_slice> transform::apply(table_slice&& x) const {
-  VAST_DEBUG("applying {} steps of transform {}", steps_.size(), name_);
-  // TODO: Add a private method `unchecked_apply()` that the transformation
-  // engine can call directly to avoid repeating the check.
-  const auto& layout = x.layout();
-  if (std::find(event_types_.begin(), event_types_.end(),
-                std::string{layout.name()})
-      == event_types_.end())
-    return std::move(x);
-  // TODO: Use the fast-path overload if all steps are `arrow_transform_step`s.
-  for (const auto& step : steps_) {
-    auto transformed = step->apply(std::move(x));
-    if (!transformed)
-      return transformed.error();
-    x = std::move(*transformed);
-  }
-  return std::move(x);
+caf::error transform::add(table_slice&& x) {
+  VAST_DEBUG("transform {} adds a slice", name_);
+  auto batch = as_record_batch(x);
+  return add_batch(x.layout(), batch);
 }
 
-std::pair<vast::type, std::shared_ptr<arrow::RecordBatch>>
-transform::apply(vast::type layout,
-                 std::shared_ptr<arrow::RecordBatch> batch) const {
-  VAST_DEBUG("applying {} arrow steps of transform {}", steps_.size(), name_);
-  for (const auto& step : steps_) {
-    auto arrow_step = dynamic_cast<const arrow_transform_step*>(step.get());
-    VAST_ASSERT(arrow_step);
-    auto result = (*arrow_step)(layout, std::move(batch));
-    if (!result)
-      return std::make_pair(std::move(layout), std::move(batch));
-    std::tie(layout, batch) = std::move(*result);
-    if (!batch)
-      return std::make_pair(std::move(layout), std::move(batch));
+caf::expected<std::vector<table_slice>> transform::finish() {
+  VAST_DEBUG("transform {} retrieves results from {} steps", name_,
+             steps_.size());
+  auto guard = caf::detail::make_scope_guard([this]() {
+    this->to_transform_.clear();
+  });
+  std::vector<table_slice> result{};
+  auto finished = finish_batch();
+  if (!finished)
+    return std::move(finished.error());
+  for (auto& [layout, batch] : *finished) {
+    auto slice = arrow_table_slice_builder::create(batch, layout);
+    result.push_back(std::move(slice));
   }
-  return std::make_pair(std::move(layout), std::move(batch));
+  return result;
+}
+
+caf::error transform::add_batch(vast::type layout,
+                                std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_DEBUG("add arrow data to transform {}", name_);
+  to_transform_.emplace_back(std::move(layout), std::move(batch));
+  return caf::none;
+}
+
+caf::error
+transform::process_queue(const std::unique_ptr<transform_step>& step) {
+  caf::error failed{};
+  const auto size = to_transform_.size();
+  for (size_t i = 0; i < size; ++i) {
+    auto [layout, batch] = std::move(to_transform_.front());
+    to_transform_.pop_front();
+    // TODO: Add a private method `unchecked_apply()` that the transformation
+    // engine can call directly to avoid repeating the check.
+    if (std::find(event_types_.begin(), event_types_.end(),
+                  std::string{layout.name()})
+        == event_types_.end()) {
+      // The transform does not change slices of unconfigured event types.
+      to_transform_.emplace_back(std::move(layout), std::move(batch));
+      continue;
+    }
+    if (auto err = step->add(std::move(layout), std::move(batch))) {
+      failed = caf::make_error(
+        static_cast<vast::ec>(err.code()),
+        fmt::format("transform aborts because of an error: {}", err));
+      to_transform_.clear();
+      break;
+    }
+  }
+  // Finish frees up resource inside the plugin.
+  auto finished = step->finish();
+  if (!finished && !failed)
+    failed = std::move(finished.error());
+  if (failed) {
+    to_transform_.clear();
+    return failed;
+  }
+  for (const auto& b : *finished)
+    to_transform_.push_back(b);
+  return caf::none;
+}
+
+caf::expected<std::vector<transform_batch>> transform::finish_batch() {
+  VAST_DEBUG("applying {} transform {}", steps_.size(), name_);
+  for (const auto& step : steps_) {
+    auto failed = process_queue(step);
+    if (failed) {
+      to_transform_.clear();
+      return failed;
+    }
+  }
+  std::vector<transform_batch> result{};
+  while (!to_transform_.empty()) {
+    result.emplace_back(std::move(to_transform_.front()));
+    to_transform_.pop_front();
+  }
+  to_transform_.clear();
+  return result;
 }
 
 transformation_engine::transformation_engine(std::vector<transform>&& transforms)
@@ -109,57 +132,86 @@ transformation_engine::transformation_engine(std::vector<transform>&& transforms
 }
 
 /// Apply relevant transformations to the table slice.
-caf::expected<table_slice> transformation_engine::apply(table_slice&& x) const {
-  auto offset = x.offset();
-  auto size = x.rows();
+caf::error transformation_engine::add(table_slice&& x) {
+  VAST_DEBUG("transformation engine adds a slice");
   auto layout = x.layout();
-  // TODO: Consider using a tsl robin map instead for transparent key lookup.
-  const auto& matching = layout_mapping_.find(std::string{layout.name()});
-  if (matching == layout_mapping_.end())
-    return std::move(x);
-  const auto& indices = matching->second;
-  VAST_INFO("applying {} transforms for received table slice w/ layout {}",
-            indices.size(), x.layout());
-  auto arrow_fast_path
-    = std::all_of(indices.begin(), indices.end(), [&](size_t idx) {
-        return transforms_.at(idx).arrow_fast_path_;
-      });
-  if (arrow_fast_path) {
-    VAST_INFO("selected fast path because all transforms support arrow");
-    // NOTE: It's important that `batch` is kept alive until `create()`
-    // is finished: If a copy was made, `batch` will hold the only reference
-    // to its underlying table slice, but the RecordBatches created by the
-    // transform step will most likely reference some of same underlying data.
-    auto original_batch = as_record_batch(x);
-    auto batch = original_batch;
-    for (auto idx : indices) {
-      const auto& t = transforms_.at(idx);
-      std::tie(layout, batch) = t.apply(std::move(layout), std::move(batch));
-      if (batch->num_rows() > static_cast<int>(size))
-        return caf::make_error(ec::invalid_result, "adding rows in a transform "
-                                                   "is currently not "
-                                                   "supported");
-      if (!batch)
-        return caf::make_error(ec::convert_error, "error while applying arrow "
-                                                  "transform");
-    }
-    return arrow_table_slice_builder::create(batch, layout);
-  }
-  VAST_INFO("falling back to generic path because not all transforms support "
-            "arrow");
-  for (auto idx : indices) {
-    const auto& t = transforms_.at(idx);
-    auto transformed = t.apply(std::move(x));
-    if (!transformed)
-      return transformed.error();
-    if (transformed->rows() > size)
-      return caf::make_error(ec::invalid_result, "adding rows in a transform "
-                                                 "is currently not supported");
-    x = std::move(*transformed);
-  }
-  x.offset(offset);
+  to_transform_[layout].emplace_back(std::move(x));
+  return caf::none;
+}
 
-  return std::move(x);
+caf::error
+transformation_engine::process_queue(transform& transform,
+                                     std::deque<transform_batch>& queue) {
+  caf::error failed{};
+  const auto size = queue.size();
+  for (size_t i = 0; i < size; ++i) {
+    auto [layout, batch] = std::move(queue.front());
+    queue.pop_front();
+    if (auto err = transform.add_batch(layout, batch)) {
+      failed = err;
+      while (!queue.empty())
+        queue.pop_front();
+      break;
+    }
+  }
+  // Finish frees up resource inside the plugin.
+  auto finished = transform.finish_batch();
+  if (!finished && !failed)
+    failed = std::move(finished.error());
+  if (failed)
+    return failed;
+  for (const auto& b : *finished)
+    queue.push_back(b);
+  return caf::none;
+}
+
+/// Apply relevant transformations to the table slice.
+caf::expected<std::vector<table_slice>> transformation_engine::finish() {
+  VAST_DEBUG("transformation engine retrieves results");
+  auto to_transform = std::exchange(to_transform_, {});
+  // NOTE: It's important that `batch` is kept alive until `create()`
+  // is finished: If a copy was made, `batch` will hold the only reference
+  // to its underlying table slice, but the RecordBatches created by the
+  // transform step will most likely reference some of same underlying data.
+  std::vector<std::shared_ptr<arrow::RecordBatch>> keep_alive{};
+  std::unordered_map<vast::type, std::deque<transform_batch>> batches{};
+  std::vector<table_slice> result{};
+  for (auto& [layout, queue] : to_transform) {
+    // TODO: Consider using a tsl robin map instead for transparent key lookup.
+    const auto& matching = layout_mapping_.find(std::string{layout.name()});
+    if (matching == layout_mapping_.end()) {
+      for (auto& s : queue)
+        result.emplace_back(std::move(s));
+      queue.clear();
+      continue;
+    }
+    auto& bq = batches[layout];
+    for (auto& s : queue) {
+      auto b = as_record_batch(s);
+      bq.emplace_back(layout, b);
+    }
+    queue.clear();
+    for (auto& [layout, batch] : bq)
+      keep_alive.push_back(batch);
+    const auto& indices = matching->second;
+    VAST_INFO("transformation engine applies {} transforms on received table "
+              "slices with layout {}",
+              indices.size(), layout);
+    for (auto idx : indices) {
+      auto& t = transforms_.at(idx);
+      auto failed = process_queue(t, bq);
+      if (failed)
+        return failed;
+    }
+  }
+  for (auto& [layout, queue] : batches) {
+    for (auto& [layout, batch] : queue) {
+      auto slice = arrow_table_slice_builder::create(batch, layout);
+      result.emplace_back(slice);
+    }
+    queue.clear();
+  }
+  return result;
 }
 
 const std::vector<transform>& transformation_engine::transforms() {

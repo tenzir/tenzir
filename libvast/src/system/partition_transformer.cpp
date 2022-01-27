@@ -152,7 +152,6 @@ partition_transformer_actor::behavior_type partition_transformer(
     self, [](caf::unit_t&) {},
     [](caf::unit_t&, caf::downstream<vast::table_slice>& out,
        vast::table_slice x) {
-      VAST_INFO("pushing slice");
       out.push(x);
     },
     [](caf::unit_t&, const caf::error&) { /* nop */ });
@@ -165,18 +164,25 @@ partition_transformer_actor::behavior_type partition_transformer(
       // data, as for now we do not want to assign a new import time range to
       // transformed partitions.
       const auto old_import_time = slice.import_time();
-      auto transformed = self->state.transform->apply(std::move(slice));
-      if (!transformed) {
-        VAST_ERROR("failed to apply transform: {}", transformed.error());
+      if (auto err = self->state.transform->add(std::move(slice))) {
+        VAST_ERROR("partition_transformer failed to add slice: {}", err);
         return;
       }
-      // If the transform is a no-op we may get back the original table slice
-      // that's still mapped as read-only, but in this case we also don't need
-      // to adjust the import time.
-      if (transformed->import_time() != old_import_time)
-        transformed->import_time(old_import_time);
-      self->state.events += transformed->rows();
-      self->state.slices.push_back(std::move(*transformed));
+      auto transformed = self->state.transform->finish();
+      if (!transformed) {
+        VAST_ERROR("partition_transformer failed to finish transform: {}",
+                   transformed.error());
+        return;
+      }
+      for (auto& slice : *transformed) {
+        // If the transform is a no-op we may get back the original table slice
+        // that's still mapped as read-only, but in this case we also don't need
+        // to adjust the import time.
+        if (slice.import_time() != old_import_time)
+          slice.import_time(old_import_time);
+        self->state.events += slice.rows();
+        self->state.slices.push_back(std::move(slice));
+      }
       // Adjust the import time range iff necessary.
       self->state.data.synopsis->min_import_time
         = std::min(self->state.data.synopsis->min_import_time, old_import_time);

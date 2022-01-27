@@ -45,6 +45,8 @@ struct transformer_state {
   /// The cached status response.
   record status;
 
+  bool reassign_offset_ranges;
+
   /// Name of the TRANSFORMER actor type.
   static constexpr const char* name = "transformer";
 };
@@ -57,12 +59,11 @@ transformer_actor::behavior_type
 transformer(transformer_actor::stateful_pointer<transformer_state> self,
             std::string name, std::vector<transform>&&);
 
-/// A transformer actor that is attached to a system component. This behaves
-/// identical to the regular `transformer` except for a slightly different
-/// logic during system shutdown.
-transformer_actor::behavior_type component_transformer(
-  transformer_actor::stateful_pointer<transformer_state> self, std::string name,
-  std::vector<transform>&&);
+/// A transformer actor that is attached to a system component. This reassings
+/// correct offsets to the transformed table slices.
+transformer_actor::behavior_type
+importer_transformer(transformer_actor::stateful_pointer<transformer_state> self,
+                     std::string name, std::vector<transform>&&);
 
 /// An actor that hosts a no-op stream sink for table slices, that the SOURCE
 /// and IMPORTER attach to their respective TRANSFORMER actors on shutdown.

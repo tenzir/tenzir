@@ -52,44 +52,34 @@ delete_step::adjust_layout(const vast::type& layout) const {
   return std::pair{std::move(adjusted_layout), std::move(flat_index_to_keep)};
 }
 
-caf::expected<table_slice> delete_step::operator()(table_slice&& slice) const {
-  const auto& layout = slice.layout();
+caf::error
+delete_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
+  VAST_DEBUG("delete step adds batch");
   auto layout_result = adjust_layout(layout);
   if (!layout_result) {
-    if (layout_result.error())
+    if (layout_result.error()) {
+      transformed_.clear();
       return layout_result.error();
-    return slice;
-  }
-  const auto& [adjusted_layout, to_keep] = *layout_result;
-  auto builder_ptr
-    = factory<table_slice_builder>::make(slice.encoding(), adjusted_layout);
-  builder_ptr->reserve(slice.rows());
-  for (size_t i = 0; i < slice.rows(); ++i) {
-    for (const auto j : to_keep) {
-      if (!builder_ptr->add(slice.at(i, j)))
-        return caf::make_error(ec::unspecified, "delete step: unknown error "
-                                                "in table slice builder");
     }
-  }
-  return builder_ptr->finish();
-}
-
-caf::expected<std::pair<type, std::shared_ptr<arrow::RecordBatch>>>
-delete_step::operator()(type layout,
-                        std::shared_ptr<arrow::RecordBatch> batch) const {
-  auto layout_result = adjust_layout(layout);
-  if (!layout_result) {
-    if (layout_result.error())
-      return layout_result.error();
-    return std::make_pair(std::move(layout), std::move(batch));
+    transformed_.emplace_back(std::move(layout), std::move(batch));
+    return caf::none;
   }
   auto& [adjusted_layout, to_keep] = *layout_result;
   auto result = batch->SelectColumns(to_keep);
-  if (!result.ok())
+  if (!result.ok()) {
+    transformed_.clear();
     return caf::make_error(ec::unspecified,
                            fmt::format("failed to delete columns: {}",
                                        result.status().ToString()));
-  return std::make_pair(std::move(adjusted_layout), result.MoveValueUnsafe());
+  }
+  transformed_.emplace_back(std::move(adjusted_layout),
+                            result.MoveValueUnsafe());
+  return caf::none;
+}
+
+caf::expected<std::vector<transform_batch>> delete_step::finish() {
+  VAST_DEBUG("delete step finished transformation");
+  return std::exchange(transformed_, {});
 }
 
 class delete_step_plugin final : public virtual transform_plugin {
@@ -104,7 +94,7 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<transform_step_ptr>
+  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const caf::settings& opts) const override {
     auto fields = caf::get_if<std::vector<std::string>>(&opts, "fields");
     if (!fields)

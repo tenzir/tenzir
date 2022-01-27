@@ -14,14 +14,23 @@
 namespace vast {
 
 // Selects mathcing rows from the input
-class select_step : public generic_transform_step {
+class select_step : public transform_step {
 public:
   select_step(std::string expr);
 
-  caf::expected<table_slice> operator()(table_slice&& slice) const override;
+  /// Applies the transformation to a record batch with a corresponding vast
+  /// layout.
+  [[nodiscard]] caf::error
+  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override;
+
+  /// Retrieves the result of the transformation.
+  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override;
 
 private:
   caf::expected<vast::expression> expression_;
+
+  /// The slices being transformed.
+  std::vector<transform_batch> transformed_;
 };
 
 } // namespace vast
