@@ -172,11 +172,15 @@ caf::error configuration::parse(int argc, char** argv) {
       if (auto config = std::filesystem::path{arg.substr(9)};
           std::filesystem::exists(config, err))
         config_files.push_back(std::move(config));
-      else
+      else if (err)
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("cannot find configuration file {}: "
                                            "{}",
                                            config, err.message()));
+      else
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("cannot find configuration file {}",
+                                           config));
     }
   }
   // Parse and merge all configuration files.
