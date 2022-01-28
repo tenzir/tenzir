@@ -2,7 +2,11 @@
 
 #include "vast/arrow_extension_types.hpp"
 
+#include "vast/detail/overload.hpp"
 #include "vast/test/test.hpp"
+#include "vast/type.hpp"
+
+#include <arrow/api.h>
 
 auto arrow_enum_roundtrip(const vast::enumeration_type& et) {
   const auto& dict_type = arrow::dictionary(arrow::int16(), arrow::utf8());
@@ -44,6 +48,14 @@ TEST(enum extension type equality) {
   CHECK(!t1.ExtensionEquals(t5));
 }
 
+TEST(enum extension type shenigans) {
+  using vast::enum_extension_type;
+  using vast::enumeration_type;
+  enum_extension_type t1{enumeration_type{{"one"}, {"two"}, {"three"}}};
+  // t1.type_id()
+  const auto& s = arrow::utf8();
+}
+
 template <class ExtType>
 void serde_roundtrip() {
   const auto& arrow_type = std::make_shared<ExtType>();
@@ -66,6 +78,7 @@ TEST(subnet type serde roundtrip) {
 TEST(pattern type serde roundtrip) {
   serde_roundtrip<vast::pattern_extension_type>();
 }
+
 template <class... T>
 auto is_type() {
   return []<class... U>(const U&...) {
@@ -73,7 +86,7 @@ auto is_type() {
   };
 }
 
-TEST(sum type) {
+TEST(arrow::DataType sum type) {
   // Returns a visitor that checks whether the expected concrete types are the
   // types resulting in the visitation.
   CHECK(caf::visit(is_type<arrow::NullType>(), *arrow::null()));
@@ -87,12 +100,68 @@ TEST(sum type) {
   CHECK(caf::visit(is_type<arrow::Int64Type, arrow::NullType>(),
                    *arrow::int64(), *arrow::null()));
 
+  CHECK_EQUAL(caf::get_if<arrow::StringType>(&*arrow::utf8()), &*arrow::utf8());
   CHECK(
     caf::visit(is_type<std::shared_ptr<arrow::Int64Type>>(), arrow::int64()));
   CHECK(caf::visit(is_type<std::shared_ptr<arrow::Int64Type>,
                            std::shared_ptr<arrow::NullType>>(),
                    arrow::int64(), arrow::null()));
   auto n = arrow::null();
+  auto et = static_pointer_cast<arrow::DataType>(
+    vast::make_arrow_enum(vast::enumeration_type{{"A"}, {"B"}, {"C"}}));
   CHECK(caf::get_if<std::shared_ptr<arrow::NullType>>(&n).has_value());
   CHECK(!caf::get_if<std::shared_ptr<arrow::Int64Type>>(&n).has_value());
+  CHECK(
+    caf::get_if<std::shared_ptr<vast::enum_extension_type>>(&et).has_value());
+}
+
+template <class Builder, class T>
+std::shared_ptr<arrow::Array> makeArrowArray(std::vector<T> xs) {
+  Builder b{};
+  CHECK(b.AppendValues(xs).ok());
+  return b.Finish().ValueOrDie();
+}
+
+std::shared_ptr<arrow::Array> makeAddressArray() {
+  arrow::FixedSizeBinaryBuilder b{arrow::fixed_size_binary(16)};
+  return std::make_shared<vast::address_array>(vast::make_arrow_address(),
+                                               b.Finish().ValueOrDie());
+}
+
+TEST(arrow::Array sum type) {
+  auto str_arr = makeArrowArray<arrow::StringBuilder, std::string>({"a", "b"});
+  auto uint_arr = makeArrowArray<arrow::UInt64Builder, unsigned long>({7, 8});
+  auto int_arr = makeArrowArray<arrow::Int64Builder, long>({3, 2, 1});
+  auto addr_arr = makeAddressArray();
+  const auto& pattern_arr = static_cast<const arrow::Array&>(
+    vast::pattern_array(vast::make_arrow_pattern(), str_arr));
+
+  CHECK(caf::get_if<arrow::StringArray>(&*str_arr) != nullptr);
+  CHECK(caf::get_if<arrow::UInt64Array>(&*str_arr) == nullptr);
+  CHECK(caf::get_if<arrow::StringArray>(&*uint_arr) == nullptr);
+  CHECK(caf::get_if<arrow::UInt64Array>(&*uint_arr) != nullptr);
+  caf::visit(is_type<arrow::StringArray>(), *str_arr);
+
+  caf::visit(is_type<vast::pattern_array>(), pattern_arr);
+  caf::visit(is_type<vast::pattern_array>(), *str_arr);
+
+  auto f = vast::detail::overload{
+    [](const vast::address_array&) {
+      return 99;
+    },
+    [](const vast::pattern_array&) {
+      return 100;
+    },
+    [](const arrow::StringArray&) {
+      return 101;
+    },
+    [](const auto& other) {
+      fmt::print(stderr, "other: '{}'\n", other.ToString());
+      return -1;
+    },
+  };
+  CHECK_EQUAL(caf::visit(f, *str_arr), 101);
+  CHECK_EQUAL(caf::visit(f, pattern_arr), 100);
+  CHECK_EQUAL(caf::visit(f, *addr_arr), 99);
+  CHECK_EQUAL(caf::visit(f, *int_arr), -1);
 }

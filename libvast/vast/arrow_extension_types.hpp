@@ -12,8 +12,9 @@
 
 #include "vast/type.hpp"
 
+#include <arrow/array.h>
 #include <arrow/extension_type.h>
-#include <arrow/type_fwd.h>
+#include <arrow/type.h>
 #include <caf/detail/type_list.hpp>
 
 namespace vast {
@@ -99,6 +100,12 @@ public:
   std::string Serialize() const override;
 };
 
+struct address_array : arrow::ExtensionArray {
+  using TypeClass = vast::address_extension_type;
+  // using TypeClass = arrow::ExtensionType;
+  using arrow::ExtensionArray::ExtensionArray;
+};
+
 /// Subnet representation as an Arrow extension type.
 /// Internal (physical) representation is a struct containing
 /// a `uint8`, the length of the network prefix, and the address,
@@ -135,6 +142,11 @@ public:
   /// Create serialized representation of this subnet, based on extension name.
   /// @return the serialized representation, `vast.subnet`.
   std::string Serialize() const override;
+};
+
+struct pattern_array : arrow::ExtensionArray {
+  using TypeClass = arrow::ExtensionType;
+  using arrow::ExtensionArray::ExtensionArray;
 };
 
 /// pattern representation as an Arrow extension type.
@@ -177,20 +189,20 @@ void register_extension_types();
 
 /// Creates an `address_extension_type` for VAST `address_type.
 /// @returns An arrow extension type for address.
-std::shared_ptr<address_extension_type> make_arrow_address();
+std::shared_ptr<arrow::ExtensionType> make_arrow_address();
 
 /// Creates an `subnet_extension_type` for VAST `subnet_type.
 /// @returns An arrow extension type for subnet.
-std::shared_ptr<subnet_extension_type> make_arrow_subnet();
+std::shared_ptr<arrow::ExtensionType> make_arrow_subnet();
 
 /// Creates an `pattern_extension_type` for VAST `pattern_type.
 /// @returns An arrow extension type for pattern.
-std::shared_ptr<pattern_extension_type> make_arrow_pattern();
+std::shared_ptr<arrow::ExtensionType> make_arrow_pattern();
 
 /// Creates a `enum_extension_type` extension for `enumeration_type`.
 /// @param t The enumeration type to represent.
 /// @returns An arrow extension type for the specific enumeration.
-std::shared_ptr<enum_extension_type> make_arrow_enum(enumeration_type t);
+std::shared_ptr<arrow::ExtensionType> make_arrow_enum(enumeration_type t);
 
 } // namespace vast
 
@@ -207,8 +219,8 @@ struct sum_type_access<arrow::DataType> final {
     arrow::NullType, arrow::BooleanType, arrow::Int64Type, arrow::UInt64Type,
     arrow::DoubleType, arrow::DurationType, arrow::StringType,
     arrow::TimestampType, arrow::MapType, arrow::ListType, arrow::StructType,
-    vast::address_extension_type, vast::enum_extension_type,
-    vast::subnet_extension_type, vast::pattern_extension_type>;
+    vast::address_extension_type, vast::pattern_extension_type,
+    vast::subnet_extension_type, vast::enum_extension_type>;
 
   using extension_types = detail::tl_filter_t<types, is_extension_type>;
   using type0 = detail::tl_head_t<types>;
@@ -334,6 +346,77 @@ struct sum_type_access<std::shared_ptr<arrow::DataType>> final {
     (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x)];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+template <>
+struct sum_type_access<arrow::Array> final {
+  using types = caf::detail::type_list<
+    arrow::NullArray, arrow::BooleanArray, arrow::Int64Array,
+    arrow::UInt64Array, arrow::DoubleArray, arrow::DurationArray,
+    arrow::StringArray, arrow::TimestampArray, arrow::MapArray, arrow::ListArray,
+    arrow::StructArray, vast::address_array, vast::pattern_array>;
+  // vast::address_extension_type, vast::enum_extension_type,
+  // vast::subnet_extension_type, vast::pattern_extension_type>;
+  using type0 = detail::tl_head_t<types>;
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool is(const arrow::Array& arr, sum_type_token<T, Index>) {
+    return (arr.type_id() == T::TypeClass::type_id);
+  }
+
+  template <class T, int Index>
+  static const T& get(const arrow::Array& arr, sum_type_token<T, Index>) {
+    return static_cast<const T&>(arr);
+  }
+
+  template <class T, int Index>
+  static T& get(arrow::Array& arr, sum_type_token<T, Index>) {
+    return static_cast<T&>(arr);
+  }
+
+  template <class T, int Index>
+  static const T*
+  get_if(const arrow::Array* arr, sum_type_token<T, Index> token) {
+    if (arr && is(*arr, token))
+      return &get(*arr, token);
+    return nullptr;
+  }
+
+  template <class T, int Index>
+  static T* get_if(arrow::Array* arr, sum_type_token<T, Index> token) {
+    if (arr && is(*arr, token))
+      return &get(*arr, token);
+    return nullptr;
+  }
+
+  template <class Result, class Visitor, class... Args>
+  static auto apply(const arrow::Array& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      caf::detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{
+        // decay to function pointer
+        +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
+          auto xs_as_tuple = std::forward_as_tuple(xs...);
+          auto indices = caf::detail::get_indices(xs_as_tuple);
+          return caf::detail::apply_args_suffxied(
+            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+            get(x, sum_type_token<Ts, Indices>{}));
+        }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    int pos = sum_type_access<arrow::DataType>::index_from_type(*x.type());
+    fmt::print(stderr, "variant<array>: underlying type is '{}' @ {}\n",
+               x.type()->ToString(), pos);
+    const auto dispatch
+      = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
     VAST_ASSERT(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
   }

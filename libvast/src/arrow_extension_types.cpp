@@ -152,7 +152,7 @@ bool address_extension_type::ExtensionEquals(const ExtensionType& other) const {
 
 std::shared_ptr<arrow::Array>
 address_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
-  return std::make_shared<arrow::ExtensionArray>(data);
+  return std::make_shared<address_array>(data);
 }
 
 arrow::Result<std::shared_ptr<arrow::DataType>>
@@ -223,7 +223,7 @@ bool pattern_extension_type::ExtensionEquals(const ExtensionType& other) const {
 
 std::shared_ptr<arrow::Array>
 pattern_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
-  return std::make_shared<arrow::ExtensionArray>(data);
+  return std::make_shared<pattern_array>(data);
 }
 
 arrow::Result<std::shared_ptr<arrow::DataType>>
@@ -262,19 +262,19 @@ void register_extension_types() {
   register_extension_type(make_arrow_pattern());
 }
 
-std::shared_ptr<address_extension_type> make_arrow_address() {
+std::shared_ptr<arrow::ExtensionType> make_arrow_address() {
   return std::make_shared<address_extension_type>();
 }
 
-std::shared_ptr<subnet_extension_type> make_arrow_subnet() {
+std::shared_ptr<arrow::ExtensionType> make_arrow_subnet() {
   return std::make_shared<subnet_extension_type>();
 }
 
-std::shared_ptr<pattern_extension_type> make_arrow_pattern() {
+std::shared_ptr<arrow::ExtensionType> make_arrow_pattern() {
   return std::make_shared<pattern_extension_type>();
 }
 
-std::shared_ptr<enum_extension_type> make_arrow_enum(enumeration_type t) {
+std::shared_ptr<arrow::ExtensionType> make_arrow_enum(enumeration_type t) {
   return std::make_shared<enum_extension_type>(t);
 }
 
