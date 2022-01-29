@@ -17,7 +17,7 @@
 
 namespace caf {
 
-int sum_type_access<arrow::DataType>::index_from_type(
+int sum_type_access<arrow::Array>::index_from_type(
   const arrow::DataType& x) noexcept {
   static constexpr int extension_id = -1;
   static constexpr int unknown_id = -2;
@@ -26,20 +26,24 @@ int sum_type_access<arrow::DataType>::index_from_type(
     std::integer_sequence<int, Indices...>) noexcept {
     std::array<int, arrow::Type::type::MAX_ID> tbl{};
     tbl.fill(unknown_id);
-    (static_cast<void>(tbl[Ts::type_id]
-                       = is_extension_type<Ts>::value ? extension_id : Indices),
+    (static_cast<void>(tbl[Ts::type_id] = arrow::is_extension_type<Ts>::value
+                                            ? extension_id
+                                            : Indices),
      ...);
     return tbl;
   }
-  (types{},
-   std::make_integer_sequence<int, caf::detail::tl_size<types>::value>());
+  (sum_type_access<arrow::DataType>::types{},
+   std::make_integer_sequence<int, caf::detail::tl_size<data_types>::value>());
   static const auto extension_table = []<class... Ts, int... Indices>(
     caf::detail::type_list<Ts...>, std::integer_sequence<int, Indices...>) {
     std::array<std::pair<std::string_view, int>,
                detail::tl_size<extension_types>::value>
       tbl{};
-    (static_cast<void>(tbl[Indices]
-                       = {Ts::vast_id, detail::tl_index_of<types, Ts>::value}),
+    (static_cast<void>(
+       tbl[Indices]
+       = {Ts::vast_id,
+          detail::tl_index_of<sum_type_access<arrow::DataType>::types,
+                              Ts>::value}),
      ...);
     return tbl;
   }
@@ -91,7 +95,7 @@ std::shared_ptr<arrow::Array>
 enum_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
   VAST_ASSERT(data->type->id() == arrow::Type::EXTENSION);
   VAST_ASSERT(ExtensionEquals(static_cast<const ExtensionType&>(*data->type)));
-  return std::make_shared<arrow::ExtensionArray>(data);
+  return std::make_shared<enum_array>(data);
 }
 
 arrow::Result<std::shared_ptr<arrow::DataType>>
@@ -187,7 +191,7 @@ std::string subnet_extension_type::extension_name() const {
 
 std::shared_ptr<arrow::Array>
 subnet_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
-  return std::make_shared<arrow::ExtensionArray>(data);
+  return std::make_shared<subnet_array>(data);
 }
 
 std::string subnet_extension_type::Serialize() const {

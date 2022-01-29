@@ -48,14 +48,6 @@ TEST(enum extension type equality) {
   CHECK(!t1.ExtensionEquals(t5));
 }
 
-TEST(enum extension type shenigans) {
-  using vast::enum_extension_type;
-  using vast::enumeration_type;
-  enum_extension_type t1{enumeration_type{{"one"}, {"two"}, {"three"}}};
-  // t1.type_id()
-  const auto& s = arrow::utf8();
-}
-
 template <class ExtType>
 void serde_roundtrip() {
   const auto& arrow_type = std::make_shared<ExtType>();
@@ -109,13 +101,16 @@ TEST(arrow::DataType sum type) {
   auto n = arrow::null();
   auto et = static_pointer_cast<arrow::DataType>(
     vast::make_arrow_enum(vast::enumeration_type{{"A"}, {"B"}, {"C"}}));
-  CHECK(caf::get_if<std::shared_ptr<arrow::NullType>>(&n).has_value());
-  CHECK(!caf::get_if<std::shared_ptr<arrow::Int64Type>>(&n).has_value());
-  CHECK(
-    caf::get_if<std::shared_ptr<vast::enum_extension_type>>(&et).has_value());
+  auto pt = static_pointer_cast<arrow::DataType>(vast::make_arrow_pattern());
+  CHECK(caf::get_if<std::shared_ptr<arrow::NullType>>(&n));
+  CHECK(!caf::get_if<std::shared_ptr<arrow::Int64Type>>(&n));
+  CHECK(caf::get_if<std::shared_ptr<vast::enum_extension_type>>(&et));
+  CHECK(!caf::get_if<std::shared_ptr<vast::enum_extension_type>>(&pt));
+  CHECK(!caf::get_if<std::shared_ptr<vast::pattern_extension_type>>(&et));
+  CHECK(caf::get_if<std::shared_ptr<vast::pattern_extension_type>>(&pt));
 }
 
-template <class Builder, class T>
+template <class Builder, class T = typename Builder::value_type>
 std::shared_ptr<arrow::Array> makeArrowArray(std::vector<T> xs) {
   Builder b{};
   CHECK(b.AppendValues(xs).ok());
@@ -130,18 +125,24 @@ std::shared_ptr<arrow::Array> makeAddressArray() {
 
 TEST(arrow::Array sum type) {
   auto str_arr = makeArrowArray<arrow::StringBuilder, std::string>({"a", "b"});
-  auto uint_arr = makeArrowArray<arrow::UInt64Builder, unsigned long>({7, 8});
-  auto int_arr = makeArrowArray<arrow::Int64Builder, long>({3, 2, 1});
+  auto uint_arr = makeArrowArray<arrow::UInt64Builder>({7, 8});
+  auto int_arr = makeArrowArray<arrow::Int64Builder>({3, 2, 1});
   auto addr_arr = makeAddressArray();
   const auto& pattern_arr = static_cast<const arrow::Array&>(
     vast::pattern_array(vast::make_arrow_pattern(), str_arr));
 
-  CHECK(caf::get_if<arrow::StringArray>(&*str_arr) != nullptr);
-  CHECK(caf::get_if<arrow::UInt64Array>(&*str_arr) == nullptr);
-  CHECK(caf::get_if<arrow::StringArray>(&*uint_arr) == nullptr);
-  CHECK(caf::get_if<arrow::UInt64Array>(&*uint_arr) != nullptr);
-  caf::visit(is_type<arrow::StringArray>(), *str_arr);
+  CHECK(caf::get_if<arrow::StringArray>(&*str_arr));
+  CHECK(!caf::get_if<arrow::UInt64Array>(&*str_arr));
+  CHECK(!caf::get_if<arrow::StringArray>(&*uint_arr));
+  CHECK(caf::get_if<arrow::UInt64Array>(&*uint_arr));
+  CHECK(!caf::get_if<vast::address_array>(&*uint_arr));
+  CHECK(!caf::get_if<vast::pattern_array>(&*addr_arr));
+  CHECK(caf::get_if<vast::address_array>(&*addr_arr));
+  CHECK(!caf::get_if<vast::address_array>(&pattern_arr));
+  CHECK(caf::get_if<vast::pattern_array>(&pattern_arr));
+  CHECK(caf::get_if<vast::pattern_array>(&pattern_arr));
 
+  caf::visit(is_type<arrow::StringArray>(), *str_arr);
   caf::visit(is_type<vast::pattern_array>(), pattern_arr);
   caf::visit(is_type<vast::pattern_array>(), *str_arr);
 
@@ -155,8 +156,7 @@ TEST(arrow::Array sum type) {
     [](const arrow::StringArray&) {
       return 101;
     },
-    [](const auto& other) {
-      fmt::print(stderr, "other: '{}'\n", other.ToString());
+    [](const auto&) {
       return -1;
     },
   };
@@ -164,4 +164,9 @@ TEST(arrow::Array sum type) {
   CHECK_EQUAL(caf::visit(f, pattern_arr), 100);
   CHECK_EQUAL(caf::visit(f, *addr_arr), 99);
   CHECK_EQUAL(caf::visit(f, *int_arr), -1);
+  caf::get_if<std::shared_ptr<vast::pattern_array>>(&str_arr);
+  CHECK(caf::visit(is_type<std::shared_ptr<arrow::StringArray>>(), str_arr));
+  CHECK(!caf::visit(is_type<std::shared_ptr<arrow::StringArray>>(), addr_arr));
+  CHECK(!caf::visit(is_type<std::shared_ptr<vast::pattern_array>>(), addr_arr));
+  CHECK(caf::visit(is_type<std::shared_ptr<vast::address_array>>(), addr_arr));
 }
