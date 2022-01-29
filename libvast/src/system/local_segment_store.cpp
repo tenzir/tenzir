@@ -9,7 +9,6 @@
 #include "vast/system/local_segment_store.hpp"
 
 #include "vast/atoms.hpp"
-#include "vast/co_result.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/fbs/partition.hpp"
@@ -156,8 +155,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
           rp.deliver(err);
         self->quit(std::move(err));
       });
-  return co_lift_behavior(
-    self,
+  return {
     [self](query query) -> caf::result<atom::done> {
       VAST_DEBUG("{} handles new query", *self);
       if (!self->state.segment) {
@@ -189,15 +187,15 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                                   {"store-type", "passive"}});
       return atom::done_v;
     },
-    [self](atom::erase, ids xs) noexcept -> co_result<atom::done> {
+    [self](atom::erase, ids xs) -> caf::result<atom::done> {
       if (!self->state.segment) {
         // Treat this as an "erase" query for the purposes of storing it
         // until the segment is loaded.
-        auto [rp, tag] = co_await co_make_response_promise<atom::done>(*self);
+        auto rp = self->make_response_promise<atom::done>();
         auto query = query::make_erase({});
         query.ids = std::move(xs);
         self->state.deferred_requests.emplace_back(query, rp);
-        co_return tag;
+        return rp;
       }
       VAST_DEBUG("{} erases {} of {} events", *self,
                  rank(self->state.segment->ids() - xs),
@@ -209,35 +207,40 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         // ref-counting. The lookups can still finish normally because the
         // `mmap()` is still valid even after the underlying segment file was
         // removed.
-        co_return co_await co_delegate(*self, self->state.fs, atom::erase_v,
-                                       self->state.path);
+        return self->delegate(self->state.fs, atom::erase_v, self->state.path);
       }
       auto new_segment = segment::copy_without(*self->state.segment, xs);
       if (!new_segment) {
         VAST_ERROR("could not remove ids from segment {}: {}",
                    self->state.segment->id(), render(new_segment.error()));
-        co_return new_segment.error();
+        return new_segment.error();
       }
       VAST_ASSERT(self->state.path.has_filename());
       auto old_path = self->state.path;
       auto new_path = self->state.path.replace_extension("next");
-      auto write_result
-        = co_await co_request_then(*self, self->state.fs, caf::infinite,
-                                   atom::write_v, new_path,
-                                   new_segment->chunk());
-      if (!write_result) {
-        VAST_ERROR("failed to flush archive {}", write_result.error());
-        co_return write_result.error();
-      }
-      // Re-use the old filename so that we don't have to write a new
-      // partition flatbuffer with the changed store header as well.
-      std::error_code ec;
-      std::filesystem::rename(new_path, old_path, ec);
-      if (ec)
-        VAST_ERROR("failed to erase old data {}", new_segment->id());
-      self->state.segment = std::move(*new_segment);
-      co_return atom::done_v;
-    });
+      auto rp = self->make_response_promise<atom::done>();
+      self
+        ->request(self->state.fs, caf::infinite, atom::write_v, new_path,
+                  new_segment->chunk())
+        .then(
+          [seg = std::move(*new_segment), self, old_path, new_path,
+           rp](atom::ok) mutable {
+            std::error_code ec;
+            // Re-use the old filename so that we don't have to write a new
+            // partition flatbuffer with the changed store header as well.
+            std::filesystem::rename(new_path, old_path, ec);
+            if (ec)
+              VAST_ERROR("failed to erase old data {}", seg.id());
+            self->state.segment = std::move(seg);
+            rp.deliver(atom::done_v);
+          },
+          [rp](caf::error& err) mutable {
+            VAST_ERROR("failed to flush archive {}", to_string(err));
+            rp.deliver(err);
+          });
+      return rp;
+    },
+  };
 }
 
 local_store_actor::behavior_type
