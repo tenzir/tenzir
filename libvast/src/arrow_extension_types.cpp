@@ -79,6 +79,38 @@ enumeration_type enum_extension_type::get_enum_type() const {
   return this->enum_type_;
 }
 
+address_extension_type::address_extension_type()
+  : arrow::ExtensionType(arrow::fixed_size_binary(16)) {
+}
+
+std::string address_extension_type::extension_name() const {
+  return id;
+}
+
+bool address_extension_type::ExtensionEquals(const ExtensionType& other) const {
+  return other.extension_name() == this->extension_name();
+}
+
+std::shared_ptr<arrow::Array>
+address_extension_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
+  return std::make_shared<arrow::ExtensionArray>(data);
+}
+
+arrow::Result<std::shared_ptr<arrow::DataType>>
+address_extension_type::Deserialize(std::shared_ptr<DataType> storage_type,
+                                    const std::string& serialized) const {
+  if (serialized != id)
+    return arrow::Status::Invalid("Type identifier did not match");
+  if (!storage_type->Equals(this->storage_type_))
+    return arrow::Status::Invalid("Storage type did not match "
+                                  "fixed_size_binary(16)");
+  return std::make_shared<address_extension_type>();
+}
+
+std::string address_extension_type::Serialize() const {
+  return id;
+}
+
 void register_extension_type(const std::shared_ptr<arrow::ExtensionType>& t) {
   if (auto et = arrow::GetExtensionType(t->extension_name()); !et)
     if (!arrow::RegisterExtensionType(t).ok())
@@ -86,8 +118,11 @@ void register_extension_type(const std::shared_ptr<arrow::ExtensionType>& t) {
                       t->extension_name()));
 }
 
+std::string address_extension_type::id = "vast.address";
+
 void register_extension_types() {
   register_extension_type(make_arrow_enum(enumeration_type{{}}));
+  register_extension_type(std::make_shared<address_extension_type>());
 }
 
 std::shared_ptr<enum_extension_type> make_arrow_enum(enumeration_type t) {

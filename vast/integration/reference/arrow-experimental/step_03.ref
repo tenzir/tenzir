@@ -1,3 +1,9 @@
+  -- field metadata --
+  -- field metadata --
+  ARROW:extension:metadata: 'vast.address'
+  ARROW:extension:metadata: 'vast.address'
+  ARROW:extension:name: 'vast.address'
+  ARROW:extension:name: 'vast.address'
   child 0, item: uint64
 -- schema metadata --
 community_id: string

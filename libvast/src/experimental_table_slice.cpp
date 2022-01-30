@@ -8,6 +8,7 @@
 
 #include "vast/experimental_table_slice.hpp"
 
+#include "vast/arrow_extension_types.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
@@ -278,6 +279,11 @@ auto decode(const type& t, const arrow::Array& arr, F& f) ->
         const auto& ext_arr = static_cast<const arrow::ExtensionArray&>(arr);
         return dispatch(
           static_cast<const arrow::DictionaryArray&>(*ext_arr.storage()));
+      }
+      if (t.extension_name() == address_extension_type::id) {
+        const auto& ext_arr = static_cast<const arrow::ExtensionArray&>(arr);
+        return dispatch(
+          static_cast<const arrow::FixedSizeBinaryArray&>(*ext_arr.storage()));
       }
       die(fmt::format("Unable to handle extension type '{}'",
                       t.extension_name()));
