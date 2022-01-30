@@ -27,6 +27,19 @@
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       defaultApp = apps.vast;
       devShell = import ./shell.nix { inherit pkgs; };
+      hydraJobs = { inherit packages; } // (
+        let
+          vast-vm-tests = (import ./nix/nixos-test.nix
+            {
+              makeTest = import (pkgs.path + "/nixos/tests/make-test-python.nix");
+              inherit pkgs self;
+            });
+        in
+        pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          inherit (vast-vm-tests)
+            vast-vm-systemd;
+        }
+      );
     }
   );
 }
