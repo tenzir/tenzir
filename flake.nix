@@ -6,9 +6,15 @@
 
   outputs = { self, nixpkgs, flake-utils }: {
     overlay = import ./nix/overlay.nix;
-    nixosModule = {
-      imports = [ ./nix/module.nix ];
-      nixpkgs.overlays = [ self.overlay ];
+    nixosModules.vast = {
+      imports = [
+        ./nix/module.nix
+        {
+          nixpkgs.config.packageOverrides = pkgs: {
+            inherit (self.packages."${pkgs.stdenv.hostPlatform.system}") vast;
+          };
+        }
+      ];
     };
   } // flake-utils.lib.eachDefaultSystem (system:
     let pkgs = import nixpkgs { inherit system; overlays = [ self.overlay ]; }; in
