@@ -28,25 +28,27 @@ in
     settings = mkOption {
       type = lib.types.submodule {
         options = {
-          vast = {
+          vast = mkOption {
             default = { };
             type = lib.types.submodule {
-              options.db-directory = mkOption {
-                type = lib.types.path;
-                default = "/var/lib/vast";
-                description = ''
-                  Data directory for VAST.
-                '';
-              };
-              options.endpoint = mkOption {
-                type = lib.types.str;
-                default = "localhost:42000";
-                description = "The endpoint at which the VAST node is listening.";
-              };
-              options.plugins = mkOption {
-                type = lib.types.listOf lib.types.str;
-                default = [ "all" ];
-                description = "The names of plugins to enable";
+              options = {
+                plugins = mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [ "all" ];
+                  description = "The names of plugins to enable";
+                };
+                db-directory = mkOption {
+                  type = lib.types.path;
+                  default = "/var/lib/vast";
+                  description = ''
+                    Data directory for VAST.
+                  '';
+                };
+                endpoint = mkOption {
+                  type = lib.types.str;
+                  default = "localhost:42000";
+                  description = "The endpoint at which the VAST node is listening.";
+                };
               };
             };
           };
