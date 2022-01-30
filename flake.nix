@@ -3,9 +3,10 @@
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/e5a50e8f2995ff359a170d52cc40adbcfdd92ba4";
   inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs.nix-filter.url = "github:numtide/nix-filter";
 
-  outputs = { self, nixpkgs, flake-utils }: {
-    overlay = import ./nix/overlay.nix;
+  outputs = { self, nixpkgs, flake-utils, nix-filter }@inputs: {
+    overlay = import ./nix/overlay.nix { inherit inputs; };
     nixosModules.vast = {
       imports = [
         ./nix/module.nix
