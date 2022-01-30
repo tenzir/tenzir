@@ -1,5 +1,4 @@
-{ nixpkgs ? import ./nix/pinned.nix
-, pkgs ? import ./nix { nixpkgs = nixpkgs; }
+{ pkgs
 , useClang ? pkgs.stdenv.isDarwin
 }:
 let
