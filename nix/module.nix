@@ -3,10 +3,11 @@ let
   name = "vast";
   inherit (lib) mkIf mkOption mkEnableOption;
   cfg = config.services.vast;
-  format = pkgs.formats.yaml {};
+  format = pkgs.formats.yaml { };
   configFile = format.generate "vast.yaml" cfg.settings;
   port = lib.toInt (lib.last (lib.splitString ":" cfg.settings.vast.endpoint));
-in {
+in
+{
   options.services.vast = {
     enable = mkEnableOption "enable VAST";
 
@@ -28,8 +29,8 @@ in {
       type = lib.types.submodule {
         options = {
           vast = {
-            default = {};
-            type =  lib.types.submodule {
+            default = { };
+            type = lib.types.submodule {
               options.db-directory = mkOption {
                 type = lib.types.path;
                 default = "/var/lib/vast";
@@ -51,7 +52,7 @@ in {
           };
         };
       };
-      default = {};
+      default = { };
       example = lib.literalExpression ''
         {
           vast = {
