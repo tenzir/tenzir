@@ -1,3 +1,4 @@
+{ inputs }:
 final: prev:
 let
   inherit (final) lib;
@@ -75,12 +76,28 @@ in
     # https://github.com/NixOS/nixpkgs/issues/130963
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
   });
-  vast-source = final.nix-gitignore.gitignoreSource [
-    "nix"
-    "flake.nix"
-    "flake.lock"
-    "shell.nix"
-  ] ./..;
+  vast-source = inputs.nix-filter.lib.filter {
+    root = ./..;
+    include = [
+      (inputs.nix-filter.lib.inDirectory ../libvast_test)
+      (inputs.nix-filter.lib.inDirectory ../libvast)
+      (inputs.nix-filter.lib.inDirectory ../vast)
+      (inputs.nix-filter.lib.inDirectory ../tools)
+      (inputs.nix-filter.lib.inDirectory ../plugins)
+      (inputs.nix-filter.lib.inDirectory ../schema)
+      (inputs.nix-filter.lib.inDirectory ../doc)
+      (inputs.nix-filter.lib.inDirectory ../cmake)
+      (inputs.nix-filter.lib.inDirectory ../changelog)
+      ../VERSIONING.md
+      ../CMakeLists.txt
+      ../CHANGELOG.md
+      ../LICENSE
+      ../LICENSE.3rdparty
+      ../BANNER
+      ../README.md
+      ../vast.yaml.example
+    ];
+  };
   vast = (final.callPackage ./vast { inherit stdenv; }).overrideAttrs (old: {
     # https://github.com/NixOS/nixpkgs/issues/130963
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
