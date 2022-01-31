@@ -689,6 +689,26 @@ bool experimental_table_slice_builder::add_impl(data_view x) {
 
 // -- utility functions --------------------------------------------------------
 
+namespace {
+std::shared_ptr<const arrow::KeyValueMetadata>
+make_arrow_metadata(const type& t) {
+  auto metadata = std::make_shared<arrow::KeyValueMetadata>();
+  uint nesting_level = 0;
+  for (const auto& name_and_attrs : t.names_and_attributes()) {
+    fmt::print(stderr, "l: {}\n", name_and_attrs);
+    if (!name_and_attrs.first.empty())
+      metadata->Append(fmt::format("VAST:name:{}", nesting_level),
+                       std::string{name_and_attrs.first});
+    ++nesting_level;
+  }
+  if (nesting_level == 0)
+    return nullptr;
+  metadata->Append("VAST:max_level", fmt::format("{}", nesting_level - 1));
+  return metadata;
+}
+
+} // namespace
+
 std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t) {
   VAST_ASSERT(caf::holds_alternative<record_type>(t));
   const auto& rt = flatten(caf::get<record_type>(t));
@@ -703,7 +723,8 @@ std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t) {
 std::shared_ptr<arrow::Field>
 make_experimental_field(const record_type::field_view& field) {
   const auto& arrow_type = make_experimental_type(field.type);
-  return arrow::field(std::string{field.name}, arrow_type);
+  return arrow::field(std::string{field.name}, arrow_type,
+                      make_arrow_metadata(field.type));
 }
 
 std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
@@ -745,6 +766,8 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
   };
   return caf::visit(f, t);
 }
+
+namespace {
 
 // NOLINTNEXTLINE(misc-no-recursion)
 type make_vast_type(const arrow::DataType& arrow_type) {
@@ -809,6 +832,29 @@ type make_vast_type(const arrow::DataType& arrow_type) {
   return caf::visit(f, arrow_type);
 }
 
+} // namespace
+
+type make_vast_type(const arrow::Field& field) {
+  auto vast_type = make_vast_type(*field.type());
+  if (!field.HasMetadata())
+    return vast_type;
+  if (auto ml = field.metadata()->Get("VAST:max_level"); !ml.ok()) {
+    VAST_INFO("skipping non-VAST metadata for field '{}'. Metadata was: '{}'",
+              field.metadata()->ToString());
+    return vast_type;
+  } else {
+    int max_level = stoi(*ml);
+    // working from innermost to outermost nesting
+    for (int l = max_level; l >= 0; --l) {
+      auto name
+        = field.metadata()->Get(fmt::format("VAST:name:{}", l)).ValueOr("");
+      vast_type = type{name, vast_type};
+    }
+    return vast_type;
+  }
+}
+
+// NOLINTNEXTLINE(misc-no-recursion)
 type make_vast_type(const arrow::Schema& arrow_schema) {
   std::vector<record_type::field_view> field_types;
   field_types.reserve(arrow_schema.num_fields());
