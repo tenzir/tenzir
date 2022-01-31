@@ -37,6 +37,8 @@ int sum_type_access<arrow::Array>::index_from_type(
   }
   (sum_type_access<arrow::DataType>::types{},
    std::make_integer_sequence<int, caf::detail::tl_size<data_types>::value>());
+  // The second-stage O(n) lookup table for extension types that identifies the
+  // types by their unique identifier string.
   static const auto extension_table = []<class... Ts, int... Indices>(
     caf::detail::type_list<Ts...>, std::integer_sequence<int, Indices...>) {
     std::array<std::pair<std::string_view, int>,
