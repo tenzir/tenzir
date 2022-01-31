@@ -35,7 +35,7 @@ sketch::lookup(relational_operator op, const data& x) const noexcept {
       auto v0 = flatbuffer_->sketch_as_bloom_filter_v0();
       auto err = unpack(*v0->bloom_filter(), view);
       VAST_ASSERT(!err);
-      // FIXME: Hash data exactly as we've done in the builder.
+      // FIXME: Hash data exactly as in src/sketch/buffered_builder.cpp.
       auto h = [](const auto& x) {
         return hash(x);
       };

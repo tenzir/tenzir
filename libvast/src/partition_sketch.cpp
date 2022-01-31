@@ -8,21 +8,23 @@
 
 #include "vast/partition_sketch.hpp"
 
-#include "vast/data.hpp"
-#include "vast/error.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/table_slice.hpp"
 
 namespace vast {
 
-partition_sketch_builder::partition_sketch_builder(data config) {
-  // TODO: parse config
+partition_sketch::partition_sketch(chunk_ptr flatbuffer) noexcept
+  : flatbuffer_{std::move(flatbuffer)} {
+  VAST_ASSERT(flatbuffer_);
 }
 
-caf::error partition_sketch_builder::add(const table_slice& slice) {
-  auto& layout = slice.layout();
-  // TODO: iterate over all columns and append each column to the respective
-  // sketch.
-  return ec::unimplemented;
+double partition_sketch::lookup(const predicate&) {
+  // TODO: implement
+  return 0.0;
+}
+
+size_t mem_usage(const partition_sketch& x) noexcept {
+  return x.flatbuffer_->size();
 }
 
 } // namespace vast
