@@ -435,9 +435,10 @@ TEST(arrow primitive type to field roundtrip) {
     {"b", record_type{{"hits", count_type{}}, {"net", subnet_type{}}}}}});
 }
 
-TEST(arrow named types roundtrip) {
+TEST(arrow names and attrs roundtrip) {
   field_roundtrip(type{"fool", bool_type{}});
   field_roundtrip(type{"fool", type{"cool", bool_type{}}});
+  field_roundtrip(type{"fool", bool_type{}, {{"#key1_novalue"}, {"#key2", "v2"}}});
 }
 
 auto schema_roundtrip(const type& t) {

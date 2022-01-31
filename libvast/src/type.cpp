@@ -816,10 +816,10 @@ type::names_and_attributes() const& noexcept {
           for (const auto& attribute : *attributes) {
             if (attribute->value() != nullptr
                 && attribute->value()->begin() != attribute->value()->end())
-              attrs.emplace_back(attribute->key()->string_view(),
-                                 attribute->value()->string_view());
+              attrs.push_back({attribute->key()->string_view(),
+                               attribute->value()->string_view()});
             else
-              attrs.emplace_back(attribute->key()->string_view(), "");
+              attrs.push_back({attribute->key()->string_view(), ""});
           }
         }
         if (enriched_type->name())

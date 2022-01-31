@@ -24,6 +24,8 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 
+#include <simdjson.h>
+
 namespace vast {
 
 // -- column builder implementations ------------------------------------------
@@ -690,15 +692,55 @@ bool experimental_table_slice_builder::add_impl(data_view x) {
 // -- utility functions --------------------------------------------------------
 
 namespace {
+
+std::vector<struct type::attribute>
+deserialize_attributes(std::string_view serialized) {
+  simdjson::padded_string json{serialized};
+  simdjson::dom::parser parser;
+  auto doc = parser.parse(json);
+  // TODO: use field_view as soon as simdjson::ondemand hits (one less copy)
+  std::vector<struct type::attribute> attrs{};
+  for (auto f : doc.get_object()) {
+    auto value = std::string{f.value.get_string().value()};
+    // if (!f.value.is_string())
+    //   die("hard");
+    std::optional<std::string> value_opt
+      = value.empty() ? std::optional<std::string>() : value;
+    fmt::print(stderr, "'{}' -> '{}'\n", f.key, value_opt);
+    attrs.push_back({std::string{f.key}, value_opt});
+  }
+  fmt::print(stderr, "tp: deser: {}\n", serialized);
+  return attrs;
+}
+
+std::string
+serialize_attributes(const std::vector<type::attribute_view>& attrs) {
+  auto out = std::string{};
+  auto inserter = std::back_inserter(out);
+  fmt::format_to(inserter, "{{ ");
+  bool first = true;
+  for (const auto& [key, value] : attrs) {
+    if (first)
+      first = false;
+    else
+      fmt::format_to(inserter, ", ");
+    fmt::format_to(inserter, R"("{}": "{}")", key, value);
+  }
+  fmt::format_to(inserter, "}}");
+  return out;
+}
+
 std::shared_ptr<const arrow::KeyValueMetadata>
 make_arrow_metadata(const type& t) {
   auto metadata = std::make_shared<arrow::KeyValueMetadata>();
   uint nesting_level = 0;
-  for (const auto& name_and_attrs : t.names_and_attributes()) {
-    fmt::print(stderr, "l: {}\n", name_and_attrs);
-    if (!name_and_attrs.first.empty())
+  for (const auto& [name, attrs] : t.names_and_attributes()) {
+    if (!name.empty())
       metadata->Append(fmt::format("VAST:name:{}", nesting_level),
-                       std::string{name_and_attrs.first});
+                       std::string{name});
+    if (!attrs.empty())
+      metadata->Append(fmt::format("VAST:attributes:{}", nesting_level),
+                       serialize_attributes(attrs));
     ++nesting_level;
   }
   if (nesting_level == 0)
@@ -848,7 +890,14 @@ type make_vast_type(const arrow::Field& field) {
     for (int l = max_level; l >= 0; --l) {
       auto name
         = field.metadata()->Get(fmt::format("VAST:name:{}", l)).ValueOr("");
-      vast_type = type{name, vast_type};
+      if (const auto& attrs
+          = field.metadata()->Get(fmt::format("VAST:attributes:{}", l));
+          attrs.ok()) {
+        ;
+        vast_type = type{name, vast_type, deserialize_attributes(*attrs)};
+      } else {
+        vast_type = type{name, vast_type};
+      }
     }
     return vast_type;
   }
