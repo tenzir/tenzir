@@ -1,10 +1,18 @@
+    -- field metadata --
+    ARROW:extension:metadata: 'vast.address'
+    ARROW:extension:name: 'vast.address'
+  -- field metadata --
   -- field metadata --
   -- field metadata --
   ARROW:extension:metadata: 'vast.address'
+  ARROW:extension:metadata: 'vast.subnet'
   ARROW:extension:metadata: '{ "A": 0, "B": 1, "C": 2}'
   ARROW:extension:name: 'vast.address'
   ARROW:extension:name: 'vast.enum'
+  ARROW:extension:name: 'vast.subnet'
   child 0, item: int64
+  child 0, length: uint8
+  child 1, address: fixed_size_binary[16]
 -- schema metadata --
 a: fixed_size_binary[16]
 b: bool
@@ -16,7 +24,7 @@ done with current reader, rows: 4
 e: dictionary<values=string, indices=int16, ordered=0>
 i: int64
 l: list<item: int64>
-n: fixed_size_binary[17]
+n: struct<length: uint8, address: fixed_size_binary[16]>
 name: 'all_types'
 open next reader
 open next reader
