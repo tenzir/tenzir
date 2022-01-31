@@ -136,4 +136,15 @@ using contains_type_t = decltype(contains_type_impl<T>(std::declval<TList>()));
 template <class TList, class T>
 inline constexpr bool contains_type_v = contains_type_t<TList, T>::value;
 
+// -- type list --------------------------------------------------------------
+
+/// Map elements of a caf type_list by wrapping them into `std::shared_ptr`.
+template <class Types>
+struct tl_map_shared_ptr;
+
+template <class... Ts>
+struct tl_map_shared_ptr<caf::detail::type_list<Ts...>> {
+  using type = caf::detail::type_list<std::shared_ptr<Ts>...>;
+};
+
 } // namespace vast::detail

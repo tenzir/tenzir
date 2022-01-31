@@ -384,19 +384,9 @@ struct sum_type_access<arrow::DataType> final {
   }
 };
 
-namespace detail {
-template <class Types>
-struct tl_map_shared_ptr;
-template <class... Ts>
-struct tl_map_shared_ptr<detail::type_list<Ts...>> {
-  using type = detail::type_list<std::shared_ptr<Ts>...>;
-};
-
-} // namespace detail
-
 template <>
 struct sum_type_access<std::shared_ptr<arrow::Array>> final {
-  using types = typename detail::tl_map_shared_ptr<
+  using types = typename vast::detail::tl_map_shared_ptr<
     typename sum_type_access<arrow::Array>::types>::type;
   using type0 = detail::tl_head_t<types>;
   static constexpr bool specialized = true;
@@ -433,6 +423,7 @@ struct sum_type_access<std::shared_ptr<arrow::Array>> final {
   static auto
   apply(const std::shared_ptr<arrow::Array>& x, Visitor&& v, Args&&... xs)
     -> Result {
+    VAST_ASSERT(x);
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
     static constexpr auto table = []<class... Ts, int... Indices>(
@@ -457,7 +448,7 @@ struct sum_type_access<std::shared_ptr<arrow::Array>> final {
 
 template <>
 struct sum_type_access<std::shared_ptr<arrow::DataType>> final {
-  using types = typename detail::tl_map_shared_ptr<
+  using types = typename vast::detail::tl_map_shared_ptr<
     typename sum_type_access<arrow::DataType>::types>::type;
   using type0 = detail::tl_head_t<types>;
   static constexpr bool specialized = true;
