@@ -114,7 +114,7 @@ static expression expand(data x) {
   return caf::visit(expander{}, expression{std::move(pred)});
 }
 
-static auto make_predicate_parser() {
+static auto make_predicate_operand_parser() {
   using parsers::alnum;
   using parsers::chr;
   using namespace parser_literals;
@@ -132,6 +132,12 @@ static auto make_predicate_parser() {
     | ':' >> parsers::legacy_type ->* to_type_extractor
     | field ->* to_field_extractor
     ;
+  return operand;
+  // clang-format on
+}
+
+static auto make_predicate_parser() {
+  using namespace parser_literals;
   auto operation
     = "~"_p   ->* [] { return relational_operator::match; }
     | "!~"_p  ->* [] { return relational_operator::not_match; }
@@ -151,6 +157,7 @@ static auto make_predicate_parser() {
     | "-]"_p  ->* [] { return relational_operator::not_ni; }
     ;
   auto ws = ignore(*parsers::space);
+  auto operand = make_predicate_operand_parser();
   auto pred
     = (operand >> ws >> operation >> ws >> operand) ->* to_predicate
     ;
@@ -159,6 +166,42 @@ static auto make_predicate_parser() {
 }
 
 } // namespace
+
+template <class Iterator>
+bool predicate_operand_parser::parse(Iterator& f, const Iterator& l,
+                                     unused_type) const {
+  static auto p = make_predicate_operand_parser();
+  return p(f, l, unused);
+}
+
+template <class Iterator>
+bool predicate_operand_parser::parse(Iterator& f, const Iterator& l,
+                                     predicate::operand& a) const {
+  using namespace parsers;
+  static auto p = make_predicate_operand_parser();
+  return p(f, l, a);
+}
+
+template bool predicate_operand_parser::parse(std::string::iterator&,
+                                              const std::string::iterator&,
+                                              unused_type) const;
+template bool predicate_operand_parser::parse(std::string::iterator&,
+                                              const std::string::iterator&,
+                                              predicate::operand&) const;
+
+template bool
+predicate_operand_parser::parse(std::string::const_iterator&,
+                                const std::string::const_iterator&,
+                                unused_type) const;
+template bool
+predicate_operand_parser::parse(std::string::const_iterator&,
+                                const std::string::const_iterator&,
+                                predicate::operand&) const;
+
+template bool predicate_operand_parser::parse(char const*&, char const* const&,
+                                              unused_type) const;
+template bool predicate_operand_parser::parse(char const*&, char const* const&,
+                                              predicate::operand&) const;
 
 template <class Iterator>
 bool predicate_parser::parse(Iterator& f, const Iterator& l,

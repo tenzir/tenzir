@@ -13,6 +13,27 @@
 
 namespace vast {
 
+struct predicate_operand_parser : parser_base<predicate_operand_parser> {
+  using attribute = predicate::operand;
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const;
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, predicate::operand& x) const;
+};
+
+template <>
+struct parser_registry<predicate::operand> {
+  using type = predicate_operand_parser;
+};
+
+namespace parsers {
+
+static auto const predicate_operand = make_parser<vast::predicate::operand>();
+
+} // namespace parsers
+
 struct predicate_parser : parser_base<predicate_parser> {
   using attribute = predicate;
 
