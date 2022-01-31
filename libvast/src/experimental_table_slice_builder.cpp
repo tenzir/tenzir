@@ -150,9 +150,11 @@ public:
   // to be appended as string, however the table slice only receives the uint8
   using arrow_builder_type = arrow::Int16Builder;
 
-  explicit enum_column_builder(enumeration_type enum_type)
+  explicit enum_column_builder(enumeration_type enum_type,
+                               arrow::MemoryPool* pool)
     : enum_type_{std::move(enum_type)},
-      arr_builder_{std::make_shared<arrow::Int16Builder>()} {
+      arr_builder_{std::make_shared<arrow::Int16Builder>(pool)},
+      dict_builder_{pool} {
   }
 
   bool add(data_view x) override {
@@ -179,13 +181,13 @@ public:
 private:
   enumeration_type enum_type_;
   std::shared_ptr<arrow::Int16Builder> arr_builder_;
+  arrow::StringBuilder dict_builder_;
 
-  [[nodiscard]] std::shared_ptr<arrow::Array> make_field_array() const {
-    arrow::StringBuilder string_builder{};
+  [[nodiscard]] std::shared_ptr<arrow::Array> make_field_array() {
     for (const auto& f : enum_type_.fields())
-      if (!string_builder.Append(std::string{f.name}).ok())
+      if (!dict_builder_.Append(std::string{f.name}).ok())
         die("failed to build Arrow enum field array");
-    if (auto array = string_builder.Finish(); array.ok()) {
+    if (auto array = dict_builder_.Finish(); array.ok()) {
       return *array;
     }
     die("failed to finish Arrow enum field array");
@@ -526,7 +528,7 @@ experimental_table_slice_builder::column_builder::make(
       return std::make_unique<subnet_column_builder>(pool);
     },
     [&](const enumeration_type& x) -> std::unique_ptr<column_builder> {
-      return std::make_unique<enum_column_builder>(x);
+      return std::make_unique<enum_column_builder>(x, pool);
     },
     [=](const record_type& x) -> std::unique_ptr<column_builder> {
       auto field_builders = std::vector<std::unique_ptr<column_builder>>{};
@@ -746,79 +748,65 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
 
 // NOLINTNEXTLINE(misc-no-recursion)
 type make_vast_type(const arrow::DataType& arrow_type) {
-  switch (arrow_type.id()) {
-    case arrow::Type::NA:
+  auto f = detail::overload{
+    [](const arrow::NullType&) -> type {
       return type{none_type{}};
-    case arrow::Type::BOOL:
+    },
+    [](const arrow::BooleanType&) -> type {
       return type{bool_type{}};
-    case arrow::Type::INT64:
+    },
+    [](const arrow::Int64Type&) -> type {
       return type{integer_type{}};
-    case arrow::Type::UINT64:
+    },
+    [](const arrow::UInt64Type&) -> type {
       return type{count_type{}};
-    case arrow::Type::DOUBLE:
+    },
+    [](const arrow::DoubleType&) -> type {
       return type{real_type{}};
-    case arrow::Type::DURATION: {
-      const auto& t = static_cast<const arrow::DurationType&>(arrow_type);
+    },
+    [](const arrow::StringType&) -> type {
+      return type{string_type{}};
+    },
+    [](const arrow::DurationType& t) -> type {
       if (t.unit() != arrow::TimeUnit::NANO)
         die(fmt::format("unhandled Arrow type: Duration[{}]", t.unit()));
       return type{duration_type{}};
-    }
-    case arrow::Type::STRING:
-      return type{string_type{}};
-    case arrow::Type::TIMESTAMP: {
-      const auto& t = static_cast<const arrow::TimestampType&>(arrow_type);
+    },
+    [](const arrow::TimestampType& t) -> type {
       if (t.unit() != arrow::TimeUnit::NANO)
         die(fmt::format("unhandled Arrow type: Timestamp[{}]", t.unit()));
       return type{time_type{}};
-    }
-    case arrow::Type::FIXED_SIZE_BINARY: {
-      const auto& t
-        = static_cast<const arrow::FixedSizeBinaryType&>(arrow_type);
-      switch (auto width = t.byte_width(); width) {
-        case 17:
-          return type{subnet_type{}};
-        default:
-          die(fmt::format("unhandled Arrow type: FIXEDBINARY[{}]", width));
-      }
-      return type{time_type{}};
-    }
-    case arrow::Type::MAP: {
-      const auto& t = static_cast<const arrow::MapType&>(arrow_type);
+    },
+    [](const arrow::MapType& mt) {
       return type{map_type{
-        make_vast_type(*t.key_type()),
-        make_vast_type(*t.item_type()),
+        make_vast_type(*mt.key_type()),
+        make_vast_type(*mt.item_type()),
       }};
-    }
-    case arrow::Type::LIST: {
-      const auto& t = static_cast<const arrow::ListType&>(arrow_type);
-      const auto& embedded_type = make_vast_type(*t.value_type());
+    },
+    [](const arrow::ListType& lt) {
+      const auto& embedded_type = make_vast_type(*lt.value_type());
       return type{list_type{embedded_type}};
-    }
-    case arrow::Type::STRUCT: {
+    },
+    [](const arrow::StructType& st) {
       std::vector<record_type::field_view> field_types;
-      field_types.reserve(arrow_type.num_fields());
-      for (const auto& f : arrow_type.fields())
+      field_types.reserve(st.num_fields());
+      for (const auto& f : st.fields())
         field_types.emplace_back(f->name(), make_vast_type(*f->type()));
       return type{record_type{field_types}};
-    }
-    case arrow::Type::EXTENSION: {
-      const auto& t = static_cast<const arrow::ExtensionType&>(arrow_type);
-      if (t.extension_name() == "vast.enum") {
-        const auto& et = static_cast<const enum_extension_type&>(arrow_type);
-        return type{et.get_enum_type()};
-      }
-      if (t.extension_name() == address_extension_type::id)
-        return type{address_type{}};
-      if (t.extension_name() == subnet_extension_type::id)
-        return type{subnet_type{}};
-      if (t.extension_name() == pattern_extension_type::id)
-        return type{pattern_type{}};
-      die(
-        fmt::format("unhandled Arrow extension type: {}", t.extension_name()));
-    }
-    default:
-      die(fmt::format("unhandled Arrow type: {}", arrow_type.ToString()));
-  }
+    },
+    [](const pattern_extension_type&) -> type {
+      return type{pattern_type{}};
+    },
+    [](const address_extension_type&) -> type {
+      return type{address_type{}};
+    },
+    [](const subnet_extension_type&) -> type {
+      return type{subnet_type{}};
+    },
+    [](const enum_extension_type& et) -> type {
+      return type{et.get_enum_type()};
+    }};
+  return caf::visit(f, arrow_type);
 }
 
 type make_vast_type(const arrow::Schema& arrow_schema) {

@@ -1,9 +1,21 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#pragma once
+
 #include "vast/fwd.hpp"
 
 #include "vast/type.hpp"
 
+#include <arrow/array.h>
 #include <arrow/extension_type.h>
-#include <arrow/type_fwd.h>
+#include <arrow/type.h>
+#include <caf/detail/type_list.hpp>
 
 namespace vast {
 
@@ -12,6 +24,7 @@ namespace vast {
 /// contains all the possible variants specified in the underlying VAST enum.
 class enum_extension_type : public arrow::ExtensionType {
 public:
+  static constexpr auto vast_id = "vast.enum";
   /// Wrap the provided `enumeration_type` into an `arrow::ExtensionType`.
   /// @param enum_type VAST enum type to wrap.
   explicit enum_extension_type(enumeration_type enum_type);
@@ -55,7 +68,8 @@ private:
 /// Internal (physical) representation is a 16-byte fixed binary.
 class address_extension_type : public arrow::ExtensionType {
 public:
-  static const std::string id;
+  static constexpr auto vast_id = "vast.address";
+
   static const std::shared_ptr<arrow::DataType> arrow_type;
 
   // Create an arrow type representation of a VAST address type.
@@ -92,7 +106,8 @@ public:
 /// represented as `address_extension_type`.
 class subnet_extension_type : public arrow::ExtensionType {
 public:
-  static const std::string id;
+  static constexpr auto vast_id = "vast.subnet";
+
   static const std::shared_ptr<arrow::DataType> arrow_type;
 
   // Create an arrow type representation of a VAST subnet type.
@@ -127,7 +142,7 @@ public:
 /// Internal (physical) representation is `arrow::StringType`.
 class pattern_extension_type : public arrow::ExtensionType {
 public:
-  const static std::string id;
+  static constexpr auto vast_id = "vast.pattern";
   static const std::shared_ptr<arrow::DataType> arrow_type;
 
   // Create an arrow type representation of a VAST pattern type.
@@ -158,24 +173,337 @@ public:
   std::string Serialize() const override;
 };
 
+struct enum_array : arrow::ExtensionArray {
+  using TypeClass = enum_extension_type;
+  using arrow::ExtensionArray::ExtensionArray;
+};
+
+struct address_array : arrow::ExtensionArray {
+  using TypeClass = address_extension_type;
+  using arrow::ExtensionArray::ExtensionArray;
+};
+
+struct subnet_array : arrow::ExtensionArray {
+  using TypeClass = subnet_extension_type;
+  using arrow::ExtensionArray::ExtensionArray;
+};
+
+struct pattern_array : arrow::ExtensionArray {
+  using TypeClass = pattern_extension_type;
+  using arrow::ExtensionArray::ExtensionArray;
+};
+
 /// Register all VAST-defined Arrow extension types in the global registry.
 void register_extension_types();
 
 /// Creates an `address_extension_type` for VAST `address_type.
 /// @returns An arrow extension type for address.
-std::shared_ptr<address_extension_type> make_arrow_address();
+std::shared_ptr<arrow::ExtensionType> make_arrow_address();
 
 /// Creates an `subnet_extension_type` for VAST `subnet_type.
 /// @returns An arrow extension type for subnet.
-std::shared_ptr<subnet_extension_type> make_arrow_subnet();
+std::shared_ptr<arrow::ExtensionType> make_arrow_subnet();
 
 /// Creates an `pattern_extension_type` for VAST `pattern_type.
 /// @returns An arrow extension type for pattern.
-std::shared_ptr<pattern_extension_type> make_arrow_pattern();
+std::shared_ptr<arrow::ExtensionType> make_arrow_pattern();
 
 /// Creates a `enum_extension_type` extension for `enumeration_type`.
 /// @param t The enumeration type to represent.
 /// @returns An arrow extension type for the specific enumeration.
-std::shared_ptr<enum_extension_type> make_arrow_enum(enumeration_type t);
+std::shared_ptr<arrow::ExtensionType> make_arrow_enum(enumeration_type t);
 
 } // namespace vast
+
+namespace caf {
+
+/// Sum type access definitions for `arrow::Array` and `arrow::DataType`
+/// alongside their respective `std::shared_ptr` as typically occurring in Apache
+/// Arrow are based on the `types_list` for `arrow::Array`, from which the
+/// `type_list` for `arrow::DataType` is derived. However, the actual mapping is
+/// based on `arrow::DataType`: it's possible to access the underlying datatype
+/// from an Array via its `::TypeClass`, but there's no way to go from DataType
+/// back to the Array, so there's no way to define `apply` for `arrow::DataType`
+/// in terms of indexing for `arrow::Array`.
+/// For this machinery to work, we need to create a separate struct extending
+/// `arrow::ExtensionArray` for every custom extension type and provide a
+/// proper implementation for `::TypeClass`. See `pattern_array` etc.
+
+template <>
+struct sum_type_access<arrow::Array> final {
+  template <class T>
+  struct is_extension_array
+    : std::integral_constant<bool, T::TypeClass::type_id
+                                     == arrow::ExtensionType::type_id> {};
+  template <class Types>
+  struct tl_map_array_to_type;
+  template <class... Ts>
+  struct tl_map_array_to_type<detail::type_list<Ts...>> {
+    using type = detail::type_list<typename Ts::TypeClass...>;
+  };
+  using types = detail::type_list<
+    arrow::NullArray, arrow::BooleanArray, arrow::Int64Array,
+    arrow::UInt64Array, arrow::DoubleArray, arrow::DurationArray,
+    arrow::StringArray, arrow::TimestampArray, arrow::MapArray,
+    arrow::ListArray, arrow::StructArray, vast::address_array,
+    vast::pattern_array, vast::enum_array, vast::subnet_array>;
+  using data_types = typename tl_map_array_to_type<types>::type;
+  using extension_types
+    = detail::tl_filter_t<data_types, arrow::is_extension_type>;
+
+  using type0 = detail::tl_head_t<types>;
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool is(const arrow::Array& arr, sum_type_token<T, Index>) {
+    if (arr.type_id() != T::TypeClass::type_id)
+      return false;
+    if constexpr (is_extension_array<T>::value)
+      return static_cast<const arrow::ExtensionType&>(*arr.type())
+               .extension_name()
+             == T::TypeClass::vast_id;
+    return true;
+  }
+
+  template <class T, int Index>
+  static const T& get(const arrow::Array& arr, sum_type_token<T, Index>) {
+    return static_cast<const T&>(arr);
+  }
+
+  template <class T, int Index>
+  static T& get(arrow::Array& arr, sum_type_token<T, Index>) {
+    return static_cast<T&>(arr);
+  }
+
+  template <class T, int Index>
+  static const T*
+  get_if(const arrow::Array* arr, sum_type_token<T, Index> token) {
+    if (arr && is(*arr, token))
+      return &get(*arr, token);
+    return nullptr;
+  }
+
+  template <class T, int Index>
+  static T* get_if(arrow::Array* arr, sum_type_token<T, Index> token) {
+    if (arr && is(*arr, token))
+      return &get(*arr, token);
+    return nullptr;
+  }
+
+  static int index_from_type(const arrow::DataType& x) noexcept;
+
+  template <class Result, class Visitor, class... Args>
+  static auto apply(const arrow::Array& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{
+        +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
+          auto xs_as_tuple = std::forward_as_tuple(xs...);
+          auto indices = detail::get_indices(xs_as_tuple);
+          return detail::apply_args_suffxied(
+            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+            get(x, sum_type_token<Ts, Indices>{}));
+        }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    const auto dispatch = table[index_from_type(*x.type())];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+template <>
+struct sum_type_access<arrow::DataType> final {
+  using types = sum_type_access<arrow::Array>::data_types;
+
+  using type0 = detail::tl_head_t<types>;
+
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool is(const arrow::DataType& x, sum_type_token<T, Index>) {
+    if (x.id() != T::type_id)
+      return false;
+    if constexpr (arrow::is_extension_type<T>::value)
+      return static_cast<const arrow::ExtensionType&>(x).extension_name()
+             == T::vast_id;
+    return true;
+  }
+
+  template <class T, int Index>
+  static const T& get(const arrow::DataType& x, sum_type_token<T, Index>) {
+    return static_cast<const T&>(x);
+  }
+
+  template <class T, int Index>
+  static T& get(arrow::DataType& x, sum_type_token<T, Index>) {
+    return static_cast<T&>(x);
+  }
+
+  template <class T, int Index>
+  static const T*
+  get_if(const arrow::DataType* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class T, int Index>
+  static T* get_if(arrow::DataType* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class Result, class Visitor, class... Args>
+  static auto apply(const arrow::DataType& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{
+        +[](const arrow::DataType& x, Visitor&& v, Args&&... xs) -> Result {
+          auto xs_as_tuple = std::forward_as_tuple(xs...);
+          auto indices = detail::get_indices(xs_as_tuple);
+          return detail::apply_args_suffxied(
+            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+            get(x, sum_type_token<Ts, Indices>{}));
+        }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    const auto dispatch
+      = table[sum_type_access<arrow::Array>::index_from_type(x)];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+template <>
+struct sum_type_access<std::shared_ptr<arrow::Array>> final {
+  using types = typename vast::detail::tl_map_shared_ptr<
+    typename sum_type_access<arrow::Array>::types>::type;
+  using type0 = detail::tl_head_t<types>;
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool
+  is(const std::shared_ptr<arrow::Array>& arr, sum_type_token<T, Index>) {
+    VAST_ASSERT(arr);
+    if (arr->type_id() != T::element_type::TypeClass::type_id)
+      return false;
+    if constexpr (sum_type_access<arrow::Array>::is_extension_array<
+                    typename T::element_type>::value)
+      return static_cast<const arrow::ExtensionType&>(*arr->type())
+               .extension_name()
+             == T::element_type::TypeClass::vast_id;
+    return true;
+  }
+
+  template <class T, int Index>
+  static T
+  get(const std::shared_ptr<arrow::Array>& x, sum_type_token<T, Index>) {
+    return std::static_pointer_cast<typename T::element_type>(x);
+  }
+
+  template <class T, int Index>
+  static std::optional<T> get_if(const std::shared_ptr<arrow::Array>* x,
+                                 sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return get(*x, token);
+    return {};
+  }
+
+  template <class Result, class Visitor, class... Args>
+  static auto
+  apply(const std::shared_ptr<arrow::Array>& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    VAST_ASSERT(x);
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{+[](const std::shared_ptr<arrow::Array>& x, Visitor&& v,
+                            Args&&... xs) -> Result {
+        auto xs_as_tuple = std::forward_as_tuple(xs...);
+        auto indices = detail::get_indices(xs_as_tuple);
+        return detail::apply_args_suffxied(
+          std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+          get(x, sum_type_token<Ts, Indices>{}));
+      }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    const auto dispatch
+      = table[sum_type_access<arrow::Array>::index_from_type(*x->type())];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+template <>
+struct sum_type_access<std::shared_ptr<arrow::DataType>> final {
+  using types = typename vast::detail::tl_map_shared_ptr<
+    typename sum_type_access<arrow::DataType>::types>::type;
+  using type0 = detail::tl_head_t<types>;
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool
+  is(const std::shared_ptr<arrow::DataType>& x, sum_type_token<T, Index>) {
+    VAST_ASSERT(x);
+    if (x->id() != T::element_type::type_id)
+      return false;
+    if constexpr (arrow::is_extension_type<typename T::element_type>::value)
+      return static_cast<const arrow::ExtensionType&>(*x).extension_name()
+             == T::element_type::vast_id;
+    return true;
+    return x->id() == T::element_type::type_id;
+  }
+
+  template <class T, int Index>
+  static T
+  get(const std::shared_ptr<arrow::DataType>& x, sum_type_token<T, Index>) {
+    return std::static_pointer_cast<typename T::element_type>(x);
+  }
+
+  template <class T, int Index>
+  static std::optional<T> get_if(const std::shared_ptr<arrow::DataType>* x,
+                                 sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return get(*x, token);
+    return {};
+  }
+
+  template <class Result, class Visitor, class... Args>
+  static auto
+  apply(const std::shared_ptr<arrow::DataType>& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{+[](const std::shared_ptr<arrow::DataType>& x,
+                            Visitor&& v, Args&&... xs) -> Result {
+        auto xs_as_tuple = std::forward_as_tuple(xs...);
+        auto indices = detail::get_indices(xs_as_tuple);
+        return detail::apply_args_suffxied(
+          std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+          get(x, sum_type_token<Ts, Indices>{}));
+      }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    const auto dispatch
+      = table[sum_type_access<arrow::Array>::index_from_type(*x)];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+} // namespace caf
