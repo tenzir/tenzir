@@ -150,9 +150,11 @@ public:
   // to be appended as string, however the table slice only receives the uint8
   using arrow_builder_type = arrow::Int16Builder;
 
-  explicit enum_column_builder(enumeration_type enum_type)
+  explicit enum_column_builder(enumeration_type enum_type,
+                               arrow::MemoryPool* pool)
     : enum_type_{std::move(enum_type)},
-      arr_builder_{std::make_shared<arrow::Int16Builder>()} {
+      arr_builder_{std::make_shared<arrow::Int16Builder>(pool)},
+      dict_builder_{pool} {
   }
 
   bool add(data_view x) override {
@@ -179,13 +181,13 @@ public:
 private:
   enumeration_type enum_type_;
   std::shared_ptr<arrow::Int16Builder> arr_builder_;
+  arrow::StringBuilder dict_builder_;
 
-  [[nodiscard]] std::shared_ptr<arrow::Array> make_field_array() const {
-    arrow::StringBuilder string_builder{};
+  [[nodiscard]] std::shared_ptr<arrow::Array> make_field_array() {
     for (const auto& f : enum_type_.fields())
-      if (!string_builder.Append(std::string{f.name}).ok())
+      if (!dict_builder_.Append(std::string{f.name}).ok())
         die("failed to build Arrow enum field array");
-    if (auto array = string_builder.Finish(); array.ok()) {
+    if (auto array = dict_builder_.Finish(); array.ok()) {
       return *array;
     }
     die("failed to finish Arrow enum field array");
@@ -522,12 +524,11 @@ experimental_table_slice_builder::column_builder::make(
       return std::make_unique<map_column_builder>(pool, std::move(key_builder),
                                                   std::move(value_builder));
     },
-    // TODO: this thing doesn't use a pool, all others do; why?
     [&](const subnet_type&) -> std::unique_ptr<column_builder> {
       return std::make_unique<subnet_column_builder>(pool);
     },
     [&](const enumeration_type& x) -> std::unique_ptr<column_builder> {
-      return std::make_unique<enum_column_builder>(x);
+      return std::make_unique<enum_column_builder>(x, pool);
     },
     [=](const record_type& x) -> std::unique_ptr<column_builder> {
       auto field_builders = std::vector<std::unique_ptr<column_builder>>{};

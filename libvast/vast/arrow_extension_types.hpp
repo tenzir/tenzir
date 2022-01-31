@@ -217,17 +217,17 @@ std::shared_ptr<arrow::ExtensionType> make_arrow_enum(enumeration_type t);
 
 namespace caf {
 
-// sum type access definitions for `arrow::Array` and `arrow::DataType`
-// alongside their respective `std::shared_ptr` as typically occurring in Apache
-// Arrow are based on the `types_list` for `arrow::Array`, from which the
-// `type_list` for `arrow::DataType` is derived. However, the actual mapping is
-// based on `arrow::DataType`: it's possible to access the underlying datatype
-// from an Array via its `::TypeClass`, but there's no way to go from DataType
-// back to the Array, so there's no way to define `apply` for `arrow::DataType`
-// in terms of indexing for `arrow::Array`.
-// For this machinery to work, we need to create a separate struct extending
-// `arrow::ExtensionArray` for every custom extension type and provide a
-// proper implementation for `::TypeClass`. See `pattern_array` etc.
+/// Sum type access definitions for `arrow::Array` and `arrow::DataType`
+/// alongside their respective `std::shared_ptr` as typically occurring in Apache
+/// Arrow are based on the `types_list` for `arrow::Array`, from which the
+/// `type_list` for `arrow::DataType` is derived. However, the actual mapping is
+/// based on `arrow::DataType`: it's possible to access the underlying datatype
+/// from an Array via its `::TypeClass`, but there's no way to go from DataType
+/// back to the Array, so there's no way to define `apply` for `arrow::DataType`
+/// in terms of indexing for `arrow::Array`.
+/// For this machinery to work, we need to create a separate struct extending
+/// `arrow::ExtensionArray` for every custom extension type and provide a
+/// proper implementation for `::TypeClass`. See `pattern_array` etc.
 
 template <>
 struct sum_type_access<arrow::Array> final {
@@ -301,7 +301,6 @@ struct sum_type_access<arrow::Array> final {
       detail::type_list<Ts...>,
       std::integer_sequence<int, Indices...>) noexcept {
       return std::array{
-        // decay to function pointer
         +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
           auto xs_as_tuple = std::forward_as_tuple(xs...);
           auto indices = detail::get_indices(xs_as_tuple);
@@ -369,7 +368,6 @@ struct sum_type_access<arrow::DataType> final {
       detail::type_list<Ts...>,
       std::integer_sequence<int, Indices...>) noexcept {
       return std::array{
-        // decay to function pointer
         +[](const arrow::DataType& x, Visitor&& v, Args&&... xs) -> Result {
           auto xs_as_tuple = std::forward_as_tuple(xs...);
           auto indices = detail::get_indices(xs_as_tuple);
@@ -440,15 +438,14 @@ struct sum_type_access<std::shared_ptr<arrow::Array>> final {
     static constexpr auto table = []<class... Ts, int... Indices>(
       detail::type_list<Ts...>,
       std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{// decay to function pointer
-                        +[](const std::shared_ptr<arrow::Array>& x, Visitor&& v,
+      return std::array{+[](const std::shared_ptr<arrow::Array>& x, Visitor&& v,
                             Args&&... xs) -> Result {
-                          auto xs_as_tuple = std::forward_as_tuple(xs...);
-                          auto indices = detail::get_indices(xs_as_tuple);
-                          return detail::apply_args_suffxied(
-                            std::forward<decltype(v)>(v), std::move(indices),
-                            xs_as_tuple, get(x, sum_type_token<Ts, Indices>{}));
-                        }...};
+        auto xs_as_tuple = std::forward_as_tuple(xs...);
+        auto indices = detail::get_indices(xs_as_tuple);
+        return detail::apply_args_suffxied(
+          std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+          get(x, sum_type_token<Ts, Indices>{}));
+      }...};
     }
     (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
@@ -501,15 +498,14 @@ struct sum_type_access<std::shared_ptr<arrow::DataType>> final {
     static constexpr auto table = []<class... Ts, int... Indices>(
       detail::type_list<Ts...>,
       std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{// decay to function pointer
-                        +[](const std::shared_ptr<arrow::DataType>& x,
+      return std::array{+[](const std::shared_ptr<arrow::DataType>& x,
                             Visitor&& v, Args&&... xs) -> Result {
-                          auto xs_as_tuple = std::forward_as_tuple(xs...);
-                          auto indices = detail::get_indices(xs_as_tuple);
-                          return detail::apply_args_suffxied(
-                            std::forward<decltype(v)>(v), std::move(indices),
-                            xs_as_tuple, get(x, sum_type_token<Ts, Indices>{}));
-                        }...};
+        auto xs_as_tuple = std::forward_as_tuple(xs...);
+        auto indices = detail::get_indices(xs_as_tuple);
+        return detail::apply_args_suffxied(
+          std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+          get(x, sum_type_token<Ts, Indices>{}));
+      }...};
     }
     (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
