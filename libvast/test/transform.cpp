@@ -14,6 +14,7 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
+#include "vast/transform_steps/count.hpp"
 #include "vast/transform_steps/delete.hpp"
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/project.hpp"
@@ -140,6 +141,27 @@ as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
 }
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
+
+TEST(count step) {
+  auto slice1 = make_transforms_testdata();
+  auto slice2 = make_transforms_testdata();
+  vast::count_step count{};
+  auto slice1_err = count.add(slice1.layout(), to_record_batch(slice1));
+  REQUIRE_SUCCESS(slice1_err);
+  auto slice2_err = count.add(slice2.layout(), to_record_batch(slice2));
+  REQUIRE_SUCCESS(slice2_err);
+  auto counted = count.finish();
+  REQUIRE_NOERROR(counted);
+  REQUIRE_EQUAL(counted->size(), 1ull);
+  REQUIRE_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(counted).layout()).num_fields(),
+    1ull);
+  CHECK_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(counted).layout()).field(0).name,
+    "count");
+  CHECK_EQUAL((as_table_slice(counted)).at(0, 0),
+              vast::data_view{vast::count{20}});
+}
 
 TEST(delete_ step) {
   auto [slice, expected_slice] = make_proj_and_del_testdata();
@@ -330,6 +352,19 @@ TEST(transformation engine - multiple matching transforms) {
                 vast::table_slice_encoding::arrow);
   CHECK_EQUAL(
     caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 1ull);
+}
+
+TEST(transformation engine - aggregate validation transforms) {
+  std::vector<vast::transform> transforms;
+  transforms.emplace_back("t", std::vector<std::string>{"testdata"});
+  transforms.at(0).add_step(std::make_unique<vast::count_step>());
+  vast::transformation_engine engine(std::move(transforms));
+  auto validation1 = engine.validate(
+    vast::transformation_engine::allow_aggregate_transforms::yes);
+  CHECK_SUCCESS(validation1);
+  auto validation2 = engine.validate(
+    vast::transformation_engine::allow_aggregate_transforms::no);
+  CHECK_FAILURE(validation2);
 }
 
 FIXTURE_SCOPE_END()

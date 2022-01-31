@@ -204,6 +204,12 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                                  ? query::priority::low
                                  : query::priority::normal;
   self->state.transformer = transformation_engine{std::move(transforms)};
+  if (auto err = self->state.transformer.validate(
+        transformation_engine::allow_aggregate_transforms::no)) {
+    VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
+    self->quit();
+    return exporter_actor::behavior_type::make_empty_behavior();
+  }
   if (has_continuous_option(options))
     VAST_DEBUG("{} has continuous query option", *self);
   self->set_exit_handler([=](const caf::exit_msg& msg) {

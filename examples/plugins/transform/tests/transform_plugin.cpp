@@ -25,7 +25,7 @@ const std::string config = R"_(
 vast:
   transforms:
     my-transform:
-      - example-transform
+      - example-transform: {}
   transform-triggers:
     import:
       - transform: my-transform
@@ -49,7 +49,7 @@ TEST(load plugins from config) {
   CHECK(client_source_transforms);
   auto server_import_transforms = vast::system::make_transforms(
     vast::system::transforms_location::server_import, *settings);
-  CHECK(!server_import_transforms); // currently disabled
+  CHECK(server_import_transforms);
   auto server_export_transforms = vast::system::make_transforms(
     vast::system::transforms_location::server_export, *settings);
   REQUIRE(server_export_transforms);

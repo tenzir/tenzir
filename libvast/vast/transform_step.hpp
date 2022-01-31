@@ -31,6 +31,12 @@ class transform_step {
 public:
   virtual ~transform_step() = default;
 
+  /// Returns true for aggregate transform steps.
+  /// @note Transform steps are not aggregate by default.
+  [[nodiscard]] virtual bool is_aggregate() const {
+    return false;
+  }
+
   /// Starts applyings the transformation to a batch with a corresponding vast
   /// layout.
   [[nodiscard]] virtual caf::error

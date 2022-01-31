@@ -110,6 +110,8 @@ struct less_equal_compare {
     }                                                                          \
   } while (false)
 #define REQUIRE_ERROR(x) REQUIRE_EQUAL(!(x), true)
+#define REQUIRE_SUCCESS(x) REQUIRE_EQUAL((x), caf::none)
+#define REQUIRE_FAILURE(x) REQUIRE_NOT_EQUAL((x), caf::none)
 #define FAIL CAF_FAIL
 // Checks that continue with the current test on failure
 #define CHECK CAF_CHECK
@@ -134,6 +136,8 @@ struct less_equal_compare {
     }                                                                          \
   } while (false)
 #define CHECK_ERROR(x) CHECK_EQUAL(!(x), true)
+#define CHECK_SUCCESS(x) CHECK_EQUAL((x), caf::none)
+#define CHECK_FAILURE(x) CHECK_NOT_EQUAL((x), caf::none)
 #define CHECK_FAIL CAF_CHECK_FAIL
 // Checks that automagically handle caf::variant types.
 #define CHECK_VARIANT_EQUAL CAF_CHECK_EQUAL

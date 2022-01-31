@@ -39,6 +39,12 @@ const std::vector<std::string>& transform::event_types() const {
   return event_types_;
 }
 
+bool transform::is_aggregate() const {
+  return std::any_of(steps_.begin(), steps_.end(), [](const auto& step) {
+    return step->is_aggregate();
+  });
+}
+
 caf::error transform::add(table_slice&& x) {
   VAST_DEBUG("transform {} adds a slice", name_);
   auto batch = to_record_batch(x);
@@ -131,6 +137,23 @@ transformation_engine::transformation_engine(std::vector<transform>&& transforms
       layout_mapping_[type].push_back(i);
 }
 
+caf::error transformation_engine::validate(
+  enum allow_aggregate_transforms allow_aggregates) {
+  const auto first_aggregate = std::find_if(
+    transforms_.begin(), transforms_.end(), [](const auto& transform) {
+      return transform.is_aggregate();
+    });
+  bool is_aggregate = first_aggregate != transforms_.end();
+  auto is_aggregate_allowed
+    = allow_aggregates == allow_aggregate_transforms::yes;
+  if (is_aggregate && !is_aggregate_allowed) {
+    return caf::make_error(ec::invalid_configuration,
+                           fmt::format("the transform {} is an aggregate",
+                                       first_aggregate->name()));
+  }
+  return caf::none;
+}
+
 /// Apply relevant transformations to the table slice.
 caf::error transformation_engine::add(table_slice&& x) {
   VAST_DEBUG("transformation engine adds a slice");
@@ -180,6 +203,8 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     // TODO: Consider using a tsl robin map instead for transparent key lookup.
     const auto& matching = layout_mapping_.find(std::string{layout.name()});
     if (matching == layout_mapping_.end()) {
+      VAST_DEBUG("transform_engine cannot find a transform for layout {}",
+                 layout);
       for (auto& s : queue)
         result.emplace_back(std::move(s));
       queue.clear();
