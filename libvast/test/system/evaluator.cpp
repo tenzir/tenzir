@@ -69,7 +69,9 @@ vast::system::indexer_actor::behavior_type dummy_indexer(counts xs) {
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     // Spin up our dummies.
     auto& x_indexers = indexers["x"];
     add_indexer(x_indexers, {12, 42, 42, 17, 42, 75, 38, 11, 10});

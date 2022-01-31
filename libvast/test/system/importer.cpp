@@ -58,7 +58,8 @@ dummy_sink(system::stream_sink_actor<table_slice>::pointer self,
 
 template <class Base>
 struct importer_fixture : Base {
-  importer_fixture(size_t table_slice_size) : slice_size(table_slice_size) {
+  importer_fixture(size_t table_slice_size)
+    : Base(VAST_PP_STRINGIFY(SUITE)), slice_size(table_slice_size) {
     MESSAGE("spawn importer");
     auto dir = this->directory / "importer";
     importer

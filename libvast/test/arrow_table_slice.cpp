@@ -373,7 +373,14 @@ TEST(record batch roundtrip - adding column) {
   CHECK_VARIANT_EQUAL(slice2.at(3, 1, string_type{}), "3"sv);
 }
 
-FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)
+namespace {
+struct fixture : public fixtures::table_slices {
+  fixture() : fixtures::table_slices(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+} // namespace
+
+FIXTURE_SCOPE(arrow_table_slice_tests, fixture)
 
 TEST_TABLE_SLICE(arrow_table_slice_builder, arrow)
 

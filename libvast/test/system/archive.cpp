@@ -27,7 +27,9 @@ namespace {
 struct fixture : fixtures::deterministic_actor_system_and_events {
   system::archive_actor a;
 
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     a = self->spawn(system::archive, directory, 10, 1024 * 1024);
   }
 

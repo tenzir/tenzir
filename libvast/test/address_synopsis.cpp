@@ -43,7 +43,7 @@ TEST(failed construction) {
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
-  fixture() {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
     factory<synopsis>::add(type{address_type{}},
                            make_address_synopsis<legacy_hash>);
   }

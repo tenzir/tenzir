@@ -29,7 +29,7 @@ caf::behavior worker(caf::event_based_actor* self) {
 }
 
 struct fixture : fixtures::actor_system {
-  fixture() {
+  fixture() : fixtures::actor_system(VAST_PP_STRINGIFY(SUITE)) {
     victims = std::vector<caf::actor>{sys.spawn(worker), sys.spawn(worker),
                                       sys.spawn(worker)};
   }

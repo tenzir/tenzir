@@ -31,9 +31,14 @@ std::string_view eve_log
   {"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1},"resp_mime_types":null})json";
 #endif
 
+struct fixture : public fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
 } // namespace
 
-FIXTURE_SCOPE(zeek_reader_tests, fixtures::deterministic_actor_system)
+FIXTURE_SCOPE(zeek_reader_tests, fixture)
 
 TEST(json to data) {
   auto layout = type{

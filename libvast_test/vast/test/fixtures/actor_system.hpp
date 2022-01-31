@@ -38,7 +38,7 @@ struct test_configuration : vast::system::configuration {
 /// A fixture with an actor system that uses the default work-stealing
 /// scheduler.
 struct actor_system : filesystem {
-  actor_system();
+  actor_system(const std::string& suite);
 
   ~actor_system();
 
@@ -57,7 +57,7 @@ using test_node_base_fixture = test_coordinator_fixture<test_configuration>;
 /// determinstic testing of actors.
 struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
                                     filesystem {
-  deterministic_actor_system();
+  deterministic_actor_system(const std::string&);
 
   auto error_handler() {
     return [&](const caf::error& e) { FAIL(vast::render(e)); };

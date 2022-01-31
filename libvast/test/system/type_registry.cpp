@@ -43,7 +43,9 @@ vast::table_slice make_data(const vast::type& layout, Ts&&... ts) {
 } // namespace
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     MESSAGE("spawning AUT");
     aut = spawn_aut();
     REQUIRE(aut);

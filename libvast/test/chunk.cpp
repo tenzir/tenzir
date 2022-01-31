@@ -91,7 +91,16 @@ TEST(as_bytes) {
   CHECK_EQUAL(bytes, as_bytes(x));
 }
 
-FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
+namespace {
+
+struct fixture : public fixtures::filesystem {
+  fixture() : fixtures::filesystem(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(chunk_tests, fixture)
 
 TEST(read / write) {
   std::string str = "foobarbaz";

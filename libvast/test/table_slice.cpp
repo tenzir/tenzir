@@ -27,7 +27,17 @@
 using namespace vast;
 using namespace std::string_literals;
 
-FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
+namespace {
+
+class fixture : public fixtures::table_slices {
+public:
+  fixture() : fixtures::table_slices(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(table_slice_tests, fixture)
 
 TEST(random integer slices) {
   auto t = type{integer_type{}, {{"default", "uniform(100,200)"}}};

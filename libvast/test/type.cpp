@@ -937,7 +937,17 @@ TEST(subset) {
   CHECK(!is_subset(r0, r4));
 }
 
-FIXTURE_SCOPE(type_fixture, fixtures::deterministic_actor_system)
+namespace {
+
+class fixture : public fixtures::deterministic_actor_system {
+public:
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(type_fixture, fixture)
 
 TEST(serialization) {
   CHECK_ROUNDTRIP(type{});

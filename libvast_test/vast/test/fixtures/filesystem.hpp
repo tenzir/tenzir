@@ -9,20 +9,20 @@
 #pragma once
 
 #include "vast/detail/pp.hpp"
+#include "vast/logger.hpp"
 
 #include <filesystem>
 
 namespace fixtures {
 
 struct filesystem {
-  filesystem() {
+  filesystem(const std::string& suite) : directory("vast-unit-test/" + suite) {
     // Fresh afresh.
     std::filesystem::remove_all(directory);
     std::filesystem::create_directories(directory);
   }
 
-  const std::filesystem::path directory
-    = "vast-unit-test/" VAST_PP_STRINGIFY(SUITE);
+  const std::filesystem::path directory;
 };
 
 } // namespace fixtures

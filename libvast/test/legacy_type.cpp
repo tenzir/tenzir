@@ -178,7 +178,16 @@ TEST(parseable) {
   CHECK_EQUAL(unbox(to<legacy_type>(str)), r);
 }
 
-FIXTURE_SCOPE(type_tests, fixtures::deterministic_actor_system)
+namespace {
+
+struct fixture : public fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(type_tests, fixture)
 
 TEST(serialization) {
   CHECK_ROUNDTRIP(legacy_type{});

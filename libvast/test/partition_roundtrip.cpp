@@ -116,7 +116,16 @@ TEST(index roundtrip) {
   CHECK_EQUAL(stats->Get(0)->count(), 54931u);
 }
 
-FIXTURE_SCOPE(partition_roundtrips, fixtures::deterministic_actor_system)
+namespace {
+
+struct fixture : fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(partition_roundtrips, fixture)
 
 TEST(empty partition roundtrip) {
   // Init factory.

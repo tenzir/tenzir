@@ -188,6 +188,8 @@ std::string_view conn_log_100_events = R"__(#separator \x09
 #close	2014-05-23-18-02-35)__";
 
 struct fixture : fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
   std::vector<table_slice>
   read(std::unique_ptr<std::istream> input, size_t slice_size,
        size_t num_events, bool expect_eof, bool expect_stall) {
@@ -383,7 +385,10 @@ FIXTURE_SCOPE_END()
 
 namespace {
 
-struct writer_fixture : fixtures::events, fixtures::filesystem {};
+struct writer_fixture : fixtures::events, fixtures::filesystem {
+  writer_fixture() : fixtures::filesystem(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
 
 } // namespace
 

@@ -46,7 +46,10 @@ system::filesystem_actor::behavior_type mock_filesystem(
   };
 }
 
-struct fixture : fixtures::deterministic_actor_system {};
+struct fixture : fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
 
 } // namespace
 

@@ -19,7 +19,19 @@
 using namespace vast;
 using namespace vast::system;
 
-FIXTURE_SCOPE(sink_tests, fixtures::actor_system_and_events)
+namespace {
+
+class fixture : public fixtures::deterministic_actor_system_and_events {
+public:
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(sink_tests, fixture)
 
 TEST(zeek sink) {
   MESSAGE("constructing a sink");

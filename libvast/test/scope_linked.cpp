@@ -25,9 +25,14 @@ caf::behavior dummy() {
   };
 }
 
+struct fixture : public fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
 } // namespace
 
-FIXTURE_SCOPE(scope_linked_tests, fixtures::deterministic_actor_system)
+FIXTURE_SCOPE(scope_linked_tests, fixture)
 
 TEST(exit message on exit) {
   // Spawn dummy, assign it to a scope_linked handle (sla) and make sure it
