@@ -21,6 +21,9 @@ int sum_type_access<arrow::Array>::index_from_type(
   const arrow::DataType& x) noexcept {
   static constexpr int extension_id = -1;
   static constexpr int unknown_id = -2;
+  // The first-stage O(1) lookup table from arrow::DataType id to the sum type
+  // variant index defined by the type list. Returns unknown_id if the DataType
+  // is not in the type list, and extension_id if the type is an extension type.
   static const auto table = []<class... Ts, int... Indices>(
     caf::detail::type_list<Ts...>,
     std::integer_sequence<int, Indices...>) noexcept {
