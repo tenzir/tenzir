@@ -436,9 +436,28 @@ TEST(arrow primitive type to field roundtrip) {
 }
 
 TEST(arrow names and attrs roundtrip) {
+  auto name_n_attrs_type
+    = type{"fool", bool_type{}, {{"#key1_novalue"}, {"#key2", "v2"}}};
+  auto deeply_nested_type = type{
+    "fool",
+    type{type{bool_type{}, {{"keyX", "v1"}}},
+         {{"#key1_novalue"}, {"#key2", "v2"}}},
+  };
   field_roundtrip(type{"fool", bool_type{}});
   field_roundtrip(type{"fool", type{"cool", bool_type{}}});
-  field_roundtrip(type{"fool", bool_type{}, {{"#key1_novalue"}, {"#key2", "v2"}}});
+  field_roundtrip(name_n_attrs_type);
+  field_roundtrip(
+    type{"fool", type{bool_type{}, {{"#key1_novalue"}, {"#key2", "v2"}}}});
+  field_roundtrip(deeply_nested_type);
+  field_roundtrip(
+    type{"my_list_outer", list_type{type{"inner", deeply_nested_type}}});
+  field_roundtrip(type{
+    "my_map",
+    map_type{
+      type{"my_keys", name_n_attrs_type},
+      type{"my_vals", deeply_nested_type},
+    },
+  });
 }
 
 auto schema_roundtrip(const type& t) {
@@ -449,19 +468,22 @@ auto schema_roundtrip(const type& t) {
 
 TEST(arrow record type to schema roundtrip) {
   schema_roundtrip(type{record_type{{"a", integer_type{}}}});
-  schema_roundtrip(type{record_type{
-    {"a", integer_type{}},
-    {"b", bool_type{}},
-    {"c", integer_type{}},
-    {"d", count_type{}},
-    {"e", real_type{}},
-    {"f", duration_type{}},
-    {"g", time_type{}},
-    {"h", string_type{}},
-    {"i", address_type{}},
-    {"j", subnet_type{}},
-    {"k", list_type{integer_type{}}},
-  }});
+  schema_roundtrip(type{
+    "alias",
+    record_type{
+      {"a", integer_type{}},
+      {"b", bool_type{}},
+      {"c", integer_type{}},
+      {"d", count_type{}},
+      {"e", real_type{}},
+      {"f", duration_type{}},
+      {"g", time_type{}},
+      {"h", string_type{}},
+      {"i", address_type{}},
+      {"j", subnet_type{}},
+      {"k", list_type{integer_type{}}},
+    },
+  });
 
   // unsupported: recursive top-level records are flattened in arrow schema
   // schema_roundtrip(type{

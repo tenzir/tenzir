@@ -1,7 +1,12 @@
-type baz = bool
+type baz = bool #baz_key=baz_value
+type named_bool = bool #key_with_no_value
 
-type all_types = record {
-  b: bool,
+type multi_attr_rec = record {
+  contagious: named_bool,
+}
+
+type all_types_i = record {
+  b: bool #description=unnamed_extended_bool,
   i: int,
   c: count,
   r: real,
@@ -11,7 +16,7 @@ type all_types = record {
   a: addr,
   n: subnet,
   e: enum { A, B, C },
-  l: list<int>,
+  l: list<multi_attr_rec>,
   bar: record {
     x: baz,
   }
@@ -19,4 +24,6 @@ type all_types = record {
   // p: pattern #skip,
   // active indexer instantiated (and failing) despite #skip
   // m: map<int, real> #skip, 
-}
+} #top_level_key=v
+
+type all_types = all_types_i #some=attr

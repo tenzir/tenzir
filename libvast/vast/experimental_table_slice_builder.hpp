@@ -138,9 +138,11 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t);
 /// Converts a VAST `type` to an Arrow `Field`.
 //  @param name The field name.
 /// @param t The type to convert.
+/// @param nullable Is the field nullable.
 /// @returns An arrow representation of `t`.
 std::shared_ptr<arrow::Field>
-make_experimental_field(const record_type::field_view& field);
+make_experimental_field(const record_type::field_view& field, bool nullable
+                                                              = true);
 
 /// Converts an Arrow `Schema` to a VAST `type`.
 /// @param arrow_schema The Arrow schema to convert.

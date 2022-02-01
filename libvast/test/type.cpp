@@ -744,10 +744,19 @@ TEST(enriched types) {
   CHECK_EQUAL(lat, at);
 }
 
-bool operator==(const type::attribute_view& av1,
-                const type::attribute_view& av2) {
+namespace {
+
+bool equals_av(const type::attribute_view& av1,
+               const type::attribute_view& av2) {
   return av1.key == av2.key && av1.value == av2.value;
 }
+
+bool equals(const std::vector<type::attribute_view>& lhs,
+            const std::vector<type::attribute_view>& rhs) {
+  return std::equal(lhs.begin(), lhs.end(), rhs.begin(), equals_av);
+}
+
+} // namespace
 
 TEST(names_and_attributes) {
   const auto layer1 = type{"layer1_innermost",
@@ -760,19 +769,19 @@ TEST(names_and_attributes) {
   const auto layer4_no_attrs = type{"layer4", layer3_unnamed};
   std::vector<std::pair<std::string_view, std::vector<type::attribute_view>>>
     x{};
-  for (auto l : layer4_no_attrs.names_and_attributes())
+  for (const auto& l : layer4_no_attrs.names_and_attributes())
     x.push_back(l);
   CHECK_EQUAL(x[0].first, "layer4");
   CHECK(x[0].second.empty());
   CHECK_EQUAL(x[1].first, "");
-  CHECK_EQUAL(x[1].second, (std::vector<type::attribute_view>{
-                             {"l3", "level3"}, {"layer_3_empty", ""}}));
+  CHECK(equals(x[1].second, (std::vector<type::attribute_view>{
+                              {"l3", "level3"}, {"layer_3_empty", ""}})));
   CHECK_EQUAL(x[2].first, "layer2");
-  CHECK_EQUAL(x[2].second, (std::vector<type::attribute_view>{
-                             {"l2", "level2"}, {"layer_2_empty", ""}}));
+  CHECK(equals(x[2].second, (std::vector<type::attribute_view>{
+                              {"l2", "level2"}, {"layer_2_empty", ""}})));
   CHECK_EQUAL(x[3].first, "layer1_innermost");
-  CHECK_EQUAL(x[3].second, (std::vector<type::attribute_view>{
-                             {"inner_1_empty", ""}, {"inner_2", "level1"}}));
+  CHECK(equals(x[3].second, (std::vector<type::attribute_view>{
+                              {"inner_1_empty", ""}, {"inner_2", "level1"}})));
 }
 
 TEST(sorting) {
