@@ -21,11 +21,9 @@ using namespace vast::system;
 
 namespace {
 
-class fixture : public fixtures::deterministic_actor_system_and_events {
+class fixture : public fixtures::actor_system_and_events {
 public:
-  fixture()
-    : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::actor_system_and_events(VAST_PP_STRINGIFY(SUITE)) {
   }
 };
 
