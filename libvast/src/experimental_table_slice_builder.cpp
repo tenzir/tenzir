@@ -920,8 +920,8 @@ type enrich_type_with_metadata(
       if (key != "VAST:nesting-depth")
         VAST_WARN("Unhandled VAST metadata key '{}'", key);
     }
-    for (const auto& [name, attrs] : std::ranges::reverse_view(names_and_attrs))
-      t = type{name, t, attrs};
+    for (auto it = names_and_attrs.rbegin(); it != names_and_attrs.rend(); ++it)
+      t = type{it->first, t, it->second};
     return t;
   }
 }
@@ -929,8 +929,8 @@ type enrich_type_with_metadata(
 } // namespace
 
 type make_vast_type(const arrow::Field& field) {
-  const auto& vast_type = make_vast_type_int(*field.type());
-  return enrich_type_with_metadata(vast_type, field.metadata());
+  auto vast_type = make_vast_type_int(*field.type());
+  return enrich_type_with_metadata(std::move(vast_type), field.metadata());
 }
 
 type make_vast_type(const arrow::Schema& arrow_schema) {
