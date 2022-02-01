@@ -483,6 +483,7 @@ TEST(arrow record type to schema roundtrip) {
       {"j", subnet_type{}},
       {"k", list_type{integer_type{}}},
     },
+    {{"top_level_key", "top_level_value"}},
   });
 
   // unsupported: recursive top-level records are flattened in arrow schema

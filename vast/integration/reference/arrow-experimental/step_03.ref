@@ -16,22 +16,22 @@
   VAST:attributes:0: '{ "index": "hash"}'
   VAST:attributes:0: '{ "index": "hash"}'
   VAST:attributes:0: '{ "ioc": ""}'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
   VAST:name:0: 'port'
   VAST:name:0: 'port'
   VAST:name:0: 'port'
   VAST:name:0: 'timestamp'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
   child 0, item: uint64
 -- schema metadata --
-VAST:max_level: '0'
 VAST:name:0: 'suricata.http'
+VAST:nesting-depth: '0'
 community_id: string
 dest_ip: fixed_size_binary[16]
 dest_port: uint64

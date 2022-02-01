@@ -9,10 +9,13 @@
 #include "vast/experimental_table_slice_builder.hpp"
 
 #include "vast/arrow_extension_types.hpp"
+#include "vast/concept/parseable/core.hpp"
+#include "vast/concept/parseable/numeric.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/zip_iterator.hpp"
 #include "vast/die.hpp"
 #include "vast/experimental_table_slice.hpp"
 #include "vast/fbs/table_slice.hpp"
@@ -24,6 +27,7 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 
+#include <ranges>
 #include <simdjson.h>
 
 namespace vast {
@@ -701,8 +705,11 @@ deserialize_attributes(std::string_view serialized) {
   std::vector<struct type::attribute> attrs{};
   for (auto f : doc.get_object()) {
     auto value = std::string{f.value.get_string().value()};
-    // if (!f.value.is_string())
-    //   die("hard");
+    if (!f.value.is_string()) {
+      VAST_ERROR("Unexpected Arrow metadata content in json parser: {} -> {}",
+                 f.key, f.value);
+      continue;
+    }
     std::optional<std::string> value_opt
       = value.empty() ? std::optional<std::string>() : value;
     attrs.push_back({std::string{f.key}, value_opt});
@@ -712,8 +719,8 @@ deserialize_attributes(std::string_view serialized) {
 
 std::string
 serialize_attributes(const std::vector<type::attribute_view>& attrs) {
-  auto out = std::string{};
-  auto inserter = std::back_inserter(out);
+  auto result = std::string{};
+  auto inserter = std::back_inserter(result);
   fmt::format_to(inserter, "{{ ");
   bool first = true;
   for (const auto& [key, value] : attrs) {
@@ -724,25 +731,25 @@ serialize_attributes(const std::vector<type::attribute_view>& attrs) {
     fmt::format_to(inserter, R"("{}": "{}")", key, value);
   }
   fmt::format_to(inserter, "}}");
-  return out;
+  return result;
 }
 
 std::shared_ptr<const arrow::KeyValueMetadata>
 make_arrow_metadata(const type& t) {
   auto metadata = std::make_shared<arrow::KeyValueMetadata>();
-  int nesting_level = 0;
+  int nesting_depth = 0;
   for (const auto& [name, attrs] : t.names_and_attributes()) {
     if (!name.empty())
-      metadata->Append(fmt::format("VAST:name:{}", nesting_level),
+      metadata->Append(fmt::format("VAST:name:{}", nesting_depth),
                        std::string{name});
     if (!attrs.empty())
-      metadata->Append(fmt::format("VAST:attributes:{}", nesting_level),
+      metadata->Append(fmt::format("VAST:attributes:{}", nesting_depth),
                        serialize_attributes(attrs));
-    ++nesting_level;
+    ++nesting_depth;
   }
-  if (nesting_level == 0)
+  if (nesting_depth == 0)
     return nullptr;
-  metadata->Append("VAST:max_level", fmt::format("{}", nesting_level - 1));
+  metadata->Append("VAST:nesting-depth", fmt::format("{}", nesting_depth - 1));
   return metadata;
 }
 
@@ -810,7 +817,10 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
 
 namespace {
 
-// NOLINTNEXTLINE(misc-no-recursion)
+/// Takes an Arrow data type and converts it to its according VAST
+/// representation. As metadata is handled at the field level on the field
+/// level in Arrow, the type at this point is incomplete, as it's lacking the
+/// enriched type information (alias names and attributes).
 type make_vast_type_int(const arrow::DataType& arrow_type) {
   auto f = detail::overload{
     [](const arrow::NullType&) -> type {
@@ -873,31 +883,46 @@ type make_vast_type_int(const arrow::DataType& arrow_type) {
   return caf::visit(f, arrow_type);
 }
 
+/// Enhances a VAST type based on the metadata extracted from Arrow.
+/// Metadata can be attached to both Arrow schema and an Arrow field, and VAST
+/// stores metadata on either of the two, using the exact same structure.
 type enrich_type_with_metadata(
-  const type& t,
-  const std::shared_ptr<const arrow::KeyValueMetadata>& metadata) {
+  type t, const std::shared_ptr<const arrow::KeyValueMetadata>& metadata) {
   if (!metadata)
     return t;
-  if (auto ml = metadata->Get("VAST:max_level"); !ml.ok()) {
+  if (auto ml = metadata->Get("VAST:nesting-depth"); !ml.ok()) {
     VAST_INFO("skipping non-VAST metadata for field '{}'. Metadata was: '{}'",
               t.name(), metadata->ToString());
     return t;
   } else {
-    auto enriched_type = t;
-    int max_level = stoi(*ml);
-    // working from innermost to outermost nesting
-    for (int l = max_level; l >= 0; --l) {
-      auto name = metadata->Get(fmt::format("VAST:name:{}", l)).ValueOr("");
-      if (const auto& attrs
-          = metadata->Get(fmt::format("VAST:attributes:{}", l));
-          attrs.ok()) {
-        enriched_type
-          = type{name, enriched_type, deserialize_attributes(*attrs)};
-      } else {
-        enriched_type = type{name, enriched_type};
-      }
+    int nesting_depth{};
+    if (!parsers::i32(ml.ValueUnsafe(), nesting_depth)) {
+      VAST_ERROR("Invalid value for 'VAST:nesting-depth': {}", *ml);
+      return t;
     }
-    return enriched_type;
+    auto names_and_attrs = std::vector<
+      std::pair<std::string, struct std::vector<struct type::attribute>>>(
+      nesting_depth + 1);
+    auto name_parser = "VAST:name:" >> parsers::i32 >> parsers::eoi;
+    auto attr_parser = "VAST:attributes:" >> parsers::i32 >> parsers::eoi;
+    for (const auto& [key, value] :
+         detail::zip(metadata->keys(), metadata->values())) {
+      if (!key.starts_with("VAST:"))
+        continue;
+      if (int32_t index{}; name_parser(key, index)) {
+        names_and_attrs[index].first = value;
+        continue;
+      }
+      if (int32_t index{}; attr_parser(key, index)) {
+        names_and_attrs[index].second = deserialize_attributes(value);
+        continue;
+      }
+      if (key != "VAST:nesting-depth")
+        VAST_WARN("Unhandled VAST metadata key '{}'", key);
+    }
+    for (const auto& [name, attrs] : std::ranges::reverse_view(names_and_attrs))
+      t = type{name, t, attrs};
+    return t;
   }
 }
 
@@ -908,7 +933,6 @@ type make_vast_type(const arrow::Field& field) {
   return enrich_type_with_metadata(vast_type, field.metadata());
 }
 
-// NOLINTNEXTLINE(misc-no-recursion)
 type make_vast_type(const arrow::Schema& arrow_schema) {
   std::vector<record_type::field_view> field_types;
   field_types.reserve(arrow_schema.num_fields());

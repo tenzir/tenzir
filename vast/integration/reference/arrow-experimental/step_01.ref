@@ -9,17 +9,17 @@
   ARROW:extension:name: 'vast.address'
   ARROW:extension:name: 'vast.address'
   VAST:attributes:0: '{ "index": "hash"}'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
-  VAST:max_level: '0'
   VAST:name:0: 'port'
   VAST:name:0: 'port'
   VAST:name:0: 'timestamp'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
+  VAST:nesting-depth: '0'
   child 0, item: string
 -- schema metadata --
-VAST:max_level: '0'
 VAST:name:0: 'zeek.conn'
+VAST:nesting-depth: '0'
 conn_state: string
 done with all readers
 done with current reader, rows: 10
