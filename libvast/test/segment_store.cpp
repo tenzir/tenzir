@@ -30,7 +30,9 @@ using namespace binary_byte_literals;
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     create_directories(segments_dir);
     // Create an empty segment.
     std::ofstream{this->empty};

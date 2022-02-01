@@ -75,7 +75,16 @@ TEST(min - max synopsis) {
   verify(heterogeneous_view, {N, N, T, F, N, N, N, N, N, N, N, N});
 }
 
-FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)
+namespace {
+
+struct fixture : public fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(synopsis_tests, fixture)
 
 TEST(serialization) {
   factory<synopsis>::initialize();

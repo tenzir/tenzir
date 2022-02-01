@@ -23,7 +23,16 @@
 
 using namespace vast;
 
-FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
+namespace {
+
+struct fixture : public fixtures::filesystem {
+  fixture() : fixtures::filesystem(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(chunk_tests, fixture)
 
 #if VAST_POSIX
 

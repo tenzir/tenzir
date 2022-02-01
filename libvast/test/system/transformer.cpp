@@ -70,7 +70,9 @@ dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
 
 struct transformer_fixture
   : public fixtures::deterministic_actor_system_and_events {
-  transformer_fixture() {
+  transformer_fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     vast::factory<vast::table_slice_builder>::initialize();
   }
 

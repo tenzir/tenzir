@@ -45,7 +45,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   static constexpr size_t segments = 1;
   static constexpr size_t max_segment_size = 8192;
 
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     auto fs = self->spawn(system::posix_filesystem, directory);
     auto archive_dir = directory / "archive";
     auto index_dir = directory / "index";

@@ -48,7 +48,9 @@ vast::system::archive_actor::behavior_type mock_archive() {
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     filesystem = self->spawn(memory_filesystem);
     importer = self->spawn(mock_importer);
   }

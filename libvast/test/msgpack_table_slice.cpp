@@ -16,7 +16,16 @@
 
 using namespace vast;
 
-FIXTURE_SCOPE(msgpack_table_slice_tests, fixtures::table_slices)
+namespace {
+
+struct fixture : fixtures::table_slices {
+  fixture() : fixtures::table_slices(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(msgpack_table_slice_tests, fixture)
 
 TEST_TABLE_SLICE(msgpack_table_slice_builder, msgpack)
 

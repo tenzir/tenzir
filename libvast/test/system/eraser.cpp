@@ -107,7 +107,9 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     sched.run();
   }
 

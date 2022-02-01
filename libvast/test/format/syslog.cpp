@@ -18,11 +18,20 @@
 
 using namespace vast;
 
+namespace {
+
 // Technically, we don't need the actor system. However, we do need to
 // initialize the table slice builder factories which happens automatically in
 // the actor system setup. Further, including this fixture gives us access to
 // log files to hunt down bugs faster.
-FIXTURE_SCOPE(syslog_tests, fixtures::deterministic_actor_system)
+struct fixture : public fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(syslog_tests, fixture)
 TEST(syslog reader) {
   auto in = detail::make_input_stream(artifacts::logs::syslog::syslog_msgs);
   format::syslog::reader reader{caf::settings{}, std::move(*in)};

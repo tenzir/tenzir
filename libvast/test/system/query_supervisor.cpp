@@ -43,9 +43,15 @@ dummy_partition(system::partition_actor::pointer self, ids x) {
   };
 }
 
+class fixture : public fixtures::deterministic_actor_system {
+public:
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
 } // namespace
 
-FIXTURE_SCOPE(query_supervisor_tests, fixtures::deterministic_actor_system)
+FIXTURE_SCOPE(query_supervisor_tests, fixture)
 
 TEST(lookup) {
   MESSAGE("spawn supervisor, it should register itself as a worker on launch");

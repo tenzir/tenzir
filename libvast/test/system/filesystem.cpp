@@ -28,7 +28,7 @@ using namespace std::string_literals;
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
-  fixture() {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
     filesystem = self->spawn<caf::detached>(posix_filesystem, directory);
   }
 

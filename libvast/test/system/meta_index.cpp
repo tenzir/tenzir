@@ -110,7 +110,9 @@ struct mock_partition {
 };
 
 struct fixture : public fixtures::deterministic_actor_system_and_events {
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     MESSAGE("register synopsis factory");
     factory<synopsis>::initialize();
     MESSAGE("register table_slice_builder factory");

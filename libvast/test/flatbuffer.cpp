@@ -52,7 +52,16 @@ TEST(lifetime) {
   CHECK_EQUAL(counter, 1);
 }
 
-FIXTURE_SCOPE(flatbuffer_fixture, fixtures::deterministic_actor_system)
+namespace {
+
+struct fixture : public fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(flatbuffer_fixture, fixture)
 
 TEST(serialization) {
   auto fbt = flatbuffer<fbs::Type>{};

@@ -15,14 +15,14 @@
 namespace fixtures {
 
 struct filesystem {
-  filesystem() {
+  explicit filesystem(std::string_view suite)
+    : directory(std::filesystem::path{"vast-unit-test/"} / suite) {
     // Fresh afresh.
     std::filesystem::remove_all(directory);
     std::filesystem::create_directories(directory);
   }
 
-  const std::filesystem::path directory
-    = "vast-unit-test/" VAST_PP_STRINGIFY(SUITE);
+  const std::filesystem::path directory;
 };
 
 } // namespace fixtures

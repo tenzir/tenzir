@@ -81,7 +81,7 @@ caf::behavior mock_node(caf::stateful_actor<mock_node_state>* self) {
 }
 
 struct fixture : fixtures::deterministic_actor_system {
-  fixture() {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
     MESSAGE("spawn mock node");
     node = sys.spawn(mock_node);
     run();

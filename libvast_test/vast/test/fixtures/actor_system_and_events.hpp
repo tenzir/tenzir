@@ -16,14 +16,18 @@ namespace fixtures {
 /// A fixture with an actor system that uses the default work-stealing
 /// scheduler and test data (events).
 struct actor_system_and_events : actor_system, events {
-  // nop
+  explicit actor_system_and_events(std::string_view suite)
+    : actor_system(suite) {
+  }
 };
 
 /// A fixture with an actor system that uses the test coordinator for
 /// determinstic testing of actors and test data (events).
 struct deterministic_actor_system_and_events : deterministic_actor_system,
                                                events {
-  // nop
+  explicit deterministic_actor_system_and_events(std::string_view suite)
+    : deterministic_actor_system(suite) {
+  }
 };
 
 } // namespace fixtures

@@ -464,7 +464,15 @@ TEST(arrow record type to schema roundtrip) {
   //       {"inner", record_type{{"value", subnet_type{}}}}}});
 }
 
-FIXTURE_SCOPE(experimental_table_slice_tests, fixtures::table_slices)
+namespace {
+
+struct fixture : public fixtures::table_slices {
+  fixture() : fixtures::table_slices(VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+} // namespace
+
+FIXTURE_SCOPE(experimental_table_slice_tests, fixture)
 
 TEST_TABLE_SLICE(experimental_table_slice_builder, experimental)
 

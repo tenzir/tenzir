@@ -66,9 +66,16 @@ test_sink(test_sink_actor::stateful_pointer<test_sink_state> self,
   };
 }
 
+struct fixture : public fixtures::deterministic_actor_system_and_events {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
+  }
+};
+
 } // namespace
 
-FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
+FIXTURE_SCOPE(source_tests, fixture)
 
 TEST(zeek conn source) {
   MESSAGE("start source for producing table slices of size 100");

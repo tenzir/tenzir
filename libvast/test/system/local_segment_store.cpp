@@ -26,7 +26,9 @@
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
     filesystem = self->spawn(memory_filesystem);
   }
 
