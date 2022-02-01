@@ -101,7 +101,7 @@ make_data(const std::vector<table_slice>& slices) {
 
 namespace fixtures {
 
-table_slices::table_slices(const std::string& suite)
+table_slices::table_slices(std::string_view suite)
   : fixtures::deterministic_actor_system_and_events(suite) {
   // A bunch of test data for nested type combinations.
   // clang-format off

@@ -21,7 +21,7 @@
 namespace fixtures {
 
 struct node : deterministic_actor_system_and_events {
-  node(const std::string& suite);
+  explicit node(std::string_view suite);
 
   ~node() override;
 

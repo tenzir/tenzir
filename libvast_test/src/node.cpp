@@ -18,7 +18,7 @@ using namespace vast;
 
 namespace fixtures {
 
-node::node(const std::string& suite)
+node::node(std::string_view suite)
   : fixtures::deterministic_actor_system_and_events(suite) {
   MESSAGE("spawning node");
   // We are using an infinite grace period due to CAF's special clock in the

@@ -37,7 +37,7 @@ caf::error test_configuration::parse(int argc, char** argv) {
 
 /// A fixture with an actor system that uses the default work-stealing
 /// scheduler.
-actor_system::actor_system(const std::string& suite)
+actor_system::actor_system(std::string_view suite)
   : fixtures::filesystem(suite), sys(config), self(sys, true) {
   // Clean up state from previous executions.
   if (std::filesystem::exists(directory))
@@ -48,7 +48,7 @@ actor_system::~actor_system() {
   // nop
 }
 
-deterministic_actor_system::deterministic_actor_system(const std::string& suite)
+deterministic_actor_system::deterministic_actor_system(std::string_view suite)
   : filesystem(suite) {
   // Clean up state from previous executions.
   if (std::filesystem::exists(directory))

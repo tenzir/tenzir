@@ -9,14 +9,14 @@
 #pragma once
 
 #include "vast/detail/pp.hpp"
-#include "vast/logger.hpp"
 
 #include <filesystem>
 
 namespace fixtures {
 
 struct filesystem {
-  filesystem(const std::string& suite) : directory("vast-unit-test/" + suite) {
+  explicit filesystem(std::string_view suite)
+    : directory(std::filesystem::path{"vast-unit-test/"} / suite) {
     // Fresh afresh.
     std::filesystem::remove_all(directory);
     std::filesystem::create_directories(directory);

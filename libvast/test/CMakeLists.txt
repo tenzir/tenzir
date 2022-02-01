@@ -35,9 +35,13 @@ endmacro ()
 foreach (test ${test_sources})
   file(STRINGS ${test} contents)
   foreach (line ${contents})
-    if ("${line}" MATCHES "SUITE")
-      string(REGEX REPLACE "#define SUITE \(.*\)" "\\1" suite ${line})
+    if ("${line}" MATCHES "^ *# *define +SUITE +[^ ]+ *$")
+      string(REGEX REPLACE "^ *# *define +SUITE +\([^ ]+\) *$" "\\1" suite
+                           ${line})
       list(APPEND suites ${suite})
+      # We only support a single suite per source file, so we can stop
+      # considering the remaining lines in this file.
+      break()
     endif ()
   endforeach ()
 endforeach ()

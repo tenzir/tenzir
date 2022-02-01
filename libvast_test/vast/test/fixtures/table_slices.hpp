@@ -69,7 +69,7 @@ namespace fixtures {
 
 class table_slices : public deterministic_actor_system_and_events {
 public:
-  table_slices(const std::string& suite);
+  explicit table_slices(std::string_view suite);
 
   /// Registers a table slice implementation.
   template <class Builder>
