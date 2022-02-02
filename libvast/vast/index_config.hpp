@@ -13,7 +13,7 @@
 
 namespace vast {
 
-/// The configuration for `vast.index`.
+/// The configuration that defines VAST's indexing behavior.
 struct index_config {
   static constexpr bool use_deep_to_string_formatter = true;
 
