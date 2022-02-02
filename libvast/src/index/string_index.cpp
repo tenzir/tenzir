@@ -10,8 +10,10 @@
 
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/fbs/value_index.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
 
@@ -61,8 +63,11 @@ bool string_index::append_impl(data_view x, id pos) {
   auto length = str->size();
   if (length > max_length_)
     length = max_length_;
-  if (length > chars_.size())
-    chars_.resize(length, char_bitmap_index{8});
+  if (length > chars_.size()) {
+    chars_.reserve(length);
+    for (size_t i = chars_.size(); i < length; ++i)
+      chars_.emplace_back(8);
+  }
   for (auto i = 0u; i < length; ++i) {
     chars_[i].skip(pos - chars_[i].size());
     chars_[i].append(static_cast<uint8_t>((*str)[i]));
@@ -151,6 +156,38 @@ size_t string_index::memusage_impl() const {
   for (const auto& char_index : chars_)
     acc += char_index.memusage();
   return acc;
+}
+
+flatbuffers::Offset<fbs::ValueIndex> string_index::pack_impl(
+  flatbuffers::FlatBufferBuilder& builder,
+  flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase> base_offset) {
+  auto char_index_offsets
+    = std::vector<flatbuffers::Offset<fbs::BitmapIndex>>{};
+  char_index_offsets.reserve(chars_.size());
+  for (const auto& char_index : chars_)
+    char_index_offsets.emplace_back(pack(builder, char_index));
+  const auto length_index_offset = pack(builder, length_);
+  const auto string_index_offset = fbs::value_index::CreateStringIndexDirect(
+    builder, base_offset, max_length_, length_index_offset,
+    &char_index_offsets);
+  return fbs::CreateValueIndex(builder, fbs::value_index::ValueIndex::string,
+                               string_index_offset.Union());
+}
+
+caf::error string_index::unpack_impl(const fbs::ValueIndex& from) {
+  const auto* from_string = from.value_index_as_string();
+  VAST_ASSERT(from_string);
+  max_length_ = from_string->max_length();
+  if (auto err = unpack(*from_string->length_index(), length_))
+    return err;
+  chars_.clear();
+  chars_.reserve(from_string->char_indexes()->size());
+  for (const auto* char_index : *from_string->char_indexes()) {
+    auto& to = chars_.emplace_back();
+    if (auto err = unpack(*char_index, to))
+      return err;
+  }
+  return caf::none;
 }
 
 } // namespace vast

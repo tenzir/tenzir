@@ -164,18 +164,22 @@ public:
 
   friend caf::error
   unpack(const fbs::coder::SingletonCoder& from, singleton_coder& to) {
-    using concrete_bitmap_type = std::conditional_t<
-      std::is_same_v<Bitmap, ewah_bitmap>, fbs::bitmap::EWAHBitmap,
-      std::conditional_t<std::is_same_v<Bitmap, null_bitmap>,
-                         fbs::bitmap::NullBitmap,
-                         std::conditional_t<std::is_same_v<Bitmap, wah_bitmap>,
-                                            fbs::bitmap::WAHBitmap, void>>>;
-    static_assert(!std::is_void_v<concrete_bitmap_type>);
-    if (const auto* from_concrete
-        = from.bitmap()->bitmap_as<concrete_bitmap_type>())
-      return unpack(*from_concrete, to.bitmap_);
-    return caf::make_error(ec::logic_error,
-                           "invalid vast.fbs.coder.SingletonCoder bitmap type");
+    if constexpr (std::is_same_v<Bitmap, bitmap>) {
+      return unpack(*from.bitmap(), to.bitmap_);
+    } else {
+      using concrete_bitmap_type = std::conditional_t<
+        std::is_same_v<Bitmap, ewah_bitmap>, fbs::bitmap::EWAHBitmap,
+        std::conditional_t<std::is_same_v<Bitmap, null_bitmap>,
+                           fbs::bitmap::NullBitmap,
+                           std::conditional_t<std::is_same_v<Bitmap, wah_bitmap>,
+                                              fbs::bitmap::WAHBitmap, void>>>;
+      static_assert(!std::is_void_v<concrete_bitmap_type>);
+      if (const auto* from_concrete
+          = from.bitmap()->bitmap_as<concrete_bitmap_type>())
+        return unpack(*from_concrete, to.bitmap_);
+      return caf::make_error(
+        ec::logic_error, "invalid vast.fbs.coder.SingletonCoder bitmap type");
+    }
   }
 
 private:
@@ -189,11 +193,14 @@ public:
   using size_type = typename Bitmap::size_type;
   using value_type = size_t;
 
-  vector_coder() : size_{0} {
-    // nop
-  }
+  vector_coder() = default;
+  vector_coder(const vector_coder&) = delete;
+  vector_coder(vector_coder&&) = default;
+  vector_coder& operator=(const vector_coder&) = delete;
+  vector_coder& operator=(vector_coder&&) = default;
+  ~vector_coder() = default;
 
-  vector_coder(size_t n) : size_{0}, bitmaps_(n) {
+  explicit vector_coder(size_t n) : bitmaps_(n) {
     // nop
   }
 
@@ -241,22 +248,29 @@ public:
     to.bitmaps_.clear();
     to.bitmaps_.reserve(from.bitmaps()->size());
     for (const auto* from_bitmap : *from.bitmaps()) {
-      using concrete_bitmap_type = std::conditional_t<
-        std::is_same_v<Bitmap, ewah_bitmap>, fbs::bitmap::EWAHBitmap,
-        std::conditional_t<std::is_same_v<Bitmap, null_bitmap>,
-                           fbs::bitmap::NullBitmap,
-                           std::conditional_t<std::is_same_v<Bitmap, wah_bitmap>,
-                                              fbs::bitmap::WAHBitmap, void>>>;
-      static_assert(!std::is_void_v<concrete_bitmap_type>);
-      const auto* from_concrete
-        = from_bitmap->bitmap_as<concrete_bitmap_type>();
-      if (!from_concrete)
-        return caf::make_error(
-          ec::logic_error, "invalid vast.fbs.coder.VectorCoder bitmap type");
-      auto to_concrete = Bitmap{};
-      if (auto err = unpack(*from_concrete, to_concrete))
-        return err;
-      to.bitmaps_.emplace_back(std::move(to_concrete));
+      if constexpr (std::is_same_v<Bitmap, bitmap>) {
+        auto to_bitmap = bitmap{};
+        if (auto err = unpack(*from_bitmap, to_bitmap))
+          return err;
+        to.bitmaps_.emplace_back(std::move(to_bitmap));
+      } else {
+        using concrete_bitmap_type = std::conditional_t<
+          std::is_same_v<Bitmap, ewah_bitmap>, fbs::bitmap::EWAHBitmap,
+          std::conditional_t<
+            std::is_same_v<Bitmap, null_bitmap>, fbs::bitmap::NullBitmap,
+            std::conditional_t<std::is_same_v<Bitmap, wah_bitmap>,
+                               fbs::bitmap::WAHBitmap, void>>>;
+        static_assert(!std::is_void_v<concrete_bitmap_type>);
+        const auto* from_concrete
+          = from_bitmap->bitmap_as<concrete_bitmap_type>();
+        if (!from_concrete)
+          return caf::make_error(
+            ec::logic_error, "invalid vast.fbs.coder.VectorCoder bitmap type");
+        auto to_concrete = Bitmap{};
+        if (auto err = unpack(*from_concrete, to_concrete))
+          return err;
+        to.bitmaps_.emplace_back(std::move(to_concrete));
+      }
     }
     return caf::none;
   }
@@ -271,8 +285,8 @@ protected:
     size_ += other.size_;
   }
 
-  size_type size_;
-  mutable std::vector<Bitmap> bitmaps_;
+  size_type size_ = 0;
+  mutable std::vector<Bitmap> bitmaps_ = {};
 };
 
 /// Encodes each value in its own bitmap.
@@ -624,6 +638,11 @@ public:
   using value_type = typename coder_type::value_type;
 
   multi_level_coder() = default;
+  multi_level_coder(const multi_level_coder&) = delete;
+  multi_level_coder(multi_level_coder&&) = default;
+  multi_level_coder& operator=(const multi_level_coder&) = delete;
+  multi_level_coder& operator=(multi_level_coder&&) = default;
+  ~multi_level_coder() = default;
 
   /// Constructs a multi-level coder from a given base.
   /// @param b The base to initialize this coder with.
@@ -700,9 +719,11 @@ public:
           : fbs::coder::Coder::multi_level;
     auto coder_offsets = std::vector<flatbuffers::Offset<fbs::Coder>>{};
     coder_offsets.reserve(value.coders_.size());
-    for (const auto& coder : value.coders_)
+    for (const auto& coder : value.coders_) {
+      const auto coder_offset = pack(builder, coder);
       coder_offsets.emplace_back(
-        fbs::CreateCoder(builder, coder_type, pack(builder, coder).Union()));
+        fbs::CreateCoder(builder, coder_type, coder_offset.Union()));
+    }
     const auto coders_offset = builder.CreateVector(coder_offsets);
     return fbs::coder::CreateMultiLevelCoder(builder, base_offset,
                                              coders_offset);
@@ -776,7 +797,7 @@ private:
     VAST_ASSERT(
       !(op == relational_operator::in || op == relational_operator::not_in));
     // All coders must have the same number of elements.
-    auto pred = [n = size()](auto c) {
+    auto pred = [n = size()](const auto& c) {
       return c.size() == n;
     };
     VAST_ASSERT(std::all_of(coders.begin(), coders.end(), pred));
@@ -848,9 +869,9 @@ private:
     return result;
   }
 
-  base base_;
-  mutable std::vector<value_type> xs_;
-  std::vector<coder_type> coders_;
+  base base_ = {};
+  mutable std::vector<value_type> xs_ = {};
+  std::vector<coder_type> coders_ = {};
 };
 
 template <class T>

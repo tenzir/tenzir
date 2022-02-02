@@ -15,6 +15,8 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/fbs/value_index.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
@@ -137,6 +139,25 @@ TEST(none values - string) {
   CHECK_EQUAL(to_string(unbox(bm)), "10011100011110000000011");
   bm = idx->lookup(relational_operator::not_equal, make_data_view(caf::none));
   CHECK_EQUAL(to_string(unbox(bm)), "01100011100001111111100");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  const auto idx_offset = pack(builder, idx);
+  builder.Finish(idx_offset);
+  auto maybe_fb = flatbuffer<fbs::ValueIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  auto idx2 = value_index_ptr{};
+  REQUIRE_EQUAL(unpack(*fb, idx2), caf::none);
+  CHECK_EQUAL(idx->type(), idx2->type());
+  CHECK_EQUAL(idx->options(), idx2->options());
+  bm = idx2->lookup(relational_operator::equal, make_data_view("foo"));
+  CHECK_EQUAL(to_string(unbox(bm)), "01100010000001110001100");
+  bm = idx2->lookup(relational_operator::not_equal, make_data_view("foo"));
+  CHECK_EQUAL(to_string(unbox(bm)), "10011101111110001110011");
+  bm = idx2->lookup(relational_operator::equal, make_data_view(caf::none));
+  CHECK_EQUAL(to_string(unbox(bm)), "10011100011110000000011");
+  bm = idx2->lookup(relational_operator::not_equal, make_data_view(caf::none));
+  CHECK_EQUAL(to_string(unbox(bm)), "01100011100001111111100");
 }
 
 TEST(regression - zeek conn log service http) {
@@ -146,8 +167,9 @@ TEST(regression - zeek conn log service http) {
   //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }
   //           END { print n }'
   //    | paste -s -d , -
-  auto is_http
-    = [](auto x) { return caf::get<view<std::string>>(x) == "http"; };
+  auto is_http = [](auto x) {
+    return caf::get<view<std::string>>(x) == "http";
+  };
   std::vector<size_t> http_per_100_events{
     13, 16, 20, 22, 31, 11, 14, 28, 13, 42, 45, 52, 59, 54, 59, 59, 51,
     29, 21, 31, 20, 28, 9,  56, 48, 57, 32, 53, 25, 31, 25, 44, 38, 55,
@@ -157,8 +179,9 @@ TEST(regression - zeek conn log service http) {
   };
   auto& slices = zeek_conn_log_full;
   REQUIRE_EQUAL(slices.size(), http_per_100_events.size());
-  REQUIRE(std::all_of(slices.begin(), prev(slices.end()),
-                      [](auto& slice) { return slice.rows() == 100; }));
+  REQUIRE(std::all_of(slices.begin(), prev(slices.end()), [](auto& slice) {
+    return slice.rows() == 100;
+  }));
   std::vector<std::pair<value_index_ptr, ids>> slice_stats;
   slice_stats.reserve(slices.size());
   size_t row_id = 0;
@@ -192,7 +215,9 @@ TEST(regression - manual value index for zeek conn log service http) {
   // Setup one bitmap index per character.
   using char_bitmap_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   std::vector<char_bitmap_index> chars;
-  chars.resize(42, char_bitmap_index{8});
+  chars.reserve(42);
+  for (size_t i = 0; i < 42; ++i)
+    chars.emplace_back(8);
   // Manually build a failing slice: [8000,8100).
   ewah_bitmap none;
   ewah_bitmap mask;
@@ -219,7 +244,9 @@ TEST(regression - manual value index for zeek conn log service http) {
         mask.append_bits(false, i - mask.size());
         mask.append_bit(true);
       },
-      [&](auto) { FAIL("unexpected service type"); },
+      [&](auto) {
+        FAIL("unexpected service type");
+      },
     };
     // Column 7 is service.
     caf::visit(f, slice.at(row, 7));

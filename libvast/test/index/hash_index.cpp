@@ -14,6 +14,8 @@
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/fbs/value_index.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/operator.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/test/test.hpp"
@@ -97,6 +99,20 @@ TEST(hash index for integer) {
   auto result
     = idx->lookup(relational_operator::not_equal, make_data_view(integer{42}));
   CHECK_EQUAL(to_string(unbox(result)), "011");
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  const auto idx_offset = pack(builder, idx);
+  builder.Finish(idx_offset);
+  auto maybe_fb = flatbuffer<fbs::ValueIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  auto idx2 = value_index_ptr{};
+  REQUIRE_EQUAL(unpack(*fb, idx2), caf::none);
+  CHECK_EQUAL(idx->type(), idx2->type());
+  CHECK_EQUAL(idx->options(), idx2->options());
+  result
+    = idx2->lookup(relational_operator::not_equal, make_data_view(integer{42}));
+  CHECK_EQUAL(to_string(unbox(result)), "011");
 }
 
 TEST(hash index for list) {
@@ -113,6 +129,22 @@ TEST(hash index for list) {
   auto result = idx->lookup(relational_operator::equal, make_data_view(zs));
   CHECK_EQUAL(to_string(unbox(result)), "001");
   result = idx->lookup(relational_operator::ni, make_data_view(integer{1}));
+  REQUIRE(!result);
+  CHECK(result.error() == ec::unsupported_operator);
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  const auto idx_offset = pack(builder, idx);
+  builder.Finish(idx_offset);
+  auto maybe_fb = flatbuffer<fbs::ValueIndex>::make(builder.Release());
+  REQUIRE_NOERROR(maybe_fb);
+  auto fb = *maybe_fb;
+  REQUIRE(fb);
+  auto idx2 = value_index_ptr{};
+  REQUIRE_EQUAL(unpack(*fb, idx2), caf::none);
+  CHECK_EQUAL(idx->type(), idx2->type());
+  CHECK_EQUAL(idx->options(), idx2->options());
+  result = idx2->lookup(relational_operator::equal, make_data_view(zs));
+  CHECK_EQUAL(to_string(unbox(result)), "001");
+  result = idx2->lookup(relational_operator::ni, make_data_view(integer{1}));
   REQUIRE(!result);
   CHECK(result.error() == ec::unsupported_operator);
 }

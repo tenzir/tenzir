@@ -85,6 +85,11 @@ public:
 
   virtual bool deserialize(detail::legacy_deserializer& source);
 
+  friend flatbuffers::Offset<fbs::ValueIndex>
+  pack(flatbuffers::FlatBufferBuilder& builder, const value_index_ptr& value);
+
+  friend caf::error unpack(const fbs::ValueIndex& from, value_index_ptr& to);
+
 protected:
   [[nodiscard]] const ewah_bitmap& mask() const;
   [[nodiscard]] const ewah_bitmap& none() const;
@@ -96,6 +101,13 @@ private:
   lookup_impl(relational_operator op, data_view x) const = 0;
 
   [[nodiscard]] virtual size_t memusage_impl() const = 0;
+
+  [[nodiscard]] virtual flatbuffers::Offset<fbs::ValueIndex> pack_impl(
+    flatbuffers::FlatBufferBuilder& builder,
+    flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase> base_offset)
+    = 0;
+
+  [[nodiscard]] virtual caf::error unpack_impl(const fbs::ValueIndex& from) = 0;
 
   ewah_bitmap mask_;         ///< The position of all values excluding nil.
   ewah_bitmap none_;         ///< The positions of nil values.

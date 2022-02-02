@@ -15,6 +15,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/fbs/value_index.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/hash/legacy_hash.hpp"
 #include "vast/logger.hpp"
@@ -281,6 +282,69 @@ private:
     return digests_.capacity() * sizeof(digest_type)
            + unique_digests_.size() * sizeof(key)
            + seeds_.size() * sizeof(typename decltype(seeds_)::value_type);
+  }
+
+  flatbuffers::Offset<fbs::ValueIndex>
+  pack_impl(flatbuffers::FlatBufferBuilder& builder,
+            flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase>
+              base_offset) override {
+    auto digest_bytes = std::vector<uint8_t>{};
+    digest_bytes.resize(digests_.size() * sizeof(digest_type));
+    std::memcpy(digest_bytes.data(), digests_.data(), digest_bytes.size());
+    auto unique_digest_bytes = std::vector<uint8_t>{};
+    unique_digest_bytes.resize(unique_digests_.size() * sizeof(key));
+    for (size_t i = 0; const auto& unique_digest : unique_digests_) {
+      std::memcpy(unique_digest_bytes.data() + i * sizeof(key), &unique_digest,
+                  sizeof(key));
+      ++i;
+    }
+    auto seed_offsets = std::vector<
+      flatbuffers::Offset<fbs::value_index::detail::HashIndexSeed>>{};
+    seed_offsets.reserve(seeds_.size());
+    for (const auto& [key, value] : seeds_) {
+      const auto key_offset = pack(builder, key);
+      seed_offsets.emplace_back(fbs::value_index::detail::CreateHashIndexSeed(
+        builder, key_offset, value));
+    }
+    const auto hash_index_offset = fbs::value_index::CreateHashIndexDirect(
+      builder, base_offset, &digest_bytes, &unique_digest_bytes, &seed_offsets);
+    return fbs::CreateValueIndex(builder, fbs::value_index::ValueIndex::hash,
+                                 hash_index_offset.Union());
+  }
+
+  caf::error unpack_impl(const fbs::ValueIndex& from) override {
+    const auto* from_hash = from.value_index_as_hash();
+    VAST_ASSERT(from_hash);
+    VAST_ASSERT(from_hash->digests()->size() % sizeof(digest_type) == 0);
+    const auto num_digests = from_hash->digests()->size() / sizeof(digest_type);
+    digests_.reserve(num_digests);
+    for (size_t i = 0; i < num_digests; ++i) {
+      auto digest = digest_type{};
+      std::memcpy(&digest,
+                  from_hash->digests()->Data() + i * sizeof(digest_type),
+                  sizeof(digest_type));
+      digests_.emplace_back(digest);
+    }
+    VAST_ASSERT(from_hash->unique_digests()->size() % sizeof(key) == 0);
+    const auto num_unique_digests
+      = from_hash->unique_digests()->size() / sizeof(key);
+    unique_digests_.reserve(num_unique_digests);
+    for (size_t i = 0; i < num_digests; ++i) {
+      auto digest = key{};
+      std::memcpy(&digest,
+                  from_hash->unique_digests()->Data() + i * sizeof(key),
+                  sizeof(key));
+      unique_digests_.insert(digest);
+    }
+    seeds_.reserve(from_hash->seeds()->size());
+    for (const auto& seed : *from_hash->seeds()) {
+      auto key = data{};
+      if (auto err = unpack(*seed->key(), key))
+        return err;
+      auto ok = seeds_.emplace(key, seed->value()).second;
+      VAST_ASSERT(ok);
+    }
+    return caf::none;
   }
 
   [[nodiscard]] bool immutable() const {

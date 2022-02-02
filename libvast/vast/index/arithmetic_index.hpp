@@ -17,6 +17,7 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/value_index.hpp"
 #include "vast/ids.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
@@ -55,12 +56,18 @@ public:
   static_assert(!std::is_same_v<value_type, std::false_type>,
                 "invalid type T for arithmetic_index");
 
-  using multi_level_range_coder = multi_level_coder<range_coder<ids>>;
+  using multi_level_range_coder = multi_level_coder<range_coder<bitmap>>;
 
   // clang-format off
+  // TODO: This uses a type-erased bitmap rather than a specific bitmap
+  // implementation, which is absolutely unnecessary. It can, however, not
+  // easily be changed as these bitmaps were persisted using the legacy CAF
+  // serializer as part of the partition v0 FlatBuffers table. Once that no
+  // longer exists we can and should switch to using ewah_bitmap or similar
+  // here.
   using coder_type = std::conditional_t<
     std::is_same_v<T, bool>,
-    singleton_coder<ids>,
+    singleton_coder<bitmap>,
     multi_level_range_coder
   >;
   // clang-format on
@@ -197,6 +204,25 @@ private:
 
   [[nodiscard]] size_t memusage_impl() const override {
     return bmi_.memusage();
+  }
+
+  flatbuffers::Offset<fbs::ValueIndex>
+  pack_impl(flatbuffers::FlatBufferBuilder& builder,
+            flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase>
+              base_offset) override {
+    const auto bitmap_index_offset = pack(builder, bmi_);
+    const auto arithmetic_index_offset
+      = fbs::value_index::CreateArithmeticIndex(builder, base_offset,
+                                                bitmap_index_offset);
+    return fbs::CreateValueIndex(builder,
+                                 fbs::value_index::ValueIndex::arithmetic,
+                                 arithmetic_index_offset.Union());
+  }
+
+  caf::error unpack_impl(const fbs::ValueIndex& from) override {
+    const auto* from_arithmetic = from.value_index_as_arithmetic();
+    VAST_ASSERT(from_arithmetic);
+    return unpack(*from_arithmetic->bitmap_index(), bmi_);
   }
 
   bitmap_index_type bmi_;

@@ -10,8 +10,11 @@
 
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/fbs/value_index.hpp"
+#include "vast/index/address_index.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
+#include "vast/value_index_factory.hpp"
 
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
@@ -22,7 +25,8 @@ namespace vast {
 
 subnet_index::subnet_index(vast::type x, caf::settings opts)
   : value_index{std::move(x), std::move(opts)},
-    network_{vast::type{address_type{}}},
+    network_{
+      factory<value_index>::make(vast::type{address_type{}}, caf::settings{})},
     length_{128 + 1} {
   // nop
 }
@@ -33,7 +37,9 @@ caf::error subnet_index::serialize(caf::serializer& sink) const {
       return value_index::serialize(sink);
     },
     [&] {
-      return sink(network_, length_);
+      auto* network_as_address = dynamic_cast<address_index*>(network_.get());
+      VAST_ASSERT(network_as_address);
+      return sink(*network_as_address, length_);
     });
 }
 
@@ -43,21 +49,29 @@ caf::error subnet_index::deserialize(caf::deserializer& source) {
       return value_index::deserialize(source);
     },
     [&] {
-      return source(network_, length_);
+      network_ = factory<value_index>::make(vast::type{address_type{}},
+                                            caf::settings{});
+      auto* network_as_address = dynamic_cast<address_index*>(network_.get());
+      VAST_ASSERT(network_as_address);
+      return source(*network_as_address, length_);
     });
 }
 
 bool subnet_index::deserialize(detail::legacy_deserializer& source) {
   if (!value_index::deserialize(source))
     return false;
-  return source(network_, length_);
+  network_
+    = factory<value_index>::make(vast::type{address_type{}}, caf::settings{});
+  auto* network_as_address = dynamic_cast<address_index*>(network_.get());
+  VAST_ASSERT(network_as_address);
+  return source(*network_as_address, length_);
 }
 
 bool subnet_index::append_impl(data_view x, id pos) {
   if (auto sn = caf::get_if<view<subnet>>(&x)) {
     length_.skip(pos - length_.size());
     length_.append(sn->length());
-    return static_cast<bool>(network_.append(sn->network(), pos));
+    return static_cast<bool>(network_->append(sn->network(), pos));
   }
   return false;
 }
@@ -79,7 +93,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
           auto masked = x;
           masked.mask(128 - bits + i);
           ids len = length_.lookup(relational_operator::equal, i);
-          auto net = network_.lookup(relational_operator::equal, masked);
+          auto net = network_->lookup(relational_operator::equal, masked);
           if (!net)
             return net;
           len &= *net;
@@ -96,7 +110,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
           case relational_operator::equal:
           case relational_operator::not_equal: {
             auto result
-              = network_.lookup(relational_operator::equal, x.network());
+              = network_->lookup(relational_operator::equal, x.network());
             if (!result)
               return result;
             auto n = length_.lookup(relational_operator::equal, x.length());
@@ -110,7 +124,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
             // For a subnet index U and subnet x, the in operator signifies a
             // subset relationship such that `U in x` translates to U ⊆ x, i.e.,
             // the lookup returns all subnets in U that are a subset of x.
-            auto result = network_.lookup(relational_operator::in, x);
+            auto result = network_->lookup(relational_operator::in, x);
             if (!result)
               return result;
             *result
@@ -126,8 +140,8 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
             // the lookup returns all subnets in U that include x.
             ids result;
             for (auto i = uint8_t{1}; i <= x.length(); ++i) {
-              auto xs = network_.lookup(relational_operator::in,
-                                        subnet{x.network(), i});
+              auto xs = network_->lookup(relational_operator::in,
+                                         subnet{x.network(), i});
               if (!xs)
                 return xs;
               *xs &= length_.lookup(relational_operator::equal, i);
@@ -147,7 +161,26 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
 }
 
 size_t subnet_index::memusage_impl() const {
-  return network_.memusage() + length_.memusage();
+  return network_->memusage() + length_.memusage();
+}
+
+flatbuffers::Offset<fbs::ValueIndex> subnet_index::pack_impl(
+  flatbuffers::FlatBufferBuilder& builder,
+  flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase> base_offset) {
+  const auto address_index_offset = pack(builder, network_);
+  const auto prefix_index_offset = pack(builder, length_);
+  const auto subnet_index_offset = fbs::value_index::CreateSubnetIndex(
+    builder, base_offset, address_index_offset, prefix_index_offset);
+  return fbs::CreateValueIndex(builder, fbs::value_index::ValueIndex::subnet,
+                               subnet_index_offset.Union());
+}
+
+caf::error subnet_index::unpack_impl(const fbs::ValueIndex& from) {
+  const auto* from_subnet = from.value_index_as_subnet();
+  VAST_ASSERT(from_subnet);
+  if (auto err = unpack(*from_subnet->address_index(), network_))
+    return err;
+  return unpack(*from_subnet->prefix_index(), length_);
 }
 
 } // namespace vast

@@ -42,6 +42,13 @@ private:
 
   size_t memusage_impl() const override;
 
+  flatbuffers::Offset<fbs::ValueIndex>
+  pack_impl(flatbuffers::FlatBufferBuilder& builder,
+            flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase>
+              base_offset) override;
+
+  caf::error unpack_impl(const fbs::ValueIndex& from) override;
+
   bitmap_index<enumeration, equality_coder<ewah_bitmap>> index_;
 };
 
