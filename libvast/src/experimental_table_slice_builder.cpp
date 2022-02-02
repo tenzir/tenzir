@@ -749,7 +749,6 @@ make_arrow_metadata(const type& t) {
   }
   if (nesting_depth == 0)
     return nullptr;
-  metadata->Append("VAST:nesting-depth", fmt::format("{}", nesting_depth - 1));
   return metadata;
 }
 
@@ -890,40 +889,36 @@ type enrich_type_with_metadata(
   type t, const std::shared_ptr<const arrow::KeyValueMetadata>& metadata) {
   if (!metadata)
     return t;
-  if (auto ml = metadata->Get("VAST:nesting-depth"); !ml.ok()) {
-    VAST_INFO("skipping non-VAST metadata for field '{}'. Metadata was: '{}'",
-              t.name(), metadata->ToString());
-    return t;
-  } else {
-    int nesting_depth{};
-    if (!parsers::i32(ml.ValueUnsafe(), nesting_depth)) {
-      VAST_ERROR("Invalid value for 'VAST:nesting-depth': {}", *ml);
-      return t;
-    }
-    auto names_and_attrs = std::vector<
-      std::pair<std::string, struct std::vector<struct type::attribute>>>(
-      nesting_depth + 1);
-    auto name_parser = "VAST:name:" >> parsers::i32 >> parsers::eoi;
-    auto attr_parser = "VAST:attributes:" >> parsers::i32 >> parsers::eoi;
-    for (const auto& [key, value] :
-         detail::zip(metadata->keys(), metadata->values())) {
-      if (!key.starts_with("VAST:"))
-        continue;
-      if (int32_t index{}; name_parser(key, index)) {
-        names_and_attrs[index].first = value;
-        continue;
+  int nesting_depth = -1;
+  auto names_and_attrs = std::vector<
+    std::pair<std::string, struct std::vector<struct type::attribute>>>(1);
+  auto name_parser = "VAST:name:" >> parsers::i32 >> parsers::eoi;
+  auto attr_parser = "VAST:attributes:" >> parsers::i32 >> parsers::eoi;
+  for (const auto& [key, value] :
+       detail::zip(metadata->keys(), metadata->values())) {
+    if (!key.starts_with("VAST:"))
+      continue;
+    if (int32_t index{}; name_parser(key, index)) {
+      if (nesting_depth < index) {
+        nesting_depth = index;
+        names_and_attrs.resize(index + 1);
       }
-      if (int32_t index{}; attr_parser(key, index)) {
-        names_and_attrs[index].second = deserialize_attributes(value);
-        continue;
-      }
-      if (key != "VAST:nesting-depth")
-        VAST_WARN("Unhandled VAST metadata key '{}'", key);
+      names_and_attrs[index].first = value;
+      continue;
     }
-    for (auto it = names_and_attrs.rbegin(); it != names_and_attrs.rend(); ++it)
-      t = type{it->first, t, it->second};
-    return t;
+    if (int32_t index{}; attr_parser(key, index)) {
+      if (nesting_depth < index) {
+        nesting_depth = index;
+        names_and_attrs.resize(index + 1);
+      }
+      names_and_attrs[index].second = deserialize_attributes(value);
+      continue;
+    }
+    VAST_WARN("Unhandled VAST metadata key '{}'", key);
   }
+  for (auto it = names_and_attrs.rbegin(); it != names_and_attrs.rend(); ++it)
+    t = type{it->first, t, it->second};
+  return t;
 }
 
 } // namespace
