@@ -9,8 +9,8 @@
 #include "vast/partition_sketch_builder.hpp"
 
 #define SUITE partition_sketch
-#include "vast/concept/convertible/data.hpp" //FIXME: remove
-#include "vast/data.hpp"                     //FIXME: remove
+#include "vast/concept/convertible/data.hpp"
+#include "vast/data.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
@@ -25,6 +25,8 @@ rules:
       - suricata.dns.dns.rrname
       - :address
     fp-rate: 0.005
+  - targets:
+      - zeek.conn.id.orig_h
 )__";
 
 struct fixture {
@@ -46,7 +48,7 @@ struct fixture {
 FIXTURE_SCOPE(partition_sketch_tests, fixture)
 
 TEST(builder instantiation) {
-  auto builder = partition_sketch_builder{config};
+  auto builder = unbox(partition_sketch_builder::make(config));
   // TODO: test
 }
 

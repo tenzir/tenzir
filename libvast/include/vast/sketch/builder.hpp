@@ -29,6 +29,9 @@ public:
   /// @returns An error on failure.
   virtual caf::error add(table_slice slice, offset off) = 0;
 
+  // TODO: use arrow arrays as "column" abstraction
+  // virtual caf::error add(const arrow::Array& column) = 0;
+
   /// Finalizes the builder and constructs a sketch from it.
   /// @returns The sketch according to the current builder state.
   virtual caf::expected<sketch> finish() = 0;

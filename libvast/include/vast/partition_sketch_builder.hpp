@@ -12,7 +12,6 @@
 
 #include "vast/index_config.hpp"
 #include "vast/partition_sketch.hpp"
-#include "vast/qualified_record_field.hpp"
 #include "vast/sketch/builder.hpp"
 #include "vast/type.hpp"
 
@@ -28,12 +27,13 @@ class partition_sketch_builder {
 public:
   /// Opaque factory to construct a concrete builder, based on the
   /// configuration.
-  using builder_factory = std::function<std::unique_ptr<sketch::builder>()>;
+  using builder_factory
+    = std::function<std::unique_ptr<sketch::builder>(const type&)>;
 
   /// Construct a partion sketch builder from an index configuration.
   /// @param config The index configuration.
-  /// @pre *config* is validated.
-  explicit partition_sketch_builder(index_config config);
+  /// @returns A partition sketch builder iff the configuration was correct.
+  static caf::expected<partition_sketch_builder> make(index_config config);
 
   /// Indexes a table slice.
   /// @param x The table slice to index.
@@ -44,18 +44,25 @@ public:
   caf::expected<partition_sketch> finish();
 
 private:
-  /// Factory to create field sketch builders.
+  /// Construct a partion sketch builder from an index configuration.
+  /// @param config The index configuration.
+  /// @pre *config* is validated.
+  explicit partition_sketch_builder(index_config config);
+
+  /// Factory to create field sketch builders, mapping full-qualified field
+  /// names to builder factories.
   std::unordered_map<std::string, builder_factory> field_factory_;
 
   /// Factory to create type sketch builders.
-  std::unordered_map<type, builder_factory> type_factory_;
+  std::unordered_map<std::string, builder_factory> type_factory_;
 
-  /// Sketches for fields.
-  std::unordered_map<qualified_record_field, std::unique_ptr<sketch::builder>>
+  /// Sketches for fields, tracked by field extractor.
+  std::unordered_map<std::string, std::unique_ptr<sketch::builder>>
     field_builders_;
 
-  /// Sketches for types.
-  std::unordered_map<type, std::unique_ptr<sketch::builder>> type_builders_;
+  /// Sketches for types, tracked by type name.
+  std::unordered_map<std::string, std::unique_ptr<sketch::builder>>
+    type_builders_;
 
   index_config config_;
 };

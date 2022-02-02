@@ -22,108 +22,151 @@ namespace {
 
 using builder_factory = partition_sketch_builder::builder_factory;
 
-/// Constructs a builder factory for a given type and rule parameters.
-caf::expected<builder_factory>
-make_builder_factory(const type& t, const index_config::rule& rule) {
-  auto make_bloom_filter_builder = [&](double p) -> builder_factory {
-    return [p] {
-      return std::make_unique<sketch::bloom_filter_builder>(p);
-    };
-  };
+/// Constructs a builder factory from a given rule.
+builder_factory make_factory(const index_config::rule& rule) {
+  using sketch_builder_ptr = std::unique_ptr<sketch::builder>;
+  auto p = rule.fp_rate;
   auto f = detail::overload{
-    // TODO: for numeric and time types, use a min-max sketch.
-    [&](const auto&) -> caf::expected<builder_factory> {
-      return caf::make_error(ec::type_clash,
-                             fmt::format("no sketch available for type {}", t));
+    [](const auto&) -> sketch_builder_ptr {
+      return nullptr; // no sketch available
     },
-    [&](const string_type&) -> caf::expected<builder_factory> {
-      return make_bloom_filter_builder(rule.fp_rate);
+    [p](const string_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(p);
     },
-    [&](const address_type&) -> caf::expected<builder_factory> {
-      return make_bloom_filter_builder(rule.fp_rate);
+    [p](const address_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(p);
     },
   };
-  return caf::visit(f, t);
+  return builder_factory{f};
 }
 
 } // namespace
 
-partition_sketch_builder::partition_sketch_builder(index_config config)
-  : config_{std::move(config)} {
-  // Parse config and populate builder factories.
-  for (const auto& rule : config_.rules) {
+caf::expected<partition_sketch_builder>
+partition_sketch_builder::make(index_config config) {
+  partition_sketch_builder builder{std::move(config)};
+  for (const auto& rule : builder.config_.rules) {
     // Create one sketch per target.
     for (const auto& target : rule.targets) {
       auto op = to<predicate::operand>(target);
-      if (!op) {
-        VAST_WARN("ignoring invalid rule target '{}'", target);
-        continue;
-      }
+      if (!op)
+        return caf::error(ec::unspecified,
+                          fmt::format("invalid rule target '{}'", target));
       // Register builder factories and factory stubs where typing is absent.
       auto f = detail::overload{
-        [&](const auto&) {
+        [&](const auto&) -> caf::error {
           // TODO(MV): add formatter for predicate::operand
-          // VAST_WARN("ignoring unsupported predicate operand '{}'", *op);
-          VAST_WARN("ignoring unsupported predicate operand");
+          return caf::make_error(ec::unspecified, "unsupported predicate "
+                                                  "operand");
         },
-        [this](const field_extractor& x) {
-          // We cannot construct concrete factories at startup time because
-          // the field type is not known until the first event arrives.
-          // Therefore, we only register the name and construct the factory
-          // on first sight.
-          // TODO(MV): there is currently no mechanism in place to ensure
-          // that a fully qualified field is actually present.
-          field_factory_.emplace(x.field, builder_factory{});
+        [&builder, &rule](const field_extractor& x) -> caf::error {
+          if (builder.field_factory_.contains(x.field))
+            return caf::make_error(ec::unspecified,
+                                   fmt::format("duplicate field extractor {}",
+                                               x.field));
+          builder.field_factory_.emplace(x.field, make_factory(rule));
+          return caf::none;
         },
-        [this, &rule](const type_extractor& x) {
-          // FIXME: handle duplicates in key space or rethink data structure.
-          if (auto factory = make_builder_factory(x.type, rule))
-            type_factory_.emplace(x.type, *factory);
+        [&builder, &rule](const type_extractor& x) -> caf::error {
+          // TODO: remove the string wrapping once transparent keys work.
+          if (builder.type_factory_.contains(std::string{x.type.name()}))
+            return caf::make_error(ec::unspecified,
+                                   fmt::format("duplicate type extractor {}",
+                                               x.type.name()));
+          builder.type_factory_.emplace(std::string{x.type.name()},
+                                        make_factory(rule));
+          return caf::none;
         },
       };
-      caf::visit(f, *op);
+      if (auto err = caf::visit(f, *op))
+        return err;
     }
   }
+  // VAST creates type-level sketches for all types per default. Therefore, we
+  // top up the type factory to include all basic types.
+  // TODO: consider a generic version that uses tl_filter and the type list
+  // concrete_types from type.hpp.
+  auto default_factory = make_factory(index_config::rule{});
+  auto top_up = [&](basic_type auto basic) {
+    auto t = type{basic};
+    builder.type_factory_.emplace(t.name(), default_factory);
+  };
+  top_up(bool_type{});
+  top_up(integer_type{});
+  top_up(count_type{});
+  top_up(real_type{});
+  top_up(duration_type{});
+  top_up(time_type{});
+  top_up(string_type{});
+  top_up(pattern_type{});
+  top_up(address_type{});
+  top_up(subnet_type{});
+  return builder;
+}
+
+partition_sketch_builder::partition_sketch_builder(index_config config)
+  : config_{std::move(config)} {
 }
 
 caf::error partition_sketch_builder::add(const table_slice& x) {
   const auto& layout = caf::get<record_type>(x.layout());
-  for (auto leaf : layout.leaves()) {
-    // Add column to corresopnding field sketch.
-    auto fqf = qualified_record_field{x.layout(), leaf.index};
-    sketch::builder* builder = nullptr;
-    if (auto i = field_builders_.find(fqf); i != field_builders_.end()) {
-      builder = i->second.get();
-    } else if (auto i = field_factory_.find(fqf.name());
-               i != field_factory_.end()) {
-      // 👆 On-the-fly construction of an FQF might be expensive. Measure.
-      auto new_builder = i->second();
-      builder = new_builder.get();
-      field_builders_.emplace(std::move(fqf), std::move(new_builder));
+  // Handle all field sketches.
+  for (auto& [key, builder] : field_builders_) {
+    auto offsets = layout.resolve_key_suffix(key);
+    auto begin = offsets.begin();
+    auto end = offsets.end();
+    if (begin == end)
+      continue;
+    // The first type locks in the builder for all matching fields. If
+    // subsequent fields have a different type, we emit a warning.
+    // Alternatively, we could bifurcate the processing.
+    auto first_offset = *begin;
+    auto first_field = layout.field(first_offset);
+    if (!builder)
+      builder = field_factory_[key](first_field.type);
+    if (!builder)
+      return caf::make_error(
+        ec::unspecified,
+        fmt::format("failed to construct sketch builder for key '{}'", key));
+    VAST_ASSERT(builder);
+    if (auto err = builder->add(x, first_offset))
+      return err;
+    while (++begin != end) {
+      auto offset = *begin;
+      auto field = layout.field(offset);
+      if (field.type != first_field.type) {
+        VAST_WARN("ignoring field '{}' with different type than first field",
+                  offset);
+        continue;
+      }
+      if (auto err = builder->add(x, offset))
+        return err;
     }
-    if (builder)
+  }
+  // Handle all type sketches.
+  for (auto&& leaf : layout.leaves()) {
+    // FIXME: do not ignore containers; step through them instead.
+    if (caf::holds_alternative<list_type>(leaf.field.type)
+        || caf::holds_alternative<map_type>(leaf.field.type))
+      continue;
+    auto type_name = leaf.field.type.name();
+    // Should we create a sketch for this type?
+    auto i = type_factory_.find(std::string{type_name});
+    if (i == type_factory_.end())
+      continue;
+    const auto& factory = i->second;
+    for (auto name : leaf.field.type.names()) {
+      auto& builder = type_builders_[std::string{name}];
+      if (!builder)
+        builder = factory(leaf.field.type);
+      if (!builder)
+        return caf::make_error(ec::unspecified,
+                               fmt::format("failed to construct sketch "
+                                           "builder for type '{}'",
+                                           name));
       if (auto err = builder->add(x, leaf.index))
         return err;
-    // Add column to corresopnding type sketch.
-    // We currently offer only type sketches for basic types and therefore
-    // prune the type meta data, i.e., names and attributes.
-    // TODO(MV): it would make sense to allow differentiate sketches for type
-    // aliases, so we should revisit this in the future and only strip
-    // attributes.
-    auto prune = [&]<concrete_type T>(const T& x) {
-      return type{x};
-    };
-    auto pruned = caf::visit(prune, leaf.field.type);
-    if (auto i = type_builders_.find(pruned); i != type_builders_.end()) {
-      builder = i->second.get();
-    } else if (auto i = type_factory_.find(pruned); i != type_factory_.end()) {
-      auto new_builder = i->second();
-      builder = new_builder.get();
-      type_builders_.emplace(std::move(pruned), std::move(new_builder));
     }
-    if (builder)
-      if (auto err = builder->add(x, leaf.index))
-        return err;
   }
   return caf::none;
 }

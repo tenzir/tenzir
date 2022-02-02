@@ -223,7 +223,7 @@ private:
 } // namespace
 
 caf::error buffered_builder::add(table_slice x, offset off) {
-  auto record_batch = to_record_batch(x); // FIXME: do not assume Arrow.
+  auto record_batch = to_record_batch(x);
   const auto& layout = caf::get<record_type>(x.layout());
   auto idx = layout.flat_index(off);
   auto array = record_batch->column(idx);
