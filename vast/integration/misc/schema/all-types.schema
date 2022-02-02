@@ -19,6 +19,8 @@ type all_types_i = record {
   l: list<multi_attr_rec>,
   bar: record {
     x: baz,
+    y: string,
+    z: time
   }
   // active indexer instantiated (and failing) despite #skip
   // p: pattern #skip,

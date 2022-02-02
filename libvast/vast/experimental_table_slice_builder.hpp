@@ -102,6 +102,9 @@ private:
   /// @returns `true` on success.
   bool add_impl(data_view x) override;
 
+  /// Number of leaf columns
+  size_t columns_;
+
   /// Current column index.
   size_t column_ = 0;
 

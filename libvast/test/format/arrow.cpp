@@ -30,8 +30,6 @@
 
 #include <utility>
 
-using caf::get;
-
 using namespace std::chrono;
 using namespace std::string_literals;
 using namespace vast;

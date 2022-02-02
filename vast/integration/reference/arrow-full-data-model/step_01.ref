@@ -4,6 +4,8 @@
 a: fixed_size_binary[16]
 b: bool
 bar.x: bool
+bar.y: string
+bar.z: timestamp[ns]
 c: uint64
 d: int64
 done with all readers
