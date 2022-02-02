@@ -180,9 +180,15 @@ public:
       };
       deleter_ = std::move(g);
     } else {
-      deleter_ = std::move(step);
+      deleter_ = std::forward<Step>(step);
     }
   }
+
+  // -- free functions --------------------------------------------------------
+
+  /// Create an Arrow Buffer that structurally shares the lifetime of the chunk.
+  friend std::shared_ptr<arrow::Buffer>
+  as_arrow_buffer(chunk_ptr chunk) noexcept;
 
   // -- concepts --------------------------------------------------------------
 
