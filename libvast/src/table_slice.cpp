@@ -161,12 +161,17 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
         // count here that we bind to the lifetime of the original chunk. This
         // avoids cyclic references between the table slice and its
         // encoding-specific state.
-        chunk_ = chunk::make(bytes, [state = std::move(state),
-                                     chunk = std::move(chunk_)]() noexcept {
-          static_cast<void>(state);
-          static_cast<void>(chunk);
-          --num_instances_;
-        });
+        chunk_
+          = chunk::make(bytes, [state = std::move(state),
+                                chunk = std::move(chunk_)]() mutable noexcept {
+              --num_instances_;
+              // We manually call the destructors in proper order here, as the
+              // state (and thus the contained chunk that actually owns the
+              // memory we decoupled) must be destroyed last and the destruction
+              // order for lambda captures is undefined.
+              chunk = {};
+              state = {};
+            });
       },
     };
     visit(f, as_flatbuffer(chunk_));

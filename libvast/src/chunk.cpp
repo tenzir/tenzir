@@ -154,11 +154,16 @@ std::shared_ptr<arrow::Buffer> as_arrow_buffer(chunk_ptr chunk) noexcept {
   if (!chunk)
     return nullptr;
   auto buffer = arrow::Buffer::Wrap(chunk->data(), chunk->size());
+  VAST_ASSERT(reinterpret_cast<const std::byte*>(buffer->data())
+              == chunk->data());
   auto* const buffer_data = buffer.get();
-  return {buffer_data, [chunk = std::move(chunk),
-                        buffer = std::move(buffer)](arrow::Buffer*) noexcept {
-            static_cast<void>(chunk);
-            static_cast<void>(buffer);
+  return {buffer_data, [chunk = std::move(chunk), buffer = std::move(buffer)](
+                         arrow::Buffer*) mutable noexcept {
+            // We manually call the destructors in proper order here, as the
+            // chunk must be destroyed last and the destruction order for lambda
+            // captures is undefined.
+            buffer = {};
+            chunk = {};
           }};
 }
 
