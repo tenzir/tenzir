@@ -19,6 +19,7 @@
       defaultPackage = packages.vast;
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       defaultApp = apps.vast;
+      devShell = import ./shell.nix { inherit pkgs; };
     }
   );
 }

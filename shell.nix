@@ -1,5 +1,4 @@
-{ nixpkgs ? import ./nix/pinned.nix
-, pkgs ? import ./nix { nixpkgs = nixpkgs; }
+{ pkgs
 , useClang ? pkgs.stdenv.isDarwin
 }:
 let
@@ -15,8 +14,10 @@ mkShell ({
   inputsFrom = [ pkgs.vast ];
   # To build libcaf_openssl with bundled CAF.
   buildInputs = [ pkgs.openssl ];
+
   shellHook = ''
-    echo "Entering VAST environment"
+    alias xd='nix run nixpkgs#glow "$(git rev-parse --show-toplevel)/nix/README.md"'
+    echo "Entering VAST environment; run \`xd\` for info"
   '';
 } // lib.optionalAttrs isStatic {
   VAST_STATIC_EXECUTABLE = "ON";
