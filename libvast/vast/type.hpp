@@ -127,6 +127,8 @@ public:
   struct attribute_view final {
     std::string_view key;   ///< The key.
     std::string_view value; ///< The value (empty if unset).
+    friend bool operator==(const attribute_view& lhs, const attribute_view& rhs)
+      = default;
   };
 
   /// Indiciates whether to skip over internal types when looking at the

@@ -889,28 +889,23 @@ type enrich_type_with_metadata(
   type t, const std::shared_ptr<const arrow::KeyValueMetadata>& metadata) {
   if (!metadata)
     return t;
-  int nesting_depth = -1;
   auto names_and_attrs = std::vector<
-    std::pair<std::string, struct std::vector<struct type::attribute>>>(1);
-  auto name_parser = "VAST:name:" >> parsers::i32 >> parsers::eoi;
-  auto attr_parser = "VAST:attributes:" >> parsers::i32 >> parsers::eoi;
+    std::pair<std::string, struct std::vector<struct type::attribute>>> {};
+  auto name_parser = "VAST:name:" >> parsers::u32 >> parsers::eoi;
+  auto attr_parser = "VAST:attributes:" >> parsers::u32 >> parsers::eoi;
   for (const auto& [key, value] :
        detail::zip(metadata->keys(), metadata->values())) {
     if (!key.starts_with("VAST:"))
       continue;
-    if (int32_t index{}; name_parser(key, index)) {
-      if (nesting_depth < index) {
-        nesting_depth = index;
+    if (uint32_t index{}; name_parser(key, index)) {
+      if (index >= names_and_attrs.size())
         names_and_attrs.resize(index + 1);
-      }
       names_and_attrs[index].first = value;
       continue;
     }
-    if (int32_t index{}; attr_parser(key, index)) {
-      if (nesting_depth < index) {
-        nesting_depth = index;
+    if (uint32_t index{}; attr_parser(key, index)) {
+      if (index >= names_and_attrs.size())
         names_and_attrs.resize(index + 1);
-      }
       names_and_attrs[index].second = deserialize_attributes(value);
       continue;
     }
