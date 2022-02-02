@@ -117,6 +117,7 @@ static expression expand(data x) {
 static auto make_predicate_parser() {
   using parsers::alnum;
   using parsers::chr;
+  using parsers::str;
   using namespace parser_literals;
   // clang-format off
   // TODO: Align this with identifier_char.
@@ -124,7 +125,7 @@ static auto make_predicate_parser() {
   // A field cannot start with:
   //  - '-' to leave room for potential arithmetic expressions in operands
   //  - ':' so it won't be interpreted as a type extractor
-  auto field = !(':'_p | '-') >> (+field_char % '.');
+  auto field = !(':'_p | '-') >> ((+field_char | str{"*"}) % '.');
   auto operand
     = (parsers::data >> !(field_char | '.')) ->* to_data_operand
     | "#type"_p  ->* [] { return meta_extractor{meta_extractor::type}; }

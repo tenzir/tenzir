@@ -2048,17 +2048,43 @@ record_type::resolve_key_suffix(std::string_view key,
       std::vector{key},
     },
   };
-  const auto* prefix_begin = prefix.begin();
-  while (prefix_begin != prefix.end()) {
-    const auto [prefix_mismatch, key_mismatch]
-      = std::mismatch(prefix_begin, prefix.end(), key.begin(), key.end());
-    if (prefix_mismatch == prefix.end() && key_mismatch != key.end()
-        && *key_mismatch == '.')
-      history[0].second.push_back(key.substr(1 + key_mismatch - key.begin()));
-    prefix_begin = std::find(prefix_begin, prefix.end(), '.');
-    if (prefix_begin == prefix.end())
-      break;
-    ++prefix_begin;
+  // This loop strips all possible prefix variations (full prefix, prefix from
+  // the first dot separator, prefix from second dot separator, ...) from our
+  // initial key and enters the created variations of our key into the remaining
+  // key map.
+  while (!prefix.empty()) {
+    const auto* prefix_mismatch = prefix.begin();
+    const auto* key_mismatch = key.begin();
+    while (key_mismatch != key.end()) {
+      // There's two ways to advance: mismatch until dot separator, or a
+      // wildcard in the key with manually advancing the prefix to the next dot.
+      if (*key_mismatch == '*') {
+        ++key_mismatch;
+        prefix_mismatch = std::find(prefix_mismatch + 1, prefix.end(), '.');
+      } else {
+        std::tie(prefix_mismatch, key_mismatch) = std::mismatch(
+          prefix_mismatch, prefix.end(), key_mismatch, key.end());
+      }
+      if (key_mismatch != key.end()) {
+        if (*key_mismatch == '.'
+            && (prefix_mismatch == prefix.end() || *prefix_mismatch == '.')) {
+          // Strip the prefix from the key, and enter it to our starting set of
+          // remaining keys. Note that it suffices to check whether the
+          // prefix-stripped key equals the last prefix-stripped key to avoid
+          // duplicate entries.
+          const auto prefix_stripped_key
+            = key.substr(1 + key_mismatch - key.begin());
+          if (prefix_stripped_key != history[0].second.back())
+            history[0].second.push_back(prefix_stripped_key);
+          break;
+        }
+        if (*key_mismatch != '*')
+          break;
+      }
+    }
+    // Lastly, update the prefix.
+    const auto* it = std::find(prefix.begin(), prefix.end(), '.');
+    prefix = prefix.substr((it == prefix.end() ? 0 : 1) + it - prefix.begin());
   }
   while (!index.empty()) {
     auto& [record, remaining_keys] = history.back();
@@ -2097,14 +2123,40 @@ record_type::resolve_key_suffix(std::string_view key,
       case fbs::type::Type::list_type:
       case fbs::type::Type::map_type: {
         for (const auto& remaining_key : remaining_keys) {
-          // TODO: Once we no longer support flattening types, we can switch to
-          // an equality comparison between field_name and remaining_key here.
-          const auto [field_name_mismatch, remaining_key_mismatch]
-            = std::mismatch(field_name->rbegin(), field_name->rend(),
-                            remaining_key.rbegin(), remaining_key.rend());
-          if (remaining_key_mismatch == remaining_key.rend()
-              && (field_name_mismatch == field_name->rend()
-                  || *field_name_mismatch == '.')) {
+          // TODO: Once we no longer support flattening types, and no longer
+          // use the partition v0 table with its flattened combined type, we
+          // can switch to an equality comparison between field_name and
+          // remaining_key or '*' here.
+          // Until then, this rather complicated lambda has to be used, which
+          // goes right-to-left over both remaining key and field name,
+          // matches either until the end or until a dot, and jumps until the
+          // end or next dot (whichever comes first) in the field name of the
+          // remaining key ends at a '*'.
+          auto match = [&]() noexcept {
+            auto field_name_mismatch = field_name->rbegin();
+            auto remaining_key_mismatch = remaining_key.rbegin();
+            while (true) {
+              std::tie(field_name_mismatch, remaining_key_mismatch)
+                = std::mismatch(field_name_mismatch, field_name->rend(),
+                                remaining_key_mismatch, remaining_key.rend());
+              if (remaining_key_mismatch == remaining_key.rend()) {
+                return field_name_mismatch == field_name->rend()
+                       || *field_name_mismatch == '.';
+              }
+              if (*remaining_key_mismatch == '*') {
+                ++remaining_key_mismatch;
+                if (remaining_key_mismatch != remaining_key.rend()
+                    && *remaining_key_mismatch != '.')
+                  return false;
+                while (++field_name_mismatch != field_name->rend())
+                  if (*field_name_mismatch == '.')
+                    break;
+                continue;
+              }
+              return false;
+            }
+          };
+          if (match()) {
             co_yield index;
             break;
           }
@@ -2119,14 +2171,20 @@ record_type::resolve_key_suffix(std::string_view key,
           history[0].second,
         };
         for (const auto& remaining_key : remaining_keys) {
-          auto [remaining_key_mismatch, field_name_mismatch]
-            = std::mismatch(remaining_key.begin(), remaining_key.end(),
-                            field_name->begin(), field_name->end());
-          if (field_name_mismatch == field_name->end()
-              && remaining_key_mismatch != remaining_key.end()
-              && *remaining_key_mismatch == '.') {
-            next.second.emplace_back(remaining_key.substr(
-              1 + remaining_key_mismatch - remaining_key.begin()));
+          VAST_ASSERT(!remaining_key.empty());
+          if (remaining_key[0] == '*'
+              && (remaining_key.size() == 1 || remaining_key[1] == '.')) {
+            next.second.emplace_back(remaining_key.substr(2));
+          } else {
+            auto [remaining_key_mismatch, field_name_mismatch]
+              = std::mismatch(remaining_key.begin(), remaining_key.end(),
+                              field_name->begin(), field_name->end());
+            if (field_name_mismatch == field_name->end()
+                && remaining_key_mismatch != remaining_key.end()
+                && *remaining_key_mismatch == '.') {
+              next.second.emplace_back(remaining_key.substr(
+                1 + remaining_key_mismatch - remaining_key.begin()));
+            }
           }
         }
         history.push_back(std::move(next));

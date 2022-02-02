@@ -306,9 +306,18 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 // Compare the desired field name with each field in the
                 // partition.
                 auto matching = [&] {
-                  for (const auto& [fqf, _] : synopsis.second.field_synopses_) {
-                    if (fqf.name().ends_with(*s))
+                  for (const auto& [field, _] :
+                       synopsis.second.field_synopses_) {
+                    if (field.is_standalone_type()) {
+                      if (field.layout_name().ends_with(lhs.field))
+                        return true;
+                      continue;
+                    }
+                    auto rt = record_type{{field.field_name(), field.type()}};
+                    for ([[maybe_unused]] const auto& offset :
+                         rt.resolve_key_suffix(*s, field.layout_name())) {
                       return true;
+                    }
                   }
                   return false;
                 }();
@@ -328,7 +337,14 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         },
         [&](const field_extractor& lhs, const data&) -> result_type {
           auto pred = [&](const auto& field) {
-            return field.name().ends_with(lhs.field);
+            if (field.is_standalone_type())
+              return field.layout_name().ends_with(lhs.field);
+            auto rt = record_type{{field.field_name(), field.type()}};
+            for ([[maybe_unused]] const auto& offset :
+                 rt.resolve_key_suffix(lhs.field, field.layout_name())) {
+              return true;
+            }
+            return false;
           };
           return search(pred);
         },

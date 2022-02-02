@@ -82,20 +82,11 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
     auto neg = is_negated(op);
     auto layout = *state.combined_layout();
     // data s -> string, rhs in #field query
-    for (const auto& [field, offset] : layout.leaves()) {
-      const auto key = layout.key(offset);
-      const auto [s_mismatch, key_mismatch]
-        = std::mismatch(s->rbegin(), s->rend(), key.rbegin(), key.rend());
-      if (s_mismatch == s->rend()
-          && (key_mismatch == key.rend() || *key_mismatch == '.')) {
-        for (const auto& [layout_name, ids] : state.type_ids()) {
-          const auto [layout_name_mismatch, key_mismatch] = std::mismatch(
-            layout_name.begin(), layout_name.end(), key.begin(), key.end());
-          if (layout_name_mismatch == layout_name.end()
-              && (key_mismatch == key.end() || *key_mismatch == '.')) {
-            row_ids |= ids;
-          }
-        }
+    for (const auto& [layout_name, ids] : state.type_ids()) {
+      for ([[maybe_unused]] const auto& offset :
+           layout.resolve_key_suffix(*s, layout_name)) {
+        row_ids |= ids;
+        break;
       }
     }
     if (neg) {

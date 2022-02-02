@@ -897,6 +897,10 @@ public:
   resolve_key(std::string_view key) const noexcept;
 
   /// Resolves a key into a list of offsets by suffix matching the given key.
+  /// Any section of a key (delimited by dots) may be replaced with the wildcard
+  /// character '*'.
+  /// TODO: Implement support for literally matching any section surrounded in
+  /// quotes, disabling special handling for '*' and '.' characters.
   /// @note This only matches on full keys, so the key 'y.z' matches 'x.y.z' but
   /// not 'x.other_y.z'.
   /// @note The key may optionally begin with a given prefix for backwards
