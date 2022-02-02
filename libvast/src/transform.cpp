@@ -169,10 +169,6 @@ transformation_engine::process_queue(transform& transform,
 caf::expected<std::vector<table_slice>> transformation_engine::finish() {
   VAST_DEBUG("transformation engine retrieves results");
   auto to_transform = std::exchange(to_transform_, {});
-  // NOTE: It's important that `batch` is kept alive until `create()`
-  // is finished: If a copy was made, `batch` will hold the only reference
-  // to its underlying table slice, but the RecordBatches created by the
-  // transform step will most likely reference some of same underlying data.
   std::unordered_map<vast::type, std::deque<transform_batch>> batches{};
   std::vector<table_slice> result{};
   for (auto& [layout, queue] : to_transform) {
