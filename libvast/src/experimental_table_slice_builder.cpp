@@ -27,7 +27,6 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 
-#include <ranges>
 #include <simdjson.h>
 
 namespace vast {
