@@ -889,8 +889,8 @@ type enrich_type_with_metadata(
   type t, const std::shared_ptr<const arrow::KeyValueMetadata>& metadata) {
   if (!metadata)
     return t;
-  auto names_and_attrs = std::vector<
-    std::pair<std::string, struct std::vector<struct type::attribute>>> {};
+  auto names_and_attrs
+    = std::vector<std::pair<std::string, std::vector<struct type::attribute>>>{};
   auto name_parser = "VAST:name:" >> parsers::u32 >> parsers::eoi;
   auto attr_parser = "VAST:attributes:" >> parsers::u32 >> parsers::eoi;
   for (const auto& [key, value] :
