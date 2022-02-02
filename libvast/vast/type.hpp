@@ -127,6 +127,8 @@ public:
   struct attribute_view final {
     std::string_view key;   ///< The key.
     std::string_view value; ///< The value (empty if unset).
+    friend bool operator==(const attribute_view& lhs, const attribute_view& rhs)
+      = default;
   };
 
   /// Indiciates whether to skip over internal types when looking at the
@@ -307,6 +309,12 @@ public:
   /// Returns a view of all names of this type.
   [[nodiscard]] detail::generator<std::string_view> names() const& noexcept;
   [[nodiscard]] detail::generator<std::string_view> names() && = delete;
+
+  /// Returns a view of all names of this type, alongside all type attributes
+  /// that have been defined on the same nesting level as the associated name.
+  [[nodiscard]] detail::generator<
+    std::pair<std::string_view, std::vector<attribute_view>>>
+  names_and_attributes() const& noexcept;
 
   /// Returns the value of an attribute by name, if it exists.
   /// @param key The key of the attribute.

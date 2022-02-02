@@ -1,6 +1,12 @@
+      child 0, contagious: bool
+    -- field metadata --
     -- field metadata --
     ARROW:extension:metadata: 'vast.address'
     ARROW:extension:name: 'vast.address'
+    VAST:name:0: 'multi_attr_rec'
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
   -- field metadata --
   -- field metadata --
   -- field metadata --
@@ -10,10 +16,17 @@
   ARROW:extension:name: 'vast.address'
   ARROW:extension:name: 'vast.enum'
   ARROW:extension:name: 'vast.subnet'
-  child 0, item: int64
+  VAST:attributes:0: '{ "baz_key": "baz_value"}'
+  VAST:attributes:0: '{ "description": "unnamed_extended_bool"}'
+  VAST:attributes:0: '{ "skip": ""}'
+  VAST:name:0: 'baz'
+  child 0, item: struct<contagious: bool>
   child 0, length: uint8
   child 1, address: fixed_size_binary[16]
 -- schema metadata --
+VAST:attributes:1: '{ "some": "attr", "top_level_key": "v"}'
+VAST:name:0: 'all_types'
+VAST:name:1: 'all_types_i'
 a: fixed_size_binary[16]
 b: bool
 bar.x: bool
@@ -23,9 +36,8 @@ done with all readers
 done with current reader, rows: 4
 e: dictionary<values=string, indices=int16, ordered=0>
 i: int64
-l: list<item: int64>
+l: list<item: struct<contagious: bool>>
 n: struct<length: uint8, address: fixed_size_binary[16]>
-name: 'all_types'
 open next reader
 open next reader
 r: double

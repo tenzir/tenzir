@@ -407,7 +407,7 @@ TEST(record batch roundtrip - adding column) {
 
 auto field_roundtrip(const type& t) {
   const auto& arrow_field = make_experimental_field({"x", t});
-  const auto& restored_t = make_vast_type(*arrow_field->type());
+  const auto& restored_t = make_vast_type(*arrow_field);
   CHECK_EQUAL(t, restored_t);
 }
 
@@ -423,7 +423,6 @@ TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{pattern_type{}});
   field_roundtrip(type{address_type{}});
   field_roundtrip(type{subnet_type{}});
-  // currently a value of type count, indistinguishable from a normal count
   field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
   field_roundtrip(type{list_type{integer_type{}}});
   field_roundtrip(type{map_type{integer_type{}, address_type{}}});
@@ -436,6 +435,31 @@ TEST(arrow primitive type to field roundtrip) {
     {"b", record_type{{"hits", count_type{}}, {"net", subnet_type{}}}}}});
 }
 
+TEST(arrow names and attrs roundtrip) {
+  auto name_n_attrs_type
+    = type{"fool", bool_type{}, {{"#key1_novalue"}, {"#key2", "v2"}}};
+  auto deeply_nested_type = type{
+    "fool",
+    type{type{bool_type{}, {{"keyX", "v1"}}},
+         {{"#key1_novalue"}, {"#key2", "v2"}}},
+  };
+  field_roundtrip(type{"fool", bool_type{}});
+  field_roundtrip(type{"fool", type{"cool", bool_type{}}});
+  field_roundtrip(name_n_attrs_type);
+  field_roundtrip(
+    type{"fool", type{bool_type{}, {{"#key1_novalue"}, {"#key2", "v2"}}}});
+  field_roundtrip(deeply_nested_type);
+  field_roundtrip(
+    type{"my_list_outer", list_type{type{"inner", deeply_nested_type}}});
+  field_roundtrip(type{
+    "my_map",
+    map_type{
+      type{"my_keys", name_n_attrs_type},
+      type{"my_vals", deeply_nested_type},
+    },
+  });
+}
+
 auto schema_roundtrip(const type& t) {
   const auto& arrow_schema = make_experimental_schema(t);
   const auto& restored_t = make_vast_type(*arrow_schema);
@@ -444,19 +468,23 @@ auto schema_roundtrip(const type& t) {
 
 TEST(arrow record type to schema roundtrip) {
   schema_roundtrip(type{record_type{{"a", integer_type{}}}});
-  schema_roundtrip(type{record_type{
-    {"a", integer_type{}},
-    {"b", bool_type{}},
-    {"c", integer_type{}},
-    {"d", count_type{}},
-    {"e", real_type{}},
-    {"f", duration_type{}},
-    {"g", time_type{}},
-    {"h", string_type{}},
-    {"i", address_type{}},
-    {"j", subnet_type{}},
-    {"k", list_type{integer_type{}}},
-  }});
+  schema_roundtrip(type{
+    "alias",
+    record_type{
+      {"a", integer_type{}},
+      {"b", bool_type{}},
+      {"c", integer_type{}},
+      {"d", count_type{}},
+      {"e", real_type{}},
+      {"f", duration_type{}},
+      {"g", time_type{}},
+      {"h", string_type{}},
+      {"i", address_type{}},
+      {"j", subnet_type{}},
+      {"k", list_type{integer_type{}}},
+    },
+    {{"top_level_key", "top_level_value"}},
+  });
 
   // unsupported: recursive top-level records are flattened in arrow schema
   // schema_roundtrip(type{

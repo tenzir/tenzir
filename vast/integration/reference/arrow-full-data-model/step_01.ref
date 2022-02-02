@@ -1,4 +1,5 @@
-  child 0, item: int64
+      child 0, contagious: bool
+  child 0, item: struct<contagious: bool>
 -- schema metadata --
 a: fixed_size_binary[16]
 b: bool
@@ -9,7 +10,7 @@ done with all readers
 done with current reader, rows: 4
 e: uint64
 i: int64
-l: list<item: int64>
+l: list<item: struct<contagious: bool>>
 n: fixed_size_binary[17]
 name: 'all_types'
 open next reader

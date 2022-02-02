@@ -744,6 +744,32 @@ TEST(enriched types) {
   CHECK_EQUAL(lat, at);
 }
 
+TEST(names_and_attributes) {
+  const auto layer1 = type{"layer1_innermost",
+                           bool_type{},
+                           {{"inner_1_empty"}, {"inner_2", "level1"}}};
+  const auto layer2
+    = type{"layer2", layer1, {{"l2", "level2"}, {"layer_2_empty"}}};
+  const auto layer3_unnamed
+    = type{layer2, {{"l3", "level3"}, {"layer_3_empty"}}};
+  const auto layer4_no_attrs = type{"layer4", layer3_unnamed};
+  std::vector<std::pair<std::string_view, std::vector<type::attribute_view>>>
+    x{};
+  for (const auto& l : layer4_no_attrs.names_and_attributes())
+    x.push_back(l);
+  CHECK_EQUAL(x[0].first, "layer4");
+  CHECK(x[0].second.empty());
+  CHECK_EQUAL(x[1].first, "");
+  CHECK_EQUAL(x[1].second, (std::vector<type::attribute_view>{
+                             {"l3", "level3"}, {"layer_3_empty", ""}}));
+  CHECK_EQUAL(x[2].first, "layer2");
+  CHECK_EQUAL(x[2].second, (std::vector<type::attribute_view>{
+                             {"l2", "level2"}, {"layer_2_empty", ""}}));
+  CHECK_EQUAL(x[3].first, "layer1_innermost");
+  CHECK_EQUAL(x[3].second, (std::vector<type::attribute_view>{
+                             {"inner_1_empty", ""}, {"inner_2", "level1"}}));
+}
+
 TEST(sorting) {
   auto ts = std::vector<type>{
     type{none_type{}},

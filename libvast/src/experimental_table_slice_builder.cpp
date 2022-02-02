@@ -9,10 +9,13 @@
 #include "vast/experimental_table_slice_builder.hpp"
 
 #include "vast/arrow_extension_types.hpp"
+#include "vast/concept/parseable/core.hpp"
+#include "vast/concept/parseable/numeric.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/zip_iterator.hpp"
 #include "vast/die.hpp"
 #include "vast/experimental_table_slice.hpp"
 #include "vast/fbs/table_slice.hpp"
@@ -23,6 +26,8 @@
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
+
+#include <simdjson.h>
 
 namespace vast {
 
@@ -689,6 +694,65 @@ bool experimental_table_slice_builder::add_impl(data_view x) {
 
 // -- utility functions --------------------------------------------------------
 
+namespace {
+
+std::vector<struct type::attribute>
+deserialize_attributes(std::string_view serialized) {
+  simdjson::padded_string json{serialized};
+  simdjson::dom::parser parser;
+  auto doc = parser.parse(json);
+  std::vector<struct type::attribute> attrs{};
+  for (auto f : doc.get_object()) {
+    auto value = std::string{f.value.get_string().value()};
+    if (!f.value.is_string()) {
+      VAST_ERROR("Unexpected Arrow metadata content in json parser: {} -> {}",
+                 f.key, f.value);
+      continue;
+    }
+    std::optional<std::string> value_opt
+      = value.empty() ? std::optional<std::string>() : value;
+    attrs.push_back({std::string{f.key}, value_opt});
+  }
+  return attrs;
+}
+
+std::string
+serialize_attributes(const std::vector<type::attribute_view>& attrs) {
+  auto result = std::string{};
+  auto inserter = std::back_inserter(result);
+  fmt::format_to(inserter, "{{ ");
+  bool first = true;
+  for (const auto& [key, value] : attrs) {
+    if (first)
+      first = false;
+    else
+      fmt::format_to(inserter, ", ");
+    fmt::format_to(inserter, R"("{}": "{}")", key, value);
+  }
+  fmt::format_to(inserter, "}}");
+  return result;
+}
+
+std::shared_ptr<const arrow::KeyValueMetadata>
+make_arrow_metadata(const type& t) {
+  auto metadata = std::make_shared<arrow::KeyValueMetadata>();
+  int nesting_depth = 0;
+  for (const auto& [name, attrs] : t.names_and_attributes()) {
+    if (!name.empty())
+      metadata->Append(fmt::format("VAST:name:{}", nesting_depth),
+                       std::string{name});
+    if (!attrs.empty())
+      metadata->Append(fmt::format("VAST:attributes:{}", nesting_depth),
+                       serialize_attributes(attrs));
+    ++nesting_depth;
+  }
+  if (nesting_depth == 0)
+    return nullptr;
+  return metadata;
+}
+
+} // namespace
+
 std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t) {
   VAST_ASSERT(caf::holds_alternative<record_type>(t));
   const auto& rt = flatten(caf::get<record_type>(t));
@@ -696,14 +760,16 @@ std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t) {
   arrow_fields.reserve(rt.num_leaves());
   for (const auto& field : rt.fields())
     arrow_fields.emplace_back(make_experimental_field(field));
-  auto metadata = arrow::key_value_metadata({{"name", std::string{t.name()}}});
+  const auto& metadata = make_arrow_metadata(t);
   return std::make_shared<arrow::Schema>(arrow_fields, metadata);
 }
 
 std::shared_ptr<arrow::Field>
-make_experimental_field(const record_type::field_view& field) {
+make_experimental_field(const record_type::field_view& field,
+                        const bool nullable) {
   const auto& arrow_type = make_experimental_type(field.type);
-  return arrow::field(std::string{field.name}, arrow_type);
+  return arrow::field(std::string{field.name}, arrow_type, nullable,
+                      make_arrow_metadata(field.type));
 }
 
 std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
@@ -726,11 +792,12 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
       return make_arrow_pattern();
     },
     [](const list_type& x) -> data_type_ptr {
-      return arrow::list(make_experimental_type(x.value_type()));
+      return arrow::list(make_experimental_field({"item", x.value_type()}));
     },
     [](const map_type& x) -> data_type_ptr {
-      return arrow::map(make_experimental_type(x.key_type()),
-                        make_experimental_type(x.value_type()));
+      return std::make_shared<arrow::MapType>(
+        make_experimental_field({"key", x.key_type()}, false),
+        make_experimental_field({"item", x.value_type()}));
     },
     [](const record_type& x) -> data_type_ptr {
       std::vector<std::shared_ptr<arrow::Field>> fields;
@@ -746,8 +813,13 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
   return caf::visit(f, t);
 }
 
-// NOLINTNEXTLINE(misc-no-recursion)
-type make_vast_type(const arrow::DataType& arrow_type) {
+namespace {
+
+/// Takes an Arrow data type and converts it to its according VAST
+/// representation. As metadata is handled at the field level on the field
+/// level in Arrow, the type at this point is incomplete, as it's lacking the
+/// enriched type information (alias names and attributes).
+type make_vast_type_int(const arrow::DataType& arrow_type) {
   auto f = detail::overload{
     [](const arrow::NullType&) -> type {
       return type{none_type{}};
@@ -779,19 +851,19 @@ type make_vast_type(const arrow::DataType& arrow_type) {
     },
     [](const arrow::MapType& mt) {
       return type{map_type{
-        make_vast_type(*mt.key_type()),
-        make_vast_type(*mt.item_type()),
+        make_vast_type(*mt.key_field()),
+        make_vast_type(*mt.item_field()),
       }};
     },
     [](const arrow::ListType& lt) {
-      const auto& embedded_type = make_vast_type(*lt.value_type());
+      const auto& embedded_type = make_vast_type(*lt.value_field());
       return type{list_type{embedded_type}};
     },
     [](const arrow::StructType& st) {
       std::vector<record_type::field_view> field_types;
       field_types.reserve(st.num_fields());
       for (const auto& f : st.fields())
-        field_types.emplace_back(f->name(), make_vast_type(*f->type()));
+        field_types.emplace_back(f->name(), make_vast_type(*f));
       return type{record_type{field_types}};
     },
     [](const pattern_extension_type&) -> type {
@@ -809,12 +881,54 @@ type make_vast_type(const arrow::DataType& arrow_type) {
   return caf::visit(f, arrow_type);
 }
 
+/// Enhances a VAST type based on the metadata extracted from Arrow.
+/// Metadata can be attached to both Arrow schema and an Arrow field, and VAST
+/// stores metadata on either of the two, using the exact same structure.
+type enrich_type_with_metadata(
+  type t, const std::shared_ptr<const arrow::KeyValueMetadata>& metadata) {
+  if (!metadata)
+    return t;
+  auto names_and_attrs
+    = std::vector<std::pair<std::string, std::vector<struct type::attribute>>>{};
+  auto name_parser = "VAST:name:" >> parsers::u32 >> parsers::eoi;
+  auto attr_parser = "VAST:attributes:" >> parsers::u32 >> parsers::eoi;
+  for (const auto& [key, value] :
+       detail::zip(metadata->keys(), metadata->values())) {
+    if (!key.starts_with("VAST:"))
+      continue;
+    if (uint32_t index{}; name_parser(key, index)) {
+      if (index >= names_and_attrs.size())
+        names_and_attrs.resize(index + 1);
+      names_and_attrs[index].first = value;
+      continue;
+    }
+    if (uint32_t index{}; attr_parser(key, index)) {
+      if (index >= names_and_attrs.size())
+        names_and_attrs.resize(index + 1);
+      names_and_attrs[index].second = deserialize_attributes(value);
+      continue;
+    }
+    VAST_WARN("Unhandled VAST metadata key '{}'", key);
+  }
+  for (auto it = names_and_attrs.rbegin(); it != names_and_attrs.rend(); ++it)
+    t = type{it->first, t, it->second};
+  return t;
+}
+
+} // namespace
+
+type make_vast_type(const arrow::Field& field) {
+  auto vast_type = make_vast_type_int(*field.type());
+  return enrich_type_with_metadata(std::move(vast_type), field.metadata());
+}
+
 type make_vast_type(const arrow::Schema& arrow_schema) {
   std::vector<record_type::field_view> field_types;
   field_types.reserve(arrow_schema.num_fields());
   for (const auto& f : arrow_schema.fields())
-    field_types.emplace_back(f->name(), make_vast_type(*f->type()));
-  return type{record_type{field_types}};
+    field_types.emplace_back(f->name(), make_vast_type_int(*f->type()));
+  return enrich_type_with_metadata(type{record_type{field_types}},
+                                   arrow_schema.metadata());
 }
 
 } // namespace vast
