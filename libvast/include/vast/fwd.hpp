@@ -348,7 +348,9 @@ struct query_cursor;
 struct query_status;
 struct report;
 struct spawn_arguments;
+
 enum class keep_original_partition : bool;
+enum class query_response : bool;
 enum class send_initial_dbstate : bool;
 enum class status_verbosity;
 
@@ -404,6 +406,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::system::metrics_metadata))
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_cursor))
+  VAST_ADD_TYPE_ID((vast::system::query_response))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
   VAST_ADD_TYPE_ID((vast::system::keep_original_partition))

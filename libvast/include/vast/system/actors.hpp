@@ -263,6 +263,8 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<atom::subscribe, atom::create,
                  partition_creation_listener_actor, send_initial_dbstate>,
   // Evaluates a query, ie. sends matching events to the caller.
+  caf::replies_to<atom::evaluate, query, uint64_t>::with<query_response>,
+  // Evaluates a query, ie. sends matching events to the caller.
   caf::replies_to<atom::evaluate, query>::with<query_cursor>,
   // Resolves a query to its candidate partitions.
   // TODO: Expose the catalog as a system component so this
