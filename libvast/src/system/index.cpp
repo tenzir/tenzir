@@ -793,8 +793,7 @@ void schedule_lookups(index_state& st) {
     if (active_query_ids.empty())
       return;
     // 2. Spin up the partition.
-    // Helper function to spin up a single partition.
-    auto spin_up = [&](const uuid& partition_id) -> partition_actor {
+    auto materialize = [&](const uuid& partition_id) -> partition_actor {
       // We need to first check whether the ID is the active partition or one
       // of our unpersisted ones. Only then can we dispatch to our LRU cache.
       partition_actor part;
@@ -813,10 +812,13 @@ void schedule_lookups(index_state& st) {
                    *st.self, partition_id);
       return part;
     };
-    auto partition_actor = spin_up(partition_id);
+    auto partition_actor = materialize(partition_id);
     if (!partition_actor) {
-      // TODO: Decrement query candidate counters and continue;
-      die("not implemented");
+      for (auto qid : active_query_ids) {
+        auto& query_state = st.pending_queries[qid];
+        query_state.candidate_partitions--;
+      }
+      continue;
     }
     // 3. request all relevant queries in a loop
     auto cnt = std::make_shared<size_t>(active_query_ids.size());
