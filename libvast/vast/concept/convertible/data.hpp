@@ -22,9 +22,14 @@
 
 #include <caf/error.hpp>
 
+/// As a convention, in this file `From` and `To` refer to the source
+/// and target types, and `src` and `dst` refer to their values
+///
 /// Assigns fields from `src` to `dst`.
+///
 /// The source must have a structure that matches the destination.
 /// For example:
+///
 /// auto xs = record{               | struct foo {
 ///   {"a", "foo"},                 |   std::string a;
 ///   {"b", record{                 |   struct {
@@ -38,8 +43,12 @@
 ///   {"h", true}                   |   bool h;
 /// };                              | };
 ///
-/// If a member of `out` is missing in `in`, the value does not get overwritten,
-/// Similarly, data in `in` that does not match `out` is ignored.
+/// A suitable overload of `caf::inspect()` for `struct foo` that exposes
+/// the fields in the same order as the layout of `xs` is required
+/// for this machinery to work.
+///
+/// If a member of `from` is missing in `to`, the value does not get
+/// overwritten, Similarly, data in `from` that does not match `to` is ignored.
 ///
 /// A special overload that can turn a list of records into a key-value map
 /// requires that one of the fields in the accompanying record_type has
@@ -101,7 +110,10 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
 } // namespace detail
 
 /// Checks if `from` can be converted to `to`, i.e. whether a viable overload
-/// of / `convert(from, to)` exists.
+/// of `convert(from, to)` exists. For the `TYPED_` version, the additional
+/// parameter `type` refers to the intended type of `from`. (this can be
+/// different from the actual type of `from`, for example a `count` passed as
+/// a positive signed int).
 // NOTE: You might wonder why this is defined as a macro instead of a concept.
 // The issue here is that we're looking for overloads of a non-member function,
 // and the rules for name lookup for free functions mandate that regular
@@ -145,8 +157,8 @@ caf::error convert(const data& src, To& dst);
 // Generic overload when `src` and `dst` are of the same type.
 // TODO: remove the `!concepts::integral` constraint once count is a real type.
 template <class Type, class T>
-  requires(!std::integral<T>)
-|| std::same_as<bool, T> caf::error convert(const T& src, T& dst, const Type&) {
+  requires(!std::integral<T> || std::same_as<bool, T>)
+caf::error convert(const T& src, T& dst, const Type&) {
   dst = src;
   return caf::none;
 }
@@ -154,13 +166,29 @@ template <class Type, class T>
 // Dispatch to standard conversion.
 // clang-format off
 template <class From, class To, class Type>
-  requires (!std::same_as<From, To>) &&
-           std::convertible_to<From, To>
+  requires (!std::same_as<From, To> &&
+           std::convertible_to<From, To>)
 caf::error convert(const From& src, To& dst, const Type&) {
   dst = src;
   return caf::none;
 }
 // clang-format on
+
+// Overload for reals.
+template <concepts::floating_point To>
+caf::error convert(const integer& src, To& dst, const real_type&) {
+  dst = src.value;
+  return caf::none;
+}
+
+/// Overload for converting any arithmetic type to a floating point type.
+//  We need to exclude `From == To` to disambiguate overloads.
+template <concepts::arithmetic From, concepts::floating_point To>
+  requires(!std::same_as<From, To>)
+caf::error convert(const From& src, To& dst, const real_type&) {
+  dst = src;
+  return caf::none;
+}
 
 // Overload for counts.
 template <concepts::unsigned_integral To>

@@ -641,3 +641,16 @@ TEST(record with list to optional vector) {
   CHECK(!x.xs["baz"].ovs);
   CHECK_EQUAL(*x.xs["baz"].ou, 42u);
 }
+
+TEST(conversion to float) {
+  float fdest = 0;
+  double ddest = 0;
+  CHECK_EQUAL(convert(integer{42}, fdest, real_type{}), caf::none);
+  CHECK_EQUAL(convert(integer{42}, ddest, real_type{}), caf::none);
+  CHECK_EQUAL(convert(42, fdest, real_type{}), caf::none);
+  CHECK_EQUAL(convert(-42, ddest, real_type{}), caf::none);
+  CHECK_EQUAL(convert(42u, fdest, real_type{}), caf::none);
+  CHECK_EQUAL(convert(42ull, ddest, real_type{}), caf::none);
+  CHECK_EQUAL(convert(42.0, fdest, real_type{}), caf::none);
+  CHECK_EQUAL(convert(42.0, ddest, real_type{}), caf::none);
+}
