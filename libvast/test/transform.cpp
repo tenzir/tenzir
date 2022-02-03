@@ -238,9 +238,10 @@ TEST(select step) {
   CHECK_EQUAL(as_table_slice(selected2), multi_row_slice);
   vast::select_step select_step3("index>+9");
   auto add3_failed = select_step3.add(slice.layout(), to_record_batch(slice));
-  REQUIRE(add3_failed);
+  REQUIRE(!add3_failed);
   auto selected3 = select_step3.finish();
   REQUIRE_NOERROR(selected3);
+  REQUIRE_EQUAL(selected3->size(), 0ull);
 }
 
 TEST(anonymize step) {

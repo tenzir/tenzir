@@ -59,11 +59,8 @@ select_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   if (new_slice) {
     auto as_batch = to_record_batch(*new_slice);
     transformed_.emplace_back(new_slice->layout(), std::move(as_batch));
-    return caf::none;
   }
-  transformed_.clear();
-  return caf::make_error(ec::invalid_result, "the filter function did not "
-                                             "return a slice");
+  return caf::none;
 }
 
 caf::expected<std::vector<transform_batch>> select_step::finish() {
