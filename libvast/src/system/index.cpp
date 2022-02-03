@@ -751,6 +751,11 @@ void schedule_lookups(index_state& st) {
     auto active = [](const query_state& qs) {
       return qs.requested_partitions > qs.scheduled_partitions;
     };
+    auto weight = [&](const query_state& qs) -> uint8_t {
+      if (!active(qs))
+        return 0;
+      return qs.query.priority;
+    };
     // TODO: The partition selector should add memory residency as an input to
     // the formula.
     // TODO: The selector should return end if no queries are pending. Luckily
@@ -760,15 +765,14 @@ void schedule_lookups(index_state& st) {
     auto it
       = std::max_element(st.pending_partitions.begin(),
                          st.pending_partitions.end(), [&](auto max, auto x) {
-                           size_t max_size = 0;
+                           size_t current_max_weight = 0;
                            for (const auto& qid : max.second)
-                             if (active(st.pending_queries[qid]))
-                               max_size++;
-                           size_t curr_size = 0;
+                             current_max_weight
+                               += weight(st.pending_queries[qid]);
+                           size_t next_weight = 0;
                            for (const auto& qid : x.second)
-                             if (active(st.pending_queries[qid]))
-                               curr_size++;
-                           return max_size < curr_size;
+                             next_weight += weight(st.pending_queries[qid]);
+                           return current_max_weight < next_weight;
                          });
     // VAST_ASSERT(it != st.pending_partitions.end());
     std::vector<uuid> active_query_ids = {};
