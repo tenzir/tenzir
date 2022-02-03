@@ -1410,137 +1410,124 @@ index(index_actor::stateful_pointer<index_state> self,
            keep_original_partition keep) -> caf::result<partition_info> {
       VAST_DEBUG("{} applies a transform to partitions {}", *self,
                  old_partition_ids);
-      return ec::unimplemented;
-      // if (!self->state.store_plugin)
-      //   return caf::make_error(ec::invalid_configuration,
-      //                          "partition transforms are not supported for
-      //                          the " "global archive");
-      // if (old_partition_ids.empty())
-      //   return caf::make_error(ec::invalid_argument, "no ids given");
-      // auto worker = self->state.next_worker();
-      // if (!worker)
-      //   return caf::skip;
-      // auto new_partition_id = vast::uuid::random();
-      // auto store_id = std::string{self->state.store_plugin->name()};
-      // partition_transformer_actor sink = self->spawn(
-      //   partition_transformer, new_partition_id, store_id,
-      //   self->state.synopsis_opts, self->state.index_opts,
-      //   self->state.accountant,
-      //   static_cast<idspace_distributor_actor>(self->state.importer),
-      //   self->state.type_registry, self->state.filesystem, transform);
-      //// match_everything == '"" in #type'
-      // static const auto match_everything
-      //   = vast::predicate{meta_extractor{meta_extractor::type},
-      //                     relational_operator::ni, data{""}};
-      // auto query
-      //   = query::make_extract(sink, query::extract::drop_ids,
-      //   match_everything);
-      // auto query_id = self->state.create_query_id();
-      // auto lookup
-      //   = query_state{query_id, query, old_partition_ids,
-      //   std::move(*worker)};
-      // auto actors
-      //   = self->state.collect_query_actors(lookup, old_partition_ids.size());
-      // if (actors.empty()) {
-      //   self->send(self, atom::worker_v, lookup.worker);
-      //   return caf::make_error(ec::invalid_argument,
-      //                          fmt::format("all partition ids invalid: {}",
-      //                                      old_partition_ids));
-      // }
-      // self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
-      //            std::move(actors),
-      //            caf::actor_cast<receiver_actor<atom::done>>(sink));
-      // auto rp = self->make_response_promise<partition_info>();
-      //// TODO: Implement some kind of monadic composition instead of these
-      //// nested requests.
-      // self
-      //   ->request(sink, caf::infinite, atom::persist_v,
-      //             self->state.partition_path(new_partition_id),
-      //             self->state.partition_synopsis_path(new_partition_id))
-      //   .then(
-      //     [self, rp, old_partition_ids, new_partition_id,
-      //      keep](augmented_partition_synopsis& aps) mutable {
-      //       // If the partition was completely deleted, `synopsis` may be
-      //       null. auto events = aps.synopsis ? aps.synopsis->events : 0ull;
-      //       auto time = aps.synopsis ? aps.synopsis->max_import_time
-      //                                : vast::time::clock::time_point{};
-      //       auto result = partition_info{
-      //         .uuid = aps.uuid,
-      //         .events = events,
-      //         .max_import_time = time,
-      //         .stats = std::move(aps.stats),
-      //       };
-      //       // Update the index statistics. We only need to add the events of
-      //       // the new partition here, the subtraction of the old events is
-      //       // done in `erase`.
-      //       for (const auto& [name, stats] : result.stats.layouts)
-      //         self->state.stats.layouts[name].count += stats.count;
-      //       if (keep == keep_original_partition::yes) {
-      //         if (aps.synopsis)
-      //           self
-      //             ->request(self->state.catalog, caf::infinite,
-      //             atom::merge_v,
-      //                       new_partition_id, aps.synopsis)
-      //             .then(
-      //               [self, rp, new_partition_id, result](atom::ok) mutable {
-      //                 self->state.persisted_partitions.insert(new_partition_id);
-      //                 rp.deliver(result);
-      //               },
-      //               [rp](const caf::error& e) mutable {
-      //                 rp.deliver(e);
-      //               });
-      //         else
-      //           rp.deliver(result);
-      //       } else {
-      //         // Pick one partition id at random to be "transformed", all the
-      //         // other ones are "deleted" from the catalog. If the new
-      //         // partition is empty, all partitions are deleted.
-      //         if (aps.synopsis) {
-      //           VAST_ASSERT(!old_partition_ids.empty());
-      //           auto old_partition_id = old_partition_ids.back();
-      //           old_partition_ids.pop_back();
-      //           self
-      //             ->request(self->state.catalog, caf::infinite,
-      //             atom::replace_v,
-      //                       old_partition_id, new_partition_id, aps.synopsis)
-      //             .then(
-      //               [self, rp, old_partition_id, new_partition_id,
-      //                result](atom::ok) mutable {
-      //                 self->state.persisted_partitions.insert(new_partition_id);
-      //                 self
-      //                   ->request(static_cast<index_actor>(self),
-      //                   caf::infinite,
-      //                             atom::erase_v, old_partition_id)
-      //                   .then(
-      //                     [=](atom::done) mutable {
-      //                       rp.deliver(result);
-      //                     },
-      //                     [=](const caf::error& e) mutable {
-      //                       rp.deliver(e);
-      //                     });
-      //               },
-      //               [rp](const caf::error& e) mutable {
-      //                 rp.deliver(e);
-      //               });
-      //         } else {
-      //           rp.deliver(result);
-      //         }
-      //         for (auto partition_id : old_partition_ids) {
-      //           self
-      //             ->request(static_cast<index_actor>(self), caf::infinite,
-      //                       atom::erase_v, partition_id)
-      //             .then([](atom::done) { /* nop */ },
-      //                   [](const caf::error& e) {
-      //                     VAST_WARN("index failed to erase {} from catalog",
-      //                     e);
-      //                   });
-      //         }
-      //       }
-      //     },
-      //     [rp](const caf::error& e) mutable {
-      //       rp.deliver(e);
-      //     });
-      // return rp;
+      if (!self->state.store_plugin)
+        return caf::make_error(ec::invalid_configuration,
+                               "partition transforms are not supported for the "
+                               "global archive");
+      if (old_partition_ids.empty())
+        return caf::make_error(ec::invalid_argument, "no ids given");
+      auto new_partition_id = vast::uuid::random();
+      auto store_id = std::string{self->state.store_plugin->name()};
+      partition_transformer_actor sink = self->spawn(
+        partition_transformer, new_partition_id, store_id,
+        self->state.synopsis_opts, self->state.index_opts,
+        self->state.accountant,
+        static_cast<idspace_distributor_actor>(self->state.importer),
+        self->state.type_registry, self->state.filesystem, transform);
+      // match_everything == '"" in #type'
+      static const auto match_everything
+        = vast::predicate{meta_extractor{meta_extractor::type},
+                          relational_operator::ni, data{""}};
+      auto query
+        = query::make_extract(sink, query::extract::drop_ids, match_everything);
+      query.priority = 100;
+      auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
+      self->state.pending_queries.emplace(
+        query.id,
+        query_state{.query = query,
+                    .client = caf::actor_cast<receiver_actor<atom::done>>(sink),
+                    .candidate_partitions = input_size,
+                    .requested_partitions = input_size});
+      for (const auto& id : old_partition_ids)
+        self->state.pending_partitions[id].push_back(query.id);
+      schedule_lookups(self->state);
+      auto rp = self->make_response_promise<partition_info>();
+      // TODO: Implement some kind of monadic composition instead of these
+      // nested requests.
+      self
+        ->request(sink, caf::infinite, atom::persist_v,
+                  self->state.partition_path(new_partition_id),
+                  self->state.partition_synopsis_path(new_partition_id))
+        .then(
+          [self, rp, old_partition_ids, new_partition_id,
+           keep](augmented_partition_synopsis& aps) mutable {
+            // If the partition was completely deleted, `synopsis` may be null.
+            auto events = aps.synopsis ? aps.synopsis->events : 0ull;
+            auto time = aps.synopsis ? aps.synopsis->max_import_time
+                                     : vast::time::clock::time_point{};
+            auto result = partition_info{
+              .uuid = aps.uuid,
+              .events = events,
+              .max_import_time = time,
+              .stats = std::move(aps.stats),
+            };
+            // Update the index statistics. We only need to add the events of
+            // the new partition here, the subtraction of the old events is
+            // done in `erase`.
+            for (const auto& [name, stats] : result.stats.layouts)
+              self->state.stats.layouts[name].count += stats.count;
+            if (keep == keep_original_partition::yes) {
+              if (aps.synopsis)
+                self
+                  ->request(self->state.catalog, caf::infinite, atom::merge_v,
+                            new_partition_id, aps.synopsis)
+                  .then(
+                    [self, rp, new_partition_id, result](atom::ok) mutable {
+                      self->state.persisted_partitions.insert(new_partition_id);
+                      rp.deliver(result);
+                    },
+                    [rp](const caf::error& e) mutable {
+                      rp.deliver(e);
+                    });
+              else
+                rp.deliver(result);
+            } else {
+              // Pick one partition id at random to be "transformed", all the
+              // other ones are "deleted" from the catalog. If the new
+              // partition is empty, all partitions are deleted.
+              if (aps.synopsis) {
+                VAST_ASSERT(!old_partition_ids.empty());
+                auto old_partition_id = old_partition_ids.back();
+                old_partition_ids.pop_back();
+                self
+                  ->request(self->state.catalog, caf::infinite, atom::replace_v,
+                            old_partition_id, new_partition_id, aps.synopsis)
+                  .then(
+                    [self, rp, old_partition_id, new_partition_id,
+                     result](atom::ok) mutable {
+                      self->state.persisted_partitions.insert(new_partition_id);
+                      self
+                        ->request(static_cast<index_actor>(self), caf::infinite,
+                                  atom::erase_v, old_partition_id)
+                        .then(
+                          [=](atom::done) mutable {
+                            rp.deliver(result);
+                          },
+                          [=](const caf::error& e) mutable {
+                            rp.deliver(e);
+                          });
+                    },
+                    [rp](const caf::error& e) mutable {
+                      rp.deliver(e);
+                    });
+              } else {
+                rp.deliver(result);
+              }
+              for (auto partition_id : old_partition_ids) {
+                self
+                  ->request(static_cast<index_actor>(self), caf::infinite,
+                            atom::erase_v, partition_id)
+                  .then([](atom::done) { /* nop */ },
+                        [](const caf::error& e) {
+                          VAST_WARN("index failed to erase {} from catalog", e);
+                        });
+              }
+            }
+          },
+          [rp](const caf::error& e) mutable {
+            rp.deliver(e);
+          });
+      return rp;
     },
     // -- query_supervisor_master_actor ----------------------------------------
     [self](atom::worker, query_supervisor_actor /*worker*/) {
