@@ -634,9 +634,9 @@ TEST(record with list to optional vector) {
   CHECK(x.xs.contains("baz"));
   CHECK(x.xs["foo"].ovs);
   CHECK_EQUAL(x.xs["foo"].ovs->size(), 3u);
-  CHECK_EQUAL(x.xs["foo"].ou, 0ull);
+  CHECK_EQUAL(x.xs["foo"].ou, uint64_t{0});
   CHECK(x.xs["bar"].ovs);
-  CHECK_EQUAL(x.xs["bar"].ou, 0ull);
+  CHECK_EQUAL(x.xs["bar"].ou, uint64_t{0});
   CHECK_EQUAL(x.xs["bar"].ovs->size(), 3u);
   CHECK(!x.xs["baz"].ovs);
   CHECK_EQUAL(*x.xs["baz"].ou, 42u);
