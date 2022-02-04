@@ -61,7 +61,7 @@ void store_or_fulfill(
 void partition_transformer_state::add_slice(const table_slice& slice) {
   const auto& layout = slice.layout();
   data.events += slice.rows();
-  data.synopsis.unshared().add(slice, synopsis_opts);
+  data.synopsis.unshared().add(slice, partition_capacity, synopsis_opts);
   // Update type ids
   auto it = data.type_ids.emplace(layout.name(), ids{}).first;
   auto& ids = it->second;
@@ -165,7 +165,7 @@ void partition_transformer_state::fulfill(
 partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
-  uuid id, std::string store_id, const caf::settings& synopsis_opts,
+  uuid id, std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
   idspace_distributor_actor idspace_distributor,
   type_registry_actor type_registry, filesystem_actor fs,
@@ -175,6 +175,8 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.data.offset = invalid_id;
   self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
   self->state.synopsis_opts = synopsis_opts;
+  self->state.partition_capacity = caf::get_or(
+    index_opts, "max-partition-size", defaults::system::max_partition_size);
   self->state.index_opts = index_opts;
   self->state.accountant = std::move(accountant);
   self->state.idspace_distributor = std::move(idspace_distributor);

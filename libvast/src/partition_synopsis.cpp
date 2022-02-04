@@ -10,6 +10,7 @@
 
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/index_config.hpp"
 #include "vast/synopsis_factory.hpp"
 
 namespace vast {
@@ -34,9 +35,37 @@ void partition_synopsis::shrink() {
   }
 }
 
+// TODO: Use a more efficient data structure for rule lookup.
+std::optional<double> get_field_fprate(const index_config& config,
+                                       const qualified_record_field& field) {
+  for (const auto& [targets, fprate] : config.rules) {
+    for (const auto& name : targets) {
+      if (name == field.field_name())
+        return fprate;
+    }
+  }
+  return std::nullopt;
+}
+
+double get_type_fprate(const index_config& config, const type& type) {
+  for (const auto& [targets, fprate] : config.rules) {
+    for (const auto& name : targets) {
+      if (name == ":string" && type == string_type{})
+        return fprate;
+      else if (name == ":address" && type == address_type{})
+        return fprate;
+    }
+  }
+  if (type == address_type{})
+    return defaults::system::address_synopsis_fp_rate;
+  return defaults::system::string_synopsis_fp_rate;
+}
+
 void partition_synopsis::add(const table_slice& slice,
-                             const caf::settings& synopsis_options) {
-  auto make_synopsis = [&](const type& t) -> synopsis_ptr {
+                             size_t partition_capacity,
+                             const index_config& fp_rates) {
+  auto make_synopsis
+    = [](const type& t, const caf::settings& synopsis_options) -> synopsis_ptr {
     if (t.attribute("skip"))
       return nullptr;
     return factory<synopsis>::make(t, synopsis_options);
@@ -44,6 +73,15 @@ void partition_synopsis::add(const table_slice& slice,
   const auto& layout = slice.layout();
   auto each = caf::get<record_type>(layout).leaves();
   auto leaf_it = each.begin();
+  caf::settings synopsis_opts;
+  // These options must be kept in sync with vast/address_synopsis.hpp and
+  // vast/string_synopsis.hpp respectively.
+  synopsis_opts["buffer-input-data"] = true;
+  synopsis_opts["max-partition-size"] = partition_capacity;
+  synopsis_opts["string-synopsis-fp-rate"]
+    = get_type_fprate(fp_rates, vast::type{string_type{}});
+  synopsis_opts["address-synopsis-fp-rate"]
+    = get_type_fprate(fp_rates, vast::type{address_type{}});
   for (size_t col = 0; col < slice.columns(); ++col, ++leaf_it) {
     auto&& leaf = *leaf_it;
     auto add_column = [&](const synopsis_ptr& syn) {
@@ -56,39 +94,45 @@ void partition_synopsis::add(const table_slice& slice,
           syn->add(std::move(view));
       }
     };
-    auto key = qualified_record_field{layout, leaf.index};
-    if (!caf::holds_alternative<string_type>(leaf.field.type)) {
+    // Make a field synopsis if it was configured.
+    if (auto key = qualified_record_field{layout, leaf.index};
+        auto fprate = get_field_fprate(fp_rates, key)) {
       // Locate the relevant synopsis.
       auto it = field_synopses_.find(key);
       if (it == field_synopses_.end()) {
         // Attempt to create a synopsis if we have never seen this key before.
-        it = field_synopses_
-               .emplace(std::move(key), make_synopsis(leaf.field.type))
-               .first;
+        auto opts = synopsis_opts;
+        opts["string-synopsis-fp-rate"] = *fprate;
+        opts["address-synopsis-fp-rate"] = *fprate;
+        it
+          = field_synopses_
+              .emplace(std::move(key), make_synopsis(leaf.field.type, opts))
+              .first;
       }
       // If there exists a synopsis for a field, add the entire column.
       if (auto& syn = it->second)
         add_column(syn);
-    } else { // type == string
-      // All strings share a partition-wide synopsis.
-      // NOTE: if this is made configurable or removed, the pruning step from
-      // the catalog lookup must be adjusted acordingly.
-      field_synopses_[key] = nullptr;
-      // We need to prune the type's metadata here by converting it to a
-      // concrete type and back, because the type synopses are looked up
-      // independent from names and attributes.
-      auto prune = [&]<concrete_type T>(const T& x) {
-        return type{x};
-      };
-      auto cleaned_type = caf::visit(prune, leaf.field.type);
-      auto tt = type_synopses_.find(cleaned_type);
-      if (tt == type_synopses_.end())
-        tt
-          = type_synopses_.emplace(cleaned_type, make_synopsis(leaf.field.type))
-              .first;
-      if (auto& syn = tt->second)
-        add_column(syn);
+    } else {
+      // We still rely on having `field -> nullptr` mappings for all fields
+      // without a dedicated synopsis during lookup and .
+      field_synopses_.emplace(std::move(key), nullptr);
     }
+    // We need to prune the type's metadata here by converting it to a
+    // concrete type and back, because the type synopses are looked up
+    // independent from names and attributes.
+    auto prune = [&]<concrete_type T>(const T& x) {
+      return type{x};
+    };
+    auto cleaned_type = caf::visit(prune, leaf.field.type);
+    // Create the type synopsis
+    auto tt = type_synopses_.find(cleaned_type);
+    if (tt == type_synopses_.end())
+      tt = type_synopses_
+             .emplace(cleaned_type,
+                      make_synopsis(leaf.field.type, synopsis_opts))
+             .first;
+    if (auto& syn = tt->second)
+      add_column(syn);
   }
 }
 
@@ -168,7 +212,8 @@ caf::error unpack_(
     synopsis_ptr ptr;
     if (auto error = unpack(*synopsis, ptr))
       return error;
-    if (qf.is_standalone_type())
+    // We mark type-level synopses by using an empty string as name.
+    if (qf.name().empty())
       ps.type_synopses_[qf.type()] = std::move(ptr);
     else
       ps.field_synopses_[qf] = std::move(ptr);

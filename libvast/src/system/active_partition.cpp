@@ -179,8 +179,8 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
-  caf::settings index_opts, caf::settings synopsis_opts, store_actor store,
-  std::string store_id, chunk_ptr header) {
+  caf::settings index_opts, const index_config& synopsis_opts,
+  store_actor store, std::string store_id, chunk_ptr header) {
   VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
                    VAST_ARG(id));
   self->state.self = self;
@@ -188,16 +188,17 @@ active_partition_actor::behavior_type active_partition(
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.streaming_initiated = false;
-  self->state.synopsis_opts = std::move(synopsis_opts);
   self->state.data.id = id;
   self->state.data.offset = invalid_id;
   self->state.data.events = 0;
   self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
   self->state.data.store_id = store_id;
   self->state.data.store_header = std::move(header);
+  self->state.partition_capacity
+    = get_or(index_opts, "cardinality", defaults::system::max_partition_size);
   self->state.partition_local_stores = store_id != "archive";
   self->state.store = std::move(store);
-  put(self->state.synopsis_opts, "buffer-input-data", true);
+  self->state.synopsis_index_config = synopsis_opts;
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
@@ -230,7 +231,8 @@ active_partition_actor::behavior_type active_partition(
       ids.append_bits(true, last - first);
       self->state.data.offset = std::min(x.offset(), self->state.data.offset);
       self->state.data.events += x.rows();
-      self->state.data.synopsis.unshared().add(x, self->state.synopsis_opts);
+      self->state.data.synopsis.unshared().add(
+        x, self->state.partition_capacity, self->state.synopsis_index_config);
       size_t col = 0;
       for (const auto& [field, offset] :
            caf::get<record_type>(layout).leaves()) {

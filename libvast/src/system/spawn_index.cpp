@@ -8,6 +8,7 @@
 
 #include "vast/system/spawn_index.hpp"
 
+#include "vast/concept/convertible/data.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
@@ -47,6 +48,18 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     opt("vast.active-partition-timeout", sd::active_partition_timeout));
   if (!active_partition_timeout)
     return active_partition_timeout.error();
+  vast::index_config index_config;
+  const auto* settings = get_if(&args.inv.options, "vast.indexing");
+  if (settings) {
+    vast::data as_data{};
+    if (auto err = convert(*settings, as_data))
+      return caf::make_error(ec::convert_error, fmt::format("failed to convert "
+                                                            "{} to data: {}",
+                                                            *settings, err));
+    if (auto err = convert(as_data, index_config))
+      return err;
+    VAST_VERBOSE("using customized indexing configuration {}", index_config);
+  }
   auto handle = self->spawn(
     index, accountant, filesystem, archive, catalog, type_registry, indexdir,
     // TODO: Pass these options as a vast::data object instead.
@@ -57,7 +70,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     opt("vast.max-taste-partitions", sd::taste_partitions),
     opt("vast.max-queries", sd::num_query_supervisors),
     std::filesystem::path{opt("vast.catalog-dir", indexdir.string())},
-    opt("vast.catalog-fp-rate", sd::string_synopsis_fp_rate));
+    std::move(index_config));
   VAST_VERBOSE("{} spawned the index", *self);
   return caf::actor_cast<caf::actor>(handle);
 }
