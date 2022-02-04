@@ -12,6 +12,7 @@
 #include "vast/system/actors.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
+#include <fmt/format.h>
 
 // An in-memory implementation of the filesystem actor, to rule out
 // test flakiness due to a slow disk and to be able to write to any
@@ -29,14 +30,16 @@ inline vast::system::filesystem_actor::behavior_type memory_filesystem() {
       -> caf::result<vast::chunk_ptr> {
       auto chunk = chunks->find(path);
       if (chunk == chunks->end())
-        return caf::make_error(vast::ec::no_such_file, "unknown file");
+        return caf::make_error(vast::ec::no_such_file,
+                               fmt::format("unknown file {}", path));
       return chunk->second;
     },
     [chunks](vast::atom::mmap, const std::filesystem::path& path)
       -> caf::result<vast::chunk_ptr> {
       auto chunk = chunks->find(path);
       if (chunk == chunks->end())
-        return caf::make_error(vast::ec::no_such_file, "unknown file");
+        return caf::make_error(vast::ec::no_such_file,
+                               fmt::format("unknown file {}", path));
       return chunk->second;
     },
     [chunks](vast::atom::erase, std::filesystem::path& path) {
