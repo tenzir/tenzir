@@ -437,9 +437,7 @@ public:
   caf::error apply(const record_type::field_view& field, To& dst) {
     auto f = detail::overload{
       [&](const caf::none_t&, const none_type&) -> caf::error {
-        // If the data is nil then the best we can do is default-construct.
-        if constexpr (std::is_default_constructible_v<To>)
-          new (&dst) To{};
+        // If the data is nil then we leave the value untouched.
         return caf::none;
       },
       [&]<class Data>(const Data&, const none_type&) -> caf::error {
@@ -452,9 +450,7 @@ public:
                                            field));
       },
       [&]<concrete_type Type>(const caf::none_t&, const Type&) -> caf::error {
-        // If the data is nil then the best we can do is default-construct.
-        if constexpr (std::is_default_constructible_v<To>)
-          new (&dst) To{};
+        // If the data is nil then we leave the value untouched.
         return caf::none;
       },
       [&]<class Data, concrete_type Type>(const Data& d,

@@ -145,7 +145,7 @@ TEST(failing) {
   x.value.value = 1337;
   r = record{{"value", caf::none}};
   CHECK_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value.value, 0);
+  CHECK_EQUAL(x.value.value, 1337);
 }
 
 struct MultiMember {
@@ -354,20 +354,20 @@ struct CafOpt {
 };
 
 TEST(std::optional member variable) {
-  auto x = StdOpt{integer{22}};
+  auto x = StdOpt{integer{42}};
   auto r = record{{"value", caf::none}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value, std::nullopt);
+  CHECK_EQUAL(x.value, integer{42});
   r = record{{"value", integer{22}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.value->value, 22);
 }
 
 TEST(caf::optional member variable) {
-  auto x = CafOpt{integer{22}};
+  auto x = CafOpt{integer{42}};
   auto r = record{{"value", caf::none}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value, caf::none);
+  CHECK_EQUAL(x.value, integer{42});
   r = record{{"value", integer{22}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.value->value, 22);
@@ -634,9 +634,9 @@ TEST(record with list to optional vector) {
   CHECK(x.xs.contains("baz"));
   CHECK(x.xs["foo"].ovs);
   CHECK_EQUAL(x.xs["foo"].ovs->size(), 3u);
-  CHECK(!x.xs["foo"].ou);
+  CHECK_EQUAL(x.xs["foo"].ou, uint64_t{0});
   CHECK(x.xs["bar"].ovs);
-  CHECK_EQUAL(x.xs["bar"].ou, caf::none);
+  CHECK_EQUAL(x.xs["bar"].ou, uint64_t{0});
   CHECK_EQUAL(x.xs["bar"].ovs->size(), 3u);
   CHECK(!x.xs["baz"].ovs);
   CHECK_EQUAL(*x.xs["baz"].ou, 42u);
