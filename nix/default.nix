@@ -1,10 +1,16 @@
 let
-  nixpkgs_ = import ./pinned.nix;
-  vastPkgs = import ./overlay.nix;
+  flake = (import
+  (
+    let
+      lock = builtins.fromJSON (builtins.readFile ../flake.lock);
+    in
+    fetchTarball {
+      url = "https://github.com/edolstra/flake-compat/archive/${lock.nodes.flake-compat.locked.rev}.tar.gz";
+      sha256 = lock.nodes.flake-compat.locked.narHash;
+    }
+  )
+  {
+    src = ../.;
+  }).defaultNix;
 in
-
-{ nixpkgs ? nixpkgs_, ... }@args:
-(import nixpkgs (args // { overlays = [ vastPkgs ] ++ (args.overlays or []); })) //
-{
-  inherit nixpkgs_;
-}
+flake
