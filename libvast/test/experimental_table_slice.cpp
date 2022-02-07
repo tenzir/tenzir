@@ -85,8 +85,8 @@ table_slice roundtrip(table_slice slice) {
 }
 
 void record_batch_roundtrip(const table_slice& slice) {
-  const auto copy = experimental_table_slice_builder::create(
-    to_record_batch(slice), slice.layout());
+  const auto copy
+    = experimental_table_slice_builder::create(to_record_batch(slice));
   CHECK_EQUAL(slice, copy);
 }
 
@@ -176,6 +176,7 @@ TEST(single column - count) {
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), 3_c);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - enumeration) {
@@ -188,6 +189,7 @@ TEST(single column - enumeration) {
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), 2_e);
   CHECK_VARIANT_EQUAL(slice.at(4, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - enum2) {
@@ -198,6 +200,7 @@ TEST(single column - enum2) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_e);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - integer) {
@@ -208,6 +211,7 @@ TEST(single column - integer) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_i);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), 2_i);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - boolean) {
@@ -218,6 +222,7 @@ TEST(single column - boolean) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), true);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - real) {
@@ -228,6 +233,7 @@ TEST(single column - real) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 3.21);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - string) {
@@ -238,6 +244,7 @@ TEST(single column - string) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), "c"sv);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - pattern) {
@@ -250,6 +257,7 @@ TEST(single column - pattern) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(p2));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - time) {
@@ -262,6 +270,7 @@ TEST(single column - time) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), epoch + 48h);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - duration) {
@@ -274,6 +283,7 @@ TEST(single column - duration) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), h12);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - address) {
@@ -290,6 +300,7 @@ TEST(single column - address) {
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), a2);
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), a3);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - subnet) {
@@ -306,6 +317,7 @@ TEST(single column - subnet) {
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), s3);
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - list of integers) {
@@ -319,6 +331,7 @@ TEST(single column - list of integers) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), make_view(list2));
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - list of record) {
@@ -330,6 +343,7 @@ TEST(single column - list of record) {
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - list of strings) {
@@ -343,6 +357,7 @@ TEST(single column - list of strings) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(list2));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - list of list of integers) {
@@ -362,6 +377,7 @@ TEST(single column - list of list of integers) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, llt), make_view(list1));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, llt), make_view(list2));
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - map) {
@@ -375,6 +391,7 @@ TEST(single column - map) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(map2));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - serialization) {

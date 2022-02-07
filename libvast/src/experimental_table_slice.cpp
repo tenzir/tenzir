@@ -645,10 +645,6 @@ private:
     return arrow::Status::OK();
   }
 
-  // TODO: can we already derive (and VASTify) the schema at this stage?
-  arrow::Status OnSchemaDecoded(std::shared_ptr<arrow::Schema>) override {
-    return arrow::Status::OK();
-  }
   Callback callback_;
 };
 
@@ -685,6 +681,7 @@ private:
   std::shared_ptr<arrow::RecordBatch> record_batch_ = nullptr;
 };
 
+/// Compute position for each array by traversing the schema tree breadth-first.
 void index_column_arrays(const std::shared_ptr<arrow::Array>& arr,
                          arrow::ArrayVector& out) {
   auto f = detail::overload{[&](const std::shared_ptr<arrow::Array>& a) {
@@ -718,11 +715,11 @@ experimental_table_slice::experimental_table_slice(
   // table slice's chunk, and storing a sliced chunk in there would cause a
   // cyclic reference. In the future, we should just not store the sliced
   // chunk at all, but rather create it on the fly only.
-  state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
-  VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
   auto decoder = record_batch_decoder{};
   state_.record_batch = decoder.decode(
     as_arrow_buffer(parent->slice(as_bytes(*slice.arrow_ipc()))));
+  state_.layout = make_vast_type(*state_.record_batch->schema());
+  VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
   state_.array_index = index_column_arrays(state_.record_batch);
 }
 

@@ -11,10 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/type.hpp"
-#include "vast/view.hpp"
 
 #include <arrow/array.h>
-#include <arrow/builder.h>
 #include <arrow/extension_type.h>
 #include <arrow/type.h>
 #include <caf/detail/type_list.hpp>
@@ -27,6 +25,7 @@ namespace vast {
 class enum_extension_type : public arrow::ExtensionType {
 public:
   static constexpr auto vast_id = "vast.enum";
+
   static const std::shared_ptr<arrow::DataType> arrow_type;
 
   /// Wrap the provided `enumeration_type` into an `arrow::ExtensionType`.

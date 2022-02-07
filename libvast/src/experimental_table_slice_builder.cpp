@@ -24,6 +24,7 @@
 #include "vast/type.hpp"
 
 #include <arrow/api.h>
+#include <arrow/extension_type.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 
@@ -513,11 +514,6 @@ make_arrow_array(arrow::ArrayVector::const_iterator& array_iterator,
     // arrays ain't any better
     [&](const std::shared_ptr<arrow::DataType>&)
       -> std::shared_ptr<arrow::Array> {
-      // VAST_ASSERT(datatype->Equals(*(*array_iterator)->type()),
-      //             fmt::format("expected datatype '{}', but got '{}'",
-      //             *datatype,
-      //                         *(*array_iterator)->type())
-      //               .c_str());
       return *array_iterator++;
     },
     [&](const std::shared_ptr<arrow::StructType>& st)
@@ -617,66 +613,17 @@ size_t experimental_table_slice_builder::columns() const noexcept {
   return detail::narrow_cast<size_t>(result);
 }
 
-table_slice experimental_table_slice_builder::finish() {
-  // Sanity check: If this triggers, the calls to add() did not match the number
-  // of fields in the layout.
-  VAST_ASSERT(column_ == 0);
-  // Pack layout.
-  const auto layout_bytes = as_bytes(layout());
-  auto layout_buffer = builder_.CreateVector(
-    reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
-  // Pack record batch.
-  auto columns = arrow::ArrayVector{};
-  columns.reserve(column_builders_.size());
-  for (auto&& builder : column_builders_)
-    columns.emplace_back(builder->finish());
-  auto record_batch = make_record_batch(columns, rows_, schema_);
-  auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
-  auto stream_writer
-    = arrow::ipc::MakeStreamWriter(ipc_ostream, schema_).ValueOrDie();
-  auto status = stream_writer->WriteRecordBatch(*record_batch);
-  if (!status.ok())
-    VAST_ERROR("failed to write record batch: {}", status);
-  auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
-  auto fbs_ipc_buffer
-    = builder_.CreateVector(arrow_ipc_buffer->data(), arrow_ipc_buffer->size());
-  // Create Arrow-encoded table slices. We need to set the import time to
-  // something other than 0, as it cannot be modified otherwise. We then later
-  // reset it to the clock's epoch.
-  constexpr int64_t stub_ns_since_epoch = 1337;
-  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createexperimental(
-    builder_, layout_buffer, fbs_ipc_buffer, stub_ns_since_epoch);
-  // Create and finish table slice.
-  auto table_slice_buffer
-    = fbs::CreateTableSlice(builder_,
-                            fbs::table_slice::TableSlice::arrow_experimental,
-                            arrow_table_slice_buffer.Union());
-  fbs::FinishTableSliceBuffer(builder_, table_slice_buffer);
-  // Reset the builder state.
-  rows_ = {};
-  // Create the table slice from the chunk.
-  auto chunk = fbs::release(builder_);
-  auto result = table_slice{std::move(chunk), table_slice::verify::no};
-  result.import_time(time{});
-  return result;
-}
+namespace {
 
-table_slice experimental_table_slice_builder::create(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout,
-  size_t initial_buffer_size) {
-  VAST_ASSERT(record_batch->schema()->Equals(make_experimental_schema(layout)),
-              "record layout doesn't match record batch schema");
-  auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
-  // Pack layout.
-  const auto layout_bytes = as_bytes(layout);
-  auto layout_buffer = builder.CreateVector(
-    reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
-  // Pack record batch.
+/// Create a table slice from a record batch.
+/// @param rb The record batch to encode.
+/// @param builder The flatbuffers builder to use.
+table_slice create_table_slice(const arrow::RecordBatch& rb,
+                               flatbuffers::FlatBufferBuilder& builder) {
   auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto stream_writer
-    = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema())
-        .ValueOrDie();
-  auto status = stream_writer->WriteRecordBatch(*record_batch);
+    = arrow::ipc::MakeStreamWriter(ipc_ostream, rb.schema()).ValueOrDie();
+  auto status = stream_writer->WriteRecordBatch(rb);
   if (!status.ok())
     VAST_ERROR("failed to write record batch: {}", status);
   auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
@@ -687,7 +634,7 @@ table_slice experimental_table_slice_builder::create(
   // reset it to the clock's epoch.
   constexpr int64_t stub_ns_since_epoch = 1337;
   auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createexperimental(
-    builder, layout_buffer, fbs_ipc_buffer, stub_ns_since_epoch);
+    builder, fbs_ipc_buffer, stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder,
@@ -699,6 +646,30 @@ table_slice experimental_table_slice_builder::create(
   auto result = table_slice{std::move(chunk), table_slice::verify::no};
   result.import_time(time{});
   return result;
+}
+
+} // namespace
+
+table_slice experimental_table_slice_builder::finish() {
+  // Sanity check: If this triggers, the calls to add() did not match the number
+  // of fields in the layout.
+  VAST_ASSERT(column_ == 0);
+  // Pack record batch.
+  auto columns = arrow::ArrayVector{};
+  columns.reserve(column_builders_.size());
+  for (auto&& builder : column_builders_)
+    columns.emplace_back(builder->finish());
+  auto record_batch = make_record_batch(columns, rows_, schema_);
+  // Reset the builder state.
+  rows_ = {};
+  return create_table_slice(*record_batch, this->builder_);
+}
+
+table_slice experimental_table_slice_builder::create(
+  const std::shared_ptr<arrow::RecordBatch>& record_batch,
+  size_t initial_buffer_size) {
+  auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
+  return create_table_slice(*record_batch, builder);
 }
 
 size_t experimental_table_slice_builder::rows() const noexcept {

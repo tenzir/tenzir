@@ -11,7 +11,6 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/die.hpp"
 
-#include <arrow/type_fwd.h>
 #include <caf/sum_type_access.hpp>
 
 #include <simdjson.h>
@@ -75,6 +74,7 @@ int sum_type_access<arrow::Array>::index_from_type(
 } // namespace caf
 
 namespace vast {
+
 const std::shared_ptr<arrow::DataType> enum_extension_type::arrow_type
   = arrow::dictionary(arrow::int16(), arrow::utf8());
 
