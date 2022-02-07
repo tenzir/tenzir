@@ -22,6 +22,18 @@
         }
       ];
     };
+    nixosModules.vast-client = {
+      imports = [
+        ./nix/module-client.nix
+        {
+          nixpkgs.config.packageOverrides = pkgs: {
+            inherit (self.packages."${pkgs.stdenv.hostPlatform.system}")
+              vast
+            ;
+          };
+        }
+      ];
+    };
   } // flake-utils.lib.eachDefaultSystem (system:
     let
       overlay = import ./nix/overlay.nix { inherit inputs; };
@@ -46,12 +58,13 @@
             {
               # FIXME: the pkgs channel has an issue made the testing creashed
               makeTest = import (pinned.path + "/nixos/tests/make-test-python.nix");
-              inherit self pkgs;
+              inherit self pkgs inputs pinned;
             };
         in
         pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           inherit (vast-vm-tests)
             vast-vm-systemd
+            vast-vm-cluster-systemd
             ;
         }
       );
