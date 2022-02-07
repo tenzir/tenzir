@@ -35,10 +35,7 @@ public:
 
   [[nodiscard]] synopsis_ptr clone() const override {
     using self = bloom_filter_synopsis<T, HashFunction>;
-    // Cannot use `make_unique()` with a private constructor.
-    auto copy = std::unique_ptr<self>(new self(type()));
-    copy->bloom_filter_ = bloom_filter_;
-    return copy;
+    return std::make_unique<self>(type(), bloom_filter_);
   }
 
   void add(data_view x) override {
@@ -102,11 +99,6 @@ public:
 
 protected:
   bloom_filter<HashFunction> bloom_filter_;
-
-private:
-  /// Constructor that leaves `bloom_filter_` uninitialized.
-  bloom_filter_synopsis(vast::type x) : synopsis{std::move(x)} {
-  }
 };
 
 // Because VAST deserializes a synopsis with empty options and
