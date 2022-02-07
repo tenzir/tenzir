@@ -324,6 +324,9 @@ struct index_state {
   /// Statistics about processed data.
   index_statistics stats = {};
 
+  /// Timekeeper for the scheduling algorithm.
+  struct measurement scheduler_measurement;
+
   /// Handle of the accountant.
   accountant_actor accountant = {};
 

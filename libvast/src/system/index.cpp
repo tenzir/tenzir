@@ -615,13 +615,16 @@ void index_state::add_partition_creation_listener(
 
 void index_state::send_report() {
   auto msg = report{.data = {
-                      {"query.backlog.normal", backlog.normal.size()},
-                      {"query.backlog.low", backlog.low.size()},
+                      {"query.pending.partitions", pending_partitions.size()},
+                      {"query.pending.queries", pending_queries.size()},
                       {"query.workers.idle", max_concurrent_partition_lookups
                                                - running_partition_lookups},
                       {"query.workers.busy", running_partition_lookups},
                     }};
-  self->send(accountant, msg);
+  self->send(accountant, std::move(msg));
+  auto r = performance_report{.data = {{{"scheduler", scheduler_measurement}}}};
+  self->send(accountant, std::move(r));
+  scheduler_measurement = measurement{};
 }
 
 caf::typed_response_promise<record>
@@ -731,6 +734,11 @@ index_state::status(status_verbosity v) const {
 }
 
 void schedule_lookups(index_state& st) {
+  auto t = timer::start(st.scheduler_measurement);
+  auto num_scheduled = size_t{0};
+  auto on_return = caf::detail::make_scope_guard([&] {
+    t.stop(num_scheduled);
+  });
   while (st.running_partition_lookups < st.max_concurrent_partition_lookups) {
     if (st.pending_partitions.empty())
       return;
@@ -863,6 +871,7 @@ void schedule_lookups(index_state& st) {
           });
     }
     st.running_partition_lookups++;
+    num_scheduled++;
   }
 }
 
