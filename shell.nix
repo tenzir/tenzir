@@ -3,7 +3,7 @@
 }:
 let
   inherit (pkgs) lib;
-  llvmPkgs = pkgs.buildPackages.llvmPackages_12;
+  llvmPkgs = pkgs.buildPackages.llvmPackages_13;
   stdenv = if useClang then llvmPkgs.stdenv else pkgs.gcc11Stdenv;
   inherit (stdenv.hostPlatform) isStatic;
   mkShell = pkgs.mkShell.override { inherit stdenv; };
