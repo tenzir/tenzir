@@ -18,6 +18,7 @@
 #include "vast/expression.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
+#include "vast/partition_synopsis.hpp"
 #include "vast/query.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
@@ -392,9 +393,9 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
       return atom::ok_v;
     },
     [=](atom::merge, uuid partition,
-        std::shared_ptr<partition_synopsis>& synopsis) -> atom::ok {
+        partition_synopsis_ptr& synopsis) -> atom::ok {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(partition));
-      self->state.merge(partition, std::move(*synopsis));
+      self->state.merge(partition, std::move(synopsis.unshared()));
       return atom::ok_v;
     },
     [=](atom::erase, uuid partition) {
@@ -402,12 +403,12 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
       return atom::ok_v;
     },
     [=](atom::replace, uuid old_partition, uuid new_partition,
-        std::shared_ptr<partition_synopsis>& synopsis) -> atom::ok {
+        partition_synopsis_ptr& synopsis) -> atom::ok {
       // There's technically no need for this assertion, at some point
       // we probably want to remove it or add a new `atom::update` handler
       // for in-place replacements.
       VAST_ASSERT(old_partition != new_partition);
-      self->state.merge(new_partition, std::move(*synopsis));
+      self->state.merge(new_partition, std::move(synopsis.unshared()));
       self->state.erase(old_partition);
       return atom::ok_v;
     },

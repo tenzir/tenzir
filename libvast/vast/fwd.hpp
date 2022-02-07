@@ -197,6 +197,7 @@ void intrusive_ptr_release(const table_slice_builder*);
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
+using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
 using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using transform_ptr = std::shared_ptr<transform>;

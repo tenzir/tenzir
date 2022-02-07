@@ -571,23 +571,21 @@ void index_state::decomission_active_partition() {
   VAST_DEBUG("{} persists active partition to {}", *self, part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
-      [=, this](std::shared_ptr<partition_synopsis>& ps) {
+      [=, this](partition_synopsis_ptr& ps) {
         VAST_DEBUG("{} successfully persisted partition {}", *self, id);
         // The meta index expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
-        auto copy = std::make_shared<partition_synopsis>(*ps);
         meta_index_bytes += ps->memusage();
         // TODO: We should skip this continuation if we're currently shutting
         // down.
-        self
-          ->request(meta_index, caf::infinite, atom::merge_v, id, std::move(ps))
+        self->request(meta_index, caf::infinite, atom::merge_v, id, ps)
           .then(
             [=, this](atom::ok) {
               VAST_DEBUG("{} received ok for request to persist partition {}",
                          *self, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
-                           partition_synopsis_pair{id, copy});
+                           partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
               persisted_partitions.insert(id);
             },
@@ -921,8 +919,6 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} adds flush listener", *self);
       self->state.add_flush_listener(std::move(listener));
     },
-    // caf::reacts_to<atom::subscribe, atom::create,
-    // partition_creation_listener_actor>,
     [self](atom::subscribe, atom::create,
            partition_creation_listener_actor listener) {
       VAST_DEBUG("{} adds partition creation listener", *self);
@@ -1228,13 +1224,9 @@ index(index_actor::stateful_pointer<index_state> self,
                   self->state.partition_path(new_partition_id),
                   self->state.partition_synopsis_path(new_partition_id))
         .then(
-          [self, rp, old_partition_id, new_partition_id](
-            std::shared_ptr<partition_synopsis>& synopsis) mutable {
-            // Make a copy so the caller and the meta index don't need
-            // synchronization.
-            auto result = partition_synopsis_pair{
-              new_partition_id,
-              std::make_shared<partition_synopsis>(*synopsis)};
+          [self, rp, old_partition_id,
+           new_partition_id](partition_synopsis_ptr& synopsis) mutable {
+            auto result = partition_synopsis_pair{new_partition_id, synopsis};
 
             // TODO: We eventually want to allow transforms that delete
             // whole events, at that point we also need to update the index

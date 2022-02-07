@@ -15,13 +15,20 @@
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
+namespace caf {
+
+// Forward declaration to be able to befriend the unshare implementation.
+template <typename T>
+T* default_intrusive_cow_ptr_unshare(T*&);
+
+} // namespace caf
+
 namespace vast {
 
 /// Contains one synopsis per partition column.
-struct partition_synopsis final {
+struct partition_synopsis final : public caf::ref_counted {
   partition_synopsis() = default;
   partition_synopsis(partition_synopsis&&) = default;
-  partition_synopsis(const partition_synopsis&);
 
   partition_synopsis& operator=(partition_synopsis&&) = default;
 
@@ -68,9 +75,14 @@ struct partition_synopsis final {
   FRIEND_ATTRIBUTE_NODISCARD friend caf::error
   unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
          partition_synopsis& ps, uint64_t offset, uint64_t events);
-};
 
-using partition_synopsis_ptr = std::shared_ptr<partition_synopsis>;
+private:
+  // Returns a raw pointer to a deep copy of this partition synopsis.
+  // For use by the `caf::intrusive_cow_ptr`.
+  friend partition_synopsis* ::caf::default_intrusive_cow_ptr_unshare<
+    partition_synopsis>(partition_synopsis*& ptr);
+  partition_synopsis* copy() const;
+};
 
 struct partition_synopsis_pair {
   vast::uuid uuid;

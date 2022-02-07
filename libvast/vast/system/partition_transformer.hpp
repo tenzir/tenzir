@@ -34,8 +34,7 @@ struct partition_transformer_state {
   struct path_data {
     std::filesystem::path partition_path = {};
     std::filesystem::path synopsis_path = {};
-    caf::typed_response_promise<std::shared_ptr<partition_synopsis>> promise
-      = {};
+    caf::typed_response_promise<partition_synopsis_ptr> promise = {};
   };
 
   partition_transformer_state() = default;

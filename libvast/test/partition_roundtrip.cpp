@@ -33,6 +33,7 @@
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
+#include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>
 
 #include <cstddef>
@@ -137,9 +138,9 @@ TEST(empty partition roundtrip) {
   state.data.store_header = vast::chunk::make_empty();
   state.data.offset = 17;
   state.data.events = 23;
-  state.data.synopsis = std::make_shared<vast::partition_synopsis>();
-  state.data.synopsis->offset = state.data.offset;
-  state.data.synopsis->events = state.data.events;
+  state.data.synopsis = caf::make_copy_on_write<vast::partition_synopsis>();
+  state.data.synopsis.unshared().offset = state.data.offset;
+  state.data.synopsis.unshared().events = state.data.events;
   auto& ids = state.data.type_ids["x"];
   ids.append_bits(false, 3);
   ids.append_bits(true, 3);
@@ -160,7 +161,7 @@ TEST(empty partition roundtrip) {
   auto slice = slice_builder->finish();
   slice.offset(0);
   REQUIRE_NOT_EQUAL(slice.encoding(), vast::table_slice_encoding::none);
-  state.data.synopsis->add(slice, caf::settings{});
+  state.data.synopsis.unshared().add(slice, caf::settings{});
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {
@@ -196,8 +197,8 @@ TEST(empty partition roundtrip) {
   //   CHECK_EQUAL(recovered_state.combined_layout_, state.combined_layout);
   CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
   // Deserialize meta index state from this partition.
-  auto ps = std::make_shared<vast::partition_synopsis>();
-  auto error2 = vast::system::unpack(*partition_legacy, *ps);
+  auto ps = caf::make_copy_on_write<vast::partition_synopsis>();
+  auto error2 = vast::system::unpack(*partition_legacy, ps.unshared());
   CHECK(!error2);
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
   CHECK_EQUAL(ps->offset, state.data.offset);
@@ -273,7 +274,7 @@ TEST(full partition roundtrip) {
                     persist_path, synopsis_path);
   run();
   persist_promise.receive(
-    [](std::shared_ptr<vast::partition_synopsis>&) {
+    [](vast::partition_synopsis_ptr&) {
       CHECK("persisting done");
     },
     [](const caf::error& err) {

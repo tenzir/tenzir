@@ -204,13 +204,13 @@ using meta_index_actor = typed_actor_fwd<
   caf::replies_to<atom::merge, std::shared_ptr<std::map<
                                  uuid, partition_synopsis>>>::with<atom::ok>,
   // Merge a single partition synopsis.
-  caf::replies_to<atom::merge, uuid, std::shared_ptr<partition_synopsis>>::with< //
+  caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with< //
     atom::ok>,
   // Erase a single partition synopsis.
   caf::replies_to<atom::erase, uuid>::with<atom::ok>,
   // Atomically remove one and merge another partition synopsis
   caf::replies_to<atom::replace, uuid, uuid,
-                  std::shared_ptr<partition_synopsis>>::with<atom::ok>,
+                  partition_synopsis_ptr>::with<atom::ok>,
   // Return the candidate partitions for an expression.
   caf::replies_to<atom::candidates, vast::uuid,
                   vast::expression>::with<meta_index_result>,
@@ -356,8 +356,8 @@ using filesystem_actor = typed_actor_fwd<
 /// The interface of an BULK PARTITION actor.
 using partition_transformer_actor = typed_actor_fwd<
   // Persist transformed partition to given path.
-  caf::replies_to<atom::persist, std::filesystem::path, std::filesystem::path>::
-    with<std::shared_ptr<partition_synopsis>>,
+  caf::replies_to<atom::persist, std::filesystem::path,
+                  std::filesystem::path>::with<partition_synopsis_ptr>,
   // INTERNAL: Continuation handler for `atom::done`.
   caf::reacts_to<atom::internal, atom::resume, atom::done, vast::id>>
   // query::extract API
@@ -370,8 +370,8 @@ using active_partition_actor = typed_actor_fwd<
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // Persists the active partition at the specified path.
   caf::replies_to<atom::persist, std::filesystem::path,
-                  std::filesystem::path>::with< //
-    std::shared_ptr<partition_synopsis>>,
+                  std::filesystem::path> //
+  ::with<partition_synopsis_ptr>,
   // INTERNAL: A repeatedly called continuation of the persist request.
   caf::reacts_to<atom::internal, atom::persist, atom::resume>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
@@ -527,7 +527,7 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 // never be sent over the network.
 #define vast_uuid_synopsis_map std::map<vast::uuid, vast::partition_synopsis>
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::transform_ptr)
 #undef vast_uuid_synopsis_map

@@ -50,6 +50,7 @@
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
+#include <caf/make_copy_on_write.hpp>
 #include <caf/sec.hpp>
 #include <flatbuffers/base.h> // FLATBUFFERS_MAX_BUFFER_SIZE
 #include <flatbuffers/flatbuffers.h>
@@ -191,7 +192,7 @@ active_partition_actor::behavior_type active_partition(
   self->state.data.id = id;
   self->state.data.offset = invalid_id;
   self->state.data.events = 0;
-  self->state.data.synopsis = std::make_shared<partition_synopsis>();
+  self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
   self->state.data.store_id = store_id;
   self->state.data.store_header = std::move(header);
   self->state.partition_local_stores = store_id != "archive";
@@ -209,9 +210,10 @@ active_partition_actor::behavior_type active_partition(
       VAST_TRACE_SCOPE("partition {} got table slice {} {}",
                        self->state.data.id, VAST_ARG(out), VAST_ARG(x));
       // Adjust the import time range iff necessary.
-      self->state.data.synopsis->min_import_time
+      auto& mutable_synopsis = self->state.data.synopsis.unshared();
+      mutable_synopsis.min_import_time
         = std::min(self->state.data.synopsis->min_import_time, x.import_time());
-      self->state.data.synopsis->max_import_time
+      mutable_synopsis.max_import_time
         = std::max(self->state.data.synopsis->max_import_time, x.import_time());
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
@@ -228,7 +230,7 @@ active_partition_actor::behavior_type active_partition(
       ids.append_bits(true, last - first);
       self->state.data.offset = std::min(x.offset(), self->state.data.offset);
       self->state.data.events += x.rows();
-      self->state.data.synopsis->add(x, self->state.synopsis_opts);
+      self->state.data.synopsis.unshared().add(x, self->state.synopsis_opts);
       size_t col = 0;
       for (const auto& [field, offset] :
            caf::get<record_type>(layout).leaves()) {
@@ -320,7 +322,8 @@ active_partition_actor::behavior_type active_partition(
       self->state.add_flush_listener(listener);
     },
     [self](atom::persist, const std::filesystem::path& part_dir,
-           const std::filesystem::path& synopsis_dir) {
+           const std::filesystem::path& synopsis_dir)
+      -> caf::result<partition_synopsis_ptr> {
       VAST_DEBUG("{} got persist atom", *self);
       // Ensure that the response promise has not already been initialized.
       VAST_ASSERT(
@@ -330,7 +333,7 @@ active_partition_actor::behavior_type active_partition(
       self->state.synopsis_path = synopsis_dir;
       self->state.persisted_indexers = 0;
       self->state.persistence_promise
-        = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
+        = self->make_response_promise<partition_synopsis_ptr>();
       self->send(self, atom::internal_v, atom::persist_v, atom::resume_v);
       return self->state.persistence_promise;
     },
@@ -381,12 +384,13 @@ active_partition_actor::behavior_type active_partition(
                            self->state.indexers.size());
                 return;
               }
+              auto& mutable_synopsis = self->state.data.synopsis.unshared();
               // Shrink synopses for addr fields to optimal size.
-              self->state.data.synopsis->shrink();
+              mutable_synopsis.shrink();
               // TODO: It would probably make more sense if the partition
               // synopsis keeps track of offset/events internally.
-              self->state.data.synopsis->offset = self->state.data.offset;
-              self->state.data.synopsis->events = self->state.data.events;
+              mutable_synopsis.offset = self->state.data.offset;
+              mutable_synopsis.events = self->state.data.events;
               for (auto& [qf, actor] : self->state.indexers) {
                 auto actor_id = actor.id();
                 auto chunk_it = self->state.chunks.find(actor_id);

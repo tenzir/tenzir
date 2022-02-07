@@ -27,6 +27,8 @@
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
 
+#include <caf/make_copy_on_write.hpp>
+
 #include <optional>
 
 using namespace vast;
@@ -138,7 +140,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       else
         part.slice.import_time( //
           caf::get<vast::time>(unbox(to<data>("2015-01-02"))));
-      auto ps = std::make_shared<partition_synopsis>(
+      auto ps = caf::make_copy_on_write<partition_synopsis>(
         make_partition_synopsis(part.slice));
       merge(meta_idx, part.id, ps);
     }
@@ -228,7 +230,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
   }
 
   void merge(meta_index_actor& meta_idx, const vast::uuid& id,
-             std::shared_ptr<partition_synopsis> ps) {
+             partition_synopsis_ptr ps) {
     auto rp = self->request(meta_idx, caf::infinite, atom::merge_v, id, ps);
     run();
     rp.receive([=](atom::ok) {},
@@ -341,21 +343,24 @@ TEST(meta index with bool synopsis) {
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps1 = make_partition_synopsis(slice);
   auto id1 = uuid::random();
-  merge(meta_idx, id1, std::make_shared<partition_synopsis>(std::move(ps1)));
+  merge(meta_idx, id1,
+        caf::make_copy_on_write<partition_synopsis>(std::move(ps1)));
   CHECK(builder->add(make_data_view(false)));
   slice = builder->finish();
   slice.offset(1);
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps2 = make_partition_synopsis(slice);
   auto id2 = uuid::random();
-  merge(meta_idx, id2, std::make_shared<partition_synopsis>(std::move(ps2)));
+  merge(meta_idx, id2,
+        caf::make_copy_on_write<partition_synopsis>(std::move(ps2)));
   CHECK(builder->add(make_data_view(caf::none)));
   slice = builder->finish();
   slice.offset(2);
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps3 = make_partition_synopsis(slice);
   auto id3 = uuid::random();
-  merge(meta_idx, id3, std::make_shared<partition_synopsis>(std::move(ps3)));
+  merge(meta_idx, id3,
+        caf::make_copy_on_write<partition_synopsis>(std::move(ps3)));
   MESSAGE("test custom synopsis");
   auto lookup_ = [&](std::string_view expr) {
     return lookup(meta_idx, expr);

@@ -98,25 +98,27 @@ size_t partition_synopsis::memusage() const {
   return result;
 }
 
-partition_synopsis::partition_synopsis(const partition_synopsis& other)
-  : offset(other.offset),
-    events(other.events),
-    min_import_time(other.min_import_time),
-    max_import_time(other.max_import_time) {
-  type_synopses_.reserve(other.type_synopses_.size());
-  field_synopses_.reserve(other.field_synopses_.size());
-  for (const auto& [type, synopsis] : other.type_synopses_) {
+partition_synopsis* partition_synopsis::copy() const {
+  auto result = std::make_unique<partition_synopsis>();
+  result->offset = offset;
+  result->events = events;
+  result->min_import_time = min_import_time;
+  result->max_import_time = max_import_time;
+  result->type_synopses_.reserve(type_synopses_.size());
+  result->field_synopses_.reserve(field_synopses_.size());
+  for (const auto& [type, synopsis] : type_synopses_) {
     if (synopsis)
-      type_synopses_[type] = synopsis->clone();
+      result->type_synopses_[type] = synopsis->clone();
     else
-      type_synopses_[type] = nullptr;
+      result->type_synopses_[type] = nullptr;
   }
-  for (const auto& [field, synopsis] : other.field_synopses_) {
+  for (const auto& [field, synopsis] : field_synopses_) {
     if (synopsis)
-      field_synopses_[field] = synopsis->clone();
+      result->field_synopses_[field] = synopsis->clone();
     else
-      field_synopses_[field] = nullptr;
+      result->field_synopses_[field] = nullptr;
   }
+  return result.release();
 }
 
 caf::expected<

@@ -81,9 +81,7 @@ struct active_partition_state {
     /// a `Partition` flatbuffer upon completion of this partition. Will be
     /// sent back to the partition after persisting to minimize memory footprint
     /// of the meta index.
-    /// Semantically this should be a unique_ptr, but caf requires message
-    /// types to be copy-constructible.
-    std::shared_ptr<partition_synopsis> synopsis = {};
+    partition_synopsis_ptr synopsis = {};
 
     /// A mapping from qualified field name to serialized indexer state
     /// for each indexer in the partition.
@@ -133,8 +131,7 @@ struct active_partition_state {
 
   /// Promise that gets satisfied after the partition state was serialized
   /// and written to disk.
-  caf::typed_response_promise<std::shared_ptr<partition_synopsis>>
-    persistence_promise = {};
+  caf::typed_response_promise<partition_synopsis_ptr> persistence_promise = {};
 
   /// Path where the index state is written.
   std::optional<std::filesystem::path> persist_path = {};

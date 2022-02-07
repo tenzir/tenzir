@@ -104,9 +104,9 @@ TEST(identity transform / done before persist) {
   auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v,
                           partition_path, synopsis_path);
   run();
-  std::shared_ptr<vast::partition_synopsis> synopsis = nullptr;
+  vast::partition_synopsis_ptr synopsis = nullptr;
   rp.receive(
-    [&](std::shared_ptr<vast::partition_synopsis>& ps) {
+    [&](vast::partition_synopsis_ptr& ps) {
       synopsis = ps;
     },
     [&](caf::error& err) {
@@ -177,9 +177,9 @@ TEST(delete transform / persist before done) {
   }
   self->send(transformer, vast::atom::done_v);
   run();
-  std::shared_ptr<vast::partition_synopsis> synopsis = nullptr;
+  vast::partition_synopsis_ptr synopsis = nullptr;
   rp.receive(
-    [&](std::shared_ptr<vast::partition_synopsis>& ps) {
+    [&](vast::partition_synopsis_ptr& ps) {
       REQUIRE(ps);
       synopsis = ps;
     },
