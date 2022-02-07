@@ -105,10 +105,11 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr);
 
 /// Flatbuffer support.
-[[nodiscard]] caf::expected<flatbuffers::Offset<fbs::synopsis::v0>>
+[[nodiscard]] caf::expected<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>
 pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr&,
      const qualified_record_field&);
 
-[[nodiscard]] caf::error unpack(const fbs::synopsis::v0&, synopsis_ptr&);
+[[nodiscard]] caf::error
+unpack(const fbs::synopsis::LegacySynopsis&, synopsis_ptr&);
 
 } // namespace vast

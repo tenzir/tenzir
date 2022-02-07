@@ -98,9 +98,10 @@ size_t partition_synopsis::memusage() const {
   return result;
 }
 
-caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
+caf::expected<
+  flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
-  std::vector<flatbuffers::Offset<fbs::synopsis::v0>> synopses;
+  std::vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>> synopses;
   for (const auto& [fqf, synopsis] : x.field_synopses_) {
     auto maybe_synopsis = pack(builder, synopsis, fqf);
     if (!maybe_synopsis)
@@ -115,7 +116,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
     synopses.push_back(*maybe_synopsis);
   }
   auto synopses_vector = builder.CreateVector(synopses);
-  fbs::partition_synopsis::v0Builder ps_builder(builder);
+  fbs::partition_synopsis::LegacyPartitionSynopsisBuilder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
   vast::fbs::uinterval id_range{x.offset, x.offset + x.events};
   ps_builder.add_id_range(&id_range);
@@ -130,7 +131,8 @@ namespace {
 
 // Not publicly exposed because it doesn't fully initialize `ps`.
 caf::error unpack_(
-  const flatbuffers::Vector<flatbuffers::Offset<fbs::synopsis::v0>>& synopses,
+  const flatbuffers::Vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>&
+    synopses,
   partition_synopsis& ps) {
   for (const auto* synopsis : synopses) {
     if (!synopsis)
@@ -152,8 +154,8 @@ caf::error unpack_(
 
 } // namespace
 
-caf::error
-unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
+caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
+                  partition_synopsis& ps) {
   if (!x.id_range())
     return caf::make_error(ec::format_error, "missing id range");
   ps.offset = x.id_range()->begin();
@@ -173,8 +175,8 @@ unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
 // This overload is for supporting the transition from VAST 2021.07.29
 // to 2021.08.26, where the `id_range` field was added to partition
 // synopsis. It can be removed once these versions are unsupported.
-caf::error unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps,
-                  uint64_t offset, uint64_t events) {
+caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
+                  partition_synopsis& ps, uint64_t offset, uint64_t events) {
   // We should not end up in this overload when an id range already exists.
   VAST_ASSERT(!x.id_range());
   ps.offset = offset;

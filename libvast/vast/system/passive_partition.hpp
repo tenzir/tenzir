@@ -112,7 +112,7 @@ struct passive_partition_state {
   node_actor::pointer node = {};
 
   /// A typed view into the `partition_chunk`.
-  const fbs::partition::v0* flatbuffer = {};
+  const fbs::partition::LegacyPartition* flatbuffer = {};
 
   /// Maps qualified fields to indexer actors. This is mutable since
   /// indexers are spawned lazily on first access.
@@ -122,10 +122,10 @@ struct passive_partition_state {
 // -- flatbuffers --------------------------------------------------------------
 
 [[nodiscard]] caf::error
-unpack(const fbs::partition::v0& x, passive_partition_state& y);
+unpack(const fbs::partition::LegacyPartition& x, passive_partition_state& y);
 
 [[nodiscard]] caf::error
-unpack(const fbs::partition::v0& x, partition_synopsis& y);
+unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& y);
 
 // -- behavior -----------------------------------------------------------------
 

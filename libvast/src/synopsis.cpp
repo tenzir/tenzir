@@ -101,7 +101,7 @@ bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr) {
   return true;
 }
 
-caf::expected<flatbuffers::Offset<fbs::synopsis::v0>>
+caf::expected<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>
 pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
      const qualified_record_field& fqf) {
   auto column_name = fbs::serialize_bytes(builder, fqf);
@@ -111,15 +111,16 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
   if (auto* tptr = dynamic_cast<time_synopsis*>(ptr)) {
     auto min = tptr->min().time_since_epoch().count();
     auto max = tptr->max().time_since_epoch().count();
-    fbs::time_synopsis::v0 time_synopsis(min, max);
-    fbs::synopsis::v0Builder synopsis_builder(builder);
+    fbs::synopsis::TimeSynopsis time_synopsis(min, max);
+    fbs::synopsis::LegacySynopsisBuilder synopsis_builder(builder);
     synopsis_builder.add_qualified_record_field(*column_name);
     synopsis_builder.add_time_synopsis(&time_synopsis);
     return synopsis_builder.Finish();
   }
   if (auto* bptr = dynamic_cast<bool_synopsis*>(ptr)) {
-    fbs::bool_synopsis::v0 bool_synopsis(bptr->any_true(), bptr->any_false());
-    fbs::synopsis::v0Builder synopsis_builder(builder);
+    fbs::synopsis::BoolSynopsis bool_synopsis(bptr->any_true(),
+                                              bptr->any_false());
+    fbs::synopsis::LegacySynopsisBuilder synopsis_builder(builder);
     synopsis_builder.add_qualified_record_field(*column_name);
     synopsis_builder.add_bool_synopsis(&bool_synopsis);
     return synopsis_builder.Finish();
@@ -127,10 +128,10 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
     auto data = fbs::serialize_bytes(builder, synopsis);
     if (!data)
       return data.error();
-    fbs::opaque_synopsis::v0Builder opaque_builder(builder);
+    fbs::synopsis::LegacyOpaqueSynopsisBuilder opaque_builder(builder);
     opaque_builder.add_data(*data);
     auto opaque_synopsis = opaque_builder.Finish();
-    fbs::synopsis::v0Builder synopsis_builder(builder);
+    fbs::synopsis::LegacySynopsisBuilder synopsis_builder(builder);
     synopsis_builder.add_qualified_record_field(*column_name);
     synopsis_builder.add_opaque_synopsis(opaque_synopsis);
     return synopsis_builder.Finish();
@@ -138,7 +139,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
   return caf::make_error(ec::logic_error, "unreachable");
 }
 
-caf::error unpack(const fbs::synopsis::v0& synopsis, synopsis_ptr& ptr) {
+caf::error
+unpack(const fbs::synopsis::LegacySynopsis& synopsis, synopsis_ptr& ptr) {
   ptr = nullptr;
   if (auto bs = synopsis.bool_synopsis())
     ptr = std::make_unique<bool_synopsis>(bs->any_true(), bs->any_false());

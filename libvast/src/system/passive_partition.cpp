@@ -90,8 +90,8 @@ passive_partition_state::type_ids() const {
   return type_ids_;
 }
 
-caf::error
-unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
+caf::error unpack(const fbs::partition::LegacyPartition& partition,
+                  passive_partition_state& state) {
   // Check that all fields exist.
   if (!partition.uuid())
     return caf::make_error(ec::format_error, //
@@ -167,7 +167,8 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   return caf::none;
 }
 
-caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
+caf::error
+unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
   if (!x.partition_synopsis())
     return caf::make_error(ec::format_error, "missing partition synopsis");
   if (!x.type_ids())
@@ -251,15 +252,15 @@ partition_actor::behavior_type passive_partition(
         }
         // Deserialize chunk from the filesystem actor
         auto partition = fbs::GetPartition(chunk->data());
-        if (partition->partition_type() != fbs::partition::Partition::v0) {
+        if (partition->partition_type() != fbs::partition::Partition::legacy) {
           VAST_ERROR("{} found partition with invalid version of type: {}",
                      *self, partition->GetFullyQualifiedName());
           self->quit();
           return;
         }
-        auto partition_v0 = partition->partition_as_v0();
+        auto partition_legacy = partition->partition_as_legacy();
         self->state.partition_chunk = chunk;
-        self->state.flatbuffer = partition_v0;
+        self->state.flatbuffer = partition_legacy;
         if (auto error = unpack(*self->state.flatbuffer, self->state)) {
           VAST_ERROR("{} failed to unpack partition: {}", *self, render(error));
           self->quit(std::move(error));

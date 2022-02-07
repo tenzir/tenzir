@@ -1,15 +1,13 @@
 include "interval.fbs";
 
-namespace vast.fbs.opaque_synopsis;
+namespace vast.fbs.synopsis;
 
-table v0 {
-  /// The serialized synopsis as produced by `caf::serialize()`.
+table LegacyOpaqueSynopsis {
+  /// A synopsis serialized using the CAF 0.17 binary serializer.
   data: [ubyte];
 }
 
-namespace vast.fbs.time_synopsis;
-
-struct v0 {
+struct TimeSynopsis {
   /// The earliest timestamp in this column, in nanoseconds since epoch.
   start: int64;
 
@@ -17,9 +15,7 @@ struct v0 {
   end: int64;
 }
 
-namespace vast.fbs.bool_synopsis;
-
-struct v0 {
+struct BoolSynopsis {
   /// Whether this column has any "true" value.
   any_true: bool;
 
@@ -27,51 +23,17 @@ struct v0 {
   any_false: bool;
 }
 
-namespace vast.fbs.synopsis;
-
-table v0 {
+table LegacySynopsis {
   /// The caf-serialized record field for this synopsis.
   /// If the name is blank, this is interpreted as a type synopsis.
-  // TODO: Use the `Type` flatbuffer once available.
   qualified_record_field: [ubyte];
 
   /// Synopsis for a bool column.
-  bool_synopsis: bool_synopsis.v0;
+  bool_synopsis: BoolSynopsis;
 
   /// Synopsis for a time column.
-  time_synopsis: time_synopsis.v0;
+  time_synopsis: TimeSynopsis;
 
   /// Other synopsis type with no native flatbuffer layout.
-  opaque_synopsis: opaque_synopsis.v0;
+  opaque_synopsis: LegacyOpaqueSynopsis;
 }
-
-namespace vast.fbs.partition_synopsis;
-
-table v0 {
-  /// Synopses for individual fields.
-  // TODO: Split this into separate vectors for field synopses
-  // and type synopses.
-  synopses: [synopsis.v0];
-
-  /// The id range of this partition.
-  id_range: vast.fbs.uinterval;
-
-  /// The import time range of this partition.
-  import_time_range: vast.fbs.interval;
-}
-
-namespace vast.fbs.partition_synopsis;
-
-union PartitionSynopsis {
-  v0,
-}
-
-namespace vast.fbs;
-
-table PartitionSynopsis {
-  partition_synopsis: partition_synopsis.PartitionSynopsis;
-}
-
-root_type PartitionSynopsis;
-
-file_identifier "vPSN";

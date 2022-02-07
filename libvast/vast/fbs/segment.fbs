@@ -10,7 +10,7 @@ table v0 {
   slices: [FlatTableSlice];
 
   /// A unique identifier.
-  uuid: uuid.v0;
+  uuid: LegacyUUID;
 
   /// The ID intervals this segment covers.
   ids: [uinterval];

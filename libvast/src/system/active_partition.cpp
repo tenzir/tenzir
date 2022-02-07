@@ -107,17 +107,18 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   auto uuid = pack(builder, x.id);
   if (!uuid)
     return uuid.error();
-  std::vector<flatbuffers::Offset<fbs::qualified_value_index::v0>> indices;
+  std::vector<flatbuffers::Offset<fbs::value_index::LegacyQualifiedValueIndex>>
+    indices;
   // Note that the deserialization code relies on the order of indexers within
   // the flatbuffers being preserved.
   for (const auto& [name, chunk] : x.indexer_chunks) {
     auto data = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size());
     auto fieldname = builder.CreateString(name);
-    fbs::value_index::v0Builder vbuilder(builder);
+    fbs::value_index::detail::LegacyValueIndexBuilder vbuilder(builder);
     vbuilder.add_data(data);
     auto vindex = vbuilder.Finish();
-    fbs::qualified_value_index::v0Builder qbuilder(builder);
+    fbs::value_index::LegacyQualifiedValueIndexBuilder qbuilder(builder);
     qbuilder.add_field_name(fieldname);
     qbuilder.add_index(vindex);
     auto qindex = qbuilder.Finish();
@@ -131,13 +132,13 @@ pack(flatbuffers::FlatBufferBuilder& builder,
     = fbs::serialize_bytes(builder, legacy_combined_layout);
   if (!combined_layout_offset)
     return combined_layout_offset.error();
-  std::vector<flatbuffers::Offset<fbs::type_ids::v0>> tids;
+  std::vector<flatbuffers::Offset<fbs::partition::detail::LegacyTypeIDs>> tids;
   for (const auto& kv : x.type_ids) {
     auto name = builder.CreateString(kv.first);
     auto ids = fbs::serialize_bytes(builder, kv.second);
     if (!ids)
       return ids.error();
-    fbs::type_ids::v0Builder tids_builder(builder);
+    fbs::partition::detail::LegacyTypeIDsBuilder tids_builder(builder);
     tids_builder.add_name(name);
     tids_builder.add_ids(*ids);
     tids.push_back(tids_builder.Finish());
@@ -147,27 +148,27 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   auto maybe_ps = pack(builder, *x.synopsis);
   if (!maybe_ps)
     return maybe_ps.error();
-  flatbuffers::Offset<fbs::partition::store_header::v0> store_header = {};
+  flatbuffers::Offset<fbs::partition::detail::StoreHeader> store_header = {};
   auto store_name = builder.CreateString(x.store_id);
   auto store_data = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(x.store_header->data()),
     x.store_header->size());
-  fbs::partition::store_header::v0Builder store_builder(builder);
+  fbs::partition::detail::StoreHeaderBuilder store_builder(builder);
   store_builder.add_id(store_name);
   store_builder.add_data(store_data);
   store_header = store_builder.Finish();
-  fbs::partition::v0Builder v0_builder(builder);
-  v0_builder.add_uuid(*uuid);
-  v0_builder.add_offset(x.offset);
-  v0_builder.add_events(x.events);
-  v0_builder.add_indexes(indexes);
-  v0_builder.add_partition_synopsis(*maybe_ps);
-  v0_builder.add_combined_layout(*combined_layout_offset);
-  v0_builder.add_type_ids(type_ids);
-  v0_builder.add_store(store_header);
-  auto partition_v0 = v0_builder.Finish();
+  fbs::partition::LegacyPartitionBuilder legacy_builder(builder);
+  legacy_builder.add_uuid(*uuid);
+  legacy_builder.add_offset(x.offset);
+  legacy_builder.add_events(x.events);
+  legacy_builder.add_indexes(indexes);
+  legacy_builder.add_partition_synopsis(*maybe_ps);
+  legacy_builder.add_combined_layout(*combined_layout_offset);
+  legacy_builder.add_type_ids(type_ids);
+  legacy_builder.add_store(store_header);
+  auto partition_v0 = legacy_builder.Finish();
   fbs::PartitionBuilder partition_builder(builder);
-  partition_builder.add_partition_type(fbs::partition::Partition::v0);
+  partition_builder.add_partition_type(fbs::partition::Partition::legacy);
   partition_builder.add_partition(partition_v0.Union());
   auto partition = partition_builder.Finish();
   fbs::FinishPartitionBuffer(builder, partition);
@@ -448,7 +449,7 @@ active_partition_actor::behavior_type active_partition(
                   = pack(synopsis_builder, *self->state.data.synopsis)) {
                 fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
                 ps_builder.add_partition_synopsis_type(
-                  fbs::partition_synopsis::PartitionSynopsis::v0);
+                  fbs::partition_synopsis::PartitionSynopsis::legacy);
                 ps_builder.add_partition_synopsis(ps->Union());
                 auto ps_offset = ps_builder.Finish();
                 fbs::FinishPartitionSynopsisBuffer(synopsis_builder, ps_offset);

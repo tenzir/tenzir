@@ -15,7 +15,7 @@ namespace vast.fbs.index;
 /// The persistent state of the index.
 table v0 {
   /// The contained partition UUIDs.
-  partitions: [uuid.v0];
+  partitions: [LegacyUUID];
 
   /// The index statistics
   stats: [layout_statistics.v0];

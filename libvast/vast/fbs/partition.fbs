@@ -1,34 +1,12 @@
+include "partition_synopsis.fbs";
 include "uuid.fbs";
-include "synopsis.fbs";
+include "value_index.fbs";
 
-namespace vast.fbs.value_index;
-
-table v0 {
-  /// The type of the index.
-  // TODO: This is currently deduced implicitly from the `combined_layout` of
-  // the `Partition`. Once available, we want to use the `Type` flatbuffer here
-  // so all relevant information is available.
-  // type: Type;
-
-  /// The serialized `vast::value_index`.
-  data: [ubyte];
-}
-
-namespace vast.fbs.qualified_value_index;
-
-table v0 {
-  /// The full-qualified field name, e.g., "zeek.conn.id.orig_h".
-  field_name: string;
-
-  /// The value index for the given field.
-  index: value_index.v0;
-}
-
-namespace vast.fbs.type_ids;
+namespace vast.fbs.partition.detail;
 
 /// Stores the ids of a given type in the current partition.
 /// Used to answer queries like `#type == "foo"`.
-table v0 {
+table LegacyTypeIDs {
   /// The type name.
   name: string;
 
@@ -36,12 +14,10 @@ table v0 {
   ids: [ubyte];
 }
 
-namespace vast.fbs.partition.store_header;
-
 /// Stores an id for the store implmentation and a block of bytes that
 /// passed to the initalization function.
-table v0 {
-  /// The identifier of the store implementation that can read the data.
+table StoreHeader {
+  /// The identifier of the store implementation that can read the data.        
   id: string;
 
   /// The store metadata.
@@ -52,9 +28,9 @@ namespace vast.fbs.partition;
 
 /// A partition is a collection of indices and column synopses for some
 /// id range.
-table v0 {
+table LegacyPartition {
   /// The UUID of this partition.
-  uuid: uuid.v0;
+  uuid: LegacyUUID;
 
   /// The first ID in the partition.
   offset: uint64;
@@ -62,26 +38,27 @@ table v0 {
   /// The number of contained events.
   events: uint64;
 
-  /// The available layouts in this partition.
-  /// TODO: Use the layout type once available.
+  /// The available layouts in this partition, flattened with the layout name
+  /// embedded in the field names, pruned of attributes, and serialized using
+  /// CAF 0.17's binary serializer.
   combined_layout: [ubyte];
 
   /// A map storing the mapping from type name -> ids
-  type_ids: [type_ids.v0];
+  type_ids: [detail.LegacyTypeIDs];
 
   /// Various synopsis structures for partition-wide synopses of certain
   /// columns. (eg. global min and max timestamp)
-  partition_synopsis: partition_synopsis.v0;
+  partition_synopsis: partition_synopsis.LegacyPartitionSynopsis;
 
   /// The contained value indexes.
-  indexes: [qualified_value_index.v0];
+  indexes: [value_index.LegacyQualifiedValueIndex];
 
   /// A store identifier and header information.
-  store: store_header.v0;
+  store: detail.StoreHeader;
 }
 
 union Partition {
-  v0,
+  legacy: partition.LegacyPartition,
 }
 
 namespace vast.fbs;
