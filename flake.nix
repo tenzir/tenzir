@@ -10,7 +10,6 @@
   inputs.nix-filter.url = "github:numtide/nix-filter";
 
   outputs = { self, nixpkgs, flake-utils, nix-filter, pinned, flake-compat }@inputs: {
-    overlay = import ./nix/overlay.nix { inherit inputs; };
     nixosModules.vast = {
       imports = [
         ./nix/module.nix
@@ -25,8 +24,9 @@
     };
   } // flake-utils.lib.eachDefaultSystem (system:
     let
-      pkgs = import nixpkgs { inherit system; overlays = [ self.overlay ]; };
-      pinned = import inputs.pinned { overlays = [ self.overlay ]; inherit system; };
+      overlay = import ./nix/overlay.nix { inherit inputs; };
+      pkgs = inputs.nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
+      pinned = inputs.pinned.legacyPackages."${system}".appendOverlays [ overlay ];
     in
     rec {
       inherit pinned;
@@ -41,12 +41,12 @@
       devShell = import ./shell.nix { inherit pkgs; };
       hydraJobs = { inherit packages; } // (
         let
-          vast-vm-tests = (import ./nix/nixos-test.nix
+          vast-vm-tests = nixpkgs.legacyPackages."${system}".callPackage ./nix/nixos-test.nix
             {
               # FIXME: the pkgs channel has an issue made the testing creashed
               makeTest = import (pinned.path + "/nixos/tests/make-test-python.nix");
               inherit self pkgs;
-            });
+            };
         in
         pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           inherit (vast-vm-tests)
