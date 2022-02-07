@@ -6,14 +6,18 @@ let
   stdenv = if final.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
 in
 {
-  arrow-cpp = (prev.arrow-cpp.override { enableShared = !isStatic; }).overrideAttrs (old: {
+  arrow-cpp = (prev.arrow-cpp.override { 
+    enableShared = !isStatic;
+    enableFlight = !isStatic;
+    enableS3 = !isStatic;
+    enableGcs = !isStatic;
+  }).overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ [
       "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"
     ];
   });
-  arrow-cpp-no-simd = (prev.arrow-cpp.override { enableShared = !isStatic; }).overrideAttrs (old: {
+  arrow-cpp-no-simd = final.arrow-cpp.overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ [
-      "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"
       "-DARROW_SIMD_LEVEL=NONE"
     ];
   });
