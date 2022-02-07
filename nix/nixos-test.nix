@@ -33,9 +33,8 @@
       testScript = ''
         start_all()
         machine.wait_for_unit("network-online.target")
-        # trap invalid opcode ip
-        # print(machine.succeed("systemctl status vast.service"))
         machine.wait_for_unit("vast.service")
+        print(machine.succeed("systemctl status vast.service"))
         machine.wait_for_open_port(42000)
       '';
     }
