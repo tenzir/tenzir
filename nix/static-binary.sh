@@ -1,6 +1,3 @@
-#!/usr/bin/env nix-shell
-#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/4789953e5c1ef6d10e3ff437e5b7ab8eed526942.tar.gz -i bash -p git nixUnstable coreutils nix-prefetch-github
-
 nix --version
 nix-prefetch-github --version
 

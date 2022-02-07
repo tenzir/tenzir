@@ -34,6 +34,7 @@
         inherit (pkgs)
           vast
           ;
+          staticShell = pkgs.mkShell { buildInputs = with pkgs; [ git nixUnstable coreutils nix-prefetch-github ];};
       };
       defaultPackage = packages.vast;
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
