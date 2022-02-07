@@ -762,18 +762,17 @@ void schedule_lookups(index_state& st) {
     // the logic further down handles this correctly.
     // Real TODO: Use an ordered data structue to keep track of pending
     // partitions.
-    auto it
-      = std::max_element(st.pending_partitions.begin(),
-                         st.pending_partitions.end(), [&](auto max, auto x) {
-                           size_t current_max_weight = 0;
-                           for (const auto& qid : max.second)
-                             current_max_weight
-                               += weight(st.pending_queries[qid]);
-                           size_t next_weight = 0;
-                           for (const auto& qid : x.second)
-                             next_weight += weight(st.pending_queries[qid]);
-                           return current_max_weight < next_weight;
-                         });
+    auto less_weight = [&](auto current_max, auto x) {
+      auto partition_weight = [&](const auto& queries) {
+        return std::accumulate(queries.begin(), queries.end(), size_t{0},
+                               [&](size_t acc, const auto& qid) {
+                                 return acc + weight(st.pending_queries[qid]);
+                               });
+      };
+      return partition_weight(current_max.second) < partition_weight(x.second);
+    };
+    auto it = std::max_element(st.pending_partitions.begin(),
+                               st.pending_partitions.end(), less_weight);
     // VAST_ASSERT(it != st.pending_partitions.end());
     std::vector<uuid> active_query_ids = {};
     std::vector<uuid> inactive_query_ids = {};
