@@ -47,6 +47,12 @@ public:
     // nop
   }
 
+  [[nodiscard]] synopsis_ptr clone() const override {
+    auto copy = std::make_unique<buffered_synopsis>(type(), p_);
+    copy->data_ = data_;
+    return copy;
+  }
+
   [[nodiscard]] synopsis_ptr shrink() const override {
     size_t next_power_of_two = 1ull;
     while (data_.size() > next_power_of_two)

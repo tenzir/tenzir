@@ -33,6 +33,11 @@ public:
     // nop
   }
 
+  [[nodiscard]] synopsis_ptr clone() const override {
+    using self = bloom_filter_synopsis<T, HashFunction>;
+    return std::make_unique<self>(type(), bloom_filter_);
+  }
+
   void add(data_view x) override {
     VAST_ASSERT(caf::holds_alternative<view<T>>(x), "invalid data");
     bloom_filter_.add(caf::get<view<T>>(x));

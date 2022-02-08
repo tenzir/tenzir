@@ -18,6 +18,7 @@
 
 #include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/attach_stream_stage.hpp>
+#include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>
 
 namespace vast::system {
@@ -28,7 +29,7 @@ namespace vast::system {
 void partition_transformer_state::add_slice(const table_slice& slice) {
   const auto& layout = slice.layout();
   data.events += slice.rows();
-  data.synopsis->add(slice, synopsis_opts);
+  data.synopsis.unshared().add(slice, synopsis_opts);
   // Update type ids
   auto it = data.type_ids.emplace(layout.name(), ids{}).first;
   auto& ids = it->second;
@@ -65,11 +66,12 @@ void partition_transformer_state::finalize_data() {
   for (auto& [qf, idx] : indexers) {
     data.indexer_chunks.emplace_back(qf.name(), chunkify(idx));
   }
-  data.synopsis->shrink();
+  auto& mutable_synopsis = data.synopsis.unshared();
+  mutable_synopsis.shrink();
   // TODO: It would probably make more sense if the partition
   // synopsis keeps track of offset/events internally.
-  data.synopsis->offset = data.offset;
-  data.synopsis->events = data.events;
+  mutable_synopsis.offset = data.offset;
+  mutable_synopsis.events = data.events;
 }
 
 void partition_transformer_state::fulfill(
@@ -141,7 +143,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.data.id = id;
   self->state.data.store_id = store_id;
   self->state.data.offset = invalid_id;
-  self->state.data.synopsis = std::make_shared<partition_synopsis>();
+  self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
   self->state.data.store_header = builder_and_header->second;
   self->state.synopsis_opts = synopsis_opts;
   self->state.index_opts = index_opts;
@@ -172,10 +174,11 @@ partition_transformer_actor::behavior_type partition_transformer(
         return;
       }
       // Adjust the import time range iff necessary.
-      self->state.data.synopsis->min_import_time
-        = std::min(self->state.data.synopsis->min_import_time, old_import_time);
-      self->state.data.synopsis->max_import_time
-        = std::max(self->state.data.synopsis->max_import_time, old_import_time);
+      auto& mutable_synopsis = self->state.data.synopsis.unshared();
+      mutable_synopsis.min_import_time
+        = std::min(mutable_synopsis.min_import_time, old_import_time);
+      mutable_synopsis.max_import_time
+        = std::max(mutable_synopsis.max_import_time, old_import_time);
     },
     [self](atom::done) {
       auto transformed = self->state.transform->finish();
@@ -268,14 +271,13 @@ partition_transformer_actor::behavior_type partition_transformer(
     },
     [self](atom::persist, std::filesystem::path partition_path,
            std::filesystem::path synopsis_path)
-      -> caf::result<std::shared_ptr<partition_synopsis>> {
+      -> caf::result<partition_synopsis_ptr> {
       VAST_DEBUG("partition-transformer will persist itself to {}",
                  partition_path);
       auto path_data = partition_transformer_state::path_data{};
       path_data.partition_path = std::move(partition_path);
       path_data.synopsis_path = std::move(synopsis_path);
-      auto promise
-        = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
+      auto promise = self->make_response_promise<partition_synopsis_ptr>();
       path_data.promise = promise;
       // Immediately fulfill the promise if we are already done
       // with the serialization.

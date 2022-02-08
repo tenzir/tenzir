@@ -19,6 +19,8 @@ public:
 
   time_synopsis(time start, time end);
 
+  [[nodiscard]] synopsis_ptr clone() const override;
+
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override;
 };
 

@@ -41,6 +41,10 @@ public:
     VAST_ASSERT(caf::holds_alternative<string_type>(this->type()));
   }
 
+  [[nodiscard]] synopsis_ptr clone() const override {
+    return this->super::clone();
+  }
+
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
     if (typeid(other) != typeid(string_synopsis))
       return false;

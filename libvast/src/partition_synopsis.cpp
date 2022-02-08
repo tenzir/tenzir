@@ -98,6 +98,29 @@ size_t partition_synopsis::memusage() const {
   return result;
 }
 
+partition_synopsis* partition_synopsis::copy() const {
+  auto result = std::make_unique<partition_synopsis>();
+  result->offset = offset;
+  result->events = events;
+  result->min_import_time = min_import_time;
+  result->max_import_time = max_import_time;
+  result->type_synopses_.reserve(type_synopses_.size());
+  result->field_synopses_.reserve(field_synopses_.size());
+  for (const auto& [type, synopsis] : type_synopses_) {
+    if (synopsis)
+      result->type_synopses_[type] = synopsis->clone();
+    else
+      result->type_synopses_[type] = nullptr;
+  }
+  for (const auto& [field, synopsis] : field_synopses_) {
+    if (synopsis)
+      result->field_synopses_[field] = synopsis->clone();
+    else
+      result->field_synopses_[field] = nullptr;
+  }
+  return result.release();
+}
+
 caf::expected<
   flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {

@@ -24,6 +24,10 @@ bool_synopsis::bool_synopsis(bool true_, bool false_)
   : synopsis{vast::type{bool_type{}}}, true_(true_), false_(false_) {
 }
 
+synopsis_ptr bool_synopsis::clone() const {
+  return std::make_unique<bool_synopsis>(true_, false_);
+}
+
 void bool_synopsis::add(data_view x) {
   VAST_ASSERT(caf::holds_alternative<view<bool>>(x));
   if (caf::get<view<bool>>(x))

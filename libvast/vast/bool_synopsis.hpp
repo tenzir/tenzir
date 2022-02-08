@@ -20,6 +20,8 @@ public:
 
   bool_synopsis(bool true_, bool false_);
 
+  [[nodiscard]] synopsis_ptr clone() const override;
+
   void add(data_view x) override;
 
   [[nodiscard]] std::optional<bool>

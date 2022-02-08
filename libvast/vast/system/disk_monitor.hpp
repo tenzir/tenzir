@@ -40,6 +40,12 @@ struct disk_monitor_config {
 /// configuration.
 caf::error validate(const disk_monitor_config&);
 
+/// Computes the size of the database directory.
+/// Note that this function may spawn an external process to perform the
+/// computation.
+caf::expected<size_t>
+compute_dbdir_size(std::filesystem::path, const disk_monitor_config&);
+
 struct disk_monitor_state {
   /// The path to the database directory.
   std::filesystem::path dbdir;
@@ -52,11 +58,6 @@ struct disk_monitor_state {
 
   /// Node handle of the INDEX.
   index_actor index;
-
-  /// Computes the size of the database directory.
-  /// Note that this function may spawn an external process to perform the
-  /// computation.
-  [[nodiscard]] caf::expected<size_t> compute_dbdir_size() const;
 
   [[nodiscard]] bool purging() const;
 

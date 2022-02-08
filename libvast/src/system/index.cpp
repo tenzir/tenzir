@@ -571,20 +571,21 @@ void index_state::decomission_active_partition() {
   VAST_DEBUG("{} persists active partition to {}", *self, part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
-      [=, this](std::shared_ptr<partition_synopsis>& ps) {
+      [=, this](partition_synopsis_ptr& ps) {
         VAST_DEBUG("{} successfully persisted partition {}", *self, id);
-        // Semantically ps is a unique_ptr, and the partition releases its
-        // copy before sending. We use shared_ptr for the transport because
-        // CAF message types must be copy-constructible.
+        // The meta index expects to own the partition synopsis it receives,
+        // so we make a copy for the listeners.
         meta_index_bytes += ps->memusage();
         // TODO: We should skip this continuation if we're currently shutting
         // down.
-        self
-          ->request(meta_index, caf::infinite, atom::merge_v, id, std::move(ps))
+        self->request(meta_index, caf::infinite, atom::merge_v, id, ps)
           .then(
             [=, this](atom::ok) {
               VAST_DEBUG("{} received ok for request to persist partition {}",
                          *self, id);
+              for (auto& listener : partition_creation_listeners)
+                self->send(listener, atom::update_v,
+                           partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
               persisted_partitions.insert(id);
             },
@@ -599,6 +600,11 @@ void index_state::decomission_active_partition() {
                    id, err);
         self->quit(std::move(err));
       });
+}
+
+void index_state::add_partition_creation_listener(
+  partition_creation_listener_actor listener) {
+  partition_creation_listeners.push_back(listener);
 }
 
 // -- introspection ----------------------------------------------------------
@@ -913,6 +919,11 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} adds flush listener", *self);
       self->state.add_flush_listener(std::move(listener));
     },
+    [self](atom::subscribe, atom::create,
+           partition_creation_listener_actor listener) {
+      VAST_DEBUG("{} adds partition creation listener", *self);
+      self->state.add_partition_creation_listener(listener);
+    },
     [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
       if (!self->state.accept_queries) {
         VAST_VERBOSE("{} delays query {} because it is still starting up",
@@ -1165,8 +1176,8 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::importer, idspace_distributor_actor idspace_distributor) {
       self->state.importer = std::move(idspace_distributor);
     },
-    [self](atom::apply, transform_ptr transform,
-           vast::uuid old_partition_id) -> caf::result<vast::uuid> {
+    [self](atom::apply, transform_ptr transform, vast::uuid old_partition_id)
+      -> caf::result<partition_synopsis_pair> {
       VAST_DEBUG("{} applies a transform to partition {}", *self,
                  old_partition_id);
       if (!self->state.store_plugin)
@@ -1205,14 +1216,18 @@ index(index_actor::stateful_pointer<index_state> self,
       self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
                  std::move(actors),
                  caf::actor_cast<receiver_actor<atom::done>>(sink));
-      auto rp = self->make_response_promise<vast::uuid>();
+      auto rp = self->make_response_promise<partition_synopsis_pair>();
+      // TODO: Implement some kind of monadic composition instead of these
+      // nested requests.
       self
         ->request(sink, caf::infinite, atom::persist_v,
                   self->state.partition_path(new_partition_id),
                   self->state.partition_synopsis_path(new_partition_id))
         .then(
-          [self, rp, old_partition_id, new_partition_id](
-            std::shared_ptr<partition_synopsis>& synopsis) mutable {
+          [self, rp, old_partition_id,
+           new_partition_id](partition_synopsis_ptr& synopsis) mutable {
+            auto result = partition_synopsis_pair{new_partition_id, synopsis};
+
             // TODO: We eventually want to allow transforms that delete
             // whole events, at that point we also need to update the index
             // statistics here.
@@ -1220,15 +1235,15 @@ index(index_actor::stateful_pointer<index_state> self,
               ->request(self->state.meta_index, caf::infinite, atom::replace_v,
                         old_partition_id, new_partition_id, synopsis)
               .then(
-                [self, rp, old_partition_id,
-                 new_partition_id](atom::ok) mutable {
+                [self, rp, old_partition_id, new_partition_id,
+                 result](atom::ok) mutable {
                   self->state.persisted_partitions.insert(new_partition_id);
                   self
                     ->request(static_cast<index_actor>(self), caf::infinite,
                               atom::erase_v, old_partition_id)
                     .then(
                       [=](atom::done) mutable {
-                        rp.deliver(new_partition_id);
+                        rp.deliver(result);
                       },
                       [=](const caf::error& e) mutable {
                         rp.deliver(e);

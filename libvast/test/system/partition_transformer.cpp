@@ -10,6 +10,7 @@
 
 #include "vast/system/partition_transformer.hpp"
 
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/fbs/utils.hpp"
@@ -103,9 +104,9 @@ TEST(identity transform / done before persist) {
   auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v,
                           partition_path, synopsis_path);
   run();
-  std::shared_ptr<vast::partition_synopsis> synopsis = nullptr;
+  vast::partition_synopsis_ptr synopsis = nullptr;
   rp.receive(
-    [&](std::shared_ptr<vast::partition_synopsis>& ps) {
+    [&](vast::partition_synopsis_ptr& ps) {
       synopsis = ps;
     },
     [&](caf::error& err) {
@@ -176,9 +177,9 @@ TEST(delete transform / persist before done) {
   }
   self->send(transformer, vast::atom::done_v);
   run();
-  std::shared_ptr<vast::partition_synopsis> synopsis = nullptr;
+  vast::partition_synopsis_ptr synopsis = nullptr;
   rp.receive(
-    [&](std::shared_ptr<vast::partition_synopsis>& ps) {
+    [&](vast::partition_synopsis_ptr& ps) {
       REQUIRE(ps);
       synopsis = ps;
     },
@@ -269,18 +270,38 @@ TEST(partition transform via the index) {
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);
     });
+  // Check how big the partition is.
+  auto rp2 = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                           index_dir / fmt::format("{:l}.mdx", partition_uuid));
+  run();
+  size_t events = 0;
+  rp2.receive(
+    [&](vast::chunk_ptr& partition_synopsis_chunk) {
+      REQUIRE(partition_synopsis_chunk);
+      const auto* partition_synopsis
+        = vast::fbs::GetPartitionSynopsis(partition_synopsis_chunk->data());
+      REQUIRE_EQUAL(partition_synopsis->partition_synopsis_type(),
+                    vast::fbs::partition_synopsis::PartitionSynopsis::legacy);
+      const auto* partition_synopsis_legacy
+        = partition_synopsis->partition_synopsis_as_legacy();
+      const auto* range = partition_synopsis_legacy->id_range();
+      events = range->end() - range->begin();
+    },
+    [](const caf::error& e) {
+      REQUIRE_SUCCESS(e);
+    });
   // Run a partition transformation.
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto identity_step = vast::make_transform_step("identity", caf::settings{});
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
-  auto rp2 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
                            partition_uuid);
   run();
-  rp2.receive(
-    [=](vast::uuid&) {
-      CHECK(true);
+  rp3.receive(
+    [=](const vast::partition_synopsis_pair& pair) {
+      CHECK_EQUAL(pair.synopsis->events, events);
     },
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);

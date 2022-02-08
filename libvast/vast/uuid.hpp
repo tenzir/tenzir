@@ -105,9 +105,20 @@ namespace fmt {
 
 template <>
 struct formatter<vast::uuid> {
+  bool lowercase = false;
+
+  // Callers may use '{:l}' to force lower-case rendering.
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
+    auto it = ctx.begin();
+    auto end = ctx.end();
+    if (it != end && (*it++ == 'l')) {
+      lowercase = true;
+    }
+    // continue until end of range
+    while (it != end && *it != '}')
+      ++it;
+    return it;
   }
 
   template <typename FormatContext>
@@ -117,10 +128,20 @@ struct formatter<vast::uuid> {
                                             "formatter");
     const auto args
       = std::span{reinterpret_cast<const unsigned char*>(x.begin()), x.size()};
-    return format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
-                     join(args.subspan(0, 4), ""), join(args.subspan(4, 2), ""),
-                     join(args.subspan(6, 2), ""), join(args.subspan(8, 2), ""),
-                     join(args.subspan(10, 6), ""));
+    if (lowercase)
+      return format_to(ctx.out(), "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
+                       join(args.subspan(0, 4), ""),
+                       join(args.subspan(4, 2), ""),
+                       join(args.subspan(6, 2), ""),
+                       join(args.subspan(8, 2), ""),
+                       join(args.subspan(10, 6), ""));
+    else
+      return format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
+                       join(args.subspan(0, 4), ""),
+                       join(args.subspan(4, 2), ""),
+                       join(args.subspan(6, 2), ""),
+                       join(args.subspan(8, 2), ""),
+                       join(args.subspan(10, 6), ""));
   }
 };
 

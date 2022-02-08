@@ -82,6 +82,9 @@ concept signed_integral = integral<T> && std::is_signed_v<T>;
 template <class T>
 concept floating_point = std::is_floating_point_v<T>;
 
+template <class T>
+concept arithmetic = std::is_arithmetic_v<T>;
+
 struct any_callable {
   using result_type = void;
   template <class... Ts>

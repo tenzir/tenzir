@@ -19,6 +19,10 @@ time_synopsis::time_synopsis(time start, time end)
   : min_max_synopsis<time>{vast::type{time_type{}}, start, end} {
 }
 
+synopsis_ptr time_synopsis::clone() const {
+  return std::make_unique<time_synopsis>(min(), max());
+}
+
 bool time_synopsis::equals(const synopsis& other) const noexcept {
   if (typeid(other) != typeid(time_synopsis))
     return false;
