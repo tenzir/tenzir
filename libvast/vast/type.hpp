@@ -954,6 +954,20 @@ public:
   friend record_type flatten(const record_type& type) noexcept;
 };
 
+/// A string of characters.
+/// @relates type
+class blob_type final {
+public:
+  /// Returns the type index.
+  static constexpr uint8_t type_index = 15;
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte> as_bytes(const blob_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static blob construct() noexcept;
+};
+
 } // namespace vast
 
 // -- misc --------------------------------------------------------------------

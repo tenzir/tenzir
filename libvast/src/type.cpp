@@ -2529,6 +2529,25 @@ record_type flatten(const record_type& type) noexcept {
   return record_type{fields};
 }
 
+blob blob_type::construct() noexcept {
+  return {};
+}
+
+std::span<const std::byte> as_bytes(const blob_type&) noexcept;
+
+static const auto buffer = []() noexcept {
+  constexpr auto reserved_size = 32;
+  auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+  const auto pattern_type = fbs::type::CreatePatternType(builder);
+  const auto type
+    = fbs::CreateType(builder, fbs::type::Type::blob_type, blob_type.Union());
+  builder.Finish(type);
+  auto result = builder.Release();
+
+  VAST_ASSERT(result.size() == reserved_size);
+  return result;
+}();
+return as_bytes(buffer);
 } // namespace vast
 
 // -- sum_type_access ---------------------------------------------------------

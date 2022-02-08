@@ -78,6 +78,9 @@ table RecordType {
   fields: [detail.RecordField] (required);
 }
 
+/// A blob.
+table BlobType {}
+
 namespace vast.fbs.type;
 
 /// The sum type of all possible types.
@@ -96,6 +99,7 @@ union Type {
   list_type: ListType,
   map_type: MapType,
   record_type: RecordType,
+  blob_type: BlobType,
   enriched_type: detail.EnrichedType,
 }
 
