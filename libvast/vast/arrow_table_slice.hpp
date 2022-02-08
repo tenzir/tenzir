@@ -12,6 +12,7 @@
 
 #include "vast/table_slice.hpp"
 
+#include <arrow/type_fwd.h>
 #include <caf/meta/type_name.hpp>
 
 #include <memory>
@@ -42,6 +43,18 @@ struct arrow_table_slice_state<fbs::table_slice::arrow::v1> {
   std::shared_ptr<arrow::RecordBatch> record_batch;
 };
 
+template <>
+struct arrow_table_slice_state<fbs::table_slice::arrow::experimental> {
+  /// The deserialized table layout.
+  type layout;
+
+  /// The deserialized Arrow Record Batch.
+  std::shared_ptr<arrow::RecordBatch> record_batch;
+
+  /// Mapping from column offset to nested Arrow array
+  arrow::ArrayVector array_index;
+};
+
 /// A table slice that stores elements encoded in the [Arrow](https://arrow.org)
 /// format. The implementation stores data in column-major order.
 template <class FlatBuffer>
@@ -61,11 +74,16 @@ public:
 
   /// Whether the most recent version of the encoding is used.
   inline static constexpr bool is_latest_version
-    = std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v1>;
+    = std::is_same_v<
+        FlatBuffer,
+        fbs::table_slice::arrow::
+          v1> || std::is_same_v<FlatBuffer, fbs::table_slice::arrow::experimental>;
 
   /// The encoding of the slice.
   inline static constexpr enum table_slice_encoding encoding
-    = table_slice_encoding::arrow;
+    = std::is_same_v<FlatBuffer, fbs::table_slice::arrow::experimental>
+        ? table_slice_encoding::experimental
+        : table_slice_encoding::arrow;
 
   /// @returns The table layout.
   [[nodiscard]] const type& layout() const noexcept;
@@ -130,5 +148,6 @@ arrow_table_slice(const FlatBuffer&) -> arrow_table_slice<FlatBuffer>;
 /// Extern template declarations for all Arrow encoding versions.
 extern template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 extern template class arrow_table_slice<fbs::table_slice::arrow::v1>;
+extern template class arrow_table_slice<fbs::table_slice::arrow::experimental>;
 
 } // namespace vast

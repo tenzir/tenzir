@@ -17,7 +17,6 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/die.hpp"
-#include "vast/experimental_table_slice.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
