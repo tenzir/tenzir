@@ -267,6 +267,123 @@ TEST(single column - list of integers) {
   CHECK_ROUNDTRIP(slice);
 }
 
+TEST(list of structs) {
+  auto unbox_ref = [](auto&& x) -> decltype(auto) {
+    if (!x)
+      FAIL("x == nullptr");
+    return *std::forward<decltype(x)>(x);
+  };
+  auto layout = record_type{
+    {
+      "foo",
+      list_type{
+        record_type{
+          {"bar", count_type{}},
+          {"baz", count_type{}},
+        },
+      },
+    },
+  };
+  auto foo1 = list{
+    record{
+      {"bar", 1_c},
+      {"baz", 2_c},
+    },
+    record{
+      {"bar", 3_c},
+      {"baz", caf::none},
+    },
+  };
+  auto foo2 = caf::none;
+  auto foo3 = list{
+    record{
+      {"bar", caf::none},
+      {"baz", 6_c},
+    },
+  };
+  auto foo4 = list{
+    record{
+      {"bar", caf::none},
+      {"baz", caf::none},
+    },
+  };
+  auto slice = make_slice(layout, foo1, foo2, foo3, foo4);
+  auto batch = to_record_batch(slice);
+  const auto& list_col
+    = unbox_ref(caf::get_if<arrow::ListArray>(batch->column(0).get()));
+  REQUIRE_EQUAL(list_col.length(), 4u);
+  {
+    MESSAGE("access foo (across boundaries)");
+    const auto& foo_col
+      = unbox_ref(caf::get_if<arrow::StructArray>(list_col.values().get()));
+    const auto& bar_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo_col.field(0).get()));
+    const auto& baz_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo_col.field(1).get()));
+    REQUIRE_EQUAL(bar_col.length(), 4u);
+    CHECK_EQUAL(bar_col.Value(0), 1u);
+    CHECK_EQUAL(bar_col.Value(1), 3u);
+    CHECK(bar_col.IsNull(2));
+    CHECK(bar_col.IsNull(3));
+    REQUIRE_EQUAL(baz_col.length(), 4u);
+    CHECK_EQUAL(baz_col.Value(0), 2u);
+    CHECK(baz_col.IsNull(1));
+    CHECK_EQUAL(baz_col.Value(2), 6u);
+    CHECK(baz_col.IsNull(3));
+  }
+  {
+    MESSAGE("access foo1");
+    REQUIRE(!list_col.IsNull(0));
+    auto foo1_col_slice = list_col.value_slice(0);
+    const auto& foo1_col
+      = unbox_ref(caf::get_if<arrow::StructArray>(foo1_col_slice.get()));
+    const auto& bar1_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo1_col.field(0).get()));
+    const auto& baz1_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo1_col.field(1).get()));
+    REQUIRE_EQUAL(bar1_col.length(), 2u);
+    CHECK_EQUAL(bar1_col.Value(0), 1u);
+    CHECK_EQUAL(bar1_col.Value(1), 3u);
+    REQUIRE_EQUAL(baz1_col.length(), 2u);
+    CHECK_EQUAL(baz1_col.Value(0), 2u);
+    CHECK(baz1_col.IsNull(1));
+  }
+  {
+    MESSAGE("access foo2");
+    CHECK(list_col.IsNull(1));
+  }
+  {
+    MESSAGE("access foo3");
+    REQUIRE(!list_col.IsNull(2));
+    auto foo3_col_slice = list_col.value_slice(2);
+    const auto& foo3_col
+      = unbox_ref(caf::get_if<arrow::StructArray>(foo3_col_slice.get()));
+    const auto& bar3_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo3_col.field(0).get()));
+    const auto& baz3_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo3_col.field(1).get()));
+    CHECK_EQUAL(bar3_col.length(), 1u);
+    CHECK(bar3_col.IsNull(0));
+    REQUIRE_EQUAL(baz3_col.length(), 1u);
+    CHECK_EQUAL(baz3_col.Value(0), 6u);
+  }
+  {
+    MESSAGE("access foo4");
+    REQUIRE(!list_col.IsNull(3));
+    auto foo4_col_slice = list_col.value_slice(3);
+    const auto& foo4_col
+      = unbox_ref(caf::get_if<arrow::StructArray>(foo4_col_slice.get()));
+    const auto& bar4_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo4_col.field(0).get()));
+    const auto& baz4_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo4_col.field(1).get()));
+    CHECK_EQUAL(bar4_col.length(), 1u);
+    CHECK(bar4_col.IsNull(0));
+    REQUIRE_EQUAL(baz4_col.length(), 1u);
+    CHECK(baz4_col.IsNull(0));
+  }
+}
+
 TEST(single column - list of record) {
   auto t = list_type{record_type{{"a", string_type{}}}};
   record_type layout{{"values", t}};
