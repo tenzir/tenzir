@@ -4,6 +4,11 @@ include "type.fbs";
 
 namespace vast.fbs.value_index.detail;
 
+table LegacyValueIndex {
+  /// A value index serialized using CAF 0.17's binary serializer.
+  data: [ubyte];
+}
+
 table ValueIndexBase {
   mask: bitmap.EWAHBitmap (required);
   none: bitmap.EWAHBitmap (required);
@@ -17,6 +22,14 @@ table HashIndexSeed {
 }
 
 namespace vast.fbs.value_index;
+
+table LegacyQualifiedValueIndex {
+  /// The full-qualified field name, e.g., "zeek.conn.id.orig_h".
+  field_name: string;
+
+  /// The value index for the given field.
+  index: detail.LegacyValueIndex;
+}
 
 table ArithmeticIndex {
   base: detail.ValueIndexBase (required);

@@ -1,0 +1,30 @@
+include "synopsis.fbs";
+
+namespace vast.fbs.partition_synopsis;
+
+table LegacyPartitionSynopsis {
+  /// Synopses for individual fields.
+  // TODO: Split this into separate vectors for field synopses
+  // and type synopses.
+  synopses: [synopsis.LegacySynopsis];
+
+  /// The id range of this partition.
+  id_range: vast.fbs.uinterval;
+
+  /// The import time range of this partition.
+  import_time_range: vast.fbs.interval;
+}
+
+union PartitionSynopsis {
+  legacy: partition_synopsis.LegacyPartitionSynopsis,
+}
+
+namespace vast.fbs;
+
+table PartitionSynopsis {
+  partition_synopsis: partition_synopsis.PartitionSynopsis;
+}
+
+root_type PartitionSynopsis;
+
+file_identifier "vPSN";

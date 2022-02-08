@@ -59,7 +59,7 @@ TEST(uuid roundtrip) {
   CHECK_NOT_EQUAL(uuid, uuid2);
   std::span<const std::byte> span{
     reinterpret_cast<const std::byte*>(fb->data()), fb->size()};
-  auto error = vast::fbs::unwrap<vast::fbs::uuid::v0>(span, uuid2);
+  auto error = vast::fbs::unwrap<vast::fbs::LegacyUUID>(span, uuid2);
   CHECK(!error);
   CHECK_EQUAL(uuid, uuid2);
 }
@@ -178,15 +178,15 @@ TEST(empty partition roundtrip) {
   auto partition = vast::fbs::GetPartition(span.data());
   REQUIRE(partition);
   REQUIRE_EQUAL(partition->partition_type(),
-                vast::fbs::partition::Partition::v0);
-  auto partition_v0 = partition->partition_as_v0();
-  REQUIRE(partition_v0);
-  REQUIRE(partition_v0->store());
-  REQUIRE(partition_v0->store()->id());
-  CHECK_EQUAL(partition_v0->store()->id()->str(), "legacy_archive");
-  CHECK_EQUAL(partition_v0->offset(), state.data.offset);
-  CHECK_EQUAL(partition_v0->events(), state.data.events);
-  auto error = unpack(*partition_v0, recovered_state);
+                vast::fbs::partition::Partition::legacy);
+  auto partition_legacy = partition->partition_as_legacy();
+  REQUIRE(partition_legacy);
+  REQUIRE(partition_legacy->store());
+  REQUIRE(partition_legacy->store()->id());
+  CHECK_EQUAL(partition_legacy->store()->id()->str(), "legacy_archive");
+  CHECK_EQUAL(partition_legacy->offset(), state.data.offset);
+  CHECK_EQUAL(partition_legacy->events(), state.data.events);
+  auto error = unpack(*partition_legacy, recovered_state);
   CHECK(!error);
   CHECK_EQUAL(recovered_state.id, state.data.id);
   CHECK_EQUAL(recovered_state.offset, state.data.offset);
@@ -197,7 +197,7 @@ TEST(empty partition roundtrip) {
   CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
   // Deserialize meta index state from this partition.
   auto ps = std::make_shared<vast::partition_synopsis>();
-  auto error2 = vast::system::unpack(*partition_v0, *ps);
+  auto error2 = vast::system::unpack(*partition_legacy, *ps);
   CHECK(!error2);
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
   CHECK_EQUAL(ps->offset, state.data.offset);

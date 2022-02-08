@@ -125,14 +125,14 @@ caf::error extract_partition_synopsis(
   if (!chunk)
     return std::move(chunk.error());
   const auto* partition = fbs::GetPartition(chunk->get()->data());
-  if (partition->partition_type() != fbs::partition::Partition::v0)
+  if (partition->partition_type() != fbs::partition::Partition::legacy)
     return caf::make_error(ec::format_error, "found unsupported version for "
                                              "partition "
                                                + partition_path.string());
-  const auto* partition_v0 = partition->partition_as_v0();
-  VAST_ASSERT(partition_v0);
+  const auto* partition_legacy = partition->partition_as_legacy();
+  VAST_ASSERT(partition_legacy);
   partition_synopsis ps;
-  if (auto error = unpack(*partition_v0, ps))
+  if (auto error = unpack(*partition_legacy, ps))
     return error;
   flatbuffers::FlatBufferBuilder builder;
   auto ps_offset = pack(builder, ps);
@@ -140,7 +140,7 @@ caf::error extract_partition_synopsis(
     return ps_offset.error();
   fbs::PartitionSynopsisBuilder ps_builder(builder);
   ps_builder.add_partition_synopsis_type(
-    fbs::partition_synopsis::PartitionSynopsis::v0);
+    fbs::partition_synopsis::PartitionSynopsis::legacy);
   ps_builder.add_partition_synopsis(ps_offset->Union());
   auto flatbuffer = ps_builder.Finish();
   fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
@@ -154,7 +154,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   VAST_DEBUG("index persists {} uuids of definitely persisted and {}"
              "uuids of maybe persisted partitions",
              state.persisted_partitions.size(), state.unpersisted.size());
-  std::vector<flatbuffers::Offset<fbs::uuid::v0>> partition_offsets;
+  std::vector<flatbuffers::Offset<fbs::LegacyUUID>> partition_offsets;
   for (auto uuid : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
       partition_offsets.push_back(*uuid_fb);
@@ -324,13 +324,14 @@ caf::error index_state::load_from_disk() {
         = fbs::GetPartitionSynopsis(chunk->get()->data());
       partition_synopsis ps;
       if (ps_flatbuffer->partition_synopsis_type()
-          != fbs::partition_synopsis::PartitionSynopsis::v0)
+          != fbs::partition_synopsis::PartitionSynopsis::legacy)
         return caf::make_error(ec::format_error, "invalid partition synopsis "
                                                  "version");
-      const auto& synopsis_v0 = *ps_flatbuffer->partition_synopsis_as_v0();
+      const auto& synopsis_legacy
+        = *ps_flatbuffer->partition_synopsis_as_legacy();
       // Re-write old partition synopses that were created before the offset and
       // id were saved.
-      if (!synopsis_v0.id_range()) {
+      if (!synopsis_legacy.id_range()) {
         VAST_VERBOSE("{} rewrites old meta-index data for partition {}", *self,
                      partition_uuid);
         if (auto error = extract_partition_synopsis(part_path, synopsis_path))
@@ -340,7 +341,7 @@ caf::error index_state::load_from_disk() {
         //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
         goto retry;
       }
-      if (auto error = unpack(synopsis_v0, ps))
+      if (auto error = unpack(synopsis_legacy, ps))
         return error;
       meta_index_bytes += ps.memusage();
       persisted_partitions.insert(partition_uuid);
@@ -1104,16 +1105,17 @@ index(index_actor::stateful_pointer<index_state> self,
                   // removed partition.
                   const auto* partition = fbs::GetPartition(chunk->data());
                   if (partition->partition_type()
-                      != fbs::partition::Partition::v0) {
+                      != fbs::partition::Partition::legacy) {
                     rp.deliver(caf::make_error(ec::format_error, "unexpected "
                                                                  "format "
                                                                  "version"));
                     return;
                   }
                   vast::ids all_ids;
-                  const auto* partition_v0 = partition->partition_as_v0();
+                  const auto* partition_legacy
+                    = partition->partition_as_legacy();
                   for (const auto* partition_stats :
-                       *partition_v0->type_ids()) {
+                       *partition_legacy->type_ids()) {
                     const auto* name = partition_stats->name();
                     vast::ids ids;
                     if (auto error

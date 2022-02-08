@@ -71,8 +71,9 @@ void print_hash_index(const vast::value_index_ptr& ptr, indentation& indent,
   }
 }
 
-void print_partition_v0(const vast::fbs::partition::v0* partition,
-                        indentation& indent, const options& options) {
+void print_partition_legacy(
+  const vast::fbs::partition::LegacyPartition* partition, indentation& indent,
+  const options& options) {
   if (!partition) {
     std::cout << "(null)\n";
     return;
@@ -189,8 +190,9 @@ void print_partition(const std::filesystem::path& path, indentation& indent,
     return;
   }
   switch (partition->partition_type()) {
-    case vast::fbs::partition::Partition::v0:
-      print_partition_v0(partition->partition_as_v0(), indent, formatting);
+    case vast::fbs::partition::Partition::legacy:
+      print_partition_legacy(partition->partition_as_legacy(), indent,
+                             formatting);
       break;
     default:
       std::cout << "(unknown partition version)\n";

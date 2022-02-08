@@ -122,9 +122,9 @@ TEST(identity transform / done before persist) {
       REQUIRE(partition_chunk);
       const auto* partition = vast::fbs::GetPartition(partition_chunk->data());
       REQUIRE_EQUAL(partition->partition_type(),
-                    vast::fbs::partition::Partition::v0);
-      const auto* partition_v0 = partition->partition_as_v0();
-      CHECK_EQUAL(partition_v0->events(), events);
+                    vast::fbs::partition::Partition::legacy);
+      const auto* partition_legacy = partition->partition_as_legacy();
+      CHECK_EQUAL(partition_legacy->events(), events);
     },
     [](const caf::error&) {
       FAIL("failed to read stored partition");
@@ -135,10 +135,10 @@ TEST(identity transform / done before persist) {
       const auto* partition
         = vast::fbs::GetPartitionSynopsis(synopsis_chunk->data());
       REQUIRE_EQUAL(partition->partition_synopsis_type(),
-                    vast::fbs::partition_synopsis::PartitionSynopsis::v0);
-      const auto* synopsis_v0 = partition->partition_synopsis_as_v0();
-      CHECK_EQUAL(synopsis_v0->id_range()->begin(), IDSPACE_BEGIN);
-      CHECK_EQUAL(synopsis_v0->id_range()->end(), IDSPACE_BEGIN + events);
+                    vast::fbs::partition_synopsis::PartitionSynopsis::legacy);
+      const auto* synopsis_legacy = partition->partition_synopsis_as_legacy();
+      CHECK_EQUAL(synopsis_legacy->id_range()->begin(), IDSPACE_BEGIN);
+      CHECK_EQUAL(synopsis_legacy->id_range()->end(), IDSPACE_BEGIN + events);
     },
     [](const caf::error&) {
       FAIL("failed to read stored synopsis");
@@ -196,13 +196,13 @@ TEST(delete transform / persist before done) {
       REQUIRE(partition_chunk);
       const auto* partition = vast::fbs::GetPartition(partition_chunk->data());
       REQUIRE_EQUAL(partition->partition_type(),
-                    vast::fbs::partition::Partition::v0);
-      const auto* partition_v0 = partition->partition_as_v0();
+                    vast::fbs::partition::Partition::legacy);
+      const auto* partition_legacy = partition->partition_as_legacy();
       // TODO: Implement a new transform step that deletes
       // whole events, as opposed to specific fields.
-      CHECK_EQUAL(partition_v0->events(), events);
+      CHECK_EQUAL(partition_legacy->events(), events);
       vast::legacy_record_type intermediate;
-      REQUIRE(!vast::fbs::deserialize_bytes(partition_v0->combined_layout(),
+      REQUIRE(!vast::fbs::deserialize_bytes(partition_legacy->combined_layout(),
                                             intermediate));
       auto combined_layout = vast::type::from_legacy_type(intermediate);
       REQUIRE(caf::holds_alternative<vast::record_type>(combined_layout));
@@ -220,10 +220,10 @@ TEST(delete transform / persist before done) {
       const auto* partition
         = vast::fbs::GetPartitionSynopsis(synopsis_chunk->data());
       REQUIRE_EQUAL(partition->partition_synopsis_type(),
-                    vast::fbs::partition_synopsis::PartitionSynopsis::v0);
-      const auto* synopsis_v0 = partition->partition_synopsis_as_v0();
-      CHECK_EQUAL(synopsis_v0->id_range()->begin(), IDSPACE_BEGIN);
-      CHECK_EQUAL(synopsis_v0->id_range()->end(), IDSPACE_BEGIN + events);
+                    vast::fbs::partition_synopsis::PartitionSynopsis::legacy);
+      const auto* synopsis_legacy = partition->partition_synopsis_as_legacy();
+      CHECK_EQUAL(synopsis_legacy->id_range()->begin(), IDSPACE_BEGIN);
+      CHECK_EQUAL(synopsis_legacy->id_range()->end(), IDSPACE_BEGIN + events);
     },
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);

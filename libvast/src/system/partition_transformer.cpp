@@ -249,7 +249,7 @@ partition_transformer_actor::behavior_type partition_transformer(
           }
           fbs::PartitionSynopsisBuilder ps_builder(builder);
           ps_builder.add_partition_synopsis_type(
-            fbs::partition_synopsis::PartitionSynopsis::v0);
+            fbs::partition_synopsis::PartitionSynopsis::legacy);
           ps_builder.add_partition_synopsis(synopsis->Union());
           auto ps_offset = ps_builder.Finish();
           fbs::FinishPartitionSynopsisBuffer(builder, ps_offset);

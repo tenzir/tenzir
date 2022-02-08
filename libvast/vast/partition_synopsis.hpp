@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/detail/friend_attribute.hpp"
+#include "vast/fbs/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
@@ -55,15 +56,16 @@ struct partition_synopsis final {
   // -- flatbuffer -------------------------------------------------------------
 
   FRIEND_ATTRIBUTE_NODISCARD friend caf::expected<
-    flatbuffers::Offset<fbs::partition_synopsis::v0>>
+    flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>
   pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
 
   FRIEND_ATTRIBUTE_NODISCARD friend caf::error
-  unpack(const fbs::partition_synopsis::v0&, partition_synopsis&);
+  unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis&,
+         partition_synopsis&);
 
   FRIEND_ATTRIBUTE_NODISCARD friend caf::error
-  unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps,
-         uint64_t offset, uint64_t events);
+  unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
+         partition_synopsis& ps, uint64_t offset, uint64_t events);
 };
 
 } // namespace vast

@@ -114,16 +114,16 @@ bool operator<(const uuid& x, const uuid& y) {
   return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end());
 }
 
-caf::expected<flatbuffers::Offset<fbs::uuid::v0>>
+caf::expected<flatbuffers::Offset<fbs::LegacyUUID>>
 pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x) {
   auto data = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(&*x.begin()), x.size());
-  fbs::uuid::v0Builder uuid_builder{builder};
+  fbs::LegacyUUIDBuilder uuid_builder{builder};
   uuid_builder.add_data(data);
   return uuid_builder.Finish();
 }
 
-caf::error unpack(const fbs::uuid::v0& x, uuid& y) {
+caf::error unpack(const fbs::LegacyUUID& x, uuid& y) {
   if (x.data()->size() != uuid::num_bytes)
     return caf::make_error(ec::format_error, "wrong uuid format");
   std::span<const std::byte, uuid::num_bytes> bytes{

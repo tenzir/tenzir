@@ -83,10 +83,10 @@ struct is_uniquely_represented<uuid>
   : std::bool_constant<sizeof(uuid) == uuid::num_bytes> {};
 
 // flatbuffer support
-[[nodiscard]] caf::expected<flatbuffers::Offset<fbs::uuid::v0>>
+[[nodiscard]] caf::expected<flatbuffers::Offset<fbs::LegacyUUID>>
 pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x);
 
-[[nodiscard]] caf::error unpack(const fbs::uuid::v0& x, uuid& y);
+[[nodiscard]] caf::error unpack(const fbs::LegacyUUID& x, uuid& y);
 
 } // namespace vast
 

@@ -62,7 +62,7 @@ inline std::ostream& operator<<(std::ostream& str, const indentation& indent) {
 }
 
 inline std::ostream&
-operator<<(std::ostream& out, const vast::fbs::uuid::v0* uuid) {
+operator<<(std::ostream& out, const vast::fbs::LegacyUUID* uuid) {
   if (!uuid || !uuid->data())
     return out << "(null)";
   auto old_flags = out.flags();
