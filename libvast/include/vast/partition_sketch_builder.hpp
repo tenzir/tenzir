@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/heterogenous_string_hash.hpp"
 #include "vast/index_config.hpp"
 #include "vast/partition_sketch.hpp"
 #include "vast/sketch/builder.hpp"
@@ -49,19 +50,19 @@ private:
   /// @pre *config* is validated.
   explicit partition_sketch_builder(index_config config);
 
-  /// Factory to create field sketch builders, mapping full-qualified field
-  /// names to builder factories.
-  std::unordered_map<std::string, builder_factory> field_factory_;
+  /// Factory to create field sketch builders, mapping field extractors to
+  /// builder factories.
+  detail::heterogenous_string_hashmap<builder_factory> field_factory_;
 
   /// Factory to create type sketch builders.
-  std::unordered_map<std::string, builder_factory> type_factory_;
+  detail::heterogenous_string_hashmap<builder_factory> type_factory_;
 
   /// Sketches for fields, tracked by field extractor.
-  std::unordered_map<std::string, std::unique_ptr<sketch::builder>>
+  detail::heterogenous_string_hashmap<std::unique_ptr<sketch::builder>>
     field_builders_;
 
   /// Sketches for types, tracked by type name.
-  std::unordered_map<std::string, std::unique_ptr<sketch::builder>>
+  detail::heterogenous_string_hashmap<std::unique_ptr<sketch::builder>>
     type_builders_;
 
   index_config config_;

@@ -69,12 +69,11 @@ partition_sketch_builder::make(index_config config) {
         },
         [&builder, &rule](const type_extractor& x) -> caf::error {
           // TODO: remove the string wrapping once transparent keys work.
-          if (builder.type_factory_.contains(std::string{x.type.name()}))
+          if (builder.type_factory_.contains(x.type.name()))
             return caf::make_error(ec::unspecified,
                                    fmt::format("duplicate type extractor {}",
                                                x.type.name()));
-          builder.type_factory_.emplace(std::string{x.type.name()},
-                                        make_factory(rule));
+          builder.type_factory_.emplace(x.type.name(), make_factory(rule));
           return caf::none;
         },
       };
@@ -151,7 +150,7 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
       continue;
     auto type_name = leaf.field.type.name();
     // Should we create a sketch for this type?
-    auto i = type_factory_.find(std::string{type_name});
+    auto i = type_factory_.find(type_name);
     if (i == type_factory_.end())
       continue;
     const auto& factory = i->second;
