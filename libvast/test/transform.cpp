@@ -11,9 +11,14 @@
 #include "vast/transform.hpp"
 
 #include "vast/arrow_table_slice_builder.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/format/reader_factory.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/test/schemas.hpp"
 #include "vast/test/test.hpp"
+#include "vast/transform_steps/aggregate_suricata_flow.hpp"
 #include "vast/transform_steps/count.hpp"
 #include "vast/transform_steps/delete.hpp"
 #include "vast/transform_steps/hash.hpp"
@@ -26,6 +31,7 @@
 #include <arrow/array/array_base.h>
 #include <arrow/array/array_binary.h>
 #include <arrow/array/data.h>
+#include <caf/test/dsl.hpp>
 
 #include <string_view>
 
@@ -57,6 +63,14 @@ const auto testresult_layout2 = vast::type{
     {"index", vast::integer_type{}},
   },
 };
+
+/// Test events for the aggregation.
+const auto* eve_flow_json = R"_(
+{"timestamp":"2011-08-14T07:38:00.000000+0200","flow_id":929669869939483,"event_type":"flow","src_ip":"147.32.84.165","src_port":138,"dest_ip":"147.32.84.255","dest_port":138,"proto":"UDP","app_proto":"failed","flow":{"pkts_toserver":7,"pkts_toclient":2,"bytes_toserver":486,"bytes_toclient":17,"start":"2011-08-12T14:53:47.928539+0200","end":"2011-08-12T14:53:47.928552+0200","age":0,"state":"new","reason":"timeout","alerted":false}}
+{"timestamp":"2011-08-14T07:38:53.914038+0200","flow_id":929669869939483,"event_type":"flow","src_ip":"147.32.84.165","src_port":138,"dest_ip":"147.32.84.255","dest_port":138,"proto":"UDP","app_proto":"failed","flow":{"pkts_toserver":7,"pkts_toclient":2,"bytes_toserver":486,"bytes_toclient":17,"start":"2011-08-12T14:53:47.928539+0200","end":"2011-08-12T14:53:47.928552+0200","age":0,"state":"new","reason":"timeout","alerted":false}}
+{"timestamp":"2011-08-14T07:38:59.914038+0200","flow_id":929669869939483,"event_type":"flow","src_ip":"147.32.84.165","src_port":138,"dest_ip":"147.32.84.255","dest_port":138,"proto":"UDP","app_proto":"failed","flow":{"pkts_toserver":11,"pkts_toclient":3,"bytes_toserver":487,"bytes_toclient":19,"start":"2011-08-12T14:53:47.928539+0200","end":"2011-08-12T14:53:47.928552+0200","age":0,"state":"new","reason":"timeout","alerted":true}}
+{"timestamp":"2011-08-14T07:40:53.914038+0200","flow_id":929669869939483,"event_type":"flow","src_ip":"147.32.84.165","src_port":138,"dest_ip":"147.32.84.255","dest_port":138,"proto":"UDP","app_proto":"failed","flow":{"pkts_toserver":13,"pkts_toclient":5,"bytes_toserver":488,"bytes_toclient":23,"start":"2011-08-12T14:53:47.928539+0200","end":"2011-08-12T14:53:47.928552+0200","age":0,"state":"new","reason":"timeout","alerted":false}}
+)_";
 
 struct transforms_fixture {
   transforms_fixture() {
@@ -100,6 +114,33 @@ struct transforms_fixture {
     return {builder->finish(), builder2->finish()};
   }
 
+  /// Creates a table slice with suricata fields.
+  static std::vector<vast::table_slice> make_suricata_flow_testdata() {
+    using factory = vast::factory<vast::format::reader>;
+    factory::initialize();
+    auto reader = factory::get("suricata")(caf::settings{});
+    auto input = std::make_unique<std::istringstream>(eve_flow_json);
+    (*reader)->reset(std::move(input));
+    std::vector<vast::table_slice> slices;
+    auto add_slice = [&](vast::table_slice slice) {
+      slices.emplace_back(std::move(slice));
+    };
+    auto suricata_schema = unbox(vast::to<vast::schema>(
+      vast::test::BASE_SCHEMA + vast::test::SURICATA_SCHEMA));
+    (*reader)->schema(suricata_schema);
+    auto [err, num] = (*reader)->read(10, 2, add_slice);
+    CHECK_EQUAL(err, vast::ec::end_of_input);
+    REQUIRE_EQUAL(num, 4u);
+    REQUIRE_EQUAL(slices.size(), 2u);
+    const vast::table_slice::size_type FLOW_COLUMNS{23};
+    REQUIRE_EQUAL(slices[0].columns(), FLOW_COLUMNS);
+    REQUIRE_EQUAL(slices[0].rows(), 2u);
+    REQUIRE_EQUAL(slices[1].rows(), 2u);
+    const vast::table_slice::size_type REASON_COLUMN{20};
+    REQUIRE_EQUAL(slices[0].at(1, REASON_COLUMN), vast::data{"timeout"});
+    return slices;
+  }
+
   /// Creates a table slice with ten rows(type, record_batch), a second having
   /// only the row with index==2 and a third having only the rows with index>5.
   static std::tuple<vast::table_slice, vast::table_slice, vast::table_slice>
@@ -135,7 +176,7 @@ vast::type layout(caf::expected<std::vector<vast::transform_batch>> batches) {
 }
 
 vast::table_slice
-as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
+first_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
   return vast::arrow_table_slice_builder::create((*batches)[0].batch,
                                                  (*batches)[0].layout);
 }
@@ -154,12 +195,12 @@ TEST(count step) {
   REQUIRE_NOERROR(counted);
   REQUIRE_EQUAL(counted->size(), 1ull);
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(counted).layout()).num_fields(),
+    caf::get<vast::record_type>(first_slice(counted).layout()).num_fields(),
     1ull);
   CHECK_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(counted).layout()).field(0).name,
+    caf::get<vast::record_type>(first_slice(counted).layout()).field(0).name,
     "count");
-  CHECK_EQUAL((as_table_slice(counted)).at(0, 0),
+  CHECK_EQUAL((first_slice(counted)).at(0, 0),
               vast::data_view{vast::count{20}});
 }
 
@@ -171,7 +212,7 @@ TEST(delete_ step) {
   auto deleted = delete_step.finish();
   REQUIRE_NOERROR(deleted);
   REQUIRE_EQUAL(deleted->size(), 1ull);
-  REQUIRE_EQUAL(as_table_slice(deleted), expected_slice);
+  REQUIRE_EQUAL(first_slice(deleted), expected_slice);
   vast::delete_step invalid_delete_step({"xxx"});
   auto invalid_add_failed
     = invalid_delete_step.add(slice.layout(), to_record_batch(slice));
@@ -179,7 +220,7 @@ TEST(delete_ step) {
   auto not_deleted = invalid_delete_step.finish();
   REQUIRE_NOERROR(not_deleted);
   REQUIRE_EQUAL(not_deleted->size(), 1ull);
-  REQUIRE_EQUAL(as_table_slice(not_deleted), slice);
+  REQUIRE_EQUAL(first_slice(not_deleted), slice);
 }
 
 TEST(project step) {
@@ -192,14 +233,14 @@ TEST(project step) {
   auto projected = project_step.finish();
   REQUIRE_NOERROR(projected);
   REQUIRE_EQUAL(projected->size(), 1ull);
-  REQUIRE_EQUAL(as_table_slice(projected), expected_slice);
+  REQUIRE_EQUAL(first_slice(projected), expected_slice);
   auto invalid_add_failed
     = invalid_project_step.add(slice.layout(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
   auto not_projected = invalid_project_step.finish();
   REQUIRE_NOERROR(not_projected);
   REQUIRE_EQUAL(not_projected->size(), 1ull);
-  REQUIRE_EQUAL(as_table_slice(not_projected), slice);
+  REQUIRE_EQUAL(first_slice(not_projected), slice);
 }
 
 TEST(replace step) {
@@ -211,12 +252,12 @@ TEST(replace step) {
   REQUIRE_NOERROR(replaced);
   REQUIRE_EQUAL(replaced->size(), 1ull);
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
+    caf::get<vast::record_type>(first_slice(replaced).layout()).num_fields(),
     3ull);
   CHECK_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(0).name,
+    caf::get<vast::record_type>(first_slice(replaced).layout()).field(0).name,
     "uid");
-  CHECK_EQUAL((as_table_slice(replaced)).at(0, 0), vast::data_view{"xxx"sv});
+  CHECK_EQUAL((first_slice(replaced)).at(0, 0), vast::data_view{"xxx"sv});
 }
 
 TEST(select step) {
@@ -228,20 +269,31 @@ TEST(select step) {
   auto selected = select_step.finish();
   REQUIRE_NOERROR(selected);
   REQUIRE_EQUAL(selected->size(), 1ull);
-  CHECK_EQUAL(as_table_slice(selected), single_row_slice);
+  CHECK_EQUAL(first_slice(selected), single_row_slice);
   vast::select_step select_step2("index>+5");
   auto add2_failed = select_step2.add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add2_failed);
   auto selected2 = select_step2.finish();
   REQUIRE_NOERROR(selected2);
   REQUIRE_EQUAL(selected2->size(), 1ull);
-  CHECK_EQUAL(as_table_slice(selected2), multi_row_slice);
+  CHECK_EQUAL(first_slice(selected2), multi_row_slice);
   vast::select_step select_step3("index>+9");
   auto add3_failed = select_step3.add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add3_failed);
   auto selected3 = select_step3.finish();
   REQUIRE_NOERROR(selected3);
   REQUIRE_EQUAL(selected3->size(), 0ull);
+}
+
+TEST(aggregate suricata flow) {
+  auto slices = make_suricata_flow_testdata();
+  vast::aggregate_suricata_flow_step step{std::chrono::minutes(1)};
+  for (const auto& slice : slices)
+    REQUIRE_SUCCESS(step.add(slice.layout(), to_record_batch(slice)));
+  auto aggregated_slices = step.finish(); // FIXME: Multiple slice out
+  REQUIRE_NOERROR(aggregated_slices);
+  auto aggregated1 = first_slice(aggregated_slices);
+  // FIXME: More tests
 }
 
 TEST(anonymize step) {
