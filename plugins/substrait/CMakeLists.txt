@@ -59,6 +59,7 @@ endforeach()
 message(info "added source ${PROTO_SRCS}")
 
 target_include_directories(substrait PUBLIC ${PROTO_CPP_OUTDIR})
+target_include_directories(substrait PUBLIC include/)
 target_sources(substrait PRIVATE ${PROTO_SRCS})
 target_link_libraries(substrait PUBLIC protobuf)
 

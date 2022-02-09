@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "substrait/plan.pb.h"
+#include "substrait/substrait.hpp"
 
 #include <vast/data.hpp>
 #include <vast/error.hpp>
@@ -30,7 +31,12 @@ class plugin final : public virtual query_language_plugin {
 
   [[nodiscard]] caf::expected<expression>
   parse(std::string_view query) const override {
-    return caf::make_error(ec::unspecified, "tbd");
+    ::substrait::Plan plan;
+    if (query.size() > INT_MAX)
+      return caf::make_error(ec::format_error, "input too big");
+    if (!plan.ParseFromArray(query.data(), static_cast<int>(query.size())))
+      return caf::make_error(ec::format_error, "not a substrait::Plan");
+    return parse_substrait(plan);
   }
 };
 
