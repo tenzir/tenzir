@@ -41,6 +41,8 @@ protected:
 
   void transition_to(state_name x) override;
 
+  record status(status_verbosity) override;
+
 private:
   // -- member variables -------------------------------------------------------
 

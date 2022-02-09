@@ -25,11 +25,15 @@ namespace vast::system {
 
 query_processor::query_processor(caf::event_based_actor* self)
   : state_(idle), self_(self), block_end_of_hits_(false) {
+  auto status_handler = [this](atom::status, status_verbosity v) {
+    return status(v);
+  };
   behaviors_[idle].assign(
     // Our default init state simply waits for a query to execute.
     [this](vast::query& query, const index_actor& index) {
       start(std::move(query), index);
-    });
+    },
+    status_handler);
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
     [this](const query_cursor& cursor) {
@@ -39,7 +43,8 @@ query_processor::query_processor(caf::event_based_actor* self)
       partitions_.scheduled = cursor.scheduled_partitions;
       partitions_.total = cursor.candidate_partitions;
       transition_to(await_results_until_done);
-    });
+    },
+    status_handler);
   behaviors_[await_results_until_done].assign(
     [this](atom::done) -> caf::result<void> {
       if (block_end_of_hits_)
@@ -47,7 +52,8 @@ query_processor::query_processor(caf::event_based_actor* self)
       partitions_.received += partitions_.scheduled;
       process_done();
       return caf::unit;
-    });
+    },
+    status_handler);
 }
 
 query_processor::~query_processor() = default;
@@ -87,6 +93,12 @@ void query_processor::transition_to(state_name x) {
 void query_processor::process_done() {
   if (!request_more_results())
     transition_to(idle);
+}
+
+record query_processor::status(status_verbosity) {
+  record result;
+  result["state"] = to_string(state_);
+  return result;
 }
 
 // -- related functions --------------------------------------------------------
