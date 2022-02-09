@@ -2,8 +2,20 @@ if (NOT VAST_ENABLE_UNIT_TESTS)
   return()
 endif ()
 
-file(GLOB_RECURSE test_sources CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+file(READ ../../schema/types/base.schema BASE_SCHEMA)
+file(READ ../../schema/types/suricata.schema SURICATA_SCHEMA)
+configure_file("suricata_schema.cpp.in" "suricata_schema.cpp" @ONLY)
+
+file(READ ../../vast/integration/data/suricata/eve.json EVE_JSON)
+configure_file("eve_json.cpp.in" "eve_json.cpp" @ONLY)
+
+file(
+  GLOB_RECURSE
+  test_sources
+  CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/suricata_schema.cpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/eve_json.cpp")
 list(SORT test_sources)
 
 file(GLOB_RECURSE test_headers CONFIGURE_DEPENDS
