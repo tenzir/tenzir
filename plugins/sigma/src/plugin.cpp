@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-// FIXME: migrate this code into plugin
+#include "sigma/parse.hpp"
+
 #include <vast/data.hpp>
-#include <vast/detail/sigma.hpp>
 #include <vast/error.hpp>
 #include <vast/plugin.hpp>
 
@@ -30,7 +30,7 @@ class plugin final : public virtual query_language_plugin {
   [[nodiscard]] caf::expected<expression>
   parse(std::string_view query) const override {
     if (auto yaml = from_yaml(query))
-      return detail::sigma::parse_rule(*yaml);
+      return parse_rule(*yaml);
     else
       return caf::make_error(ec::invalid_query,
                              fmt::format("not a Sigma rule: {}", yaml.error()));

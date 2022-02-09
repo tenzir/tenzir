@@ -4,19 +4,19 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #define SUITE sigma
 
-#include "vast/detail/sigma.hpp"
+#include "sigma/parse.hpp"
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/vast/expression.hpp"
-#include "vast/expression.hpp"
-#include "vast/test/test.hpp"
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/concept/printable/stream.hpp>
+#include <vast/concept/printable/vast/expression.hpp>
+#include <vast/expression.hpp>
+#include <vast/test/test.hpp>
 
 #include <caf/test/dsl.hpp>
 
@@ -27,11 +27,11 @@ using namespace vast::detail;
 namespace {
 
 expression to_search_id(std::string_view yaml) {
-  return unbox(sigma::parse_search_id(unbox(from_yaml(yaml))));
+  return unbox(plugins::sigma::parse_search_id(unbox(from_yaml(yaml))));
 }
 
 expression to_rule(std::string_view yaml) {
-  return unbox(sigma::parse_rule(unbox(from_yaml(yaml))));
+  return unbox(plugins::sigma::parse_rule(unbox(from_yaml(yaml))));
 }
 
 expression to_expr(std::string_view expr) {

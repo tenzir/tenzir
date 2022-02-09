@@ -6,14 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/detail/sigma.hpp"
+#include "sigma/parse.hpp"
 
-#include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/string.hpp"
-#include "vast/detail/base64.hpp"
-#include "vast/detail/string.hpp"
-#include "vast/error.hpp"
-#include "vast/expression_visitors.hpp"
+#include <vast/concept/parseable/core.hpp>
+#include <vast/concept/parseable/string.hpp>
+#include <vast/detail/base64.hpp>
+#include <vast/detail/string.hpp>
+#include <vast/error.hpp>
+#include <vast/expression_visitors.hpp>
 
 #include <map>
 #include <regex>
@@ -21,7 +21,7 @@
 #include <tuple>
 #include <vector>
 
-namespace vast::detail::sigma {
+namespace vast::plugins::sigma {
 
 // TODO: A lot of code in here is directly copied from
 // src/concept/parseable/expression.cpp. We should factor the implementation in
@@ -239,7 +239,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
   if (auto xs = caf::get_if<record>(&yaml)) {
     conjunction result;
     for (auto& [key, rhs] : *xs) {
-      auto keys = split(key, "|");
+      auto keys = detail::split(key, "|");
       auto extractor = field_extractor{std::string{keys[0]}};
       auto op = relational_operator::equal;
       auto all = false;
@@ -370,4 +370,4 @@ caf::expected<expression> parse_rule(const data& yaml) {
   return result;
 }
 
-} // namespace vast::detail::sigma
+} // namespace vast::plugins::sigma
