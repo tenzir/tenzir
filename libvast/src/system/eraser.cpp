@@ -36,21 +36,26 @@ void eraser_state::init(caf::timespan interval, std::string query,
   query_ = std::move(query);
   index_ = std::move(index);
   // Override the behavior for the idle state.
-  behaviors_[idle].assign([this](atom::run) {
-    if (self_->current_sender() != self_->ctrl())
-      promise_ = self_->make_response_promise();
-    auto expr = to<expression>(query_);
-    if (!expr) {
-      VAST_ERROR("{} failed to parse query {}", *self_, query_);
-      return;
-    }
-    if (expr = normalize_and_validate(std::move(*expr)); !expr) {
-      VAST_ERROR("{} failed to normalize and validate {}", *self_, query_);
-      return;
-    }
-    self_->send(index_, atom::evaluate_v, query::make_erase(std::move(*expr)));
-    transition_to(await_query_id);
-  });
+  behaviors_[idle].assign(
+    [this](atom::run) {
+      if (self_->current_sender() != self_->ctrl())
+        promise_ = self_->make_response_promise();
+      auto expr = to<expression>(query_);
+      if (!expr) {
+        VAST_ERROR("{} failed to parse query {}", *self_, query_);
+        return;
+      }
+      if (expr = normalize_and_validate(std::move(*expr)); !expr) {
+        VAST_ERROR("{} failed to normalize and validate {}", *self_, query_);
+        return;
+      }
+      self_->send(index_, atom::evaluate_v,
+                  query::make_erase(std::move(*expr)));
+      transition_to(await_query_id);
+    },
+    [this](atom::status, status_verbosity v) {
+      return status(v);
+    });
   // Trigger the delayed send message.
   transition_to(idle);
 }
@@ -66,6 +71,13 @@ void eraser_state::transition_to(query_processor::state_name x) {
     else
       self_->delayed_send(self_, interval_, atom::run_v);
   }
+}
+
+record eraser_state::status(status_verbosity v) {
+  auto result = super::status(v);
+  result["query"] = query_;
+  result["interval"] = interval_;
+  return result;
 }
 
 caf::behavior
