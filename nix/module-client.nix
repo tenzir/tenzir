@@ -60,6 +60,10 @@ in
         wantedBy = [ "multi-user.target" ];
         serviceConfig = {
           Type = "notify";
+          # In the distributed environment, we cannot detect the endpoint of vast while all services are deploying simultaneously.
+          # So, use the restart option to ensure the service tries in the way.
+          Restart = "always";
+          RestartSec = "10";
           ExecStop = "${cfg.package}/bin/vast --config=${configFile} stop";
           DynamicUser = true;
           NoNewPrivileges = true;
