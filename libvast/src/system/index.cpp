@@ -950,10 +950,17 @@ index(index_actor::stateful_pointer<index_state> self,
            query_supervisor_actor worker) -> caf::result<query_cursor> {
       // Query handling
       auto sender = self->current_sender();
-      auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
       // Sanity check.
       if (!sender) {
         VAST_WARN("{} ignores an anonymous query", *self);
+        self->send(self, atom::worker_v, worker);
+        return caf::sec::invalid_argument;
+      }
+      auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
+      // FIXME: This is a quick and dirty attempt to verify that the problem
+      // is because clients exit before we arrive here.
+      if (client->getf(caf::monitorable_actor::is_terminated_flag)) {
+        VAST_DEBUG("{} ignores terminated query: {}", *self, query);
         self->send(self, atom::worker_v, worker);
         return caf::sec::invalid_argument;
       }
