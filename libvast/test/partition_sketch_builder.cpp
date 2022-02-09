@@ -11,6 +11,7 @@
 #define SUITE partition_sketch
 #include "vast/concept/convertible/data.hpp"
 #include "vast/data.hpp"
+#include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
@@ -22,22 +23,18 @@ namespace {
 auto example_index_config = R"__(
 rules:
   - targets:
-      - suricata.dns.dns.rrname
-      - :address
+      - orig_h
+      - zeek.conn.id.resp_h
     fp-rate: 0.005
   - targets:
-      - zeek.conn.id.orig_h
+      - :address
+    fp-rate: 0.1
 )__";
 
-struct fixture {
+struct fixture : fixtures::events {
   fixture() {
     const auto yaml = unbox(from_yaml(example_index_config));
     REQUIRE_EQUAL(convert(yaml, config), caf::none);
-    REQUIRE_EQUAL(config.rules.size(), 1u);
-    const auto& rule = config.rules[0];
-    REQUIRE_EQUAL(rule.targets.size(), 2u);
-    REQUIRE_EQUAL(rule.targets[0], "suricata.dns.dns.rrname");
-    REQUIRE_EQUAL(rule.fp_rate, 0.005);
   }
 
   index_config config;
@@ -49,7 +46,15 @@ FIXTURE_SCOPE(partition_sketch_tests, fixture)
 
 TEST(builder instantiation) {
   auto builder = unbox(partition_sketch_builder::make(config));
-  // TODO: test
+  auto err = builder.add(zeek_conn_log[0]);
+  CHECK_EQUAL(err, caf::none);
+  fmt::print("+++++++++++++++++++++\n");
+  for (auto field : builder.fields())
+    fmt::print("{}\n", field);
+  fmt::print("---------------------\n");
+  for (auto type : builder.types())
+    fmt::print("{}\n", type);
+  fmt::print("+++++++++++++++++++++\n");
 }
 
 FIXTURE_SCOPE_END()

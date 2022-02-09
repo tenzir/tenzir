@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/generator.hpp"
 #include "vast/detail/heterogenous_string_hash.hpp"
 #include "vast/index_config.hpp"
 #include "vast/partition_sketch.hpp"
@@ -43,6 +44,14 @@ public:
   /// Creates an immutable partition sketch from the builder state.
   /// @returns The partition sketch.
   caf::expected<partition_sketch> finish();
+
+  /// Gets all field extractors.
+  /// @returns the list of field extractors for which builders exists.
+  detail::generator<std::string_view> fields() const;
+
+  /// Gets all type extractors.
+  /// @returns the list of type extractors for which builders exists.
+  detail::generator<std::string_view> types() const;
 
 private:
   /// Construct a partion sketch builder from an index configuration.

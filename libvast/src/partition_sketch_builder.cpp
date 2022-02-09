@@ -13,7 +13,9 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/sketch/accumulator_builder.hpp"
 #include "vast/sketch/bloom_filter_builder.hpp"
+#include "vast/sketch/min_max_accumulator.hpp"
 #include "vast/table_slice.hpp"
 
 namespace vast {
@@ -25,19 +27,62 @@ using builder_factory = partition_sketch_builder::builder_factory;
 /// Constructs a builder factory from a given rule.
 builder_factory make_factory(const index_config::rule& rule) {
   using sketch_builder_ptr = std::unique_ptr<sketch::builder>;
+  using min_max_sketch_builder
+    = sketch::accumulator_builder<sketch::min_max_accumulator>;
   auto p = rule.fp_rate;
   auto f = detail::overload{
-    [](const auto&) -> sketch_builder_ptr {
-      return nullptr; // no sketch available
+    [](const none_type&) -> sketch_builder_ptr {
+      return nullptr;
+    },
+    [](const bool_type&) -> sketch_builder_ptr {
+      // We abuse the min-max sketch to represent min = false and max = true.
+      return std::make_unique<min_max_sketch_builder>();
+    },
+    [](const integer_type&) -> sketch_builder_ptr {
+      return std::make_unique<min_max_sketch_builder>();
+    },
+    [](const count_type&) -> sketch_builder_ptr {
+      return std::make_unique<min_max_sketch_builder>();
+    },
+    [](const real_type&) -> sketch_builder_ptr {
+      return std::make_unique<min_max_sketch_builder>();
+    },
+    [](const duration_type&) -> sketch_builder_ptr {
+      return std::make_unique<min_max_sketch_builder>();
+    },
+    [](const time_type&) -> sketch_builder_ptr {
+      return std::make_unique<min_max_sketch_builder>();
     },
     [p](const string_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(p);
+    },
+    [p](const pattern_type&) -> sketch_builder_ptr {
       return std::make_unique<sketch::bloom_filter_builder>(p);
     },
     [p](const address_type&) -> sketch_builder_ptr {
       return std::make_unique<sketch::bloom_filter_builder>(p);
     },
+    [p](const subnet_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(p);
+    },
+    [p](const enumeration_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(p);
+    },
+    [](const list_type& x) -> sketch_builder_ptr {
+      // FIXME: recurse
+      return nullptr; // no sketch available
+    },
+    [](const map_type& x) -> sketch_builder_ptr {
+      // FIXME: recurse
+      return nullptr; // no sketch available
+    },
+    [](const record_type&) -> sketch_builder_ptr {
+      die("sketch builders can only operate on individual columns");
+    },
   };
-  return builder_factory{f};
+  return [f](const type& x) {
+    return caf::visit(f, x);
+  };
 }
 
 } // namespace
@@ -100,6 +145,7 @@ partition_sketch_builder::make(index_config config) {
   top_up(pattern_type{});
   top_up(address_type{});
   top_up(subnet_type{});
+  // FIXME: top up list and map
   return builder;
 }
 
@@ -110,19 +156,20 @@ partition_sketch_builder::partition_sketch_builder(index_config config)
 caf::error partition_sketch_builder::add(const table_slice& x) {
   const auto& layout = caf::get<record_type>(x.layout());
   // Handle all field sketches.
-  for (auto& [key, builder] : field_builders_) {
+  for (auto& [key, factory] : field_factory_) {
     auto offsets = layout.resolve_key_suffix(key);
     auto begin = offsets.begin();
     auto end = offsets.end();
     if (begin == end)
       continue;
+    auto& builder = field_builders_[key];
     // The first type locks in the builder for all matching fields. If
     // subsequent fields have a different type, we emit a warning.
     // Alternatively, we could bifurcate the processing.
     auto first_offset = *begin;
     auto first_field = layout.field(first_offset);
     if (!builder)
-      builder = field_factory_[key](first_field.type);
+      builder = factory(first_field.type);
     if (!builder)
       return caf::make_error(
         ec::unspecified,
@@ -144,11 +191,8 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
   }
   // Handle all type sketches.
   for (auto&& leaf : layout.leaves()) {
-    // FIXME: do not ignore containers; step through them instead.
-    if (caf::holds_alternative<list_type>(leaf.field.type)
-        || caf::holds_alternative<map_type>(leaf.field.type))
-      continue;
     auto type_name = leaf.field.type.name();
+    VAST_WARN("-------> {}: {}", leaf.field.name, type_name);
     // Should we create a sketch for this type?
     auto i = type_factory_.find(type_name);
     if (i == type_factory_.end())
@@ -173,6 +217,18 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
 caf::expected<partition_sketch> partition_sketch_builder::finish() {
   // TODO: implement.
   return ec::unimplemented;
+}
+
+detail::generator<std::string_view> partition_sketch_builder::fields() const {
+  for (const auto& [key, _] : field_builders_)
+    co_yield std::string_view{key};
+  co_return;
+}
+
+detail::generator<std::string_view> partition_sketch_builder::types() const {
+  for (const auto& [name, _] : type_builders_)
+    co_yield std::string_view{name};
+  co_return;
 }
 
 } // namespace vast
