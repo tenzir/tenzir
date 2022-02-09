@@ -12,11 +12,11 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/detail/load_contents.hpp"
-#include "vast/detail/sigma.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/schema.hpp"
 
 #include <caf/config_value.hpp>
@@ -35,19 +35,19 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
                          std::vector<std::string>::const_iterator end) {
   if (begin == end)
     return caf::make_error(ec::syntax_error, "no query expression given");
-  auto str = detail::join(begin, end, " ");
-  // TODO: improve error handling. Right now, we silently try to parse the
-  // query expression as Sigma rule. If it fails, we only print a debug log
-  // entry and move on to parsing the input as VAST expression.
-  if (auto yaml = from_yaml(str)) {
-    if (auto e = detail::sigma::parse_rule(*yaml))
-      return normalize_and_validate(std::move(*e));
-    else
-      VAST_DEBUG("failed to parse query as Sigma rule: {}", e.error());
-  } else {
-    VAST_DEBUG("failed to parse input as YAML: {}", yaml.error());
-  }
-  if (auto e = to<expression>(str)) {
+  auto query = detail::join(begin, end, " ");
+  // We are trying all query language plugins in a non-deterministic order.
+  for (const auto& plugin : plugins::get())
+    if (const auto* query_lang = plugin.as<query_language_plugin>()) {
+      if (auto expr = query_lang->parse(query))
+        return normalize_and_validate(std::move(*expr));
+      else
+        // TODO: Demote to DEBUG when polishing the PR.
+        VAST_ERROR("failed to parse query as {} languae: {}", plugin->name(),
+                   expr.error());
+    }
+  // TODO: rewrite the VAST expression as a query language plugin.
+  if (auto e = to<expression>(query)) {
     return normalize_and_validate(std::move(*e));
   } else {
     VAST_DEBUG("failed to parse query as VAST expression: {}", e.error());

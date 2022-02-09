@@ -280,6 +280,20 @@ public:
              std::span<const std::byte> header) const = 0;
 };
 
+// -- query language plugin ---------------------------------------------------
+
+/// A query language parser to pass query in a custom language to VAST.
+/// @relates plugin
+class query_language_plugin : public virtual plugin {
+public:
+  /// Parses a query expression string into a VAST expression.
+  /// @param The string representing the custom query.
+  /// In the future, we may want to let this plugin return a substrait query
+  /// plan instead of a VAST expression.
+  [[nodiscard]] virtual caf::expected<expression>
+  parse(std::string_view query) const = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
