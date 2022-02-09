@@ -74,5 +74,9 @@ SpacesInParentheses: false
 SpacesInSquareBrackets: false
 Standard: Cpp11
 UseTab: Never
+---
+Language: Proto
+# Don't format .proto files.
+DisableFormat: true
 ...
 
