@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "substrait/plan.pb.h"
+
 #include <vast/data.hpp>
 #include <vast/error.hpp>
 #include <vast/expression.hpp>
