@@ -2,6 +2,6 @@
 
 This changelog documents all notable changes to the Sigma plugin for VAST.
 
-## v0.1.0
+## v1.0.0
 
 This is the first official release.
