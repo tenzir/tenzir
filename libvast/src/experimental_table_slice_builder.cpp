@@ -23,7 +23,6 @@
 #include "vast/type.hpp"
 
 #include <arrow/api.h>
-#include <arrow/extension_type.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 

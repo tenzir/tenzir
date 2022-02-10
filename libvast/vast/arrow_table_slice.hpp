@@ -52,7 +52,7 @@ struct arrow_table_slice_state<fbs::table_slice::arrow::experimental> {
   std::shared_ptr<arrow::RecordBatch> record_batch;
 
   /// Mapping from column offset to nested Arrow array
-  arrow::ArrayVector array_index;
+  arrow::ArrayVector flat_columns;
 };
 
 /// A table slice that stores elements encoded in the [Arrow](https://arrow.org)

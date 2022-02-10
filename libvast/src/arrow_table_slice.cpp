@@ -1359,7 +1359,7 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     state_.layout = make_vast_type(*state_.record_batch->schema());
     VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
     // TODO: this should not compile, why does it?
-    state_.array_index = index_column_arrays(state_.record_batch);
+    state_.flat_columns = index_column_arrays(state_.record_batch);
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -1394,7 +1394,7 @@ table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
   } else if constexpr (std::is_same_v<FlatBuffer,
                                       fbs::table_slice::arrow::experimental>) {
     if (auto&& batch = record_batch())
-      return state_.array_index.size();
+      return state_.flat_columns.size();
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -1420,7 +1420,7 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
                                       fbs::table_slice::arrow::experimental>) {
     if (auto&& batch = record_batch()) {
       auto f = index_applier{offset, index};
-      auto&& array = state_.array_index[column];
+      auto&& array = state_.flat_columns[column];
       const auto& layout = caf::get<record_type>(this->layout());
       auto offset = layout.resolve_flat_index(column);
       decode(layout.field(offset).type, *array, f);
@@ -1445,7 +1445,7 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
     return legacy::value_at(layout.field(offset).type, *array, row);
   } else if constexpr (std::is_same_v<FlatBuffer,
                                       fbs::table_slice::arrow::experimental>) {
-    auto&& array = state_.array_index[column];
+    auto&& array = state_.flat_columns[column];
     const auto& layout = caf::get<record_type>(this->layout());
     auto offset = layout.resolve_flat_index(column);
     return value_at(layout.field(offset).type, *array, row);
@@ -1477,7 +1477,7 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
         .field(caf::get<record_type>(this->layout()).resolve_flat_index(column))
         .type,
       t));
-    auto&& array = state_.array_index[column];
+    auto&& array = state_.flat_columns[column];
     return value_at(t, *array, row);
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
