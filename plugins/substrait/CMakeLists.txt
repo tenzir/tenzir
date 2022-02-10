@@ -16,8 +16,8 @@ include(CTest)
 find_package(VAST REQUIRED)
 VASTRegisterPlugin(
   TARGET substrait
-  ENTRYPOINT  substrait.cpp
-  TEST_SOURCES tests.cpp)
+  ENTRYPOINT src/substrait.cpp
+  TEST_SOURCES tests/tests.cpp)
 
 # Protobuf support
 

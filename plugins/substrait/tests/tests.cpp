@@ -33,5 +33,6 @@ substrait::Plan create_plan() {
 TEST(parse plan) {
   auto plan = create_plan();
   auto expression = vast::plugins::substrait::parse_substrait(plan);
-  REQUIRE_NOERROR(expression);
+  CHECK_NOERROR(expression);
+  VAST_INFO("{}", *expression);
 }
