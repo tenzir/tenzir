@@ -277,7 +277,7 @@ using index_actor = typed_actor_fwd<
   // erased, returns the nil uuid. When keep_original_partition is no: does an
   // in-place transform keeping the old ids, and makes a new partition
   // preserving the old one(s).
-  caf::replies_to<atom::apply, transform_ptr, uuid,
+  caf::replies_to<atom::apply, transform_ptr, std::vector<uuid>,
                   keep_original_partition>::with<partition_synopsis_pair>,
   // Makes the identity of the importer known to the index.
   caf::reacts_to<atom::importer, idspace_distributor_actor>>

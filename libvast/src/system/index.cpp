@@ -1177,14 +1177,17 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.importer = std::move(idspace_distributor);
     },
     [self](
-      atom::apply, transform_ptr transform, vast::uuid old_partition_id,
+      atom::apply, transform_ptr transform,
+      std::vector<vast::uuid> old_partition_ids,
       keep_original_partition keep) -> caf::result<partition_synopsis_pair> {
-      VAST_DEBUG("{} applies a transform to partition {}", *self,
-                 old_partition_id);
+      VAST_DEBUG("{} applies a transform to partitions {}", *self,
+                 old_partition_ids);
       if (!self->state.store_plugin)
         return caf::make_error(ec::invalid_configuration,
                                "partition transforms are not supported for the "
                                "global archive");
+      if (old_partition_ids.empty())
+        return caf::make_error(ec::invalid_argument, "no ids given");
       auto worker = self->state.next_worker();
       if (!worker)
         return caf::skip;
@@ -1203,16 +1206,15 @@ index(index_actor::stateful_pointer<index_state> self,
       auto query
         = query::make_extract(sink, query::extract::drop_ids, match_everything);
       auto query_id = self->state.create_query_id();
-      auto lookup = query_state{query_id, query,
-                                std::vector<vast::uuid>{old_partition_id},
-                                std::move(*worker)};
+      auto lookup
+        = query_state{query_id, query, old_partition_ids, std::move(*worker)};
       auto actors
-        = self->state.collect_query_actors(lookup, /* num_partitions = */ 1);
+        = self->state.collect_query_actors(lookup, old_partition_ids.size());
       if (actors.empty()) {
         self->send(self, atom::worker_v, lookup.worker);
         return caf::make_error(ec::invalid_argument,
-                               fmt::format("invalid partition id: {}",
-                                           old_partition_id));
+                               fmt::format("all partition ids invalid: {}",
+                                           old_partition_ids));
       }
       self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
                  std::move(actors),
@@ -1225,14 +1227,13 @@ index(index_actor::stateful_pointer<index_state> self,
                   self->state.partition_path(new_partition_id),
                   self->state.partition_synopsis_path(new_partition_id))
         .then(
-          [self, rp, old_partition_id, new_partition_id,
+          [self, rp, old_partition_ids, new_partition_id,
            keep](partition_synopsis_ptr& synopsis) mutable {
             auto result = partition_synopsis_pair{new_partition_id, synopsis};
-
             // TODO: We eventually want to allow transforms that delete
             // whole events, at that point we also need to update the index
             // statistics here.
-            if (keep == keep_original_partition::yes)
+            if (keep == keep_original_partition::yes) {
               self
                 ->request(self->state.meta_index, caf::infinite, atom::merge_v,
                           new_partition_id, synopsis)
@@ -1244,7 +1245,10 @@ index(index_actor::stateful_pointer<index_state> self,
                   [rp](const caf::error& e) mutable {
                     rp.deliver(e);
                   });
-            else
+            } else {
+              // Pick one partition id at random to be "transformed", all the
+              // other ones are "deleted" from the meta index.
+              auto old_partition_id = old_partition_ids.at(0);
               self
                 ->request(self->state.meta_index, caf::infinite,
                           atom::replace_v, old_partition_id, new_partition_id,
@@ -1267,6 +1271,18 @@ index(index_actor::stateful_pointer<index_state> self,
                   [rp](const caf::error& e) mutable {
                     rp.deliver(e);
                   });
+            }
+            for (size_t i = 1; i < old_partition_ids.size(); ++i) {
+              auto partition_id = old_partition_ids[i];
+              self
+                ->request(self->state.meta_index, caf::infinite, atom::erase_v,
+                          partition_id)
+                .then([](atom::ok) { /* nop */ },
+                      [](const caf::error& e) {
+                        VAST_WARN("index failed to erase {} from meta index",
+                                  e);
+                      });
+            }
           },
           [rp](const caf::error& e) mutable {
             rp.deliver(e);
