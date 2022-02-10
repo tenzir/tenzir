@@ -14,6 +14,7 @@
 #include "vast/logger.hpp"
 #include "vast/query.hpp"
 
+#include <caf/after.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
@@ -111,7 +112,12 @@ query_supervisor_actor::behavior_type query_supervisor(
       // the in-progress work.
       if (self->state.open_requests == 0)
         self->send(self->state.master, atom::worker_v, self);
-    }};
+    },
+    caf::after(std::chrono::seconds(60)) >>
+      [self]() {
+        self->send(self->state.master, atom::worker_v, atom::wakeup_v, self);
+      },
+  };
 }
 
 } // namespace vast::system

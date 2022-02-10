@@ -1299,6 +1299,22 @@ index(index_actor::stateful_pointer<index_state> self,
         self->state.idle_workers.insert(std::move(worker));
       }
     },
+    [self](atom::worker, atom::wakeup, query_supervisor_actor worker) {
+      auto lost = true;
+      for (const auto& [_, qs] : self->state.pending) {
+        if (worker == qs.worker) {
+          lost = false;
+        }
+      }
+      for (auto& w : self->state.idle_workers) {
+        if (w == worker)
+          lost = false;
+      }
+      if (lost) {
+        VAST_WARN("{} recoverd a lost worker", *self);
+        self->delegate(static_cast<index_actor>(self), atom::worker_v, worker);
+      }
+    },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) { //
       return self->state.status(v);
