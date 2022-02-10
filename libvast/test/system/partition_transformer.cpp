@@ -296,9 +296,9 @@ TEST(partition transform via the index) {
   auto identity_step = vast::make_transform_step("identity", caf::settings{});
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
-  auto rp3
-    = self->request(index, caf::infinite, vast::atom::apply_v, transform,
-                    partition_uuid, vast::system::keep_original_partition::yes);
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
+                           std::vector<vast::uuid>{partition_uuid},
+                           vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
     [=](const vast::partition_synopsis_pair& pair) {
@@ -316,7 +316,7 @@ TEST(partition transform via the index) {
               });
   auto rp5
     = self->request(index, caf::infinite, vast::atom::apply_v, transform,
-                    partition_uuid, vast::system::keep_original_partition::no);
+                    std::vector<vast::uuid>{partition_uuid}, vast::system::keep_original_partition::no);
   run();
   rp5.receive(
     [=](const vast::partition_synopsis_pair& pair) {
