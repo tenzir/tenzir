@@ -142,8 +142,8 @@ public:
   }
 
   template <class... Ts>
-  std::pair<iterator, bool> emplace_hint(const_iterator, Ts&&... xs) {
-    return emplace(std::forward<Ts>(xs)...);
+  iterator emplace_hint(const_iterator, Ts&&... xs) {
+    return emplace(std::forward<Ts>(xs)...).first;
   }
 
   iterator erase(const_iterator i) {

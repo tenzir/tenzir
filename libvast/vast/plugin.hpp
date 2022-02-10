@@ -437,9 +437,9 @@ extern const char* VAST_PLUGIN_VERSION;
       }                                                                        \
       static bool init() {                                                     \
         ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
-          new (name),                                                          \
+          new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \
           +[](::vast::plugin* plugin) noexcept {                               \
-            delete plugin;                                                     \
+            delete plugin; /* NOLINT(cppcoreguidelines-owning-memory) */       \
           },                                                                   \
           VAST_PLUGIN_VERSION));                                               \
         return true;                                                           \
@@ -472,6 +472,7 @@ extern const char* VAST_PLUGIN_VERSION;
 
 #  define VAST_REGISTER_PLUGIN(name)                                           \
     extern "C" ::vast::plugin* vast_plugin_create() {                          \
+      /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       return new (name);                                                       \
     }                                                                          \
     extern "C" void vast_plugin_destroy(class ::vast::plugin* plugin) {        \
