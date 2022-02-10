@@ -25,6 +25,9 @@ namespace vast {
 class enum_extension_type : public arrow::ExtensionType {
 public:
   static constexpr auto vast_id = "vast.enum";
+
+  static const std::shared_ptr<arrow::DataType> arrow_type;
+
   /// Wrap the provided `enumeration_type` into an `arrow::ExtensionType`.
   /// @param enum_type VAST enum type to wrap.
   explicit enum_extension_type(enumeration_type enum_type);
@@ -107,7 +110,6 @@ public:
 class subnet_extension_type : public arrow::ExtensionType {
 public:
   static constexpr auto vast_id = "vast.subnet";
-
   static const std::shared_ptr<arrow::DataType> arrow_type;
 
   // Create an arrow type representation of a VAST subnet type.

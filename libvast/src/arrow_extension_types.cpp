@@ -75,9 +75,11 @@ int sum_type_access<arrow::Array>::index_from_type(
 
 namespace vast {
 
+const std::shared_ptr<arrow::DataType> enum_extension_type::arrow_type
+  = arrow::dictionary(arrow::int16(), arrow::utf8());
+
 enum_extension_type::enum_extension_type(enumeration_type enum_type)
-  : arrow::ExtensionType(arrow::dictionary(arrow::int16(), arrow::utf8())),
-    enum_type_(std::move(enum_type)) {
+  : arrow::ExtensionType(arrow_type), enum_type_(std::move(enum_type)) {
 }
 
 bool enum_extension_type::ExtensionEquals(const ExtensionType& other) const {
@@ -148,7 +150,7 @@ enumeration_type enum_extension_type::get_enum_type() const {
 }
 
 address_extension_type::address_extension_type()
-  : arrow::ExtensionType(arrow::fixed_size_binary(16)) {
+  : arrow::ExtensionType(address_extension_type::arrow_type) {
 }
 
 std::string address_extension_type::extension_name() const {

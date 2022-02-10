@@ -681,6 +681,27 @@ private:
   std::shared_ptr<arrow::RecordBatch> record_batch_ = nullptr;
 };
 
+/// Compute position for each array by traversing the schema tree breadth-first.
+void index_column_arrays(const std::shared_ptr<arrow::Array>& arr,
+                         arrow::ArrayVector& out) {
+  auto f = detail::overload{[&](const std::shared_ptr<arrow::Array>& a) {
+                              out.push_back(a);
+                            },
+                            [&](const std::shared_ptr<arrow::StructArray>& s) {
+                              for (const auto& child : s->fields())
+                                index_column_arrays(child, out);
+                            }};
+  return caf::visit(f, arr);
+}
+
+arrow::ArrayVector
+index_column_arrays(const std::shared_ptr<arrow::RecordBatch>& record_batch) {
+  arrow::ArrayVector result{};
+  for (const auto& arr : record_batch->columns())
+    index_column_arrays(arr, result);
+  return result;
+}
+
 } // namespace
 
 // -- constructors, destructors, and assignment operators ----------------------
@@ -694,11 +715,12 @@ experimental_table_slice::experimental_table_slice(
   // table slice's chunk, and storing a sliced chunk in there would cause a
   // cyclic reference. In the future, we should just not store the sliced
   // chunk at all, but rather create it on the fly only.
-  state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
-  VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
   auto decoder = record_batch_decoder{};
   state_.record_batch = decoder.decode(
     as_arrow_buffer(parent->slice(as_bytes(*slice.arrow_ipc()))));
+  state_.layout = make_vast_type(*state_.record_batch->schema());
+  VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
+  state_.array_index = index_column_arrays(state_.record_batch);
 }
 
 experimental_table_slice::~experimental_table_slice() noexcept {
@@ -719,7 +741,7 @@ table_slice::size_type experimental_table_slice::rows() const noexcept {
 
 table_slice::size_type experimental_table_slice::columns() const noexcept {
   if (auto&& batch = record_batch())
-    return batch->num_columns();
+    return state_.array_index.size();
   return 0;
 }
 
@@ -729,7 +751,7 @@ void experimental_table_slice::append_column_to_index(
   id offset, table_slice::size_type column, value_index& index) const {
   if (auto&& batch = record_batch()) {
     auto f = index_applier{offset, index};
-    auto array = batch->column(detail::narrow_cast<int>(column));
+    auto array = this->column_array(column);
     const auto& layout = caf::get<record_type>(this->layout());
     auto offset = layout.resolve_flat_index(column);
     decode(layout.field(offset).type, *array, f);
@@ -738,9 +760,7 @@ void experimental_table_slice::append_column_to_index(
 
 data_view experimental_table_slice::at(table_slice::size_type row,
                                        table_slice::size_type column) const {
-  auto&& batch = record_batch();
-  VAST_ASSERT(batch);
-  auto array = batch->column(detail::narrow_cast<int>(column));
+  auto&& array = this->column_array(column);
   const auto& layout = caf::get<record_type>(this->layout());
   auto offset = layout.resolve_flat_index(column);
   return value_at(layout.field(offset).type, *array, row);
@@ -754,9 +774,7 @@ data_view experimental_table_slice::at(table_slice::size_type row,
       .field(caf::get<record_type>(this->layout()).resolve_flat_index(column))
       .type,
     t));
-  auto&& batch = record_batch();
-  VAST_ASSERT(batch);
-  auto array = batch->column(detail::narrow_cast<int>(column));
+  auto&& array = this->column_array(column);
   return value_at(t, *array, row);
 }
 
@@ -773,6 +791,11 @@ void experimental_table_slice::import_time(time import_time) noexcept {
 std::shared_ptr<arrow::RecordBatch>
 experimental_table_slice::record_batch() const noexcept {
   return state_.record_batch;
+}
+
+std::shared_ptr<arrow::Array> experimental_table_slice::column_array(
+  table_slice::size_type column) const noexcept {
+  return state_.array_index[column];
 }
 
 } // namespace vast

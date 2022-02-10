@@ -12,6 +12,7 @@
 
 #include "vast/table_slice.hpp"
 
+#include <arrow/type_fwd.h>
 #include <caf/meta/type_name.hpp>
 
 #include <memory>
@@ -27,6 +28,9 @@ struct experimental_table_slice_state {
 
   /// The deserialized Arrow Record Batch.
   std::shared_ptr<arrow::RecordBatch> record_batch;
+
+  /// Mapping from column offset to nested Arrow array
+  arrow::ArrayVector array_index;
 };
 
 /// A table slice that stores elements encoded in the [Arrow](https://arrow.org)
@@ -96,6 +100,12 @@ public:
   /// @returns A shared pointer to the underlying Arrow Record Batch.
   [[nodiscard]] std::shared_ptr<arrow::RecordBatch>
   record_batch() const noexcept;
+
+  /// Provides a data column for an offset.
+  /// @param column The column index
+  /// @returns The arrow array backing the (flattened) column
+  [[nodiscard]] std::shared_ptr<arrow::Array>
+  column_array(table_slice::size_type column) const noexcept;
 
 private:
   // -- implementation details -------------------------------------------------

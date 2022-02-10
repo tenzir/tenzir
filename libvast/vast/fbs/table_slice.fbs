@@ -40,13 +40,6 @@ table v1 {
 
 /// A table slice encoded with Apache Arrow (unstable).
 table experimental {
-  /// The schema of the data.
-  /// TODO: The schema is already included in the record batch, but it cannot be
-  /// mapped 1-to-1 to VAST types. This can be resolved by using extension types
-  /// for Arrow. Additionally, this is currently CAF binary; make this a
-  /// separarate table.
-  layout: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
-
   /// The Arrow IPC data.
   arrow_ipc: [ubyte];
 

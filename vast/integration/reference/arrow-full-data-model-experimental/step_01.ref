@@ -1,10 +1,20 @@
+          child 0, x1: int64
+          child 1, x2: uint64
+      -- field metadata --
+      VAST:attributes:0: '{ "key_with_no_value": ""}'
+      VAST:name:0: 'named_bool'
       child 0, contagious: bool
+      child 0, item: struct<x1: int64, x2: uint64>
+    -- field metadata --
+    -- field metadata --
     -- field metadata --
     -- field metadata --
     ARROW:extension:metadata: 'vast.address'
     ARROW:extension:name: 'vast.address'
+    VAST:attributes:0: '{ "baz_key": "baz_value"}'
+    VAST:attributes:0: '{ "skip": ""}'
+    VAST:name:0: 'baz'
     VAST:name:0: 'multi_attr_rec'
-  -- field metadata --
   -- field metadata --
   -- field metadata --
   -- field metadata --
@@ -16,20 +26,22 @@
   ARROW:extension:name: 'vast.address'
   ARROW:extension:name: 'vast.enum'
   ARROW:extension:name: 'vast.subnet'
-  VAST:attributes:0: '{ "baz_key": "baz_value"}'
   VAST:attributes:0: '{ "description": "unnamed_extended_bool"}'
   VAST:attributes:0: '{ "skip": ""}'
-  VAST:name:0: 'baz'
   child 0, item: struct<contagious: bool>
   child 0, length: uint8
+  child 0, x: bool
   child 1, address: fixed_size_binary[16]
+  child 1, y: string
+  child 2, z: timestamp[ns]
+  child 3, lrc: list<item: struct<x1: int64, x2: uint64>>
 -- schema metadata --
 VAST:attributes:1: '{ "some": "attr", "top_level_key": "v"}'
 VAST:name:0: 'all_types'
 VAST:name:1: 'all_types_i'
 a: fixed_size_binary[16]
 b: bool
-bar.x: bool
+bar: struct<x: bool, y: string, z: timestamp[ns], lrc: list<item: struct<x1: int64, x2: uint64>>>
 c: uint64
 d: duration[ns]
 done with all readers

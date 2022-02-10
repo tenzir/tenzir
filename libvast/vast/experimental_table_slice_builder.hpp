@@ -71,7 +71,7 @@ public:
 
   /// @pre `record_batch->schema()->Equals(make_experimental_schema(layout))``
   [[nodiscard]] table_slice static create(
-    const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout,
+    const std::shared_ptr<arrow::RecordBatch>& record_batch,
     size_t initial_buffer_size = default_buffer_size);
 
   /// @returns The number of columns in the table slice.
@@ -101,6 +101,9 @@ private:
   /// @param x The data to add.
   /// @returns `true` on success.
   bool add_impl(data_view x) override;
+
+  /// Number of leaf columns
+  size_t num_leaves_;
 
   /// Current column index.
   size_t column_ = 0;

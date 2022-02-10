@@ -24,6 +24,7 @@
 #include "vast/type.hpp"
 
 #include <arrow/api.h>
+#include <arrow/extension_type.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 
@@ -485,10 +486,9 @@ public:
   }
 
   std::shared_ptr<arrow::Array> finish() override {
-    std::shared_ptr<arrow::Array> result;
-    if (!subnet_builder_->Finish(&result).ok())
-      die("failed to finish Arrow subnet column builder");
-    return result;
+    if (auto result = subnet_builder_->Finish(); result.ok())
+      return *result;
+    die("failed to finish Arrow subnet column builder");
   }
 
   [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
@@ -501,6 +501,47 @@ private:
   std::shared_ptr<arrow::FixedSizeBinaryBuilder> address_builder_;
   std::shared_ptr<arrow::StructBuilder> subnet_builder_;
 };
+
+/// Consumes arrow arrays and builds up the appropriate array based on the
+/// provided data type.
+/// @param array_iterator An iterator to consume column arrays.
+/// @param arrow_type the data type we're building the array for.
+std::shared_ptr<arrow::Array>
+make_arrow_array(arrow::ArrayVector::const_iterator& array_iterator,
+                 std::shared_ptr<arrow::DataType> arrow_type) {
+  auto f = detail::overload{
+    // TODO: catch-all is bad, but implementing 15 code paths for standard
+    // arrays ain't any better
+    [&](const std::shared_ptr<arrow::DataType>&)
+      -> std::shared_ptr<arrow::Array> {
+      return *array_iterator++;
+    },
+    [&](const std::shared_ptr<arrow::StructType>& st)
+      -> std::shared_ptr<arrow::Array> {
+      arrow::ArrayVector children{};
+      std::vector<std::string> field_names{};
+      children.reserve(st->num_fields());
+      field_names.reserve(st->num_fields());
+      for (const auto& field : st->fields()) {
+        children.push_back(make_arrow_array(array_iterator, field->type()));
+        field_names.push_back(field->name());
+      }
+      auto res = arrow::StructArray::Make(children, field_names);
+      return res.ValueOrDie();
+    }};
+  return caf::visit(f, arrow_type);
+}
+
+auto make_record_batch(const arrow::ArrayVector& columns, size_t rows,
+                       const std::shared_ptr<arrow::Schema>& schema) {
+  auto it = columns.begin();
+  auto output_columns = arrow::ArrayVector{};
+  output_columns.reserve(schema->num_fields());
+  for (const auto& field : schema->fields())
+    output_columns.push_back(make_arrow_array(it, field->type()));
+  return arrow::RecordBatch::Make(schema, detail::narrow_cast<int64_t>(rows),
+                                  std::move(output_columns));
+}
 
 } // namespace
 
@@ -569,75 +610,29 @@ size_t experimental_table_slice_builder::columns() const noexcept {
   return detail::narrow_cast<size_t>(result);
 }
 
-table_slice experimental_table_slice_builder::finish() {
-  // Sanity check: If this triggers, the calls to add() did not match the number
-  // of fields in the layout.
-  VAST_ASSERT(column_ == 0);
-  // Pack layout.
-  const auto layout_bytes = as_bytes(layout());
-  auto layout_buffer = builder_.CreateVector(
-    reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
-  // Pack schema.
-  // Pack record batch.
-  auto columns = std::vector<std::shared_ptr<arrow::Array>>{};
-  columns.reserve(column_builders_.size());
-  for (auto&& builder : column_builders_)
-    columns.emplace_back(builder->finish());
-  auto record_batch
-    = arrow::RecordBatch::Make(schema_, rows_, std::move(columns));
+namespace {
+
+/// Create a table slice from a record batch.
+/// @param record_batch The record batch to encode.
+/// @param builder The flatbuffers builder to use.
+table_slice create_table_slice(const arrow::RecordBatch& record_batch,
+                               flatbuffers::FlatBufferBuilder& builder) {
   auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto stream_writer
-    = arrow::ipc::MakeStreamWriter(ipc_ostream, schema_).ValueOrDie();
-  auto status = stream_writer->WriteRecordBatch(*record_batch);
+    = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch.schema())
+        .ValueOrDie();
+  auto status = stream_writer->WriteRecordBatch(record_batch);
   if (!status.ok())
     VAST_ERROR("failed to write record batch: {}", status);
   auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
   auto fbs_ipc_buffer
-    = builder_.CreateVector(arrow_ipc_buffer->data(), arrow_ipc_buffer->size());
+    = builder.CreateVector(arrow_ipc_buffer->data(), arrow_ipc_buffer->size());
   // Create Arrow-encoded table slices. We need to set the import time to
   // something other than 0, as it cannot be modified otherwise. We then later
   // reset it to the clock's epoch.
   constexpr int64_t stub_ns_since_epoch = 1337;
   auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createexperimental(
-    builder_, layout_buffer, fbs_ipc_buffer, stub_ns_since_epoch);
-  // Create and finish table slice.
-  auto table_slice_buffer
-    = fbs::CreateTableSlice(builder_,
-                            fbs::table_slice::TableSlice::arrow_experimental,
-                            arrow_table_slice_buffer.Union());
-  fbs::FinishTableSliceBuffer(builder_, table_slice_buffer);
-  // Reset the builder state.
-  rows_ = {};
-  // Create the table slice from the chunk.
-  auto chunk = fbs::release(builder_);
-  auto result = table_slice{std::move(chunk), table_slice::verify::no};
-  result.import_time(time{});
-  return result;
-}
-
-table_slice experimental_table_slice_builder::create(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout,
-  size_t initial_buffer_size) {
-  VAST_ASSERT(record_batch->schema()->Equals(make_experimental_schema(layout)),
-              "record layout doesn't match record batch schema");
-  auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
-  // Pack layout.
-  const auto layout_bytes = as_bytes(layout);
-  auto layout_buffer = builder.CreateVector(
-    reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
-  // Pack record batch.
-  auto flat_record_batch
-    = arrow::ipc::SerializeRecordBatch(*record_batch,
-                                       arrow::ipc::IpcWriteOptions::Defaults())
-        .ValueOrDie();
-  auto record_batch_buffer = builder.CreateVector(flat_record_batch->data(),
-                                                  flat_record_batch->size());
-  // Create Arrow-encoded table slices. We need to set the import time to
-  // something other than 0, as it cannot be modified otherwise. We then later
-  // reset it to the clock's epoch.
-  constexpr int64_t stub_ns_since_epoch = 1337;
-  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createexperimental(
-    builder, layout_buffer, record_batch_buffer, stub_ns_since_epoch);
+    builder, fbs_ipc_buffer, stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder,
@@ -649,6 +644,54 @@ table_slice experimental_table_slice_builder::create(
   auto result = table_slice{std::move(chunk), table_slice::verify::no};
   result.import_time(time{});
   return result;
+}
+
+void verify_record_batch(const arrow::RecordBatch& record_batch) {
+  auto check_col
+    = [](auto&& check_col, const arrow::Array& column) noexcept -> void {
+    auto f = detail::overload{
+      [&](const arrow::StructArray& sa) noexcept {
+        for (const auto& column : sa.fields())
+          check_col(check_col, *column);
+      },
+      [&](const arrow::ListArray& la) noexcept {
+        check_col(check_col, *la.values());
+      },
+      [&](const arrow::MapArray& ma) noexcept {
+        check_col(check_col, *ma.keys());
+        check_col(check_col, *ma.items());
+      },
+      [](const arrow::Array&) noexcept {},
+    };
+    caf::visit(f, column);
+  };
+  for (const auto& column : record_batch.columns())
+    check_col(check_col, *column);
+}
+
+} // namespace
+
+table_slice experimental_table_slice_builder::finish() {
+  // Sanity check: If this triggers, the calls to add() did not match the number
+  // of fields in the layout.
+  VAST_ASSERT(column_ == 0);
+  // Pack record batch.
+  auto columns = arrow::ArrayVector{};
+  columns.reserve(column_builders_.size());
+  for (auto&& builder : column_builders_)
+    columns.emplace_back(builder->finish());
+  auto record_batch = make_record_batch(columns, rows_, schema_);
+  // Reset the builder state.
+  rows_ = {};
+  return create_table_slice(*record_batch, this->builder_);
+}
+
+table_slice experimental_table_slice_builder::create(
+  const std::shared_ptr<arrow::RecordBatch>& record_batch,
+  size_t initial_buffer_size) {
+  verify_record_batch(*record_batch);
+  auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
+  return create_table_slice(*record_batch, builder);
 }
 
 size_t experimental_table_slice_builder::rows() const noexcept {
@@ -674,9 +717,8 @@ experimental_table_slice_builder::experimental_table_slice_builder(
     builder_{initial_buffer_size} {
   VAST_ASSERT(schema_);
   const auto& rt = caf::get<record_type>(this->layout());
-  VAST_ASSERT(schema_->num_fields()
-              == detail::narrow_cast<int>(rt.num_leaves()));
-  column_builders_.reserve(columns());
+  num_leaves_ = rt.num_leaves();
+  column_builders_.reserve(num_leaves_);
   auto* pool = arrow::default_memory_pool();
   for (const auto& [field, _] : rt.leaves())
     column_builders_.emplace_back(column_builder::make(field.type, pool));
@@ -685,7 +727,7 @@ experimental_table_slice_builder::experimental_table_slice_builder(
 bool experimental_table_slice_builder::add_impl(data_view x) {
   if (!column_builders_[column_]->add(x))
     return false;
-  if (++column_ == columns()) {
+  if (++column_ == num_leaves_) {
     ++rows_;
     column_ = 0;
   }
@@ -755,7 +797,7 @@ make_arrow_metadata(const type& t) {
 
 std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t) {
   VAST_ASSERT(caf::holds_alternative<record_type>(t));
-  const auto& rt = flatten(caf::get<record_type>(t));
+  const auto& rt = caf::get<record_type>(t);
   std::vector<std::shared_ptr<arrow::Field>> arrow_fields;
   arrow_fields.reserve(rt.num_leaves());
   for (const auto& field : rt.fields())
@@ -802,11 +844,8 @@ std::shared_ptr<arrow::DataType> make_experimental_type(const type& t) {
     [](const record_type& x) -> data_type_ptr {
       std::vector<std::shared_ptr<arrow::Field>> fields;
       fields.reserve(x.num_fields());
-      for (const auto& field : x.fields()) {
-        auto ptr = arrow::field(std::string{field.name},
-                                make_experimental_type(field.type));
-        fields.emplace_back(std::move(ptr));
-      }
+      for (const auto& field : x.fields())
+        fields.push_back(make_experimental_field(field));
       return arrow::struct_(fields);
     },
   };
@@ -926,7 +965,7 @@ type make_vast_type(const arrow::Schema& arrow_schema) {
   std::vector<record_type::field_view> field_types;
   field_types.reserve(arrow_schema.num_fields());
   for (const auto& f : arrow_schema.fields())
-    field_types.emplace_back(f->name(), make_vast_type_int(*f->type()));
+    field_types.emplace_back(f->name(), make_vast_type(*f));
   return enrich_type_with_metadata(type{record_type{field_types}},
                                    arrow_schema.metadata());
 }

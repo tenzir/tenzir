@@ -45,6 +45,28 @@ auto make_slice(const record_type& layout, Ts&&... xs) {
   return slice;
 }
 
+template <class T, class... Ts>
+auto make_slice(const record_type& layout, std::vector<T> x0,
+                std::vector<Ts>... xs) {
+  auto builder = experimental_table_slice_builder::make(type{"rec", layout});
+  for (size_t i = 0; i < x0.size(); ++i) {
+    CHECK(builder->add(x0.at(i)));
+    CHECK(builder->add(xs.at(i)...));
+  }
+  return builder->finish();
+}
+
+template <concrete_type T, class V>
+auto check_column(const table_slice& slice, int c, const T& t,
+                  const std::vector<V>& ref) {
+  for (size_t r = 0; r < ref.size(); ++r)
+    CHECK_VARIANT_EQUAL(slice.at(r, c, t), make_view(ref[r]));
+}
+
+count operator"" _c(unsigned long long int x) {
+  return static_cast<count>(x);
+}
+
 template <concrete_type VastType, class... Ts>
 auto make_single_column_slice(const VastType& t, const Ts&... xs) {
   record_type layout{{"foo", t}};
@@ -62,8 +84,10 @@ table_slice roundtrip(table_slice slice) {
   return slice_copy;
 }
 
-count operator"" _c(unsigned long long int x) {
-  return static_cast<count>(x);
+void record_batch_roundtrip(const table_slice& slice) {
+  const auto copy
+    = experimental_table_slice_builder::create(to_record_batch(slice));
+  CHECK_EQUAL(slice, copy);
 }
 
 enumeration operator"" _e(unsigned long long int x) {
@@ -74,30 +98,41 @@ integer operator"" _i(unsigned long long int x) {
   return integer{detail::narrow<integer::value_type>(x)};
 }
 
-} // namespace
-
-// may be useful to have in a shared place, not a unit test.
-void inspect(caf::detail::stringification_inspector& f,
-             const arrow::Schema& schema) {
-  auto str = schema.ToString(true);
-  f(str);
-}
-
-void inspect(caf::detail::stringification_inspector& f,
-             const arrow::Field& field) {
-  auto str = field.ToString(true);
-  f(str);
-}
-
-void inspect(caf::detail::stringification_inspector& f,
-             const arrow::DataType& arrow_type) {
-  auto str = arrow_type.ToString();
-  f(str);
-}
-
 #define CHECK_OK(expression)                                                   \
   if (!(expression).ok())                                                      \
     FAIL("!! " #expression);
+
+} // namespace
+
+TEST(nested multi - column roundtrip) {
+  auto t = record_type{
+    {"f1", type{string_type{}, {{"key", "value"}}}},
+    {"f2", type{"alt_name", count_type{}}},
+    {
+      "f3_rec",
+      type{
+        "nested",
+        record_type{
+          {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
+          {"f3.2", integer_type{}},
+        },
+        {{"attr"}, {"other_attr", "val"}},
+      },
+    },
+  };
+  auto f1s = std::vector<std::string>{"n1", "n2", "n3", "n4"};
+  auto f2s = std::vector<count>{1_c, 2_c, 3_c, 4_c};
+  auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
+                                  pattern("p4")};
+  auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
+  auto slice = make_slice(t, f1s, f2s, f3s, f4s);
+  check_column(slice, 0, string_type{}, f1s);
+  check_column(slice, 1, count_type{}, f2s);
+  check_column(slice, 2, pattern_type{}, f3s);
+  check_column(slice, 3, integer_type{}, f4s);
+
+  record_batch_roundtrip(slice);
+}
 
 TEST(single column - equality) {
   auto t = count_type{};
@@ -122,6 +157,7 @@ TEST(single column - count) {
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), 3_c);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - enumeration) {
@@ -134,6 +170,7 @@ TEST(single column - enumeration) {
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), 2_e);
   CHECK_VARIANT_EQUAL(slice.at(4, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - enum2) {
@@ -144,6 +181,7 @@ TEST(single column - enum2) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_e);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - integer) {
@@ -154,6 +192,7 @@ TEST(single column - integer) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 1_i);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), 2_i);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - boolean) {
@@ -164,6 +203,7 @@ TEST(single column - boolean) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), true);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - real) {
@@ -174,6 +214,7 @@ TEST(single column - real) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), 3.21);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - string) {
@@ -184,6 +225,7 @@ TEST(single column - string) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), "c"sv);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - pattern) {
@@ -196,6 +238,7 @@ TEST(single column - pattern) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(p2));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - time) {
@@ -208,6 +251,7 @@ TEST(single column - time) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), epoch + 48h);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - duration) {
@@ -220,6 +264,7 @@ TEST(single column - duration) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), h12);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - address) {
@@ -236,6 +281,7 @@ TEST(single column - address) {
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), a2);
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), a3);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - subnet) {
@@ -252,6 +298,7 @@ TEST(single column - subnet) {
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), s3);
   CHECK_VARIANT_EQUAL(slice.at(3, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - list of integers) {
@@ -265,6 +312,7 @@ TEST(single column - list of integers) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), make_view(list2));
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(list of structs) {
@@ -393,6 +441,7 @@ TEST(single column - list of record) {
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - list of strings) {
@@ -406,6 +455,7 @@ TEST(single column - list of strings) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(list2));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - list of list of integers) {
@@ -425,6 +475,7 @@ TEST(single column - list of list of integers) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, llt), make_view(list1));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, llt), make_view(list2));
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - map) {
@@ -438,6 +489,7 @@ TEST(single column - map) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(map2));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
   CHECK_ROUNDTRIP(slice);
+  record_batch_roundtrip(slice);
 }
 
 TEST(single column - serialization) {
@@ -457,22 +509,6 @@ TEST(single column - serialization) {
   CHECK_VARIANT_EQUAL(slice2.at(2, 0, t), 2_c);
   CHECK_VARIANT_EQUAL(slice2.at(3, 0, t), 3_c);
   CHECK_VARIANT_EQUAL(slice1, slice2);
-}
-
-TEST(experimental schema from type with nested records) {
-  auto t = record_type{
-    {"a",
-     record_type{
-       {"b",
-        record_type{
-          {"c", string_type{}},
-        }},
-     }},
-  };
-  auto ft = flatten(t);
-  auto af = make_experimental_schema(type{t});
-  auto aft = make_experimental_schema(type{ft});
-  CHECK(af->Equals(aft));
 }
 
 TEST(record batch roundtrip) {
@@ -583,7 +619,7 @@ auto schema_roundtrip(const type& t) {
   CHECK_EQUAL(t, restored_t);
 }
 
-TEST(arrow record type to schema roundtrip) {
+TEST(arrow record type to schema roundtrip tp) {
   schema_roundtrip(type{record_type{{"a", integer_type{}}}});
   schema_roundtrip(type{
     "alias",
@@ -602,11 +638,35 @@ TEST(arrow record type to schema roundtrip) {
     },
     {{"top_level_key", "top_level_value"}},
   });
-
-  // unsupported: recursive top-level records are flattened in arrow schema
-  // schema_roundtrip(type{
-  //     record_type{
-  //       {"inner", record_type{{"value", subnet_type{}}}}}});
+  schema_roundtrip(type{
+    record_type{{
+      "inner",
+      type{record_type{
+             {"value", subnet_type{}},
+             {"value2", time_type{}},
+             {"value3", duration_type{}},
+           },
+           {{"key0", "value0"}, {"key1"}}},
+    }},
+  });
+  auto inner = type{
+    "inner_rec",
+    record_type{
+      {"a", integer_type{}},
+      {"b", string_type{}},
+    },
+    {{"key0", "value0"}, {"key1"}},
+  };
+  auto outer = type{
+    "outer_rec",
+    record_type{
+      {"x", count_type{}},
+      {"y", string_type{}},
+      {"z_nested", inner},
+    },
+    {{"keyx", "vx"}},
+  };
+  schema_roundtrip(outer);
 }
 
 namespace {
