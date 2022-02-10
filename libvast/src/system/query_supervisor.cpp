@@ -25,8 +25,9 @@ namespace {
 [[maybe_unused]] auto get_ids(const query_map& xs) {
   std::vector<uuid> ys;
   ys.reserve(xs.size());
-  std::transform(xs.begin(), xs.end(), std::back_inserter(ys),
-                 [](auto& kvp) { return kvp.first; });
+  std::transform(xs.begin(), xs.end(), std::back_inserter(ys), [](auto& kvp) {
+    return kvp.first;
+  });
   return ys;
 }
 
@@ -45,6 +46,9 @@ query_supervisor_actor::behavior_type query_supervisor(
   // Ask master for initial work.
   self->state.master = std::move(master);
   self->send(self->state.master, atom::worker_v, self);
+  self->attach_functor([identifier = self->state.log_identifier]() noexcept {
+    VAST_WARN("query_supervisor {} exited");
+  });
   return {
     [self](atom::supervise, const vast::uuid& query_id,
            const vast::query& query,
