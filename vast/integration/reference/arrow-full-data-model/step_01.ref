@@ -1,8 +1,12 @@
       child 0, contagious: bool
+      child 0, x1: int64
+      child 1, x2: uint64
   child 0, item: struct<contagious: bool>
+  child 0, item: struct<x1: int64, x2: uint64>
 -- schema metadata --
 a: fixed_size_binary[16]
 b: bool
+bar.lrc: list<item: struct<x1: int64, x2: uint64>>
 bar.x: bool
 bar.y: string
 bar.z: timestamp[ns]

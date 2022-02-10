@@ -20,7 +20,8 @@ type all_types_i = record {
   bar: record {
     x: baz,
     y: string,
-    z: time
+    z: time,
+    lrc: list<record { x1: int, x2: count }>,
   }
   // active indexer instantiated (and failing) despite #skip
   // p: pattern #skip,

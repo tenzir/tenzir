@@ -98,26 +98,11 @@ integer operator"" _i(unsigned long long int x) {
   return integer{detail::narrow<integer::value_type>(x)};
 }
 
+#define CHECK_OK(expression)                                                   \
+  if (!(expression).ok())                                                      \
+    FAIL("!! " #expression);
+
 } // namespace
-
-// may be useful to have in a shared place, not a unit test.
-void inspect(caf::detail::stringification_inspector& f,
-             const arrow::Schema& schema) {
-  auto str = schema.ToString(true);
-  f(str);
-}
-
-void inspect(caf::detail::stringification_inspector& f,
-             const arrow::Field& field) {
-  auto str = field.ToString(true);
-  f(str);
-}
-
-void inspect(caf::detail::stringification_inspector& f,
-             const arrow::DataType& arrow_type) {
-  auto str = arrow_type.ToString();
-  f(str);
-}
 
 TEST(nested multi - column roundtrip) {
   auto t = record_type{
@@ -148,10 +133,6 @@ TEST(nested multi - column roundtrip) {
 
   record_batch_roundtrip(slice);
 }
-
-#define CHECK_OK(expression)                                                   \
-  if (!(expression).ok())                                                      \
-    FAIL("!! " #expression);
 
 TEST(single column - equality) {
   auto t = count_type{};

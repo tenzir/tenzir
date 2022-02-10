@@ -539,9 +539,6 @@ auto make_record_batch(const arrow::ArrayVector& columns, size_t rows,
   output_columns.reserve(schema->num_fields());
   for (const auto& field : schema->fields())
     output_columns.push_back(make_arrow_array(it, field->type()));
-  // TODO: try this out, can we re-use the logic and just call into
-  // make_arrow_array directly? arrow::RecordBatch::FromStructArray(const
-  // std::shared_ptr<Array> &array)
   return arrow::RecordBatch::Make(schema, detail::narrow_cast<int64_t>(rows),
                                   std::move(output_columns));
 }
@@ -616,14 +613,15 @@ size_t experimental_table_slice_builder::columns() const noexcept {
 namespace {
 
 /// Create a table slice from a record batch.
-/// @param rb The record batch to encode.
+/// @param record_batch The record batch to encode.
 /// @param builder The flatbuffers builder to use.
-table_slice create_table_slice(const arrow::RecordBatch& rb,
+table_slice create_table_slice(const arrow::RecordBatch& record_batch,
                                flatbuffers::FlatBufferBuilder& builder) {
   auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto stream_writer
-    = arrow::ipc::MakeStreamWriter(ipc_ostream, rb.schema()).ValueOrDie();
-  auto status = stream_writer->WriteRecordBatch(rb);
+    = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch.schema())
+        .ValueOrDie();
+  auto status = stream_writer->WriteRecordBatch(record_batch);
   if (!status.ok())
     VAST_ERROR("failed to write record batch: {}", status);
   auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
@@ -719,8 +717,8 @@ experimental_table_slice_builder::experimental_table_slice_builder(
     builder_{initial_buffer_size} {
   VAST_ASSERT(schema_);
   const auto& rt = caf::get<record_type>(this->layout());
-  columns_ = rt.num_leaves();
-  column_builders_.reserve(columns_);
+  num_leaves_ = rt.num_leaves();
+  column_builders_.reserve(num_leaves_);
   auto* pool = arrow::default_memory_pool();
   for (const auto& [field, _] : rt.leaves())
     column_builders_.emplace_back(column_builder::make(field.type, pool));
@@ -729,7 +727,7 @@ experimental_table_slice_builder::experimental_table_slice_builder(
 bool experimental_table_slice_builder::add_impl(data_view x) {
   if (!column_builders_[column_]->add(x))
     return false;
-  if (++column_ == columns_) {
+  if (++column_ == num_leaves_) {
     ++rows_;
     column_ = 0;
   }
