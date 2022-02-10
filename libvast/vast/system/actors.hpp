@@ -193,7 +193,8 @@ using accountant_actor = typed_actor_fwd<
 /// The QUERY SUPERVISOR MASTER actor interface.
 using query_supervisor_master_actor = typed_actor_fwd<
   // Enlist the QUERY SUPERVISOR as an available worker.
-  caf::reacts_to<atom::worker, query_supervisor_actor>>::unwrap;
+  caf::reacts_to<atom::worker, query_supervisor_actor>,
+  caf::reacts_to<atom::worker, atom::wakeup, query_supervisor_actor>>::unwrap;
 
 using partition_creation_listener_actor = typed_actor_fwd<
   caf::reacts_to<atom::update, partition_synopsis_pair>>::unwrap;
