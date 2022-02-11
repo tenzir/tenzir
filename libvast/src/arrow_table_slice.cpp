@@ -585,67 +585,6 @@ private:
   value_index& idx_;
 };
 
-// -- utility for converting Buffer to RecordBatch -----------------------------
-
-template <class Callback>
-class record_batch_listener final : public arrow::ipc::Listener {
-public:
-  record_batch_listener(Callback&& callback) noexcept
-    : callback_{std::forward<Callback>(callback)} {
-    // nop
-  }
-
-  virtual ~record_batch_listener() noexcept override = default;
-
-private:
-  arrow::Status OnRecordBatchDecoded(
-    std::shared_ptr<arrow::RecordBatch> record_batch) override {
-    std::invoke(callback_, std::move(record_batch));
-    return arrow::Status::OK();
-  }
-
-  Callback callback_;
-};
-
-template <class Callback>
-auto make_record_batch_listener(Callback&& callback) {
-  return std::make_shared<record_batch_listener<Callback>>(
-    std::forward<Callback>(callback));
-}
-
-class record_batch_decoder final {
-public:
-  record_batch_decoder() noexcept
-    : decoder_{make_record_batch_listener(
-      [&](std::shared_ptr<arrow::RecordBatch> record_batch) {
-        record_batch_ = std::move(record_batch);
-      })} {
-    // nop
-  }
-
-  std::shared_ptr<arrow::RecordBatch>
-  decode(const std::shared_ptr<arrow::Buffer>& flat_schema,
-         const std::shared_ptr<arrow::Buffer>& flat_record_batch) noexcept {
-    VAST_ASSERT(!record_batch_);
-    if (auto status = decoder_.Consume(flat_schema); !status.ok()) {
-      VAST_ERROR("{} failed to decode Arrow Schema: {}", __func__,
-                 status.ToString());
-      return {};
-    }
-    if (auto status = decoder_.Consume(flat_record_batch); !status.ok()) {
-      VAST_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
-                 status.ToString());
-      return {};
-    }
-    VAST_ASSERT(record_batch_);
-    return std::exchange(record_batch_, {});
-  }
-
-private:
-  arrow::ipc::StreamDecoder decoder_;
-  std::shared_ptr<arrow::RecordBatch> record_batch_ = nullptr;
-};
-
 } // namespace legacy
 
 template <class Array>
@@ -1276,6 +1215,24 @@ public:
     // nop
   }
 
+  std::shared_ptr<arrow::RecordBatch> legacy_decode(
+    const std::shared_ptr<arrow::Buffer>& flat_schema,
+    const std::shared_ptr<arrow::Buffer>& flat_record_batch) noexcept {
+    VAST_ASSERT(!record_batch_);
+    if (auto status = decoder_.Consume(flat_schema); !status.ok()) {
+      VAST_ERROR("{} failed to decode Arrow Schema: {}", __func__,
+                 status.ToString());
+      return {};
+    }
+    if (auto status = decoder_.Consume(flat_record_batch); !status.ok()) {
+      VAST_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
+                 status.ToString());
+      return {};
+    }
+    VAST_ASSERT(record_batch_);
+    return std::exchange(record_batch_, {});
+  }
+
   std::shared_ptr<arrow::RecordBatch>
   decode(const std::shared_ptr<arrow::Buffer>& flat_record_batch) noexcept {
     VAST_ASSERT(!record_batch_);
@@ -1330,8 +1287,8 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     if (auto err = fbs::deserialize_bytes(slice_.layout(), intermediate))
       die("failed to deserialize layout: " + render(err));
     state_.layout = type::from_legacy_type(intermediate);
-    auto decoder = legacy::record_batch_decoder{};
-    state_.record_batch = decoder.decode(
+    auto decoder = record_batch_decoder{};
+    state_.record_batch = decoder.legacy_decode(
       as_arrow_buffer(parent->slice(as_bytes(*slice.schema()))),
       as_arrow_buffer(parent->slice(as_bytes(*slice.record_batch()))));
   } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v1>) {
@@ -1342,8 +1299,8 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     // chunk at all, but rather create it on the fly only.
     state_.layout = type{chunk::copy(as_bytes(*slice_.layout()))};
     VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
-    auto decoder = legacy::record_batch_decoder{};
-    state_.record_batch = decoder.decode(
+    auto decoder = record_batch_decoder{};
+    state_.record_batch = decoder.legacy_decode(
       as_arrow_buffer(parent->slice(as_bytes(*slice.schema()))),
       as_arrow_buffer(parent->slice(as_bytes(*slice.record_batch()))));
   } else if constexpr (std::is_same_v<FlatBuffer,
@@ -1358,7 +1315,6 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
       as_arrow_buffer(parent->slice(as_bytes(*slice.arrow_ipc()))));
     state_.layout = make_vast_type(*state_.record_batch->schema());
     VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
-    // TODO: this should not compile, why does it?
     state_.flat_columns = index_column_arrays(state_.record_batch);
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
