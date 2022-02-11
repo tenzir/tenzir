@@ -8,9 +8,8 @@
 
 #define SUITE experimental_table_slice
 
-#include "vast/experimental_table_slice.hpp"
-
 #include "vast/arrow_extension_types.hpp"
+#include "vast/arrow_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
@@ -130,7 +129,6 @@ TEST(nested multi - column roundtrip) {
   check_column(slice, 1, count_type{}, f2s);
   check_column(slice, 2, pattern_type{}, f3s);
   check_column(slice, 3, integer_type{}, f4s);
-
   record_batch_roundtrip(slice);
 }
 
@@ -675,6 +673,7 @@ struct fixture : public fixtures::table_slices {
   fixture() : fixtures::table_slices(VAST_PP_STRINGIFY(SUITE)) {
   }
 };
+
 } // namespace
 
 FIXTURE_SCOPE(experimental_table_slice_tests, fixture)

@@ -11,7 +11,6 @@
 #include "vast/arrow_table_slice.hpp"
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/config.hpp"
-#include "vast/experimental_table_slice.hpp"
 #include "vast/experimental_table_slice_builder.hpp"
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"

@@ -16,7 +16,6 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
-#include "vast/experimental_table_slice.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"

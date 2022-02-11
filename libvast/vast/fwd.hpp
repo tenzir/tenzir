@@ -75,7 +75,6 @@ namespace vast {
 
 class address;
 class address_type;
-class experimental_table_slice;
 class experimental_table_slice_builder;
 class arrow_table_slice_builder;
 class bitmap;

@@ -17,14 +17,12 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/die.hpp"
-#include "vast/experimental_table_slice.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/type.hpp"
 
 #include <arrow/api.h>
-#include <arrow/extension_type.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 
