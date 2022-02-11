@@ -36,23 +36,23 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
   if (begin == end)
     return caf::make_error(ec::syntax_error, "no query expression given");
   auto query = detail::join(begin, end, " ");
-  // We are trying all query language plugins in a non-deterministic order.
-  for (const auto& plugin : plugins::get())
-    if (const auto* query_lang = plugin.as<query_language_plugin>()) {
-      if (auto expr = query_lang->parse(query))
+  // Always try parsing as VAST expression first.
+  if (auto e = to<expression>(query))
+    return normalize_and_validate(std::move(*e));
+  // If that fails, we try all query language plugins, currently in a
+  // non-deterministic order.
+  // TODO: let the user choose exactly one language instead.
+  for (const auto& plugin : plugins::get()) {
+    if (const auto* language = plugin.as<query_language_plugin>()) {
+      if (auto expr = language->parse(query))
         return normalize_and_validate(std::move(*expr));
       else
-        // TODO: Demote to DEBUG when polishing the PR.
-        VAST_ERROR("failed to parse query as {} languae: {}", plugin->name(),
+        VAST_DEBUG("failed to parse query as {} language: {}", language->name(),
                    expr.error());
     }
-  // TODO: rewrite the VAST expression as a query language plugin.
-  if (auto e = to<expression>(query)) {
-    return normalize_and_validate(std::move(*e));
-  } else {
-    VAST_DEBUG("failed to parse query as VAST expression: {}", e.error());
-    return std::move(e.error());
   }
+  return caf::make_error(ec::syntax_error,
+                         fmt::format("invalid query: {}", query));
 }
 
 caf::expected<expression>
