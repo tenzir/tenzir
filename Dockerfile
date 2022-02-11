@@ -68,6 +68,7 @@ COPY BANNER CMakeLists.txt LICENSE LICENSE.3rdparty README.md VERSIONING.md \
 RUN ln -sf ../../pyvast/pyvast examples/jupyter/pyvast && \
     ln -sf ../../vast.yaml.example vast/integration/vast.yaml.example && \
     ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
+    ln -sf ../../vast/integration/data/ plugins/sigma/integration/data/ && \
     ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py
 
 # -- development ---------------------------------------------------------------

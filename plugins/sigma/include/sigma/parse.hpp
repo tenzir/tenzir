@@ -15,7 +15,7 @@
 #include <caf/expected.hpp>
 
 /// Utilities to work with [Sigma](https://github.com/Neo23x0/sigma).
-namespace vast::detail::sigma {
+namespace vast::plugins::sigma {
 
 /// Parses a *rule* as VAST expression.
 /// @param yaml The rule contents.
@@ -27,4 +27,4 @@ caf::expected<expression> parse_rule(const data& yaml);
 /// @returns The VAST expression corresponding to *yaml*.
 caf::expected<expression> parse_search_id(const data& yaml);
 
-} // namespace vast::detail::sigma
+} // namespace vast::plugins::sigma

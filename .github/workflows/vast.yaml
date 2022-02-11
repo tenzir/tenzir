@@ -612,6 +612,9 @@ jobs:
             path: plugins/broker
             dependencies:
               - libbroker-dev
+          - name: Sigma
+            target: sigma
+            path: plugins/sigma
     env:
       INSTALL_DIR: '${{ github.workspace }}/_install'
       BUILD_DIR: '${{ github.workspace }}/_build'

@@ -32,6 +32,7 @@ cmakeFlags=""
 plugins=(
   "${toplevel}/plugins/broker"
   "${toplevel}/plugins/pcap"
+  "${toplevel}/plugins/sigma"
 )
 
 while [ $# -ne 0 ]; do
