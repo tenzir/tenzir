@@ -9,29 +9,22 @@
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.nix-filter.url = "github:numtide/nix-filter";
 
-  outputs = { self, nixpkgs, flake-utils, nix-filter, pinned, flake-compat }@inputs: {
+  outputs = { self, nixpkgs, flake-utils, nix-filter, pinned, flake-compat }@inputs: rec {
+    _nixpkgs.config.packageOverrides = pkgs: {
+      inherit (self.packages."${pkgs.stdenv.hostPlatform.system}")
+        vast
+      ;
+    };
     nixosModules.vast = {
       imports = [
         ./nix/module.nix
-        {
-          nixpkgs.config.packageOverrides = pkgs: {
-            inherit (self.packages."${pkgs.stdenv.hostPlatform.system}")
-              vast
-              ;
-          };
-        }
+        { nixpkgs = _nixpkgs; }
       ];
     };
     nixosModules.vast-client = {
       imports = [
         ./nix/module-client.nix
-        {
-          nixpkgs.config.packageOverrides = pkgs: {
-            inherit (self.packages."${pkgs.stdenv.hostPlatform.system}")
-              vast
-            ;
-          };
-        }
+        { nixpkgs = _nixpkgs; }
       ];
     };
   } // flake-utils.lib.eachDefaultSystem (system:
@@ -46,12 +39,10 @@
         inherit (pkgs)
           vast
           ;
-          staticShell = pkgs.mkShell { buildInputs = with pkgs; [ git coreutils nix-prefetch-github ];};
       };
       defaultPackage = packages.vast;
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       defaultApp = apps.vast;
-      devShell = import ./shell.nix { inherit pkgs; };
       hydraJobs = { inherit packages; } // (
         let
           vast-vm-tests = import ./nix/nixos-test.nix
