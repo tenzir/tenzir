@@ -41,12 +41,12 @@
       pinned = inputs.pinned.legacyPackages."${system}".appendOverlays [ overlay ];
     in
     rec {
-      inherit pinned;
+      inherit pinned overlay;
       packages = flake-utils.lib.flattenTree {
         inherit (pkgs)
           vast
           ;
-          staticShell = pkgs.mkShell { buildInputs = with pkgs; [ git nixUnstable coreutils nix-prefetch-github ];};
+          staticShell = pkgs.mkShell { buildInputs = with pkgs; [ git coreutils nix-prefetch-github ];};
       };
       defaultPackage = packages.vast;
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
@@ -54,7 +54,7 @@
       devShell = import ./shell.nix { inherit pkgs; };
       hydraJobs = { inherit packages; } // (
         let
-          vast-vm-tests = nixpkgs.legacyPackages."${system}".callPackage ./nix/nixos-test.nix
+          vast-vm-tests = import ./nix/nixos-test.nix
             {
               # FIXME: the pkgs channel has an issue made the testing creashed
               makeTest = import (pinned.path + "/nixos/tests/make-test-python.nix");
@@ -64,7 +64,7 @@
         pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           inherit (vast-vm-tests)
             vast-vm-systemd
-            vast-vm-cluster-systemd
+            vast-cluster-vm-systemd
             ;
         }
       );

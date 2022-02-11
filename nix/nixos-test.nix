@@ -51,7 +51,7 @@ in
       inherit (pkgs) system;
     };
 
-  vast-vm-cluster-systemd = makeTest
+  vast-cluster-vm-systemd = makeTest
     {
       name = "vast-cluster-vm-systemd";
 
