@@ -30,7 +30,12 @@ namespace vast::plugins::aggregate {
 /// The configuration of an aggregate transform step.
 struct configuration {
   /// Duration window for grouping time values.
-  std::optional<duration> time_window = {};
+  std::optional<duration> round_temporal_multiple = {};
+
+  /// Whether to disable the eager and lazy pass respectively. At least one the
+  /// passes needs to be enabled.
+  bool disable_eager_pass = false;
+  bool disable_lazy_pass = false;
 
   /// List of fields to group by.
   std::vector<std::string> group_by = {};
@@ -53,361 +58,494 @@ struct configuration {
   /// List of fields to take the conjunction of.
   std::vector<std::string> all = {};
 
+  /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.time_window, x.group_by, x.sum, x.min, x.max, x.mean, x.any,
-             x.all);
+    return f(x.round_temporal_multiple, x.disable_eager_pass,
+             x.disable_lazy_pass, x.group_by, x.sum, x.min, x.max, x.mean,
+             x.any, x.all);
   }
 
+  /// Enable parsing from a record via convertible.
   static inline const record_type& layout() noexcept {
     static auto result = record_type{
-      {"time-window", duration_type{}},  {"group-by", list_type{string_type{}}},
-      {"sum", list_type{string_type{}}}, {"min", list_type{string_type{}}},
-      {"max", list_type{string_type{}}}, {"mean", list_type{string_type{}}},
-      {"any", list_type{string_type{}}}, {"all", list_type{string_type{}}},
+      {"round-temporal-multiple", duration_type{}},
+      {"disable-eager-pass", bool_type{}},
+      {"disable-lazy-pass", bool_type{}},
+      {"group-by", list_type{string_type{}}},
+      {"sum", list_type{string_type{}}},
+      {"min", list_type{string_type{}}},
+      {"max", list_type{string_type{}}},
+      {"mean", list_type{string_type{}}},
+      {"any", list_type{string_type{}}},
+      {"all", list_type{string_type{}}},
     };
     return result;
   }
 };
 
-enum class action {
-  drop,
-  group_by_time_window,
-  group_by,
-  sum,
-  min,
-  max,
-  mean,
-  any,
-  all,
-};
+/// The layout-specific state for an aggregation.
+struct aggregation {
+  /// The action to take for a given column. Columns without an action are
+  /// dropped as part of the aggregation.
+  enum class action {
+    group_by, ///< Group identical values.
+    sum,      ///< Accumulate values within the same group.
+    min,      ///< Use the minimum value within the same group.
+    max,      ///< Use the maximum value within the same group.
+    mean,     ///< Calculate the mean value within the same group.
+    any,      ///< Disjoin values within the same group.
+    all,      ///< Conjoin values within the same group.
+  };
 
-struct bucket_key : arrow::ScalarVector {
-  using arrow::ScalarVector::ScalarVector;
+  /// The key by which aggregations are grouped. Essentially, this is an
+  /// *arrow::ScalarVector* with custom equality and hash operations.
+  struct group_by_key : arrow::ScalarVector {
+    using arrow::ScalarVector::ScalarVector;
+  };
 
-  friend bool
-  operator==(const bucket_key& lhs, const bucket_key& rhs) noexcept {
-    return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
-                      [](const std::shared_ptr<arrow::Scalar>& x,
-                         const std::shared_ptr<arrow::Scalar>& y) noexcept {
-                        return x->Equals(y);
-                      });
-  }
-};
-
-} // namespace vast::plugins::aggregate
-
-namespace std {
-
-template <>
-struct std::hash<vast::plugins::aggregate::bucket_key> {
-  size_t
-  operator()(const vast::plugins::aggregate::bucket_key& x) const noexcept {
-    auto hasher = vast::xxh64{};
-    for (const auto& scalar : x) {
-      VAST_ASSERT(scalar);
-      vast::hash_append(hasher, scalar->hash());
+  /// The equality functor for enabling use of *group_by_key* as a key in
+  /// map data structures.
+  struct group_by_key_equal {
+    bool operator()(const group_by_key& lhs,
+                    const group_by_key& rhs) const noexcept {
+      return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
+                        [](const std::shared_ptr<arrow::Scalar>& x,
+                           const std::shared_ptr<arrow::Scalar>& y) noexcept {
+                          return x->Equals(y);
+                        });
     }
-    return hasher.finish();
-  }
-};
+  };
 
-} // namespace std
+  /// The hash functor for enabling use of *group_by_key* as a key in unordered
+  /// map data structures.
+  struct group_by_key_hash {
+    size_t operator()(const group_by_key& x) const noexcept {
+      auto hasher = vast::xxh64{};
+      for (const auto& scalar : x) {
+        VAST_ASSERT(scalar);
+        vast::hash_append(hasher, scalar->hash());
+      }
+      return hasher.finish();
+    }
+  };
 
-namespace vast::plugins::aggregate {
+  /// Groups record batch slices where a configured set of columns is equal.
+  using bucket_map = std::unordered_map<group_by_key, arrow::RecordBatchVector,
+                                        group_by_key_hash, group_by_key_equal>;
 
-struct resolved_columns {
-  resolved_columns(const configuration& config, const type& layout) {
+  /// Creates a new aggregation given a configuration and a layout.
+  static caf::expected<aggregation>
+  make(const configuration& config, const type& layout) {
+    auto result = aggregation{};
+    if (config.disable_eager_pass && config.disable_lazy_pass)
+      return caf::make_error(ec::invalid_configuration,
+                             "aggregate transform must not have both eager and "
+                             "lazy pass disabled");
+    result.disable_eager_pass_ = config.disable_eager_pass;
+    result.disable_lazy_pass_ = config.disable_lazy_pass;
+    VAST_ASSERT(caf::holds_alternative<record_type>(layout));
     const auto& rt = caf::get<record_type>(layout);
-    group_by_actions.resize(rt.num_leaves(), action::drop);
-    for (const auto& key : config.group_by) {
-      for (auto&& offset : rt.resolve_key_suffix(key, layout.name())) {
-        group_by_actions[rt.flat_index(offset)]
-          = caf::holds_alternative<time_type>(rt.field(offset).type)
-              ? action::group_by_time_window
-              : action::group_by;
+    auto unflattened_actions = std::vector<std::pair<offset, action>>{};
+    auto resolve_action = [&](const auto& keys, enum action action) noexcept {
+      for (const auto& key : keys)
+        for (auto&& index : rt.resolve_key_suffix(key, layout.name()))
+          unflattened_actions.emplace_back(index, action);
+    };
+    resolve_action(config.group_by, action::group_by);
+    resolve_action(config.sum, action::sum);
+    resolve_action(config.min, action::min);
+    resolve_action(config.max, action::max);
+    resolve_action(config.mean, action::mean);
+    resolve_action(config.any, action::any);
+    resolve_action(config.all, action::all);
+    std::sort(unflattened_actions.begin(), unflattened_actions.end());
+    const auto has_duplicates
+      = std::adjacent_find(unflattened_actions.begin(),
+                           unflattened_actions.end(),
+                           [](const auto& lhs, const auto& rhs) noexcept {
+                             return lhs.first == rhs.first;
+                           })
+        != unflattened_actions.end();
+    if (has_duplicates)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("aggregation detected ambiguous "
+                                         "action configuration for layout {}",
+                                         layout));
+    auto drop_transformations = std::vector<record_type::transformation>{};
+    for (int flat_index = 0; const auto& leaf : rt.leaves()) {
+      if (leaf.index
+          != unflattened_actions[result.selected_columns_.size()].first) {
+        drop_transformations.push_back({leaf.index, record_type::drop()});
+      } else {
+        const auto action
+          = unflattened_actions[result.selected_columns_.size()].second;
+        result.actions_.push_back(action);
+        if (action == action::group_by
+            && caf::holds_alternative<time_type>(leaf.field.type))
+          result.round_temporal_columns_.push_back(
+            detail::narrow_cast<int>(result.selected_columns_.size()));
+        result.selected_columns_.push_back(flat_index);
+      }
+      ++flat_index;
+    }
+    auto adjusted_rt = rt.transform(std::move(drop_transformations));
+    VAST_ASSERT(adjusted_rt);
+    VAST_ASSERT(!layout.has_attributes());
+    result.adjusted_layout_ = type{layout.name(), *adjusted_rt};
+    result.num_group_by_columns_ = std::count(
+      result.actions_.begin(), result.actions_.end(), action::group_by);
+    result.round_temporal_multiple_ = config.round_temporal_multiple;
+    return result;
+  }
+
+  /// Aggregations are expensive to copy because they hold a lot of state, so we
+  /// make them non-copyable. Not because they cannot be copied theoretically,
+  /// but because doing so would most certainly be a design issue within the code.
+  aggregation(const aggregation&) = delete;
+  aggregation& operator=(const aggregation&) = delete;
+
+  /// Destruction and move-operations can simply be defaulted for an aggregation.
+  ~aggregation() noexcept = default;
+  aggregation(aggregation&&) noexcept = default;
+  aggregation& operator=(aggregation&&) noexcept = default;
+
+  /// Adds a record batch to the aggregation. Unless disabled, this performs an
+  /// eager aggregation already.
+  caf::error add(std::shared_ptr<arrow::RecordBatch> batch) {
+    // First, adjust the record batch: We only want to aggregate a subset of
+    // rows, and the remaining rows can just be dropped eagerly. It is important
+    // that we do this first to avoid unnecessary overhead first, and also
+    // because all the indices calculated from the configuration in the
+    // constructor are for the selected columns only.
+    auto select_columns_result = batch->SelectColumns(selected_columns_);
+    if (!select_columns_result.ok())
+      return caf::make_error(
+        ec::unspecified,
+        fmt::format("aggregate transform failed to select columns: {}",
+                    select_columns_result.status().ToString()));
+    batch = select_columns_result.MoveValueUnsafe();
+    VAST_ASSERT(batch->num_columns()
+                == detail::narrow_cast<int>(actions_.size()));
+    // Second, round time values to a multiple of the configured value.
+    if (round_temporal_multiple_) {
+      const auto options = arrow::compute::RoundTemporalOptions{
+        std::chrono::duration_cast<std::chrono::duration<int, std::milli>>(
+          *round_temporal_multiple_)
+          .count(),
+        arrow::compute::CalendarUnit::MILLISECOND,
+      };
+      for (const auto& column : round_temporal_columns_) {
+        auto round_temporal_result
+          = arrow::compute::RoundTemporal(batch->column(column), options);
+        if (!round_temporal_result.ok())
+          return caf::make_error(
+            ec::unspecified,
+            fmt::format("aggregate transform failed to round time column {} to "
+                        "multiple of {}: {}",
+                        batch->column_name(column), *round_temporal_multiple_,
+                        round_temporal_result.status().ToString()));
+        auto set_column_result = batch->SetColumn(
+          column, batch->schema()->field(column),
+          round_temporal_result.MoveValueUnsafe().make_array());
+        if (!set_column_result.ok())
+          return caf::make_error(
+            ec::unspecified,
+            fmt::format("aggregate transform failed to replace column: {}",
+                        set_column_result.status().ToString()));
+        batch = set_column_result.MoveValueUnsafe();
       }
     }
-    for (const auto& key : config.sum)
-      for (auto&& offset : rt.resolve_key_suffix(key, layout.name()))
-        group_by_actions[rt.flat_index(offset)] = action::sum;
-    for (const auto& key : config.min)
-      for (auto&& offset : rt.resolve_key_suffix(key, layout.name()))
-        group_by_actions[rt.flat_index(offset)] = action::min;
-    for (const auto& key : config.max)
-      for (auto&& offset : rt.resolve_key_suffix(key, layout.name()))
-        group_by_actions[rt.flat_index(offset)] = action::max;
-    for (const auto& key : config.mean)
-      for (auto&& offset : rt.resolve_key_suffix(key, layout.name()))
-        group_by_actions[rt.flat_index(offset)] = action::mean;
-    for (const auto& key : config.any)
-      for (auto&& offset : rt.resolve_key_suffix(key, layout.name()))
-        group_by_actions[rt.flat_index(offset)] = action::any;
-    for (const auto& key : config.all)
-      for (auto&& offset : rt.resolve_key_suffix(key, layout.name()))
-        group_by_actions[rt.flat_index(offset)] = action::all;
+    // Third and last, aggregate the batch eagerly iff configured to do so.
+    if (disable_eager_pass_) {
+      buffer_.push_back(std::move(batch));
+      return caf::none;
+    }
+    return aggregate({std::move(batch)});
   }
 
-  resolved_columns() = default;
-  ~resolved_columns() noexcept = default;
-  resolved_columns(const resolved_columns&) = default;
-  resolved_columns& operator=(const resolved_columns&) = default;
-  resolved_columns(resolved_columns&&) noexcept = default;
-  resolved_columns& operator=(resolved_columns&&) noexcept = default;
+  /// Returns the aggregated batches, doing a second aggregation pass unless
+  /// disabled.
+  caf::expected<std::vector<transform_batch>> finish() {
+    if (!disable_lazy_pass_)
+      if (auto err = aggregate(std::exchange(buffer_, {})))
+        return err;
+    // Collect the results from the buffer.
+    auto result = std::vector<transform_batch>{};
+    result.reserve(buffer_.size());
+    for (auto&& batch : std::exchange(buffer_, {}))
+      result.emplace_back(adjusted_layout_, std::move(batch));
+    return result;
+  }
+
+private:
+  /// Default-constructor for internal use in `make(...)`.
+  aggregation() = default;
+
+  /// Finds or creates the bucket for a given row in a record batch.
+  bucket_map::iterator
+  find_or_create_bucket(const std::shared_ptr<arrow::RecordBatch>& batch,
+                        int row) {
+    // If our row goes beyond the end of the batch, signal that we do not have a
+    // bucket.
+    if (row >= batch->num_rows())
+      return buckets_.end();
+    // Create current bucket key.
+    auto key = group_by_key{};
+    key.reserve(num_group_by_columns_);
+    for (int column = 0; column < batch->num_columns(); ++column) {
+      if (actions_[column] == action::group_by)
+        key.emplace_back(
+          batch->column(column)->GetScalar(row).ValueOr(nullptr));
+    }
+    // Find bucket for current key.
+    const auto bucket = buckets_.find(key);
+    if (bucket != buckets_.end())
+      return bucket;
+    // Create a new bucket consisting of an empty table that we can later append
+    // to.
+    auto [new_bucket, ok] = buckets_.try_emplace(std::move(key));
+    VAST_ASSERT(ok);
+    VAST_ASSERT(new_bucket != buckets_.end());
+    return new_bucket;
+  }
+
+  /// Aggregates a vector of record batches into a set of record batches that
+  /// belong to the same buckets.
+  caf::error aggregate(const arrow::RecordBatchVector& batches) {
+    if (batches.empty())
+      return caf::none;
+    // If we don't have a builder yet for storing the intermediate results, this
+    // is where we create it.
+    if (!builder_) {
+      const auto initial_size = detail::narrow_cast<int>(buckets_.size());
+      auto make_builder_result
+        = arrow::RecordBatchBuilder::Make(batches[0]->schema(),
+                                          arrow::default_memory_pool(),
+                                          initial_size, &builder_);
+      if (!make_builder_result.ok())
+        return caf::make_error(ec::unspecified,
+                               fmt::format("aggregate transform failed to "
+                                           "create record batch builder: {}",
+                                           make_builder_result.ToString()));
+    }
+    // Iterate over the record batches row-wise and select slices that group
+    // into the same bucket as large as possible.
+    VAST_ASSERT(buckets_.empty());
+    for (const auto& batch : batches) {
+      VAST_ASSERT(batch->num_rows() >= 1);
+      auto bucket = find_or_create_bucket(batch, 0);
+      auto next_bucket = buckets_.end();
+      VAST_ASSERT(bucket != next_bucket);
+      for (int row = 0, length = 1; row < batch->num_rows(); ++length) {
+        do {
+          next_bucket = find_or_create_bucket(batch, row + length);
+          ++length;
+        } while (bucket == next_bucket);
+        VAST_TRACE("aggregate transform slices [{}, {}) out of {} row(s)", row,
+                   row + length, batch->num_rows());
+        bucket->second.emplace_back(batch->Slice(row, length));
+        bucket = next_bucket;
+        row += std::exchange(length, 1);
+      }
+    }
+    // Third and last, for every bucket we must aggregate the results and put
+    // them into the builder.
+    for (auto&& bucket : std::exchange(buckets_, {})) {
+      VAST_ASSERT(!bucket.second.empty());
+      auto table
+        = arrow::Table::FromRecordBatches(std::exchange(bucket.second, {}))
+            .ValueOrDie();
+      VAST_ASSERT(table->num_columns()
+                  == detail::narrow_cast<int>(actions_.size()));
+      VAST_ASSERT(table->num_columns() == builder_->num_fields());
+      for (int column = 0; column < table->num_columns(); ++column) {
+        auto append_to_builder
+          = [&](const std::shared_ptr<arrow::Scalar>& scalar) noexcept {
+              if (scalar && scalar->is_valid) {
+                auto append_result
+                  = builder_->GetField(column)->AppendScalar(*scalar);
+                VAST_ASSERT(append_result.ok());
+              } else {
+                auto append_result = builder_->GetField(column)->AppendNull();
+                VAST_ASSERT(append_result.ok());
+              }
+            };
+        switch (actions_[column]) {
+          case action::group_by: {
+            auto get_scalar_result = table->column(column)->GetScalar(0);
+            if (!get_scalar_result.ok())
+              return caf::make_error(
+                ec::unspecified,
+                fmt::format("aggregate transform failed to access grouped "
+                            "value: {}",
+                            get_scalar_result.status().ToString()));
+            append_to_builder(get_scalar_result.MoveValueUnsafe());
+            break;
+          }
+          case action::sum: {
+            auto sum_result = arrow::compute::Sum(table->column(column));
+            if (!sum_result.ok())
+              return caf::make_error(
+                ec::unspecified, fmt::format("aggregate transform failed to "
+                                             "compute sum: {}",
+                                             sum_result.status().ToString()));
+            append_to_builder(sum_result.MoveValueUnsafe().scalar());
+            break;
+          }
+          case action::min: {
+            auto min_max_result = arrow::compute::MinMax(table->column(column));
+            if (!min_max_result.ok())
+              return caf::make_error(
+                ec::unspecified,
+                fmt::format("aggregate transform failed to compute minimum: "
+                            "{}",
+                            min_max_result.status().ToString()));
+            append_to_builder(min_max_result.MoveValueUnsafe()
+                                .scalar_as<arrow::StructScalar>()
+                                .value[0]);
+            break;
+          }
+          case action::max: {
+            auto min_max_result = arrow::compute::MinMax(table->column(column));
+            if (!min_max_result.ok())
+              return caf::make_error(
+                ec::unspecified,
+                fmt::format("aggregate transform failed to compute maximum: "
+                            "{}",
+                            min_max_result.status().ToString()));
+            append_to_builder(min_max_result.MoveValueUnsafe()
+                                .scalar_as<arrow::StructScalar>()
+                                .value[1]);
+            break;
+          }
+          case action::mean: {
+            auto mean_result = arrow::compute::Mean(table->column(column));
+            if (!mean_result.ok())
+              return caf::make_error(ec::unspecified,
+                                     "aggregate transform failed to compute "
+                                     "mean: {}",
+                                     mean_result.status().ToString());
+            auto cast_result = mean_result.MoveValueUnsafe().scalar()->CastTo(
+              table->column(column)->type());
+            if (!cast_result.ok())
+              return caf::make_error(ec::unspecified,
+                                     "aggregate transform failed to cast: {}",
+                                     cast_result.status().ToString());
+            append_to_builder(cast_result.MoveValueUnsafe());
+            break;
+          }
+          case action::any: {
+            auto any_result = arrow::compute::Any(table->column(column));
+            if (!any_result.ok())
+              return caf::make_error(
+                ec::unspecified, fmt::format("aggregate transform failed to "
+                                             "compute disjunction: {}",
+                                             any_result.status().ToString()));
+            append_to_builder(any_result.MoveValueUnsafe().scalar());
+            break;
+          }
+          case action::all: {
+            auto all_result = arrow::compute::All(table->column(column));
+            if (!all_result.ok())
+              return caf::make_error(
+                ec::unspecified, fmt::format("aggregate transform failed to "
+                                             "compute conjunction: {}",
+                                             all_result.status().ToString()));
+            append_to_builder(all_result.MoveValueUnsafe().scalar());
+            break;
+          }
+        }
+      }
+    }
+    // Lastly, add the newly created aggregated batch to the buffer.
+    auto batch = std::shared_ptr<arrow::RecordBatch>{};
+    auto flush_result = builder_->Flush(&batch);
+    if (!flush_result.ok())
+      return caf::make_error(ec::unspecified,
+                             fmt::format("aggregate transform failed to flush "
+                                         "aggregated batch: {}",
+                                         flush_result.ToString()));
+    buffer_.push_back(std::move(batch));
+    return caf::none;
+  }
+
+  /// Whether to disable the eager and lazy pass respectively. At least one the
+  /// passes needs to be enabled.
+  bool disable_eager_pass_ = false;
+  bool disable_lazy_pass_ = false;
 
   /// The action to take during aggregation for every individual column in the
   /// incoming record batches.
-  std::vector<action> group_by_actions = {};
+  std::vector<action> actions_ = {};
 
-  /// Buckets that we sort into.
-  std::unordered_map<bucket_key, arrow::ChunkedArrayVector> buckets = {};
+  /// The columnns that are selected from the incoming record batches as part of
+  /// the data transformation.
+  std::vector<int> selected_columns_ = {};
+
+  /// The group-by columns from the record batches that hold time values. These
+  /// need to be handled with special care, as we round them to a multiple of a
+  /// configured value.
+  std::vector<int> round_temporal_columns_ = {};
+
+  /// The duration used as the multiple value when rounding grouped temporal
+  /// values.
+  std::optional<duration> round_temporal_multiple_ = {};
+
+  /// The adjusted layout with the dropped columns removed.
+  type adjusted_layout_ = {};
+
+  /// Buckets that we sort into during aggregation.
+  bucket_map buckets_ = {};
+
+  /// The builder used as part of the aggregation. Stored since it only needs to
+  /// be created once per layout effectively, and we can do so lazily.
+  std::unique_ptr<arrow::RecordBatchBuilder> builder_ = {};
+
+  /// The buffer responsible for holding the intermediate aggregation results.
+  arrow::RecordBatchVector buffer_ = {};
+
+  /// The number of columns to group by.
+  size_t num_group_by_columns_ = {};
 };
 
-// The main job of a transform plugin is to create a `transform_step`
-// when required. A transform step is a function that gets a table
-// slice and returns the slice with a transformation applied.
+/// The aggregate transform step, which holds applies an aggregation to every
+/// incoming record batch, which is configured per-type. The aggregation
+/// configuration is resolved eagerly and then executed eagerly and/or lazily
+/// per type.
 class aggregate_step : public transform_step {
 public:
+  /// Create a new aggregate step from an already parsed configuration.
   aggregate_step(configuration config) : config_{std::move(config)} {
-    if (config_.time_window) {
-      static_assert(std::is_same_v<time::period, std::nano>,
-                    "aggregate step assumed nanosecond time resolution");
-      round_temporal_options_ = arrow::compute::RoundTemporalOptions{
-        detail::narrow_cast<int>(
-          std::chrono::duration_cast<std::chrono::seconds>(*config_.time_window)
-            .count()),
-        arrow::compute::CalendarUnit::SECOND};
-    }
+    // nop
   }
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
-  /// VAST layout.
+  /// VAST layout; this creates a layout-specific aggregation lazily.
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_ASSERT(caf::holds_alternative<record_type>(layout));
-    const auto& rt = caf::get<record_type>(layout);
-    // Find an existing resolved columns cache entry, or build a new one if it
-    // doesn't exist yet.
-    auto cache_entry = resolved_columns_cache_.find(layout);
-    if (cache_entry == resolved_columns_cache_.end()) {
-      // Parse resolved columns from configuration + layout.
-      cache_entry = resolved_columns_cache_.insert(
-        cache_entry, {layout, resolved_columns{config_, layout}});
+    auto aggregation = aggregations_.find(layout);
+    if (aggregation == aggregations_.end()) {
+      auto make_aggregation_result = aggregation::make(config_, layout);
+      if (!make_aggregation_result)
+        return make_aggregation_result.error();
+      auto [new_aggregation, ok] = aggregations_.try_emplace(
+        layout, std::move(*make_aggregation_result));
+      VAST_ASSERT(ok);
+      aggregation = new_aggregation;
     }
-    auto& resolved_columns = cache_entry->second;
-    // Apply timestamp window.
-    if (config_.time_window) {
-      for (int column = 0; column < batch->num_columns(); ++column) {
-        // Skip all the olumns that are not supposed to be time windowed.
-        if (resolved_columns.group_by_actions[column]
-            != action::group_by_time_window)
-          continue;
-        // Find time column that we group by.
-        const auto* time_column
-          = caf::get_if<arrow::TimestampArray>(batch->column(column).get());
-        if (!time_column)
-          return caf::make_error(
-            ec::invalid_configuration,
-            fmt::format("failed to apply time window to column {}: column has "
-                        "unexpected type",
-                        rt.key(rt.resolve_flat_index(column))));
-        // Apply rounding to multiple for time column.
-        auto rounded_time_column = arrow::compute::RoundTemporal(
-          *time_column, round_temporal_options_);
-        if (!rounded_time_column.ok())
-          return caf::make_error(
-            ec::invalid_configuration,
-            fmt::format("failed to apply time window to column {}: {}",
-                        rt.key(rt.resolve_flat_index(column)),
-                        rounded_time_column.status().ToString()));
-        // Update the existing time column in the record batch.
-        auto updated_batch
-          = batch->SetColumn(column, batch->schema()->field(column),
-                             rounded_time_column->make_array());
-        if (!updated_batch.ok())
-          return caf::make_error(
-            ec::invalid_configuration,
-            fmt::format("failed to apply time window to column {}: {}",
-                        rt.key(rt.resolve_flat_index(column)),
-                        updated_batch.status().ToString()));
-        batch = updated_batch.MoveValueUnsafe();
-      }
-    }
-    // Group into buckets.
-    auto last_bucket = resolved_columns.buckets.end();
-    for (int row = 0, last_row = 0; row < batch->num_rows(); ++row) {
-      // Create current bucket key.
-      auto current_key = bucket_key{};
-      for (int column = 0; column < batch->num_columns(); ++column) {
-        auto action = resolved_columns.group_by_actions[column];
-        if (action == action::group_by
-            || action == action::group_by_time_window) {
-          current_key.emplace_back(
-            batch->column(column)->GetScalar(row).ValueOr(nullptr));
-        }
-      }
-      // Find bucket for current key.
-      auto current_bucket = resolved_columns.buckets.find(current_key);
-      // If bucket does not exist yet, create bucket with one chunked array per
-      // column in the batch.
-      if (current_bucket == resolved_columns.buckets.end()) {
-        auto chunked_arrays = arrow::ChunkedArrayVector{};
-        for (int column = 0; column < batch->num_columns(); ++column)
-          if (resolved_columns.group_by_actions[column] != action::drop)
-            chunked_arrays.emplace_back(
-              arrow::ChunkedArray::MakeEmpty(batch->column(column)->type())
-                .ValueOrDie());
-        auto [it, inserted] = resolved_columns.buckets.try_emplace(
-          std::move(current_key), std::move(chunked_arrays));
-        VAST_ASSERT(inserted);
-        current_bucket = it;
-      }
-      // If the bucket did not change we can slice more than one row at once.
-      if (current_bucket == last_bucket)
-        continue;
-      // Append to chunked array per column in the batch.
-      const auto next_last_row = row + 1;
-      for (int column = 0, builder_column = 0; column < batch->num_columns();
-           ++column) {
-        if (resolved_columns.group_by_actions[column] == action::drop)
-          continue;
-        auto chunks = current_bucket->second[builder_column]->chunks();
-        chunks.emplace_back(
-          batch->column(column)->Slice(last_row, next_last_row - last_row));
-        current_bucket->second[builder_column]
-          = arrow::ChunkedArray::Make(
-              std::move(chunks), current_bucket->second[builder_column]->type())
-              .ValueOr(nullptr);
-        ++builder_column;
-      }
-      last_row = next_last_row;
-    }
-    return caf::none;
+    return aggregation->second.add(std::move(batch));
   }
 
   /// Retrieves the result of the transformation.
   [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
     auto result = std::vector<transform_batch>{};
-    result.reserve(resolved_columns_cache_.size());
-    for (const auto& [layout, resolved_columns] : resolved_columns_cache_) {
-      // Modify the layout to drop the columns we don't care about.
-      auto transformations = std::vector<record_type::transformation>{};
-      auto rt = caf::get<record_type>(layout);
-      for (size_t index = 0; const auto& leaf : rt.leaves()) {
-        if (resolved_columns.group_by_actions[index] == action::drop)
-          transformations.push_back({leaf.index, record_type::drop()});
-        ++index;
-      }
-      auto adjusted_rt = rt.transform(std::move(transformations));
-      // TODO: can we handle the error safely in some way?
-      VAST_ASSERT(adjusted_rt);
-      VAST_ASSERT(!layout.has_attributes());
-      auto adjusted_layout = type{layout.name(), *adjusted_rt};
-      auto adjusted_schema = make_arrow_schema(adjusted_layout);
-      // Set up the record batch builder for our aggregated slice.
-      auto batch_builder = std::unique_ptr<arrow::RecordBatchBuilder>{};
-      auto make_batch_builder_result = arrow::RecordBatchBuilder::Make(
-        adjusted_schema, arrow::default_memory_pool(),
-        detail::narrow_cast<int>(resolved_columns.buckets.size()),
-        &batch_builder);
-      VAST_ASSERT(batch_builder->num_fields()
-                  == detail::narrow_cast<int>(adjusted_rt->num_leaves()));
-      VAST_ASSERT(batch_builder->num_fields()
-                  == detail::narrow_cast<int>(
-                    resolved_columns.buckets.begin()->second.size()));
-      // TODO: can we handle the error safely in some way?
-      VAST_ASSERT(make_batch_builder_result.ok());
-      // Iterate over all the buckets to perform the aggregations.
-      for (const auto& bucket : resolved_columns.buckets) {
-        for (int builder_column = 0;
-             auto action : resolved_columns.group_by_actions) {
-          switch (action) {
-            case action::drop:
-              // If we dropped the field then we must not increment the running
-              // builder column index.
-              continue;
-            case action::group_by_time_window:
-            case action::group_by: {
-              auto value = bucket.second[builder_column]->GetScalar(0);
-              if (value.ok()) {
-                auto append_result = batch_builder->GetField(builder_column)
-                                       ->AppendScalar(*value.MoveValueUnsafe());
-                VAST_ASSERT(append_result.ok());
-              } else {
-                auto append_result
-                  = batch_builder->GetField(builder_column)->AppendNull();
-                VAST_ASSERT(append_result.ok());
-              }
-              break;
-            }
-            case action::sum: {
-              auto sum = arrow::compute::Sum(bucket.second[builder_column])
-                           .ValueOrDie();
-              auto append_result = batch_builder->GetField(builder_column)
-                                     ->AppendScalar(*sum.scalar());
-              VAST_ASSERT(append_result.ok());
-              break;
-            }
-            case action::min: {
-              auto min_max
-                = arrow::compute::MinMax(bucket.second[builder_column])
-                    .ValueOrDie();
-              auto append_result
-                = batch_builder->GetField(builder_column)
-                    ->AppendScalar(
-                      *min_max.scalar_as<arrow::StructScalar>().value[0]);
-              VAST_ASSERT(append_result.ok());
-              break;
-            }
-            case action::max: {
-              auto min_max
-                = arrow::compute::MinMax(bucket.second[builder_column])
-                    .ValueOrDie();
-              auto append_result
-                = batch_builder->GetField(builder_column)
-                    ->AppendScalar(
-                      *min_max.scalar_as<arrow::StructScalar>().value[1]);
-              VAST_ASSERT(append_result.ok());
-              break;
-            }
-            case action::mean: {
-              auto mean = arrow::compute::Mean(bucket.second[builder_column])
-                            .ValueOrDie();
-              auto cast_result
-                = mean.scalar()->CastTo(bucket.second[builder_column]->type());
-              VAST_ASSERT(cast_result.ok());
-              auto append_result
-                = batch_builder->GetField(builder_column)
-                    ->AppendScalar(*cast_result.MoveValueUnsafe());
-              VAST_ASSERT(append_result.ok());
-              break;
-            }
-            case action::any: {
-              auto any = arrow::compute::Any(bucket.second[builder_column])
-                           .ValueOrDie();
-              auto append_result = batch_builder->GetField(builder_column)
-                                     ->AppendScalar(*any.scalar());
-              VAST_ASSERT(append_result.ok());
-              break;
-            }
-            case action::all: {
-              auto any = arrow::compute::All(bucket.second[builder_column])
-                           .ValueOrDie();
-              auto append_result = batch_builder->GetField(builder_column)
-                                     ->AppendScalar(*any.scalar());
-              VAST_ASSERT(append_result.ok());
-              break;
-            }
-          }
-          ++builder_column;
-        }
-      }
-      // Create aggregated record batch, and emplace it into the result
-      // alongside the modified type.
-      auto adjusted_batch = std::shared_ptr<arrow::RecordBatch>{};
-      auto flush_result = batch_builder->Flush(&adjusted_batch);
-      VAST_ASSERT(flush_result.ok());
-      result.emplace_back(adjusted_layout, adjusted_batch);
+    for (auto&& [_, aggregation] : aggregations_) {
+      auto batches = aggregation.finish();
+      if (!batches)
+        return batches.error();
+      result.reserve(result.size() + batches->size());
+      std::move(batches->begin(), batches->end(), std::back_inserter(result));
     }
     return result;
   }
@@ -416,33 +554,30 @@ private:
   /// The underlying configuration of the transformation.
   configuration config_ = {};
 
-  /// Cache for mapping of layout to resolved columns.
-  std::unordered_map<type, resolved_columns> resolved_columns_cache_ = {};
-
-  /// Options for the `round_to_multiple` Arrow Compute function.
-  arrow::compute::RoundTemporalOptions round_temporal_options_{
-    1, arrow::compute::CalendarUnit::SECOND};
+  /// A mapping of layout to the configured aggregation.
+  std::unordered_map<type, aggregation> aggregations_ = {};
 };
 
-// -- plugin ------------------------------------------------------------------
-
-/// The plugin definition itself is below.
+/// The plugin entrypoint for the aggregate transform plugin.
 class plugin final : public virtual transform_plugin {
 public:
+  /// Initializes the aggregate plugin. This plugin has no general configuration,
+  /// and is configured per instantiation as part of the transforms definition.
+  /// We only check whether there's no unexpected configuration here.
   caf::error initialize(data options) override {
-    // We don't use any plugin-specific configuration under
-    // vast.plugins.aggregate, so nothing is needed here.
     if (caf::holds_alternative<caf::none_t>(options))
       return caf::none;
     if (const auto* rec = caf::get_if<record>(&options))
       if (rec->empty())
         return caf::none;
-    return caf::make_error(ec::invalid_configuration, "expected empty "
-                                                      "configuration under "
-                                                      "vast.plugins.aggregate");
+    return caf::make_error(ec::invalid_configuration, //
+                           "expected empty configuration under "
+                           "vast.plugins.aggregate");
   }
 
-  /// The name is how the transform step is addressed in a transform definition.
+  /// Returns the unique name of the plugin, which also equals the transform
+  /// step name that is used to refer to instantiations of the aggregate step
+  /// when configuring transforms.
   [[nodiscard]] const char* name() const override {
     return "aggregate";
   };
@@ -452,7 +587,6 @@ public:
   /// passed as the first argument.
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const caf::settings& options) const override {
-    // TODO: parse options into some configuration struct (yet tbd).
     auto rec = to<record>(options);
     if (!rec)
       return rec.error();
