@@ -208,9 +208,13 @@ filesystem_actor& partition_factory::filesystem() {
 
 partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
-  VAST_ASSERT(std::find(state_.persisted_partitions.begin(),
-                        state_.persisted_partitions.end(), id)
-              != state_.persisted_partitions.end());
+  if (std::find(state_.persisted_partitions.begin(),
+                state_.persisted_partitions.end(), id)
+      != state_.persisted_partitions.end()) {
+    VAST_WARN("{} can't load unknown partition {}", *state_.self, id);
+    // FIXME: returning a null actor crashes soon after.
+    // return {};
+  }
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
   return state_.self->spawn(passive_partition, id, state_.accountant,
