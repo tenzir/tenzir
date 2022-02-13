@@ -852,8 +852,10 @@ jobs:
         env:
           STATIC_BINARY_TARGET: ${{ matrix.nix.target }}
         run: |
-          nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
-            ${{ matrix.nix.build-options }}
+          cd nix
+          nix develop ./devshell\#__default -c nix run ./#build-static -- ${{ github.event.inputs.arguments }} \
+          ${{ matrix.nix.build-options }}
+          cd ..
 
       - name: Create Paths
         id: create_paths

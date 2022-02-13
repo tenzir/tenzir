@@ -9,9 +9,9 @@ let
   fileContents = nixpkgs.lib.strings.fileContents;
 in
 {
-  entrypoint = writeShellApplication {
-    name = "static-binary.sh";
-    text = (fileContents ./static-binary.sh);
+  static = writeShellApplication {
+    name = "static-binary.bash";
+    text = (fileContents ./static-binary.bash);
     runtimeInputs = with nixpkgs; [ git coreutils nix-prefetch-github ];
   };
 }

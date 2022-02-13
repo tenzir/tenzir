@@ -1,8 +1,17 @@
+#!/usr/bin/env bash
 nix --version
-nix-prefetch-github --version
+
+PRJ_ROOT=${PRJ_ROOT/nix/}
+toplevel=${PRJ_ROOT/%/}
+nixpkgs="(import ${toplevel}nix).pinned.\${builtins.currentSystem}"
+vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
+artifact_name="$(git -C "${toplevel}" describe --abbrev=10 --match='v[0-9]*')"
+desc="$(git -C "${toplevel}" describe --abbrev=10 --long --match='v[0-9]*' HEAD)"
+
+echo "rev is ${vast_rev}"
 
 usage() {
-  printf "usage: %s [options]\n" $(basename $0)
+  printf "usage: %s [options]\n" "$(basename "$0")"
   echo
   echo 'options:'
   echo "    -h,--help               print this message"
@@ -10,16 +19,9 @@ usage() {
   echo "                            working copy"
   echo "       --with-plugin=<path> add <path> to the list of bundled plugins (pcap and"
   echo "                            broker are enabled automatically)"
-  echo "    -D<CMake option>        options starting with "-D" are passed to CMake"
+  echo "    -D<CMake option>        options starting with -D are passed to CMake"
   echo
 }
-
-dir="$(dirname "$(readlink -f "$0")")"
-toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
-desc="$(git -C ${dir} describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-artifact_name="$(git -C ${dir} describe --abbrev=10 --match='v[0-9]*')"
-vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
-echo "rev is ${vast_rev}"
 
 target="${STATIC_BINARY_TARGET:-vast}"
 
@@ -27,10 +29,11 @@ USE_HEAD="off"
 cmakeFlags=""
 # Enable the bundled plugins by default.
 plugins=(
-  "${toplevel}/plugins/broker"
-  "${toplevel}/plugins/pcap"
+  "${toplevel}plugins/broker"
+  "${toplevel}plugins/pcap"
 )
 
+# shellcheck disable=SC2116,SC2001
 while [ $# -ne 0 ]; do
   case "$1" in
     -D*)
@@ -64,20 +67,21 @@ plugin_version() {
   local plugin="$1"
   local name="${plugin##*/}"
   local key="VAST_PLUGIN_${name^^}_REVISION"
-  local value="g$(git -C "${plugin}" rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "${plugin}")"
+  local value
+  value="g$(git -C "${plugin}" rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "${plugin}")"
   echo "-D${key}=${value}"
 }
 
-# Get Plugin versions
+# # Get Plugin versions
 for plugin in "${plugins[@]}"; do
-  cmakeFlags="${cmakeFlags} \"$(plugin_version ${plugin})\""
+  cmakeFlags="${cmakeFlags} \"$(plugin_version "${plugin}")\""
 done
 
 if [ "${USE_HEAD}" == "on" ]; then
-  source_json="$(nix-prefetch-github --rev=${vast_rev} tenzir vast)"
-  desc="$(git -C ${dir} describe --abbrev=10 --long --match='v[0-9]*' HEAD)"
-  read -r -d '' exp <<EOF
-  with (import ${dir}).pinned."\${builtins.currentSystem}";
+  source_json="$(nix-prefetch-github --rev="${vast_rev}" tenzir vast)"
+  exp=$(
+    cat <<EOF
+  with ${nixpkgs}
   pkgsStatic."${target}".override {
     vast-source = fetchFromGitHub (builtins.fromJSON ''${source_json}'');
     versionOverride = "${desc}";
@@ -85,21 +89,26 @@ if [ "${USE_HEAD}" == "on" ]; then
     extraCmakeFlags = [ ${cmakeFlags} ];
   }
 EOF
+  )
 else
-  read -r -d '' exp <<EOF
-  with (import ${dir}).pinned."\${builtins.currentSystem}";
+  exp=$(
+    cat <<EOF
+  with ${nixpkgs};
   pkgsStatic."${target}".override {
     versionOverride = "${desc}";
     withPlugins = [ ${plugins[@]} ];
     extraCmakeFlags = [ ${cmakeFlags} ];
-  }
+    }
 EOF
+  )
 fi
 
-echo running "nix-build --no-out-link -E \'${exp}\'"
+
+echo running "nix-build --no-out-link -E '${exp}'"
 result=$(nix-build --no-out-link -E "${exp}")
 
 mkdir -p build
+# shellcheck disable=SC2046
 tar -C "${result}" \
   --exclude lib \
   --exclude include \

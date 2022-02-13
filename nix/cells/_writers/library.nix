@@ -38,35 +38,35 @@ let
         , runtimeInputs ? [ ]
         , checkPhase ? null
         }:
-        lib.info ''
-          using polyfill for writeShellApplication, consider updating nixpkgs to a newer version
-        ''
-        writeTextFile {
-          inherit name;
-          executable = true;
-          destination = "/bin/${name}";
-          text = ''
-            #!${runtimeShell}
-            set -o errexit
-            set -o nounset
-            set -o pipefail
+          lib.info ''
+            using polyfill for writeShellApplication, consider updating nixpkgs to a newer version
+          ''
+          writeTextFile {
+            inherit name;
+            executable = true;
+            destination = "/bin/${name}";
+            text = ''
+              #!${runtimeShell}
+              set -o errexit
+              set -o nounset
+              set -o pipefail
 
-            export PATH="${lib.makeBinPath runtimeInputs}:$PATH"
+              export PATH="${lib.makeBinPath runtimeInputs}:$PATH"
 
-            ${text}
-          '';
-          checkPhase =
-            if checkPhase == null
-            then
-              ''
-                runHook preCheck
-                ${stdenv.shell} -n $out/bin/${name}
-                ${shellcheck}/bin/shellcheck $out/bin/${name}
-                runHook postCheck
-              ''
-            else checkPhase;
-          meta.mainProgram = name;
-        }
+              ${text}
+            '';
+            checkPhase =
+              if checkPhase == null
+              then
+                ''
+                  runHook preCheck
+                  ${stdenv.shell} -n $out/bin/${name}
+                  ${shellcheck}/bin/shellcheck $out/bin/${name}
+                  runHook postCheck
+                ''
+              else checkPhase;
+            meta.mainProgram = name;
+          }
       );
   writePython3Application =
     { name
@@ -75,47 +75,47 @@ let
     , libraries ? [ ]
     , checkPhase ? null
     }:
-    writeTextFile {
-      inherit name;
-      executable = true;
-      destination = "/bin/${name}";
-      text = ''
-        #!${
-        if libraries == [ ]
-        then "${nixpkgs.python3}/bin/python"
-        else "${nixpkgs.python3.withPackages (ps: libraries)}/bin/python"
-      }
-        # fmt: off
-        import os; os.environ["PATH"] += os.pathsep + os.pathsep.join("${
-        lib.makeBinPath runtimeInputs
-      }".split(":"))
-        # fmt: on
+      writeTextFile {
+        inherit name;
+        executable = true;
+        destination = "/bin/${name}";
+        text = ''
+          #!${
+          if libraries == [ ]
+          then "${nixpkgs.python3}/bin/python"
+          else "${nixpkgs.python3.withPackages (ps: libraries)}/bin/python"
+        }
+          # fmt: off
+          import os; os.environ["PATH"] += os.pathsep + os.pathsep.join("${
+          lib.makeBinPath runtimeInputs
+        }".split(":"))
+          # fmt: on
 
-        ${text}
-      '';
-      checkPhase =
-        if checkPhase == null
-        then
-          ''
-            runHook preCheck
-            ${nixpkgs.python3Packages.black}/bin/black --check $out/bin/${name}
-            runHook postCheck
-          ''
-        else checkPhase;
-      meta.mainProgram = name;
-    };
+          ${text}
+        '';
+        checkPhase =
+          if checkPhase == null
+          then
+            ''
+              runHook preCheck
+              ${nixpkgs.python3Packages.black}/bin/black --check $out/bin/${name}
+              runHook postCheck
+            ''
+          else checkPhase;
+        meta.mainProgram = name;
+      };
 in
 {
   inherit writePython3Application;
   writeShellApplication =
     { ... } @ args:
-    writeShellApplication' (
-      args
-      // {
-        text = ''
-          export LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive
-          ${args.text}
-        '';
-      }
-    );
+      writeShellApplication' (
+        args
+        // {
+          text = ''
+            export LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive
+            ${args.text}
+          '';
+        }
+      );
 }

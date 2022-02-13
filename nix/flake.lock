@@ -36,7 +36,6 @@
       },
       "original": {
         "owner": "divnix",
-        "ref": "main",
         "repo": "std",
         "type": "github"
       }
