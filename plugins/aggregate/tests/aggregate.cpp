@@ -58,7 +58,7 @@ TEST(aggregate Zeek conn log) {
   // used for comparison here. As an example, here's how to calculate the
   // grouped sums of the duration values using jq:
   //
-  //   jq -s 'map(.timestamp |= .[:-16])
+  //   jq -s 'map(.ts |= .[:-16])
   //     | group_by(.ts)[]
   //     | map(.duration)
   //     | add'
