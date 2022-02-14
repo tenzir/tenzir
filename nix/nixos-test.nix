@@ -1,6 +1,11 @@
-{ makeTest, pkgs, self, inputs, pinned }:
+{ # FIXED: using stable vm channel
+  makeTest ? import (inputs.nixos + "/nixos/tests/make-test-python.nix")
+, pkgs
+, self
+, inputs
+}:
 let
-  vastStatic = pinned.pkgsStatic.vast.override {
+  vastStatic = pkgs.pkgsStatic.vast.override {
     withPlugins = [
       ../plugins/broker
       ../plugins/pcap
@@ -51,7 +56,7 @@ in
       inherit (pkgs) system;
     };
 
-  vast-vm-cluster-systemd = makeTest
+  vast-cluster-vm-systemd = makeTest
     {
       name = "vast-cluster-vm-systemd";
 
