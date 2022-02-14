@@ -97,7 +97,7 @@ time:
   rules:
     - name: compact-suricata-flow
       after: 7 days
-      transform: aggregate-suricata-flow
+      transform: suricata-flow-aggregate
       types:
         - suricata.flow
 ```
