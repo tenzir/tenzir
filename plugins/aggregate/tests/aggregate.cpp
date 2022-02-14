@@ -55,7 +55,18 @@ TEST(aggregate Zeek conn log) {
   REQUIRE_EQUAL(result.size(), 1u);
   const auto aggregated_slice = table_slice{result[0].batch, result[0].layout};
   // NOTE: I calculated this data ahead of time using jq, so it can safely be
-  // used for comparion here. -- DL
+  // used for comparison here. As an example, here's how to calculate the
+  // grouped sums of the duration values using jq:
+  //
+  //   jq -s 'map(.timestamp |= .[:-16])
+  //     | group_by(.ts)[]
+  //     | map(.duration)
+  //     | add'
+  //
+  // The same can be repeated for the other values, using add to calculate the
+  // sum, and min and max to calculate the min and max values respectively. The
+  // rounding functions by trimming the last 16 characters from the timestamp
+  // string before grouping.
   const auto expected_data = std::vector<std::vector<std::string_view>>{
     {"2009-11-19", "179794541699806ns", "0", "621055", "286586076"},
     {"2009-11-18", "1010088519993ns", "48", "693", "98531"},
