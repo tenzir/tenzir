@@ -144,10 +144,8 @@ caf::error transformation_engine::validate(
       return transform.is_aggregate();
     });
   bool is_aggregate = first_aggregate != transforms_.end();
-  // FIXME: evaluate when aggregates are actually okay to use.
   auto is_aggregate_allowed
-    //= allow_aggregates == allow_aggregate_transforms::yes;
-    = true;
+    = allow_aggregates == allow_aggregate_transforms::yes;
   if (is_aggregate && !is_aggregate_allowed) {
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("the transform {} is an aggregate",

@@ -526,6 +526,11 @@ public:
     // nop
   }
 
+  /// Marks this transform step as an aggregating transform step.
+  [[nodiscard]] bool is_aggregate() const override {
+    return true;
+  }
+
   /// Applies the transformation to an Arrow Record Batch with a corresponding
   /// VAST layout; this creates a layout-specific aggregation lazily.
   [[nodiscard]] caf::error
