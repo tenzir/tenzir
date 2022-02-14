@@ -118,8 +118,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   auto erase(const ids& selection) const {
-    if (auto err = store->erase(selection))
-      FAIL("store->erase failed: " << err);
+    auto erased = store->erase(selection);
+    if (!erased)
+      FAIL("store->erase failed: " << erased.error());
   }
 
   std::filesystem::path segments_dir = directory / "segments";

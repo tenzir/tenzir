@@ -45,7 +45,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
     self
       ->do_receive(
-        [&](vast::atom::done) {
+        [&](uint64_t) {
           done = true;
         },
         [&](vast::table_slice slice) {

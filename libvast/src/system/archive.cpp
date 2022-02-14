@@ -54,7 +54,8 @@ std::unique_ptr<segment_store::lookup> archive_state::next_session() {
     if (request.cancelled || request.ids_queue.empty()) {
       // Not sure whether this is really necessary.
       while (!request.ids_queue.empty()) {
-        request.ids_queue.front().second.deliver(atom::done_v);
+        request.ids_queue.front().second.deliver(request.num_hits);
+        request.num_hits = 0;
         request.ids_queue.pop();
       }
       requests.pop_front();
@@ -71,19 +72,20 @@ std::unique_ptr<segment_store::lookup> archive_state::next_session() {
   return nullptr;
 }
 
-caf::typed_response_promise<atom::done>
+caf::typed_response_promise<uint64_t>
 archive_state::file_request(vast::query query) {
-  auto rp = self->make_response_promise<atom::done>();
+  auto rp = self->make_response_promise<uint64_t>();
   auto it
-    = std::find_if(requests.begin(), requests.end(),
-                   [&](const auto& request) { return request.query == query; });
+    = std::find_if(requests.begin(), requests.end(), [&](const auto& request) {
+        return request.query == query;
+      });
   if (it != requests.end()) {
     VAST_ASSERT(query == it->query);
     // Down messages are sent with high prio so the request might still be
     // in the queue but cancelled. In case the first request has already been
     // cleaned up, we are in the else branch.
     if (it->cancelled) {
-      rp.deliver(atom::done_v);
+      rp.deliver(uint64_t{0});
       return rp;
     }
     it->ids_queue.emplace(query.ids, rp);
@@ -166,15 +168,17 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       it->cancelled = true;
   });
   return {
-    [self](vast::query query) -> caf::result<atom::done> {
+    [self](vast::query query) -> caf::result<uint64_t> {
       const auto& xs = query.ids;
       VAST_DEBUG("{} got a request with the query {} and {} hints [{},  {})",
                  *self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
       if (caf::holds_alternative<query::erase>(query.cmd)) {
         // We erase eagerly.
-        if (auto err = self->state.store->erase(xs))
-          VAST_ERROR("{} failed to erase events: {}", *self, render(err));
-        return atom::done_v;
+        auto num_erased = self->state.store->erase(xs);
+        if (!num_erased)
+          VAST_ERROR("{} failed to erase events: {}", *self,
+                     render(num_erased.error()));
+        return num_erased;
       }
       return self->state.file_request(std::move(query));
     },
@@ -182,7 +186,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       VAST_ASSERT(self->state.session);
       VAST_ASSERT(!self->state.requests.empty());
       if (self->state.requests.front().cancelled) {
-        self->state.active_promise.deliver(atom::done_v);
+        self->state.active_promise.deliver(
+          self->state.requests.front().num_hits);
         self->state.session = self->state.next_session();
         if (!self->state.session)
           // Nothing to do at the moment;
@@ -219,9 +224,11 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                          for (auto& sub_slice :
                               select(*slice, self->state.session_ids)) {
                            if (request.query.expr == expression{}) {
+                             request.num_hits += sub_slice.rows();
                              self->send(extract.sink, sub_slice);
                            } else {
                              auto hits = evaluate(checker, sub_slice);
+                             request.num_hits += rank(hits);
                              for (auto& final_slice : select(sub_slice, hits))
                                self->send(extract.sink, final_slice);
                            }
@@ -229,8 +236,10 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                        } else {
                          auto final_slice
                            = filter(*slice, checker, self->state.session_ids);
-                         if (final_slice)
+                         if (final_slice) {
+                           request.num_hits += final_slice->rows();
                            self->send(extract.sink, *final_slice);
+                         }
                        }
                      },
                      [&](query::erase) {
@@ -244,7 +253,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
           VAST_ERROR("{} failed to retrieve slice: {}", *self, slice.error());
           self->state.active_promise.deliver(slice.error());
         } else {
-          self->state.active_promise.deliver(atom::done_v);
+          self->state.active_promise.deliver(request.num_hits);
+          request.num_hits = 0;
         }
         // This session is done.
         // We're at the end, check for more requests.
@@ -314,9 +324,11 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     [self](atom::erase, const ids& xs) {
-      if (auto err = self->state.store->erase(xs))
-        VAST_ERROR("{} failed to erase events: {}", *self, render(err));
-      return atom::done_v;
+      auto num_erased = self->state.store->erase(xs);
+      if (!num_erased)
+        VAST_ERROR("{} failed to erase events: {}", *self,
+                   render(num_erased.error()));
+      return num_erased;
     },
   };
 }

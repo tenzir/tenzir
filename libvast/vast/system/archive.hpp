@@ -31,20 +31,20 @@ namespace vast::system {
 struct archive_state {
   struct request_state {
     request_state(vast::query query_,
-                  std::pair<ids, caf::typed_response_promise<atom::done>> ids_)
+                  std::pair<ids, caf::typed_response_promise<uint64_t>> ids_)
       : query{std::move(query_)} {
       ids_queue.push(std::move(ids_));
     }
     vast::query query;
-    std::queue<std::pair<ids, caf::typed_response_promise<atom::done>>>
-      ids_queue;
+    std::queue<std::pair<ids, caf::typed_response_promise<uint64_t>>> ids_queue;
+    uint64_t num_hits = 0;
     bool cancelled = false;
   };
 
   std::deque<request_state> requests;
   std::unique_ptr<vast::segment_store::lookup> session;
   ids session_ids = {};
-  caf::typed_response_promise<atom::done> active_promise;
+  caf::typed_response_promise<uint64_t> active_promise;
 
   archive_actor::pointer self;
 
@@ -61,7 +61,7 @@ struct archive_state {
   /// Updates an existing request with additional ids or inserts a new request
   /// if the query client hasn't been seen before.
   /// @param query The type of request.
-  caf::typed_response_promise<atom::done> file_request(vast::query query);
+  caf::typed_response_promise<uint64_t> file_request(vast::query query);
 
   vast::system::measurement measurement;
   accountant_actor accountant;

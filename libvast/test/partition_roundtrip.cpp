@@ -40,10 +40,10 @@
 
 vast::system::store_actor::behavior_type dummy_store() {
   return {[](const vast::query&) {
-            return vast::atom::done_v;
+            return uint64_t{0};
           },
           [](const vast::atom::erase&, const vast::ids&) {
-            return vast::atom::done_v;
+            return uint64_t{0};
           }};
 }
 
@@ -311,7 +311,7 @@ TEST(full partition roundtrip) {
                                   expression));
         run();
         rp.receive(
-          [&done](vast::atom::done) {
+          [&done](uint64_t) {
             done = true;
           },
           [](caf::error&) {

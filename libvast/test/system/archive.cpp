@@ -47,10 +47,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     self->send(a, query);
     run();
     self
-      ->do_receive([&](vast::atom::done) { done = true; },
-                   [&](table_slice slice) {
-                     result.push_back(std::move(slice));
-                   })
+      ->do_receive(
+        [&](uint64_t) {
+          done = true;
+        },
+        [&](table_slice slice) {
+          result.push_back(std::move(slice));
+        })
       .until(done);
     return result;
   }

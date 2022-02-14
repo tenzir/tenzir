@@ -322,11 +322,11 @@ partition_actor::behavior_type passive_partition(
         self->quit(std::move(err));
       });
   return {
-    [self](vast::query query) -> caf::result<atom::done> {
+    [self](vast::query query) -> caf::result<uint64_t> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query));
       if (!self->state.partition_chunk)
         return std::get<1>(self->state.deferred_evaluations.emplace_back(
-          std::move(query), self->make_response_promise<atom::done>()));
+          std::move(query), self->make_response_promise<uint64_t>()));
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       VAST_ASSERT(self->state.deferred_evaluations.empty());
@@ -336,7 +336,7 @@ partition_actor::behavior_type passive_partition(
       if (self->state.indexers.empty())
         return caf::make_error(ec::system_error, "can not handle query because "
                                                  "shutdown was requested");
-      auto rp = self->make_response_promise<atom::done>();
+      auto rp = self->make_response_promise<uint64_t>();
       // Don't bother with the indexers etc. if we already know the ids
       // we want to retrieve.
       if (!query.ids.empty()) {
@@ -350,7 +350,7 @@ partition_actor::behavior_type passive_partition(
       auto start = std::chrono::steady_clock::now();
       auto triples = detail::evaluate(self->state, query.expr);
       if (triples.empty())
-        return atom::done_v;
+        return uint64_t{0};
       auto eval = self->spawn(evaluator, query.expr, triples);
       self->request(eval, caf::infinite, atom::run_v)
         .then(
@@ -370,7 +370,7 @@ partition_actor::behavior_type passive_partition(
             auto* count = caf::get_if<query::count>(&query.cmd);
             if (count && count->mode == query::count::estimate) {
               self->send(count->sink, rank(hits));
-              rp.deliver(atom::done_v);
+              rp.deliver(rank(hits));
             } else {
               query.ids = hits;
               rp.delegate(self->state.store, std::move(query));
@@ -400,8 +400,18 @@ partition_actor::behavior_type passive_partition(
       for (const auto& kv : self->state.type_ids_) {
         all_ids |= kv.second;
       }
-      return self->delegate(self->state.store, atom::erase_v,
-                            std::move(all_ids));
+      auto rp = self->make_response_promise<atom::done>();
+      self
+        ->request(self->state.store, caf::infinite, atom::erase_v,
+                  std::move(all_ids))
+        .then(
+          [rp](uint64_t) mutable {
+            rp.deliver(atom::done_v);
+          },
+          [rp](caf::error& err) mutable {
+            rp.deliver(std::move(err));
+          });
+      return rp;
     },
     [self](atom::status, status_verbosity /*v*/) -> record {
       record result;

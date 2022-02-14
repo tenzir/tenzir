@@ -106,9 +106,9 @@ using store_actor = typed_actor_fwd<
   // implement query handling. It may be better to have an API that exposes
   // an mmapped view of the contained table slices; or to provide an opaque
   // callback that the store can use for that.
-  caf::replies_to<query>::with<atom::done>,
+  caf::replies_to<query>::with<uint64_t>,
   // TODO: Replace usage of `atom::erase` with `query::erase` in call sites.
-  caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
+  caf::replies_to<atom::erase, ids>::with<uint64_t>>::unwrap;
 
 /// The STORE BUILDER actor interface.
 using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
@@ -120,7 +120,7 @@ using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
-  caf::replies_to<query>::with<atom::done>,
+  caf::replies_to<query>::with<uint64_t>,
   // Delete the whole partition from disk and from the archive
   caf::replies_to<atom::erase>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
