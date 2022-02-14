@@ -24,6 +24,8 @@
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
 
+#include <chrono>
+
 using namespace vast;
 using namespace std::string_literals;
 
@@ -91,6 +93,18 @@ TEST(row view) {
       CHECK_EQUAL(rview[column],
                   sut.at(row, column, flat_layout.field(column).type));
   }
+}
+
+TEST(select - import time) {
+  auto sut
+    = table_slice{chunk::copy(zeek_conn_log_full[0]), table_slice::verify::yes};
+  sut.offset(100);
+  auto time = vast::time{std::chrono::milliseconds(202202141214)};
+  sut.import_time(time);
+  auto result = select(sut, make_ids({{110, 120}, {170, 180}}));
+  REQUIRE_EQUAL(result.size(), 2u);
+  CHECK_EQUAL(result[0].import_time(), time);
+  CHECK_EQUAL(result[1].import_time(), time);
 }
 
 TEST(select all) {
@@ -201,6 +215,18 @@ TEST(split) {
   CHECK_EQUAL(split_sut(5), manual_split_sut(5));
   CHECK_EQUAL(split_sut(6), manual_split_sut(6));
   CHECK_EQUAL(split_sut(7), manual_split_sut(7));
+}
+
+TEST(filter - import time) {
+  auto sut
+    = table_slice{chunk::copy(zeek_conn_log[0]), table_slice::verify::yes};
+  auto time = vast::time{std::chrono::milliseconds(202202141214)};
+  sut.import_time(time);
+  auto exp = unbox(
+    tailor(unbox(to<expression>("id.orig_h != 192.168.1.102")), sut.layout()));
+  auto result = filter(sut, exp);
+  REQUIRE(result);
+  CHECK_EQUAL(result->import_time(), time);
 }
 
 TEST(filter - expression overload) {

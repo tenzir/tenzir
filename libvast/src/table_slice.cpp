@@ -502,6 +502,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
       return;
     }
     new_slice.offset(last_offset);
+    new_slice.import_time(slice.import_time());
     result.emplace_back(std::move(new_slice));
   };
   auto flat_layout = flatten(caf::get<record_type>(slice.layout()));
@@ -778,6 +779,7 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   if (builder->rows() == slice.rows())
     return slice;
   auto new_slice = builder->finish();
+  new_slice.import_time(slice.import_time());
   VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
   return new_slice;
 }
