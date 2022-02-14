@@ -607,6 +607,11 @@ jobs:
             target: example-transform
             path: examples/plugins/transform
             dependencies:
+          - name: Aggregate
+            target: aggregate
+            path: plugins/aggregate
+            dependencies:
+              - libbroker-dev
           - name: Broker
             target: broker
             path: plugins/broker
