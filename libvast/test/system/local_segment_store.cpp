@@ -33,8 +33,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   std::vector<vast::table_slice>
-  query(vast::system::store_actor actor, const vast::ids& ids) {
+  query(const vast::system::store_actor& actor, const vast::ids& ids) {
     bool done = false;
+    uint64_t tally = 0;
+    uint64_t rows = 0;
     std::vector<vast::table_slice> result;
     auto query = vast::query::make_extract(
       self, vast::query::extract::preserve_ids, vast::expression{});
@@ -45,13 +47,16 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
     self
       ->do_receive(
-        [&](uint64_t) {
+        [&](uint64_t x) {
+          tally = x;
           done = true;
         },
         [&](vast::table_slice slice) {
+          rows += slice.rows();
           result.push_back(std::move(slice));
         })
       .until(done);
+    REQUIRE_EQUAL(rows, tally);
     return result;
   }
 
