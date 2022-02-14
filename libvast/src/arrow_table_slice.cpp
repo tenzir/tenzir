@@ -587,8 +587,7 @@ private:
 
 } // namespace legacy
 
-template <class Array>
-data_view value_at(const type& t, const Array& arr, size_t row);
+data_view value_at(const type& t, const arrow::Array& arr, int64_t row);
 
 template <class T>
 class experimental_container_view : public container_view<T> {
@@ -673,198 +672,7 @@ private:
   const int64_t row_;
 };
 
-// -- decoding of Arrow column arrays ------------------------------------------
-
-// Safe ourselves redundant boilerplate code for dispatching to the visitor.
-template <concrete_type Type, class Array>
-struct decodable : std::false_type {};
-
-template <>
-struct decodable<bool_type, arrow::BooleanArray> : std::true_type {};
-
-template <class TypeClass>
-  requires(arrow::is_floating_type<TypeClass>::value)
-struct decodable<real_type, arrow::NumericArray<TypeClass>> : std::true_type {};
-
-template <class TypeClass>
-  requires(std::is_integral_v<typename TypeClass::c_type>&&
-             std::is_signed_v<typename TypeClass::c_type>)
-struct decodable<integer_type, arrow::NumericArray<TypeClass>>
-  : std::true_type {};
-
-template <>
-struct decodable<duration_type, arrow::DurationArray> : std::true_type {};
-
-template <class TypeClass>
-  requires(
-    std::is_integral_v<
-      typename TypeClass::c_type> && !std::is_signed_v<typename TypeClass::c_type>)
-struct decodable<count_type, arrow::NumericArray<TypeClass>> : std::true_type {
-};
-
-template <>
-struct decodable<enumeration_type, arrow::DictionaryArray> : std::true_type {};
-
-template <>
-struct decodable<address_type, arrow::FixedSizeBinaryArray> : std::true_type {};
-
-template <>
-struct decodable<subnet_type, arrow::StructArray> : std::true_type {};
-
-template <>
-struct decodable<string_type, arrow::StringArray> : std::true_type {};
-
-template <>
-struct decodable<pattern_type, arrow::StringArray> : std::true_type {};
-
-template <>
-struct decodable<time_type, arrow::TimestampArray> : std::true_type {};
-
-template <>
-struct decodable<list_type, arrow::ListArray> : std::true_type {};
-
-template <>
-struct decodable<map_type, arrow::MapArray> : std::true_type {};
-
-template <>
-struct decodable<record_type, arrow::StructArray> : std::true_type {};
-
-template <class F>
-auto decode(const type& t, const arrow::Array& arr, F& f) ->
-  typename F::result_type {
-  auto dispatch = [&]<class Array>(const Array& arr) {
-    auto visitor
-      = [&]<concrete_type Type>(const Type& t) -> typename F::result_type {
-      if constexpr (decodable<Type, Array>::value)
-        return f(arr, t);
-      else if constexpr (std::is_void_v<typename F::result_type>)
-        VAST_ERROR("unable to decode {} into {}", detail::pretty_type_name(arr),
-                   t);
-      else
-        die(fmt::format("unable to decode {} into {}",
-                        detail::pretty_type_name(arr), t));
-    };
-    return caf::visit(visitor, t);
-  };
-  switch (arr.type_id()) {
-    default: {
-      VAST_WARN("{} got unrecognized Arrow type ID '{}' ({})", __func__,
-                arr.type_id(), arr.type()->ToString());
-      return;
-    }
-    // -- handle basic types ---------------------------------------------------
-    case arrow::Type::BOOL: {
-      return dispatch(static_cast<const arrow::BooleanArray&>(arr));
-    }
-    case arrow::Type::STRING: {
-      return dispatch(static_cast<const arrow::StringArray&>(arr));
-    }
-    case arrow::Type::TIMESTAMP: {
-      return dispatch(static_cast<const arrow::TimestampArray&>(arr));
-    }
-    case arrow::Type::DURATION: {
-      return dispatch(static_cast<const arrow::DurationArray&>(arr));
-    }
-    case arrow::Type::FIXED_SIZE_BINARY: {
-      using array_type = arrow::FixedSizeBinaryArray;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    // -- handle container types -----------------------------------------------
-    case arrow::Type::MAP: {
-      return dispatch(static_cast<const arrow::MapArray&>(arr));
-    }
-    case arrow::Type::LIST: {
-      return dispatch(static_cast<const arrow::ListArray&>(arr));
-    }
-    case arrow::Type::STRUCT: {
-      return dispatch(static_cast<const arrow::StructArray&>(arr));
-    }
-    // -- lift floating point values to real -----------------------------
-    case arrow::Type::HALF_FLOAT: {
-      using array_type = arrow::NumericArray<arrow::HalfFloatType>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::FLOAT: {
-      using array_type = arrow::NumericArray<arrow::FloatType>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::DOUBLE: {
-      using array_type = arrow::NumericArray<arrow::DoubleType>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    // -- lift signed values to integer ----------------------------------
-    case arrow::Type::INT8: {
-      using array_type = arrow::NumericArray<arrow::Int8Type>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::INT16: {
-      using array_type = arrow::NumericArray<arrow::Int16Type>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::INT32: {
-      using array_type = arrow::NumericArray<arrow::Int32Type>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::INT64: {
-      using array_type = arrow::NumericArray<arrow::Int64Type>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    // -- lift unsinged values to count ----------------------------------
-    case arrow::Type::UINT8: {
-      using array_type = arrow::NumericArray<arrow::UInt8Type>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::UINT16: {
-      using array_type = arrow::NumericArray<arrow::UInt16Type>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::UINT32: {
-      using array_type = arrow::NumericArray<arrow::UInt32Type>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::UINT64: {
-      using array_type = arrow::NumericArray<arrow::UInt64Type>;
-      return dispatch(static_cast<const array_type&>(arr));
-    }
-    case arrow::Type::EXTENSION: {
-      const auto& t = static_cast<const arrow::ExtensionType&>(*arr.type());
-      const auto& ext_arr = static_cast<const arrow::ExtensionArray&>(arr);
-      if (t.extension_name() == enum_extension_type::vast_id)
-        return dispatch(
-          static_cast<const arrow::DictionaryArray&>(*ext_arr.storage()));
-      if (t.extension_name() == address_extension_type::vast_id)
-        return dispatch(
-          static_cast<const arrow::FixedSizeBinaryArray&>(*ext_arr.storage()));
-      if (t.extension_name() == subnet_extension_type::vast_id)
-        return dispatch(
-          static_cast<const arrow::StructArray&>(*ext_arr.storage()));
-      if (t.extension_name() == pattern_extension_type::vast_id)
-        return dispatch(
-          static_cast<const arrow::StringArray&>(*ext_arr.storage()));
-      die(fmt::format("Unable to handle extension type '{}'",
-                      t.extension_name()));
-    }
-  }
-}
-
 // -- access to a single element -----------------------------------------------
-
-auto boolean_at(const arrow::BooleanArray& arr, int64_t row) {
-  return arr.Value(row);
-}
-
-auto real_at = [](const auto& arr, int64_t row) {
-  return static_cast<real>(arr.Value(row));
-};
-
-auto integer_at = [](const auto& arr, int64_t row) {
-  return integer{arr.Value(row)};
-};
-
-auto count_at = [](const auto& arr, int64_t row) {
-  return static_cast<count>(arr.Value(row));
-};
-
 auto enumeration_at = [](const arrow::DictionaryArray& arr, int64_t row) {
   const auto& b = static_cast<const arrow::Int16Array&>(*arr.indices());
   return static_cast<enumeration>(b.Value(row));
@@ -901,10 +709,6 @@ auto string_at(const arrow::StringArray& arr, int64_t row) {
   return std::string_view{cstr, detail::narrow_cast<size_t>(len)};
 }
 
-auto pattern_at(const arrow::StringArray& arr, int64_t row) {
-  return pattern_view{string_at(arr, row)};
-}
-
 auto address_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
   auto bytes = arr.raw_values() + (row * 16);
   auto span = std::span<const uint8_t, 16>{bytes, 16};
@@ -918,8 +722,7 @@ auto subnet_at(const arrow::StructArray& arr, int64_t row) {
   const auto& address_array = *ext_arr->storage();
   auto addr = address_at(
     static_cast<const arrow::FixedSizeBinaryArray&>(address_array), row);
-  auto len
-    = count_at(static_cast<const arrow::UInt8Array&>(*length_array), row);
+  auto len = static_cast<const arrow::UInt8Array&>(*length_array).Value(row);
   return subnet{addr, uint8_t(len)};
 }
 
@@ -965,7 +768,7 @@ auto list_at(type value_type, const arrow::ListArray& arr, int64_t row) {
   return list_view_handle{list_view_ptr{std::move(ptr)}};
 }
 
-auto map_at(type key_type, type value_type, const arrow::ListArray& arr,
+auto map_at(type key_type, type value_type, const arrow::MapArray& arr,
             int64_t row) {
   using view_impl
     = experimental_container_view<std::pair<data_view, data_view>>;
@@ -986,196 +789,72 @@ auto record_at(const record_type& type, const arrow::StructArray& arr,
   return record_view_handle{record_view_ptr{std::move(ptr)}};
 }
 
-class row_picker {
-public:
-  using result_type = void;
-
-  row_picker(size_t row) : row_(detail::narrow_cast<int64_t>(row)) {
-    // nop
-  }
-
-  data_view& result() {
-    return result_;
-  }
-
-  void operator()(const arrow::BooleanArray& arr, const bool_type&) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = boolean_at(arr, row_);
-  }
-
-  template <class T, class U>
-  void operator()(const arrow::NumericArray<T>& arr, const U&) {
-    if (arr.IsNull(row_))
-      return;
-    using view_type = view<type_to_data_t<U>>;
-    result_ = static_cast<view_type>(arr.Value(row_));
-  }
-
-  void operator()(const arrow::DictionaryArray& arr, const enumeration_type&) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = enumeration_at(arr, row_);
-  }
-
-  void operator()(const arrow::DurationArray& arr, const duration_type&) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = duration_at(arr, row_);
-  }
-
-  template <class T>
-  void operator()(const arrow::NumericArray<T>& arr, const integer_type&) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = integer_at(arr, row_);
-  }
-
-  void operator()(const arrow::FixedSizeBinaryArray& arr, const address_type&) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = address_at(arr, row_);
-  }
-
-  void operator()(const arrow::StructArray& arr, const subnet_type&) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = subnet_at(arr, row_);
-  }
-
-  template <class T>
-  void operator()(const arrow::StringArray& arr, const T&) {
-    if (arr.IsNull(row_))
-      return;
-    if constexpr (std::is_same_v<T, string_type>) {
-      result_ = string_at(arr, row_);
-    } else {
-      static_assert(std::is_same_v<T, pattern_type>);
-      result_ = pattern_at(arr, row_);
-    }
-  }
-
-  void operator()(const arrow::TimestampArray& arr, const time_type&) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = timestamp_at(arr, row_);
-  }
-
-  void operator()(const arrow::ListArray& arr, const list_type& t) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = list_at(t.value_type(), arr, row_);
-  }
-
-  void operator()(const arrow::MapArray& arr, const map_type& t) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = map_at(t.key_type(), t.value_type(), arr, row_);
-  }
-
-  void operator()(const arrow::StructArray& arr, const record_type& t) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = record_at(t, arr, row_);
-  }
-
-private:
-  data_view result_;
-  int64_t row_;
-};
-
-template <class Array>
-data_view value_at(const type& t, const Array& arr, size_t row) {
-  row_picker f{row};
-  decode(t, arr, f);
-  return std::move(f.result());
+data_view value_at(const type& t, const arrow::Array& arr, int64_t row) {
+  auto f = detail::overload{
+    [&](const bool_type&, const arrow::BooleanArray& a) {
+      return a.Value(row);
+    },
+    [&](const integer_type&, const arrow::Int64Array& a) {
+      return integer{a.Value(row)};
+    },
+    [&](const count_type&, const arrow::UInt64Array& a) {
+      return a.Value(row);
+    },
+    [&](const real_type&, const arrow::DoubleArray& a) {
+      return a.Value(row);
+    },
+    [&](const enumeration_type&, const enum_array& a) {
+      return enumeration_at(
+        static_cast<const arrow::DictionaryArray&>(*a.storage()), row);
+    },
+    [&](const time_type&, const arrow::TimestampArray& a) {
+      return timestamp_at(a, row);
+    },
+    [&](const duration_type&, const arrow::DurationArray& a) {
+      return duration_at(a, row);
+    },
+    [&](const address_type&, const address_array& a) {
+      return address_at(
+        static_cast<const arrow::FixedSizeBinaryArray&>(*a.storage()), row);
+    },
+    [&](const subnet_type&, const subnet_array& a) {
+      return subnet_at(static_cast<const arrow::StructArray&>(*a.storage()),
+                       row);
+    },
+    [&](const string_type&, const arrow::StringArray& a) {
+      return string_at(a, row);
+    },
+    [&](const pattern_type&, const pattern_array& a) {
+      return pattern_view{
+        string_at(static_cast<const arrow::StringArray&>(*a.storage()), row)};
+    },
+    [&](const list_type& lt, const arrow::ListArray& a) {
+      return list_at(lt.value_type(), a, row);
+    },
+    [&](const map_type& mt, const arrow::MapArray& a) {
+      return map_at(mt.key_type(), mt.value_type(), a, row);
+    },
+    [&](const record_type& rt, const arrow::StructArray& a) {
+      return record_at(rt, a, row);
+    },
+    [&](const auto&, const auto&) -> data_view {
+      die(fmt::format("unhandled type pair({}, {})!\n", t,
+                      arr.type()->ToString()));
+    },
+  };
+  if (arr.IsNull(row))
+    return caf::none;
+  return caf::visit(f, t, arr);
 }
 
-class index_applier {
-public:
-  using result_type = void;
-
-  index_applier(size_t offset, value_index& idx)
-    : offset_(detail::narrow_cast<int64_t>(offset)), idx_(idx) {
-    // nop
+auto apply_index(size_t offset, value_index& idx, const arrow::Array& arr,
+                 const type& vast_type) -> void {
+  for (int64_t row = 0; row < arr.length(); ++row) {
+    const auto& v = value_at(vast_type, arr, row);
+    if (!caf::holds_alternative<view<caf::none_t>>(v))
+      idx.append(v, detail::narrow_cast<size_t>(offset + row));
   }
-
-  template <class Array, class Getter>
-  void apply(const Array& arr, Getter f) {
-    for (int64_t row = 0; row < arr.length(); ++row)
-      if (!arr.IsNull(row))
-        idx_.append(f(arr, row), detail::narrow_cast<size_t>(offset_ + row));
-  }
-
-  void operator()(const arrow::BooleanArray& arr, const bool_type&) {
-    apply(arr, boolean_at);
-  }
-
-  template <class T>
-  void operator()(const arrow::NumericArray<T>& arr, const real_type&) {
-    apply(arr, real_at);
-  }
-
-  template <class T>
-  void operator()(const arrow::NumericArray<T>& arr, const integer_type&) {
-    apply(arr, integer_at);
-  }
-
-  template <class T>
-  void operator()(const arrow::NumericArray<T>& arr, const count_type&) {
-    apply(arr, count_at);
-  }
-
-  void operator()(const arrow::DictionaryArray& arr, const enumeration_type&) {
-    apply(arr, enumeration_at);
-  }
-
-  void operator()(const arrow::DurationArray& arr, const duration_type&) {
-    apply(arr, duration_at);
-  }
-
-  void operator()(const arrow::FixedSizeBinaryArray& arr, const address_type&) {
-    apply(arr, address_at);
-  }
-
-  void operator()(const arrow::StructArray& arr, const subnet_type&) {
-    apply(arr, subnet_at);
-  }
-
-  void operator()(const arrow::StringArray& arr, const string_type&) {
-    apply(arr, string_at);
-  }
-
-  void operator()(const arrow::StringArray& arr, const pattern_type&) {
-    apply(arr, pattern_at);
-  }
-
-  void operator()(const arrow::TimestampArray& arr, const time_type&) {
-    apply(arr, timestamp_at);
-  }
-
-  void operator()(const arrow::ListArray& arr, const list_type& t) {
-    apply(arr, [&](const auto& arr, int64_t row) {
-      return list_at(t.value_type(), arr, row);
-    });
-  }
-
-  void operator()(const arrow::MapArray& arr, const map_type& t) {
-    apply(arr, [&](const auto& arr, int64_t row) {
-      return map_at(t.key_type(), t.value_type(), arr, row);
-    });
-  }
-
-  void operator()(const arrow::StructArray& arr, const record_type& t) {
-    apply(arr, [&](const auto& arr, int64_t row) {
-      return record_at(t, arr, row);
-    });
-  }
-
-private:
-  int64_t offset_;
-  value_index& idx_;
-};
+}
 
 // -- utility for converting Buffer to RecordBatch -----------------------------
 
@@ -1369,17 +1048,16 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
       auto f = legacy::index_applier{offset, index};
       auto array = batch->column(detail::narrow_cast<int>(column));
       const auto& layout = caf::get<record_type>(this->layout());
-      auto offset = layout.resolve_flat_index(column);
-      legacy::decode(layout.field(offset).type, *array, f);
+      auto o = layout.resolve_flat_index(column);
+      legacy::decode(layout.field(o).type, *array, f);
     }
   } else if constexpr (std::is_same_v<FlatBuffer,
                                       fbs::table_slice::arrow::experimental>) {
     if (auto&& batch = record_batch()) {
-      auto f = index_applier{offset, index};
       auto&& array = state_.flat_columns[column];
       const auto& layout = caf::get<record_type>(this->layout());
-      auto offset = layout.resolve_flat_index(column);
-      decode(layout.field(offset).type, *array, f);
+      auto o = layout.resolve_flat_index(column);
+      apply_index(offset, index, *array, layout.field(o).type);
     }
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
