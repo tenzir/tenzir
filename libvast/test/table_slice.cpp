@@ -93,6 +93,17 @@ TEST(row view) {
   }
 }
 
+TEST(select - import time) {
+  auto sut
+    = table_slice{chunk::copy(zeek_conn_log_full[0]), table_slice::verify::yes};
+  sut.offset(100);
+  sut.import_time(time::clock::now());
+  auto result = select(sut, make_ids({{110, 120}, {170, 180}}));
+  REQUIRE_EQUAL(result.size(), 2u);
+  CHECK_EQUAL(result[0].import_time(), sut.import_time());
+  CHECK_EQUAL(result[1].import_time(), sut.import_time());
+}
+
 TEST(select all) {
   auto sut = zeek_conn_log_full[0];
   sut.offset(100);
@@ -201,6 +212,17 @@ TEST(split) {
   CHECK_EQUAL(split_sut(5), manual_split_sut(5));
   CHECK_EQUAL(split_sut(6), manual_split_sut(6));
   CHECK_EQUAL(split_sut(7), manual_split_sut(7));
+}
+
+TEST(filter - import time) {
+  auto sut
+    = table_slice{chunk::copy(zeek_conn_log[0]), table_slice::verify::yes};
+  sut.import_time(time::clock::now());
+  auto exp = unbox(
+    tailor(unbox(to<expression>("id.orig_h != 192.168.1.102")), sut.layout()));
+  auto result = filter(sut, exp);
+  REQUIRE(result);
+  CHECK_EQUAL(result->import_time(), sut.import_time());
 }
 
 TEST(filter - expression overload) {
