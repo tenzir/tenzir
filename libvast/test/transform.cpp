@@ -198,8 +198,7 @@ TEST(project step) {
   REQUIRE(!invalid_add_failed);
   auto not_projected = invalid_project_step.finish();
   REQUIRE_NOERROR(not_projected);
-  REQUIRE_EQUAL(not_projected->size(), 1ull);
-  REQUIRE_EQUAL(as_table_slice(not_projected), slice);
+  CHECK(not_projected->empty());
 }
 
 TEST(replace step) {
