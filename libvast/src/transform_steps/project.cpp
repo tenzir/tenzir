@@ -65,7 +65,6 @@ project_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
       transformed_.clear();
       return layout_result.error();
     }
-    transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
   }
   // remove columns
