@@ -162,7 +162,7 @@ caf::error reader::dispatch(const ::broker::data& msg, size_t max_slice_size,
                                                     "slice builder");
         } else {
           VAST_DEBUG("{} ignores identical layout for stream ID {}: {}", name(),
-                     stream_id);
+                     stream_id, layout);
         }
       } else {
         VAST_INFO("{} got schema for new stream {}", name(), stream_id);
