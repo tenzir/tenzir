@@ -1,0 +1,2 @@
+The `project` transform step now correctly removes data where no configured
+columns match instead of leaving the data unchanged.
