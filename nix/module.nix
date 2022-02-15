@@ -1,4 +1,4 @@
-{ lib, pkgs, config, ... }:
+{ lib, pkgs, config, vast, ... }:
 let
   name = "vast";
   inherit (lib) mkIf mkOption mkEnableOption;
@@ -21,7 +21,7 @@ in
     enable = mkEnableOption "enable VAST";
 
     package = mkOption {
-      default = pkgs.vast;
+      default = vast;
       type = lib.types.package;
       description = ''
         Which VAST package to use.

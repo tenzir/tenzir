@@ -8,14 +8,18 @@
   inputs.nix-filter.url = "github:numtide/nix-filter";
 
   outputs = { self, nixpkgs, flake-utils, nix-filter, flake-compat }@inputs: {
-    overlay = import ./nix/overlay.nix { inherit inputs; };
     nixosModules.vast = {
-      imports = [ ./nix/module.nix ];
-      nixpkgs.overlays = [ self.overlay ];
+      imports = [
+        ./nix/module.nix
+      ];
+      _module.args = {
+        inherit (self.packages."x86_64-linux") vast;
+      };
     };
-  } // flake-utils.lib.eachDefaultSystem (system:
+  } // flake-utils.lib.eachSystem ["x86_64-linux"] (system:
     let
-      pkgs = inputs.nixpkgs.legacyPackages."${system}".appendOverlays [ self.overlay ];
+      overlay = import ./nix/overlay.nix { inherit inputs; };
+      pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
     in
     rec {
       inherit pkgs;
