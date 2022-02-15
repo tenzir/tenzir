@@ -212,7 +212,7 @@ TEST(empty partition roundtrip) {
              [=](const caf::error& err) {
                FAIL(err);
              });
-  auto expr = vast::expression{vast::predicate{vast::field_extractor{".x"},
+  auto expr = vast::expression{vast::predicate{vast::field_extractor{"x"},
                                                vast::relational_operator::equal,
                                                vast::data{0u}}};
   auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
