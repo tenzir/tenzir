@@ -38,7 +38,7 @@ FIXTURE_SCOPE(aggregate_tests, fixture);
 TEST(aggregate Zeek conn log) {
   auto opts = caf::settings{};
   caf::put(opts, "group-by", std::vector<std::string>{"ts"});
-  caf::put(opts, "round-temporal-multiple", "1 day");
+  caf::put(opts, "time-resolution", "1 day");
   caf::put(opts, "sum", std::vector<std::string>{"duration", "resp_pkts"});
   caf::put(opts, "min", std::vector<std::string>{"orig_ip_bytes"});
   caf::put(opts, "max", std::vector<std::string>{"resp_ip_bytes"});
