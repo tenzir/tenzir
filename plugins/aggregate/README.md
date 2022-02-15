@@ -2,7 +2,10 @@
 
 The `aggregate` plugin for VAST adds a generic aggregation transformation step
 that allows for flexible configuration. This is best used in conjunction with
-the [`compaction` plugin][docs-compaction].
+the [`compaction` plugin][docs-compaction]. The aggreagtion operates on the
+scope of the transformation, which for import and export is the size of a single
+batch (configurable as `vast.import.batch-size`), and for compaction is the size
+of a partition (configurable as `vast.max-partition-size`).
 
 [docs-compaction]: https://docs.tenzir.com/vast/features/compaction
 
@@ -14,34 +17,20 @@ underlying mechanism that users already know from queries.
 
 ### `group-by`
 
-A list of columns to group by. VAST internally calculates the cross product for
+A list of columns to group by. VAST internally calculates the combined hash for
 all the configured columns for every row, and sorts the data into buckets for
 aggregation.
 
-### `round-temporal-multiple`
+### `time-resolution`
 
-An optional duration value that specifies the tolerancy when comparing time
+An optional duration value that specifies the tolerance when comparing time
 values in the `group-by` section.
 
-### `sum` / `min` / `max` / `mean` / `any` / `all`
+### `sum` / `min` / `max` / `any` / `all`
 
-A list of columns to perform the respective computation on within the grouped
-buckets. Fields that have no such compute operation and are not part of the
-`group-by` columns are dropped from the output.
-
-### `disable-eager-pass` / `disable-lazy-pass`
-
-By default, the `aggregate` transform step computes the aggregation in two
-passes:
-- An eager pass when a batch of data arrives at the transformation, and
-- a lazy pass when VAST requests the result of the transformation.
-
-Either of the passes may be disabled depending on the use case. We highly
-recommend leaving both passes enabled when using the `aggregate` transform with
-the `compaction` plugin.
-
-Note that if both passes are enabled, `mean` calculates the mean of the eager
-result during the lazy pass, which may introduce rounding errors.
+A list of columns to perform the respective aggregation function on within the
+grouped buckets. Fields that have no such function specified and are not part of
+the `group-by` columns are dropped from the output.
 
 ## Usage Example
 
@@ -68,7 +57,7 @@ vast:
             - suricata.flow.dest_port
             - suricata.flow.proto
             - suricata.flow.event_type
-          round-temporal-multiple: 1 minute
+          time-resolution: 1 minute
           sum:
             - suricata.flow.pcap_cnt
             - suricata.flow.flow.pkts_toserver

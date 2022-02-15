@@ -610,8 +610,6 @@ jobs:
           - name: Aggregate
             target: aggregate
             path: plugins/aggregate
-            dependencies:
-              - libbroker-dev
           - name: Broker
             target: broker
             path: plugins/broker

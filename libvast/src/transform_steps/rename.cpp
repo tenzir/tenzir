@@ -112,7 +112,7 @@ class plugin final : public virtual transform_plugin {
 public:
   caf::error initialize(data options) override {
     // We don't use any plugin-specific configuration under
-    // vast.plugins.aggregate, so nothing is needed here.
+    // vast.plugins.rename, so nothing is needed here.
     if (caf::holds_alternative<caf::none_t>(options))
       return caf::none;
     if (const auto* rec = caf::get_if<record>(&options))

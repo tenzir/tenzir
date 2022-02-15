@@ -30,12 +30,7 @@ namespace vast::plugins::aggregate {
 /// The configuration of an aggregate transform step.
 struct configuration {
   /// Duration window for grouping time values.
-  std::optional<duration> round_temporal_multiple = {};
-
-  /// Whether to disable the eager and lazy pass respectively. At least one the
-  /// passes needs to be enabled.
-  bool disable_eager_pass = false;
-  bool disable_lazy_pass = false;
+  std::optional<duration> time_resolution = {};
 
   /// List of fields to group by.
   std::vector<std::string> group_by = {};
@@ -49,9 +44,6 @@ struct configuration {
   /// List of fields to take the maximum of.
   std::vector<std::string> max = {};
 
-  /// List of fields to take the maximum of.
-  std::vector<std::string> mean = {};
-
   /// List of fields to take the disjunction of.
   std::vector<std::string> any = {};
 
@@ -61,22 +53,17 @@ struct configuration {
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.round_temporal_multiple, x.disable_eager_pass,
-             x.disable_lazy_pass, x.group_by, x.sum, x.min, x.max, x.mean,
-             x.any, x.all);
+    return f(x.time_resolution, x.group_by, x.sum, x.min, x.max, x.any, x.all);
   }
 
   /// Enable parsing from a record via convertible.
   static inline const record_type& layout() noexcept {
     static auto result = record_type{
-      {"round-temporal-multiple", duration_type{}},
-      {"disable-eager-pass", bool_type{}},
-      {"disable-lazy-pass", bool_type{}},
+      {"time-resolution", duration_type{}},
       {"group-by", list_type{string_type{}}},
       {"sum", list_type{string_type{}}},
       {"min", list_type{string_type{}}},
       {"max", list_type{string_type{}}},
-      {"mean", list_type{string_type{}}},
       {"any", list_type{string_type{}}},
       {"all", list_type{string_type{}}},
     };
@@ -93,7 +80,6 @@ struct aggregation {
     sum,      ///< Accumulate values within the same group.
     min,      ///< Use the minimum value within the same group.
     max,      ///< Use the maximum value within the same group.
-    mean,     ///< Calculate the mean value within the same group.
     any,      ///< Disjoin values within the same group.
     all,      ///< Conjoin values within the same group.
   };
@@ -137,12 +123,6 @@ struct aggregation {
   static caf::expected<aggregation>
   make(const configuration& config, const type& layout) {
     auto result = aggregation{};
-    if (config.disable_eager_pass && config.disable_lazy_pass)
-      return caf::make_error(ec::invalid_configuration,
-                             "aggregate transform must not have both eager and "
-                             "lazy pass disabled");
-    result.disable_eager_pass_ = config.disable_eager_pass;
-    result.disable_lazy_pass_ = config.disable_lazy_pass;
     VAST_ASSERT(caf::holds_alternative<record_type>(layout));
     const auto& rt = caf::get<record_type>(layout);
     auto unflattened_actions = std::vector<std::pair<offset, action>>{};
@@ -155,7 +135,6 @@ struct aggregation {
     resolve_action(config.sum, action::sum);
     resolve_action(config.min, action::min);
     resolve_action(config.max, action::max);
-    resolve_action(config.mean, action::mean);
     resolve_action(config.any, action::any);
     resolve_action(config.all, action::all);
     std::sort(unflattened_actions.begin(), unflattened_actions.end());
@@ -194,7 +173,7 @@ struct aggregation {
     result.adjusted_layout_ = type{layout.name(), *adjusted_rt};
     result.num_group_by_columns_ = std::count(
       result.actions_.begin(), result.actions_.end(), action::group_by);
-    result.round_temporal_multiple_ = config.round_temporal_multiple;
+    result.time_resolution_ = config.time_resolution;
     return result;
   }
 
@@ -227,10 +206,10 @@ struct aggregation {
     VAST_ASSERT(batch->num_columns()
                 == detail::narrow_cast<int>(actions_.size()));
     // Second, round time values to a multiple of the configured value.
-    if (round_temporal_multiple_) {
+    if (time_resolution_) {
       const auto options = arrow::compute::RoundTemporalOptions{
         std::chrono::duration_cast<std::chrono::duration<int, std::milli>>(
-          *round_temporal_multiple_)
+          *time_resolution_)
           .count(),
         arrow::compute::CalendarUnit::MILLISECOND,
       };
@@ -242,7 +221,7 @@ struct aggregation {
             ec::unspecified,
             fmt::format("aggregate transform failed to round time column {} to "
                         "multiple of {}: {}",
-                        batch->column_name(column), *round_temporal_multiple_,
+                        batch->column_name(column), *time_resolution_,
                         round_temporal_result.status().ToString()));
         auto set_column_result = batch->SetColumn(
           column, batch->schema()->field(column),
@@ -255,20 +234,15 @@ struct aggregation {
         batch = set_column_result.MoveValueUnsafe();
       }
     }
-    // Third and last, aggregate the batch eagerly iff configured to do so.
-    if (disable_eager_pass_) {
-      buffer_.push_back(std::move(batch));
-      return caf::none;
-    }
+    // Third and last, aggregate the batch eagerly.
     return aggregate({std::move(batch)});
   }
 
   /// Returns the aggregated batches, doing a second aggregation pass unless
   /// disabled.
   caf::expected<std::vector<transform_batch>> finish() {
-    if (!disable_lazy_pass_)
-      if (auto err = aggregate(std::exchange(buffer_, {})))
-        return err;
+    if (auto err = aggregate(std::exchange(buffer_, {})))
+      return err;
     // Collect the results from the buffer.
     auto result = std::vector<transform_batch>{};
     result.reserve(buffer_.size());
@@ -427,23 +401,6 @@ private:
                                 .value[1]);
             break;
           }
-          case action::mean: {
-            auto mean_result = arrow::compute::Mean(table->column(column));
-            if (!mean_result.ok())
-              return caf::make_error(
-                ec::unspecified, fmt::format("aggregate transform failed to "
-                                             "compute mean: {}",
-                                             mean_result.status().ToString()));
-            auto cast_result = mean_result.MoveValueUnsafe().scalar()->CastTo(
-              table->column(column)->type());
-            if (!cast_result.ok())
-              return caf::make_error(
-                ec::unspecified, fmt::format("aggregate transform failed to "
-                                             "cast: {}",
-                                             cast_result.status().ToString()));
-            append_to_builder(cast_result.MoveValueUnsafe());
-            break;
-          }
           case action::any: {
             auto any_result = arrow::compute::Any(table->column(column));
             if (!any_result.ok())
@@ -479,11 +436,6 @@ private:
     return caf::none;
   }
 
-  /// Whether to disable the eager and lazy pass respectively. At least one the
-  /// passes needs to be enabled.
-  bool disable_eager_pass_ = false;
-  bool disable_lazy_pass_ = false;
-
   /// The action to take during aggregation for every individual column in the
   /// incoming record batches.
   std::vector<action> actions_ = {};
@@ -499,7 +451,7 @@ private:
 
   /// The duration used as the multiple value when rounding grouped temporal
   /// values.
-  std::optional<duration> round_temporal_multiple_ = {};
+  std::optional<duration> time_resolution_ = {};
 
   /// The adjusted layout with the dropped columns removed.
   type adjusted_layout_ = {};
