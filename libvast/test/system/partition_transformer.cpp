@@ -296,10 +296,29 @@ TEST(partition transform via the index) {
   auto identity_step = vast::make_transform_step("identity", caf::settings{});
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
-  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
-                           partition_uuid);
+  auto rp3
+    = self->request(index, caf::infinite, vast::atom::apply_v, transform,
+                    partition_uuid, vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
+    [=](const vast::partition_synopsis_pair& pair) {
+      CHECK_EQUAL(pair.synopsis->events, events);
+    },
+    [](const caf::error& e) {
+      REQUIRE_EQUAL(e, caf::no_error);
+    });
+  auto rp4 = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                           index_dir / fmt::format("{:l}.mdx", partition_uuid));
+  run();
+  rp4.receive([&](vast::chunk_ptr&) {},
+              [](const caf::error& e) {
+                REQUIRE_SUCCESS(e);
+              });
+  auto rp5
+    = self->request(index, caf::infinite, vast::atom::apply_v, transform,
+                    partition_uuid, vast::system::keep_original_partition::no);
+  run();
+  rp5.receive(
     [=](const vast::partition_synopsis_pair& pair) {
       CHECK_EQUAL(pair.synopsis->events, events);
     },

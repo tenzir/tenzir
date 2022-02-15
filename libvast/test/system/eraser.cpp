@@ -85,7 +85,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         vast::system::partition_creation_listener_actor) {
       FAIL("no mock implementation available");
     },
-    [=](atom::apply, transform_ptr, uuid) -> partition_synopsis_pair {
+    [=](atom::apply, transform_ptr, uuid,
+        system::keep_original_partition) -> partition_synopsis_pair {
       FAIL("no mock implementation available");
     },
     [=](atom::importer, system::idspace_distributor_actor) {

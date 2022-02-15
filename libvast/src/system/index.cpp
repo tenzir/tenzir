@@ -1176,8 +1176,9 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::importer, idspace_distributor_actor idspace_distributor) {
       self->state.importer = std::move(idspace_distributor);
     },
-    [self](atom::apply, transform_ptr transform, vast::uuid old_partition_id)
-      -> caf::result<partition_synopsis_pair> {
+    [self](
+      atom::apply, transform_ptr transform, vast::uuid old_partition_id,
+      keep_original_partition keep) -> caf::result<partition_synopsis_pair> {
       VAST_DEBUG("{} applies a transform to partition {}", *self,
                  old_partition_id);
       if (!self->state.store_plugin)
@@ -1224,34 +1225,48 @@ index(index_actor::stateful_pointer<index_state> self,
                   self->state.partition_path(new_partition_id),
                   self->state.partition_synopsis_path(new_partition_id))
         .then(
-          [self, rp, old_partition_id,
-           new_partition_id](partition_synopsis_ptr& synopsis) mutable {
+          [self, rp, old_partition_id, new_partition_id,
+           keep](partition_synopsis_ptr& synopsis) mutable {
             auto result = partition_synopsis_pair{new_partition_id, synopsis};
 
             // TODO: We eventually want to allow transforms that delete
             // whole events, at that point we also need to update the index
             // statistics here.
-            self
-              ->request(self->state.meta_index, caf::infinite, atom::replace_v,
-                        old_partition_id, new_partition_id, synopsis)
-              .then(
-                [self, rp, old_partition_id, new_partition_id,
-                 result](atom::ok) mutable {
-                  self->state.persisted_partitions.insert(new_partition_id);
-                  self
-                    ->request(static_cast<index_actor>(self), caf::infinite,
-                              atom::erase_v, old_partition_id)
-                    .then(
-                      [=](atom::done) mutable {
-                        rp.deliver(result);
-                      },
-                      [=](const caf::error& e) mutable {
-                        rp.deliver(e);
-                      });
-                },
-                [rp](const caf::error& e) mutable {
-                  rp.deliver(e);
-                });
+            if (keep == keep_original_partition::yes)
+              self
+                ->request(self->state.meta_index, caf::infinite, atom::merge_v,
+                          new_partition_id, synopsis)
+                .then(
+                  [self, rp, new_partition_id, result](atom::ok) mutable {
+                    self->state.persisted_partitions.insert(new_partition_id);
+                    rp.deliver(result);
+                  },
+                  [rp](const caf::error& e) mutable {
+                    rp.deliver(e);
+                  });
+            else
+              self
+                ->request(self->state.meta_index, caf::infinite,
+                          atom::replace_v, old_partition_id, new_partition_id,
+                          synopsis)
+                .then(
+                  [self, rp, old_partition_id, new_partition_id,
+                   result](atom::ok) mutable {
+                    self->state.persisted_partitions.insert(new_partition_id);
+                    self
+                      ->request(static_cast<index_actor>(self), caf::infinite,
+                                atom::erase_v, old_partition_id)
+                      .then(
+                        [=](atom::done) mutable {
+                          rp.deliver(result);
+                        },
+                        [=](const caf::error& e) mutable {
+                          rp.deliver(e);
+                        });
+                  },
+                  [rp](const caf::error& e) mutable {
+                    rp.deliver(e);
+                  });
           },
           [rp](const caf::error& e) mutable {
             rp.deliver(e);

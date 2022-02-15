@@ -317,25 +317,26 @@ class configuration;
 
 struct accountant_config;
 struct active_partition_state;
-struct passive_partition_state;
-struct index_state;
-struct index_statistics;
-struct layout_statistics;
 struct component_map;
 struct component_map_entry;
 struct component_state;
 struct component_state_map;
 struct data_point;
+struct index_state;
+struct index_statistics;
+struct layout_statistics;
 struct measurement;
-struct metrics_metadata;
 struct meta_index_result;
+struct metrics_metadata;
 struct node_state;
+struct passive_partition_state;
 struct performance_report;
 struct performance_sample;
 struct query_cursor;
 struct query_status;
 struct report;
 struct spawn_arguments;
+enum class keep_original_partition : bool;
 enum class status_verbosity;
 
 } // namespace system
@@ -391,6 +392,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::system::query_cursor))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
+  VAST_ADD_TYPE_ID((vast::system::keep_original_partition))
   VAST_ADD_TYPE_ID((vast::system::status_verbosity))
   VAST_ADD_TYPE_ID((vast::system::meta_index_result))
 
