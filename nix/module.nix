@@ -45,10 +45,12 @@ in
 
     settings = mkOption {
       type = lib.types.submodule {
+        freeformType = format.type;
         options = {
           vast = mkOption {
             default = { };
             type = lib.types.submodule {
+              freeformType = format.type;
               options = {
                 plugins = mkOption {
                   type = lib.types.listOf lib.types.str;
