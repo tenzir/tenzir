@@ -17,9 +17,8 @@
 #include <vast/plugin.hpp>
 #include <vast/transform_step.hpp>
 
-#include <arrow/compute/api_aggregate.h>
-#include <arrow/compute/api_scalar.h>
-#include <arrow/compute/function.h>
+#include <arrow/compute/api.h>
+#include <arrow/config.h>
 #include <arrow/table.h>
 #include <arrow/table_builder.h>
 
@@ -207,20 +206,34 @@ struct aggregation {
                 == detail::narrow_cast<int>(actions_.size()));
     // Second, round time values to a multiple of the configured value.
     if (time_resolution_) {
+#if ARROW_VERSION_MAJOR >= 7
       const auto options = arrow::compute::RoundTemporalOptions{
         std::chrono::duration_cast<std::chrono::duration<int, std::milli>>(
           *time_resolution_)
           .count(),
         arrow::compute::CalendarUnit::MILLISECOND,
       };
+#else
+      const auto options = arrow::compute::RoundToMultipleOptions{
+        detail::narrow_cast<double>(time_resolution_->count())};
+#endif
       for (const auto& column : round_temporal_columns_) {
+#if ARROW_VERSION_MAJOR >= 7
         auto round_temporal_result
           = arrow::compute::RoundTemporal(batch->column(column), options);
+#else
+        auto round_temporal_result
+          = arrow::compute::RoundToMultiple(batch->column(column), options);
+        if (round_temporal_result.ok())
+          round_temporal_result
+            = arrow::compute::Cast(round_temporal_result.MoveValueUnsafe(),
+                                   batch->column(column)->type());
+#endif
         if (!round_temporal_result.ok())
           return caf::make_error(
             ec::unspecified,
-            fmt::format("aggregate transform failed to round time column {} to "
-                        "multiple of {}: {}",
+            fmt::format("aggregate transform failed to round time column {} "
+                        "to multiple of {}: {}",
                         batch->column_name(column), *time_resolution_,
                         round_temporal_result.status().ToString()));
         auto set_column_result = batch->SetColumn(
