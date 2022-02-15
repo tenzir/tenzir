@@ -33,7 +33,7 @@ struct fixture : fixtures::events {
 
 } // namespace
 
-FIXTURE_SCOPE(aggregate_tests, fixture);
+FIXTURE_SCOPE(aggregate_tests, fixture)
 
 TEST(aggregate Zeek conn log) {
   auto opts = caf::settings{};
@@ -75,6 +75,6 @@ TEST(aggregate Zeek conn log) {
                   unbox(to<data>(expected_data[row][column])));
 }
 
-FIXTURE_SCOPE_END();
+FIXTURE_SCOPE_END()
 
 } // namespace vast
