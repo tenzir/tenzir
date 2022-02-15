@@ -15,6 +15,7 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
+#include <arrow/array.h>
 #include <fmt/format.h>
 
 namespace vast {
@@ -45,27 +46,18 @@ replace_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
     cb->add(make_view(value_));
   }
   auto values_column = cb->finish();
-  auto removed = batch->RemoveColumn(detail::narrow_cast<int>(column_index));
-  if (!removed.ok()) {
-    transformed_.clear();
-    return caf::make_error(
-      ec::unspecified, fmt::format("failed to remove field from record "
-                                   "batch schema at index {}: {}",
-                                   column_index, removed.status().ToString()));
-  }
-  batch = removed.ValueOrDie();
-  // SetColumn inserts *before* the element at the given index.
-  auto added = batch->AddColumn(detail::narrow_cast<int>(column_index), field_,
-                                values_column);
-  if (!added.ok()) {
+  auto adjusted_batch
+    = batch->SetColumn(detail::narrow_cast<int>(column_index),
+                       arrow::field(field_, values_column->type()),
+                       values_column);
+  if (!adjusted_batch.ok()) {
     transformed_.clear();
     return caf::make_error(ec::unspecified,
-                           fmt::format("failed to add field {} to record batch "
-                                       "schema at index {}: {}",
-                                       field_, column_index,
-                                       added.status().ToString()));
+                           fmt::format("failed to replace field in record "
+                                       "batch schema at index {}: {}",
+                                       column_index,
+                                       adjusted_batch.status().ToString()));
   }
-  batch = added.ValueOrDie();
   // Adjust layout.
   auto field = layout_rt.field(*column_offset);
   auto adjusted_layout_rt = layout_rt.transform(
@@ -74,7 +66,8 @@ replace_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   VAST_ASSERT(adjusted_layout_rt); // replacing a field cannot fail.
   auto adjusted_layout = type{*adjusted_layout_rt};
   adjusted_layout.assign_metadata(layout);
-  transformed_.emplace_back(std::move(adjusted_layout), std::move(batch));
+  transformed_.emplace_back(std::move(adjusted_layout),
+                            adjusted_batch.MoveValueUnsafe());
   return caf::none;
 }
 
