@@ -36,6 +36,8 @@
 
 namespace vast::system {
 
+/// The transformer replaces the old partition with the new one or keeps it
+/// depending on the value of keep_original_partition.
 enum class keep_original_partition : bool {
   yes = true,
   no = false,
