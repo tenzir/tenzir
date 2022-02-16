@@ -272,13 +272,13 @@ using index_actor = typed_actor_fwd<
   // Erases the given events from the INDEX, and returns their ids.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
   // Applies the given transformation to the partition.
-  // Erases the existing partition and returns the synopsis of the
-  // new partition. If the partition is completely erased, returns
-  // the nil uuid.
-  // TODO: Add options to do an in-place transform keeping the old ids,
-  // and to make a new partition preserving the old one(s).
-  caf::replies_to<atom::apply, transform_ptr,
-                  uuid>::with<partition_synopsis_pair>,
+  // When keep_original_partition is yes: erases the existing partition and
+  // returns the synopsis of the new partition. If the partition is completely
+  // erased, returns the nil uuid. When keep_original_partition is no: does an
+  // in-place transform keeping the old ids, and makes a new partition
+  // preserving the old one(s).
+  caf::replies_to<atom::apply, transform_ptr, uuid,
+                  keep_original_partition>::with<partition_synopsis_pair>,
   // Makes the identity of the importer known to the index.
   caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.

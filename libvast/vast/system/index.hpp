@@ -36,6 +36,13 @@
 
 namespace vast::system {
 
+/// The transformer replaces the old partition with the new one or keeps it
+/// depending on the value of keep_original_partition.
+enum class keep_original_partition : bool {
+  yes = true,
+  no = false,
+};
+
 /// Extract a partition synopsis from the partition at `partition_path`
 /// and write it to `partition_synopsis_path`.
 //  TODO: Move into separate header.
