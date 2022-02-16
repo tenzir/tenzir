@@ -27,6 +27,8 @@ eraser_state::eraser_state(caf::event_based_actor* self) : super{self} {
 
 void eraser_state::init(caf::timespan interval, std::string query,
                         index_actor index) {
+  VAST_WARN("the experimental aging mechanism is deprecated and will be "
+            "removed in VAST v2.0");
   VAST_TRACE_SCOPE("{} {} {} {}", VAST_ARG(interval), VAST_ARG(query),
                    VAST_ARG(index));
   // Set member variables.
