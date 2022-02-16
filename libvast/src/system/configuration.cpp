@@ -307,6 +307,13 @@ caf::error configuration::parse(int argc, char** argv) {
   if (use_encryption)
     load<caf::openssl::manager>();
 #endif // VAST_ENABLE_OPENSSL
+  // Deprecation warnings
+  auto slice_type = caf::get_or(content, "vast.table_slice_type", "arrow");
+  if (slice_type == "msgpack")
+    VAST_WARN("The msgpack table slice type is deprecated and importing data "
+              "into this format will not be supported any more with VAST v1.2; "
+              "We recommend to switch to the arrow format, which is already "
+              "the default.");
   return result;
 }
 
