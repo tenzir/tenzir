@@ -12,6 +12,7 @@
 
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
+#include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
 #include "vast/transform_steps/count.hpp"
@@ -26,6 +27,9 @@
 #include <arrow/array/array_base.h>
 #include <arrow/array/array_binary.h>
 #include <arrow/array/data.h>
+#include <caf/config_value.hpp>
+#include <caf/settings.hpp>
+#include <caf/test/dsl.hpp>
 
 #include <string_view>
 
@@ -128,6 +132,9 @@ struct transforms_fixture {
     }
     return {builder->finish(), builder2->finish(), builder3->finish()};
   }
+
+  const vast::transform_plugin* rename_plugin
+    = vast::plugins::find<vast::transform_plugin>("rename");
 };
 
 vast::type layout(caf::expected<std::vector<vast::transform_batch>> batches) {
@@ -301,6 +308,26 @@ TEST(transform with multiple steps) {
   CHECK_EQUAL((*not_transformed)[0].at(0, 0), vast::data_view{"asdf"sv});
   CHECK_EQUAL((*not_transformed)[0].at(0, 1), vast::data_view{"jklo"sv});
   CHECK_EQUAL((*not_transformed)[0].at(0, 2), vast::data{vast::integer{23}});
+}
+
+TEST(transform rename layout) {
+  vast::transform transform("test_transform", {"testdata"});
+  caf::settings from_to{};
+  caf::put(from_to, "from", "testdata");
+  caf::put(from_to, "to", "testdata_renamed");
+  caf::settings rename_settings{};
+  caf::put(rename_settings, "layout-names", std::vector{from_to});
+  transform.add_step(
+    unbox(rename_plugin->make_transform_step(rename_settings)));
+  transform.add_step(
+    std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
+  auto slice = make_transforms_testdata();
+  REQUIRE_SUCCESS(transform.add(std::move(slice)));
+  auto transformed = transform.finish();
+  REQUIRE_NOERROR(transformed);
+  REQUIRE_EQUAL(transformed->size(), 1ull);
+  REQUIRE_EQUAL(
+    caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
 }
 
 TEST(transformation engine - single matching transform) {

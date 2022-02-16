@@ -54,7 +54,9 @@ private:
   [[nodiscard]] caf::expected<std::vector<transform_batch>> finish_batch();
 
   /// Applies the transform step to every batch in the queue.
-  caf::error process_queue(const std::unique_ptr<transform_step>& step);
+  caf::error
+  process_queue(const std::unique_ptr<transform_step>& step,
+                std::vector<transform_batch>& result, bool check_layout);
 
   /// Grant access to the transformation engine so it can call
   /// add_batch/finsih_batch.

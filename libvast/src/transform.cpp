@@ -75,8 +75,9 @@ caf::error transform::add_batch(vast::type layout,
   return caf::none;
 }
 
-caf::error
-transform::process_queue(const std::unique_ptr<transform_step>& step) {
+caf::error transform::process_queue(const std::unique_ptr<transform_step>& step,
+                                    std::vector<transform_batch>& result,
+                                    bool check_layout) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {
@@ -84,11 +85,12 @@ transform::process_queue(const std::unique_ptr<transform_step>& step) {
     to_transform_.pop_front();
     // TODO: Add a private method `unchecked_apply()` that the transformation
     // engine can call directly to avoid repeating the check.
-    if (std::find(event_types_.begin(), event_types_.end(),
-                  std::string{layout.name()})
-        == event_types_.end()) {
+    if (check_layout
+        && std::find(event_types_.begin(), event_types_.end(),
+                     std::string{layout.name()})
+             == event_types_.end()) {
       // The transform does not change slices of unconfigured event types.
-      to_transform_.emplace_back(std::move(layout), std::move(batch));
+      result.emplace_back(std::move(layout), std::move(batch));
       continue;
     }
     if (auto err = step->add(std::move(layout), std::move(batch))) {
@@ -114,14 +116,16 @@ transform::process_queue(const std::unique_ptr<transform_step>& step) {
 
 caf::expected<std::vector<transform_batch>> transform::finish_batch() {
   VAST_DEBUG("applying {} transform {}", steps_.size(), name_);
+  bool first_run = true;
+  std::vector<transform_batch> result{};
   for (const auto& step : steps_) {
-    auto failed = process_queue(step);
+    auto failed = process_queue(step, result, first_run);
+    first_run = false;
     if (failed) {
       to_transform_.clear();
       return failed;
     }
   }
-  std::vector<transform_batch> result{};
   while (!to_transform_.empty()) {
     result.emplace_back(std::move(to_transform_.front()));
     to_transform_.pop_front();
