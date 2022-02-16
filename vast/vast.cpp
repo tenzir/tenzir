@@ -94,6 +94,16 @@ int main(int argc, char** argv) {
     VAST_ERROR("failed to initialize plugins: {}", err);
     return EXIT_FAILURE;
   }
+  // Issue deprecation warnings.
+  for (std::string_view option : {
+         "vast.import.batch-encoding",
+         "vast.spawn.source.batch-encoding",
+         "vast.metrics.self-sink.slice-type",
+       })
+    if (caf::get_or(cfg, option, "arrow") == std::string_view{"msgpack"})
+      VAST_WARN("The 'msgpack' option for the configuration option '{}' is "
+                "deprecated; automatically using the 'arrow' encoding instead",
+                option);
   // Eagerly verify the export transform configuration, to avoid hidden
   // configuration errors that pop up the first time a user tries to run
   // `vast export`.

@@ -14,7 +14,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
@@ -41,7 +40,8 @@ struct alternating {};
 template <class Policy>
 std::vector<table_slice> make_integers(size_t count) {
   auto layout = type{"test.int", record_type{{"value", integer_type{}}}};
-  auto builder = msgpack_table_slice_builder::make(layout);
+  auto builder = factory<table_slice_builder>::make(
+    defaults::import::table_slice_type, layout);
   VAST_ASSERT(builder != nullptr);
   std::vector<table_slice> result;
   result.reserve(count);

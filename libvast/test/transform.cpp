@@ -10,8 +10,6 @@
 
 #include "vast/transform.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
-#include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
@@ -27,7 +25,6 @@
 #include <arrow/array/array_base.h>
 #include <arrow/array/array_binary.h>
 #include <arrow/array/data.h>
-#include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 #include <caf/test/dsl.hpp>
 
@@ -143,8 +140,7 @@ vast::type layout(caf::expected<std::vector<vast::transform_batch>> batches) {
 
 vast::table_slice
 as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
-  return vast::arrow_table_slice_builder::create((*batches)[0].batch,
-                                                 (*batches)[0].layout);
+  return {(*batches)[0].batch, (*batches)[0].layout};
 }
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
@@ -227,7 +223,7 @@ TEST(replace step) {
 
 TEST(select step) {
   auto [slice, single_row_slice, multi_row_slice]
-    = make_select_testdata(vast::table_slice_encoding::msgpack);
+    = make_select_testdata(vast::defaults::import::table_slice_type);
   vast::select_step select_step("index==+2");
   auto add_failed = select_step.add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
@@ -368,15 +364,16 @@ TEST(transformation engine - multiple matching transforms) {
   transform2.add_step(
     std::make_unique<vast::delete_step>(std::vector<std::string>{"index"}));
   vast::transformation_engine engine(std::move(transforms));
-  auto slice = make_transforms_testdata(vast::table_slice_encoding::msgpack);
-  REQUIRE_EQUAL(slice.encoding(), vast::table_slice_encoding::msgpack);
+  auto slice
+    = make_transforms_testdata(vast::defaults::import::table_slice_type);
+  REQUIRE_EQUAL(slice.encoding(), vast::defaults::import::table_slice_type);
   auto add_failed = engine.add(std::move(slice));
   REQUIRE(!add_failed);
   auto transformed = engine.finish();
   REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->size(), 1ull);
   REQUIRE_EQUAL((*transformed)[0].encoding(),
-                vast::table_slice_encoding::arrow);
+                vast::defaults::import::table_slice_type);
   CHECK_EQUAL(
     caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 1ull);
 }
