@@ -195,8 +195,7 @@ auto make_spawn_source_command() {
     "source", "creates a new source inside the node",
     documentation::vast_spawn_source,
     opts("?vast.spawn.source")
-      .add<std::string>("batch-encoding", "encoding type of table slices "
-                                          "(arrow or msgpack)")
+      .add<std::string>("batch-encoding", "encoding type of table slices")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")
@@ -491,8 +490,7 @@ std::unique_ptr<command> make_import_command() {
   auto import_ = std::make_unique<command>(
     "import", "imports data from STDIN or file", documentation::vast_import,
     opts("?vast.import")
-      .add<std::string>("batch-encoding", "encoding type of table slices "
-                                          "(arrow or msgpack)")
+      .add<std::string>("batch-encoding", "encoding type of table slices")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")

@@ -23,7 +23,8 @@ namespace vast {
 enum class table_slice_encoding : uint8_t {
   none,         ///< No data is encoded; the table slice is empty or invalid.
   arrow,        ///< The table slice is encoded using the Apache Arrow format.
-  msgpack,      ///< The table slice is encoded using the MessagePack format.
+  msgpack,      ///< The table slice is encoded using the MessagePack format
+                ///< (deprecated).
   experimental, ///< The table slice is encoded using an unstable foramt.
 };
 

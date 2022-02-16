@@ -1,3 +1,3 @@
-The `msgpack` table slice implementation has been deprecated and we recommend
-switching to the `arrow` implementation. The v1.2 version of VAST will remove
-support for importing new data with the `msgpack` format.
+The `msgpack` encoding option is now deprecated. VAST issues a warning on
+startup and automatically uses the `arrow` encoding instead. A future version of
+VAST will remove this option entirely.

@@ -293,7 +293,7 @@ vast:
     # vast.import.read-timeout option only.
     batch-size: 1024
 
-    # Encoding type of table slices (arrow or msgpack).
+    # Encoding type of table slices.
     batch-encoding: arrow
 
     # Block until the importer forwarded all data.

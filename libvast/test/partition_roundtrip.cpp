@@ -17,8 +17,6 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/msgpack_table_slice.hpp"
-#include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/query.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
@@ -256,7 +254,8 @@ TEST(full partition roundtrip) {
       {"x", vast::count_type{}},
     },
   };
-  auto builder = vast::msgpack_table_slice_builder::make(layout);
+  auto builder = vast::factory<vast::table_slice_builder>::make(
+    vast::defaults::import::table_slice_type, layout);
   CHECK(builder->add(0u));
   auto slice = builder->finish();
   slice.offset(0);
