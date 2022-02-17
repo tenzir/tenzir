@@ -1328,7 +1328,7 @@ index(index_actor::stateful_pointer<index_state> self,
           lost = false;
       }
       if (lost) {
-        VAST_WARN("{} recoverd a lost worker", *self);
+        VAST_VERBOSE("{} recovered a lost worker", *self);
         self->delegate(static_cast<index_actor>(self), atom::worker_v, worker);
       }
     },
