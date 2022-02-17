@@ -47,9 +47,6 @@ query_supervisor_actor::behavior_type query_supervisor(
   // Ask master for initial work.
   self->state.master = std::move(master);
   self->send(self->state.master, atom::worker_v, self);
-  self->attach_functor([identifier = self->state.log_identifier]() noexcept {
-    VAST_WARN("query_supervisor {} exited");
-  });
   return {
     [self](atom::supervise, const vast::uuid& query_id,
            const vast::query& query,
@@ -106,17 +103,15 @@ query_supervisor_actor::behavior_type query_supervisor(
             });
       }
     },
-    [self](atom::shutdown, atom::sink) {
+    [self](atom::shutdown, atom::sink) -> caf::result<void> {
       // If there are still open requests, the message will be sent when
       // the count drops to zero. We currently don't have a way of aborting
       // the in-progress work.
-      if (self->state.open_requests == 0)
-        self->send(self->state.master, atom::worker_v, self);
+      if (self->state.open_requests > 0)
+        return caf::skip;
+      self->send(self->state.master, atom::worker_v, atom::wakeup_v, self);
+      return {};
     },
-    caf::after(std::chrono::seconds(60)) >>
-      [self]() {
-        self->send(self->state.master, atom::worker_v, atom::wakeup_v, self);
-      },
   };
 }
 
