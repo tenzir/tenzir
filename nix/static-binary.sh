@@ -1,8 +1,7 @@
-#!/usr/bin/env nix-shell
-#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/4789953e5c1ef6d10e3ff437e5b7ab8eed526942.tar.gz -i bash -p git nix coreutils nix-prefetch-github
+#!/usr/bin/env bash
 
 nix --version
-nix-prefetch-github --version
+nix-prefetch-github --version workaround bug
 
 usage() {
   printf "usage: %s [options]\n" $(basename $0)
@@ -82,9 +81,9 @@ if [ "${USE_HEAD}" == "on" ]; then
   source_json="$(nix-prefetch-github --rev=${vast_rev} tenzir vast)"
   desc="$(git -C ${dir} describe --abbrev=10 --long --match='v[0-9]*' HEAD)"
   read -r -d '' exp <<EOF
-  with import ${dir} {};
-  pkgsStatic."${target}".override {
-    vast-source = fetchFromGitHub (builtins.fromJSON ''${source_json}'');
+  let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
+  pkgs.pkgsStatic."${target}".override {
+    vast-source = pkgs.fetchFromGitHub (builtins.fromJSON ''${source_json}'');
     versionOverride = "${desc}";
     withPlugins = [ ${plugins[@]} ];
     extraCmakeFlags = [ ${cmakeFlags} ];
@@ -92,8 +91,8 @@ if [ "${USE_HEAD}" == "on" ]; then
 EOF
 else
   read -r -d '' exp <<EOF
-  with import ${dir} {};
-  pkgsStatic."${target}".override {
+  let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
+  pkgs.pkgsStatic."${target}".override {
     versionOverride = "${desc}";
     withPlugins = [ ${plugins[@]} ];
     extraCmakeFlags = [ ${cmakeFlags} ];
