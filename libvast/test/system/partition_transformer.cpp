@@ -19,6 +19,7 @@
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/meta_index.hpp"
+#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/memory_filesystem.hpp"
@@ -54,6 +55,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       VAST_PP_STRINGIFY(SUITE)) {
     filesystem = self->spawn(memory_filesystem);
     importer = self->spawn(mock_importer);
+    auto type_system_path = std::filesystem::path{"/type-registry"};
+    type_registry = self->spawn(vast::system::type_registry, type_system_path);
   }
 
   fixture(const fixture&) = delete;
@@ -64,10 +67,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   ~fixture() override {
     self->send_exit(filesystem, caf::exit_reason::user_shutdown);
     self->send_exit(importer, caf::exit_reason::user_shutdown);
+    self->send_exit(type_registry, caf::exit_reason::user_shutdown);
   }
 
   vast::system::accountant_actor accountant = {};
   vast::system::idspace_distributor_actor importer;
+  vast::system::type_registry_actor type_registry;
   vast::system::filesystem_actor filesystem;
 };
 
@@ -88,8 +93,8 @@ TEST(identity transform / done before persist) {
   transform->add_step(std::move(*identity_step));
   auto transformer
     = self->spawn(vast::system::partition_transformer, uuid, store_id,
-                  synopsis_opts, index_opts, accountant, importer, filesystem,
-                  std::move(transform));
+                  synopsis_opts, index_opts, accountant, importer,
+                  type_registry, filesystem, std::move(transform));
   REQUIRE(transformer);
   // Stream data
   size_t events = 0;
@@ -161,8 +166,8 @@ TEST(delete transform / persist before done) {
   transform->add_step(std::move(*delete_step));
   auto transformer
     = self->spawn(vast::system::partition_transformer, uuid, store_id,
-                  synopsis_opts, index_opts, accountant, importer, filesystem,
-                  std::move(transform));
+                  synopsis_opts, index_opts, accountant, importer,
+                  type_registry, filesystem, std::move(transform));
   REQUIRE(transformer);
   // Stream data
   auto partition_path = std::filesystem::path{"/partition.fbs"};
@@ -243,9 +248,10 @@ TEST(partition transform via the index) {
   const auto meta_index_fp_rate = 0.01;
   auto index
     = self->spawn(vast::system::index, accountant, filesystem, archive,
-                  meta_index, index_dir, vast::defaults::system::store_backend,
-                  partition_capacity, in_mem_partitions, taste_count,
-                  num_query_supervisors, index_dir, meta_index_fp_rate);
+                  meta_index, type_registry, index_dir,
+                  vast::defaults::system::store_backend, partition_capacity,
+                  in_mem_partitions, taste_count, num_query_supervisors,
+                  index_dir, meta_index_fp_rate);
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
@@ -296,9 +302,9 @@ TEST(partition transform via the index) {
   auto identity_step = vast::make_transform_step("identity", caf::settings{});
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
-  auto rp3
-    = self->request(index, caf::infinite, vast::atom::apply_v, transform,
-                    partition_uuid, vast::system::keep_original_partition::yes);
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
+                           std::vector<vast::uuid>{partition_uuid},
+                           vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
     [=](const vast::partition_synopsis_pair& pair) {
@@ -314,9 +320,9 @@ TEST(partition transform via the index) {
               [](const caf::error& e) {
                 REQUIRE_SUCCESS(e);
               });
-  auto rp5
-    = self->request(index, caf::infinite, vast::atom::apply_v, transform,
-                    partition_uuid, vast::system::keep_original_partition::no);
+  auto rp5 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
+                           std::vector<vast::uuid>{partition_uuid},
+                           vast::system::keep_original_partition::no);
   run();
   rp5.receive(
     [=](const vast::partition_synopsis_pair& pair) {

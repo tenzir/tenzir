@@ -72,7 +72,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::query_supervisor_actor&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
-    [=](atom::apply, transform_ptr, uuid,
+    [=](atom::apply, transform_ptr, std::vector<uuid>,
         system::keep_original_partition) -> partition_synopsis_pair {
       FAIL("no mock implementation available");
     },
