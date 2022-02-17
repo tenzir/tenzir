@@ -64,8 +64,8 @@ TEST(aggregate Zeek conn log) {
   // rounding functions by trimming the last 16 characters from the timestamp
   // string before grouping.
   const auto expected_data = std::vector<std::vector<std::string_view>>{
-    {"2009-11-19", "179794541699806ns", "0", "621055", "286586076"},
-    {"2009-11-18", "1010088519993ns", "48", "693", "98531"},
+    {"2009-11-19", "115588575895806ns", "0", "621229", "286586076"},
+    {"2009-11-18", "65216054323993ns", "48", "519", "98531"},
   };
   REQUIRE_EQUAL(aggregated_slice.rows(), expected_data.size());
   REQUIRE_EQUAL(aggregated_slice.columns(), expected_data[0].size());
