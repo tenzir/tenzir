@@ -1,6 +1,11 @@
 {
   description = "VAST as a standalone app or NixOS module";
 
+  nixConfig = {
+    extra-substituters = "https://vast.cachix.org";
+    extra-trusted-public-keys = "vast.cachix.org-1:0L8rErLUuFAdspyGYYQK3Sgs9PYRMzkLEqS2GxfaQhA=";
+  };
+
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/1882c6b7368fd284ad01b0a5b5601ef136321292";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
