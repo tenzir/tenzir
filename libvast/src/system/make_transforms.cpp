@@ -169,8 +169,12 @@ make_transform(const std::string& name,
                            fmt::format("unknown transform '{}'", name));
   auto transform = std::make_shared<vast::transform>(
     name, std::vector<std::string>{event_types});
-  if (auto err = parse_transform_steps(
-        *transform, caf::get<caf::config_value::list>(transforms, name)))
+  auto list = caf::get_if<caf::config_value::list>(&transforms, name);
+  if (!list)
+    return caf::make_error(
+      ec::invalid_configuration,
+      fmt::format("expected a list of steps in transform '{}'", name));
+  if (auto err = parse_transform_steps(*transform, *list))
     return err;
   return transform;
 }
