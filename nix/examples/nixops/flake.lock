@@ -225,11 +225,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1644930913,
-        "narHash": "sha256-DrVtufnpHI8ZXu74xJiZ9Roe+MYRjASBNweGYO56KnQ=",
+        "lastModified": 1645100980,
+        "narHash": "sha256-8Y5GiVNr2BilQtKkd/f6iOJv2PM3+XlBRPLJIk9MJcM=",
         "owner": "tenzir",
         "repo": "vast",
-        "rev": "a8d711de06a6b0dd06438ad45cb289f5accae6d1",
+        "rev": "e929016b4bd00a133723e776232e8686e794b8f7",
         "type": "github"
       },
       "original": {
