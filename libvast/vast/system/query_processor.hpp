@@ -131,6 +131,9 @@ protected:
   /// implementation tansitions to the idle state.
   virtual void process_done();
 
+  /// Implements the status handler.
+  virtual record status(status_verbosity);
+
   // -- member variables -------------------------------------------------------
 
   /// Stores the name of the current state.

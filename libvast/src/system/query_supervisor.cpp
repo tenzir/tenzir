@@ -14,6 +14,7 @@
 #include "vast/logger.hpp"
 #include "vast/query.hpp"
 
+#include <caf/after.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
@@ -25,8 +26,9 @@ namespace {
 [[maybe_unused]] auto get_ids(const query_map& xs) {
   std::vector<uuid> ys;
   ys.reserve(xs.size());
-  std::transform(xs.begin(), xs.end(), std::back_inserter(ys),
-                 [](auto& kvp) { return kvp.first; });
+  std::transform(xs.begin(), xs.end(), std::back_inserter(ys), [](auto& kvp) {
+    return kvp.first;
+  });
   return ys;
 }
 
@@ -101,13 +103,16 @@ query_supervisor_actor::behavior_type query_supervisor(
             });
       }
     },
-    [self](atom::shutdown, atom::sink) {
+    [self](atom::shutdown, atom::sink) -> caf::result<void> {
       // If there are still open requests, the message will be sent when
       // the count drops to zero. We currently don't have a way of aborting
       // the in-progress work.
-      if (self->state.open_requests == 0)
-        self->send(self->state.master, atom::worker_v, self);
-    }};
+      if (self->state.open_requests > 0)
+        return caf::skip;
+      self->send(self->state.master, atom::worker_v, atom::wakeup_v, self);
+      return {};
+    },
+  };
 }
 
 } // namespace vast::system

@@ -950,10 +950,17 @@ index(index_actor::stateful_pointer<index_state> self,
            query_supervisor_actor worker) -> caf::result<query_cursor> {
       // Query handling
       auto sender = self->current_sender();
-      auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
       // Sanity check.
       if (!sender) {
         VAST_WARN("{} ignores an anonymous query", *self);
+        self->send(self, atom::worker_v, worker);
+        return caf::sec::invalid_argument;
+      }
+      auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
+      // FIXME: This is a quick and dirty attempt to verify that the problem
+      // is because clients exit before we arrive here.
+      if (client->getf(caf::monitorable_actor::is_terminated_flag)) {
+        VAST_DEBUG("{} ignores terminated query: {}", *self, query);
         self->send(self, atom::worker_v, worker);
         return caf::sec::invalid_argument;
       }
@@ -1290,6 +1297,22 @@ index(index_actor::stateful_pointer<index_state> self,
         VAST_VERBOSE(
           "{} finished work on a query and has no jobs in the backlog", *self);
         self->state.idle_workers.insert(std::move(worker));
+      }
+    },
+    [self](atom::worker, atom::wakeup, query_supervisor_actor worker) {
+      auto lost = true;
+      for (const auto& [_, qs] : self->state.pending) {
+        if (worker == qs.worker) {
+          lost = false;
+        }
+      }
+      for (auto& w : self->state.idle_workers) {
+        if (w == worker)
+          lost = false;
+      }
+      if (lost) {
+        VAST_WARN("{} recoverd a lost worker", *self);
+        self->delegate(static_cast<index_actor>(self), atom::worker_v, worker);
       }
     },
     // -- status_client_actor --------------------------------------------------
