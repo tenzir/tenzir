@@ -8,11 +8,6 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [v1.1.0-rc1]
 
-### :zap: Breaking Changes
-
-- VAST has a new transform API: the `apply()` function is changed to `add()` and `finish()`. The `add()` function receives arrow batches instead of `table_slice`s. Multiple calls to the `add()` function adds multiple batches to the transformation, and the `finish()` function returns the transformed slices; this enables the transform to change multiple table slices simultaneously.
-  [#2020](https://github.com/tenzir/vast/pull/2020)
-
 ### :warning: Changes
 
 - VAST no longer attempts to intepret query expressions as Sigma rules automatically. Instead, this functionality moved to a dedicated `sigma` query language plugin that must explicitly enabled at build time.
@@ -32,15 +27,15 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST has a new `query_language` plugin type that allows for adding additional query language frontends. The plugin performs one function: compile a string into a VAST expression. The new `sigma` plugin demonstrates usage of this plugin type.
   [#2074](https://github.com/tenzir/vast/pull/2074)
 
-- The new builtin `rename` transform step allows for renaming event types as part of a transformation. This is especially useful when you want to ensure that a repeatedly triggered transformation does not affect already transformed events.
+- The new built-in `rename` transform step allows for renaming event types as part of a transformation. This is especially useful when you want to ensure that a repeatedly triggered transformation does not affect already transformed events.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
-- The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://docs.tenzir.com/vast/features/compaction), e.g., for compaction `suricata.flow` or `zeek.conn` events after a certain amount of time in the database.
+- The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://docs.tenzir.com/vast/features/compaction), e.g., for compacting `suricata.flow` or `zeek.conn` events after a certain amount of time in the database.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
 ### :beetle: Bug Fixes
 
-- A long-standing performance bug that caused query evaluation to look at more candidate partitions than necessary no longer exists: A query for `ts`, e.g., for matching the field `zeek.conn.ts`, stops evaluating unrelated fields that end in `ts`, e.g., `suricata.flow.flow.pkts` at an earlier point in the pipeline. Similarly, a field exactly named `ts` of a type incompatible with the query will no longer lead to the partition being considered.
+- A long-standing performance bug in the first stage of query evaluation caused VAST to possibly consider candidate partitions for the second stage of query evaluation for fields with matching name suffixes, but mismatching types. This bug no longer exists, and should result in a considerable speedup of some queries.
   [#2086](https://github.com/tenzir/vast/pull/2086)
 
 - VAST does not lose query capacity when backlogged queries are cancelled any more.
