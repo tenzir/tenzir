@@ -96,7 +96,7 @@ in
       ../CMakeLists.txt
       ../CHANGELOG.md
       ../LICENSE
-      ../LICENSE.3rdparty
+      ../VAST.spdx
       ../BANNER
       ../README.md
       ../vast.yaml.example
