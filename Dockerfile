@@ -57,7 +57,7 @@ COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
-COPY BANNER CMakeLists.txt LICENSE LICENSE.3rdparty README.md VERSIONING.md \
+COPY BANNER CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
      vast.yaml.example ./
 
 # Resolve repository-internal symlinks.

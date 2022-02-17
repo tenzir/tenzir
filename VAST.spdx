@@ -1,0 +1,172 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-Document
+DocumentName: VAST
+DocumentNamespace: https://github.com/tenzir/vast
+
+SPDXID: SPDXRef-File
+FileName: ./*
+FileCopyrightText: (c) 2014, Tenzir GmbH
+LicenseConcluded: BSD-3-clause
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/aux/robin-map/*
+FIleCopyrightText: (c) 2017 Tessil
+LicenseConcluded: MIT
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/src/concept/hashable/crc.cpp
+FileCopyrightText: (C) 1995-2013 Jean-loup Gailly and Mark Adler
+LicenseConcluded: Zlib
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/narrow.hpp
+FileCopyrightText: (c) 2015 Microsoft Corporation
+LicenseConcluded: MIT
+LicenseComments: From the GSL library.
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/math.hpp
+FIleCopyrightText: (c) 2015 Orson Peters
+LicenseConcluded: Zlib
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/short_alloc.hpp
+FileCopyrightText: (c) 2015 Howard Hinnant
+LicenseConcluded: MIT
+LicenseComments: Adapted to fit VAST's coding style.
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/tracepoint.hpp
+FileCopyrightText: (c) 2016 Facebook, Inc. and its affiliates
+LicenseConcluded: Apache-2.0
+LicenseComments: Modified from Folly with downstream changes documented in the file.
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/xxhash.h
+FIleCopyrightText: (C) 2012-2020 Yann Collet
+LicenseConcluded: BSD-2-clause
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/src/concept/hashable/sha1.cpp
+LicenseConcluded: Unlicense
+LicenseComments: https://github.com/kerukuro/digestpp
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/zip_iterator.hpp
+FileCopyrightText: (c) 2019 Dario Pellegrini <pellegrini.dario@gmail.com>
+LicenseConcluded: CC0
+LicenseComments: See https://codereview.stackexchange.com/questions/231352/ and https://github.com/dpellegr/ZipIterator/blob/master/LICENSE.md
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/lru_cache.hpp
+FileCopyrightText: (c) 2014, lamerman (Alexander Ponomarev)
+LicenseConcluded: BSD-3-clause
+LicenseComments: Adapted to fit VAST's code base.
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/src/detail/base64.cpp
+FileCopyrightText: (c) 2016-2019 Vinnie Falco (vinnie dot falco at gmail dot com)
+LicenseConcluded: Boost-1.0
+LicenseComment: Adapted to fit VAST's code base.
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/function.hpp
+FileCopyrightText: (c) 2015-2020 Denis Blank <denis.blank at outlook dot com>
+LicenseConcluded: Boost-1.0
+LicenseComment: Includes code from https://github.com/Naios/function2
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/absorb_line.hpp
+FileCopyrightText: (c) 2017 user763305 et al.
+LicenseConcluded: CC-BY-SA
+LicenseComment: See https://stackoverflow.com/a/6089413/92560
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/generator.hpp
+FileCopyrightText: (c) 2017 Lewis Baker
+LicenseConcluded: MIT
+LicenseComment: Includes code from https://github.com/lewissbaker/cppcoro
+
+SPDXID: SPDXRef-File
+FileName: ./scripts/clang-format-diff.py
+FileCopyrightText: (c) 2003-2017 University of Illinois at Urbana-Champaign
+LicenseConcluded: Apache-2.0-with-LLVM-exceptions
+LicenseComment: Taken from LLVM.
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/vast/detail/worm.hpp
+FileCopyrightText: (c) Peter C. Dillinger, (c) Facebook, Inc. and its affiliates.
+LicenseConcluded: MIT
+LicenseComment: https://github.com/pdillinger/wormhashing
+
+SPDXID: SPDXRef-Package
+PackageName: musl
+PackageHomePage: https://musl.libc.org
+PackageLicenseConcluded: MIT
+PackageLicenseComments: Required for static VAST builds only.
+
+SPDXID: SPDXRef-Package
+PackageName: CAF
+PackageHomePage: https://github.com/actor-framework/actor-framework
+PackageLicenseConcluded: BSD-3-Clause
+PackageVersion: 0.17.6
+
+SPDXID: SPDXRef-Package
+PackageName: FlatBuffers
+PackageHomePage: https://github.com/google/flatbuffers
+PackageLicenseConcluded: Apache-2.0
+PackageVersion: 1.11
+
+SPDXID: SPDXRef-Package
+PackageName: Apache Arrow
+PackageHomePage: https://github.com/apache/arrow
+PackageLicenseConcluded: Apache-2.0
+PackageVersion: 6.0.0
+
+SPDXID: SPDXRef-Package
+PackageName: yaml-cpp
+PackageHomePage: https://github.com/jbeder/yaml-cpp
+PackageLicenseConcluded: MIT
+PackageVersion: 0.6.2
+
+SPDXID: SPDXRef-Package
+PackageName: simdjson
+PackageHomePage: https://github.com/simdjson/simdjson
+PackageLicenseConcluded: Apache-2.0
+PackageVersion: 0.6
+
+SPDXID: SPDXRef-Package
+PackageName: spdlog
+PackageHomePage: https://github.com/gabime/spdlog
+PackageLicenseConcluded: MIT
+PackageVersion: 1.5
+
+SPDXID: SPDXRef-Package
+PackageName: fmt
+PackageHomePage: https://github.com/fmtlib/fmt
+PackageLicenseConcluded: MIT
+PackageVersion: 7.1.3
+
+SPDXID: SPDXRef-Package
+PackageName: libpcap
+PackageHomePage: https://github.com/the-tcpdump-group/libpcap
+PackageLicenseConcluded: BSD-3-Clause
+PackageLicenseComments: Usually bundled with operating system.
+
+SPDXID: SPDXRef-Package
+PackageName: Broker
+PackageHomePage: https://github.com/zeek/broker
+PackageLicenseConcluded: BSD-3-Clause
+PackageVersion: 1.4
+
+SPDXID: SPDXRef-Package
+PackageName: xxHash
+PackageHomePage: https://github.com/Cyan4973/xxHash
+PackageLicenseConcluded: BSD-2-Clause
+PackageVersion: 0.8
+
+SPDXID: SPDXRef-Package
+PackageName: Cuckoo Filter
+PackageHomePage: https://github.com/efficient/cuckoofilter
+PackageLicenseConcluded: Apache-2.0
