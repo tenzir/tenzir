@@ -34,10 +34,11 @@ enum class transforms_location {
 caf::expected<std::vector<transform>>
 make_transforms(transforms_location location, const caf::settings& settings);
 
-/// Validates the passed `settings` and creates the transform of the given name.
+/// Validates the passed `caf::settings` and creates the transform of the given
+/// name.
 caf::expected<transform_ptr>
 make_transform(const std::string& name,
                const std::vector<std::string>& event_types,
-               const caf::settings& settings);
+               const caf::settings& transforms);
 
 } // namespace vast::system
