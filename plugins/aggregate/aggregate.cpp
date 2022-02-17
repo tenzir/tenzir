@@ -285,7 +285,7 @@ private:
         auto scalar = batch->column(column)
                         ->View(batch->schema()->field(column)->type())
                         .MoveValueUnsafe()
-                        ->GetScalar(column)
+                        ->GetScalar(row)
                         .ValueOr(nullptr);
         key.push_back(scalar);
       }
@@ -324,6 +324,19 @@ private:
         VAST_TRACE("aggregate transform slices [{}, {}) out of {} row(s)",
                    start, next_start, batch->num_rows());
         auto slice = batch->Slice(start, next_start - start);
+        VAST_ASSERT([&]() {
+          for (int column = 0;
+               column < detail::narrow_cast<int>(actions_.size()); column++) {
+            if (actions_[column] != action::group_by)
+              continue;
+            if (arrow::compute::Unique(slice->column(column))
+                  .ValueOrDie()
+                  ->length()
+                != 1)
+              return false;
+          }
+          return true;
+        }());
         VAST_ASSERT(slice);
         VAST_ASSERT(bucket != buckets.end());
         bucket->second.push_back(std::move(slice));
