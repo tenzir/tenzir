@@ -123,7 +123,8 @@ partition_transformer_actor::behavior_type partition_transformer(
     self,
   uuid id, std::string store_id, const caf::settings& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  idspace_distributor_actor idspace_distributor, filesystem_actor fs,
+  idspace_distributor_actor idspace_distributor,
+  type_registry_actor type_registry, filesystem_actor fs,
   transform_ptr transform) {
   const auto* store_plugin = plugins::find<vast::store_plugin>(store_id);
   if (!store_plugin) {
@@ -159,6 +160,7 @@ partition_transformer_actor::behavior_type partition_transformer(
     [](caf::unit_t&, const caf::error&) { /* nop */ });
   self->state.stage->add_outbound_path(self->state.store_builder);
   self->state.fs = std::move(fs);
+  self->state.type_registry = std::move(type_registry);
   // transform can be an aggregate transform here
   self->state.transform = std::move(transform);
   return {
@@ -197,6 +199,8 @@ partition_transformer_actor::behavior_type partition_transformer(
         self->state.original_import_times.clear();
         self->state.events += slice.rows();
         self->state.slices.push_back(std::move(slice));
+        // TODO: Technically we'd only need to send *new* layouts here.
+        self->send(self->state.type_registry, atom::put_v, slice.layout());
       }
       VAST_DEBUG("partition-transformer received all table slices");
       self

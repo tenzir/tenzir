@@ -50,6 +50,9 @@ struct partition_transformer_state {
   /// for the transformed data.
   idspace_distributor_actor idspace_distributor = {};
 
+  /// Actor handle of the type registry.
+  type_registry_actor type_registry = {};
+
   /// Actor handle of the store builder for this partition.
   store_builder_actor store_builder = {};
 
@@ -96,11 +99,13 @@ struct partition_transformer_state {
   std::unordered_map<const std::byte*, vast::time> original_import_times = {};
 };
 
+/// Spawns a PARTITION TRANSFORMER actor with the given parameters.
 partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   uuid id, std::string store_id, const caf::settings& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  idspace_distributor_actor idspace_distributor, filesystem_actor fs,
+  idspace_distributor_actor idspace_distributor,
+  type_registry_actor type_registry, filesystem_actor fs,
   transform_ptr transform);
 
 } // namespace vast::system

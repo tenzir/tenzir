@@ -282,6 +282,10 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       VAST_TRACE_SCOPE("");
       self->state.taxonomies = std::move(t);
     },
+    [self](atom::put, vast::type layout) {
+      VAST_TRACE_SCOPE("");
+      self->state.insert(std::move(layout));
+    },
     [self](atom::get, atom::taxonomies) {
       VAST_TRACE_SCOPE("");
       return self->state.taxonomies;

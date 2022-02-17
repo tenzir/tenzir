@@ -722,9 +722,9 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
       archive_actor archive, meta_index_actor meta_index,
-      const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      type_registry_actor type_registry, const std::filesystem::path& dir,
+      std::string store_backend, size_t partition_capacity,
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double synopsis_fp_rate) {
   VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
@@ -750,7 +750,8 @@ index(index_actor::stateful_pointer<index_state> self,
     VAST_VERBOSE("{} uses {} for meta index data", *self, meta_index_dir);
   // Set members.
   self->state.self = self;
-  self->state.global_store = archive;
+  self->state.global_store = std::move(archive);
+  self->state.type_registry = std::move(type_registry);
   self->state.accept_queries = true;
   self->state.workers = num_workers;
   if (self->state.partition_local_stores) {
@@ -1198,7 +1199,7 @@ index(index_actor::stateful_pointer<index_state> self,
         self->state.synopsis_opts, self->state.index_opts,
         self->state.accountant,
         static_cast<idspace_distributor_actor>(self->state.importer),
-        self->state.filesystem, transform);
+        self->state.type_registry, self->state.filesystem, transform);
       // match_everything == '"" in #type'
       static const auto match_everything
         = vast::predicate{meta_extractor{meta_extractor::type},

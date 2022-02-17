@@ -308,6 +308,8 @@ using type_registry_actor = typed_actor_fwd<
   caf::replies_to<atom::get>::with<type_set>,
   // Registers the given taxonomies.
   caf::reacts_to<atom::put, taxonomies>,
+  // Registers a given layout.
+  caf::reacts_to<atom::put, vast::type>,
   // Retrieves the known taxonomies.
   caf::replies_to<atom::get, atom::taxonomies>::with< //
     taxonomies>,

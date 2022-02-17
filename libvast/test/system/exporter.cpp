@@ -65,8 +65,9 @@ struct fixture : fixture_base {
     auto fs = self->spawn(system::posix_filesystem, directory);
     auto indexdir = directory / "index";
     index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                        meta_index, indexdir, defaults::system::store_backend,
-                        10000, 5, 5, 1, indexdir, 0.01);
+                        meta_index, type_registry, indexdir,
+                        defaults::system::store_backend, 10000, 5, 5, 1,
+                        indexdir, 0.01);
   }
 
   void spawn_importer() {

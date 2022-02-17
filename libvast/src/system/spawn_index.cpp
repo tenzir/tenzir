@@ -31,9 +31,10 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   auto opt = [&](std::string_view key, auto default_value) {
     return get_or(args.inv.options, key, default_value);
   };
-  auto [archive, filesystem, accountant, meta_index]
-    = self->state.registry.find<archive_actor, filesystem_actor,
-                                accountant_actor, meta_index_actor>();
+  auto [archive, filesystem, accountant, meta_index, type_registry]
+    = self->state.registry
+        .find<archive_actor, filesystem_actor, accountant_actor,
+              meta_index_actor, type_registry_actor>();
   if (!archive)
     return caf::make_error(ec::lookup_error, "failed to find archive actor");
   if (!filesystem)
@@ -41,7 +42,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   const auto indexdir = args.dir / args.label;
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
-    index, accountant, filesystem, archive, meta_index, indexdir,
+    index, accountant, filesystem, archive, meta_index, type_registry, indexdir,
     // TODO: Pass these options as a vast::data object instead.
     opt("vast.store-backend", std::string{sd::store_backend}),
     opt("vast.max-partition-size", sd::max_partition_size),

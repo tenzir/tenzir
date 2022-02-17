@@ -294,6 +294,9 @@ struct index_state {
   /// The META INDEX actor.
   meta_index_actor meta_index = {};
 
+  /// The TYPE REGISTRY actor. (required for spawning partition transformers)
+  type_registry_actor type_registry;
+
   /// A running count of the size of the meta index.
   size_t meta_index_bytes = {};
 
@@ -344,6 +347,7 @@ struct index_state {
 /// forwarded to partitions.
 /// @param archive The legacy archive actor. To be removed eventually (tm).
 /// @param meta_index The meta index actor.
+/// @param type_registry The type registry actor.
 /// @param dir The directory of the index.
 /// @param store_backend The store backend to use for new partitions.
 /// @param partition_capacity The maximum number of events per partition.
@@ -360,9 +364,9 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
       archive_actor archive, meta_index_actor meta_index,
-      const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      type_registry_actor type_registry, const std::filesystem::path& dir,
+      std::string store_backend, size_t partition_capacity,
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double synopsis_fp_rate);
 
 } // namespace vast::system
