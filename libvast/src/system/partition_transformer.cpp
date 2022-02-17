@@ -190,6 +190,8 @@ partition_transformer_actor::behavior_type partition_transformer(
         return;
       }
       for (auto& slice : *transformed) {
+        // TODO: Technically we'd only need to send *new* layouts here.
+        self->send(self->state.type_registry, atom::put_v, slice.layout());
         // If the transform is a no-op we may get back the original table slice
         // that's still mapped as read-only, but in this case we also don't need
         // to adjust the import time.
@@ -199,8 +201,6 @@ partition_transformer_actor::behavior_type partition_transformer(
         self->state.original_import_times.clear();
         self->state.events += slice.rows();
         self->state.slices.push_back(std::move(slice));
-        // TODO: Technically we'd only need to send *new* layouts here.
-        self->send(self->state.type_registry, atom::put_v, slice.layout());
       }
       VAST_DEBUG("partition-transformer received all table slices");
       self
