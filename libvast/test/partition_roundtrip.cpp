@@ -80,7 +80,7 @@ TEST(index roundtrip) {
   for (auto& uuid : state.persisted_partitions)
     expected_uuids.insert(uuid);
   // Add some fake statistics
-  state.stats.layouts["zeek.conn"] = vast::system::layout_statistics{54931u};
+  state.stats.layouts["zeek.conn"] = vast::layout_statistics{54931u};
   // Serialize the index.
   flatbuffers::FlatBufferBuilder builder;
   auto index = pack(builder, state);

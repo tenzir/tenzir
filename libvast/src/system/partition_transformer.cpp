@@ -109,7 +109,11 @@ void partition_transformer_state::fulfill(
               *stream_data.partition_chunk)
     .then(
       [self, promise](atom::ok) mutable {
-        promise.deliver(self->state.data.synopsis);
+        promise.deliver(augmented_partition_synopsis{
+          .uuid = self->state.data.id,
+          .stats = std::move(self->state.stats),
+          .synopsis = std::move(self->state.data.synopsis),
+        });
         self->quit();
       },
       [self, promise](caf::error& e) mutable {
@@ -134,7 +138,7 @@ partition_transformer_actor::behavior_type partition_transformer(
     return partition_transformer_actor::behavior_type::make_empty_behavior();
   }
   auto builder_and_header
-    = store_plugin->make_store_builder(accountant, fs, id);
+    = store_plugin->make_store_builder(std::move(accountant), fs, id);
   if (!builder_and_header) {
     self->quit(caf::make_error(ec::invalid_argument,
                                "could not create store builder for backend {}",
@@ -200,6 +204,13 @@ partition_transformer_actor::behavior_type partition_transformer(
           slice.import_time(self->state.data.synopsis->max_import_time);
         self->state.original_import_times.clear();
         self->state.events += slice.rows();
+        auto layout_name = slice.layout().name();
+        auto& layouts = self->state.stats.layouts;
+        auto it = layouts.find(layout_name);
+        if (it == layouts.end())
+          it = layouts.emplace(std::string{layout_name}, layout_statistics{})
+                 .first;
+        it->second.count += slice.rows();
         self->state.slices.push_back(std::move(slice));
       }
       VAST_DEBUG("partition-transformer received all table slices");
@@ -275,13 +286,14 @@ partition_transformer_actor::behavior_type partition_transformer(
     },
     [self](atom::persist, std::filesystem::path partition_path,
            std::filesystem::path synopsis_path)
-      -> caf::result<partition_synopsis_ptr> {
+      -> caf::result<augmented_partition_synopsis> {
       VAST_DEBUG("partition-transformer will persist itself to {}",
                  partition_path);
       auto path_data = partition_transformer_state::path_data{};
       path_data.partition_path = std::move(partition_path);
       path_data.synopsis_path = std::move(synopsis_path);
-      auto promise = self->make_response_promise<partition_synopsis_ptr>();
+      auto promise
+        = self->make_response_promise<augmented_partition_synopsis>();
       path_data.promise = promise;
       // Immediately fulfill the promise if we are already done
       // with the serialization.

@@ -10,6 +10,7 @@
 
 #include "vast/detail/friend_attribute.hpp"
 #include "vast/fbs/partition_synopsis.hpp"
+#include "vast/index_statistics.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
@@ -28,8 +29,11 @@ namespace vast {
 /// Contains one synopsis per partition column.
 struct partition_synopsis final : public caf::ref_counted {
   partition_synopsis() = default;
+  ~partition_synopsis() override = default;
+  partition_synopsis(const partition_synopsis&) = delete;
   partition_synopsis(partition_synopsis&&) = default;
 
+  partition_synopsis& operator=(const partition_synopsis&) = delete;
   partition_synopsis& operator=(partition_synopsis&&) = default;
 
   /// Add data to the synopsis.
@@ -84,6 +88,30 @@ private:
   partition_synopsis* copy() const;
 };
 
+/// Some quantitative information about a partition.
+struct partition_info {
+  /// The partition id.
+  vast::uuid uuid = vast::uuid::nil();
+
+  /// Total number of events in the partition. The sum of all
+  /// values in `stats`.
+  size_t events = 0ull;
+
+  /// The newest import timestamp of the table slices in this partition.
+  time max_import_time;
+
+  /// How many events of each type the partition contains.
+  index_statistics stats;
+};
+
+/// A partition synopsis with some additional information.
+struct augmented_partition_synopsis {
+  vast::uuid uuid;
+  index_statistics stats;
+  partition_synopsis_ptr synopsis;
+};
+
+/// Legacy.
 struct partition_synopsis_pair {
   vast::uuid uuid;
   partition_synopsis_ptr synopsis;

@@ -111,8 +111,10 @@ TEST(identity transform / done before persist) {
   run();
   vast::partition_synopsis_ptr synopsis = nullptr;
   rp.receive(
-    [&](vast::partition_synopsis_ptr& ps) {
-      synopsis = ps;
+    [&](vast::augmented_partition_synopsis& aps) {
+      CHECK_EQUAL(aps.uuid, uuid);
+      CHECK_EQUAL(aps.stats.layouts["zeek.conn"].count, 20ull);
+      synopsis = aps.synopsis;
     },
     [&](caf::error& err) {
       FAIL("failed to persist: " << err);
@@ -184,9 +186,9 @@ TEST(delete transform / persist before done) {
   run();
   vast::partition_synopsis_ptr synopsis = nullptr;
   rp.receive(
-    [&](vast::partition_synopsis_ptr& ps) {
-      REQUIRE(ps);
-      synopsis = ps;
+    [&](vast::augmented_partition_synopsis& aps) {
+      REQUIRE(aps.synopsis);
+      synopsis = aps.synopsis;
     },
     [&](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);

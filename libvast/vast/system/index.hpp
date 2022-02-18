@@ -13,6 +13,7 @@
 #include "vast/detail/lru_cache.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/fbs/index.hpp"
+#include "vast/index_statistics.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
 #include "vast/system/active_partition.hpp"
@@ -86,27 +87,6 @@ struct active_partition_info {
   friend auto inspect(Inspector& f, active_partition_info& x) {
     return f(caf::meta::type_name("active_partition_info"), x.actor,
              x.stream_slot, x.capacity, x.id);
-  }
-};
-
-/// Accumulates statistics for a given layout.
-struct layout_statistics {
-  uint64_t count; ///< Number of events indexed.
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, layout_statistics& x) {
-    return f(caf::meta::type_name("layout_statistics"), x.count);
-  }
-};
-
-/// Accumulates statistics about indexed data.
-struct index_statistics {
-  /// The number of events for a given layout.
-  std::unordered_map<std::string, layout_statistics> layouts;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, index_statistics& x) {
-    return f(caf::meta::type_name("index_statistics"), x.layouts);
   }
 };
 
