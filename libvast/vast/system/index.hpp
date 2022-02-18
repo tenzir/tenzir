@@ -51,6 +51,12 @@ enum class send_initial_dbstate : bool {
   no = false,
 };
 
+/// Helper class used to route table slice columns to the correct indexer
+/// in the CAF stream stage.
+struct i_partition_selector {
+  bool operator()(const type& filter, const table_slice& slice) const;
+};
+
 /// Extract a partition synopsis from the partition at `partition_path`
 /// and write it to `partition_synopsis_path`.
 //  TODO: Move into separate header.
@@ -150,9 +156,9 @@ struct query_state {
 struct index_state {
   // -- type aliases -----------------------------------------------------------
 
-  using index_stream_stage_ptr
-    = caf::stream_stage_ptr<table_slice,
-                            caf::broadcast_downstream_manager<table_slice>>;
+  using index_stream_stage_ptr = caf::stream_stage_ptr<
+    table_slice, caf::broadcast_downstream_manager<table_slice, vast::type,
+                                                   i_partition_selector>>;
 
   // -- constructor ------------------------------------------------------------
 
@@ -199,10 +205,10 @@ struct index_state {
   vast::uuid create_query_id();
 
   /// Creates a new active partition.
-  void create_active_partition();
+  void create_active_partition(const type& layout);
 
   /// Decommissions the active partition.
-  void decomission_active_partition();
+  void decomission_active_partition(const type& layout);
 
   /// Adds a new partition creation listener.
   void
@@ -225,8 +231,8 @@ struct index_state {
   /// The streaming stage.
   index_stream_stage_ptr stage;
 
-  /// The single active (read/write) partition.
-  active_partition_info active_partition = {};
+  /// One active (read/write) partition per layout.
+  std::unordered_map<type, active_partition_info> active_partitions = {};
 
   /// Partitions that are currently in the process of persisting.
   // TODO: An alternative to keeping an explicit set of unpersisted partitions
