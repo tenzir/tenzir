@@ -57,7 +57,7 @@ struct active_store_state {
   size_t events = {};
 
   /// The name for this type of CAF actor.
-  static constexpr const char* name = "active_local_store";
+  static constexpr const char* name = "active-local-store";
 };
 
 struct passive_store_state {
@@ -83,7 +83,7 @@ struct passive_store_state {
   caf::optional<vast::segment> segment = {};
 
   /// The name for this type of CAF actor.
-  static constexpr const char* name = "passive_local_store";
+  static constexpr const char* name = "passive-local-store";
 
 private:
   caf::result<atom::done> erase(const vast::ids&);

@@ -6,6 +6,42 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [v1.1.0-rc1]
+
+### :warning: Changes
+
+- VAST no longer attempts to intepret query expressions as Sigma rules automatically. Instead, this functionality moved to a dedicated `sigma` query language plugin that must explicitly be enabled at build time.
+  [#2074](https://github.com/tenzir/vast/pull/2074)
+
+- The `msgpack` encoding option is now deprecated. VAST issues a warning on startup and automatically uses the `arrow` encoding instead. A future version of VAST will remove this option entirely.
+  [#2087](https://github.com/tenzir/vast/pull/2087)
+
+- The experimental aging feature is now deprecated. The [compaction plugin](https://docs.tenzir.com/vast/features/compaction) offers a superset of the aging functionality.
+  [#2087](https://github.com/tenzir/vast/pull/2087)
+
+### :gift: Features
+
+- The built-in `select` and `project` transform steps now correctly handle dropping all rows and columns respectively, effectively deleting the data.
+  [#2064](https://github.com/tenzir/vast/pull/2064)
+  [#2082](https://github.com/tenzir/vast/pull/2082)
+
+- VAST has a new *query language* plugin type that allows for adding additional query language frontends. The plugin performs one function: compile user input into a VAST expression. The new `sigma` plugin demonstrates usage of this plugin type.
+  [#2074](https://github.com/tenzir/vast/pull/2074)
+
+- The new built-in `rename` transform step allows for renaming event types as part of a transformation. This is especially useful when you want to ensure that a repeatedly triggered transformation does not affect already transformed events.
+  [#2076](https://github.com/tenzir/vast/pull/2076)
+
+- The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://docs.tenzir.com/vast/features/compaction), e.g., for rolling up events into a more space-efficient representation after a certain amount of time.
+  [#2076](https://github.com/tenzir/vast/pull/2076)
+
+### :beetle: Bug Fixes
+
+- A performance bug in the first stage of query evaluation caused VAST to return too many candidate partitions when querying for a field suffix. For example, a query for the `ts` field commonly used in Zeek logs also included partitions for `netflow.pkts` from `suricata.netflow` events. This bug no longer exists, resulting in a considerable speedup of affected queries.
+  [#2086](https://github.com/tenzir/vast/pull/2086)
+
+- VAST does not lose query capacity when backlogged queries are cancelled any more.
+  [#2092](https://github.com/tenzir/vast/pull/2092)
+
 ## [v1.0.0]
 
 ### :warning: Changes
@@ -1517,6 +1553,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[v1.1.0-rc1]: https://github.com/tenzir/vast/releases/tag/v1.1.0-rc1
 [v1.0.0]: https://github.com/tenzir/vast/releases/tag/v1.0.0
 [2021.12.16]: https://github.com/tenzir/vast/releases/tag/2021.12.16
 [2021.11.18]: https://github.com/tenzir/vast/releases/tag/2021.11.18
