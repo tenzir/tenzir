@@ -34,7 +34,6 @@
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
-#include "vast/layouts_diff.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/active_partition.hpp"
@@ -1227,7 +1226,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
                  std::move(actors),
                  caf::actor_cast<receiver_actor<atom::done>>(sink));
-      auto rp = self->make_response_promise<partition_synopsis_pair>();
+      auto rp = self->make_response_promise<partition_info>();
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
       self
@@ -1237,12 +1236,16 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [self, rp, old_partition_ids, new_partition_id,
            keep](augmented_partition_synopsis& aps) mutable {
-            auto result
-              = partition_synopsis_pair{new_partition_id, aps.synopsis};
+            auto result = partition_info{
+              .uuid = aps.uuid,
+              .events = aps.synopsis->events,
+              .max_import_time = aps.synopsis->max_import_time,
+              .stats = std::move(aps.stats),
+            };
             // Update the index statistics. We only need to add the events of
             // the new partition here, the subtraction of the old events is
             // done in `erase`.
-            for (const auto& [name, stats] : aps.stats.layouts)
+            for (const auto& [name, stats] : result.stats.layouts)
               self->state.stats.layouts[name].count += stats.count;
             if (keep == keep_original_partition::yes) {
               self

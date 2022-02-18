@@ -309,8 +309,8 @@ TEST(partition transform via the index) {
                            vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
-    [=](const vast::partition_synopsis_pair& pair) {
-      CHECK_EQUAL(pair.synopsis->events, events);
+    [=](const vast::partition_info& info) {
+      CHECK_EQUAL(info.events, events);
     },
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);
@@ -327,8 +327,8 @@ TEST(partition transform via the index) {
                            vast::system::keep_original_partition::no);
   run();
   rp5.receive(
-    [=](const vast::partition_synopsis_pair& pair) {
-      CHECK_EQUAL(pair.synopsis->events, events);
+    [=](const vast::partition_info& info) {
+      CHECK_EQUAL(info.events, events);
     },
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);

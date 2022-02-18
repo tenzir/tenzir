@@ -102,6 +102,12 @@ struct partition_info {
 
   /// How many events of each type the partition contains.
   index_statistics stats;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, partition_info& x) {
+    return f(caf::meta::type_name("partition_info"), x.uuid, x.events,
+             x.max_import_time, x.stats);
+  }
 };
 
 /// A partition synopsis with some additional information.
@@ -111,7 +117,7 @@ struct augmented_partition_synopsis {
   partition_synopsis_ptr synopsis;
 };
 
-/// Legacy.
+/// A partition synopsis and a uuid.
 struct partition_synopsis_pair {
   vast::uuid uuid;
   partition_synopsis_ptr synopsis;

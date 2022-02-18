@@ -279,7 +279,7 @@ using index_actor = typed_actor_fwd<
   // in-place transform keeping the old ids, and makes a new partition
   // preserving the old one(s).
   caf::replies_to<atom::apply, transform_ptr, std::vector<uuid>,
-                  keep_original_partition>::with<partition_synopsis_pair>,
+                  keep_original_partition>::with<partition_info>,
   // Makes the identity of the importer known to the index.
   caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
