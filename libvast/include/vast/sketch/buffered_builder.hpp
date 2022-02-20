@@ -18,8 +18,9 @@
 
 namespace vast::sketch {
 
-/// The base class for buffered sketch builders. Derived classes must implement
-/// the `build` function that performs a one-shot construction of the sketch.
+/// The base class for sketch builders that buffer the hash digests of their
+/// input values. Derived classes must implement the `build` function that
+/// performs a one-shot construction of the sketch.
 class buffered_builder : public builder {
 public:
   caf::error add(table_slice x, offset off) final;
