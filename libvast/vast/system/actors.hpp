@@ -196,8 +196,10 @@ using query_supervisor_master_actor = typed_actor_fwd<
   caf::reacts_to<atom::worker, query_supervisor_actor>,
   caf::reacts_to<atom::worker, atom::wakeup, query_supervisor_actor>>::unwrap;
 
+/// The PARTITION CREATION LISTENER actor interface.
 using partition_creation_listener_actor = typed_actor_fwd<
-  caf::reacts_to<atom::update, partition_synopsis_pair>>::unwrap;
+  caf::reacts_to<atom::update, partition_synopsis_pair>,
+  caf::reacts_to<atom::update, std::vector<partition_synopsis_pair>>>::unwrap;
 
 /// The META INDEX actor interface.
 using meta_index_actor = typed_actor_fwd<
@@ -208,6 +210,8 @@ using meta_index_actor = typed_actor_fwd<
   // Merge a single partition synopsis.
   caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with< //
     atom::ok>,
+  // Get *ALL* partition synopses stored in the meta index.
+  caf::replies_to<atom::get>::with<std::vector<partition_synopsis_pair>>,
   // Erase a single partition synopsis.
   caf::replies_to<atom::erase, uuid>::with<atom::ok>,
   // Atomically remove one and merge another partition synopsis
@@ -534,6 +538,7 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::partition_synopsis_pair>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::augmented_partition_synopsis)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::transform_ptr)
 #undef vast_uuid_synopsis_map

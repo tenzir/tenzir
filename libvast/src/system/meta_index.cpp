@@ -413,6 +413,13 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
       self->state.merge(partition, std::move(synopsis));
       return atom::ok_v;
     },
+    [=](atom::get) -> std::vector<partition_synopsis_pair> {
+      std::vector<partition_synopsis_pair> result;
+      result.reserve(self->state.synopses.size());
+      for (const auto& synopsis : self->state.synopses)
+        result.push_back({synopsis.first, synopsis.second});
+      return result;
+    },
     [=](atom::erase, uuid partition) {
       self->state.erase(partition);
       return atom::ok_v;

@@ -922,9 +922,22 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.add_flush_listener(std::move(listener));
     },
     [self](atom::subscribe, atom::create,
-           partition_creation_listener_actor listener) {
+           const partition_creation_listener_actor& listener) {
       VAST_DEBUG("{} adds partition creation listener", *self);
       self->state.add_partition_creation_listener(listener);
+      // When we get here, the initial bulk upgrade and any table slices
+      // finished since then have already been sent to the meta index, and
+      // since CAF guarantees message order within the same inbound queue
+      // they will all be part of the response vector.
+      self->request(self->state.meta_index, caf::infinite, atom::get_v)
+        .then(
+          [=](std::vector<partition_synopsis_pair>& v) {
+            self->send(listener, atom::update_v, std::move(v));
+          },
+          [](const caf::error& e) {
+            VAST_WARN("{} failed to get list of partitions from meta index: {}",
+                      e);
+          });
     },
     [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
       if (!self->state.accept_queries) {
