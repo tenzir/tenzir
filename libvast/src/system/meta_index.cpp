@@ -47,8 +47,8 @@ void meta_index_state::erase(const uuid& partition) {
 }
 
 void meta_index_state::merge(const uuid& partition, partition_synopsis&& ps) {
-  synopses.emplace(partition, std::move(ps));
   offset_map.inject(ps.offset, ps.offset + ps.events, partition);
+  synopses.emplace(partition, std::move(ps));
 }
 
 void meta_index_state::create_from(std::map<uuid, partition_synopsis>&& ps) {
