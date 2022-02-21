@@ -383,12 +383,6 @@ vast:
     # Include extra debug information
     debug: false
 
-  # The `vast get` retrives events by their id.
-  get:
-
-    # The output format.
-    format: json
-
 # The below settings are internal to CAF, and are not checked by VAST directly.
 # Please be careful when changing these options. Note that some CAF options may
 # be in conflict with VAST options, and are only listed here for completeness.

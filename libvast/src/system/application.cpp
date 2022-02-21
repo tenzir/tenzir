@@ -18,7 +18,6 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
 #include "vast/system/explore_command.hpp"
-#include "vast/system/get_command.hpp"
 #include "vast/system/import_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
@@ -144,13 +143,6 @@ auto make_export_command() {
     }
   }
   return export_;
-}
-
-auto make_get_command() {
-  return std::make_unique<command>(
-    "get", "extracts the events assiciated with ids", documentation::vast_get,
-    opts("?vast.get")
-      .add<std::string>("format", "output format (default: JSON)"));
 }
 
 auto make_infer_command() {
@@ -358,7 +350,6 @@ auto make_command_factory() {
     {"export null", make_writer_command("null")},
     {"export arrow", make_writer_command("arrow")},
     {"export zeek", make_writer_command("zeek")},
-    {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command},
     {"import json", import_command},
@@ -469,7 +460,6 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_dump_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_explore_command());
-  root->add_subcommand(make_get_command());
   root->add_subcommand(make_infer_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_kill_command());
