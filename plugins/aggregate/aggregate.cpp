@@ -367,6 +367,7 @@ private:
                   == detail::narrow_cast<int>(actions_.size()));
       VAST_ASSERT(table->num_columns() == builder_->num_fields());
       VAST_ASSERT(table->num_rows() > 0);
+      const auto single_row_table = table->num_rows() == 1;
       for (int column = 0; column < table->num_columns(); ++column) {
         auto append_to_builder
           = [&](const std::shared_ptr<arrow::Scalar>& scalar) noexcept {
@@ -379,6 +380,13 @@ private:
                 VAST_ASSERT(append_result.ok());
               }
             };
+        // If there's just a single row in the table, avoid going through Arrow
+        // Compute at all.
+        if (single_row_table) {
+          append_to_builder(
+            table->column(column)->GetScalar(0).MoveValueUnsafe());
+          continue;
+        }
         switch (actions_[column]) {
           case action::group_by: {
             auto get_scalar_result = table->column(column)->GetScalar(0);
