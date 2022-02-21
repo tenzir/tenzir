@@ -122,7 +122,6 @@ class value_index;
 
 struct attribute;
 struct augmented_partition_synopsis;
-struct layouts_diff;
 struct legacy_address_type;
 struct legacy_alias_type;
 struct meta_extractor;

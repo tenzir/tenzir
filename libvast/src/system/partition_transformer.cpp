@@ -210,7 +210,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         if (it == layouts.end())
           it = layouts.emplace(std::string{layout_name}, layout_statistics{})
                  .first;
-        it->second.count += slice.rows();
+        it.value().count += slice.rows();
         self->state.slices.push_back(std::move(slice));
       }
       VAST_DEBUG("partition-transformer received all table slices");
