@@ -10,18 +10,16 @@
 
 #include "vast/address.hpp"
 #include "vast/arrow_extension_types.hpp"
+#include "vast/detail/generator.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/error.hpp"
+#include "vast/die.hpp"
 #include "vast/hash/hash.hpp"
 
 #include <arrow/array.h>
-#include <caf/error.hpp>
-#include <caf/expected.hpp>
 
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
-#include <unordered_set>
 
 namespace vast::detail {
 
@@ -31,24 +29,15 @@ namespace vast::detail {
 ///
 /// We may consider rewriting this visitor as an Arrow Compute function at some
 /// point.
-template <class Function>
 struct array_hasher {
 public:
-  explicit array_hasher(Function& f) : f_{f} {
-  }
-
-  caf::expected<size_t> operator()(const arrow::NullArray&) {
-    return caf::make_error(ec::unimplemented, "null type not supported");
-  }
-
-  caf::expected<size_t> operator()(const arrow::BooleanArray& xs) {
-    static const auto false_digest = hash(0);
-    static const auto true_digest = hash(1);
+  generator<uint64_t> operator()(const arrow::BooleanArray& xs) const {
+    static const uint64_t false_digest = hash(0);
+    static const uint64_t true_digest = hash(1);
     if (xs.false_count() > 0)
-      f_(false_digest);
+      co_yield uint64_t{false_digest};
     if (xs.true_count() > 0)
-      f_(true_digest);
-    return xs.null_count();
+      co_yield uint64_t{true_digest};
   }
 
   // Overload that handles all stateless hash computations that only dependend
@@ -59,28 +48,25 @@ public:
                       arrow::UInt16Array, arrow::UInt32Array,
                       arrow::UInt64Array, arrow::HalfFloatArray,
                       arrow::FloatArray, arrow::DoubleArray, arrow::StringArray>
-      caf::expected<size_t>
-  operator()(const Array& xs) {
+      generator<uint64_t>
+  operator()(const Array& xs) const {
     for (auto i = 0; i < xs.length(); ++i) {
       if (!xs.IsNull(i)) {
         if constexpr (is_any_v<Array, arrow::Int8Array, arrow::Int16Array,
                                arrow::Int32Array, arrow::Int64Array>)
-          f_(hash(static_cast<int64_t>(xs.Value(i))));
+          co_yield hash(static_cast<int64_t>(xs.Value(i)));
         else if constexpr (is_any_v<Array, arrow::UInt8Array, arrow::UInt16Array,
                                     arrow::UInt32Array, arrow::UInt64Array>)
-          f_(hash(static_cast<uint64_t>(xs.Value(i))));
+          co_yield hash(static_cast<uint64_t>(xs.Value(i)));
         else if constexpr (is_any_v<Array, arrow::HalfFloatArray,
                                     arrow::FloatArray, arrow::DoubleArray>)
-          f_(hash(static_cast<double>(xs.Value(i))));
+          co_yield hash(static_cast<double>(xs.Value(i)));
         else if constexpr (std::is_same_v<Array, arrow::StringArray>)
-          f_(hash(as_bytes(xs.GetView(i))));
-        else if constexpr (std::is_same_v<Array, arrow::StringArray>)
-          f_(hash(as_bytes(xs.GetView(i))));
+          co_yield hash(as_bytes(xs.GetView(i)));
         else
           static_assert(always_false_v<Array>, "missing array type");
       }
     }
-    return xs.null_count();
   }
 
   // Overload that handles types that have a pair form (x,y) where x in X and
@@ -88,8 +74,8 @@ public:
   // treating x as seed.
   template <class Array>
     requires is_any_v<Array, arrow::DurationArray, arrow::TimestampArray>
-      caf::expected<size_t>
-  operator()(const Array& xs) {
+      generator<uint64_t>
+  operator()(const Array& xs) const {
     auto unit = arrow::TimeUnit::type{};
     if constexpr (std::is_same_v<Array, arrow::DurationArray>)
       unit = static_cast<const arrow::DurationType&>(*xs.type()).unit();
@@ -100,16 +86,15 @@ public:
     auto seed = static_cast<default_hash::seed_type>(unit);
     for (auto i = 0; i < xs.length(); ++i)
       if (!xs.IsNull(i))
-        f_(seeded_hash<default_hash>{seed}(xs.Value(i)));
-    return xs.null_count();
+        co_yield seeded_hash<default_hash>{seed}(xs.Value(i));
   }
 
-  caf::expected<size_t> operator()(const pattern_array& xs) {
+  generator<uint64_t> operator()(const pattern_array& xs) const {
     const auto& ys = static_cast<const arrow::StringArray&>(*xs.storage());
     return (*this)(ys);
   }
 
-  caf::expected<size_t> operator()(const address_array& xs) {
+  generator<uint64_t> operator()(const address_array& xs) const {
     const auto& ys
       = static_cast<const arrow::FixedSizeBinaryArray&>(*xs.storage());
     for (auto i = 0; i < xs.length(); ++i) {
@@ -118,13 +103,12 @@ public:
         VAST_ASSERT(bytes.size() == 16);
         // Hash a fixed-size span because we'd otherwise hash the size as well.
         auto span = bytes.first<16>();
-        f_(hash(address{span}));
+        co_yield hash(address{span});
       }
     }
-    return xs.null_count();
   }
 
-  caf::expected<size_t> operator()(const subnet_array& xs) {
+  generator<uint64_t> operator()(const subnet_array& xs) const {
     // We treat the subnet length as seed to compute a one-pass hash.
     const auto& structs = static_cast<const arrow::StructArray&>(*xs.storage());
     const auto& lengths
@@ -141,43 +125,43 @@ public:
         VAST_ASSERT(bytes.size() == 16);
         auto span = bytes.first<16>();
         auto digest = seeded_hash<default_hash>{seed}(span);
-        f_(digest);
+        co_yield digest;
       }
     }
-    return xs.null_count();
   }
 
-  caf::expected<size_t> operator()(const enum_array& xs) {
+  generator<uint64_t> operator()(const enum_array& xs) const {
     // Only hash the unique (string) values that we have encountered.
     const auto& ys = static_cast<const arrow::DictionaryArray&>(*xs.storage());
     return caf::visit(*this, *ys.dictionary());
   }
 
-  caf::expected<size_t> operator()(const arrow::ListArray& xs) {
+  generator<uint64_t> operator()(const arrow::ListArray& xs) const {
     // Lists are transparent for hashing.
     return caf::visit(*this, *xs.values());
   }
 
-  caf::expected<size_t> operator()(const arrow::MapArray& xs) {
+  generator<uint64_t> operator()(const arrow::MapArray& xs) const {
     const auto& base = static_cast<const arrow::ListArray&>(xs);
     const auto& kvps = static_cast<const arrow::StructArray&>(*base.values());
     // Treat keys and values independently.
-    auto result = size_t{0};
     for (const auto& field : kvps.fields())
-      if (auto x = caf::visit(*this, *field))
-        result += *x;
-      else
-        return x.error();
-    return result;
+      for (auto x : caf::visit(*this, *field))
+        co_yield x;
   }
 
-  caf::expected<size_t> operator()(const arrow::StructArray&) {
+  generator<uint64_t> operator()(const arrow::StructArray&) const {
     // In case there will be structs as first-class values at some point, we
     // will need to hash the cross product row-wise.
-    return caf::make_error(ec::logic_error, "invalid flat index field access");
+    die("structs cannot be accessed as top-level column");
   }
 
-  Function& f_;
+  generator<uint64_t> operator()(const arrow::Array& xs) const {
+    return caf::visit(*this, xs);
+  }
 };
+
+/// Convenience instantitation for easier use at call site.
+constexpr auto hash_array = array_hasher{};
 
 } // namespace vast::detail

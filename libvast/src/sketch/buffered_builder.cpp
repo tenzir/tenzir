@@ -25,18 +25,9 @@ caf::error buffered_builder::add(table_slice x, offset off) {
   const auto& layout = caf::get<record_type>(x.layout());
   auto idx = layout.flat_index(off);
   auto array = record_batch->column(idx);
-  auto add = [this](uint64_t digest) {
+  for (auto digest : detail::hash_array(*array))
     digests_.insert(digest);
-  };
-  auto nulls = caf::visit(detail::array_hasher{add}, *array);
-  if (!nulls)
-    return caf::make_error(ec::unspecified, //
-                           fmt::format("failed to hash table slice column {}: "
-                                       "{}",
-                                       idx, nulls.error()));
-  // Treat null value as additional value in every domain.
-  if (*nulls > 0)
-    ; // FIXME: do something meaningful
+  // TODO: figure out how to handle NULL values.
   return caf::none;
 }
 
