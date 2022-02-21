@@ -261,7 +261,7 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // Subscribes a PARTITION CREATION LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::create,
-                 partition_creation_listener_actor>,
+                 partition_creation_listener_actor, send_initial_dbstate>,
   // Evaluates a query, ie. sends matching events to the caller.
   caf::replies_to<atom::evaluate, query>::with<query_cursor>,
   // Resolves a query to its candidate partitions.

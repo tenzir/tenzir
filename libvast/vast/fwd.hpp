@@ -339,6 +339,7 @@ struct query_status;
 struct report;
 struct spawn_arguments;
 enum class keep_original_partition : bool;
+enum class send_initial_dbstate : bool;
 enum class status_verbosity;
 
 } // namespace system

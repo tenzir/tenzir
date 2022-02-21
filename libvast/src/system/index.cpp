@@ -922,9 +922,12 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.add_flush_listener(std::move(listener));
     },
     [self](atom::subscribe, atom::create,
-           const partition_creation_listener_actor& listener) {
+           const partition_creation_listener_actor& listener,
+           send_initial_dbstate should_send) {
       VAST_DEBUG("{} adds partition creation listener", *self);
       self->state.add_partition_creation_listener(listener);
+      if (should_send == send_initial_dbstate::no)
+        return;
       // When we get here, the initial bulk upgrade and any table slices
       // finished since then have already been sent to the meta index, and
       // since CAF guarantees message order within the same inbound queue

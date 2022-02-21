@@ -44,6 +44,13 @@ enum class keep_original_partition : bool {
   no = false,
 };
 
+// New partition creation listeners will be sent the initial state of the
+// whole database if they set this to 'yes'.
+enum class send_initial_dbstate : bool {
+  yes = true,
+  no = false,
+};
+
 /// Extract a partition synopsis from the partition at `partition_path`
 /// and write it to `partition_synopsis_path`.
 //  TODO: Move into separate header.
