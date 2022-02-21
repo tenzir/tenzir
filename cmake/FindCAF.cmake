@@ -7,8 +7,8 @@
 # Variables used by this module (they can change the default behaviour and need
 # to be set before calling find_package):
 #
-# CAF_ROOT_DIR  Set this variable either to an installation prefix or to wa CAF
-# build directory where to look for the CAF libraries.
+# CAF_ROOT_DIR  Set this variable either to an installation prefix or to a CAF build
+# directory where to look for the CAF libraries.
 #
 # Variables defined by this module:
 #
@@ -41,16 +41,18 @@ foreach (comp ${CAF_FIND_COMPONENTS})
     set(HDRNAME "caf/${comp}/all.hpp")
   endif ()
   if (CAF_ROOT_DIR)
-    set(header_hints
+    set(header_paths
         "${CAF_ROOT_DIR}/include" "${CAF_ROOT_DIR}/libcaf_${comp}"
         "${CAF_ROOT_DIR}/../libcaf_${comp}"
-        "${CAF_ROOT_DIR}/../../libcaf_${comp}")
+        "${CAF_ROOT_DIR}/../../libcaf_${comp}" NO_DEFAULT_PATH)
+  else ()
+    set(header_paths "/usr/include" "/usr/local/include" "/opt/local/include"
+                     "/sw/include" "${CMAKE_INSTALL_PREFIX}/include")
   endif ()
   find_path(
     CAF_INCLUDE_DIR_${UPPERCOMP}
     NAMES ${HDRNAME}
-    HINTS ${header_hints} /usr/include /usr/local/include /opt/local/include
-          /sw/include ${CMAKE_INSTALL_PREFIX}/include)
+    PATHS ${header_paths})
   mark_as_advanced(CAF_INCLUDE_DIR_${UPPERCOMP})
   if (NOT "${CAF_INCLUDE_DIR_${UPPERCOMP}}" STREQUAL
       "CAF_INCLUDE_DIR_${UPPERCOMP}-NOTFOUND")
@@ -75,8 +77,7 @@ foreach (comp ${CAF_FIND_COMPONENTS})
       find_path(
         caf_build_header_path
         NAMES caf/detail/build_config.hpp
-        HINTS ${header_hints} /usr/include /usr/local/include
-              /opt/local/include /sw/include ${CMAKE_INSTALL_PREFIX}/include)
+        PATHS ${header_paths})
       if ("${caf_build_header_path}" STREQUAL "caf_build_header_path-NOTFOUND")
         message(WARNING "Found all.hpp for CAF core, but not build_config.hpp")
         set(CAF_${comp}_FOUND false)
@@ -92,13 +93,15 @@ foreach (comp ${CAF_FIND_COMPONENTS})
     # skip probe_event as it is header only
     if (NOT ${comp} STREQUAL "probe_event" AND NOT ${comp} STREQUAL "test")
       if (CAF_ROOT_DIR)
-        set(library_hints "${CAF_ROOT_DIR}/lib")
+        set(library_paths "${CAF_ROOT_DIR}/lib" NO_DEFAULT_PATH)
+      else ()
+        set(library_paths "/usr/lib" "/usr/local/lib" "/opt/local/lib"
+                          "/sw/lib" "${CMAKE_INSTALL_PREFIX}/lib")
       endif ()
       find_library(
         CAF_LIBRARY_${UPPERCOMP}
         NAMES "caf_${comp}${suffix}"
-        HINTS ${library_hints} /usr/lib /usr/local/lib /opt/local/lib /sw/lib
-              ${CMAKE_INSTALL_PREFIX}/lib)
+        PATHS ${library_paths})
       mark_as_advanced(CAF_LIBRARY_${UPPERCOMP})
       if ("${CAF_LIBRARY_${UPPERCOMP}}" STREQUAL
           "CAF_LIBRARY_${UPPERCOMP}-NOTFOUND")
