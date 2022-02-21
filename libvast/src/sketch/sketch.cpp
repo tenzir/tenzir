@@ -27,13 +27,17 @@ sketch::lookup(relational_operator op, const data& x) const noexcept {
     case fbs::sketch::Sketch::NONE: {
       die("sketch type must not be NONE");
     }
-    case fbs::sketch::Sketch::bloom_filter_v0: {
+    case fbs::sketch::Sketch::min_max: {
+      auto min_max = flatbuffer_->sketch_as_min_max();
+      // FIXME: implement the function such that it tests whether x falls into
+      // the closed interval [min, max].
+    }
+    case fbs::sketch::Sketch::bloom_filter: {
       // TODO: also consider `X in [a,b,c]`.
       if (op != relational_operator::equal)
         return {};
       immutable_bloom_filter_view view;
-      auto v0 = flatbuffer_->sketch_as_bloom_filter_v0();
-      auto err = unpack(*v0->bloom_filter(), view);
+      auto err = unpack(*flatbuffer_->sketch_as_bloom_filter(), view);
       VAST_ASSERT(!err);
       // FIXME: Hash data exactly as in src/sketch/buffered_builder.cpp.
       auto h = [](const auto& x) {

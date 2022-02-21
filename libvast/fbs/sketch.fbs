@@ -1,15 +1,18 @@
 include "bloom_filter.fbs";
-
-namespace vast.fbs.sketch.bloom_filter;
-
-table v0 {
-  bloom_filter: BloomFilter;
-}
+include "data.fbs";
 
 namespace vast.fbs.sketch;
 
+// TODO: move into separate file, and consider moving Bloom filter into
+// namespace fbs::sketch as well.
+table MinMax {
+  min: Data (required);
+  max: Data (required);
+}
+
 union Sketch {
-  bloom_filter.v0,
+  bloom_filter: BloomFilter,
+  min_max: MinMax
 }
 
 namespace vast.fbs;

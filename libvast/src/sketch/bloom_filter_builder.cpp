@@ -54,11 +54,8 @@ bloom_filter_builder::build(const std::unordered_set<uint64_t>& digests) {
     = fbs::BloomFilterParameters{params->m, params->n, params->k, params->p};
   auto bloom_filter_offset
     = fbs::CreateBloomFilter(builder, &flat_params, bits_offset);
-  auto bloom_filter_v0_offset
-    = fbs::sketch::bloom_filter::Createv0(builder, bloom_filter_offset);
-  auto sketch_offset
-    = fbs::CreateSketch(builder, fbs::sketch::Sketch::bloom_filter_v0,
-                        bloom_filter_v0_offset.Union());
+  auto sketch_offset = fbs::CreateSketch(
+    builder, fbs::sketch::Sketch::bloom_filter, bloom_filter_offset.Union());
   builder.Finish(sketch_offset);
   // TODO: verify actual size
   // VAST_ASSERT(builder.GetSize() == flatbuffer_size);
