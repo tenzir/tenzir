@@ -37,7 +37,7 @@ namespace vast::system {
 size_t meta_index_state::memusage() const {
   size_t result = 0;
   for (const auto& [id, partition_synopsis] : synopses)
-    result += partition_synopsis.memusage();
+    result += partition_synopsis->memusage();
   return result;
 }
 
@@ -46,26 +46,28 @@ void meta_index_state::erase(const uuid& partition) {
   offset_map.erase_value(partition);
 }
 
-void meta_index_state::merge(const uuid& partition, partition_synopsis&& ps) {
-  offset_map.inject(ps.offset, ps.offset + ps.events, partition);
+void meta_index_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
+  offset_map.inject(ps->offset, ps->offset + ps->events, partition);
   synopses.emplace(partition, std::move(ps));
 }
 
-void meta_index_state::create_from(std::map<uuid, partition_synopsis>&& ps) {
-  std::vector<std::pair<uuid, partition_synopsis>> flat_data;
+void meta_index_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
+  std::vector<std::pair<uuid, partition_synopsis_ptr>> flat_data;
   for (auto&& [uuid, synopsis] : std::move(ps)) {
-    offset_map.inject(synopsis.offset, synopsis.offset + synopsis.events, uuid);
+    VAST_ASSERT(synopsis->get_reference_count() == 1ull);
+    offset_map.inject(synopsis->offset, synopsis->offset + synopsis->events,
+                      uuid);
     flat_data.emplace_back(uuid, std::move(synopsis));
   }
   std::sort(flat_data.begin(), flat_data.end(),
-            [](const std::pair<uuid, partition_synopsis>& lhs,
-               const std::pair<uuid, partition_synopsis>& rhs) {
+            [](const std::pair<uuid, partition_synopsis_ptr>& lhs,
+               const std::pair<uuid, partition_synopsis_ptr>& rhs) {
               return lhs.first < rhs.first;
             });
   synopses = decltype(synopses)::make_unsafe(std::move(flat_data));
 }
 
-partition_synopsis& meta_index_state::at(const uuid& partition) {
+partition_synopsis_ptr& meta_index_state::at(const uuid& partition) {
   return synopses.at(partition);
 }
 
@@ -214,7 +216,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         const auto& rhs = caf::get<data>(x.rhs);
         result_type result;
         for (const auto& [part_id, part_syn] : synopses) {
-          for (const auto& [field, syn] : part_syn.field_synopses_) {
+          for (const auto& [field, syn] : part_syn->field_synopses_) {
             if (match(field)) {
               // We need to prune the type's metadata here by converting it to a
               // concrete type and back, because the type synopses are looked up
@@ -235,8 +237,8 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 }
                 // The field has no dedicated synopsis. Check if there is one
                 // for the type in general.
-              } else if (auto it = part_syn.type_synopses_.find(cleaned_type);
-                         it != part_syn.type_synopses_.end() && it->second) {
+              } else if (auto it = part_syn->type_synopses_.find(cleaned_type);
+                         it != part_syn->type_synopses_.end() && it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
@@ -267,7 +269,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
             // at the layout names.
             result_type result;
             for (const auto& [part_id, part_syn] : synopses) {
-              for (const auto& [fqf, _] : part_syn.field_synopses_) {
+              for (const auto& [fqf, _] : part_syn->field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
                 // short, so we're probably not hitting the allocator due to
@@ -283,10 +285,11 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
           } else if (lhs.kind == meta_extractor::import_time) {
             result_type result;
             for (const auto& [part_id, part_syn] : synopses) {
-              VAST_ASSERT(part_syn.min_import_time <= part_syn.max_import_time);
+              VAST_ASSERT(part_syn->min_import_time
+                          <= part_syn->max_import_time);
               auto ts = time_synopsis{
-                part_syn.min_import_time,
-                part_syn.max_import_time,
+                part_syn->min_import_time,
+                part_syn->max_import_time,
               };
               auto add = ts.lookup(x.op, caf::get<vast::time>(d));
               if (!add || *add)
@@ -308,7 +311,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                 // partition.
                 auto matching = [&] {
                   for (const auto& [field, _] :
-                       synopsis.second.field_synopses_) {
+                       synopsis.second->field_synopses_) {
                     VAST_ASSERT(!field.is_standalone_type());
                     auto rt = record_type{{field.field_name(), field.type()}};
                     for ([[maybe_unused]] const auto& offset :
@@ -398,15 +401,16 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
   self->state.accountant = std::move(accountant);
   self->send(self->state.accountant, atom::announce_v, self->name());
   return {
-    [=](atom::merge,
-        std::shared_ptr<std::map<uuid, partition_synopsis>>& ps) -> atom::ok {
+    [=](
+      atom::merge,
+      std::shared_ptr<std::map<uuid, partition_synopsis_ptr>>& ps) -> atom::ok {
       self->state.create_from(std::move(*ps));
       return atom::ok_v;
     },
     [=](atom::merge, uuid partition,
         partition_synopsis_ptr& synopsis) -> atom::ok {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(partition));
-      self->state.merge(partition, std::move(synopsis.unshared()));
+      self->state.merge(partition, std::move(synopsis));
       return atom::ok_v;
     },
     [=](atom::erase, uuid partition) {
@@ -419,7 +423,7 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
       // we probably want to remove it or add a new `atom::update` handler
       // for in-place replacements.
       VAST_ASSERT(old_partition != new_partition);
-      self->state.merge(new_partition, std::move(synopsis.unshared()));
+      self->state.merge(new_partition, std::move(synopsis));
       self->state.erase(old_partition);
       return atom::ok_v;
     },
