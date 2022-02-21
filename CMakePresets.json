@@ -1,0 +1,84 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "nix-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "VAST_ENABLE_DEVELOPER_MODE": "ON",
+        "VAST_ENABLE_LSVAST": "ON"
+      }
+    },
+    {
+      "name": "gcc-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "nix-gcc-debug",
+      "inherits": ["nix-base", "gcc-base"],
+      "displayName": "GCC Debug Config",
+      "binaryDir": "${sourceDir}/build/gcc/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/debug",
+        "VAST_ENABLE_ASAN": "ON"
+      },
+      "environment": {
+        "LDFLAGS": "-fuse-ld=lld"
+      }
+    },
+    {
+      "name": "nix-gcc-redeb",
+      "inherits": ["nix-base", "gcc-base"],
+      "displayName": "GCC Redeb Config",
+      "binaryDir": "${sourceDir}/build/gcc/redeb",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/redeb",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+      },
+      "environment": {
+        "LDFLAGS": "-fuse-ld=lld"
+      }
+    },
+    {
+      "name": "nix-gcc-release",
+      "inherits": ["nix-base", "gcc-base"],
+      "displayName": "GCC Release Config",
+      "binaryDir": "${sourceDir}/build/gcc/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/release",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+      },
+      "environment": {
+        "LDFLAGS": "-fuse-ld=gold"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "nix-gcc-debug",
+      "configurePreset": "nix-gcc-debug"
+    },
+    {
+      "name": "nix-gcc-redeb",
+      "configurePreset": "nix-gcc-redeb"
+    },
+    {
+      "name": "nix-gcc-release",
+      "configurePreset": "nix-gcc-release"
+    }
+  ]
+}

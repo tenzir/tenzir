@@ -481,7 +481,7 @@ endif ()
 # other niceties.
 option(VAST_ENABLE_DEVELOPER_MODE
        "Enables build settings for a nicer development environment"
-       "${VAST_IS_NOT_SUBPROJECT}")
+       OFF)
 add_feature_info("VAST_ENABLE_DEVELOPER_MODE" VAST_ENABLE_DEVELOPER_MODE
                  "enables build settings for a nicer development environment.")
 

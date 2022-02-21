@@ -3,6 +3,9 @@
 .DS_Store
 .*sw?
 
+# CMake presets not meant to be versioned
+CMakeUserPresets.json
+
 # Build artifacts
 /build*/
 /nix/build/
