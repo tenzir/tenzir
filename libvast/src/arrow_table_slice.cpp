@@ -847,13 +847,131 @@ data_view value_at(const type& t, const arrow::Array& arr, int64_t row) {
   return caf::visit(f, t, arr);
 }
 
-auto apply_index(size_t offset, value_index& idx, const arrow::Array& arr,
-                 const type& vast_type) -> void {
-  for (int64_t row = 0; row < arr.length(); ++row) {
-    const auto& v = value_at(vast_type, arr, row);
-    if (!caf::holds_alternative<view<caf::none_t>>(v))
-      idx.append(v, detail::narrow_cast<size_t>(offset + row));
+template <concrete_type Type, class Array>
+auto values([[maybe_unused]] const Type& type, const Array& arr)
+  -> detail::generator<std::optional<view<type_to_data_t<Type>>>> {
+  auto type_mismatch = [&]() {
+    VAST_ASSERT(false, "type mismatch");
+    __builtin_unreachable();
+  };
+  for (int i = 0; i < arr.length(); ++i) {
+    if (arr.IsNull(i)) {
+      co_yield {};
+    } else {
+      if constexpr (std::is_same_v<Type, none_type>) {
+        VAST_ASSERT(false, "none_type not expected here");
+        __builtin_unreachable();
+      } else if constexpr (std::is_same_v<Type, bool_type>) {
+        if constexpr (std::is_same_v<Array, arrow::BooleanArray>) {
+          co_yield arr.Value(i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, integer_type>) {
+        if constexpr (std::is_same_v<Array, arrow::Int64Array>) {
+          co_yield integer{arr.Value(i)};
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, count_type>) {
+        if constexpr (std::is_same_v<Array, arrow::UInt64Array>) {
+          co_yield arr.Value(i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, real_type>) {
+        if constexpr (std::is_same_v<Array, arrow::DoubleArray>) {
+          co_yield arr.Value(i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, enumeration_type>) {
+        if constexpr (std::is_same_v<Array, enum_array>) {
+          co_yield enumeration_at(
+            static_cast<const arrow::DictionaryArray&>(*arr.storage()), i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, time_type>) {
+        if constexpr (std::is_same_v<Array, arrow::TimestampArray>) {
+          co_yield timestamp_at(arr, i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, duration_type>) {
+        if constexpr (std::is_same_v<Array, arrow::DurationArray>) {
+          co_yield duration_at(arr, i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, address_type>) {
+        if constexpr (std::is_same_v<Array, address_array>) {
+          co_yield address_at(
+            static_cast<const arrow::FixedSizeBinaryArray&>(*arr.storage()), i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, subnet_type>) {
+        if constexpr (std::is_same_v<Array, subnet_array>) {
+          co_yield subnet_at(
+            static_cast<const arrow::StructArray&>(*arr.storage()), i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, string_type>) {
+        if constexpr (std::is_same_v<Array, arrow::StringArray>) {
+          co_yield string_at(arr, i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, pattern_type>) {
+        if constexpr (std::is_same_v<Array, pattern_array>) {
+          co_yield pattern_view{string_at(
+            static_cast<const arrow::StringArray&>(*arr.storage()), i)};
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, list_type>) {
+        if constexpr (std::is_same_v<Array, arrow::ListArray>) {
+          co_yield list_at(type.value_type(), arr, i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, map_type>) {
+        if constexpr (std::is_same_v<Array, arrow::MapArray>) {
+          co_yield map_at(type.key_type(), type.value_type(), arr, i);
+        } else {
+          type_mismatch();
+        }
+      } else if constexpr (std::is_same_v<Type, record_type>) {
+        if constexpr (std::is_same_v<Array, arrow::StructArray>) {
+          // TODO: record_at is expensive, breaking the columnar processing
+          co_yield record_at(type, arr, i);
+        } else {
+          type_mismatch();
+        }
+      } else {
+        static_assert(detail::always_false_v<Type>, "unhandled vast type");
+      }
+    }
   }
+}
+
+auto values(const type& type, const arrow::Array& array)
+  -> detail::generator<data_view> {
+  auto f = [](const concrete_type auto& type,
+              const auto& array) -> detail::generator<data_view> {
+    if constexpr (std::is_same_v<decltype(type), none_type>)
+      die("none_type//TODO");
+    else
+      for (auto&& result : values(type, array)) {
+        if (result)
+          co_yield *result;
+        else
+          co_yield caf::none;
+      }
+  };
+  return caf::visit(f, type, array);
 }
 
 // -- utility for converting Buffer to RecordBatch -----------------------------
@@ -1056,8 +1174,12 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
     if (auto&& batch = record_batch()) {
       auto&& array = state_.flat_columns[column];
       const auto& layout = caf::get<record_type>(this->layout());
-      auto o = layout.resolve_flat_index(column);
-      apply_index(offset, index, *array, layout.field(o).type);
+      auto type = layout.field(layout.resolve_flat_index(column)).type;
+      for (size_t row = 0; auto&& value : values(type, *array)) {
+        if (!caf::holds_alternative<view<caf::none_t>>(value))
+          index.append(value, offset + row);
+        ++row;
+      }
     }
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
