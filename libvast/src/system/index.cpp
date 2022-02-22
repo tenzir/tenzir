@@ -938,8 +938,8 @@ index(index_actor::stateful_pointer<index_state> self,
             self->send(listener, atom::update_v, std::move(v));
           },
           [](const caf::error& e) {
-            VAST_WARN("{} failed to get list of partitions from meta index: {}",
-                      e);
+            VAST_WARN(
+              "index failed to get list of partitions from meta index: {}", e);
           });
     },
     [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
