@@ -217,8 +217,8 @@ subnet_extension_type::Deserialize(std::shared_ptr<DataType> storage_type,
 }
 
 const std::shared_ptr<arrow::DataType> subnet_extension_type::arrow_type
-  = arrow::struct_({arrow::field("length", arrow::uint8()),
-                    arrow::field("address", make_arrow_address())});
+  = arrow::struct_({arrow::field("address", make_arrow_address()),
+                    arrow::field("length", arrow::uint8())});
 
 pattern_extension_type::pattern_extension_type()
   : arrow::ExtensionType(arrow_type) {

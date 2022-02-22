@@ -28,10 +28,10 @@
   ARROW:extension:name: 'vast.subnet'
   VAST:attributes:0: '{ "description": "unnamed_extended_bool"}'
   VAST:attributes:0: '{ "skip": ""}'
+  child 0, address: fixed_size_binary[16]
   child 0, item: struct<contagious: bool>
-  child 0, length: uint8
   child 0, x: bool
-  child 1, address: fixed_size_binary[16]
+  child 1, length: uint8
   child 1, y: string
   child 2, z: timestamp[ns]
   child 3, lrc: list<item: struct<x1: int64, x2: uint64>>
@@ -49,7 +49,7 @@ done with current reader, rows: 4
 e: dictionary<values=string, indices=int16, ordered=0>
 i: int64
 l: list<item: struct<contagious: bool>>
-n: struct<length: uint8, address: fixed_size_binary[16]>
+n: struct<address: fixed_size_binary[16], length: uint8>
 open next reader
 open next reader
 r: double
