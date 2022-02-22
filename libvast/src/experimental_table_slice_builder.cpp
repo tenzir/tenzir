@@ -461,11 +461,11 @@ public:
   using view_type = view<data_type>;
 
   subnet_column_builder(arrow::MemoryPool* pool)
-    : length_builder_(std::make_shared<arrow::UInt8Builder>()),
-      address_builder_(std::make_shared<arrow::FixedSizeBinaryBuilder>(
-        address_extension_type::arrow_type, pool)) {
-    std::vector<std::shared_ptr<arrow::ArrayBuilder>> fields{length_builder_,
-                                                             address_builder_};
+    : address_builder_(std::make_shared<arrow::FixedSizeBinaryBuilder>(
+      address_extension_type::arrow_type, pool)),
+      length_builder_(std::make_shared<arrow::UInt8Builder>()) {
+    std::vector<std::shared_ptr<arrow::ArrayBuilder>> fields{address_builder_,
+                                                             length_builder_};
     subnet_builder_ = std::make_shared<arrow::StructBuilder>(
       subnet_extension_type::arrow_type, pool, fields);
   }
@@ -495,8 +495,8 @@ public:
   }
 
 private:
-  std::shared_ptr<arrow::UInt8Builder> length_builder_;
   std::shared_ptr<arrow::FixedSizeBinaryBuilder> address_builder_;
+  std::shared_ptr<arrow::UInt8Builder> length_builder_;
   std::shared_ptr<arrow::StructBuilder> subnet_builder_;
 };
 

@@ -716,10 +716,10 @@ auto address_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
 }
 
 auto subnet_at(const arrow::StructArray& arr, int64_t row) {
-  const auto& length_array = arr.field(0);
   const auto& ext_arr
-    = static_pointer_cast<arrow::ExtensionArray>(arr.field(1));
+    = static_pointer_cast<arrow::ExtensionArray>(arr.field(0));
   const auto& address_array = *ext_arr->storage();
+  const auto& length_array = arr.field(1);
   auto addr = address_at(
     static_cast<const arrow::FixedSizeBinaryArray&>(address_array), row);
   auto len = static_cast<const arrow::UInt8Array&>(*length_array).Value(row);
