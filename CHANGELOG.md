@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [v1.1.0-rc1]
+## [v1.1.0-rc2]
 
 ### :warning: Changes
 
@@ -34,6 +34,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://docs.tenzir.com/vast/features/compaction), e.g., for rolling up events into a more space-efficient representation after a certain amount of time.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
+- Add a parameter to the partition creation listener interface that allows plugins to get a view of the whole database state.
+  [#2103](https://github.com/tenzir/vast/pull/2103)
+
 ### :beetle: Bug Fixes
 
 - A performance bug in the first stage of query evaluation caused VAST to return too many candidate partitions when querying for a field suffix. For example, a query for the `ts` field commonly used in Zeek logs also included partitions for `netflow.pkts` from `suricata.netflow` events. This bug no longer exists, resulting in a considerable speedup of affected queries.
@@ -41,6 +44,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST does not lose query capacity when backlogged queries are cancelled any more.
   [#2092](https://github.com/tenzir/vast/pull/2092)
+
+- Correctly adjust the index statistics when applying partition transforms.
+  [#2097](https://github.com/tenzir/vast/pull/2097)
+
+- Fixed a use-after-move bug that could have resulted in incorrect offset ranges being returned from the meta index.
+  [#2103](https://github.com/tenzir/vast/pull/2103)
 
 ## [v1.0.0]
 
@@ -1553,7 +1562,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[v1.1.0-rc1]: https://github.com/tenzir/vast/releases/tag/v1.1.0-rc1
+[v1.1.0-rc2]: https://github.com/tenzir/vast/releases/tag/v1.1.0-rc2
 [v1.0.0]: https://github.com/tenzir/vast/releases/tag/v1.0.0
 [2021.12.16]: https://github.com/tenzir/vast/releases/tag/2021.12.16
 [2021.11.18]: https://github.com/tenzir/vast/releases/tag/2021.11.18
