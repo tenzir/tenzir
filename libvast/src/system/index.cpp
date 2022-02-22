@@ -48,6 +48,7 @@
 #include "vast/uuid.hpp"
 
 #include <caf/error.hpp>
+#include <caf/make_copy_on_write.hpp>
 #include <caf/response_promise.hpp>
 #include <caf/send.hpp>
 #include <flatbuffers/flatbuffers.h>
@@ -287,7 +288,7 @@ caf::error index_state::load_from_disk() {
     const auto* index_v0 = index->index_as_v0();
     const auto* partition_uuids = index_v0->partitions();
     VAST_ASSERT(partition_uuids);
-    auto synopses = std::make_shared<std::map<uuid, partition_synopsis>>();
+    auto synopses = std::make_shared<std::map<uuid, partition_synopsis_ptr>>();
     const size_t total = partition_uuids->size();
     for (size_t idx = 0; idx < total; ++idx) {
       const auto* uuid_fb = partition_uuids->Get(idx);
@@ -322,7 +323,7 @@ caf::error index_state::load_from_disk() {
       }
       const auto* ps_flatbuffer
         = fbs::GetPartitionSynopsis(chunk->get()->data());
-      partition_synopsis ps;
+      partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
       if (ps_flatbuffer->partition_synopsis_type()
           != fbs::partition_synopsis::PartitionSynopsis::legacy)
         return caf::make_error(ec::format_error, "invalid partition synopsis "
@@ -341,9 +342,9 @@ caf::error index_state::load_from_disk() {
         //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
         goto retry;
       }
-      if (auto error = unpack(synopsis_legacy, ps))
+      if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
-      meta_index_bytes += ps.memusage();
+      meta_index_bytes += ps->memusage();
       persisted_partitions.insert(partition_uuid);
       synopses->emplace(partition_uuid, std::move(ps));
     }
@@ -921,9 +922,25 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.add_flush_listener(std::move(listener));
     },
     [self](atom::subscribe, atom::create,
-           partition_creation_listener_actor listener) {
+           const partition_creation_listener_actor& listener,
+           send_initial_dbstate should_send) {
       VAST_DEBUG("{} adds partition creation listener", *self);
       self->state.add_partition_creation_listener(listener);
+      if (should_send == send_initial_dbstate::no)
+        return;
+      // When we get here, the initial bulk upgrade and any table slices
+      // finished since then have already been sent to the meta index, and
+      // since CAF guarantees message order within the same inbound queue
+      // they will all be part of the response vector.
+      self->request(self->state.meta_index, caf::infinite, atom::get_v)
+        .then(
+          [=](std::vector<partition_synopsis_pair>& v) {
+            self->send(listener, atom::update_v, std::move(v));
+          },
+          [](const caf::error& e) {
+            VAST_WARN(
+              "index failed to get list of partitions from meta index: {}", e);
+          });
     },
     [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
       if (!self->state.accept_queries) {

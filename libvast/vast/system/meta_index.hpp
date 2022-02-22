@@ -45,15 +45,15 @@ public:
 
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the meta index state at startup.
-  void create_from(std::map<uuid, partition_synopsis>&&);
+  void create_from(std::map<uuid, partition_synopsis_ptr>&&);
 
   /// Add a new partition synopsis.
-  void merge(const uuid& partition, partition_synopsis&&);
+  void merge(const uuid& partition, partition_synopsis_ptr);
 
   /// Returns the partition synopsis for a specific partition.
   /// Note that most callers will prefer to use `lookup()` instead.
   /// @pre `partition` must be a valid key for this meta index.
-  partition_synopsis& at(const uuid& partition);
+  partition_synopsis_ptr& at(const uuid& partition);
 
   /// Erase this partition from the meta index.
   void erase(const uuid& partition);
@@ -81,7 +81,7 @@ public:
   // We mainly iterate over the whole map and return a sorted set, for which
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
   // See also ae9dbed.
-  detail::flat_map<uuid, partition_synopsis> synopses = {};
+  detail::flat_map<uuid, partition_synopsis_ptr> synopses = {};
 
   /// Maps ids to the corresponding partitions.
   //  TODO: Maybe this should be moved into it a standalone actor.

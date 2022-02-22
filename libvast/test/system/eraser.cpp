@@ -85,7 +85,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
       FAIL("no mock implementation available");
     },
     [=](atom::subscribe, atom::create,
-        vast::system::partition_creation_listener_actor) {
+        vast::system::partition_creation_listener_actor,
+        system::send_initial_dbstate) {
       FAIL("no mock implementation available");
     },
     [=](atom::apply, transform_ptr, std::vector<uuid>,
