@@ -17,6 +17,7 @@
 #include <vast/plugin.hpp>
 #include <vast/transform_step.hpp>
 
+#include <arrow/builder.h>
 #include <arrow/compute/api.h>
 #include <arrow/config.h>
 #include <arrow/table.h>
@@ -106,16 +107,17 @@ struct aggregation {
   /// map data structures.
   struct group_by_key_hash {
     size_t operator()(const group_by_key& x) const noexcept {
-      auto hasher = vast::xxh64{};
+      auto hasher = xxh64{};
       for (const auto& scalar : x)
         if (scalar)
-          vast::hash_append(hasher, scalar->hash());
+          hash_append(hasher, scalar->hash());
       return hasher.finish();
     }
   };
 
-  /// Groups record batch slices where a configured set of columns is equal.
-  using bucket_map = std::unordered_map<group_by_key, arrow::RecordBatchVector,
+  /// Groups accumulators for slices of incoming record batches with a matching
+  /// set of configured set of configured group-by columns.
+  using bucket_map = std::unordered_map<group_by_key, arrow::ScalarVector,
                                         group_by_key_hash, group_by_key_equal>;
 
   /// Creates a new aggregation given a configuration and a layout.
@@ -204,7 +206,14 @@ struct aggregation {
     batch = select_columns_result.MoveValueUnsafe();
     VAST_ASSERT(batch->num_columns()
                 == detail::narrow_cast<int>(actions_.size()));
-    // Second, round time values to a multiple of the configured value.
+    // Create a builder if we don't have one already.
+    if (!builder_) {
+      auto status = arrow::RecordBatchBuilder::Make(
+        batch->schema(), arrow::default_memory_pool(), &builder_);
+      VAST_ASSERT(status.ok(), status.ToString().c_str());
+      VAST_ASSERT(builder_);
+    }
+    // Round time values to a multiple of the configured value.
     if (time_resolution_) {
 #if ARROW_VERSION_MAJOR >= 7
       const auto options = arrow::compute::RoundTemporalOptions{
@@ -247,21 +256,202 @@ struct aggregation {
         batch = set_column_result.MoveValueUnsafe();
       }
     }
-    // Third and last, aggregate the batch eagerly.
-    return aggregate({std::move(batch)});
+    // Iterate over the record batches row-wise and select slices that group
+    // into the same bucket as large as possible, adding them into the buckets
+    // accumulator state one slice at a time.
+    VAST_ASSERT(batch->num_rows() >= 1);
+    int start = 0;
+    int next_start = 0;
+    auto next_bucket = try_emplace_bucket(batch, start);
+    for (auto bucket = next_bucket; next_bucket != buckets_.end();
+         bucket = next_bucket) {
+      start = next_start;
+      do {
+        next_bucket = try_emplace_bucket(batch, ++next_start);
+      } while (bucket == next_bucket);
+      VAST_ASSERT(bucket->second.size() == actions_.size());
+      for (int column = 0; column < batch->num_columns(); ++column) {
+        auto f =
+          [&]<class Array>([[maybe_unused]] const Array& array) -> caf::error {
+          if constexpr (std::is_same_v<Array, arrow::NullArray>) {
+            die("aggregate transform step cannot operate on null arrays");
+          } else {
+            // TODO: Remove FixedSizeBinaryArray from this list when making the
+            // experimental arrow encoding the default.
+            constexpr auto is_non_primitive_array
+              = detail::is_any_v<Array, arrow::FixedSizeBinaryArray,
+                                 arrow::ListArray, arrow::MapArray,
+                                 arrow::StructArray, enum_array, pattern_array,
+                                 subnet_array, address_array>;
+            const auto non_primitive_error
+              = is_non_primitive_array
+                  ? caf::error{}
+                  : caf::make_error(ec::invalid_configuration,
+                                    fmt::format("aggregate transform step "
+                                                "cannot handle "
+                                                "non-primitive field {}",
+                                                array.type()->ToString()));
+            using scalar_type
+              = std::conditional_t<is_non_primitive_array, arrow::Scalar,
+                                   typename arrow::TypeTraits<std::conditional_t<
+                                     is_non_primitive_array, arrow::BooleanType,
+                                     typename Array::TypeClass>>::ScalarType>;
+            auto scalar
+              = std::static_pointer_cast<scalar_type>(bucket->second[column]);
+            for (int row = start; row < next_start; ++row) {
+              if (array.IsNull(row))
+                continue;
+              if (!scalar) {
+                scalar = std::static_pointer_cast<scalar_type>(
+                  array.GetScalar(row).MoveValueUnsafe());
+                continue;
+              }
+              switch (actions_[column]) {
+                case action::group_by: {
+                  row = next_start;
+                  break;
+                }
+                case action::sum: {
+                  if constexpr (is_non_primitive_array) {
+                    return non_primitive_error;
+                  } else if constexpr (requires(scalar_type lhs,
+                                                scalar_type rhs) {
+                                         {lhs.value + rhs.value};
+                                       })
+                    scalar->value = scalar->value + array.Value(row);
+                  else
+                    return caf::make_error(
+                      ec::invalid_configuration,
+                      fmt::format("aggregate transform step cannot "
+                                  "calculate 'sum' of field {}",
+                                  batch->schema()->field(column)->ToString()));
+                  break;
+                }
+                case action::min: {
+                  if constexpr (is_non_primitive_array) {
+                    return non_primitive_error;
+                  } else if constexpr (std::is_same_v<scalar_type,
+                                                      arrow::StringScalar>) {
+                    if (array.Value(row) < scalar->view())
+                      scalar = std::static_pointer_cast<scalar_type>(
+                        array.GetScalar(row).MoveValueUnsafe());
+                  } else if constexpr (requires(scalar_type lhs,
+                                                scalar_type rhs) {
+                                         {lhs.value < rhs.value};
+                                       }) {
+                    scalar->value = std::min(scalar->value, array.Value(row));
+                  } else {
+                    return caf::make_error(
+                      ec::invalid_configuration,
+                      fmt::format("aggregate transform step cannot "
+                                  "calculate 'min' of field {}",
+                                  batch->schema()->field(column)->ToString()));
+                  }
+                  break;
+                }
+                case action::max: {
+                  if constexpr (is_non_primitive_array) {
+                    return non_primitive_error;
+                  } else if constexpr (std::is_same_v<scalar_type,
+                                                      arrow::StringScalar>) {
+                    if (array.Value(row) > scalar->view())
+                      scalar = std::static_pointer_cast<scalar_type>(
+                        array.GetScalar(row).MoveValueUnsafe());
+                  } else if constexpr (requires(scalar_type lhs,
+                                                scalar_type rhs) {
+                                         {lhs.value > rhs.value};
+                                       }) {
+                    scalar->value = std::max(scalar->value, array.Value(row));
+                  } else {
+                    return caf::make_error(
+                      ec::invalid_configuration,
+                      fmt::format("aggregate transform step cannot "
+                                  "calculate 'max' of field {}",
+                                  batch->schema()->field(column)->ToString()));
+                  }
+                  break;
+                }
+                case action::any: {
+                  if constexpr (is_non_primitive_array) {
+                    return non_primitive_error;
+                  } else if constexpr (std::is_same_v<Array,
+                                                      arrow::BooleanArray>) {
+                    scalar->value = scalar->value || array.Value(row);
+                  } else {
+                    return caf::make_error(
+                      ec::invalid_configuration,
+                      fmt::format("aggregate transform step cannot "
+                                  "calculate 'any' of field {}",
+                                  batch->schema()->field(column)->ToString()));
+                  }
+                  break;
+                }
+                case action::all: {
+                  if constexpr (is_non_primitive_array) {
+                    return non_primitive_error;
+                  } else if constexpr (std::is_same_v<Array,
+                                                      arrow::BooleanArray>) {
+                    scalar->value = scalar->value && array.Value(row);
+                  } else {
+                    return caf::make_error(
+                      ec::invalid_configuration,
+                      fmt::format("aggregate transform step cannot "
+                                  "calculate 'all' of field {}",
+                                  batch->schema()->field(column)->ToString()));
+                  }
+                  break;
+                }
+              }
+            }
+            bucket->second[column] = std::move(scalar);
+          }
+          return caf::none;
+        };
+        if (auto err = caf::visit(f, *batch->column(column)))
+          return err;
+      }
+    }
+    return caf::none;
   }
 
-  /// Returns the aggregated batches, doing a second aggregation pass unless
-  /// disabled.
-  caf::expected<std::vector<transform_batch>> finish() {
-    if (auto err = aggregate(std::exchange(buffer_, {})))
-      return err;
-    // Collect the results from the buffer.
-    auto result = std::vector<transform_batch>{};
-    result.reserve(buffer_.size());
-    for (auto&& batch : std::exchange(buffer_, {}))
-      result.emplace_back(adjusted_layout_, std::move(batch));
-    return result;
+  /// Returns the aggregated batches.
+  caf::expected<transform_batch> finish() {
+    VAST_ASSERT(builder_);
+    // Calculate whether a column needs to be casted ahead of time.
+    auto column_needs_cast = [&] {
+      auto result = std::vector<bool>{};
+      result.resize(builder_->num_fields(), false);
+      if (!buckets_.empty())
+        for (int column = 0; column < builder_->num_fields(); ++column)
+          result[column] = !builder_->GetField(column)->type()->Equals(
+            buckets_.begin()->second[column]->type);
+      return result;
+    }();
+    builder_->SetInitialCapacity(detail::narrow_cast<int>(buckets_.size()));
+    for (auto&& bucket : std::exchange(buckets_, {})) {
+      for (int column = 0; auto& scalar : bucket.second) {
+        auto* column_builder = builder_->GetField(column++);
+        VAST_ASSERT(column_builder);
+        if (column_needs_cast[column] && scalar) {
+          auto cast_result = scalar->CastTo(column_builder->type());
+          VAST_ASSERT(cast_result.ok(),
+                      cast_result.status().ToString().c_str());
+          scalar = cast_result.MoveValueUnsafe();
+        }
+        if (scalar) {
+          auto append_result = column_builder->AppendScalar(*scalar);
+          VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+        } else {
+          auto append_result = column_builder->AppendNull();
+          VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+        }
+      }
+    }
+    auto sc = std::shared_ptr<arrow::UInt64Scalar>{};
+    auto batch = std::shared_ptr<arrow::RecordBatch>{};
+    auto flush_result = builder_->Flush(&batch);
+    VAST_ASSERT(flush_result.ok(), flush_result.ToString().c_str());
+    return transform_batch{adjusted_layout_, std::move(batch)};
   }
 
 private:
@@ -270,217 +460,36 @@ private:
 
   /// Finds or creates the bucket for a given row in a record batch.
   bucket_map::iterator
-  find_or_create_bucket(bucket_map& buckets,
-                        const std::shared_ptr<arrow::RecordBatch>& batch,
-                        int row) {
-    // If our row goes beyond the end of the batch, signal that we do not have a
-    // bucket.
+  try_emplace_bucket(const std::shared_ptr<arrow::RecordBatch>& batch,
+                     int row) {
+    // If our row goes beyond the end of the batch, signal that we do not have
+    // a bucket.
     if (row >= batch->num_rows())
-      return buckets.end();
+      return buckets_.end();
     // Create current bucket key.
     auto key = group_by_key{};
     key.reserve(num_group_by_columns_);
-    for (int column = 0; column < batch->num_columns(); ++column) {
-      if (actions_[column] == action::group_by) {
-        auto scalar = batch->column(column)
-                        ->View(batch->schema()->field(column)->type())
-                        .MoveValueUnsafe()
-                        ->GetScalar(row)
-                        .ValueOr(nullptr);
-        key.push_back(scalar);
-      }
-    }
-    // Find bucket for current key.
-    const auto bucket = buckets.find(key);
-    if (bucket != buckets.end())
-      return bucket;
-    // Create a new bucket consisting of an empty table that we can later append
-    // to.
-    auto [new_bucket, ok] = buckets.try_emplace(std::move(key));
-    VAST_ASSERT(ok);
-    VAST_ASSERT(new_bucket != buckets.end());
-    return new_bucket;
-  }
-
-  /// Aggregates a vector of record batches into a set of record batches that
-  /// belong to the same buckets.
-  caf::error aggregate(const arrow::RecordBatchVector& batches) {
-    if (batches.empty())
-      return caf::none;
-    // Iterate over the record batches row-wise and select slices that group
-    // into the same bucket as large as possible.
-    auto buckets = bucket_map{};
-    for (const auto& batch : batches) {
-      VAST_ASSERT(batch->num_rows() >= 1);
-      int start = 0;
-      int next_start = 0;
-      auto next_bucket = find_or_create_bucket(buckets, batch, start);
-      for (auto bucket = next_bucket; next_bucket != buckets.end();
-           bucket = next_bucket) {
-        start = next_start;
-        do {
-          next_bucket = find_or_create_bucket(buckets, batch, ++next_start);
-        } while (bucket == next_bucket);
-        VAST_TRACE("aggregate transform slices [{}, {}) out of {} row(s)",
-                   start, next_start, batch->num_rows());
-        auto slice = batch->Slice(start, next_start - start);
-        VAST_ASSERT([&]() {
-          for (int column = 0;
-               column < detail::narrow_cast<int>(actions_.size()); column++) {
-            if (actions_[column] != action::group_by)
-              continue;
-            if (arrow::compute::Unique(slice->column(column))
-                  .ValueOrDie()
-                  ->length()
-                != 1)
-              return false;
-          }
-          return true;
-        }());
-        VAST_ASSERT(slice);
-        VAST_ASSERT(bucket != buckets.end());
-        bucket->second.push_back(std::move(slice));
-      }
-    }
-    // If we don't have a builder yet for storing the intermediate results, this
-    // is where we create it.
-    if (!builder_) {
-      const auto initial_size = detail::narrow_cast<int>(buckets.size());
-      auto make_builder_result
-        = arrow::RecordBatchBuilder::Make(batches[0]->schema(),
-                                          arrow::default_memory_pool(),
-                                          initial_size, &builder_);
-      if (!make_builder_result.ok())
-        return caf::make_error(ec::unspecified,
-                               fmt::format("aggregate transform failed to "
-                                           "create record batch builder: {}",
-                                           make_builder_result.ToString()));
-    } else {
-      builder_->SetInitialCapacity(detail::narrow_cast<int>(buckets.size()));
-    }
-    // Third and last, for every bucket we must aggregate the results and put
-    // them into the builder.
-    for (const auto& bucket : buckets) {
-      VAST_ASSERT(!bucket.second.empty());
-      auto table = arrow::Table::FromRecordBatches(bucket.second).ValueOrDie();
-      VAST_ASSERT(table->num_columns()
-                  == detail::narrow_cast<int>(actions_.size()));
-      VAST_ASSERT(table->num_columns() == builder_->num_fields());
-      VAST_ASSERT(table->num_rows() > 0);
-      const auto single_row_table = table->num_rows() == 1;
-      for (int column = 0; column < table->num_columns(); ++column) {
-        auto append_to_builder
-          = [&](const std::shared_ptr<arrow::Scalar>& scalar) noexcept {
-              if (scalar && scalar->is_valid) {
-                auto append_result
-                  = builder_->GetField(column)->AppendScalar(*scalar);
-                VAST_ASSERT(append_result.ok());
-              } else {
-                auto append_result = builder_->GetField(column)->AppendNull();
-                VAST_ASSERT(append_result.ok());
-              }
-            };
-        // If there's just a single row in the table, avoid going through Arrow
-        // Compute at all.
-        if (single_row_table) {
-          append_to_builder(
-            table->column(column)->GetScalar(0).MoveValueUnsafe());
-          continue;
-        }
-        switch (actions_[column]) {
-          case action::group_by: {
-            auto get_scalar_result = table->column(column)->GetScalar(0);
-            if (!get_scalar_result.ok())
-              return caf::make_error(
-                ec::unspecified,
-                fmt::format("aggregate transform failed to access grouped "
-                            "value: {}",
-                            get_scalar_result.status().ToString()));
-            append_to_builder(get_scalar_result.MoveValueUnsafe());
-            break;
-          }
-          case action::sum: {
-            auto sum_result = arrow::compute::Sum(table->column(column));
-            if (!sum_result.ok())
-              return caf::make_error(
-                ec::unspecified, fmt::format("aggregate transform failed to "
-                                             "compute sum: {}",
-                                             sum_result.status().ToString()));
-            append_to_builder(sum_result.MoveValueUnsafe().scalar());
-            break;
-          }
-          case action::min: {
-            auto min_max_result = arrow::compute::MinMax(table->column(column));
-            if (!min_max_result.ok())
-              return caf::make_error(
-                ec::unspecified,
-                fmt::format("aggregate transform failed to compute minimum: "
-                            "{}",
-                            min_max_result.status().ToString()));
-            append_to_builder(min_max_result.MoveValueUnsafe()
-                                .scalar_as<arrow::StructScalar>()
-                                .value[0]);
-            break;
-          }
-          case action::max: {
-            auto min_max_result = arrow::compute::MinMax(table->column(column));
-            if (!min_max_result.ok())
-              return caf::make_error(
-                ec::unspecified,
-                fmt::format("aggregate transform failed to compute maximum: "
-                            "{}",
-                            min_max_result.status().ToString()));
-            append_to_builder(min_max_result.MoveValueUnsafe()
-                                .scalar_as<arrow::StructScalar>()
-                                .value[1]);
-            break;
-          }
-          case action::any: {
-            auto any_result = arrow::compute::Any(table->column(column));
-            if (!any_result.ok())
-              return caf::make_error(
-                ec::unspecified, fmt::format("aggregate transform failed to "
-                                             "compute disjunction: {}",
-                                             any_result.status().ToString()));
-            append_to_builder(any_result.MoveValueUnsafe().scalar());
-            break;
-          }
-          case action::all: {
-            auto all_result = arrow::compute::All(table->column(column));
-            if (!all_result.ok())
-              return caf::make_error(
-                ec::unspecified, fmt::format("aggregate transform failed to "
-                                             "compute conjunction: {}",
-                                             all_result.status().ToString()));
-            append_to_builder(all_result.MoveValueUnsafe().scalar());
-            break;
-          }
-        }
-      }
-    }
-    // Lastly, add the newly created aggregated batch to the buffer.
-    auto batch = std::shared_ptr<arrow::RecordBatch>{};
-    auto flush_result = builder_->Flush(&batch);
-    if (!flush_result.ok())
-      return caf::make_error(ec::unspecified,
-                             fmt::format("aggregate transform failed to flush "
-                                         "aggregated batch: {}",
-                                         flush_result.ToString()));
-    buffer_.push_back(std::move(batch));
-    return caf::none;
+    for (int column = 0; column < batch->num_columns(); ++column)
+      if (actions_[column] == action::group_by)
+        key.push_back(batch->column(column)->GetScalar(row).MoveValueUnsafe());
+    // Create a new bucket.
+    auto [iterator, inserted] = buckets_.try_emplace(std::move(key));
+    if (inserted)
+      iterator->second.resize(actions_.size(), nullptr);
+    return iterator;
   }
 
   /// The action to take during aggregation for every individual column in the
   /// incoming record batches.
   std::vector<action> actions_ = {};
 
-  /// The columnns that are selected from the incoming record batches as part of
-  /// the data transformation.
+  /// The columnns that are selected from the incoming record batches as part
+  /// of the data transformation.
   std::vector<int> selected_columns_ = {};
 
-  /// The group-by columns from the record batches that hold time values. These
-  /// need to be handled with special care, as we round them to a multiple of a
-  /// configured value.
+  /// The group-by columns from the record batches that hold time values.
+  /// These need to be handled with special care, as we round them to a
+  /// multiple of a configured value.
   std::vector<int> round_temporal_columns_ = {};
 
   /// The duration used as the multiple value when rounding grouped temporal
@@ -490,12 +499,12 @@ private:
   /// The adjusted layout with the dropped columns removed.
   type adjusted_layout_ = {};
 
-  /// The builder used as part of the aggregation. Stored since it only needs to
-  /// be created once per layout effectively, and we can do so lazily.
-  std::unique_ptr<arrow::RecordBatchBuilder> builder_ = {};
+  /// The buckets holding the intemediate accumulators.
+  bucket_map buckets_ = {};
 
-  /// The buffer responsible for holding the intermediate aggregation results.
-  arrow::RecordBatchVector buffer_ = {};
+  /// The builder used as part of the aggregation. Stored since it only needs
+  /// to be created once per layout effectively, and we can do so lazily.
+  std::unique_ptr<arrow::RecordBatchBuilder> builder_ = {};
 
   /// The number of columns to group by.
   size_t num_group_by_columns_ = {};
@@ -537,12 +546,12 @@ public:
   /// Retrieves the result of the transformation.
   [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
     auto result = std::vector<transform_batch>{};
+    result.reserve(aggregations_.size());
     for (auto&& [_, aggregation] : aggregations_) {
-      auto batches = aggregation.finish();
-      if (!batches)
-        return batches.error();
-      result.reserve(result.size() + batches->size());
-      std::move(batches->begin(), batches->end(), std::back_inserter(result));
+      auto batch = aggregation.finish();
+      if (!batch)
+        return batch.error();
+      result.push_back(std::move(*batch));
     }
     return result;
   }
@@ -558,9 +567,10 @@ private:
 /// The plugin entrypoint for the aggregate transform plugin.
 class plugin final : public transform_plugin {
 public:
-  /// Initializes the aggregate plugin. This plugin has no general configuration,
-  /// and is configured per instantiation as part of the transforms definition.
-  /// We only check whether there's no unexpected configuration here.
+  /// Initializes the aggregate plugin. This plugin has no general
+  /// configuration, and is configured per instantiation as part of the
+  /// transforms definition. We only check whether there's no unexpected
+  /// configuration here.
   caf::error initialize(data options) override {
     if (caf::holds_alternative<caf::none_t>(options))
       return caf::none;

@@ -246,9 +246,9 @@ struct sum_type_access<arrow::Array> final {
   using types = detail::type_list<
     arrow::NullArray, arrow::BooleanArray, arrow::Int64Array,
     arrow::UInt64Array, arrow::DoubleArray, arrow::DurationArray,
-    arrow::StringArray, arrow::TimestampArray, arrow::MapArray,
-    arrow::ListArray, arrow::StructArray, vast::address_array,
-    vast::pattern_array, vast::enum_array, vast::subnet_array>;
+    arrow::StringArray, arrow::TimestampArray, arrow::MapArray, arrow::ListArray,
+    arrow::StructArray, vast::address_array, vast::pattern_array,
+    vast::enum_array, vast::subnet_array, arrow::FixedSizeBinaryArray>;
   using data_types = typename tl_map_array_to_type<types>::type;
   using extension_types
     = detail::tl_filter_t<data_types, arrow::is_extension_type>;
