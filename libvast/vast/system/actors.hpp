@@ -279,7 +279,7 @@ using index_actor = typed_actor_fwd<
   // in-place transform keeping the old ids, and makes a new partition
   // preserving the old one(s).
   caf::replies_to<atom::apply, transform_ptr, std::vector<uuid>,
-                  keep_original_partition>::with<partition_synopsis_pair>,
+                  keep_original_partition>::with<partition_info>,
   // Makes the identity of the importer known to the index.
   caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
@@ -360,7 +360,7 @@ using filesystem_actor = typed_actor_fwd<
 using partition_transformer_actor = typed_actor_fwd<
   // Persist transformed partition to given path.
   caf::replies_to<atom::persist, std::filesystem::path,
-                  std::filesystem::path>::with<partition_synopsis_ptr>,
+                  std::filesystem::path>::with<augmented_partition_synopsis>,
   // INTERNAL: Continuation handler for `atom::done`.
   caf::reacts_to<atom::internal, atom::resume, atom::done, vast::id>>
   // query::extract API
@@ -532,6 +532,7 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::augmented_partition_synopsis)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::transform_ptr)
 #undef vast_uuid_synopsis_map
 

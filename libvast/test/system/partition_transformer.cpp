@@ -111,8 +111,10 @@ TEST(identity transform / done before persist) {
   run();
   vast::partition_synopsis_ptr synopsis = nullptr;
   rp.receive(
-    [&](vast::partition_synopsis_ptr& ps) {
-      synopsis = ps;
+    [&](vast::augmented_partition_synopsis& aps) {
+      CHECK_EQUAL(aps.uuid, uuid);
+      CHECK_EQUAL(aps.stats.layouts["zeek.conn"].count, 20ull);
+      synopsis = aps.synopsis;
     },
     [&](caf::error& err) {
       FAIL("failed to persist: " << err);
@@ -184,9 +186,9 @@ TEST(delete transform / persist before done) {
   run();
   vast::partition_synopsis_ptr synopsis = nullptr;
   rp.receive(
-    [&](vast::partition_synopsis_ptr& ps) {
-      REQUIRE(ps);
-      synopsis = ps;
+    [&](vast::augmented_partition_synopsis& aps) {
+      REQUIRE(aps.synopsis);
+      synopsis = aps.synopsis;
     },
     [&](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);
@@ -307,8 +309,8 @@ TEST(partition transform via the index) {
                            vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
-    [=](const vast::partition_synopsis_pair& pair) {
-      CHECK_EQUAL(pair.synopsis->events, events);
+    [=](const vast::partition_info& info) {
+      CHECK_EQUAL(info.events, events);
     },
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);
@@ -325,8 +327,8 @@ TEST(partition transform via the index) {
                            vast::system::keep_original_partition::no);
   run();
   rp5.receive(
-    [=](const vast::partition_synopsis_pair& pair) {
-      CHECK_EQUAL(pair.synopsis->events, events);
+    [=](const vast::partition_info& info) {
+      CHECK_EQUAL(info.events, events);
     },
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);

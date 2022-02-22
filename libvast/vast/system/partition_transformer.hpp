@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/index_statistics.hpp"
 #include "vast/segment_builder.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
@@ -34,7 +35,7 @@ struct partition_transformer_state {
   struct path_data {
     std::filesystem::path partition_path = {};
     std::filesystem::path synopsis_path = {};
-    caf::typed_response_promise<partition_synopsis_ptr> promise = {};
+    caf::typed_response_promise<augmented_partition_synopsis> promise = {};
   };
 
   partition_transformer_state() = default;
@@ -75,6 +76,9 @@ struct partition_transformer_state {
 
   /// Total number of rows in `slices`.
   size_t events = 0ull;
+
+  /// Number of rows per event type.
+  index_statistics stats;
 
   /// The data of the newly created partition.
   active_partition_state::serialization_data data = {};

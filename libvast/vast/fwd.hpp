@@ -121,6 +121,7 @@ class uuid;
 class value_index;
 
 struct attribute;
+struct augmented_partition_synopsis;
 struct legacy_address_type;
 struct legacy_alias_type;
 struct meta_extractor;
@@ -138,6 +139,7 @@ struct flow;
 struct integer;
 struct legacy_integer_type;
 struct invocation;
+struct index_statistics;
 struct legacy_list_type;
 struct legacy_map_type;
 struct model;
@@ -146,10 +148,12 @@ struct legacy_none_type;
 struct offset;
 struct partition_synopsis;
 struct partition_synopsis_pair;
+struct partition_info;
 struct legacy_pattern_type;
 struct predicate;
 struct qualified_record_field;
 struct query;
+struct layout_statistics;
 struct legacy_real_type;
 struct legacy_record_type;
 struct status;
@@ -323,8 +327,6 @@ struct component_state;
 struct component_state_map;
 struct data_point;
 struct index_state;
-struct index_statistics;
-struct layout_statistics;
 struct measurement;
 struct meta_index_result;
 struct metrics_metadata;
@@ -364,6 +366,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::integer))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
+  VAST_ADD_TYPE_ID((vast::partition_info))
   VAST_ADD_TYPE_ID((vast::pattern))
   VAST_ADD_TYPE_ID((vast::port))
   VAST_ADD_TYPE_ID((vast::port_type))

@@ -1184,10 +1184,9 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::importer, idspace_distributor_actor idspace_distributor) {
       self->state.importer = std::move(idspace_distributor);
     },
-    [self](
-      atom::apply, transform_ptr transform,
-      std::vector<vast::uuid> old_partition_ids,
-      keep_original_partition keep) -> caf::result<partition_synopsis_pair> {
+    [self](atom::apply, transform_ptr transform,
+           std::vector<vast::uuid> old_partition_ids,
+           keep_original_partition keep) -> caf::result<partition_info> {
       VAST_DEBUG("{} applies a transform to partitions {}", *self,
                  old_partition_ids);
       if (!self->state.store_plugin)
@@ -1227,7 +1226,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->send(lookup.worker, atom::supervise_v, query_id, lookup.query,
                  std::move(actors),
                  caf::actor_cast<receiver_actor<atom::done>>(sink));
-      auto rp = self->make_response_promise<partition_synopsis_pair>();
+      auto rp = self->make_response_promise<partition_info>();
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
       self
@@ -1236,15 +1235,22 @@ index(index_actor::stateful_pointer<index_state> self,
                   self->state.partition_synopsis_path(new_partition_id))
         .then(
           [self, rp, old_partition_ids, new_partition_id,
-           keep](partition_synopsis_ptr& synopsis) mutable {
-            auto result = partition_synopsis_pair{new_partition_id, synopsis};
-            // TODO: We eventually want to allow transforms that delete
-            // whole events, at that point we also need to update the index
-            // statistics here.
+           keep](augmented_partition_synopsis& aps) mutable {
+            auto result = partition_info{
+              .uuid = aps.uuid,
+              .events = aps.synopsis->events,
+              .max_import_time = aps.synopsis->max_import_time,
+              .stats = std::move(aps.stats),
+            };
+            // Update the index statistics. We only need to add the events of
+            // the new partition here, the subtraction of the old events is
+            // done in `erase`.
+            for (const auto& [name, stats] : result.stats.layouts)
+              self->state.stats.layouts[name].count += stats.count;
             if (keep == keep_original_partition::yes) {
               self
                 ->request(self->state.meta_index, caf::infinite, atom::merge_v,
-                          new_partition_id, synopsis)
+                          new_partition_id, aps.synopsis)
                 .then(
                   [self, rp, new_partition_id, result](atom::ok) mutable {
                     self->state.persisted_partitions.insert(new_partition_id);
@@ -1260,7 +1266,7 @@ index(index_actor::stateful_pointer<index_state> self,
               self
                 ->request(self->state.meta_index, caf::infinite,
                           atom::replace_v, old_partition_id, new_partition_id,
-                          synopsis)
+                          aps.synopsis)
                 .then(
                   [self, rp, old_partition_id, new_partition_id,
                    result](atom::ok) mutable {
