@@ -34,4 +34,5 @@ struct index_statistics {
     return f(caf::meta::type_name("index_statistics"), x.layouts);
   }
 };
+
 } // namespace vast
