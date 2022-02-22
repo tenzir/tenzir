@@ -961,15 +961,17 @@ auto values(const type& type, const arrow::Array& array)
   -> detail::generator<data_view> {
   auto f = [](const concrete_type auto& type,
               const auto& array) -> detail::generator<data_view> {
-    if constexpr (std::is_same_v<decltype(type), none_type>)
-      die("none_type//TODO");
-    else
+    if constexpr (std::is_same_v<decltype(type), none_type>) {
+      for (int i = 0; i < array.length(); ++i)
+        co_yield data_view{caf::none};
+    } else {
       for (auto&& result : values(type, array)) {
         if (result)
           co_yield *result;
         else
-          co_yield caf::none;
+          co_yield data_view{caf::none};
       }
+    }
   };
   return caf::visit(f, type, array);
 }
