@@ -914,7 +914,12 @@ type make_vast_type_int(const arrow::DataType& arrow_type) {
     },
     [](const enum_extension_type& et) -> type {
       return type{et.get_enum_type()};
-    }};
+    },
+    [](const arrow::FixedSizeBinaryType&) -> type {
+      die("only used in old arrow encoding; remove from sum type access when "
+          "making the experimental encoding the default");
+    },
+  };
   return caf::visit(f, arrow_type);
 }
 
