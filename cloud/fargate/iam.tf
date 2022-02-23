@@ -20,4 +20,3 @@ EOF
 
   tags = module.env.default_tags
 }
-

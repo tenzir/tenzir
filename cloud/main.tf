@@ -32,4 +32,3 @@ provider "aws" {
 module "env" {
   source = "./env"
 }
-
