@@ -47,8 +47,8 @@ endif ()
 # -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs"
-     "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/legacy/*.fbs")
+     "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/fbs/*.fbs"
+     "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/fbs/legacy/*.fbs")
 list(SORT flatbuffers_schemas)
 
 VASTCompileFlatBuffers(
@@ -334,7 +334,7 @@ set(libvast_native_plugin_sources
 
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
+     "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/*.hpp")
 list(REMOVE_ITEM libvast_sources ${libvast_native_plugin_sources})
 list(SORT libvast_sources)
 
@@ -370,8 +370,8 @@ set_target_properties(
 
 target_include_directories(
   libvast
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/include
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/include
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 # Make dlopen and dlclose available if we're building a shared library.
@@ -503,8 +503,8 @@ endif ()
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/vast/config.hpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/include/vast/config.hpp")
 
 file(
   WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
@@ -527,7 +527,7 @@ add_custom_target(
 
 target_sources(
   libvast
-  PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
+  PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include/vast/config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 
@@ -552,7 +552,7 @@ install(
 
 # Install generated config headers.
 install(
-  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast"
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/vast"
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   FILES_MATCHING
   PATTERN "*.hpp")
