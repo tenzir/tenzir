@@ -68,7 +68,6 @@ vast:
             - suricata.flow.flow.start
           max:
             - suricata.flow.flow.end
-            - zeek.conn._write_ts
           any:
             - suricata.flow.flow.alerted
       - replace:
