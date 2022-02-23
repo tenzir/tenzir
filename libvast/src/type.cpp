@@ -519,7 +519,7 @@ legacy_type type::to_legacy_type() const noexcept {
     },
   };
   auto result = caf::visit(f, *this);
-  if (!name().empty())
+  if (has_name())
     result = legacy_alias_type{std::move(result)}.name(std::string{name()});
   for (const auto& attribute : attributes()) {
     if (attribute.value.empty())
@@ -601,8 +601,7 @@ void inspect(caf::detail::stringification_inspector& f, type& x) {
 }
 
 void type::assign_metadata(const type& other) noexcept {
-  const auto name = other.name();
-  if (name.empty() && !other.has_attributes())
+  if (!other.has_name() && !other.has_attributes())
     return;
   const auto nested_bytes = as_bytes(table_);
   const auto reserved_size = [&]() noexcept {
@@ -614,7 +613,7 @@ void type::assign_metadata(const type& other) noexcept {
     // hash map which makes calculating the space requirements non-trivial.
     size_t size = 52;
     size += nested_bytes.size();
-    size += reserved_string_size(name);
+    size += reserved_string_size(other.name());
     return size;
   };
   auto builder = other.has_attributes()
@@ -622,7 +621,8 @@ void type::assign_metadata(const type& other) noexcept {
                    : flatbuffers::FlatBufferBuilder{};
   const auto nested_type_offset = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(nested_bytes.data()), nested_bytes.size());
-  const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
+  const auto name_offset
+    = other.has_name() ? builder.CreateString(other.name()) : 0;
   const auto attributes_offset = [&]() noexcept
     -> flatbuffers::Offset<
       flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
@@ -653,21 +653,35 @@ std::string_view type::name() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
+        return "none";
       case fbs::type::Type::bool_type:
+        return "bool";
       case fbs::type::Type::integer_type:
+        return "int";
       case fbs::type::Type::count_type:
+        return "count";
       case fbs::type::Type::real_type:
+        return "real";
       case fbs::type::Type::duration_type:
+        return "duration";
       case fbs::type::Type::time_type:
+        return "time";
       case fbs::type::Type::string_type:
+        return "string";
       case fbs::type::Type::pattern_type:
+        return "pattern";
       case fbs::type::Type::address_type:
+        return "addr";
       case fbs::type::Type::subnet_type:
+        return "subnet";
       case fbs::type::Type::enumeration_type:
+        return "enum";
       case fbs::type::Type::list_type:
+        return "list";
       case fbs::type::Type::map_type:
+        return "map";
       case fbs::type::Type::record_type:
-        return "";
+        return "record";
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* name = enriched_type->name())
@@ -686,20 +700,49 @@ detail::generator<std::string_view> type::names() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
+        co_yield "none";
+        co_return;
       case fbs::type::Type::bool_type:
+        co_yield "bool";
+        co_return;
       case fbs::type::Type::integer_type:
+        co_yield "int";
+        co_return;
       case fbs::type::Type::count_type:
+        co_yield "count";
+        co_return;
       case fbs::type::Type::real_type:
+        co_yield "real";
+        co_return;
       case fbs::type::Type::duration_type:
+        co_yield "duration";
+        co_return;
       case fbs::type::Type::time_type:
+        co_yield "time";
+        co_return;
       case fbs::type::Type::string_type:
+        co_yield "string";
+        co_return;
       case fbs::type::Type::pattern_type:
+        co_yield "pattern";
+        co_return;
       case fbs::type::Type::address_type:
+        co_yield "addr";
+        co_return;
       case fbs::type::Type::subnet_type:
+        co_yield "subnet";
+        co_return;
       case fbs::type::Type::enumeration_type:
+        co_yield "enum";
+        co_return;
       case fbs::type::Type::list_type:
+        co_yield "list";
+        co_return;
       case fbs::type::Type::map_type:
+        co_yield "map";
+        co_return;
       case fbs::type::Type::record_type:
+        co_yield "record";
         co_return;
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
@@ -753,6 +796,39 @@ type::attribute(const char* key) const& noexcept {
   __builtin_unreachable();
 }
 
+bool type::has_name() const noexcept {
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
+        return false;
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
+        if (enriched_type->name())
+          return true;
+        root = enriched_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+      }
+    }
+  }
+  __builtin_unreachable();
+}
+
 bool type::has_attributes() const noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
@@ -794,20 +870,49 @@ type::names_and_attributes() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::NONE:
+        co_yield {"none", {}};
+        co_return;
       case fbs::type::Type::bool_type:
+        co_yield {"bool", {}};
+        co_return;
       case fbs::type::Type::integer_type:
+        co_yield {"int", {}};
+        co_return;
       case fbs::type::Type::count_type:
+        co_yield {"count", {}};
+        co_return;
       case fbs::type::Type::real_type:
+        co_yield {"real", {}};
+        co_return;
       case fbs::type::Type::duration_type:
+        co_yield {"duration", {}};
+        co_return;
       case fbs::type::Type::time_type:
+        co_yield {"time", {}};
+        co_return;
       case fbs::type::Type::string_type:
+        co_yield {"string", {}};
+        co_return;
       case fbs::type::Type::pattern_type:
+        co_yield {"pattern", {}};
+        co_return;
       case fbs::type::Type::address_type:
+        co_yield {"addr", {}};
+        co_return;
       case fbs::type::Type::subnet_type:
+        co_yield {"subnet", {}};
+        co_return;
       case fbs::type::Type::enumeration_type:
+        co_yield {"enum", {}};
+        co_return;
       case fbs::type::Type::list_type:
+        co_yield {"list", {}};
+        co_return;
       case fbs::type::Type::map_type:
+        co_yield {"map", {}};
+        co_return;
       case fbs::type::Type::record_type:
+        co_yield {"record", {}};
         co_return;
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
@@ -823,9 +928,9 @@ type::names_and_attributes() const& noexcept {
           }
         }
         if (enriched_type->name())
-          co_yield std::make_pair(enriched_type->name()->string_view(), attrs);
+          co_yield {enriched_type->name()->string_view(), std::move(attrs)};
         else
-          co_yield std::make_pair("", attrs);
+          co_yield {"", std::move(attrs)};
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;

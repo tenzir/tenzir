@@ -714,7 +714,7 @@ TEST(named types) {
   auto aat_names = std::string{};
   for (auto&& name : aat.names())
     fmt::format_to(std::back_inserter(aat_names), "{}", name);
-  CHECK_EQUAL(aat_names, "l2l1");
+  CHECK_EQUAL(aat_names, "l2l1bool");
   const auto lat = type::from_legacy_type(legacy_bool_type{}.name("l3"));
   CHECK(caf::holds_alternative<bool_type>(lat));
   CHECK_EQUAL(lat.name(), "l3");
@@ -724,7 +724,7 @@ TEST(named types) {
 TEST(enriched types) {
   const auto at = type{bool_type{}, {{"first", "value"}, {"second"}}};
   CHECK(caf::holds_alternative<bool_type>(at));
-  CHECK_EQUAL(at.name(), "");
+  CHECK(!at.has_name());
   CHECK_EQUAL(at.attribute("first"), "value");
   CHECK_EQUAL(at.attribute("second"), "");
   CHECK_EQUAL(at.attribute("third"), std::nullopt);

@@ -301,8 +301,7 @@ public:
   void assign_metadata(const type& other) noexcept;
 
   /// Returns the name of this type.
-  /// @note The result is empty if the contained type is unnammed. Built-in
-  /// types have no name. Use the {fmt} API to render a type's signature.
+  /// @note Use the {fmt} API to render a type's signature.
   [[nodiscard]] std::string_view name() const& noexcept;
   [[nodiscard]] std::string_view name() && = delete;
 
@@ -315,6 +314,9 @@ public:
   [[nodiscard]] detail::generator<
     std::pair<std::string_view, std::vector<attribute_view>>>
   names_and_attributes() const& noexcept;
+  [[nodiscard]] detail::generator<
+    std::pair<std::string_view, std::vector<attribute_view>>>
+  names_and_attributes() && = delete;
 
   /// Returns the value of an attribute by name, if it exists.
   /// @param key The key of the attribute.
@@ -327,6 +329,9 @@ public:
   attribute(const char* key) const& noexcept;
   [[nodiscard]] std::optional<std::string_view>
   attribute(const char* key) && = delete;
+
+  /// Returns whether a type has any custom name.
+  [[nodiscard]] bool has_name() const noexcept;
 
   /// Returns whether the type has any attributes.
   [[nodiscard]] bool has_attributes() const noexcept;
@@ -1096,8 +1101,8 @@ struct formatter<vast::type> {
   auto format(const vast::type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
     auto out = ctx.out();
-    if (const auto& name = value.name(); !name.empty())
-      out = format_to(out, "{}", name);
+    if (value.has_name())
+      out = format_to(out, "{}", value.name());
     else
       caf::visit(
         [&](const auto& x) {

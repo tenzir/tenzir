@@ -775,20 +775,31 @@ serialize_attributes(const std::vector<type::attribute_view>& attrs) {
 
 std::shared_ptr<const arrow::KeyValueMetadata>
 make_arrow_metadata(const type& t) {
-  auto metadata = std::make_shared<arrow::KeyValueMetadata>();
+  auto keys = std::vector<std::string>{};
+  auto values = std::vector<std::string>{};
   int nesting_depth = 0;
   for (const auto& [name, attrs] : t.names_and_attributes()) {
-    if (!name.empty())
-      metadata->Append(fmt::format("VAST:name:{}", nesting_depth),
-                       std::string{name});
-    if (!attrs.empty())
-      metadata->Append(fmt::format("VAST:attributes:{}", nesting_depth),
-                       serialize_attributes(attrs));
+    if (!name.empty()) {
+      keys.emplace_back(fmt::format("VAST:name:{}", nesting_depth));
+      values.emplace_back(std::string{name});
+    }
+    if (!attrs.empty()) {
+      keys.emplace_back(fmt::format("VAST:attributes:{}", nesting_depth));
+      values.emplace_back(serialize_attributes(attrs));
+    }
     ++nesting_depth;
   }
+  VAST_ASSERT(nesting_depth > 0);
+  if (nesting_depth == 1)
+    return nullptr;
   if (nesting_depth == 0)
     return nullptr;
-  return metadata;
+  // Strip the last layer of metadata again, as that is guaranteed to be the
+  // types kind.
+  VAST_ASSERT(keys.back() == fmt::format("VAST:name:{}", nesting_depth - 1));
+  keys.pop_back();
+  values.pop_back();
+  return arrow::KeyValueMetadata::Make(std::move(keys), std::move(values));
 }
 
 } // namespace
