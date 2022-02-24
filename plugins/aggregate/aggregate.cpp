@@ -283,14 +283,13 @@ struct aggregation {
                                  arrow::ListArray, arrow::MapArray,
                                  arrow::StructArray, enum_array, pattern_array,
                                  subnet_array, address_array>;
-            const auto non_primitive_error
-              = is_non_primitive_array
-                  ? caf::error{}
-                  : caf::make_error(ec::invalid_configuration,
-                                    fmt::format("aggregate transform step "
-                                                "cannot handle "
-                                                "non-primitive field {}",
-                                                array.type()->ToString()));
+            auto make_non_primitive_error = [&]() {
+              return caf::make_error(ec::invalid_configuration,
+                                     fmt::format("aggregate transform step "
+                                                 "cannot handle non-primitive "
+                                                 "field {}",
+                                                 array.type()->ToString()));
+            };
             using scalar_type
               = std::conditional_t<is_non_primitive_array, arrow::Scalar,
                                    typename arrow::TypeTraits<std::conditional_t<
@@ -313,7 +312,7 @@ struct aggregation {
                 }
                 case action::sum: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (requires(scalar_type lhs,
                                                 scalar_type rhs) {
                                          {lhs.value + rhs.value};
@@ -329,7 +328,7 @@ struct aggregation {
                 }
                 case action::min: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (std::is_same_v<scalar_type,
                                                       arrow::StringScalar>) {
                     if (array.Value(row) < scalar->view())
@@ -351,7 +350,7 @@ struct aggregation {
                 }
                 case action::max: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (std::is_same_v<scalar_type,
                                                       arrow::StringScalar>) {
                     if (array.Value(row) > scalar->view())
@@ -373,7 +372,7 @@ struct aggregation {
                 }
                 case action::any: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (std::is_same_v<Array,
                                                       arrow::BooleanArray>) {
                     scalar->value = scalar->value || array.Value(row);
@@ -388,7 +387,7 @@ struct aggregation {
                 }
                 case action::all: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (std::is_same_v<Array,
                                                       arrow::BooleanArray>) {
                     scalar->value = scalar->value && array.Value(row);
