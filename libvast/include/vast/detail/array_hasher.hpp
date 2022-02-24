@@ -31,6 +31,11 @@ namespace vast::detail {
 /// point.
 struct array_hasher {
 public:
+  generator<uint64_t> operator()(const arrow::NullArray&) const {
+    die("null data is not valid");
+    co_return;
+  }
+
   generator<uint64_t> operator()(const arrow::BooleanArray& xs) const {
     static const uint64_t false_digest = hash(0);
     static const uint64_t true_digest = hash(1);
@@ -47,7 +52,8 @@ public:
                       arrow::Int32Array, arrow::Int64Array, arrow::UInt8Array,
                       arrow::UInt16Array, arrow::UInt32Array,
                       arrow::UInt64Array, arrow::HalfFloatArray,
-                      arrow::FloatArray, arrow::DoubleArray, arrow::StringArray>
+                      arrow::FloatArray, arrow::DoubleArray, arrow::StringArray,
+                      arrow::FixedSizeBinaryArray>
       generator<uint64_t>
   operator()(const Array& xs) const {
     for (auto i = 0; i < xs.length(); ++i) {
@@ -61,7 +67,8 @@ public:
         else if constexpr (is_any_v<Array, arrow::HalfFloatArray,
                                     arrow::FloatArray, arrow::DoubleArray>)
           co_yield hash(static_cast<double>(xs.Value(i)));
-        else if constexpr (std::is_same_v<Array, arrow::StringArray>)
+        else if constexpr (is_any_v<Array, arrow::StringArray,
+                                    arrow::FixedSizeBinaryArray>)
           co_yield hash(as_bytes(xs.GetView(i)));
         else
           static_assert(always_false_v<Array>, "missing array type");
@@ -155,13 +162,18 @@ public:
     // will need to hash the cross product row-wise.
     die("structs cannot be accessed as top-level column");
   }
-
-  generator<uint64_t> operator()(const arrow::Array& xs) const {
-    return caf::visit(*this, xs);
-  }
 };
 
-/// Convenience instantitation for easier use at call site.
-constexpr auto hash_array = array_hasher{};
+/// Convenience instantitation for easier use at call site. Usually we'd just
+/// instantiate the visitor here, after adding an overload for arrow::Array:
+///
+///    constexpr auto hash_array = array_hasher{};
+///
+/// However, since arrow::Array has a non-explicit constructor, this can lead
+/// easily to bugs of infinite recursion. In this case, arrow::Array acts like
+/// an unconstrained template parameter footgun.
+auto hash_array(const arrow::Array& xs) {
+  return caf::visit(array_hasher{}, xs);
+}
 
 } // namespace vast::detail
