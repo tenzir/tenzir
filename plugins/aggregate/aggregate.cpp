@@ -422,9 +422,12 @@ struct aggregation {
       auto result = std::vector<bool>{};
       result.resize(builder_->num_fields(), false);
       if (!buckets_.empty())
-        for (int column = 0; column < builder_->num_fields(); ++column)
-          result[column] = !builder_->GetField(column)->type()->Equals(
-            buckets_.begin()->second[column]->type);
+        for (int column = 0; column < builder_->num_fields(); ++column) {
+          auto scalar = buckets_.begin()->second[column];
+          result[column]
+            = scalar
+              && !builder_->GetField(column)->type()->Equals(scalar->type);
+        }
       return result;
     }();
     builder_->SetInitialCapacity(detail::narrow_cast<int>(buckets_.size()));
