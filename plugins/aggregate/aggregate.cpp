@@ -416,25 +416,25 @@ struct aggregation {
   /// Returns the aggregated batches.
   caf::expected<transform_batch> finish() {
     VAST_ASSERT(builder_);
-    // Calculate whether a column needs to be casted ahead of time.
-    auto column_needs_cast = [&] {
-      auto result = std::vector<bool>{};
-      result.resize(builder_->num_fields(), false);
-      if (!buckets_.empty())
-        for (int column = 0; column < builder_->num_fields(); ++column) {
-          auto scalar = buckets_.begin()->second[column];
-          result[column]
-            = scalar
-              && !builder_->GetField(column)->type()->Equals(scalar->type);
-        }
-      return result;
-    }();
+    auto cast_requirements
+      = std::vector<std::optional<bool>>(builder_->num_fields(), std::nullopt);
+    // Calculate whether a column needs to be casted only once.
+    auto needs_cast = [&](int column, std::shared_ptr<arrow::Scalar>& scalar) {
+      auto cast_requirement = cast_requirements[column];
+      if (!cast_requirement) {
+        if (!scalar)
+          return false;
+        cast_requirements[column] = std::optional<bool>(
+          !builder_->GetField(column)->type()->Equals(scalar->type));
+      };
+      return *cast_requirement;
+    };
     builder_->SetInitialCapacity(detail::narrow_cast<int>(buckets_.size()));
     for (auto&& bucket : std::exchange(buckets_, {})) {
       for (int column = 0; auto& scalar : bucket.second) {
-        auto* column_builder = builder_->GetField(column++);
+        auto* column_builder = builder_->GetField(column);
         VAST_ASSERT(column_builder);
-        if (column_needs_cast[column] && scalar) {
+        if (needs_cast(column++, scalar)) {
           auto cast_result = scalar->CastTo(column_builder->type());
           VAST_ASSERT(cast_result.ok(),
                       cast_result.status().ToString().c_str());
