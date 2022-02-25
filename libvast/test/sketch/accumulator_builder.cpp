@@ -24,7 +24,12 @@ FIXTURE_SCOPE(partition_sketch_tests, fixtures::events)
 
 TEST(min_max accumulator) {
   auto builder = accumulator_builder<min_max_accumulator>{};
-  auto err = builder.add(zeek_conn_log[0], offset{0});
+  auto slice = zeek_conn_log[0];
+  auto record_batch = to_record_batch(slice);
+  const auto& layout = caf::get<record_type>(slice.layout());
+  auto idx = layout.flat_index(offset{0});
+  auto xs = record_batch->column(idx);
+  auto err = builder.add(xs);
   CHECK_EQUAL(err, caf::none);
 }
 

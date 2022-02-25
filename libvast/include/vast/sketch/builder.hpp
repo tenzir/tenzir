@@ -10,7 +10,10 @@
 
 #include "vast/fwd.hpp"
 
+#include <arrow/type_fwd.h>
+
 #include <cstdint>
+#include <memory>
 
 namespace vast::sketch {
 
@@ -22,15 +25,10 @@ class builder {
 public:
   virtual ~builder() = default;
 
-  /// Adds a provided field of a table slice to the builder. Can be called
-  /// multiple times for the same table slice.
-  /// @param slice The table slice to index.
-  /// @param off The offset corresponding to a field in the slice.
+  /// Adds all values from an array to the builder.
+  /// @param xs The elements to add.
   /// @returns An error on failure.
-  virtual caf::error add(table_slice slice, offset off) = 0;
-
-  // TODO: use arrow arrays as "column" abstraction
-  // virtual caf::error add(const arrow::Array& column) = 0;
+  virtual caf::error add(const std::shared_ptr<arrow::Array>& xs) = 0;
 
   /// Finalizes the builder and constructs a sketch from it.
   /// @returns The sketch according to the current builder state.

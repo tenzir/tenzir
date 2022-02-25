@@ -190,7 +190,9 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
     // FIXME: remove
     VAST_ERROR("-------> adding to field {}: {}", first_field.name,
                first_field.type);
-    if (auto err = builder->add(x, first_offset))
+    auto record_batch = to_record_batch(x);
+    auto xs = record_batch->column(layout.flat_index(first_offset));
+    if (auto err = builder->add(xs))
       return err;
     while (++begin != end) {
       auto offset = *begin;
@@ -200,7 +202,8 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
                   offset);
         continue;
       }
-      if (auto err = builder->add(x, offset))
+      auto ys = record_batch->column(layout.flat_index(first_offset));
+      if (auto err = builder->add(ys))
         return err;
     }
   }
@@ -213,6 +216,7 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
     if (i == type_factory_.end())
       continue;
     const auto& factory = i->second;
+    auto record_batch = to_record_batch(x);
     for (auto name : leaf.field.type.names()) {
       auto& builder = type_builders_[std::string{name}];
       if (!builder)
@@ -225,7 +229,8 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
                                fmt::format("failed to construct sketch "
                                            "builder for type '{}'",
                                            name));
-      if (auto err = builder->add(x, leaf.index))
+      auto xs = record_batch->column(layout.flat_index(leaf.index));
+      if (auto err = builder->add(xs))
         return err;
     }
   }

@@ -23,7 +23,7 @@ namespace vast::sketch {
 /// performs a one-shot construction of the sketch.
 class buffered_builder : public builder {
 public:
-  caf::error add(table_slice x, offset off) final;
+  caf::error add(const std::shared_ptr<arrow::Array>& xs) final;
 
   caf::expected<sketch> finish() final;
 

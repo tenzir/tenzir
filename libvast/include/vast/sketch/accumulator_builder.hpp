@@ -36,12 +36,8 @@ public:
     : accumulator_{std::move(acc)} {
   }
 
-  caf::error add(table_slice x, offset off) final {
-    auto record_batch = to_record_batch(x);
-    const auto& layout = caf::get<record_type>(x.layout());
-    auto idx = layout.flat_index(off);
-    auto array = record_batch->column(idx);
-    return accumulator_.accumulate(array);
+  caf::error add(const std::shared_ptr<arrow::Array>& xs) final {
+    return accumulator_.accumulate(xs);
   }
 
   caf::expected<sketch> finish() final {
