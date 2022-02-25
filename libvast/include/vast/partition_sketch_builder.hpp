@@ -74,7 +74,7 @@ private:
   detail::heterogenous_string_hashmap<std::unique_ptr<sketch::builder>>
     type_builders_;
 
-  index_config config_;
+  const index_config config_;
 };
 
 } // namespace vast

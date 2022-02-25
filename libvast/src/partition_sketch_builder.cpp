@@ -23,19 +23,18 @@ namespace vast {
 namespace {
 
 using builder_factory = partition_sketch_builder::builder_factory;
+using sketch_builder_ptr = std::unique_ptr<sketch::builder>;
 
-/// Constructs a builder factory from a given rule.
-builder_factory make_factory(const index_config::rule& rule) {
-  using sketch_builder_ptr = std::unique_ptr<sketch::builder>;
+sketch_builder_ptr
+make_sketch_builder(const type& t, const index_config::rule* rule) {
   using min_max_sketch_builder
     = sketch::accumulator_builder<sketch::min_max_accumulator>;
-  auto p = rule.fp_rate;
   auto f = detail::overload{
     [](const none_type&) -> sketch_builder_ptr {
-      return nullptr;
+      die("sketch builders require none-null types");
     },
     [](const bool_type&) -> sketch_builder_ptr {
-      // We abuse the min-max sketch to represent min = false and max = true.
+      // We (ab)use the min-max sketch to represent min = false and max = true.
       return std::make_unique<min_max_sketch_builder>();
     },
     [](const integer_type&) -> sketch_builder_ptr {
@@ -53,35 +52,49 @@ builder_factory make_factory(const index_config::rule& rule) {
     [](const time_type&) -> sketch_builder_ptr {
       return std::make_unique<min_max_sketch_builder>();
     },
-    [p](const string_type&) -> sketch_builder_ptr {
-      return std::make_unique<sketch::bloom_filter_builder>(p);
+    [=](const string_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(rule->fp_rate);
     },
-    [p](const pattern_type&) -> sketch_builder_ptr {
-      return std::make_unique<sketch::bloom_filter_builder>(p);
+    [=](const pattern_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(rule->fp_rate);
     },
-    [p](const address_type&) -> sketch_builder_ptr {
-      return std::make_unique<sketch::bloom_filter_builder>(p);
+    [=](const address_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(rule->fp_rate);
     },
-    [p](const subnet_type&) -> sketch_builder_ptr {
-      return std::make_unique<sketch::bloom_filter_builder>(p);
+    [=](const subnet_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(rule->fp_rate);
     },
-    [p](const enumeration_type&) -> sketch_builder_ptr {
-      return std::make_unique<sketch::bloom_filter_builder>(p);
+    [=](const enumeration_type&) -> sketch_builder_ptr {
+      return std::make_unique<sketch::bloom_filter_builder>(rule->fp_rate);
     },
-    [](const list_type& x) -> sketch_builder_ptr {
-      // FIXME: recurse
-      return nullptr; // no sketch available
+    [=](const list_type& x) -> sketch_builder_ptr {
+      // Lists are "transparent" for sketching, i.e., we consider them as
+      // flattened in the context of the built sketch.
+      return make_sketch_builder(x.value_type(), rule);
     },
-    [](const map_type& x) -> sketch_builder_ptr {
-      // FIXME: recurse
-      return nullptr; // no sketch available
+    [=](const map_type& x) -> sketch_builder_ptr {
+      // TODO: to support maps, we need some form of "compound sketch" that
+      // internally consists of two sketches, one for the keys and one for the
+      // values. To the user, this could be presented as a "union sketch" that
+      // accepts multiple types. That said, an intermediate compromise is to
+      // demote a map to a list, ignoring the keys and only considering the
+      // values.
+      return make_sketch_builder(x.value_type(), rule);
     },
     [](const record_type&) -> sketch_builder_ptr {
+      // If the use case of creating sketches for records comes up, we can
+      // solve it with the same "compound sketch" idea mentioned above.
       die("sketch builders can only operate on individual columns");
     },
   };
-  return [f](const type& x) {
-    return caf::visit(f, x);
+  return caf::visit(f, t);
+}
+
+/// Constructs a builder factory from a given rule.
+builder_factory make_factory(const index_config::rule* rule) {
+  VAST_ASSERT(rule != nullptr);
+  return [rule](const type& x) {
+    return make_sketch_builder(x, rule);
   };
 }
 
@@ -109,7 +122,7 @@ partition_sketch_builder::make(index_config config) {
             return caf::make_error(ec::unspecified,
                                    fmt::format("duplicate field extractor {}",
                                                x.field));
-          builder.field_factory_.emplace(x.field, make_factory(rule));
+          builder.field_factory_.emplace(x.field, make_factory(&rule));
           return caf::none;
         },
         [&builder, &rule](const type_extractor& x) -> caf::error {
@@ -118,7 +131,7 @@ partition_sketch_builder::make(index_config config) {
             return caf::make_error(ec::unspecified,
                                    fmt::format("duplicate type extractor {}",
                                                x.type.name()));
-          builder.type_factory_.emplace(x.type.name(), make_factory(rule));
+          builder.type_factory_.emplace(x.type.name(), make_factory(&rule));
           return caf::none;
         },
       };
@@ -128,11 +141,10 @@ partition_sketch_builder::make(index_config config) {
   }
   // VAST creates type-level sketches for all types per default. Therefore, we
   // top up the type factory to include all basic types.
-  // TODO: consider a generic version that uses tl_filter and the type list
-  // concrete_types from type.hpp.
-  auto default_factory = make_factory(index_config::rule{});
-  auto top_up = [&](basic_type auto basic) {
-    auto t = type{basic};
+  static const auto default_rule = index_config::rule{};
+  auto default_factory = make_factory(&default_rule);
+  auto top_up = [&](concrete_type auto concrete) {
+    auto t = type{concrete};
     builder.type_factory_.emplace(t.name(), default_factory);
   };
   top_up(bool_type{});
@@ -145,12 +157,12 @@ partition_sketch_builder::make(index_config config) {
   top_up(pattern_type{});
   top_up(address_type{});
   top_up(subnet_type{});
-  // FIXME: top up list and map
+  // The inner types don't matter here, since we only register the factory for
+  // the name of the outer type, i.e., "list", and "map".
+  auto n = none_type{};
+  top_up(list_type{n});
+  top_up(map_type{n, n});
   return builder;
-}
-
-partition_sketch_builder::partition_sketch_builder(index_config config)
-  : config_{std::move(config)} {
 }
 
 caf::error partition_sketch_builder::add(const table_slice& x) {
@@ -175,6 +187,9 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
         ec::unspecified,
         fmt::format("failed to construct sketch builder for key '{}'", key));
     VAST_ASSERT(builder);
+    // FIXME: remove
+    VAST_ERROR("-------> adding to field {}: {}", first_field.name,
+               first_field.type);
     if (auto err = builder->add(x, first_offset))
       return err;
     while (++begin != end) {
@@ -200,6 +215,9 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
     const auto& factory = i->second;
     for (auto name : leaf.field.type.names()) {
       auto& builder = type_builders_[std::string{name}];
+      if (!builder)
+        // FIXME: remove
+        VAST_ERROR("-------> created new builder for type: {}", type_name);
       if (!builder)
         builder = factory(leaf.field.type);
       if (!builder)
@@ -229,6 +247,10 @@ detail::generator<std::string_view> partition_sketch_builder::types() const {
   for (const auto& [name, _] : type_builders_)
     co_yield std::string_view{name};
   co_return;
+}
+
+partition_sketch_builder::partition_sketch_builder(index_config config)
+  : config_{std::move(config)} {
 }
 
 } // namespace vast
