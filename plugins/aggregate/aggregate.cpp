@@ -419,14 +419,11 @@ struct aggregation {
     auto cast_requirements
       = std::vector<std::optional<bool>>(builder_->num_fields(), std::nullopt);
     // Calculate whether a column needs to be casted only once.
-    auto needs_cast = [&](int column, std::shared_ptr<arrow::Scalar>& scalar) {
-      auto cast_requirement = cast_requirements[column];
-      if (!cast_requirement) {
-        if (!scalar)
-          return false;
-        cast_requirements[column] = std::optional<bool>(
-          !builder_->GetField(column)->type()->Equals(scalar->type));
-      };
+    auto needs_cast = [&](int column, const arrow::Scalar& scalar) {
+      auto& cast_requirement = cast_requirements[column];
+      if (!cast_requirement)
+        cast_requirement
+          = !builder_->GetField(column)->type()->Equals(scalar.type);
       return *cast_requirement;
     };
     builder_->SetInitialCapacity(detail::narrow_cast<int>(buckets_.size()));
@@ -434,7 +431,7 @@ struct aggregation {
       for (int column = 0; auto& scalar : bucket.second) {
         auto* column_builder = builder_->GetField(column);
         VAST_ASSERT(column_builder);
-        if (needs_cast(column++, scalar)) {
+        if (scalar && needs_cast(column, *scalar)) {
           auto cast_result = scalar->CastTo(column_builder->type());
           VAST_ASSERT(cast_result.ok(),
                       cast_result.status().ToString().c_str());
@@ -447,6 +444,7 @@ struct aggregation {
           auto append_result = column_builder->AppendNull();
           VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
         }
+        column++;
       }
     }
     auto sc = std::shared_ptr<arrow::UInt64Scalar>{};
