@@ -70,7 +70,7 @@ caf::expected<std::vector<table_slice>> transform::finish() {
 
 caf::error transform::add_batch(vast::type layout,
                                 std::shared_ptr<arrow::RecordBatch> batch) {
-  VAST_DEBUG("add arrow data to transform {}", name_);
+  VAST_TRACE("add arrow data to transform {}", name_);
   to_transform_.emplace_back(std::move(layout), std::move(batch));
   return caf::none;
 }
@@ -160,7 +160,7 @@ caf::error transformation_engine::validate(
 
 /// Apply relevant transformations to the table slice.
 caf::error transformation_engine::add(table_slice&& x) {
-  VAST_DEBUG("transformation engine adds a slice");
+  VAST_TRACE("transformation engine adds a slice");
   auto layout = x.layout();
   to_transform_[layout].emplace_back(std::move(x));
   return caf::none;
@@ -194,7 +194,7 @@ transformation_engine::process_queue(transform& transform,
 
 /// Apply relevant transformations to the table slice.
 caf::expected<std::vector<table_slice>> transformation_engine::finish() {
-  VAST_DEBUG("transformation engine retrieves results");
+  VAST_TRACE("transformation engine retrieves results");
   auto to_transform = std::exchange(to_transform_, {});
   std::unordered_map<vast::type, std::deque<transform_batch>> batches{};
   std::vector<table_slice> result{};
@@ -202,7 +202,7 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     // TODO: Consider using a tsl robin map instead for transparent key lookup.
     const auto& matching = layout_mapping_.find(std::string{layout.name()});
     if (matching == layout_mapping_.end()) {
-      VAST_DEBUG("transform_engine cannot find a transform for layout {}",
+      VAST_TRACE("transform_engine cannot find a transform for layout {}",
                  layout);
       for (auto& s : queue)
         result.emplace_back(std::move(s));
@@ -216,9 +216,9 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     }
     queue.clear();
     const auto& indices = matching->second;
-    VAST_INFO("transformation engine applies {} transforms on received table "
-              "slices with layout {}",
-              indices.size(), layout);
+    VAST_DEBUG("transformation engine applies {} transforms on received table "
+               "slices with layout {}",
+               indices.size(), layout);
     for (auto idx : indices) {
       auto& t = transforms_.at(idx);
       auto failed = process_queue(t, bq);
