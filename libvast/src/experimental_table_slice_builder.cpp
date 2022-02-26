@@ -795,7 +795,7 @@ make_arrow_metadata(const type& t) {
   if (nesting_depth == 0)
     return nullptr;
   // Strip the last layer of metadata again, as that is guaranteed to be the
-  // types kind.
+  // type's kind.
   VAST_ASSERT(keys.back() == fmt::format("VAST:name:{}", nesting_depth - 1));
   keys.pop_back();
   values.pop_back();
