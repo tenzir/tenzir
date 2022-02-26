@@ -724,7 +724,7 @@ TEST(named types) {
 TEST(enriched types) {
   const auto at = type{bool_type{}, {{"first", "value"}, {"second"}}};
   CHECK(caf::holds_alternative<bool_type>(at));
-  CHECK(!at.has_name());
+  CHECK_EQUAL(at.name(), "bool");
   CHECK_EQUAL(at.attribute("first"), "value");
   CHECK_EQUAL(at.attribute("second"), "");
   CHECK_EQUAL(at.attribute("third"), std::nullopt);
@@ -737,8 +737,7 @@ TEST(enriched types) {
   CHECK_EQUAL(aat.attribute("second"), "");
   CHECK_EQUAL(aat.attribute("third"), "nestingworks");
   CHECK_EQUAL(aat.attribute("fourth"), std::nullopt);
-  CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks #first=value "
-                                      "#second");
+  CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks");
   const auto lat = type::from_legacy_type(
     legacy_bool_type{}.attributes({{"first", "value"}, {"second"}}));
   CHECK_EQUAL(lat, at);

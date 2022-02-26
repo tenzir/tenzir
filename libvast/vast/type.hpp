@@ -65,6 +65,8 @@ concept concrete_type = requires(const T& value) {
   requires std::is_final_v<T>;
   // The type must offer a way to get a unique type index.
   {T::type_index};
+  // The type must offer a way to get a unique kind identifier.
+  {T::kind};
   // Values of the type must offer an `as_bytes` overload.
   { as_bytes(value) } -> std::same_as<std::span<const std::byte>>;
   // Values of the type must be able to construct the corresponding data type.
@@ -330,15 +332,16 @@ public:
   [[nodiscard]] std::optional<std::string_view>
   attribute(const char* key) && = delete;
 
-  /// Returns whether a type has any custom name.
-  [[nodiscard]] bool has_name() const noexcept;
-
   /// Returns whether the type has any attributes.
   [[nodiscard]] bool has_attributes() const noexcept;
 
   /// Returns a view on all attributes.
-  [[nodiscard]] detail::generator<attribute_view> attributes() const& noexcept;
-  [[nodiscard]] detail::generator<attribute_view> attributes() && = delete;
+  /// @param transparent If set to `transparent::no`, the returned generator
+  /// only yields attributes of the outermost layer of the type.
+  [[nodiscard]] detail::generator<attribute_view>
+  attributes(enum transparent transparent = transparent::yes) const& noexcept;
+  [[nodiscard]] detail::generator<attribute_view>
+  attributes(enum transparent transparent = transparent::yes) && = delete;
 
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
@@ -415,6 +418,9 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 0;
 
+  /// Returns the kind.
+  static constexpr std::string_view kind = "none";
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const none_type&) noexcept;
 
@@ -430,6 +436,9 @@ class bool_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 1;
+
+  /// Returns the kind.
+  static constexpr std::string_view kind = "bool";
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const bool_type&) noexcept;
@@ -447,6 +456,9 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 2;
 
+  /// Returns the kind.
+  static constexpr std::string_view kind = "int";
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const integer_type&) noexcept;
 
@@ -462,6 +474,9 @@ class count_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 3;
+
+  /// Returns the kind.
+  static constexpr std::string_view kind = "count";
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const count_type&) noexcept;
@@ -479,6 +494,9 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 4;
 
+  /// Returns the kind.
+  static constexpr std::string_view kind = "real";
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const real_type&) noexcept;
 
@@ -494,6 +512,9 @@ class duration_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 5;
+
+  /// Returns the kind.
+  static constexpr std::string_view kind = "duration";
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const duration_type&) noexcept;
@@ -511,6 +532,9 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 6;
 
+  /// Returns the kind.
+  static constexpr std::string_view kind = "time";
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const time_type&) noexcept;
 
@@ -526,6 +550,9 @@ class string_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 7;
+
+  /// Returns the kind.
+  static constexpr std::string_view kind = "string";
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const string_type&) noexcept;
@@ -543,6 +570,9 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 8;
 
+  /// Returns the kind.
+  static constexpr std::string_view kind = "pattern";
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const pattern_type&) noexcept;
 
@@ -559,6 +589,9 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 9;
 
+  /// Returns the kind.
+  static constexpr std::string_view kind = "addr";
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const address_type&) noexcept;
 
@@ -574,6 +607,9 @@ class subnet_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 10;
+
+  /// Returns the kind.
+  static constexpr std::string_view kind = "subnet";
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const subnet_type&) noexcept;
@@ -637,6 +673,9 @@ public:
 
   /// Returns the type index.
   static constexpr uint8_t type_index = 11;
+
+  /// Returns the kind.
+  static constexpr std::string_view kind = "enum";
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte>
@@ -707,6 +746,9 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 12;
 
+  /// Returns the kind.
+  static constexpr std::string_view kind = "list";
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
   friend std::span<const std::byte> as_bytes(list_type&&) noexcept = delete;
@@ -763,6 +805,9 @@ public:
 
   /// Returns the type index.
   static constexpr uint8_t type_index = 13;
+
+  /// Returns the kind.
+  static constexpr std::string_view kind = "map";
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
@@ -872,6 +917,9 @@ public:
 
   /// Returns the type index.
   static constexpr uint8_t type_index = 14;
+
+  /// Returns the kind.
+  static constexpr std::string_view kind = "record";
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const record_type& x) noexcept;
@@ -1100,23 +1148,19 @@ struct formatter<vast::type> {
   template <class FormatContext>
   auto format(const vast::type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    auto out = ctx.out();
-    if (value.has_name())
-      out = format_to(out, "{}", value.name());
-    else
-      caf::visit(
-        [&](const auto& x) {
-          out = format_to(out, "{}", x);
-        },
-        value);
-    for (bool first = false; const auto& attribute : value.attributes()) {
-      if (!first) {
-        out = format_to(out, " ");
-        first = false;
-      }
-      out = format_to(out, "{}", attribute);
-    }
-    return out;
+    auto make_signature = [&]<vast::concrete_type T>(
+                            const T& pruned) noexcept -> decltype(ctx.out()) {
+      auto out = ctx.out();
+      if (const auto name = value.name(); name == T::kind)
+        out = fmt::format_to(out, "{}", pruned);
+      else
+        out = fmt::format_to(out, "{}", value.name());
+      for (const auto& attribute :
+           value.attributes(vast::type::transparent::no))
+        out = fmt::format_to(out, " {}", attribute);
+      return out;
+    };
+    return caf::visit(make_signature, value);
   }
 };
 
@@ -1144,89 +1188,28 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const vast::none_type&, FormatContext& ctx)
+  auto format(const vast::basic_type auto&, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "none");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::bool_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "bool");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::integer_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    // TODO: Rename to "integer" when switching to YAML schemas.
-    return format_to(ctx.out(), "int");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::count_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "count");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::real_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "real");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::duration_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "duration");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::time_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "time");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::string_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "string");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::pattern_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "pattern");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::address_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    // TODO: Rename to "address" when switching to YAML schemas.
-    return format_to(ctx.out(), "addr");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::subnet_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "subnet");
+    return format_to(ctx.out(), T::kind);
   }
 
   template <class FormatContext>
   auto format(const vast::enumeration_type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "enum {{{}}}", fmt::join(value.fields(), ", "));
+    return format_to(ctx.out(), "{} {{{}}}", T::kind,
+                     fmt::join(value.fields(), ", "));
   }
 
   template <class FormatContext>
   auto format(const vast::list_type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "list<{}>", value.value_type());
+    return format_to(ctx.out(), "{}<{}>", T::kind, value.value_type());
   }
 
   template <class FormatContext>
   auto format(const vast::map_type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "map<{}, {}>", value.key_type(),
+    return format_to(ctx.out(), "{}<{}, {}>", T::kind, value.key_type(),
                      value.value_type());
   }
 
@@ -1234,7 +1217,7 @@ struct formatter<T> {
   auto format(const vast::record_type& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
     auto out = ctx.out();
-    out = format_to(out, "record {{");
+    out = format_to(out, "{} {{", T::kind);
     for (bool first = true; auto field : value.fields()) {
       if (first) {
         out = format_to(out, "{}", field);
