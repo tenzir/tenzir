@@ -54,6 +54,7 @@ void explorer_state::forward_results(vast::table_slice slice) {
       unseen |= tmp;
     }
   }
+  VAST_TRACE("{} forwards {} hits", *self, rank(unseen));
   if (unseen.empty())
     return;
   std::vector<table_slice> slices;
@@ -127,6 +128,12 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         st.forward_results(slice);
         return;
       }
+      st.initial_query_results += slice.rows();
+      VAST_TRACE("{} got a table slice for the inital query ({}/{})", *self,
+                 st.initial_query_results, st.limits.initial_query);
+      if (st.initial_query_results >= st.limits.initial_query)
+        self->send_exit(self->state.initial_exporter,
+                        caf::exit_reason::user_shutdown);
       // Don't bother making new queries if we discard all results anyways.
       if (st.num_sent >= st.limits.total)
         return;
@@ -217,12 +224,11 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         // least one constraint.
         VAST_ASSERT(expr);
         auto query = to_string(*expr);
-        VAST_TRACE_SCOPE("{} spawns new exporter with query {}", *self, query);
+        VAST_TRACE("{} spawns new exporter with query {}", *self, query);
         auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
         caf::put(exporter_invocation.options, "vast.export.preserve-ids", true);
-        if (st.limits.per_result)
-          caf::put(exporter_invocation.options, "vast.export.max-events",
-                   st.limits.per_result);
+        caf::put(exporter_invocation.options, "vast.export.max-events",
+                 st.limits.per_result);
         ++self->state.running_exporters;
         self
           ->request(st.node, caf::infinite, atom::spawn_v, exporter_invocation)

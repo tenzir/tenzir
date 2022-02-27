@@ -94,6 +94,8 @@ spawn_explorer(node_actor::stateful_pointer<node_state> self,
                              defaults::explore::max_events);
   limits.per_result = caf::get_or(options, "vast.explore.max-events-context",
                                   defaults::explore::max_events_context);
+  limits.initial_query = caf::get_or(options, "vast.explore.max-events-query",
+                                     defaults::explore::max_events_query);
   auto handle = self->spawn(explorer, self, limits, before, after, by);
   VAST_VERBOSE("{} spawned an explorer", *self);
   return handle;

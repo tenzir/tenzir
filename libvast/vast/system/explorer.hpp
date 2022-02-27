@@ -26,6 +26,7 @@ struct explorer_state {
   struct event_limits {
     uint64_t total;
     uint64_t per_result;
+    uint64_t initial_query;
   };
 
   static inline constexpr const char* name = "explorer";
@@ -60,6 +61,8 @@ struct explorer_state {
   /// Flag that stores if the input source is done sending table slices. Used
   /// for lifetime management.
   bool initial_query_completed = false;
+
+  uint64_t initial_query_results = 0;
 
   /// A handle to the exporter sending us the results of the original query.
   caf::actor_addr initial_exporter = {};
