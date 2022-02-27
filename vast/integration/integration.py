@@ -657,6 +657,7 @@ def main():
     parser.add_argument(
         "-r",
         "--repetitions",
+        type=int,
         default=3,
         help="Repeat count for tests that timed out",
     )
