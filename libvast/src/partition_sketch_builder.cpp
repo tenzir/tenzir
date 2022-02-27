@@ -27,6 +27,7 @@ using sketch_builder_ptr = std::unique_ptr<sketch::builder>;
 
 sketch_builder_ptr
 make_sketch_builder(const type& t, const index_config::rule* rule) {
+  VAST_ASSERT(rule != nullptr);
   using min_max_sketch_builder
     = sketch::accumulator_builder<sketch::min_max_accumulator>;
   auto f = detail::overload{
@@ -167,9 +168,10 @@ partition_sketch_builder::make(index_config config) {
 
 caf::error partition_sketch_builder::add(const table_slice& x) {
   const auto& layout = caf::get<record_type>(x.layout());
+  auto record_batch = to_record_batch(x);
   // Handle all field sketches.
   for (auto& [key, factory] : field_factory_) {
-    auto offsets = layout.resolve_key_suffix(key);
+    auto offsets = layout.resolve_key_suffix(key, x.layout().name());
     auto begin = offsets.begin();
     auto end = offsets.end();
     if (begin == end)
@@ -186,11 +188,6 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
       return caf::make_error(
         ec::unspecified,
         fmt::format("failed to construct sketch builder for key '{}'", key));
-    VAST_ASSERT(builder);
-    // FIXME: remove
-    VAST_ERROR("-------> adding to field {}: {}", first_field.name,
-               first_field.type);
-    auto record_batch = to_record_batch(x);
     auto xs = record_batch->column(layout.flat_index(first_offset));
     if (auto err = builder->add(xs))
       return err;
@@ -208,20 +205,31 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
     }
   }
   // Handle all type sketches.
+  // FIXME: this doesn't work for nested types yet because we catch types under
+  // a single top-level name. E.g., list<string>, list<count>, etc. will result
+  // in creation of *one* builder for the list type (under the name "list").
   for (auto&& leaf : layout.leaves()) {
-    auto type_name = leaf.field.type.name();
-    VAST_WARN("-------> {}: {}", leaf.field.name, type_name);
-    // Should we create a sketch for this type?
-    auto i = type_factory_.find(type_name);
-    if (i == type_factory_.end())
+    // TODO: Do this more efficiently rather than going through a string
+    // vector. We could offer another generator that goes over the names in
+    // reverse order, or consider changing the order in the first place.
+    std::vector<std::string> names;
+    for (auto name : leaf.field.type.names())
+      names.push_back(std::string{name});
+    auto begin = names.rbegin();
+    auto end = names.rend();
+    // We only allow aliases of the types that exist in the factory, so unless
+    // we have a valid starting point, we do not proceed.
+    if (!type_factory_.contains(*begin))
       continue;
-    const auto& factory = i->second;
-    auto record_batch = to_record_batch(x);
-    for (auto name : leaf.field.type.names()) {
-      auto& builder = type_builders_[std::string{name}];
-      if (!builder)
-        // FIXME: remove
-        VAST_ERROR("-------> created new builder for type: {}", type_name);
+    builder_factory parent_factory;
+    for (; begin != end; ++begin) {
+      auto&& name = *begin;
+      auto& factory = type_factory_[name];
+      if (factory)
+        parent_factory = factory;
+      else
+        factory = parent_factory;
+      auto& builder = type_builders_[name];
       if (!builder)
         builder = factory(leaf.field.type);
       if (!builder)

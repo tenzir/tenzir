@@ -16,6 +16,8 @@
 
 #include <caf/test/dsl.hpp>
 
+#include <set>
+
 using namespace vast;
 
 namespace {
@@ -23,7 +25,7 @@ namespace {
 auto example_index_config = R"__(
 rules:
   - targets:
-      - orig_h
+      - id.orig_h
       - zeek.conn.id.resp_h
     fp-rate: 0.005
   - targets:
@@ -31,30 +33,50 @@ rules:
     fp-rate: 0.1
 )__";
 
-struct fixture : fixtures::events {
-  fixture() {
-    const auto yaml = unbox(from_yaml(example_index_config));
-    REQUIRE_EQUAL(convert(yaml, config), caf::none);
-  }
-
-  index_config config;
-};
+auto invalid_config = R"__(
+rules:
+  - targets:
+      - id.orig_h
+      - id.orig_h
+)__";
 
 } // namespace
 
-FIXTURE_SCOPE(partition_sketch_tests, fixture)
+TEST(duplicate targets) {
+  const auto yaml = unbox(from_yaml(invalid_config));
+  index_config config;
+  auto err = convert(yaml, config);
+  REQUIRE_EQUAL(convert(yaml, config), caf::none);
+  auto builder = partition_sketch_builder::make(config);
+  REQUIRE(!builder);
+  CHECK_EQUAL(builder.error(), ec::unspecified);
+}
+
+FIXTURE_SCOPE(partition_sketch_tests, fixtures::events)
 
 TEST(builder instantiation) {
+  index_config config;
+  const auto yaml = unbox(from_yaml(example_index_config));
+  REQUIRE_EQUAL(convert(yaml, config), caf::none);
   auto builder = unbox(partition_sketch_builder::make(config));
   auto err = builder.add(zeek_conn_log[0]);
   CHECK_EQUAL(err, caf::none);
-  fmt::print("+++++++++++++++++++++\n");
+  MESSAGE("check if all field builders have been instantiated");
+  auto actual_fields = std::set<std::string>{};
+  auto expected_fields
+    = std::set<std::string>{"id.orig_h", "zeek.conn.id.resp_h"};
   for (auto field : builder.fields())
-    fmt::print("{}\n", field);
-  fmt::print("---------------------\n");
+    actual_fields.insert(std::string{field});
+  MESSAGE("check if all type builders have been instantiated");
+  auto actual_types = std::set<std::string>{};
+  // This is the list of unique type names when traversing the Zeek connection
+  // log columns. Note that 'port' is a type alias that receives its own sketch
+  // as derivative of 'count'.
+  auto expected_types = std::set<std::string>{
+    "time", "string", "addr", "port", "duration", "count", "bool", "list"};
   for (auto type : builder.types())
-    fmt::print("{}\n", type);
-  fmt::print("+++++++++++++++++++++\n");
+    actual_types.insert(std::string{type});
+  CHECK_EQUAL(actual_types, expected_types);
 }
 
 FIXTURE_SCOPE_END()
