@@ -54,6 +54,9 @@ struct partition_transformer_state {
   /// Actor handle of the type registry.
   type_registry_actor type_registry = {};
 
+  /// Actor handle of the accountant.
+  accountant_actor accountant = {};
+
   /// Actor handle of the store builder for this partition.
   store_builder_actor store_builder = {};
 

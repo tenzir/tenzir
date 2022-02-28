@@ -336,4 +336,86 @@ TEST(partition transform via the index) {
   self->send_exit(index, caf::exit_reason::user_shutdown);
 }
 
+TEST(deleting a partition using a transform) {
+  // Spawn index and fill with data
+  auto index_dir = std::filesystem::path{"/vast/index"};
+  auto archive = self->spawn(mock_archive);
+  auto meta_index = self->spawn(vast::system::meta_index, accountant);
+  const auto partition_capacity = 8;
+  const auto in_mem_partitions = 10;
+  const auto taste_count = 1;
+  const auto num_query_supervisors = 10;
+  const auto meta_index_fp_rate = 0.01;
+  auto index
+    = self->spawn(vast::system::index, accountant, filesystem, archive,
+                  meta_index, type_registry, index_dir,
+                  vast::defaults::system::store_backend, partition_capacity,
+                  in_mem_partitions, taste_count, num_query_supervisors,
+                  index_dir, meta_index_fp_rate);
+  self->send(index, vast::atom::importer_v, importer);
+  vast::detail::spawn_container_source(sys, zeek_conn_log, index);
+  run();
+  // Get one of the partitions that were persisted.
+  auto rp = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                          index_dir / "index.bin");
+  run();
+  vast::uuid partition_uuid = {};
+  rp.receive(
+    [&](vast::chunk_ptr& index_chunk) {
+      REQUIRE(index_chunk);
+      const auto* index = vast::fbs::GetIndex(index_chunk->data());
+      REQUIRE_EQUAL(index->index_type(), vast::fbs::index::Index::v0);
+      const auto* index_v0 = index->index_as_v0();
+      const auto* partition_uuids = index_v0->partitions();
+      REQUIRE(partition_uuids);
+      REQUIRE_GREATER(partition_uuids->size(), 0ull);
+      const auto* uuid_fb = *partition_uuids->begin();
+      VAST_ASSERT(uuid_fb);
+      REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::no_error);
+    },
+    [](const caf::error& e) {
+      REQUIRE_EQUAL(e, caf::no_error);
+    });
+  // Check how big the partition is.
+  auto rp2 = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                           index_dir / fmt::format("{:l}.mdx", partition_uuid));
+  run();
+  size_t events = 0;
+  rp2.receive(
+    [&](vast::chunk_ptr& partition_synopsis_chunk) {
+      REQUIRE(partition_synopsis_chunk);
+      const auto* partition_synopsis
+        = vast::fbs::GetPartitionSynopsis(partition_synopsis_chunk->data());
+      REQUIRE_EQUAL(partition_synopsis->partition_synopsis_type(),
+                    vast::fbs::partition_synopsis::PartitionSynopsis::legacy);
+      const auto* partition_synopsis_legacy
+        = partition_synopsis->partition_synopsis_as_legacy();
+      const auto* range = partition_synopsis_legacy->id_range();
+      events = range->end() - range->begin();
+    },
+    [](const caf::error& e) {
+      REQUIRE_SUCCESS(e);
+    });
+  // Run a partition transformation.
+  auto transform = std::make_shared<vast::transform>(
+    "partition_transform"s, std::vector<std::string>{"zeek.conn"});
+  auto settings = caf::settings{};
+  caf::put(settings, "expression", "#type == \"does_not_exist\"");
+  auto identity_step = vast::make_transform_step("select", settings);
+  REQUIRE_NOERROR(identity_step);
+  transform->add_step(std::move(*identity_step));
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
+                           std::vector<vast::uuid>{partition_uuid},
+                           vast::system::keep_original_partition::no);
+  run();
+  rp3.receive(
+    [=](const vast::partition_info& info) {
+      CHECK_EQUAL(info.events, 0ull);
+    },
+    [](const caf::error& e) {
+      REQUIRE_EQUAL(e, caf::no_error);
+    });
+  self->send_exit(index, caf::exit_reason::user_shutdown);
+}
+
 FIXTURE_SCOPE_END()
