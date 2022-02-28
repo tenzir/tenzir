@@ -23,6 +23,38 @@
 
 namespace vast::system {
 
+namespace {
+
+void store_or_fulfill(
+  partition_transformer_actor::stateful_pointer<partition_transformer_state>
+    self,
+  partition_transformer_state::stream_data&& stream_data) {
+  if (std::holds_alternative<std::monostate>(self->state.persist)) {
+    self->state.persist = std::move(stream_data);
+  } else {
+    auto* path_data = std::get_if<partition_transformer_state::path_data>(
+      &self->state.persist);
+    VAST_ASSERT(path_data != nullptr, "unexpected variant content");
+    self->state.fulfill(self, std::move(stream_data), std::move(*path_data));
+  }
+}
+
+void store_or_fulfill(
+  partition_transformer_actor::stateful_pointer<partition_transformer_state>
+    self,
+  partition_transformer_state::path_data&& path_data) {
+  if (std::holds_alternative<std::monostate>(self->state.persist)) {
+    self->state.persist = std::move(path_data);
+  } else {
+    auto* stream_data = std::get_if<partition_transformer_state::stream_data>(
+      &self->state.persist);
+    VAST_ASSERT(stream_data != nullptr, "unexpected variant content");
+    self->state.fulfill(self, std::move(*stream_data), std::move(path_data));
+  }
+}
+
+} // namespace
+
 // Since we don't have to answer queries while this partition is being
 // constructed, we don't have to spawn separate indexer actors and
 // stream data but can just compute everything inline here.
@@ -197,36 +229,25 @@ partition_transformer_actor::behavior_type partition_transformer(
         self->state.events += slice.rows();
         self->state.slices.push_back(std::move(slice));
       }
+      auto stream_data = partition_transformer_state::stream_data{
+        .partition_chunk = nullptr,
+        .synopsis_chunk = nullptr,
+      };
       // We're already done if the whole partition got deleted
       if (self->state.events == 0) {
-        VAST_WARN("no events");
-        detail::shutdown_stream_stage(self->state.stage);
-        auto stream_data = partition_transformer_state::stream_data{
-          .partition_chunk = nullptr,
-          .synopsis_chunk = nullptr,
-        };
-        if (std::holds_alternative<std::monostate>(self->state.persist)) {
-          self->state.persist = std::move(stream_data);
-        } else {
-          auto* path_data = std::get_if<partition_transformer_state::path_data>(
-            &self->state.persist);
-          VAST_ASSERT(path_data != nullptr, "unexpected variant content");
-          self->state.fulfill(self, std::move(stream_data),
-                              std::move(*path_data));
-        }
+        store_or_fulfill(self, std::move(stream_data));
         return;
       }
       // ...otherwise, prepare for writing out the transformed data by creating
-      // a new store and requesting id.
+      // a new store, sending it the slices and requesting new idspace.
       auto store_id = self->state.data.store_id;
       const auto* store_plugin = plugins::find<vast::store_plugin>(store_id);
       if (!store_plugin) {
         self->state.stream_error
           = caf::make_error(ec::invalid_argument,
                             "could not find a store plugin named {}", store_id);
+        store_or_fulfill(self, std::move(stream_data));
         return;
-        // return
-        // partition_transformer_actor::behavior_type::make_empty_behavior();
       }
       auto builder_and_header = store_plugin->make_store_builder(
         self->state.accountant, self->state.fs, self->state.data.id);
@@ -235,9 +256,8 @@ partition_transformer_actor::behavior_type partition_transformer(
           = caf::make_error(ec::invalid_argument,
                             "could not create store builder for backend {}",
                             store_id);
+        store_or_fulfill(self, std::move(stream_data));
         return;
-        // return
-        // partition_transformer_actor::behavior_type::make_empty_behavior();
       }
       self->state.data.store_header = builder_and_header->second;
       self->state.store_builder = builder_and_header->first;
@@ -311,15 +331,7 @@ partition_transformer_actor::behavior_type partition_transformer(
           stream_data.synopsis_chunk = fbs::release(builder);
         }
       }();
-      if (std::holds_alternative<std::monostate>(self->state.persist)) {
-        self->state.persist = std::move(stream_data);
-      } else {
-        auto* path_data = std::get_if<partition_transformer_state::path_data>(
-          &self->state.persist);
-        VAST_ASSERT(path_data != nullptr, "unexpected variant content");
-        self->state.fulfill(self, std::move(stream_data),
-                            std::move(*path_data));
-      }
+      store_or_fulfill(self, std::move(stream_data));
     },
     [self](atom::persist, std::filesystem::path partition_path,
            std::filesystem::path synopsis_path)
@@ -332,18 +344,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       auto promise
         = self->make_response_promise<augmented_partition_synopsis>();
       path_data.promise = promise;
-      // Immediately fulfill the promise if we are already done
-      // with the serialization.
-      if (std::holds_alternative<std::monostate>(self->state.persist)) {
-        self->state.persist = std::move(path_data);
-      } else {
-        auto* stream_data
-          = std::get_if<partition_transformer_state::stream_data>(
-            &self->state.persist);
-        VAST_ASSERT(stream_data != nullptr, "unexpected variant content");
-        self->state.fulfill(self, std::move(*stream_data),
-                            std::move(path_data));
-      }
+      store_or_fulfill(self, std::move(path_data));
       return promise;
     }};
 }
