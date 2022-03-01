@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [v1.1.0-rc2]
+## [v1.1.0-rc3]
 
 ### :warning: Changes
 
@@ -18,6 +18,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The experimental aging feature is now deprecated. The [compaction plugin](https://docs.tenzir.com/vast/features/compaction) offers a superset of the aging functionality.
   [#2087](https://github.com/tenzir/vast/pull/2087)
+
+- Actor names in log messages now have an `-ID` suffix to make it easier to tell multiple instances of the same actor apart.
+  [#2119](https://github.com/tenzir/vast/pull/2119)
+
+- Fixed an issue where partition transforms that erase complete partitions would trigger an internal assertion failure.
+  [#2123](https://github.com/tenzir/vast/pull/2123)
 
 ### :gift: Features
 
@@ -1562,7 +1568,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[v1.1.0-rc2]: https://github.com/tenzir/vast/releases/tag/v1.1.0-rc2
+[v1.1.0-rc3]: https://github.com/tenzir/vast/releases/tag/v1.1.0-rc3
 [v1.0.0]: https://github.com/tenzir/vast/releases/tag/v1.0.0
 [2021.12.16]: https://github.com/tenzir/vast/releases/tag/2021.12.16
 [2021.11.18]: https://github.com/tenzir/vast/releases/tag/2021.11.18
