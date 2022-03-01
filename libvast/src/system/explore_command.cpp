@@ -8,8 +8,8 @@
 
 #include "vast/system/explore_command.hpp"
 
-#include "vast/concepts.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/saturating_arithmetic.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
@@ -33,17 +33,6 @@
 
 using namespace caf;
 using namespace std::chrono_literals;
-
-namespace vast::detail {
-
-template <concepts::unsigned_integral T>
-auto non_overflowing_multiply(T lhs, T rhs) {
-  if (lhs > (std::numeric_limits<T>::max() / rhs))
-    return std::numeric_limits<T>::max();
-  return lhs * rhs;
-}
-
-} // namespace vast::detail
 
 namespace vast::system {
 
@@ -69,9 +58,9 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   // Get a local actor to interact with `sys`.
   caf::scoped_actor self{sys};
   auto alternative_max_events
-    = detail::non_overflowing_multiply(max_events_query, max_events_context);
+    = detail::saturating_mul(max_events_query, max_events_context);
   if (alternative_max_events < max_events) {
-    max_events = max_events_query * max_events_context;
+    max_events = alternative_max_events;
     VAST_VERBOSE("{} adjusts max-events to {}", *self, max_events);
     caf::put(const_cast<caf::settings&>(inv.options), // NOLINT
              "vast.export.max-events", max_events);
