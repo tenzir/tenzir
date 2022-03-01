@@ -283,14 +283,13 @@ struct aggregation {
                                  arrow::ListArray, arrow::MapArray,
                                  arrow::StructArray, enum_array, pattern_array,
                                  subnet_array, address_array>;
-            const auto non_primitive_error
-              = is_non_primitive_array
-                  ? caf::error{}
-                  : caf::make_error(ec::invalid_configuration,
-                                    fmt::format("aggregate transform step "
-                                                "cannot handle "
-                                                "non-primitive field {}",
-                                                array.type()->ToString()));
+            auto make_non_primitive_error = [&]() {
+              return caf::make_error(ec::invalid_configuration,
+                                     fmt::format("aggregate transform step "
+                                                 "cannot handle non-primitive "
+                                                 "field {}",
+                                                 array.type()->ToString()));
+            };
             using scalar_type
               = std::conditional_t<is_non_primitive_array, arrow::Scalar,
                                    typename arrow::TypeTraits<std::conditional_t<
@@ -313,7 +312,7 @@ struct aggregation {
                 }
                 case action::sum: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (requires(scalar_type lhs,
                                                 scalar_type rhs) {
                                          {lhs.value + rhs.value};
@@ -329,7 +328,7 @@ struct aggregation {
                 }
                 case action::min: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (std::is_same_v<scalar_type,
                                                       arrow::StringScalar>) {
                     if (array.Value(row) < scalar->view())
@@ -351,7 +350,7 @@ struct aggregation {
                 }
                 case action::max: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (std::is_same_v<scalar_type,
                                                       arrow::StringScalar>) {
                     if (array.Value(row) > scalar->view())
@@ -373,7 +372,7 @@ struct aggregation {
                 }
                 case action::any: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (std::is_same_v<Array,
                                                       arrow::BooleanArray>) {
                     scalar->value = scalar->value || array.Value(row);
@@ -388,7 +387,7 @@ struct aggregation {
                 }
                 case action::all: {
                   if constexpr (is_non_primitive_array) {
-                    return non_primitive_error;
+                    return make_non_primitive_error();
                   } else if constexpr (std::is_same_v<Array,
                                                       arrow::BooleanArray>) {
                     scalar->value = scalar->value && array.Value(row);
@@ -417,22 +416,22 @@ struct aggregation {
   /// Returns the aggregated batches.
   caf::expected<transform_batch> finish() {
     VAST_ASSERT(builder_);
-    // Calculate whether a column needs to be casted ahead of time.
-    auto column_needs_cast = [&] {
-      auto result = std::vector<bool>{};
-      result.resize(builder_->num_fields(), false);
-      if (!buckets_.empty())
-        for (int column = 0; column < builder_->num_fields(); ++column)
-          result[column] = !builder_->GetField(column)->type()->Equals(
-            buckets_.begin()->second[column]->type);
-      return result;
-    }();
+    auto cast_requirements
+      = std::vector<std::optional<bool>>(builder_->num_fields(), std::nullopt);
+    // Calculate whether a column needs to be casted only once.
+    auto needs_cast = [&](int column, const arrow::Scalar& scalar) {
+      auto& cast_requirement = cast_requirements[column];
+      if (!cast_requirement)
+        cast_requirement
+          = !builder_->GetField(column)->type()->Equals(scalar.type);
+      return *cast_requirement;
+    };
     builder_->SetInitialCapacity(detail::narrow_cast<int>(buckets_.size()));
     for (auto&& bucket : std::exchange(buckets_, {})) {
       for (int column = 0; auto& scalar : bucket.second) {
-        auto* column_builder = builder_->GetField(column++);
+        auto* column_builder = builder_->GetField(column);
         VAST_ASSERT(column_builder);
-        if (column_needs_cast[column] && scalar) {
+        if (scalar && needs_cast(column, *scalar)) {
           auto cast_result = scalar->CastTo(column_builder->type());
           VAST_ASSERT(cast_result.ok(),
                       cast_result.status().ToString().c_str());
@@ -445,6 +444,7 @@ struct aggregation {
           auto append_result = column_builder->AppendNull();
           VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
         }
+        column++;
       }
     }
     auto sc = std::shared_ptr<arrow::UInt64Scalar>{};
