@@ -20,7 +20,7 @@ jobs:
         os: [ubuntu-20.04, macOS-latest]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ github.ref }}
 
@@ -54,7 +54,7 @@ jobs:
       TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ github.ref }}
 
