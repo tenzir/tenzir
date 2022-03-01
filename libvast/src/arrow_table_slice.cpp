@@ -858,10 +858,7 @@ auto values([[maybe_unused]] const Type& type, const Array& arr)
     if (arr.IsNull(i)) {
       co_yield {};
     } else {
-      if constexpr (std::is_same_v<Type, none_type>) {
-        VAST_ASSERT(false, "none_type not expected here");
-        __builtin_unreachable();
-      } else if constexpr (std::is_same_v<Type, bool_type>) {
+      if constexpr (std::is_same_v<Type, bool_type>) {
         if constexpr (std::is_same_v<Array, arrow::BooleanArray>) {
           co_yield arr.Value(i);
         } else {
@@ -961,15 +958,12 @@ auto values(const type& type, const arrow::Array& array)
   -> detail::generator<data_view> {
   auto f = [](const concrete_type auto& type,
               const auto& array) -> detail::generator<data_view> {
-    if constexpr (std::is_same_v<decltype(type), none_type>)
-      die("none_type//TODO");
-    else
-      for (auto&& result : values(type, array)) {
-        if (result)
-          co_yield *result;
-        else
-          co_yield caf::none;
-      }
+    for (auto&& result : values(type, array)) {
+      if (result)
+        co_yield *result;
+      else
+        co_yield caf::none;
+    }
   };
   return caf::visit(f, type, array);
 }

@@ -330,7 +330,7 @@ caf::expected<void>
 validator::operator()(const type_extractor& ex, const data& d) {
   // References to aliases can't be checked here because the expression parser
   // can't possible know about them. We defer the check to the type resolver.
-  if (caf::holds_alternative<none_type>(ex.type))
+  if (!ex.type)
     return caf::no_error;
   if (!compatible(ex.type, op_, d))
     return caf::make_error(
@@ -413,7 +413,7 @@ type_resolver::operator()(const meta_extractor& ex, const data& d) {
 
 caf::expected<expression>
 type_resolver::operator()(const type_extractor& ex, const data& d) {
-  if (caf::holds_alternative<none_type>(ex.type)) {
+  if (!ex.type) {
     auto matches = [&](const type& t) {
       for (const auto& name : t.names())
         if (name == ex.type.name())

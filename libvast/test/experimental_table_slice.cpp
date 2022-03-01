@@ -563,7 +563,6 @@ auto field_roundtrip(const type& t) {
 }
 
 TEST(arrow primitive type to field roundtrip) {
-  field_roundtrip(type{none_type{}});
   field_roundtrip(type{bool_type{}});
   field_roundtrip(type{integer_type{}});
   field_roundtrip(type{count_type{}});

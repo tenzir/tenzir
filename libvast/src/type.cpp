@@ -27,9 +27,16 @@ namespace vast {
 namespace {
 
 std::span<const std::byte> none_type_representation() {
-  // This helper function solely exists because ADL will not find the as_bytes
-  // overload for none_type from within the as_bytes overload for type.
-  return as_bytes(none_type{});
+  static const auto buffer = []() noexcept {
+    constexpr auto reserved_size = 12;
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto type = fbs::CreateType(builder);
+    builder.Finish(type);
+    auto result = builder.Release();
+    VAST_ASSERT(result.size() == reserved_size);
+    return result;
+  }();
+  return as_bytes(buffer);
 }
 
 constexpr size_t reserved_string_size(std::string_view str) {
@@ -331,7 +338,7 @@ type type::infer(const data& value) noexcept {
     [](const list& list) noexcept -> type {
       // List types cannot be inferred from empty lists.
       if (list.empty())
-        return type{list_type{none_type{}}};
+        return type{list_type{type{}}};
       // Technically lists can contain heterogenous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
       auto value_type = infer(*list.begin());
@@ -346,7 +353,7 @@ type type::infer(const data& value) noexcept {
     [](const map& map) noexcept -> type {
       // Map types cannot be inferred from empty maps.
       if (map.empty())
-        return type{map_type{none_type{}, none_type{}}};
+        return type{map_type{type{}, type{}}};
       // Technically maps can contain heterogenous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
       auto key_type = infer(map.begin()->first);
@@ -392,7 +399,7 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
   }();
   auto f = detail::overload{
     [&](const legacy_none_type&) {
-      return type{other.name(), none_type{}, attributes};
+      return type{other.name(), type{}, attributes};
     },
     [&](const legacy_bool_type&) {
       return type{other.name(), bool_type{}, attributes};
@@ -457,9 +464,6 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
 
 legacy_type type::to_legacy_type() const noexcept {
   auto f = detail::overload{
-    [&](const none_type&) -> legacy_type {
-      return legacy_none_type{};
-    },
     [&](const bool_type&) -> legacy_type {
       return legacy_bool_type{};
     },
@@ -518,7 +522,7 @@ legacy_type type::to_legacy_type() const noexcept {
       return result;
     },
   };
-  auto result = caf::visit(f, *this);
+  auto result = *this ? caf::visit(f, *this) : legacy_none_type{};
   if (!name().empty())
     result = legacy_alias_type{std::move(result)}.name(std::string{name()});
   for (const auto& attribute : attributes()) {
@@ -589,7 +593,7 @@ data type::construct() const noexcept {
   auto f = []<concrete_type T>(const T& x) noexcept -> data {
     return x.construct();
   };
-  return caf::visit(f, *this);
+  return *this ? caf::visit(f, *this) : data{};
 }
 
 void inspect(caf::detail::stringification_inspector& f, type& x) {
@@ -954,9 +958,6 @@ bool congruent(const type& x, const data& y) noexcept {
     [](const auto&, const auto&) noexcept {
       return false;
     },
-    [](const none_type&, caf::none_t) noexcept {
-      return true;
-    },
     [](const bool_type&, bool) noexcept {
       return true;
     },
@@ -1140,16 +1141,8 @@ bool is_subset(const type& x, const type& y) noexcept {
 // companion overload in view.cpp.
 bool type_check(const type& x, const data& y) noexcept {
   auto f = detail::overload{
-    [&](const none_type&, const auto&) {
-      // Cannot determine data type since data may always be
-      // null.
-      return true;
-    },
     [&](const auto&, const caf::none_t&) {
       // Every type can be assigned nil.
-      return true;
-    },
-    [&](const none_type&, const caf::none_t&) {
       return true;
     },
     [&](const enumeration_type& t, const enumeration& u) {
@@ -1228,28 +1221,6 @@ replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
       *x = *t;
     }
   return caf::none;
-}
-
-// -- none_type ---------------------------------------------------------------
-
-static_assert(none_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::NONE));
-
-std::span<const std::byte> as_bytes(const none_type&) noexcept {
-  static const auto buffer = []() noexcept {
-    constexpr auto reserved_size = 12;
-    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto type = fbs::CreateType(builder);
-    builder.Finish(type);
-    auto result = builder.Release();
-    VAST_ASSERT(result.size() == reserved_size);
-    return result;
-  }();
-  return as_bytes(buffer);
-}
-
-caf::none_t none_type::construct() noexcept {
-  return {};
 }
 
 // -- bool_type ---------------------------------------------------------------

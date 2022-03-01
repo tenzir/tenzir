@@ -279,7 +279,7 @@ TEST(transform with multiple steps) {
                                                                            "d");
   CHECK_EQUAL(((*transformed)[0]).at(0, 0), vast::data_view{"xxx"sv});
   auto wrong_layout = vast::type{"stub", testdata_layout};
-  wrong_layout.assign_metadata(vast::type{"foo", vast::none_type{}});
+  wrong_layout.assign_metadata(vast::type{"foo", vast::type{}});
   auto builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, wrong_layout);
   REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));

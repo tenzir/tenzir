@@ -69,34 +69,30 @@ public:
   struct iterator final {
     // -- iterator facade ------------------------------------------------------
 
-    template <concrete_type Type>
-    using view_for_type
-      = view<std::conditional_t<std::is_same_v<Type, none_type>, data,
-                                type_to_data_t<Type>>>;
+    template <type_or_concrete_type Type>
+    using view_for_type = view<type_to_data_t<Type>>;
+
+    template <type_or_concrete_type Type>
+    using nullable_view_for_type
+      = std::conditional_t<concrete_type<Type>,
+                           std::optional<view_for_type<Type>>,
+                           view_for_type<Type>>;
 
     // TODO: Consider making this a random access iterator.
     using iterator_category = std::forward_iterator_tag;
     using difference_type = std::ptrdiff_t;
-    using reference = std::tuple<std::optional<view_for_type<Types>>...>;
+    using reference = std::tuple<nullable_view_for_type<Types>...>;
 
     reference operator*() const noexcept {
-      auto get
-        = [&]<concrete_type Type>(
-            table_slice::size_type column,
-            const Type& type) noexcept -> std::optional<view_for_type<Type>> {
-        if constexpr (std::is_same_v<Type, none_type>) {
-          // TODO: Wrapping a data_view inside an optional is kind of
-          // non-sensical; we should consider offering an explicit operator bool
-          // to data_view that checks whether it holds a none_t, and drop the
-          // wrapping optional. As is, the ergonomics on the call site differ
-          // too much when using unspecified types.
-          auto data = proj_.slice_.at(row_, column);
-          if (caf::holds_alternative<caf::none_t>(data))
-            return std::nullopt;
-          return data;
-        } else {
+      auto get = [&]<type_or_concrete_type Type>(
+                   table_slice::size_type column,
+                   const Type& type) noexcept -> nullable_view_for_type<Type> {
+        if constexpr (concrete_type<Type>)
           return proj_.slice_.at(row_, column, type);
-        }
+        else if (type)
+          return proj_.slice_.at(row_, column, type);
+        else
+          return proj_.slice_.at(row_, column);
       };
       return detail::tuple_zip_and_map(get, proj_.indices_, proj_.types_);
     }
@@ -233,7 +229,7 @@ private:
 /// type and one of flat column index, offset, or suffix-matched column name.
 template <class... Hints>
 auto project(table_slice slice, Hints&&... hints) {
-  auto do_project = [&]<concrete_type... Types, class... Indices>(
+  auto do_project = [&]<type_or_concrete_type... Types, class... Indices>(
                       std::tuple<Types, Indices> && ... hints)
                       ->projection<Types...> {
     static_assert(sizeof...(Types) == sizeof...(Indices),
@@ -241,14 +237,19 @@ auto project(table_slice slice, Hints&&... hints) {
     const auto& layout = slice.layout();
     const auto& layout_rt = caf::get<record_type>(layout);
     auto find_flat_index_for_hint
-      = [&]<concrete_type Type>(
+      = [&]<type_or_concrete_type Type>(
           auto&& self, const Type& type,
           const auto& index) noexcept -> table_slice::size_type {
+      [[maybe_unused]] auto congruent_or_none = [&](const auto& field) {
+        if constexpr (concrete_type<Type>)
+          return congruent(field.type, vast::type{type});
+        else
+          return !type || congruent(field.type, vast::type{type});
+      };
       if constexpr (std::is_convertible_v<decltype(index), offset>) {
         // If the index is an offset, we can just use it directly.
         const auto field = layout_rt.field(index);
-        if (std::is_same_v<
-              Type, none_type> || congruent(field.type, vast::type{type}))
+        if (congruent_or_none(field))
           return layout_rt.flat_index(index);
       } else if constexpr (std::is_constructible_v<std::string_view,
                                                    decltype(index)>) {
@@ -266,8 +267,7 @@ auto project(table_slice slice, Hints&&... hints) {
              const auto& [field, _] : layout_rt.leaves()) {
           if (flat_index
               == detail::narrow_cast<table_slice::size_type>(index)) {
-            if (std::is_same_v<
-                  Type, none_type> || congruent(field.type, vast::type{type}))
+            if (congruent_or_none(field))
               return flat_index;
             break;
           }
@@ -288,7 +288,7 @@ auto project(table_slice slice, Hints&&... hints) {
       std::move(flat_indices),
     };
   };
-  auto pack_type_and_index = []<concrete_type Type, class Index>(
+  auto pack_type_and_index = []<type_or_concrete_type Type, class Index>(
                                auto&& self, const Type& type,
                                const Index& index, const auto&... remainder) {
     if constexpr (sizeof...(remainder) == 0) {

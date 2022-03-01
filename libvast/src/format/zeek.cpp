@@ -68,7 +68,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     // See also:
     // - src/format/pcap.cpp
     t = type{"port", count_type{}};
-  if (caf::holds_alternative<none_type>(t)
+  if (!t
       && (zeek_type.starts_with("vector") || zeek_type.starts_with("set")
           || zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
@@ -86,7 +86,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     // table[string]. In VAST, they are all lists.
     t = type{list_type{*elem}};
   }
-  if (caf::holds_alternative<none_type>(t))
+  if (!t)
     return caf::make_error(ec::format_error,
                            "failed to parse type: ", std::string{zeek_type});
   return t;
@@ -94,9 +94,6 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
 
 std::string to_zeek_string(const type& t) {
   auto f = detail::overload{
-    [](const none_type&) -> std::string {
-      return "none";
-    },
     [](const bool_type&) -> std::string {
       return "bool";
     },
@@ -140,7 +137,7 @@ std::string to_zeek_string(const type& t) {
       return "record";
     },
   };
-  return caf::visit(f, t);
+  return t ? caf::visit(f, t) : "none";
 }
 
 constexpr char separator = '\x09';

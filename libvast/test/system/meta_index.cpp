@@ -65,7 +65,7 @@ struct generator {
 
   explicit generator(std::string name, size_t first_event_id)
     : offset(first_event_id) {
-    layout.assign_metadata(type{name, none_type{}});
+    layout.assign_metadata(type{name, type{}});
   }
 
   table_slice operator()(size_t num) {

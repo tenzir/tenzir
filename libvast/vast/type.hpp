@@ -51,10 +51,10 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<none_type, bool_type, integer_type, count_type,
-                           real_type, duration_type, time_type, string_type,
-                           pattern_type, address_type, subnet_type,
-                           enumeration_type, list_type, map_type, record_type>;
+  = caf::detail::type_list<bool_type, integer_type, count_type, real_type,
+                           duration_type, time_type, string_type, pattern_type,
+                           address_type, subnet_type, enumeration_type,
+                           list_type, map_type, record_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -400,22 +400,6 @@ std::strong_ordering operator<=>(const T& lhs, const U& rhs) noexcept {
 /// @relates type
 caf::error
 replace_if_congruent(std::initializer_list<type*> xs, const schema& with);
-
-// -- none_type ---------------------------------------------------------------
-
-/// Represents a default constructed type.
-/// @relates type
-class none_type final {
-public:
-  /// Returns the type index.
-  static constexpr uint8_t type_index = 0;
-
-  /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const none_type&) noexcept;
-
-  /// Constructs data from the type.
-  [[nodiscard]] static caf::none_t construct() noexcept;
-};
 
 // -- bool_type ---------------------------------------------------------------
 
@@ -975,7 +959,7 @@ namespace caf {
 template <>
 struct sum_type_access<vast::type> final {
   using types = vast::concrete_types;
-  using type0 = vast::none_type;
+  using type0 = typename detail::tl_head<types>::type;
   static constexpr bool specialized = true;
 
   template <vast::concrete_type T, int Index>
@@ -1028,6 +1012,7 @@ struct sum_type_access<vast::type> final {
 
   template <class Result, class Visitor, class... Args>
   static auto apply(const vast::type& x, Visitor&& v, Args&&... xs) -> Result {
+    VAST_ASSERT(x, "cannot visit a none type");
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
     static constexpr auto table =
@@ -1098,6 +1083,8 @@ struct formatter<vast::type> {
     auto out = ctx.out();
     if (const auto& name = value.name(); !name.empty())
       out = format_to(out, "{}", name);
+    else if (!value)
+      out = format_to(out, "none");
     else
       caf::visit(
         [&](const auto& x) {
@@ -1136,12 +1123,6 @@ struct formatter<T> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
     return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const vast::none_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "none");
   }
 
   template <class FormatContext>

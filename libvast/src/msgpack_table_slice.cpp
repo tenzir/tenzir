@@ -141,11 +141,7 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   auto o = objects.get();
   if (o.format() == nil)
     return {};
-  if constexpr (std::is_same_v<T, none_type>) {
-    // This branch should never get triggered because an object with format
-    // 'nil' is handled already above.
-    die("null check too late");
-  } else if constexpr (std::is_same_v<T, bool_type>) {
+  if constexpr (std::is_same_v<T, bool_type>) {
     if (auto x = get<bool>(o))
       return make_data_view(*x);
   } else if constexpr (std::is_same_v<T, integer_type>) {

@@ -464,19 +464,6 @@ public:
   template <class To>
   caf::error apply(const record_type::field_view& field, To& dst) {
     auto f = detail::overload{
-      [&](const caf::none_t&, const none_type&) -> caf::error {
-        // If the data is nil then we leave the value untouched.
-        return caf::none;
-      },
-      [&]<class Data>(const Data&, const none_type&) -> caf::error {
-        // Data conversion of none type does not make sense.
-        // TODO: Consider using untyped convertible here as a best-effort
-        // approach.
-        return caf::make_error(ec::convert_error,
-                               fmt::format("failed to convert field {} because "
-                                           "it has no type",
-                                           field));
-      },
       [&]<concrete_type Type>(const caf::none_t&, const Type&) -> caf::error {
         // If the data is nil then we leave the value untouched.
         return caf::none;
@@ -499,7 +486,13 @@ public:
     };
     // Find the value from the record
     auto it = src.find(field.name);
-    return caf::visit(f, it != src.end() ? it->second : data{}, field.type);
+    const auto& value = it != src.end() ? it->second : data{};
+    if (!field.type && caf::holds_alternative<caf::none_t>(value))
+      return caf::make_error(ec::convert_error, fmt::format("failed to convert "
+                                                            "field {} because "
+                                                            "it has no type",
+                                                            field));
+    return field.type ? caf::visit(f, value, field.type) : caf::none;
   }
 
   template <class... Ts>
