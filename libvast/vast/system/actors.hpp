@@ -275,7 +275,7 @@ using index_actor = typed_actor_fwd<
   // partitions.
   caf::replies_to<atom::internal, query, query_supervisor_actor>::with< //
     query_cursor>,
-  // Erases the given events from the INDEX, and returns their ids.
+  // Erases the given partition from the INDEX.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
   // Applies the given transformation to the partition.
   // When keep_original_partition is yes: erases the existing partition and

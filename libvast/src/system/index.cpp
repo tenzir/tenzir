@@ -1253,10 +1253,14 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [self, rp, old_partition_ids, new_partition_id,
            keep](augmented_partition_synopsis& aps) mutable {
+            // If the partition was completely deleted, `synopsis` may be null.
+            auto events = aps.synopsis ? aps.synopsis->events : 0ull;
+            auto time = aps.synopsis ? aps.synopsis->max_import_time
+                                     : vast::time::clock::time_point{};
             auto result = partition_info{
               .uuid = aps.uuid,
-              .events = aps.synopsis->events,
-              .max_import_time = aps.synopsis->max_import_time,
+              .events = events,
+              .max_import_time = time,
               .stats = std::move(aps.stats),
             };
             // Update the index statistics. We only need to add the events of
@@ -1265,54 +1269,63 @@ index(index_actor::stateful_pointer<index_state> self,
             for (const auto& [name, stats] : result.stats.layouts)
               self->state.stats.layouts[name].count += stats.count;
             if (keep == keep_original_partition::yes) {
-              self
-                ->request(self->state.meta_index, caf::infinite, atom::merge_v,
-                          new_partition_id, aps.synopsis)
-                .then(
-                  [self, rp, new_partition_id, result](atom::ok) mutable {
-                    self->state.persisted_partitions.insert(new_partition_id);
-                    rp.deliver(result);
-                  },
-                  [rp](const caf::error& e) mutable {
-                    rp.deliver(e);
-                  });
+              if (aps.synopsis)
+                self
+                  ->request(self->state.meta_index, caf::infinite,
+                            atom::merge_v, new_partition_id, aps.synopsis)
+                  .then(
+                    [self, rp, new_partition_id, result](atom::ok) mutable {
+                      self->state.persisted_partitions.insert(new_partition_id);
+                      rp.deliver(result);
+                    },
+                    [rp](const caf::error& e) mutable {
+                      rp.deliver(e);
+                    });
+              else
+                rp.deliver(result);
             } else {
               // Pick one partition id at random to be "transformed", all the
-              // other ones are "deleted" from the meta index.
-              auto old_partition_id = old_partition_ids.at(0);
-              self
-                ->request(self->state.meta_index, caf::infinite,
-                          atom::replace_v, old_partition_id, new_partition_id,
-                          aps.synopsis)
-                .then(
-                  [self, rp, old_partition_id, new_partition_id,
-                   result](atom::ok) mutable {
-                    self->state.persisted_partitions.insert(new_partition_id);
-                    self
-                      ->request(static_cast<index_actor>(self), caf::infinite,
-                                atom::erase_v, old_partition_id)
-                      .then(
-                        [=](atom::done) mutable {
-                          rp.deliver(result);
-                        },
-                        [=](const caf::error& e) mutable {
-                          rp.deliver(e);
+              // other ones are "deleted" from the meta index. If the new
+              // partition is empty, all partitions are deleted.
+              if (aps.synopsis) {
+                VAST_ASSERT(!old_partition_ids.empty());
+                auto old_partition_id = old_partition_ids.back();
+                old_partition_ids.pop_back();
+                self
+                  ->request(self->state.meta_index, caf::infinite,
+                            atom::replace_v, old_partition_id, new_partition_id,
+                            aps.synopsis)
+                  .then(
+                    [self, rp, old_partition_id, new_partition_id,
+                     result](atom::ok) mutable {
+                      self->state.persisted_partitions.insert(new_partition_id);
+                      self
+                        ->request(static_cast<index_actor>(self), caf::infinite,
+                                  atom::erase_v, old_partition_id)
+                        .then(
+                          [=](atom::done) mutable {
+                            rp.deliver(result);
+                          },
+                          [=](const caf::error& e) mutable {
+                            rp.deliver(e);
+                          });
+                    },
+                    [rp](const caf::error& e) mutable {
+                      rp.deliver(e);
+                    });
+              } else {
+                rp.deliver(result);
+              }
+              for (auto partition_id : old_partition_ids) {
+                self
+                  ->request(static_cast<index_actor>(self), caf::infinite,
+                            atom::erase_v, partition_id)
+                  .then([](atom::done) { /* nop */ },
+                        [](const caf::error& e) {
+                          VAST_WARN("index failed to erase {} from meta index",
+                                    e);
                         });
-                  },
-                  [rp](const caf::error& e) mutable {
-                    rp.deliver(e);
-                  });
-            }
-            for (size_t i = 1; i < old_partition_ids.size(); ++i) {
-              auto partition_id = old_partition_ids[i];
-              self
-                ->request(self->state.meta_index, caf::infinite, atom::erase_v,
-                          partition_id)
-                .then([](atom::ok) { /* nop */ },
-                      [](const caf::error& e) {
-                        VAST_WARN("index failed to erase {} from meta index",
-                                  e);
-                      });
+              }
             }
           },
           [rp](const caf::error& e) mutable {
