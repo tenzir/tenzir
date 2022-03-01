@@ -80,7 +80,7 @@ struct active_partition_state {
     /// to the one in the index, so it can be shrinked and serialized into
     /// a `Partition` flatbuffer upon completion of this partition. Will be
     /// sent back to the partition after persisting to minimize memory footprint
-    /// of the meta index.
+    /// of the catalog.
     partition_synopsis_ptr synopsis = {};
 
     /// A mapping from qualified field name to serialized indexer state

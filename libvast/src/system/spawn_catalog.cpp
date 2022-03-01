@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/spawn_meta_index.hpp"
+#include "vast/system/spawn_catalog.hpp"
 
 #include "vast/query.hpp"
-#include "vast/system/meta_index.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
@@ -18,10 +18,9 @@
 namespace vast::system {
 
 caf::expected<caf::actor>
-spawn_meta_index(node_actor::stateful_pointer<node_state> self,
-                 spawn_arguments&) {
+spawn_catalog(node_actor::stateful_pointer<node_state> self, spawn_arguments&) {
   auto [accountant] = self->state.registry.find<accountant_actor>();
-  auto handle = self->spawn(meta_index, accountant);
+  auto handle = self->spawn(catalog, accountant);
   return caf::actor_cast<caf::actor>(handle);
 }
 

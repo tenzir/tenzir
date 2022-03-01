@@ -201,8 +201,8 @@ using partition_creation_listener_actor = typed_actor_fwd<
   caf::reacts_to<atom::update, partition_synopsis_pair>,
   caf::reacts_to<atom::update, std::vector<partition_synopsis_pair>>>::unwrap;
 
-/// The META INDEX actor interface.
-using meta_index_actor = typed_actor_fwd<
+/// The CATALOG actor interface.
+using catalog_actor = typed_actor_fwd<
   // Bulk import a set of partition synopses.
   caf::replies_to<
     atom::merge,
@@ -210,7 +210,7 @@ using meta_index_actor = typed_actor_fwd<
   // Merge a single partition synopsis.
   caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with< //
     atom::ok>,
-  // Get *ALL* partition synopses stored in the meta index.
+  // Get *ALL* partition synopses stored in the catalog.
   caf::replies_to<atom::get>::with<std::vector<partition_synopsis_pair>>,
   // Erase a single partition synopsis.
   caf::replies_to<atom::erase, uuid>::with<atom::ok>,
@@ -219,9 +219,9 @@ using meta_index_actor = typed_actor_fwd<
                   partition_synopsis_ptr>::with<atom::ok>,
   // Return the candidate partitions for an expression.
   caf::replies_to<atom::candidates, vast::uuid,
-                  vast::expression>::with<meta_index_result>,
+                  vast::expression>::with<catalog_result>,
   // Return the candidate partitions for a query.
-  caf::replies_to<atom::candidates, vast::query>::with<meta_index_result>>
+  caf::replies_to<atom::candidates, vast::query>::with<catalog_result>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -265,12 +265,12 @@ using index_actor = typed_actor_fwd<
   // Evaluates a query, ie. sends matching events to the caller.
   caf::replies_to<atom::evaluate, query>::with<query_cursor>,
   // Resolves a query to its candidate partitions.
-  // TODO: Expose the meta index as a system component so this
-  // handler can go directly to the meta index.
-  caf::replies_to<atom::resolve, expression>::with<meta_index_result>,
+  // TODO: Expose the catalog as a system component so this
+  // handler can go directly to the catalog.
+  caf::replies_to<atom::resolve, expression>::with<catalog_result>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
-  // INTERNAL: The actual query evaluation handler. Does the meta index lookup,
+  // INTERNAL: The actual query evaluation handler. Does the catalog lookup,
   // sends the response triple to the client, and schedules the first batch of
   // partitions.
   caf::replies_to<atom::internal, query, query_supervisor_actor>::with< //
@@ -514,7 +514,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::index_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))
-  VAST_ADD_TYPE_ID((vast::system::meta_index_actor))
+  VAST_ADD_TYPE_ID((vast::system::catalog_actor))
   VAST_ADD_TYPE_ID((vast::system::node_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
   VAST_ADD_TYPE_ID((vast::system::query_map))
@@ -529,7 +529,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
 
-// Used in the interface of the meta_index actor.
+// Used in the interface of the catalog actor.
 // We can't provide a meaningful implementation of `inspect()` for a shared_ptr,
 // so so we add these as `UNSAFE_MESSAGE_TYPE` to assure caf that they will
 // never be sent over the network.

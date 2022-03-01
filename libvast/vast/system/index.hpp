@@ -18,8 +18,8 @@
 #include "vast/query.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/importer.hpp"
-#include "vast/system/meta_index.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/uuid.hpp"
 
@@ -244,7 +244,7 @@ struct index_state {
   /// The set of partitions that exist on disk.
   std::unordered_set<uuid> persisted_partitions = {};
 
-  /// This set to true after the index finished reading the meta index state
+  /// This set to true after the index finished reading the catalog state
   /// from disk.
   bool accept_queries = {};
 
@@ -278,14 +278,14 @@ struct index_state {
   /// Caches idle workers.
   detail::stable_set<query_supervisor_actor> idle_workers = {};
 
-  /// The META INDEX actor.
-  meta_index_actor meta_index = {};
+  /// The CATALOG actor.
+  catalog_actor catalog = {};
 
   /// The TYPE REGISTRY actor. (required for spawning partition transformers)
   type_registry_actor type_registry;
 
-  /// A running count of the size of the meta index.
-  size_t meta_index_bytes = {};
+  /// A running count of the size of the catalog.
+  size_t catalog_bytes = {};
 
   /// The directory for persistent state.
   std::filesystem::path dir = {};
@@ -333,7 +333,7 @@ struct index_state {
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
 /// @param archive The legacy archive actor. To be removed eventually (tm).
-/// @param meta_index The meta index actor.
+/// @param catalog The catalog actor.
 /// @param type_registry The type registry actor.
 /// @param dir The directory of the index.
 /// @param store_backend The store backend to use for new partitions.
@@ -342,7 +342,7 @@ struct index_state {
 /// into memory.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param num_workers The maximum amount of concurrent lookups.
-/// @param meta_index_dir The directory used by the meta index.
+/// @param catalog_dir The directory used by the catalog.
 /// @param synopsis_fp_rate The false positive rate for new address and string
 /// synopses.
 /// @pre `partition_capacity > 0
@@ -350,11 +350,11 @@ struct index_state {
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
-      archive_actor archive, meta_index_actor meta_index,
+      archive_actor archive, catalog_actor catalog,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
       size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
-      const std::filesystem::path& meta_index_dir, double synopsis_fp_rate);
+      const std::filesystem::path& catalog_dir, double synopsis_fp_rate);
 
 } // namespace vast::system
 

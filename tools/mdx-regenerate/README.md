@@ -11,7 +11,7 @@ by the ".mdx" file extension. The data contained in the partition synopses is
 also redundanctly stored in the partitions itself, but is usually read from a
 separate file as a perfomance optimization.
 
-During startup VAST attempts to construct the "meta index" out of all the
+During startup VAST attempts to construct the "catalog" out of all the
 partition synopses. Where the files are missing, corrupted or outdated they
 are regenerated from the data contained.
 

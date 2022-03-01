@@ -17,8 +17,8 @@
 #include "vast/format/zeek.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/meta_index.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
@@ -238,18 +238,17 @@ TEST(identity partition transform via the index) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
   auto archive = vast::system::archive_actor{};
-  auto meta_index = self->spawn(vast::system::meta_index, accountant);
+  auto catalog = self->spawn(vast::system::catalog, accountant);
   const auto partition_capacity = 8;
   const auto in_mem_partitions = 10;
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
-  const auto meta_index_fp_rate = 0.01;
-  auto index
-    = self->spawn(vast::system::index, accountant, filesystem, archive,
-                  meta_index, type_registry, index_dir,
-                  vast::defaults::system::store_backend, partition_capacity,
-                  in_mem_partitions, taste_count, num_query_supervisors,
-                  index_dir, meta_index_fp_rate);
+  const auto catalog_fp_rate = 0.01;
+  auto index = self->spawn(vast::system::index, accountant, filesystem, archive,
+                           catalog, type_registry, index_dir,
+                           vast::defaults::system::store_backend,
+                           partition_capacity, in_mem_partitions, taste_count,
+                           num_query_supervisors, index_dir, catalog_fp_rate);
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
@@ -336,18 +335,17 @@ TEST(select transform with an empty result set) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
   auto archive = vast::system::archive_actor{};
-  auto meta_index = self->spawn(vast::system::meta_index, accountant);
+  auto catalog = self->spawn(vast::system::catalog, accountant);
   const auto partition_capacity = 8;
   const auto in_mem_partitions = 10;
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
-  const auto meta_index_fp_rate = 0.01;
-  auto index
-    = self->spawn(vast::system::index, accountant, filesystem, archive,
-                  meta_index, type_registry, index_dir,
-                  vast::defaults::system::store_backend, partition_capacity,
-                  in_mem_partitions, taste_count, num_query_supervisors,
-                  index_dir, meta_index_fp_rate);
+  const auto catalog_fp_rate = 0.01;
+  auto index = self->spawn(vast::system::index, accountant, filesystem, archive,
+                           catalog, type_registry, index_dir,
+                           vast::defaults::system::store_backend,
+                           partition_capacity, in_mem_partitions, taste_count,
+                           num_query_supervisors, index_dir, catalog_fp_rate);
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();

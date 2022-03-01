@@ -45,17 +45,17 @@
 // programs like `perf` or `bpftrace`.
 //
 // A simple example of using a tracepoint with bpftrace [1] looks like this,
-// which prints the number of candidates returned by the meta index every time
-// the `meta_index_lookup` tracepoint is triggered:
+// which prints the number of candidates returned by the catalog every time
+// the `catalog_lookup` tracepoint is triggered:
 //
-//     sudo bpftrace -e 'usdt:/opt/tenzir/bin/vast:vast:meta_index_lookup { printf("%d candidates\n", arg1); }'
+//     sudo bpftrace -e 'usdt:/opt/tenzir/bin/vast:vast:catalog_lookup { printf("%d candidates\n", arg1); }'
 //
 // The main entry point for users is the `VAST_TRACEPOINT()` macro defined
 // at the bottom of this file.
 //
 // [1]: Note that for bpftrace versions <= 0.8, the tracepoint name in this
-//      example would need to be specified as `meta_index_lookup` instead
-//      of `vast:meta_index_lookup`, and the binary would need to be named `vast`.
+//      example would need to be specified as `catalog_lookup` instead
+//      of `vast:catalog_lookup`, and the binary would need to be named `vast`.
 //
 //
 // # Inner Workings

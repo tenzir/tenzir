@@ -12,7 +12,7 @@
 
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/meta_index.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/query_cursor.hpp"
 
 #include <caf/event_based_actor.hpp>

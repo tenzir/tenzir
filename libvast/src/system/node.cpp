@@ -42,6 +42,7 @@
 #include "vast/system/shutdown.hpp"
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/system/spawn_catalog.hpp"
 #include "vast/system/spawn_counter.hpp"
 #include "vast/system/spawn_disk_monitor.hpp"
 #include "vast/system/spawn_eraser.hpp"
@@ -49,7 +50,6 @@
 #include "vast/system/spawn_exporter.hpp"
 #include "vast/system/spawn_importer.hpp"
 #include "vast/system/spawn_index.hpp"
-#include "vast/system/spawn_meta_index.hpp"
 #include "vast/system/spawn_node.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/spawn_pivoter.hpp"
@@ -88,7 +88,7 @@ auto make_error_msg(ec code, std::string msg) {
 /// A list of components that are essential for importing and exporting data
 /// from the node.
 std::set<const char*> core_components
-  = {"archive", "filesystem", "importer", "meta-index", "index"};
+  = {"archive", "filesystem", "importer", "catalog", "index"};
 
 bool is_core_component(std::string_view type) {
   auto pred = [&](const char* x) {
@@ -111,7 +111,7 @@ bool is_singleton(std::string_view type) {
   // let's hold off until then.
   const char* singletons[]
     = {"accountant", "archive", "disk-monitor", "eraser",       "filesystem",
-       "importer",   "index",   "meta-index",   "type-registry"};
+       "importer",   "index",   "catalog",      "type-registry"};
   auto pred = [&](const char* x) {
     return x == type;
   };
@@ -414,7 +414,7 @@ auto make_component_factory() {
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn explorer", lift_component_factory<spawn_explorer>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
-    {"spawn meta-index", lift_component_factory<spawn_meta_index>()},
+    {"spawn catalog", lift_component_factory<spawn_catalog>()},
     {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
@@ -461,7 +461,7 @@ auto make_command_factory() {
     {"spawn explorer", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
-    {"spawn meta-index", node_state::spawn_command},
+    {"spawn catalog", node_state::spawn_command},
     {"spawn type-registry", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
     {"spawn pivoter", node_state::spawn_command},
@@ -651,7 +651,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     // buffered data. The index uses the archive for querying. The filesystem
     // is needed by all others for the persisting logic.
     auto shutdown_sequence = std::initializer_list<const char*>{
-      "importer", "index", "archive", "meta-index", "filesystem"};
+      "importer", "index", "archive", "catalog", "filesystem"};
     // Make sure that these remain in sync.
     VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
     for (const char* name : shutdown_sequence) {

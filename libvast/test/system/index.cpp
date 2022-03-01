@@ -41,7 +41,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   static constexpr uint32_t in_mem_partitions = 8;
   static constexpr uint32_t taste_count = 4;
   static constexpr size_t num_query_supervisors = 1;
-  static constexpr double meta_index_fp_rate = 0.01;
+  static constexpr double catalog_fp_rate = 0.01;
   static constexpr size_t segments = 1;
   static constexpr size_t max_segment_size = 8192;
 
@@ -53,12 +53,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto index_dir = directory / "index";
     archive
       = self->spawn(system::archive, archive_dir, segments, max_segment_size);
-    meta_index = self->spawn(system::meta_index, system::accountant_actor{});
+    catalog = self->spawn(system::catalog, system::accountant_actor{});
     index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                        meta_index, type_registry, index_dir,
+                        catalog, type_registry, index_dir,
                         defaults::system::store_backend, slice_size,
                         in_mem_partitions, taste_count, num_query_supervisors,
-                        index_dir, meta_index_fp_rate);
+                        index_dir, catalog_fp_rate);
   }
 
   ~fixture() {
@@ -142,7 +142,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   // Handle to the INDEX actor.
   system::index_actor index;
   system::archive_actor archive;
-  system::meta_index_actor meta_index;
+  system::catalog_actor catalog;
   // Type registry should only be used for partition transforms, so it's
   // safe to pass a nullptr in this test.
   system::type_registry_actor type_registry = {};

@@ -96,7 +96,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
-    [=](atom::resolve, vast::expression) -> system::meta_index_result {
+    [=](atom::resolve, vast::expression) -> system::catalog_result {
       FAIL("no mock implementation available");
     },
     [=](atom::evaluate, vast::query&) -> caf::result<system::query_cursor> {

@@ -134,7 +134,7 @@ void partition_transformer_state::fulfill(
     self->quit();
     return;
   }
-  // The meta index data can always be regenerated on restart, so we don't need
+  // The catalog data can always be regenerated on restart, so we don't need
   // strict error handling for it.
   self
     ->request(fs, caf::infinite, atom::write_v, path_data.synopsis_path,
