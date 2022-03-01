@@ -1268,7 +1268,6 @@ index(index_actor::stateful_pointer<index_state> self,
             // done in `erase`.
             for (const auto& [name, stats] : result.stats.layouts)
               self->state.stats.layouts[name].count += stats.count;
-
             if (keep == keep_original_partition::yes) {
               if (aps.synopsis)
                 self
@@ -1288,10 +1287,10 @@ index(index_actor::stateful_pointer<index_state> self,
               // Pick one partition id at random to be "transformed", all the
               // other ones are "deleted" from the meta index. If the new
               // partition is empty, all partitions are deleted.
-              auto start = size_t{0};
               if (aps.synopsis) {
-                start = 1;
-                auto old_partition_id = old_partition_ids.at(0);
+                VAST_ASSERT(!old_partition_ids.empty());
+                auto old_partition_id = old_partition_ids.back();
+                old_partition_ids.pop_back();
                 self
                   ->request(self->state.meta_index, caf::infinite,
                             atom::replace_v, old_partition_id, new_partition_id,
@@ -1317,12 +1316,11 @@ index(index_actor::stateful_pointer<index_state> self,
               } else {
                 rp.deliver(result);
               }
-              for (size_t i = start; i < old_partition_ids.size(); ++i) {
-                auto partition_id = old_partition_ids[i];
+              for (auto partition_id : old_partition_ids) {
                 self
-                  ->request(self->state.meta_index, caf::infinite,
+                  ->request(static_cast<index_actor>(self), caf::infinite,
                             atom::erase_v, partition_id)
-                  .then([](atom::ok) { /* nop */ },
+                  .then([](atom::done) { /* nop */ },
                         [](const caf::error& e) {
                           VAST_WARN("index failed to erase {} from meta index",
                                     e);

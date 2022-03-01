@@ -110,7 +110,6 @@ void partition_transformer_state::fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   stream_data&& stream_data, path_data&& path_data) const {
-  VAST_DEBUG("{} fulfilling promise", *self); // FIXME: remvoe
   if (self->state.stream_error) {
     path_data.promise.deliver(self->state.stream_error);
     self->quit();

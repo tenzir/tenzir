@@ -45,10 +45,6 @@ vast::system::idspace_distributor_actor::behavior_type mock_importer() {
   }};
 }
 
-vast::system::archive_actor::behavior_type mock_archive() {
-  return vast::system::archive_actor::behavior_type::make_empty_behavior();
-}
-
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
@@ -191,7 +187,7 @@ TEST(delete transform / persist before done) {
       synopsis = aps.synopsis;
     },
     [&](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      FAIL("unexpected error" << e);
     });
   // Verify serialized data
   auto partition_rp = self->request(filesystem, caf::infinite,
@@ -220,7 +216,7 @@ TEST(delete transform / persist before done) {
       CHECK(!column.has_value());
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      FAIL("unexpected error" << e);
     });
   synopsis_rp.receive(
     [&](vast::chunk_ptr& synopsis_chunk) {
@@ -234,14 +230,14 @@ TEST(delete transform / persist before done) {
       CHECK_EQUAL(synopsis_legacy->id_range()->end(), IDSPACE_BEGIN + events);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      FAIL("unexpected error" << e);
     });
 }
 
-TEST(partition transform via the index) {
+TEST(identity partition transform via the index) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
-  auto archive = self->spawn(mock_archive);
+  auto archive = vast::system::archive_actor{};
   auto meta_index = self->spawn(vast::system::meta_index, accountant);
   const auto partition_capacity = 8;
   const auto in_mem_partitions = 10;
@@ -276,7 +272,7 @@ TEST(partition transform via the index) {
       REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::no_error);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      FAIL("unexpected error" << e);
     });
   // Check how big the partition is.
   auto rp2 = self->request(filesystem, caf::infinite, vast::atom::read_v,
@@ -313,7 +309,7 @@ TEST(partition transform via the index) {
       CHECK_EQUAL(info.events, events);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      FAIL("unexpected error" << e);
     });
   auto rp4 = self->request(filesystem, caf::infinite, vast::atom::read_v,
                            index_dir / fmt::format("{:l}.mdx", partition_uuid));
@@ -331,15 +327,15 @@ TEST(partition transform via the index) {
       CHECK_EQUAL(info.events, events);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      FAIL("unexpected error" << e);
     });
   self->send_exit(index, caf::exit_reason::user_shutdown);
 }
 
-TEST(deleting a partition using a transform) {
+TEST(select transform with an empty result set) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
-  auto archive = self->spawn(mock_archive);
+  auto archive = vast::system::archive_actor{};
   auto meta_index = self->spawn(vast::system::meta_index, accountant);
   const auto partition_capacity = 8;
   const auto in_mem_partitions = 10;
@@ -374,27 +370,7 @@ TEST(deleting a partition using a transform) {
       REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::no_error);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
-    });
-  // Check how big the partition is.
-  auto rp2 = self->request(filesystem, caf::infinite, vast::atom::read_v,
-                           index_dir / fmt::format("{:l}.mdx", partition_uuid));
-  run();
-  size_t events = 0;
-  rp2.receive(
-    [&](vast::chunk_ptr& partition_synopsis_chunk) {
-      REQUIRE(partition_synopsis_chunk);
-      const auto* partition_synopsis
-        = vast::fbs::GetPartitionSynopsis(partition_synopsis_chunk->data());
-      REQUIRE_EQUAL(partition_synopsis->partition_synopsis_type(),
-                    vast::fbs::partition_synopsis::PartitionSynopsis::legacy);
-      const auto* partition_synopsis_legacy
-        = partition_synopsis->partition_synopsis_as_legacy();
-      const auto* range = partition_synopsis_legacy->id_range();
-      events = range->end() - range->begin();
-    },
-    [](const caf::error& e) {
-      REQUIRE_SUCCESS(e);
+      FAIL("unexpected error" << e);
     });
   // Run a partition transformation.
   auto transform = std::make_shared<vast::transform>(
@@ -404,16 +380,17 @@ TEST(deleting a partition using a transform) {
   auto identity_step = vast::make_transform_step("select", settings);
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
-  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
+  auto rp2 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
                            std::vector<vast::uuid>{partition_uuid},
                            vast::system::keep_original_partition::no);
   run();
-  rp3.receive(
+  rp2.receive(
     [=](const vast::partition_info& info) {
+      CHECK_EQUAL(info.uuid, vast::uuid::nil());
       CHECK_EQUAL(info.events, 0ull);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      FAIL("unexpected error" << e);
     });
   self->send_exit(index, caf::exit_reason::user_shutdown);
 }
