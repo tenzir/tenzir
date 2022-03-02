@@ -129,7 +129,7 @@ TEST(aggregate test) {
   caf::put(opts, "any", std::vector<std::string>{"any_true", "any_false"});
   caf::put(opts, "all", std::vector<std::string>{"all_true", "all_false"});
   auto aggregate_step = unbox(aggregate_plugin->make_transform_step(opts));
-  CHECK_SUCCESS(
+  REQUIRE_SUCCESS(
     aggregate_step->add(agg_test_layout, to_record_batch(make_testdata())));
   const auto result = unbox(aggregate_step->finish());
   REQUIRE_EQUAL(result.size(), 1u);
