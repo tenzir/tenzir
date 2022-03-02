@@ -90,6 +90,8 @@ caf::error transform::process_queue(const std::unique_ptr<transform_step>& step,
                      std::string{layout.name()})
              == event_types_.end()) {
       // The transform does not change slices of unconfigured event types.
+      VAST_TRACE("{} transform skips a '{}' layout slice with {} event(s)",
+                 this->name(), std::string{layout.name()}, batch->num_rows());
       result.emplace_back(std::move(layout), std::move(batch));
       continue;
     }
@@ -202,8 +204,10 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     // TODO: Consider using a tsl robin map instead for transparent key lookup.
     const auto& matching = layout_mapping_.find(std::string{layout.name()});
     if (matching == layout_mapping_.end()) {
-      VAST_TRACE("transform_engine cannot find a transform for layout {}",
-                 layout);
+      if (!layout_mapping_.empty()) {
+        VAST_TRACE("transform_engine cannot find a transform for layout {}",
+                   layout);
+      }
       for (auto& s : queue)
         result.emplace_back(std::move(s));
       queue.clear();
