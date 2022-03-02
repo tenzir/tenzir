@@ -38,7 +38,7 @@ jobs:
       release-version: ${{ steps.determine-version.outputs.release-version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Fetch Tags
@@ -89,7 +89,7 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install --upgrade cmake
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Fetch Submodules and Tags
@@ -206,7 +206,7 @@ jobs:
 
           cmake --version
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -424,7 +424,7 @@ jobs:
       CMAKE_GENERATOR: Ninja
       CMAKE_MAKE_PROGRAM: ninja
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -709,7 +709,7 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install --upgrade cmake
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Fetch Submodules and Tags
@@ -787,7 +787,7 @@ jobs:
         -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
         -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Fetch Submodules and Tags
@@ -879,7 +879,7 @@ jobs:
       BUILD_DIR: build
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
