@@ -139,7 +139,7 @@ public:
   };
 
   /// Default-constructs a type, which is semantically equivalent to the
-  /// *none_type*.
+  /// none type.
   type() noexcept;
 
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
@@ -151,12 +151,12 @@ public:
   type& operator=(const type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   type(type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   type& operator=(type&& other) noexcept;
 
@@ -229,7 +229,7 @@ public:
   }
 
   /// Infers a type from a given data.
-  /// @note Returns a *none_type* if the type cannot be inferred.
+  /// @note Returns a none type if the type cannot be inferred.
   /// @relates data
   [[nodiscard]] static type infer(const data& value) noexcept;
 
@@ -250,7 +250,7 @@ public:
   [[nodiscard]] const fbs::Type&
   table(enum transparent transparent) const noexcept;
 
-  /// Returns whether the type contains a conrete type other than the *none_type*.
+  /// Returns whether the type contains a conrete type other than the none type.
   [[nodiscard]] explicit operator bool() const noexcept;
 
   /// Compares the underlying representation of two types for equality.
@@ -593,12 +593,12 @@ public:
   enumeration_type& operator=(const enumeration_type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   enumeration_type(enumeration_type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   enumeration_type& operator=(enumeration_type&& other) noexcept;
 
@@ -658,12 +658,12 @@ public:
   list_type& operator=(const list_type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   list_type(list_type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   list_type& operator=(list_type&& other) noexcept;
 
@@ -715,12 +715,12 @@ public:
   map_type& operator=(const map_type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   map_type(map_type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   map_type& operator=(map_type&& other) noexcept;
 
@@ -827,12 +827,12 @@ public:
   record_type& operator=(const record_type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   record_type(record_type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   record_type& operator=(record_type&& other) noexcept;
 
