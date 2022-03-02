@@ -20,6 +20,9 @@
 #include "vast/hash/hash.hpp"
 #include "vast/offset.hpp"
 
+#include <arrow/builder.h>
+#include <arrow/extension_type.h>
+#include <arrow/type_traits.h>
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
 #include <caf/detail/type_list.hpp>
@@ -58,7 +61,7 @@ using concrete_types
 
 /// A concept that models any concrete type.
 template <class T>
-concept concrete_type = requires(const T& value) {
+concept concrete_type = requires(const T& value, arrow::MemoryPool* pool) {
   // The type must be explicitly whitelisted above.
   requires caf::detail::tl_contains<concrete_types, T>::value;
   // The type must not be inherited from to avoid slicing issues.
@@ -68,9 +71,11 @@ concept concrete_type = requires(const T& value) {
   // Values of the type must offer an `as_bytes` overload.
   { as_bytes(value) } -> std::same_as<std::span<const std::byte>>;
   // Values of the type must be able to construct the corresponding data type.
-  // TODO: Consider including data.hpp and checking whether the returned value
-  // is convertible to data.
-  {value.construct()};
+  // TODO: Actually requiring this also requires us to include data.hpp, which
+  // is rather expensive, so we leave this disable for now.
+  // { value.construct() } -> std::convertible_to<data>;
+  // Values of the type must be convertible into a corresponding Arrow DataType.
+  requires std::is_base_of_v<arrow::DataType, typename T::arrow_type>;
 };
 
 /// A concept that models any concrete type, or the abstract type class itself.
@@ -112,17 +117,56 @@ struct type_to_data
 template <type_or_concrete_type T>
 using type_to_data_t = typename type_to_data<T>::type;
 
+/// Maps type to corresponding Arrow DataType.
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_type : std::type_identity<typename T::arrow_type> {};
+
+/// @copydoc type_to_arrow_type
+template <type_or_concrete_type T>
+using type_to_arrow_type_t = typename type_to_arrow_type<T>::type;
+
+/// Maps type to corresponding Arrow Array.
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_array
+  : std::type_identity<
+      typename arrow::TypeTraits<typename T::arrow_type>::ArrayType> {};
+
+template <>
+struct type_to_arrow_array<type> : std::type_identity<arrow::Array> {};
+
+/// @copydoc type_to_arrow_array
+template <type_or_concrete_type T>
+using type_to_arrow_array_t = typename type_to_arrow_array<T>::type;
+
+/// Maps type to corresponding Arrow Scalar.
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_scalar
+  : std::type_identity<
+      typename arrow::TypeTraits<typename T::arrow_type>::ScalarType> {};
+
+/// @copydoc type_to_arrow_scalar
+template <type_or_concrete_type T>
+using type_to_arrow_scalar_t = typename type_to_arrow_scalar<T>::type;
+
+/// Maps type to corresponding Arrow ArrayBuilder.
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_builder
+  : std::type_identity<
+      typename arrow::TypeTraits<typename T::arrow_type>::BuilderType> {};
+
+/// @copydoc type_to_arrow_builder
+template <type_or_concrete_type T>
+using type_to_arrow_builder_t = typename type_to_arrow_builder<T>::type;
+
 // -- type --------------------------------------------------------------------
 
 /// The sematic representation of data.
 class type final : public stateful_type_base {
 public:
-  /// An owned key-value type annotation.
-  struct [[deprecated("use attribute_view instead")]] attribute final {
-    std::string key;                       ///< The key.
-    std::optional<std::string> value = {}; ///< The value (optional).
-  };
-
   /// A view on a key-value type annotation.
   struct attribute_view final {
     std::string_view key;        ///< The key.
@@ -137,6 +181,9 @@ public:
     yes, ///< Skip internal types.
     no,  ///< Include internal types. Use with caution.
   };
+
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::DataType;
 
   /// Default-constructs a type, which is semantically equivalent to the
   /// none type.
@@ -268,6 +315,29 @@ public:
   /// Constructs data from the type.
   [[nodiscard]] data construct() const noexcept;
 
+  /// Creates a type from an Arrow DataType, Field, or Schema.
+  [[nodiscard]] static type from_arrow(const arrow::DataType& other) noexcept;
+  [[nodiscard]] static type from_arrow(const arrow::Field& field) noexcept;
+  [[nodiscard]] static type from_arrow(const arrow::Schema& schema) noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  /// @param name The name of the field.
+  /// @param nullable Whether the field is nullable.
+  [[nodiscard]] std::shared_ptr<arrow::Field>
+  to_arrow_field(std::string_view name, bool nullable = true) const noexcept;
+
+  /// Converts the type into an Arrow Schema.
+  /// @pre `!name().empty()`
+  /// @pre `caf::holds_alternative<record_type>(*this)`
+  [[nodiscard]] std::shared_ptr<arrow::Schema> to_arrow_schema() const noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
+  make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
+
   /// Enables integration with CAF's type inspection.
   template <class Inspector>
   friend auto inspect(Inspector& f, type& x) ->
@@ -307,12 +377,6 @@ public:
   /// Returns a view of all names of this type.
   [[nodiscard]] detail::generator<std::string_view> names() const& noexcept;
   [[nodiscard]] detail::generator<std::string_view> names() && = delete;
-
-  /// Returns a view of all names of this type, alongside all type attributes
-  /// that have been defined on the same nesting level as the associated name.
-  [[nodiscard]] detail::generator<
-    std::pair<std::string_view, std::vector<attribute_view>>>
-  names_and_attributes() const& noexcept;
 
   /// Returns the value of an attribute by name, if it exists.
   /// @param key The key of the attribute.
@@ -408,11 +472,22 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 1;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::BooleanType;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const bool_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static bool construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
 // -- integer_type ------------------------------------------------------------
@@ -424,11 +499,22 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 2;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::Int64Type;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const integer_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static integer construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
 // -- count_type --------------------------------------------------------------
@@ -440,11 +526,22 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 3;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::UInt64Type;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const count_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static count construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
 // -- real_type ---------------------------------------------------------------
@@ -456,11 +553,22 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 4;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::DoubleType;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const real_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static real construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
 // -- duration_type -----------------------------------------------------------
@@ -472,11 +580,22 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 5;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::DurationType;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const duration_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static duration construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
 // -- time_type ---------------------------------------------------------------
@@ -488,11 +607,22 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 6;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::TimestampType;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const time_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static time construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
 // -- string_type --------------------------------------------------------------
@@ -504,11 +634,22 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 7;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::StringType;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const string_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static std::string construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
 // -- pattern_type ------------------------------------------------------------
@@ -520,11 +661,76 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 8;
 
+  /// The corresponding Arrow DataType.
+  struct arrow_type;
+
+  /// The corresponding Arrow Array.
+  struct array_type final : arrow::ExtensionArray {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionArray::ExtensionArray;
+  };
+
+  /// The corresponding Arrow Scalar.
+  struct scalar_type final : arrow::ExtensionScalar {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionScalar::ExtensionScalar;
+  };
+
+  /// The corresponding Arrow ArrayBuilder.
+  struct builder_type final : arrow::StringBuilder {
+    using TypeClass = arrow_type;
+    using arrow::StringBuilder::StringBuilder;
+    [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
+  };
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const pattern_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static pattern construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<builder_type>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
+};
+
+/// An extension type for Arrow representing corresponding to the pattern type.
+struct pattern_type::arrow_type final : arrow::ExtensionType {
+  /// A unique identifier for this extension type.
+  static constexpr auto name = "vast.pattern";
+
+  /// Register this extension type.
+  static void register_extension() noexcept;
+
+  /// Create an arrow type representation of a VAST pattern type.
+  arrow_type() noexcept;
+
+  /// Unique name to identify the extension type.
+  std::string extension_name() const override;
+
+  /// Compare two extension types for equality, based on the extension name.
+  /// @param other An extension type to test for equality.
+  bool ExtensionEquals(const arrow::ExtensionType& other) const override;
+
+  /// Wrap built-in Array type in an ExtensionArray instance.
+  /// @param data the physical storage for the extension type.
+  std::shared_ptr<arrow::Array>
+  MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
+
+  /// Create an instance of pattern given the actual storage type
+  /// and the serialized representation.
+  /// @param storage_type the physical storage type of the extension.
+  /// @param serialized the serialized form of the extension.
+  arrow::Result<std::shared_ptr<arrow::DataType>>
+  Deserialize(std::shared_ptr<arrow::DataType> storage_type,
+              const std::string& serialized) const override;
+
+  /// Create serialized representation of pattern, based on extension name.
+  /// @return the serialized representation.
+  std::string Serialize() const override;
 };
 
 // -- address_type ------------------------------------------------------------
@@ -536,11 +742,82 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 9;
 
+  /// The corresponding Arrow DataType.
+  struct arrow_type;
+
+  /// The corresponding Arrow Array.
+  struct array_type final : arrow::ExtensionArray {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionArray::ExtensionArray;
+  };
+
+  /// The corresponding Arrow Scalar.
+  struct scalar_type final : arrow::ExtensionScalar {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionScalar::ExtensionScalar;
+  };
+
+  /// The corresponding Arrow ArrayBuilder.
+  struct builder_type final : arrow::FixedSizeBinaryBuilder {
+    using TypeClass = arrow_type;
+    explicit builder_type(arrow::MemoryPool* pool
+                          = arrow::default_memory_pool());
+    [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
+    [[nodiscard]] arrow::Status
+    FinishInternal(std::shared_ptr<arrow::ArrayData>* out) override;
+
+  private:
+    using arrow::FixedSizeBinaryBuilder::FixedSizeBinaryBuilder;
+  };
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const address_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static address construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<builder_type>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
+};
+
+/// An extension type for Arrow representing corresponding to the address type.
+struct address_type::arrow_type final : arrow::ExtensionType {
+  /// A unique identifier for this extension type.
+  static constexpr auto name = "vast.address";
+
+  /// Register this extension type.
+  static void register_extension() noexcept;
+
+  /// Create an arrow type representation of a VAST address type.
+  arrow_type() noexcept;
+
+  /// Unique name to identify the extension type.
+  std::string extension_name() const override;
+
+  /// Compare two extension types for equality, based on the extension name.
+  /// @param other An extension type to test for equality.
+  bool ExtensionEquals(const arrow::ExtensionType& other) const override;
+
+  /// Wrap built-in Array type in an ExtensionArray instance.
+  /// @param data the physical storage for the extension type.
+  std::shared_ptr<arrow::Array>
+  MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
+
+  /// Create an instance of pattern given the actual storage type
+  /// and the serialized representation.
+  /// @param storage_type the physical storage type of the extension.
+  /// @param serialized the serialized form of the extension.
+  arrow::Result<std::shared_ptr<arrow::DataType>>
+  Deserialize(std::shared_ptr<arrow::DataType> storage_type,
+              const std::string& serialized) const override;
+
+  /// Create serialized representation of pattern, based on extension name.
+  /// @return the serialized representation.
+  std::string Serialize() const override;
 };
 
 // -- subnet_type -------------------------------------------------------------
@@ -552,11 +829,82 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 10;
 
+  /// The corresponding Arrow DataType.
+  struct arrow_type;
+
+  /// The corresponding Arrow Array.
+  struct array_type final : arrow::ExtensionArray {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionArray::ExtensionArray;
+  };
+
+  /// The corresponding Arrow Scalar.
+  struct scalar_type final : arrow::ExtensionScalar {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionScalar::ExtensionScalar;
+  };
+
+  /// The corresponding Arrow ArrayBuilder.
+  struct builder_type final : arrow::StructBuilder {
+    using TypeClass = arrow_type;
+    explicit builder_type(arrow::MemoryPool* pool
+                          = arrow::default_memory_pool());
+    [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
+    [[nodiscard]] address_type::builder_type& address_builder() noexcept;
+    [[nodiscard]] arrow::UInt8Builder& length_builder() noexcept;
+
+  private:
+    using arrow::StructBuilder::StructBuilder;
+  };
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const subnet_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static subnet construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<builder_type>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
+};
+
+/// An extension type for Arrow representing corresponding to the subnet type.
+struct subnet_type::arrow_type final : arrow::ExtensionType {
+  /// A unique identifier for this extension type.
+  static constexpr auto name = "vast.subnet";
+
+  /// Register this extension type.
+  static void register_extension() noexcept;
+
+  /// Create an arrow type representation of a VAST pattern type.
+  arrow_type() noexcept;
+
+  /// Unique name to identify the extension type.
+  std::string extension_name() const override;
+
+  /// Compare two extension types for equality, based on the extension name.
+  /// @param other An extension type to test for equality.
+  bool ExtensionEquals(const arrow::ExtensionType& other) const override;
+
+  /// Wrap built-in Array type in an ExtensionArray instance.
+  /// @param data the physical storage for the extension type.
+  std::shared_ptr<arrow::Array>
+  MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
+
+  /// Create an instance of pattern given the actual storage type
+  /// and the serialized representation.
+  /// @param storage_type the physical storage type of the extension.
+  /// @param serialized the serialized form of the extension.
+  arrow::Result<std::shared_ptr<arrow::DataType>>
+  Deserialize(std::shared_ptr<arrow::DataType> storage_type,
+              const std::string& serialized) const override;
+
+  /// Create serialized representation of pattern, based on extension name.
+  /// @return the serialized representation.
+  std::string Serialize() const override;
 };
 
 // -- enumeration_type --------------------------------------------------------
@@ -615,6 +963,36 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 11;
 
+  /// The corresponding Arrow DataType.
+  struct arrow_type;
+
+  /// The corresponding Arrow Array.
+  struct array_type final : arrow::ExtensionArray {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionArray::ExtensionArray;
+  };
+
+  /// The corresponding Arrow Scalar.
+  struct scalar_type final : arrow::ExtensionScalar {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionScalar::ExtensionScalar;
+  };
+
+  /// The corresponding Arrow ArrayBuilder.
+  struct builder_type final : arrow::StringDictionaryBuilder {
+    using TypeClass = arrow_type;
+    explicit builder_type(std::shared_ptr<arrow_type> type,
+                          arrow::MemoryPool* pool
+                          = arrow::default_memory_pool());
+    [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
+    arrow::Status Append(enumeration index);
+
+  private:
+    using arrow::StringDictionaryBuilder::Append;
+    using arrow::StringDictionaryBuilder::DictionaryBuilder;
+    std::shared_ptr<arrow_type> type_;
+  };
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte>
   as_bytes(const enumeration_type& x) noexcept;
@@ -623,6 +1001,13 @@ public:
 
   /// Constructs data from the type.
   [[nodiscard]] enumeration construct() const noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] std::shared_ptr<builder_type>
+  make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
 
   /// Returns the field at the given key, or an empty string if it does not exist.
   [[nodiscard]] std::string_view field(uint32_t key) const& noexcept;
@@ -636,6 +1021,51 @@ public:
   /// does not exist.
   [[nodiscard]] std::optional<uint32_t>
   resolve(std::string_view key) const noexcept;
+};
+
+/// An extension type for Arrow representing corresponding to the enumeration
+/// type.
+struct enumeration_type::arrow_type final : arrow::ExtensionType {
+  friend class type;
+  friend struct enumeration_type::builder_type;
+
+  /// A unique identifier for this extension type.
+  static constexpr auto name = "vast.enumeration";
+
+  /// Register this extension type.
+  static void register_extension() noexcept;
+
+  /// Create an arrow type representation of a VAST pattern type.
+  /// @param type The underlying VAST enumeration type.
+  explicit arrow_type(const enumeration_type& type) noexcept;
+
+  /// Unique name to identify the extension type.
+  std::string extension_name() const override;
+
+  /// Compare two extension types for equality, based on the extension name.
+  /// @param other An extension type to test for equality.
+  bool ExtensionEquals(const arrow::ExtensionType& other) const override;
+
+  /// Wrap built-in Array type in an ExtensionArray instance.
+  /// @param data the physical storage for the extension type.
+  std::shared_ptr<arrow::Array>
+  MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
+
+  /// Create an instance of pattern given the actual storage type
+  /// and the serialized representation.
+  /// @param storage_type the physical storage type of the extension.
+  /// @param serialized the serialized form of the extension.
+  arrow::Result<std::shared_ptr<arrow::DataType>>
+  Deserialize(std::shared_ptr<arrow::DataType> storage_type,
+              const std::string& serialized) const override;
+
+  /// Create serialized representation of pattern, based on extension name.
+  /// @return the serialized representation.
+  std::string Serialize() const override;
+
+private:
+  /// The underlying VAST enumeration type.
+  enumeration_type vast_type_;
 };
 
 // -- list_type ---------------------------------------------------------------
@@ -684,12 +1114,23 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 12;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::ListType;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const list_type& x) noexcept;
   friend std::span<const std::byte> as_bytes(list_type&&) noexcept = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] static list construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
 
   /// Returns the nested value type.
   [[nodiscard]] type value_type() const noexcept;
@@ -741,12 +1182,23 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 13;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::MapType;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
   friend std::span<const std::byte> as_bytes(map_type&&) noexcept = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] static map construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
 
   /// Returns the nested key type.
   [[nodiscard]] type key_type() const noexcept;
@@ -850,12 +1302,23 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 14;
 
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::StructType;
+
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const record_type& x) noexcept;
   friend std::span<const std::byte> as_bytes(record_type&&) noexcept = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] record construct() const noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
 
   /// Returns an iterable view over the fields of a record type.
   [[nodiscard]] detail::generator<field_view> fields() const noexcept;
@@ -950,6 +1413,105 @@ auto serialize_bytes(flatbuffers::FlatBufferBuilder&, const Type&) = delete;
 
 } // namespace vast::fbs
 
+// -- arrow type traits -------------------------------------------------------
+
+namespace arrow {
+
+template <>
+class TypeTraits<typename vast::pattern_type::arrow_type>
+  : TypeTraits<StringType> {
+public:
+  using ArrayType = vast::pattern_type::array_type;
+  using ScalarType = vast::pattern_type::scalar_type;
+  using BuilderType = vast::pattern_type::builder_type;
+  static inline std::shared_ptr<DataType> type_singleton() {
+    return vast::pattern_type::to_arrow_type();
+  }
+};
+
+template <>
+class TypeTraits<typename vast::address_type::arrow_type>
+  : TypeTraits<FixedSizeBinaryType> {
+public:
+  using ArrayType = vast::address_type::array_type;
+  using ScalarType = vast::address_type::scalar_type;
+  using BuilderType = vast::address_type::builder_type;
+  constexpr static bool is_parameter_free = true;
+  static inline std::shared_ptr<DataType> type_singleton() {
+    return vast::address_type::to_arrow_type();
+  }
+};
+
+template <>
+class TypeTraits<typename vast::subnet_type::arrow_type>
+  : TypeTraits<StructType> {
+public:
+  using ArrayType = vast::subnet_type::array_type;
+  using ScalarType = vast::subnet_type::scalar_type;
+  using BuilderType = vast::subnet_type::builder_type;
+  constexpr static bool is_parameter_free = true;
+  static inline std::shared_ptr<DataType> type_singleton() {
+    return vast::subnet_type::to_arrow_type();
+  }
+};
+
+template <>
+class TypeTraits<typename vast::enumeration_type::arrow_type>
+  : TypeTraits<DictionaryType> {
+public:
+  using ArrayType = vast::enumeration_type::array_type;
+  using ScalarType = vast::enumeration_type::scalar_type;
+  using BuilderType = vast::enumeration_type::builder_type;
+};
+
+} // namespace arrow
+
+namespace vast {
+
+/// Maps Arrow DataType to corresponding type.
+/// @related type_to_arrow_type
+/// @related type_to_arrow_array
+/// @related type_to_arrow_scalar
+/// @related type_to_arrow_builder
+template <class T>
+struct type_from_arrow : type_from_arrow<typename T::TypeClass> {};
+
+template <class T>
+  requires(std::is_base_of_v<arrow::DataType, T>)
+struct type_from_arrow<T>
+  : caf::detail::tl_at<
+      concrete_types,
+      caf::detail::tl_index_of<
+        caf::detail::tl_map_t<concrete_types, type_to_arrow_type>, T>::value> {
+};
+
+template <class T>
+  requires(std::is_base_of_v<arrow::ArrayBuilder, T>)
+struct type_from_arrow<T>
+  : caf::detail::tl_at<
+      concrete_types,
+      caf::detail::tl_index_of<
+        caf::detail::tl_map_t<concrete_types, type_to_arrow_builder>, T>::value> {
+};
+
+template <>
+struct type_from_arrow<arrow::DataType> : std::type_identity<type> {};
+
+template <>
+struct type_from_arrow<arrow::Array> : std::type_identity<type> {};
+
+template <>
+struct type_from_arrow<arrow::Scalar> : std::type_identity<type> {};
+
+template <>
+struct type_from_arrow<arrow::ArrayBuilder> : std::type_identity<type> {};
+
+/// @copydoc type_from_arrow
+template <class T>
+using type_from_arrow_t = typename type_from_arrow<T>::type;
+
+} // namespace vast
+
 // -- sum_type_access ---------------------------------------------------------
 
 namespace caf {
@@ -957,7 +1519,7 @@ namespace caf {
 template <>
 struct sum_type_access<vast::type> final {
   using types = vast::concrete_types;
-  using type0 = typename detail::tl_head<types>::type;
+  using type0 = detail::tl_head_t<types>;
   static constexpr bool specialized = true;
 
   template <vast::concrete_type T, int Index>
@@ -972,13 +1534,15 @@ struct sum_type_access<vast::type> final {
   }
 
   template <vast::basic_type T, int Index>
-  static const T& get(const vast::type&, sum_type_token<T, Index>) {
+  static const T& get(const vast::type& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
     static const auto instance = T{};
     return instance;
   }
 
   template <vast::complex_type T, int Index>
-  static const T& get(const vast::type& x, sum_type_token<T, Index>) {
+  static const T& get(const vast::type& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
     return static_cast<const T&>(
       static_cast<const vast::stateful_type_base&>(x));
   }
@@ -1015,24 +1579,340 @@ struct sum_type_access<vast::type> final {
     // the concrete type.
     static constexpr auto table =
       []<vast::concrete_type... Ts, uint8_t... Indices>(
-        caf::detail::type_list<Ts...>,
+        detail::type_list<Ts...>,
         std::integer_sequence<uint8_t, Indices...>) noexcept {
       return std::array{
         +[](const vast::type& x, Visitor&& v, Args&&... xs) -> Result {
           auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = caf::detail::get_indices(xs_as_tuple);
-          return caf::detail::apply_args_suffxied(
+          auto indices = detail::get_indices(xs_as_tuple);
+          return detail::apply_args_suffxied(
             std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
             get(x, sum_type_token<Ts, Indices>{}));
         }...};
     }
     (types{},
-     std::make_integer_sequence<uint8_t, caf::detail::tl_size<types>::value>());
+     std::make_integer_sequence<uint8_t, detail::tl_size<types>::value>());
     const auto dispatch = table[index_from_type(x)];
     VAST_ASSERT(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
   }
 };
+
+template <>
+struct sum_type_access<arrow::DataType> final {
+  using types = detail::tl_map_t<typename sum_type_access<vast::type>::types,
+                                 vast::type_to_arrow_type>;
+  using type0 = detail::tl_head_t<types>;
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool is(const arrow::DataType& x, sum_type_token<T, Index>) {
+    if (x.id() != T::type_id)
+      return false;
+    if constexpr (arrow::is_extension_type<T>::value)
+      return static_cast<const arrow::ExtensionType&>(x).extension_name()
+             == T::name;
+    return true;
+  }
+
+  template <class T, int Index>
+  static const T&
+  get(const arrow::DataType& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
+    return static_cast<const T&>(x);
+  }
+
+  template <class T, int Index>
+  static T& get(arrow::DataType& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
+    return static_cast<T&>(x);
+  }
+
+  template <class T, int Index>
+  static const T*
+  get_if(const arrow::DataType* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class T, int Index>
+  static T* get_if(arrow::DataType* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  // A helper function that dispatches from concrete type id to index of the
+  // concrete type in the type list. This is intentionally not templatized
+  // because it contains a static lookup table that we only ever want to create
+  // once.
+  static int index_from_type(const arrow::DataType& x) noexcept;
+
+  template <class Result, class Visitor, class... Args>
+  static auto apply(const arrow::DataType& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{
+        +[](const arrow::DataType& x, Visitor&& v, Args&&... xs) -> Result {
+          auto xs_as_tuple = std::forward_as_tuple(xs...);
+          auto indices = detail::get_indices(xs_as_tuple);
+          return detail::apply_args_suffxied(
+            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+            get(x, sum_type_token<Ts, Indices>{}));
+        }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    const auto dispatch = table[index_from_type(x)];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+template <>
+struct sum_type_access<arrow::Array> final {
+  template <class T>
+  using map_array_type
+    = std::type_identity<typename arrow::TypeTraits<T>::ArrayType>;
+
+  using types
+    = detail::tl_map_t<typename sum_type_access<arrow::DataType>::types,
+                       map_array_type>;
+  using type0 = detail::tl_head_t<types>;
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool is(const arrow::Array& x, sum_type_token<T, Index>) {
+    static_assert(std::is_base_of_v<arrow::Array, T>);
+    if (x.type_id() != T::TypeClass::type_id)
+      return false;
+    if constexpr (arrow::is_extension_type<typename T::TypeClass>::value)
+      return static_cast<const arrow::ExtensionType&>(*x.type()).extension_name()
+             == T::TypeClass::name;
+    return true;
+  }
+
+  template <class T, int Index>
+  static const T& get(const arrow::Array& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
+    return static_cast<const T&>(x);
+  }
+
+  template <class T, int Index>
+  static T& get(arrow::Array& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
+    return static_cast<T&>(x);
+  }
+
+  template <class T, int Index>
+  static const T*
+  get_if(const arrow::Array* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class T, int Index>
+  static T* get_if(arrow::Array* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class Result, class Visitor, class... Args>
+  static auto apply(const arrow::Array& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    VAST_ASSERT(x.type());
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{
+        +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
+          auto xs_as_tuple = std::forward_as_tuple(xs...);
+          auto indices = detail::get_indices(xs_as_tuple);
+          return detail::apply_args_suffxied(
+            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+            get(x, sum_type_token<Ts, Indices>{}));
+        }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    const auto dispatch
+      = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+template <>
+struct sum_type_access<arrow::Scalar> final {
+  template <class T>
+  using map_scalar_type
+    = std::type_identity<typename arrow::TypeTraits<T>::ScalarType>;
+
+  using types
+    = detail::tl_map_t<typename sum_type_access<arrow::DataType>::types,
+                       map_scalar_type>;
+
+  using type0 = detail::tl_head_t<types>;
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool is(const arrow::Scalar& x, sum_type_token<T, Index>) {
+    static_assert(std::is_base_of_v<arrow::Scalar, T>);
+    if (!x.is_valid)
+      return false;
+    VAST_ASSERT(x.type);
+    if (x.type->id() != T::TypeClass::type_id)
+      return false;
+    if constexpr (arrow::is_extension_type<typename T::TypeClass>::value)
+      return static_cast<const arrow::ExtensionType&>(*x.type).extension_name()
+             == T::TypeClass::name;
+    return true;
+  }
+
+  template <class T, int Index>
+  static const T& get(const arrow::Scalar& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
+    return static_cast<const T&>(x);
+  }
+
+  template <class T, int Index>
+  static T& get(arrow::Scalar& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
+    return static_cast<T&>(x);
+  }
+
+  template <class T, int Index>
+  static const T*
+  get_if(const arrow::Scalar* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class T, int Index>
+  static T* get_if(arrow::Scalar* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class Result, class Visitor, class... Args>
+  static auto apply(const arrow::Scalar& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    VAST_ASSERT(x.is_valid);
+    VAST_ASSERT(x.type);
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{
+        +[](const arrow::Scalar& x, Visitor&& v, Args&&... xs) -> Result {
+          auto xs_as_tuple = std::forward_as_tuple(xs...);
+          auto indices = detail::get_indices(xs_as_tuple);
+          return detail::apply_args_suffxied(
+            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+            get(x, sum_type_token<Ts, Indices>{}));
+        }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    const auto dispatch
+      = table[sum_type_access<arrow::DataType>::index_from_type(*x.type)];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+template <>
+struct sum_type_access<arrow::ArrayBuilder> final {
+  template <class T>
+  using map_builder_type
+    = std::type_identity<typename arrow::TypeTraits<T>::BuilderType>;
+
+  using types
+    = detail::tl_map_t<typename sum_type_access<arrow::DataType>::types,
+                       map_builder_type>;
+  using type0 = detail::tl_head_t<types>;
+  static constexpr bool specialized = true;
+
+  template <class T, int Index>
+  static bool is(const arrow::ArrayBuilder& x, sum_type_token<T, Index>) {
+    static_assert(std::is_base_of_v<arrow::ArrayBuilder, T>);
+    using arrow_type = vast::type_to_arrow_type_t<vast::type_from_arrow_t<T>>;
+    if (x.type()->id() != arrow_type::type_id)
+      return false;
+    if constexpr (arrow::is_extension_type<arrow_type>::value)
+      return static_cast<const arrow::ExtensionType&>(*x.type()).extension_name()
+             == T::TypeClass::name;
+    return true;
+  }
+
+  template <class T, int Index>
+  static const T&
+  get(const arrow::ArrayBuilder& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
+    return static_cast<const T&>(x);
+  }
+
+  template <class T, int Index>
+  static T& get(arrow::ArrayBuilder& x, sum_type_token<T, Index> token) {
+    VAST_ASSERT(is(x, token));
+    return static_cast<T&>(x);
+  }
+
+  template <class T, int Index>
+  static const T*
+  get_if(const arrow::ArrayBuilder* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class T, int Index>
+  static T* get_if(arrow::ArrayBuilder* x, sum_type_token<T, Index> token) {
+    if (x && is(*x, token))
+      return &get(*x, token);
+    return nullptr;
+  }
+
+  template <class Result, class Visitor, class... Args>
+  static auto apply(const arrow::ArrayBuilder& x, Visitor&& v, Args&&... xs)
+    -> Result {
+    VAST_ASSERT(x.type());
+    // A dispatch table that maps variant type index to dispatch function for
+    // the concrete type.
+    static constexpr auto table = []<class... Ts, int... Indices>(
+      detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      return std::array{
+        +[](const arrow::ArrayBuilder& x, Visitor&& v, Args&&... xs) -> Result {
+          auto xs_as_tuple = std::forward_as_tuple(xs...);
+          auto indices = detail::get_indices(xs_as_tuple);
+          return detail::apply_args_suffxied(
+            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+            get(x, sum_type_token<Ts, Indices>{}));
+        }...};
+    }
+    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    const auto dispatch
+      = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
+    VAST_ASSERT(dispatch);
+    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
+  }
+};
+
+extern template struct sum_type_access<vast::type>;
+extern template struct sum_type_access<arrow::DataType>;
+extern template struct sum_type_access<arrow::Array>;
+extern template struct sum_type_access<arrow::Scalar>;
+extern template struct sum_type_access<arrow::ArrayBuilder>;
 
 } // namespace caf
 
@@ -1049,8 +1929,8 @@ struct hash<T> {
   }
 };
 
-/// Support transparent key lookup when using type or a concrete type as key in
-/// a container.
+/// Support transparent key lookup when using type or a concrete type as key
+/// in a container.
 template <vast::type_or_concrete_type T>
 struct equal_to<T> {
   using is_transparent = void; // Opt-in to heterogenous lookups.

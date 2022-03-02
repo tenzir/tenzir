@@ -26,33 +26,6 @@ namespace vast {
 /// [Arrow](https://arrow.apache.org) format.
 class experimental_table_slice_builder final : public table_slice_builder {
 public:
-  // -- member types -----------------------------------------------------------
-
-  /// Wraps a type-specific Arrow builder.
-  struct column_builder {
-    /// Destroys an Arrow column builder.
-    virtual ~column_builder() noexcept;
-
-    /// Adds data to the column builder.
-    /// @param x The data to add.
-    /// @returns `true` on success.
-    virtual bool add(data_view x) = 0;
-
-    /// @returns An Arrow array from the accumulated calls to add.
-    [[nodiscard]] virtual std::shared_ptr<arrow::Array> finish() = 0;
-
-    /// @returns The underlying array builder.
-    [[nodiscard]] virtual std::shared_ptr<arrow::ArrayBuilder>
-    arrow_builder() const = 0;
-
-    /// Constructs an Arrow column builder.
-    /// @param t A type to create a column builder for.
-    /// @param pool The Arrow memory pool to use.
-    /// @returns A builder for columns of type `t`.
-    static std::unique_ptr<column_builder>
-    make(const type& t, arrow::MemoryPool* pool);
-  };
-
   // -- constructors, destructors, and assignment operators --------------------
 
   /// Constructs an Arrow table slice builder instance.
@@ -102,14 +75,12 @@ private:
   /// @returns `true` on success.
   bool add_impl(data_view x) override;
 
-  /// Number of leaf columns
-  size_t num_leaves_;
-
-  /// Current column index.
-  size_t column_ = 0;
+  /// A generator for leaf views that is always incremented when calling add.
+  detail::generator<record_type::leaf_view> leaves_;
+  detail::generator<record_type::leaf_view>::iterator current_leaf_;
 
   /// Number of filled rows.
-  size_t rows_ = 0;
+  size_t num_rows_ = 0;
 
   /// The serialized layout can be cached because every builder instance only
   /// produces slices of a single layout.
@@ -118,43 +89,11 @@ private:
   /// Schema of the Record Batch corresponding to the layout.
   std::shared_ptr<arrow::Schema> schema_ = {};
 
-  /// Builders for columnar Arrow arrays.
-  std::vector<std::unique_ptr<column_builder>> column_builders_ = {};
+  /// Underlying Arrow builder for record batches.
+  std::shared_ptr<arrow::ArrayBuilder> arrow_builder_;
 
   /// The underlying FlatBuffers builder.
   flatbuffers::FlatBufferBuilder builder_;
 };
-
-// -- utility functions --------------------------------------------------------
-
-/// Converts a VAST `record_type` to an Arrow `Schema`.
-/// @pre `caf::holds_alternative<record_type>(t)`
-/// @param t The record type to convert.
-/// @returns An arrow representation of `t`.
-std::shared_ptr<arrow::Schema> make_experimental_schema(const type& t);
-
-/// Converts a VAST `type` to an Arrow `DataType`.
-/// @param t The type to convert.
-/// @returns An arrow representation of `t`.
-std::shared_ptr<arrow::DataType> make_experimental_type(const type& t);
-
-/// Converts a VAST `type` to an Arrow `Field`.
-//  @param name The field name.
-/// @param t The type to convert.
-/// @param nullable Is the field nullable.
-/// @returns An arrow representation of `t`.
-std::shared_ptr<arrow::Field>
-make_experimental_field(const record_type::field_view& field, bool nullable
-                                                              = true);
-
-/// Converts an Arrow `Schema` to a VAST `type`.
-/// @param arrow_schema The Arrow schema to convert.
-/// @returns A VAST type representation of `arrow_schema`.
-type make_vast_type(const arrow::Schema& arrow_schema);
-
-/// Converts an Arrow `Field` to a VAST `type`
-/// @param arrow_field The arrow type to convert.
-/// @return A VAST type representation of `arrow_field`
-type make_vast_type(const arrow::Field& arrow_field);
 
 } // namespace vast
