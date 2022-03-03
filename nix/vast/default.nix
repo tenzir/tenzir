@@ -43,7 +43,7 @@ let
 
   src = vast-source;
 
-  version = if (versionOverride != null) then versionOverride else "v1.1.0-rc3";
+  version = if (versionOverride != null) then versionOverride else "v1.1.0";
 in
 
 stdenv.mkDerivation rec {
