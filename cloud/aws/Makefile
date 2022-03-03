@@ -43,12 +43,15 @@ stop-all-tasks:
 		aws --region ${aws_region} ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name); \
 	done
 
+get-task-ip:
+	@aws ecs describe-tasks --cluster vast-cluster-default --task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
+
+# use | jq -r ".result" for a formatted output
 run-lambda:
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
 		--region ${aws_region} \
-		--payload '{"cmd":"$(CMD)"}' \
+		--payload '{"cmd":"$(CMD)", "host":"$(shell $(MAKE) get-task-ip):42000"}' \
 		lambda-result.json > /dev/null && \
-	cat lambda-result.json \
-	| jq -r ".result"
+	cat lambda-result.json
