@@ -36,7 +36,7 @@ run-task:
 		--task-definition $(shell terraform output vast_task_definition)
 
 list-tasks:
-	@aws --region ${aws_region} ecs list-tasks --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(.[64:]) | reduce .[] as $$item (""; . + $$item + " ")'
+	@aws --region ${aws_region} ecs list-tasks --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
 
 stop-all-tasks:
 	for task in $(shell $(MAKE) list-tasks); do \
@@ -46,7 +46,8 @@ stop-all-tasks:
 get-task-ip:
 	@aws ecs describe-tasks --cluster vast-cluster-default --task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
-# use | jq -r ".result" for a formatted output
+# provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
+# use | jq -r ".result" for a formated output
 run-lambda:
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \

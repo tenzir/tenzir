@@ -30,7 +30,7 @@ module "vast_client" {
   region_name        = var.region_name
   docker_image       = "${aws_ecr_repository.lambda.repository_url}:${time_static.last_image_upload.unix}"
   memory_size        = 2048
-  timeout            = 10
+  timeout            = 300
 
   in_vpc  = true
   vpc_id  = var.vpc_id
