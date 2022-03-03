@@ -25,7 +25,7 @@ apply:
 
 deploy: init docker-login docker-build apply ## One liner that builds and deploys the stack to AWS
 
-destroy:
+destroy: stop-all-tasks
 	terraform destroy -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"
 
 run-task: ## Start a VAST server instance as an AWS Fargate task
