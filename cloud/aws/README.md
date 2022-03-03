@@ -16,7 +16,9 @@ The script takes the VPC ID and the CIDR block as input and from that it creates
   - a private one with the tooling resources themselves
 - the configurations to run VAST either on Fargate as a Server or on Lambda as a client.
 
-![VAST on AWS overview](https://user-images.githubusercontent.com/7913347/155995627-cb25056e-2c6d-49f9-a55a-e8dc5a90f28a.svg)
+<p align="center">
+<img src="https://user-images.githubusercontent.com/7913347/155995627-cb25056e-2c6d-49f9-a55a-e8dc5a90f28a.svg" width="90%">
+</p>
 
 ### Images and registries
 
@@ -26,7 +28,9 @@ Both on Lambda and Fargate, VAST is deployed as a Docker image. Fargate runs the
 
 For that reason, when deploying VAST to AWS, the user will build the Lambda specific Docker image locally and push it to a private ECR repository created by the Terraform deployment script itself.
 
-![VAST on AWS repositories](https://user-images.githubusercontent.com/7913347/156000070-c9857869-7621-4e95-a517-b4e065b36ed3.svg)
+<p align="center">
+<img src="https://user-images.githubusercontent.com/7913347/156000070-c9857869-7621-4e95-a517-b4e065b36ed3.svg" width="70%">
+</p>
 
 ### VAST processes
 
@@ -36,7 +40,9 @@ To interact with the VAST server you need a VAST client. The user can run VAST c
 - directly within the Fargate container using `make execute-command`. In that case he will be limited by the tooling available in the image
 - from AWS lambda with `make run-lambda`, which makes it easier to integrate new tooling or allow connections to other AWS services
 
-![VAST on AWS processes](https://user-images.githubusercontent.com/7913347/156000469-a0f8b519-64c1-43ec-91dc-1339b41f90be.svg)
+<p align="center">
+<img src="https://user-images.githubusercontent.com/7913347/156000469-a0f8b519-64c1-43ec-91dc-1339b41f90be.svg" width="70%">
+</p>
 
 ## Requirements
 
