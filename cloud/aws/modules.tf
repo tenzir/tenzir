@@ -14,7 +14,7 @@ module "vast_server" {
   task_memory = 4096
 
   docker_image = module.env.vast_server_image
-  command      = ["start"]
+  command      = ["-e", "0.0.0.0:42000", "start"]
   port         = 42000
 
   environment = [{
