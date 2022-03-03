@@ -20,7 +20,7 @@ def handler(event, context):
             cmd_split.insert(vast_positions[0]+2, event['host'])
         logging.info("cmd: ", cmd_split)
         # execute the command and return the std outputs
-        process = subprocess.Popen(shlex.split(event['cmd']),
+        process = subprocess.Popen(cmd_split,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
