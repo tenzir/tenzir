@@ -25,8 +25,21 @@ variable "subnet_cidr" {
   description = "A new subnet to create in the targeted VPC to host VAST and IDS appliances"
 }
 
+// split the cidr into a public one and a private one
+locals {
+  private_subnet_cidr = cidrsubnet(var.subnet_cidr, 1, 0)
+  public_subnet_cidr  = cidrsubnet(var.subnet_cidr, 1, 1)
+}
+
 provider "aws" {
   region = var.region_name
+  default_tags {
+    tags = {
+      module      = module.env.module_name
+      provisioner = "terraform"
+      stage       = terraform.workspace
+    }
+  }
 }
 
 provider "time" {}

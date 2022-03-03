@@ -12,19 +12,10 @@ locals {
   }
   current_env = local.envs[terraform.workspace]
   module_name = "vast"
-  tags = {
-    module      = local.module_name
-    provisioner = "terraform"
-    stage       = terraform.workspace
-  }
 }
 
 output "stage" {
   value = terraform.workspace
-}
-
-output "default_tags" {
-  value = local.tags
 }
 
 output "module_name" {

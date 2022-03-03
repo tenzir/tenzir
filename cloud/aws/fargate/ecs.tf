@@ -1,7 +1,5 @@
 resource "aws_cloudwatch_log_group" "fargate_logging" {
   name = "/ecs/gateway/${module.env.module_name}-${var.name}-${module.env.stage}"
-
-  tags = module.env.default_tags
 }
 
 
@@ -23,8 +21,6 @@ resource "aws_security_group" "ecs_tasks" {
     to_port     = 0
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = module.env.default_tags
 }
 
 resource "aws_ecs_task_definition" "fargate_task_def" {
@@ -37,5 +33,4 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
   execution_role_arn       = var.ecs_task_execution_role_arn // necessary to log and access ecr
   container_definitions    = jsonencode(local.container_definition)
   depends_on               = [aws_cloudwatch_log_group.fargate_logging] // make sure the first task does not fail because log group is not available yet
-  tags                     = module.env.default_tags
 }

@@ -16,8 +16,6 @@ resource "aws_iam_role" "lambda_role" {
   ]
 }
 EOF
-
-  tags = module.env.default_tags
 }
 
 resource "aws_iam_role_policy" "lambda_default_policy" {

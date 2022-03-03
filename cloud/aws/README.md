@@ -22,7 +22,6 @@ Currently supported:
 Note: to avoid typing vpc_id, subnet_cidr and aws_region each time you can set them up once and for all in a file called `default.env` that is included by the Makefile.
 
 Caveats:
-- The VAST node uses a public ip to bootstrap itself
 - Only local ephemeral storage is supported
 - The `get-task-ip` and `run-lambda` commands will work properly if you have only one task running on Fargate
-- Access to the VAST server is enforced by limiting inbound trafic to its local subnet only
+- Access to the VAST server is enforced by limiting inbound trafic to its local private subnet only

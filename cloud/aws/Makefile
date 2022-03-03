@@ -33,7 +33,7 @@ run-task:
 		--enable-execute-command \
 		--propagate-tags TASK_DEFINITION \
 		--launch-type FARGATE  \
-		--network-configuration "awsvpcConfiguration={subnets=[$(shell terraform output ids_subnet_id)],securityGroups=[$(shell terraform output vast_security_group)],assignPublicIp=ENABLED}" \
+		--network-configuration "awsvpcConfiguration={subnets=[$(shell terraform output ids_appliances_subnet_id)],securityGroups=[$(shell terraform output vast_security_group)]}" \
 		--task-definition $(shell terraform output vast_task_definition)
 
 list-tasks:

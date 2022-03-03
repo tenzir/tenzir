@@ -5,7 +5,7 @@ module "vast_server" {
   region_name = var.region_name
 
   vpc_id                      = var.vpc_id
-  ingress_subnet_cidrs        = [var.subnet_cidr]
+  ingress_subnet_cidrs        = [local.private_subnet_cidr]
   ecs_cluster_id              = aws_ecs_cluster.fargate_cluster.id
   ecs_cluster_name            = aws_ecs_cluster.fargate_cluster.name
   ecs_task_execution_role_arn = aws_iam_role.fargate_task_execution_role.arn
@@ -34,7 +34,7 @@ module "vast_client" {
 
   in_vpc  = true
   vpc_id  = var.vpc_id
-  subnets = [aws_subnet.ids.id]
+  subnets = [aws_subnet.ids_appliances.id]
 
   additional_policies = []
   environment         = {}

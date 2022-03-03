@@ -16,9 +16,6 @@ resource "aws_iam_role" "ecs_task_role" {
   ]
 }
 EOF
-
-
-  tags = module.env.default_tags
 }
 
 // Allow access to ecs exec

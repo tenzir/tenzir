@@ -23,8 +23,6 @@ resource "aws_lambda_function" "lambda" {
     }
   }
 
-  tags = module.env.default_tags
-
   depends_on = [aws_iam_role_policy_attachment.lamba_exec_role_eni]
 }
 
@@ -38,7 +36,6 @@ resource "aws_lambda_function_event_invoke_config" "lambda_conf" {
 resource "aws_cloudwatch_log_group" "lambda_log_group" {
   name              = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
   retention_in_days = 14
-  tags              = module.env.default_tags
 }
 
 resource "aws_security_group" "lambda_sg" {
@@ -54,6 +51,4 @@ resource "aws_security_group" "lambda_sg" {
     to_port     = 0
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = module.env.default_tags
 }

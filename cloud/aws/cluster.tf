@@ -1,10 +1,3 @@
-resource "aws_subnet" "ids" {
-  vpc_id     = var.vpc_id
-  cidr_block = var.subnet_cidr
-
-  tags = module.env.default_tags
-}
-
 resource "aws_ecs_cluster" "fargate_cluster" {
   name               = "${module.env.module_name}-cluster-${module.env.stage}"
   capacity_providers = ["FARGATE"]
@@ -20,7 +13,6 @@ resource "aws_ecs_cluster" "fargate_cluster" {
       logging = "NONE"
     }
   }
-  tags = module.env.default_tags
 }
 
 resource "aws_iam_role" "fargate_task_execution_role" {
@@ -41,8 +33,6 @@ resource "aws_iam_role" "fargate_task_execution_role" {
   ]
 }
 EOF
-
-  tags = module.env.default_tags
 }
 
 resource "aws_iam_role_policy" "fargate_task_execution_policy" {
