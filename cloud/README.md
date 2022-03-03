@@ -14,3 +14,4 @@ Note: to avoid typing vpc_id, subnet_cidr and aws_region each time you can set t
 Caveats:
 - The VAST node uses a public ip to bootstrap itself
 - There is no way to connect to the VAST instance appart from spawning a bastion in the same network with the same security group
+- Only local ephemeral storage is supported
