@@ -845,7 +845,7 @@ jobs:
           docker push "tenzir/vast-dev:${GITHUB_SHA}"
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             release_tag="${{ needs.determine-version.outputs.release-version }}"
-            docker tag tenzir/vast-deps:latest "tenzir/vast-dev:${release_tag}"
+            docker tag tenzir/vast-dev:latest "tenzir/vast-dev:${release_tag}"
             docker push "tenzir/vast-dev:${release_tag}"
           fi
       - name: Publish Production Docker Image
@@ -856,7 +856,7 @@ jobs:
           docker push "tenzir/vast:${GITHUB_SHA}"
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             release_tag="${{ needs.determine-version.outputs.release-version }}"
-            docker tag tenzir/vast-deps:latest "tenzir/vast:${release_tag}"
+            docker tag tenzir/vast:latest "tenzir/vast:${release_tag}"
             docker push "tenzir/vast:${release_tag}"
           fi
 
