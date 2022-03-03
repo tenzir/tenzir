@@ -199,29 +199,6 @@ private:
 };
 
 template <>
-struct column_builder_trait<none_type> : arrow::TypeTraits<arrow::NullType> {
-  // -- member types -----------------------------------------------------------
-
-  using super = arrow::TypeTraits<arrow::NullType>;
-
-  using data_type = caf::none_t;
-
-  using view_type = view<data_type>;
-
-  using meta_type = none_type;
-
-  // -- static member functions ------------------------------------------------
-
-  static auto make_arrow_type() {
-    return super::type_singleton();
-  }
-
-  static bool append(typename super::BuilderType& builder, view_type) {
-    return builder.AppendNull().ok();
-  }
-};
-
-template <>
 struct column_builder_trait<address_type>
   : arrow::TypeTraits<arrow::FixedSizeBinaryType> {
   // -- member types -----------------------------------------------------------
@@ -859,7 +836,7 @@ namespace {
 type make_vast_type_int(const arrow::DataType& arrow_type) {
   auto f = detail::overload{
     [](const arrow::NullType&) -> type {
-      return type{none_type{}};
+      return type{};
     },
     [](const arrow::BooleanType&) -> type {
       return type{bool_type{}};

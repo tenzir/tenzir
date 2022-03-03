@@ -66,12 +66,12 @@ type deduce(simdjson::dom::element e) {
     case ::simdjson::dom::element_type::ARRAY:
       if (const auto arr = e.get_array(); arr.size())
         return type{list_type{deduce(arr.at(0))}};
-      return type{list_type{none_type{}}};
+      return type{list_type{type{}}};
     case ::simdjson::dom::element_type::OBJECT: {
       auto fields = std::vector<record_type::field_view>{};
       auto xs = e.get_object();
       if (xs.size() == 0)
-        return type{map_type{string_type{}, none_type{}}};
+        return type{map_type{string_type{}, type{}}};
       fields.reserve(xs.size());
       for (auto [k, v] : xs)
         fields.push_back({k, deduce(v)});

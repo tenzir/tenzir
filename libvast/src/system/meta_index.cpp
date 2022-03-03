@@ -349,8 +349,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
         },
         [&](const type_extractor& lhs, const data& d) -> result_type {
           auto result = [&] {
-            if (caf::holds_alternative<none_type>(lhs.type)) {
-              VAST_ASSERT(!lhs.type.name().empty());
+            if (!lhs.type) {
               auto pred = [&](auto& field) {
                 const auto type = field.type();
                 for (const auto& name : type.names())

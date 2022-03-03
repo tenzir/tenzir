@@ -98,7 +98,6 @@ TEST(pattern type serde roundtrip) {
 }
 
 TEST(arrow::DataType sum type) {
-  CHECK(caf::visit(is_type<arrow::NullType>(), *arrow::null()));
   CHECK(caf::visit(is_type<arrow::Int64Type>(), *arrow::int64()));
   CHECK(caf::visit(
     is_type<vast::address_extension_type>(),
@@ -106,21 +105,17 @@ TEST(arrow::DataType sum type) {
   CHECK(caf::visit(
     is_type<vast::pattern_extension_type>(),
     static_cast<const arrow::DataType&>(vast::pattern_extension_type())));
-  CHECK(caf::visit(is_type<arrow::Int64Type, arrow::NullType>(),
-                   *arrow::int64(), *arrow::null()));
-
+  CHECK(caf::visit(is_type<arrow::Int64Type, arrow::UInt64Type>(),
+                   *arrow::int64(), *arrow::uint64()));
   CHECK_EQUAL(caf::get_if<arrow::StringType>(&*arrow::utf8()), &*arrow::utf8());
   CHECK(
     caf::visit(is_type<std::shared_ptr<arrow::Int64Type>>(), arrow::int64()));
   CHECK(caf::visit(is_type<std::shared_ptr<arrow::Int64Type>,
-                           std::shared_ptr<arrow::NullType>>(),
-                   arrow::int64(), arrow::null()));
-  auto n = arrow::null();
+                           std::shared_ptr<arrow::UInt64Type>>(),
+                   arrow::int64(), arrow::uint64()));
   auto et = static_pointer_cast<arrow::DataType>(
     vast::make_arrow_enum(vast::enumeration_type{{"A"}, {"B"}, {"C"}}));
   auto pt = static_pointer_cast<arrow::DataType>(vast::make_arrow_pattern());
-  CHECK(caf::get_if<std::shared_ptr<arrow::NullType>>(&n));
-  CHECK(!caf::get_if<std::shared_ptr<arrow::Int64Type>>(&n));
   CHECK(caf::get_if<std::shared_ptr<vast::enum_extension_type>>(&et));
   CHECK(!caf::get_if<std::shared_ptr<vast::enum_extension_type>>(&pt));
   CHECK(!caf::get_if<std::shared_ptr<vast::pattern_extension_type>>(&et));

@@ -24,29 +24,6 @@
 
 namespace vast {
 
-TEST(none_type) {
-  static_assert(concrete_type<none_type>);
-  static_assert(basic_type<none_type>);
-  static_assert(!complex_type<none_type>);
-  const auto t = type{};
-  const auto nt = type{none_type{}};
-  CHECK(!t);
-  CHECK(!nt);
-  CHECK_EQUAL(as_bytes(t), as_bytes(nt));
-  CHECK(t == nt);
-  CHECK(t <= nt);
-  CHECK(t >= nt);
-  CHECK_EQUAL(fmt::format("{}", t), "none");
-  CHECK_EQUAL(fmt::format("{}", nt), "none");
-  CHECK_EQUAL(fmt::format("{}", none_type{}), "none");
-  CHECK(caf::holds_alternative<none_type>(t));
-  CHECK(caf::holds_alternative<none_type>(nt));
-  const auto lt = type::from_legacy_type(legacy_type{});
-  const auto lnt = type::from_legacy_type(legacy_none_type{});
-  CHECK(caf::holds_alternative<none_type>(lt));
-  CHECK(caf::holds_alternative<none_type>(lnt));
-}
-
 TEST(bool_type) {
   static_assert(concrete_type<bool_type>);
   static_assert(basic_type<bool_type>);
@@ -493,7 +470,7 @@ TEST(record type transformation) {
        {"y",
         record_type{
           {"z", integer_type{}},
-          {"t", none_type{}},
+          {"t", type{}},
           {"u", address_type{}},
           {"k", bool_type{}},
         }},
@@ -510,7 +487,7 @@ TEST(record type transformation) {
   };
   const auto result = old.transform({
     {{0, 0, 1},
-     record_type::insert_before({{"t", none_type{}}, {"u", address_type{}}})},
+     record_type::insert_before({{"t", type{}}, {"u", address_type{}}})},
     {{0, 1, 0, 0}, record_type::drop()},
     {{1, 0}, record_type::assign({{"b2", bool_type{}}})},
   });
@@ -617,7 +594,7 @@ TEST(record_type merging) {
 }
 
 TEST(type inference) {
-  CHECK_EQUAL(type::infer(caf::none), none_type{});
+  CHECK_EQUAL(type::infer(caf::none), type{});
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
   CHECK_EQUAL(type::infer(integer{}), integer_type{});
   CHECK_EQUAL(type::infer(count{}), count_type{});
@@ -629,18 +606,18 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(address{}), address_type{});
   CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
   // Enumeration types cannot be inferred.
-  CHECK_EQUAL(type::infer(enumeration{0}), none_type{});
+  CHECK_EQUAL(type::infer(enumeration{0}), type{});
   // List and map types can only be inferred if the nested values can be inferred.
-  CHECK_EQUAL(type::infer(list{}), list_type{none_type{}});
-  CHECK_EQUAL(type::infer(list{caf::none}), list_type{none_type{}});
+  CHECK_EQUAL(type::infer(list{}), list_type{type{}});
+  CHECK_EQUAL(type::infer(list{caf::none}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{bool{}}), list_type{bool_type{}});
-  CHECK_EQUAL(type::infer(map{}), (map_type{none_type{}, none_type{}}));
+  CHECK_EQUAL(type::infer(map{}), (map_type{type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}),
-              (map_type{none_type{}, none_type{}}));
+              (map_type{type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{caf::none, integer{}}}),
-              (map_type{none_type{}, integer_type{}}));
+              (map_type{type{}, integer_type{}}));
   CHECK_EQUAL(type::infer(map{{bool{}, caf::none}}),
-              (map_type{bool_type{}, none_type{}}));
+              (map_type{bool_type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{bool{}, integer{}}}),
               (map_type{bool_type{}, integer_type{}}));
   const auto r = record{
@@ -772,10 +749,10 @@ TEST(names_and_attributes) {
 
 TEST(sorting) {
   auto ts = std::vector<type>{
-    type{none_type{}},
+    type{},
     type{bool_type{}},
     type{integer_type{}},
-    type{"custom_none", none_type{}},
+    type{"custom_none", type{}},
     type{"custom_bool", bool_type{}},
     type{"custom_integer", integer_type{}},
   };
@@ -825,8 +802,7 @@ TEST(sum type) {
       return (std::is_same_v<T, U> && ...);
     };
   };
-  CHECK(caf::visit(is_type(none_type{}), type{}));
-  CHECK(caf::visit(is_type(none_type{}), type{none_type{}}));
+  CHECK(caf::visit(is_type(address_type{}), type{address_type{}}));
   CHECK(caf::visit(is_type(bool_type{}), type{bool_type{}}));
   CHECK(caf::visit(is_type(bool_type{}, integer_type{}), type{bool_type{}},
                    type{integer_type{}}));
@@ -839,7 +815,7 @@ TEST(hashes) {
   };
   // We're comparing strings here because that is easier to change from the log
   // output in failed unit tests. :-)
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(none_type{})), "0xB51ACBDD64EF56FF");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(type{})), "0xB51ACBDD64EF56FF");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(bool_type{})), "0x295A1E349D71CC23");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(integer_type{})), "0x5B0D4F0B0B16740"
                                                            "4");
@@ -902,9 +878,6 @@ TEST(congruence) {
   a = type{"r0", r0};
   CHECK(a != r0);
   CHECK(congruent(a, r0));
-  CHECK(congruent(type{}, type{}));
-  CHECK(!congruent(type{string_type{}}, type{}));
-  CHECK(!congruent(type{}, type{string_type{}}));
 }
 
 TEST(compatibility) {
@@ -977,7 +950,6 @@ FIXTURE_SCOPE(type_fixture, fixture)
 
 TEST(serialization) {
   CHECK_ROUNDTRIP(type{});
-  CHECK_ROUNDTRIP(type{none_type{}});
   CHECK_ROUNDTRIP(type{bool_type{}});
   CHECK_ROUNDTRIP(type{integer_type{}});
   CHECK_ROUNDTRIP(type{count_type{}});

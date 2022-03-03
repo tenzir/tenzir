@@ -147,10 +147,6 @@ struct randomizer {
     // Do nothing.
   }
 
-  void operator()(const none_type&, caf::none_t&) {
-    // nop
-  }
-
   void operator()(const integer_type&, integer& x) {
     x.value = static_cast<integer::value_type>(sample());
   }

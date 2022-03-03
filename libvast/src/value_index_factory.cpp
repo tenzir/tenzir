@@ -151,7 +151,7 @@ void factory_traits<value_index>::initialize() {
   // need a template type.
   add_value_index_factory<enumeration_type, enumeration_index>(
     enumeration_type{{"stub"}});
-  add_value_index_factory<list_type, list_index>(list_type{none_type{}});
+  add_value_index_factory<list_type, list_index>(list_type{type{}});
 }
 
 factory_traits<value_index>::key_type

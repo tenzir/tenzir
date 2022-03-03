@@ -51,10 +51,10 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<none_type, bool_type, integer_type, count_type,
-                           real_type, duration_type, time_type, string_type,
-                           pattern_type, address_type, subnet_type,
-                           enumeration_type, list_type, map_type, record_type>;
+  = caf::detail::type_list<bool_type, integer_type, count_type, real_type,
+                           duration_type, time_type, string_type, pattern_type,
+                           address_type, subnet_type, enumeration_type,
+                           list_type, map_type, record_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -139,7 +139,7 @@ public:
   };
 
   /// Default-constructs a type, which is semantically equivalent to the
-  /// *none_type*.
+  /// none type.
   type() noexcept;
 
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
@@ -151,12 +151,12 @@ public:
   type& operator=(const type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   type(type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   type& operator=(type&& other) noexcept;
 
@@ -229,7 +229,7 @@ public:
   }
 
   /// Infers a type from a given data.
-  /// @note Returns a *none_type* if the type cannot be inferred.
+  /// @note Returns a none type if the type cannot be inferred.
   /// @relates data
   [[nodiscard]] static type infer(const data& value) noexcept;
 
@@ -250,7 +250,7 @@ public:
   [[nodiscard]] const fbs::Type&
   table(enum transparent transparent) const noexcept;
 
-  /// Returns whether the type contains a conrete type other than the *none_type*.
+  /// Returns whether the type contains a conrete type other than the none type.
   [[nodiscard]] explicit operator bool() const noexcept;
 
   /// Compares the underlying representation of two types for equality.
@@ -400,22 +400,6 @@ std::strong_ordering operator<=>(const T& lhs, const U& rhs) noexcept {
 /// @relates type
 caf::error
 replace_if_congruent(std::initializer_list<type*> xs, const schema& with);
-
-// -- none_type ---------------------------------------------------------------
-
-/// Represents a default constructed type.
-/// @relates type
-class none_type final {
-public:
-  /// Returns the type index.
-  static constexpr uint8_t type_index = 0;
-
-  /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const none_type&) noexcept;
-
-  /// Constructs data from the type.
-  [[nodiscard]] static caf::none_t construct() noexcept;
-};
 
 // -- bool_type ---------------------------------------------------------------
 
@@ -609,12 +593,12 @@ public:
   enumeration_type& operator=(const enumeration_type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   enumeration_type(enumeration_type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   enumeration_type& operator=(enumeration_type&& other) noexcept;
 
@@ -674,12 +658,12 @@ public:
   list_type& operator=(const list_type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   list_type(list_type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   list_type& operator=(list_type&& other) noexcept;
 
@@ -731,12 +715,12 @@ public:
   map_type& operator=(const map_type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   map_type(map_type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   map_type& operator=(map_type&& other) noexcept;
 
@@ -843,12 +827,12 @@ public:
   record_type& operator=(const record_type& rhs) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   record_type(record_type&& other) noexcept;
 
   /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the *none_type*.
+  /// semantically equivalent to the none type.
   /// @param other The moved-from type.
   record_type& operator=(record_type&& other) noexcept;
 
@@ -975,7 +959,7 @@ namespace caf {
 template <>
 struct sum_type_access<vast::type> final {
   using types = vast::concrete_types;
-  using type0 = vast::none_type;
+  using type0 = typename detail::tl_head<types>::type;
   static constexpr bool specialized = true;
 
   template <vast::concrete_type T, int Index>
@@ -1028,6 +1012,7 @@ struct sum_type_access<vast::type> final {
 
   template <class Result, class Visitor, class... Args>
   static auto apply(const vast::type& x, Visitor&& v, Args&&... xs) -> Result {
+    VAST_ASSERT(x, "cannot visit a none type");
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
     static constexpr auto table =
@@ -1098,6 +1083,8 @@ struct formatter<vast::type> {
     auto out = ctx.out();
     if (const auto& name = value.name(); !name.empty())
       out = format_to(out, "{}", name);
+    else if (!value)
+      out = format_to(out, "none");
     else
       caf::visit(
         [&](const auto& x) {
@@ -1136,12 +1123,6 @@ struct formatter<T> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
     return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const vast::none_type&, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "none");
   }
 
   template <class FormatContext>

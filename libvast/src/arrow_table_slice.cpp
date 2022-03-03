@@ -791,50 +791,50 @@ auto record_at(const record_type& type, const arrow::StructArray& arr,
 
 data_view value_at(const type& t, const arrow::Array& arr, int64_t row) {
   auto f = detail::overload{
-    [&](const bool_type&, const arrow::BooleanArray& a) {
+    [&](const bool_type&, const arrow::BooleanArray& a) -> data_view {
       return a.Value(row);
     },
-    [&](const integer_type&, const arrow::Int64Array& a) {
+    [&](const integer_type&, const arrow::Int64Array& a) -> data_view {
       return integer{a.Value(row)};
     },
-    [&](const count_type&, const arrow::UInt64Array& a) {
+    [&](const count_type&, const arrow::UInt64Array& a) -> data_view {
       return a.Value(row);
     },
-    [&](const real_type&, const arrow::DoubleArray& a) {
+    [&](const real_type&, const arrow::DoubleArray& a) -> data_view {
       return a.Value(row);
     },
-    [&](const enumeration_type&, const enum_array& a) {
+    [&](const enumeration_type&, const enum_array& a) -> data_view {
       return enumeration_at(
         static_cast<const arrow::DictionaryArray&>(*a.storage()), row);
     },
-    [&](const time_type&, const arrow::TimestampArray& a) {
+    [&](const time_type&, const arrow::TimestampArray& a) -> data_view {
       return timestamp_at(a, row);
     },
-    [&](const duration_type&, const arrow::DurationArray& a) {
+    [&](const duration_type&, const arrow::DurationArray& a) -> data_view {
       return duration_at(a, row);
     },
-    [&](const address_type&, const address_array& a) {
+    [&](const address_type&, const address_array& a) -> data_view {
       return address_at(
         static_cast<const arrow::FixedSizeBinaryArray&>(*a.storage()), row);
     },
-    [&](const subnet_type&, const subnet_array& a) {
+    [&](const subnet_type&, const subnet_array& a) -> data_view {
       return subnet_at(static_cast<const arrow::StructArray&>(*a.storage()),
                        row);
     },
-    [&](const string_type&, const arrow::StringArray& a) {
+    [&](const string_type&, const arrow::StringArray& a) -> data_view {
       return string_at(a, row);
     },
-    [&](const pattern_type&, const pattern_array& a) {
+    [&](const pattern_type&, const pattern_array& a) -> data_view {
       return pattern_view{
         string_at(static_cast<const arrow::StringArray&>(*a.storage()), row)};
     },
-    [&](const list_type& lt, const arrow::ListArray& a) {
+    [&](const list_type& lt, const arrow::ListArray& a) -> data_view {
       return list_at(lt.value_type(), a, row);
     },
-    [&](const map_type& mt, const arrow::MapArray& a) {
+    [&](const map_type& mt, const arrow::MapArray& a) -> data_view {
       return map_at(mt.key_type(), mt.value_type(), a, row);
     },
-    [&](const record_type& rt, const arrow::StructArray& a) {
+    [&](const record_type& rt, const arrow::StructArray& a) -> data_view {
       return record_at(rt, a, row);
     },
     [&](const auto&, const auto&) -> data_view {
@@ -858,10 +858,7 @@ auto values([[maybe_unused]] const Type& type, const Array& arr)
     if (arr.IsNull(i)) {
       co_yield {};
     } else {
-      if constexpr (std::is_same_v<Type, none_type>) {
-        VAST_ASSERT(false, "none_type not expected here");
-        __builtin_unreachable();
-      } else if constexpr (std::is_same_v<Type, bool_type>) {
+      if constexpr (std::is_same_v<Type, bool_type>) {
         if constexpr (std::is_same_v<Array, arrow::BooleanArray>) {
           co_yield arr.Value(i);
         } else {
@@ -961,15 +958,12 @@ auto values(const type& type, const arrow::Array& array)
   -> detail::generator<data_view> {
   auto f = [](const concrete_type auto& type,
               const auto& array) -> detail::generator<data_view> {
-    if constexpr (std::is_same_v<decltype(type), none_type>)
-      die("none_type//TODO");
-    else
-      for (auto&& result : values(type, array)) {
-        if (result)
-          co_yield *result;
-        else
-          co_yield caf::none;
-      }
+    for (auto&& result : values(type, array)) {
+      if (result)
+        co_yield *result;
+      else
+        co_yield caf::none;
+    }
   };
   return caf::visit(f, type, array);
 }

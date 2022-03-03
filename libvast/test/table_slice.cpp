@@ -365,14 +365,12 @@ TEST(project column detect wrong flat indices) {
 
 TEST(project column unspecified types) {
   auto sut = zeek_conn_log[0];
-  auto proj = project(sut, none_type{}, "proto", time_type{}, "ts");
+  auto proj = project(sut, type{}, "proto", time_type{}, "ts");
   CHECK(proj);
   CHECK_NOT_EQUAL(proj.begin(), proj.end());
   for (auto&& [proto, ts] : proj) {
-    REQUIRE(proto);
-    CHECK(!caf::holds_alternative<caf::none_t>(*proto));
-    REQUIRE(caf::holds_alternative<view<std::string>>(*proto));
-    CHECK_EQUAL(caf::get<vast::view<std::string>>(*proto), "udp");
+    REQUIRE(caf::holds_alternative<view<std::string>>(proto));
+    CHECK_EQUAL(caf::get<vast::view<std::string>>(proto), "udp");
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
   }

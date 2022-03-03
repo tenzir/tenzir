@@ -400,7 +400,7 @@ caf::error convert(tag type, tag sub_type, vast::type& result) {
         return err;
       // Retain set semantics for tables.
       if (sub_type == tag::type_table)
-        element_type.assign_metadata(vast::type{"set", none_type{}});
+        element_type.assign_metadata(vast::type{"set", vast::type{}});
       result = vast::type{list_type{std::move(element_type)}};
       break;
     }

@@ -52,7 +52,7 @@ table_slice make_testdata(table_slice_encoding encoding
     auto ip = address::v4(0xC0A80101); // 192, 168, 1, 1
     auto port = count{443};
     auto sum = real{1.001 * i};
-    auto sum_null = vast::none_type::construct();
+    auto sum_null = caf::none;
     auto min = integer{i};
     auto max = integer{i};
     auto any_true = i == 0;

@@ -199,16 +199,8 @@ data materialize(data_view x) {
 // companion overload in type.cpp.
 bool type_check(const type& x, const data_view& y) {
   auto f = detail::overload{
-    [&](const none_type&, const auto&) {
-      // Cannot determine data type since data may always be
-      // null.
-      return true;
-    },
     [&](const auto&, const view<caf::none_t>&) {
       // Every type can be assigned nil.
-      return true;
-    },
-    [&](const none_type&, const view<caf::none_t>&) {
       return true;
     },
     [&](const enumeration_type& t, const view<enumeration>& u) {

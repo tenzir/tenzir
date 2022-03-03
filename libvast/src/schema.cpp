@@ -60,8 +60,7 @@ schema schema::combine(const schema& s1, const schema& s2) {
 }
 
 bool schema::add(schema::value_type t) {
-  if (caf::holds_alternative<none_type>(t) || t.name().empty()
-      || find(t.name()) != nullptr)
+  if (!t || find(t.name()) != nullptr)
     return false;
   types_.push_back(std::move(t));
   return true;
