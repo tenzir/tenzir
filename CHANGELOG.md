@@ -51,7 +51,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now correctly adjusts the index statistics when applying partition transforms.
   [#2097](https://github.com/tenzir/vast/pull/2097)
 
-- We fixed a use-after-move bug could have resulted in incorrect offset ranges being returned from the meta index.
+- We fixed a bug that potentially resulted in the wrong subset of partitions to be considered during query evaluation.
   [#2103](https://github.com/tenzir/vast/pull/2103)
 
 ## [v1.0.0]
