@@ -15,6 +15,11 @@ resource "aws_ecs_cluster" "fargate_cluster" {
     name  = "containerInsights"
     value = "disabled"
   }
+  configuration {
+    execute_command_configuration {
+      logging = "NONE"
+    }
+  }
   tags = module.env.default_tags
 }
 
