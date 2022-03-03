@@ -24,7 +24,7 @@ The script takes the VPC ID and the CIDR block as input and from that it creates
 
 Both on Lambda and Fargate, VAST is deployed as a Docker image. Fargate runs the official [tenzir/vast](https://hub.docker.com/r/tenzir/vast) image. To run VAST on AWS Lambda, we need:
 - an extra image layer containing the Lambda Runtime Interface
-- the image to be hosted on ECR in the region where the Lambda is deployed is deployed
+- the image to be hosted on ECR in the region where the Lambda is deployed
 
 For that reason, when deploying VAST to AWS, the user will build the Lambda specific Docker image locally and push it to a private ECR repository created by the Terraform deployment script itself.
 
@@ -60,7 +60,7 @@ Terraform variables to provide:
 
 Currently supported:
 - deploy VAST both as a Fargate task definition and a Lambda function with `make deploy`
-- start a VAST server task using `make start-task`
+- start a VAST server task using `make run-task`
 - connect to the VAST server through a VAST client running on aws lambda:
   - `make run-lambda CMD="vast status"`
 - connect directly to the VAST server through ECS Exec with `make execute-command`
