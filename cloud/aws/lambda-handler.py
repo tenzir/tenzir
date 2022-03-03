@@ -6,6 +6,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 def handler(event, context):
+    '''An AWS Lambda handler that runs the provided command with bash and returns the standard output'''
     try:
         logging.info("event: ", event)
         src_cmd = event["cmd"]

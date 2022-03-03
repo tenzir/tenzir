@@ -2,6 +2,9 @@ ARG VAST_VERSION=latest
 ARG AWS_CLI_VERSION=2.4.20
 ARG AWSLAMBDARIC_VERSION=2.0.1
 
+# The first objective here is to install the AWS Lambda Runtime Interface client that allows
+# the image to be used from within lambda. Additionally, we can install any tooling that comes
+# handy to interact with VAST (AWS CLI,...)
 FROM tenzir/vast:$VAST_VERSION AS build
 
 ARG AWS_CLI_VERSION
