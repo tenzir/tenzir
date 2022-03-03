@@ -319,7 +319,7 @@ jobs:
 
       - name: Upload Integration Test Logs on Failure
         if: failure()
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3
         with:
           name: 'vast-integration-test-debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}'
           path: '${{ env.BUILD_DIR }}/vast/vast-integration-test'
@@ -332,7 +332,7 @@ jobs:
           cmake --build "$BUILD_DIR" --target package
 
       - name: Upload Artifact to GitHub
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
@@ -581,7 +581,7 @@ jobs:
 
       - name: Upload Integration Test Logs on Failure
         if: failure()
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3
         with:
           name: 'vast-integration-test-macos-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}'
           path: '${{ env.BUILD_DIR }}/vast/vast-integration-test'
@@ -594,7 +594,7 @@ jobs:
           cmake --build "$BUILD_DIR" --target package
 
       - name: Upload Artifact to Github
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
@@ -762,7 +762,7 @@ jobs:
           cmake --install "$BUILD_DIR"
       - name: Upload Integration Test Logs on Failure
         if: failure()
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3
         with:
           name: 'vast-${{ matrix.plugin.target }}-integration-test'
           path: '${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test'
@@ -912,7 +912,7 @@ jobs:
           echo "::set-output name=artifact_name::${ARTIFACT_NAME}"
 
       - name: Upload Artifact to Github
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3
         with:
           name: "${{ steps.create_paths.outputs.artifact_name }}"
           path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
