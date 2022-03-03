@@ -4,11 +4,13 @@ vpc_id ?= $(eval vpc_id := $(shell bash -c 'read -p "VPC ID (existing): " input;
 subnet_cidr ?= $(eval subnet_cidr := $(shell bash -c 'read -p "Subnet CIDR (to be created): " input; echo $$input'))$(subnet_cidr)
 aws_region ?= $(eval aws_region := $(shell bash -c 'read -p "AWS Region: " input; echo $$input'))$(aws_region)
 
+export AWS_REGION = ${aws_region}
+
 init:
 	terraform init
 
 docker-login:
-	aws ecr get-login-password --region "${aws_region}" | \
+	aws ecr get-login-password | \
 	docker login --username AWS --password-stdin \
 		"$(shell aws sts get-caller-identity --query 'Account' --output text).dkr.ecr.${aws_region}.amazonaws.com"
 
@@ -26,7 +28,6 @@ destroy:
 run-task:
 	aws ecs run-task \
 		--cluster $(shell terraform output fargate_cluster_name) \
-		--region ${aws_region} \
 		--count 1 \
 		--enable-ecs-managed-tags \
 		--enable-execute-command \
@@ -36,15 +37,16 @@ run-task:
 		--task-definition $(shell terraform output vast_task_definition)
 
 list-tasks:
-	@aws --region ${aws_region} ecs list-tasks --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
+	@aws ecs list-tasks --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
 
 stop-all-tasks:
 	for task in $(shell $(MAKE) list-tasks); do \
-		aws --region ${aws_region} ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name); \
+		aws ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name); \
 	done
 
 get-task-ip:
-	@aws ecs describe-tasks --cluster vast-cluster-default --task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
+	@aws ecs describe-tasks \
+		--cluster vast-cluster-default \--task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
 # provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 # use | jq -r ".result" for a formated output
@@ -52,7 +54,6 @@ run-lambda:
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
-		--region ${aws_region} \
 		--payload '{"cmd":"$(CMD)", "host":"$(shell $(MAKE) get-task-ip):42000"}' \
 		lambda-result.json > /dev/null && \
 	cat lambda-result.json
