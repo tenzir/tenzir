@@ -1,9 +1,9 @@
 output "vast_security_group" {
-  value = module.vast.task_security_group_id
+  value = module.vast_server.task_security_group_id
 }
 
 output "vast_task_definition" {
-  value = module.vast.task_definition_arn
+  value = module.vast_server.task_definition_arn
 }
 
 output "fargate_cluster_name" {

@@ -1,7 +1,7 @@
-module "vast" {
+module "vast_server" {
   source = "./fargate"
 
-  name        = "vast"
+  name        = "vast-server"
   region_name = var.region_name
 
   vpc_id                      = var.vpc_id
@@ -21,4 +21,21 @@ module "vast" {
     name  = "AWS_REGION"
     value = var.region_name
   }]
+}
+
+module "vast_client" {
+  source = "./lambda"
+
+  function_base_name = "vast-client"
+  region_name        = var.region_name
+  docker_image       = "tenzir/vast:${module.env.vast_image_version}"
+  memory_size        = 2048
+  timeout            = 10
+
+  in_vpc  = true
+  vpc_id  = var.vpc_id
+  subnets = [aws_subnet.ids.id]
+
+  additional_policies = [aws_iam_policy.s3-additional-policy.arn]
+  environment         = {}
 }
