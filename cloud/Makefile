@@ -17,20 +17,19 @@ destroy:
 
 run-task:
 	aws ecs run-task \
-		--cluster $(shell bash -c '${terraform} output fargate_cluster_name') \
+		--cluster $(shell bash -c 'terraform output fargate_cluster_name') \
 		--region ${aws_region} \
 		--count 1 \
 		--enable-ecs-managed-tags \
 		--propagate-tags TASK_DEFINITION \
 		--launch-type FARGATE  \
-		--network-configuration awsvpcConfiguration={subnets=[$(shell bash -c '${terraform} output ids_subnet_id')],securityGroups=[$(shell bash -c '${terraform} output vast_security_group')],assignPublicIp=ENABLED} \
-		--task-definition $(shell bash -c '${terraform} output vast_task_definition')
+		--network-configuration awsvpcConfiguration={subnets=[$(shell bash -c 'terraform output ids_subnet_id')],securityGroups=[$(shell bash -c 'terraform output vast_security_group')],assignPublicIp=ENABLED} \
+		--task-definition $(shell bash -c 'terraform output vast_task_definition')
 
 list-tasks:
-	aws --region ${aws_region} ecs list-tasks --cluster $(shell bash -c 'terraform output fargate_cluster_name') | jq -r '.taskArns | map(.[64:]) | reduce .[] as $$item (""; . + $$item + " ")'
+	@aws --region ${aws_region} ecs list-tasks --cluster $(shell bash -c 'terraform output fargate_cluster_name') | jq -r '.taskArns | map(.[64:]) | reduce .[] as $$item (""; . + $$item + " ")'
 
 stop-all-tasks:
-	for task in $(shell bash -c 'make list-tasks'); do \
+	for task in $(shell bash -c '$(MAKE) list-tasks'); do \
 		aws --region ${aws_region} ecs stop-task --task $$task --cluster $(shell bash -c 'terraform output fargate_cluster_name'); \
 	done
-
