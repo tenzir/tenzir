@@ -37,7 +37,7 @@
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/active_partition.hpp"
-#include "vast/system/meta_index.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/partition_transformer.hpp"
 #include "vast/system/passive_partition.hpp"
 #include "vast/system/query_supervisor.hpp"
@@ -81,7 +81,7 @@
 // results into memory.
 //
 //    expression                                lookup()
-//   ------------>  index                  --------------------> meta_index
+//   ------------>  index                  --------------------> catalog
 //                                                                 |
 //     query_id,                                                   |
 //     scheduled,                                                  |
@@ -333,7 +333,7 @@ caf::error index_state::load_from_disk() {
       // Re-write old partition synopses that were created before the offset and
       // id were saved.
       if (!synopsis_legacy.id_range()) {
-        VAST_VERBOSE("{} rewrites old meta-index data for partition {}", *self,
+        VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
                      partition_uuid);
         if (auto error = extract_partition_synopsis(part_path, synopsis_path))
           return error;
@@ -344,7 +344,7 @@ caf::error index_state::load_from_disk() {
       }
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
-      meta_index_bytes += ps->memusage();
+      catalog_bytes += ps->memusage();
       persisted_partitions.insert(partition_uuid);
       synopses->emplace(partition_uuid, std::move(ps));
     }
@@ -356,7 +356,7 @@ caf::error index_state::load_from_disk() {
                synopses->size());
     this->accept_queries = false;
     self
-      ->request(meta_index, caf::infinite, atom::merge_v,
+      ->request(catalog, caf::infinite, atom::merge_v,
                 std::exchange(synopses, {}))
       .then(
         [this](atom::ok) {
@@ -365,7 +365,7 @@ caf::error index_state::load_from_disk() {
           this->accept_queries = true;
         },
         [this](caf::error& err) {
-          VAST_ERROR("{} could not load meta index state from disk, shutting "
+          VAST_ERROR("{} could not load catalog state from disk, shutting "
                      "down with error {}",
                      *self, err);
           self->send_exit(self, std::move(err));
@@ -574,12 +574,12 @@ void index_state::decomission_active_partition() {
     .then(
       [=, this](partition_synopsis_ptr& ps) {
         VAST_DEBUG("{} successfully persisted partition {}", *self, id);
-        // The meta index expects to own the partition synopsis it receives,
+        // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
-        meta_index_bytes += ps->memusage();
+        catalog_bytes += ps->memusage();
         // TODO: We should skip this continuation if we're currently shutting
         // down.
-        self->request(meta_index, caf::infinite, atom::merge_v, id, ps)
+        self->request(catalog, caf::infinite, atom::merge_v, id, ps)
           .then(
             [=, this](atom::ok) {
               VAST_DEBUG("{} received ok for request to persist partition {}",
@@ -641,7 +641,7 @@ index_state::status(status_verbosity v) const {
     }
     stats_object["layouts"] = std::move(layout_object);
     rs->content["statistics"] = std::move(stats_object);
-    rs->content["meta-index-bytes"] = meta_index_bytes;
+    rs->content["catalog-bytes"] = catalog_bytes;
     auto backlog_status = record{};
     backlog_status["num-normal-priority"] = backlog.normal.size();
     backlog_status["num-low-priority"] = backlog.low.size();
@@ -664,7 +664,7 @@ index_state::status(status_verbosity v) const {
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
-    collect_status(rs, timeout, v, meta_index, rs->content, "meta-index");
+    collect_status(rs, timeout, v, catalog, rs->content, "catalog");
     auto partitions = record{};
     auto partition_status
       = [&](const uuid& id, const partition_actor& pa, list& xs) {
@@ -722,16 +722,16 @@ index_state::status(status_verbosity v) const {
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
-      archive_actor archive, meta_index_actor meta_index,
+      archive_actor archive, catalog_actor catalog,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
       size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
-      const std::filesystem::path& meta_index_dir, double synopsis_fp_rate) {
+      const std::filesystem::path& catalog_dir, double synopsis_fp_rate) {
   VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
                    VAST_ARG(taste_partitions), VAST_ARG(num_workers),
-                   VAST_ARG(meta_index_dir), VAST_ARG(synopsis_fp_rate));
+                   VAST_ARG(catalog_dir), VAST_ARG(synopsis_fp_rate));
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                *self, dir, partition_capacity, max_inmem_partitions);
@@ -747,8 +747,8 @@ index(index_actor::stateful_pointer<index_state> self,
   if (self->state.partition_local_stores)
     VAST_VERBOSE("{} uses partition-local stores instead of the archive",
                  *self);
-  if (dir != meta_index_dir)
-    VAST_VERBOSE("{} uses {} for meta index data", *self, meta_index_dir);
+  if (dir != catalog_dir)
+    VAST_VERBOSE("{} uses {} for catalog data", *self, catalog_dir);
   // Set members.
   self->state.self = self;
   self->state.global_store = std::move(archive);
@@ -769,14 +769,14 @@ index(index_actor::stateful_pointer<index_state> self,
   }
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
-  self->state.meta_index = std::move(meta_index);
+  self->state.catalog = std::move(catalog);
   self->state.dir = dir;
-  self->state.synopsisdir = meta_index_dir;
+  self->state.synopsisdir = catalog_dir;
   self->state.partition_capacity = partition_capacity;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
-  self->state.meta_index_bytes = 0;
+  self->state.catalog_bytes = 0;
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
     VAST_ERROR("{} failed to load index state from disk: {}", *self,
@@ -929,17 +929,17 @@ index(index_actor::stateful_pointer<index_state> self,
       if (should_send == send_initial_dbstate::no)
         return;
       // When we get here, the initial bulk upgrade and any table slices
-      // finished since then have already been sent to the meta index, and
+      // finished since then have already been sent to the catalog, and
       // since CAF guarantees message order within the same inbound queue
       // they will all be part of the response vector.
-      self->request(self->state.meta_index, caf::infinite, atom::get_v)
+      self->request(self->state.catalog, caf::infinite, atom::get_v)
         .then(
           [=](std::vector<partition_synopsis_pair>& v) {
             self->send(listener, atom::update_v, std::move(v));
           },
           [](const caf::error& e) {
-            VAST_WARN(
-              "index failed to get list of partitions from meta index: {}", e);
+            VAST_WARN("index failed to get list of partitions from catalog: {}",
+                      e);
           });
     },
     [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
@@ -959,10 +959,10 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::resolve,
-           vast::expression& expr) -> caf::result<meta_index_result> {
+           vast::expression& expr) -> caf::result<catalog_result> {
       auto lookup_id = vast::uuid::random();
-      return self->delegate(self->state.meta_index, atom::candidates_v,
-                            lookup_id, std::move(expr));
+      return self->delegate(self->state.catalog, atom::candidates_v, lookup_id,
+                            std::move(expr));
     },
     [self](atom::internal, vast::query query,
            query_supervisor_actor worker) -> caf::result<query_cursor> {
@@ -1008,13 +1008,12 @@ index(index_actor::stateful_pointer<index_state> self,
       // Get all potentially matching partitions.
       auto start = std::chrono::steady_clock::now();
       self
-        ->request(self->state.meta_index, caf::infinite, atom::candidates_v,
-                  query)
+        ->request(self->state.catalog, caf::infinite, atom::candidates_v, query)
         .then(
           [=, candidates
-              = std::move(candidates)](meta_index_result& midx_result) mutable {
+              = std::move(candidates)](catalog_result& midx_result) mutable {
             auto& midx_candidates = midx_result.partitions;
-            VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
+            VAST_DEBUG("{} got initial candidates {} and from catalog {}",
                        *self, candidates, midx_candidates);
             candidates.insert(candidates.end(), midx_candidates.begin(),
                               midx_candidates.end());
@@ -1038,7 +1037,7 @@ index(index_actor::stateful_pointer<index_state> self,
               = self->state.pending.emplace(query_id, std::move(lookup));
             VAST_ASSERT(result.second);
             auto delta = std::chrono::steady_clock::now() - start;
-            VAST_TRACEPOINT(query_meta_index, query_id.as_u64().first, total,
+            VAST_TRACEPOINT(query_catalog, query_id.as_u64().first, total,
                             delta.count());
             rp.deliver(query_cursor{query_id, detail::narrow<uint32_t>(total),
                                     scheduled});
@@ -1049,7 +1048,7 @@ index(index_actor::stateful_pointer<index_state> self,
                          scheduled);
           },
           [=](caf::error err) mutable {
-            VAST_ERROR("{} failed to receive candidates from meta-index: {}",
+            VAST_ERROR("{} failed to receive candidates from catalog: {}",
                        *self, render(err));
             self->send(self, atom::worker_v, worker);
             rp.deliver(std::move(err));
@@ -1117,7 +1116,7 @@ index(index_actor::stateful_pointer<index_state> self,
         adjust_stats = false;
       }
       self
-        ->request(self->state.meta_index, caf::infinite, atom::erase_v,
+        ->request(self->state.catalog, caf::infinite, atom::erase_v,
                   partition_id)
         .then(
           [self, partition_id, path, synopsis_path, rp,
@@ -1190,7 +1189,7 @@ index(index_actor::stateful_pointer<index_state> self,
           },
           [partition_id, rp](caf::error& err) mutable {
             VAST_WARN("index encountered an error trying to erase "
-                      "partition {} from the meta index: {}",
+                      "partition {} from the catalog: {}",
                       partition_id, err);
             rp.deliver(std::move(err));
           });
@@ -1271,8 +1270,8 @@ index(index_actor::stateful_pointer<index_state> self,
             if (keep == keep_original_partition::yes) {
               if (aps.synopsis)
                 self
-                  ->request(self->state.meta_index, caf::infinite,
-                            atom::merge_v, new_partition_id, aps.synopsis)
+                  ->request(self->state.catalog, caf::infinite, atom::merge_v,
+                            new_partition_id, aps.synopsis)
                   .then(
                     [self, rp, new_partition_id, result](atom::ok) mutable {
                       self->state.persisted_partitions.insert(new_partition_id);
@@ -1285,16 +1284,15 @@ index(index_actor::stateful_pointer<index_state> self,
                 rp.deliver(result);
             } else {
               // Pick one partition id at random to be "transformed", all the
-              // other ones are "deleted" from the meta index. If the new
+              // other ones are "deleted" from the catalog. If the new
               // partition is empty, all partitions are deleted.
               if (aps.synopsis) {
                 VAST_ASSERT(!old_partition_ids.empty());
                 auto old_partition_id = old_partition_ids.back();
                 old_partition_ids.pop_back();
                 self
-                  ->request(self->state.meta_index, caf::infinite,
-                            atom::replace_v, old_partition_id, new_partition_id,
-                            aps.synopsis)
+                  ->request(self->state.catalog, caf::infinite, atom::replace_v,
+                            old_partition_id, new_partition_id, aps.synopsis)
                   .then(
                     [self, rp, old_partition_id, new_partition_id,
                      result](atom::ok) mutable {
@@ -1322,8 +1320,7 @@ index(index_actor::stateful_pointer<index_state> self,
                             atom::erase_v, partition_id)
                   .then([](atom::done) { /* nop */ },
                         [](const caf::error& e) {
-                          VAST_WARN("index failed to erase {} from meta index",
-                                    e);
+                          VAST_WARN("index failed to erase {} from catalog", e);
                         });
               }
             }

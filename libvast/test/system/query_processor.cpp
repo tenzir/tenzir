@@ -16,7 +16,7 @@
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/query.hpp"
-#include "vast/system/meta_index.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_processor.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
@@ -80,7 +80,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
-    [=](atom::resolve, vast::expression) -> system::meta_index_result {
+    [=](atom::resolve, vast::expression) -> system::catalog_result {
       FAIL("no mock implementation available");
     },
     [=](atom::evaluate, vast::query&) -> caf::result<system::query_cursor> {

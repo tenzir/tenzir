@@ -108,7 +108,7 @@ void print_partition_legacy(
       std::cout << "\n";
     }
   }
-  // Print meta index contents.
+  // Print catalog contents.
   std::cout << indent << "Meta Index\n";
   if (auto partition_synopsis = partition->partition_synopsis()) {
     indented_scope _(indent);

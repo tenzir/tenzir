@@ -52,7 +52,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
     }
   } else if (ex.kind == meta_extractor::import_time) {
     // For a passive partition, this already went through a time synopsis in
-    // the meta index, but for the active partition we create an ad-hoc time
+    // the catalog, but for the active partition we create an ad-hoc time
     // synopsis here to do the lookup.
     if constexpr (std::is_same_v<PartitionState,
                                  system::active_partition_state>) {

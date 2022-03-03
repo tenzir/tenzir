@@ -30,21 +30,21 @@
 
 namespace vast::system {
 
-/// The state of the META INDEX actor.
-struct meta_index_state {
+/// The state of the CATALOG actor.
+struct catalog_state {
 public:
   // -- constructor ------------------------------------------------------------
 
-  meta_index_state() = default;
+  catalog_state() = default;
 
   // -- concepts ---------------------------------------------------------------
 
-  constexpr static auto name = "meta-index";
+  constexpr static auto name = "catalog";
 
   // -- utility functions ------------------------------------------------------
 
   /// Adds new synopses for a partition in bulk. Used when
-  /// re-building the meta index state at startup.
+  /// re-building the catalog state at startup.
   void create_from(std::map<uuid, partition_synopsis_ptr>&&);
 
   /// Add a new partition synopsis.
@@ -52,27 +52,27 @@ public:
 
   /// Returns the partition synopsis for a specific partition.
   /// Note that most callers will prefer to use `lookup()` instead.
-  /// @pre `partition` must be a valid key for this meta index.
+  /// @pre `partition` must be a valid key for this catalog.
   partition_synopsis_ptr& at(const uuid& partition);
 
-  /// Erase this partition from the meta index.
+  /// Erase this partition from the catalog.
   void erase(const uuid& partition);
 
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.
-  [[nodiscard]] meta_index_result lookup(const expression& expr) const;
+  [[nodiscard]] catalog_result lookup(const expression& expr) const;
 
   [[nodiscard]] std::vector<uuid> lookup_impl(const expression& expr) const;
 
-  /// @returns A best-effort estimate of the amount of memory used for this meta
-  /// index (in bytes).
+  /// @returns A best-effort estimate of the amount of memory used for this
+  /// catalog (in bytes).
   [[nodiscard]] size_t memusage() const;
 
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.
-  meta_index_actor::pointer self = {};
+  catalog_actor::pointer self = {};
 
   /// An actor handle to the accountant.
   accountant_actor accountant = {};
@@ -88,8 +88,8 @@ public:
   detail::range_map<id, uuid> offset_map = {};
 };
 
-/// The result of a meta-index query.
-struct meta_index_result {
+/// The result of a catalog query.
+struct catalog_result {
   enum {
     exact,
     probabilistic,
@@ -98,19 +98,19 @@ struct meta_index_result {
   std::vector<uuid> partitions;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, meta_index_result& x) {
-    return f(caf::meta::type_name("vast.system.meta_index_result"), x.kind,
+  friend auto inspect(Inspector& f, catalog_result& x) {
+    return f(caf::meta::type_name("vast.system.catalog_result"), x.kind,
              x.partitions);
   }
 };
 
-/// The META INDEX is the first index actor that queries hit. The result
+/// The CATALOG is the first index actor that queries hit. The result
 /// represents a list of candidate partition IDs that may contain the desired
-/// data. The META INDEX may return false positives but never false negatives.
+/// data. The CATALOG may return false positives but never false negatives.
 /// @param self The actor handle.
 /// @param accountant An actor handle to the accountant.
-meta_index_actor::behavior_type
-meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
-           accountant_actor accountant);
+catalog_actor::behavior_type
+catalog(catalog_actor::stateful_pointer<catalog_state> self,
+        accountant_actor accountant);
 
 } // namespace vast::system

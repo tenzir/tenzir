@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/meta_index.hpp"
+#include "vast/system/catalog.hpp"
 
 #include "vast/data.hpp"
 #include "vast/detail/fill_status_map.hpp"
@@ -34,24 +34,24 @@
 
 namespace vast::system {
 
-size_t meta_index_state::memusage() const {
+size_t catalog_state::memusage() const {
   size_t result = 0;
   for (const auto& [id, partition_synopsis] : synopses)
     result += partition_synopsis->memusage();
   return result;
 }
 
-void meta_index_state::erase(const uuid& partition) {
+void catalog_state::erase(const uuid& partition) {
   synopses.erase(partition);
   offset_map.erase_value(partition);
 }
 
-void meta_index_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
+void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
   offset_map.inject(ps->offset, ps->offset + ps->events, partition);
   synopses.emplace(partition, std::move(ps));
 }
 
-void meta_index_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
+void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
   std::vector<std::pair<uuid, partition_synopsis_ptr>> flat_data;
   for (auto&& [uuid, synopsis] : std::move(ps)) {
     VAST_ASSERT(synopsis->get_reference_count() == 1ull);
@@ -67,12 +67,12 @@ void meta_index_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) 
   synopses = decltype(synopses)::make_unsafe(std::move(flat_data));
 }
 
-partition_synopsis_ptr& meta_index_state::at(const uuid& partition) {
+partition_synopsis_ptr& catalog_state::at(const uuid& partition) {
   return synopses.at(partition);
 }
 
 // A custom expression visitor that optimizes a given expression specifically
-// for the meta index lookup. Currently this does only a single optimization:
+// for the catalog lookup. Currently this does only a single optimization:
 // It deduplicates string lookups for the type level string synopsis.
 struct pruner {
   expression operator()(caf::none_t) const {
@@ -126,25 +126,25 @@ expression prune_all(expression e) {
   return result;
 }
 
-meta_index_result meta_index_state::lookup(const expression& expr) const {
+catalog_result catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
   auto pruned = prune_all(expr);
   auto result = lookup_impl(pruned);
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
-  VAST_DEBUG("meta index lookup found {} candidates in {} microseconds",
+  VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",
              result.size(), delta.count());
-  VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
+  VAST_TRACEPOINT(catalog_lookup, delta.count(), result.size());
   // TODO: This is correct because every exact result can be regarded as a
   // probabilistic result with zero false positives, but it is a
   // pessimization.
   // We should analyze the query here to see whether it's probabilistic or
   // exact. An exact query consists of a disjunction of exact synopses or
   // an explicit set of ids.
-  return meta_index_result{meta_index_result::probabilistic, std::move(result)};
+  return catalog_result{catalog_result::probabilistic, std::move(result)};
 }
 
-std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
+std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   // The partition UUIDs must be sorted, otherwise the invariants of the
   // inplace union and intersection algorithms are violated, leading to
@@ -247,7 +247,7 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
                   break;
                 }
               } else {
-                // The meta index couldn't rule out this partition, so we have
+                // The catalog couldn't rule out this partition, so we have
                 // to include it in the result set.
                 result.push_back(part_id);
                 break;
@@ -393,9 +393,9 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
   return caf::visit(f, expr);
 }
 
-meta_index_actor::behavior_type
-meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
-           accountant_actor accountant) {
+catalog_actor::behavior_type
+catalog(catalog_actor::stateful_pointer<catalog_state> self,
+        accountant_actor accountant) {
   self->state.self = self;
   self->state.accountant = std::move(accountant);
   self->send(self->state.accountant, atom::announce_v, self->name());
@@ -434,22 +434,22 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
       return atom::ok_v;
     },
     [=](atom::candidates, vast::uuid lookup_id,
-        const vast::expression& expr) -> caf::result<meta_index_result> {
+        const vast::expression& expr) -> caf::result<catalog_result> {
       auto start = std::chrono::steady_clock::now();
       auto result = self->state.lookup(expr);
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(lookup_id);
-      self->send(self->state.accountant, "meta-index.lookup.runtime", runtime,
+      self->send(self->state.accountant, "catalog.lookup.runtime", runtime,
                  metrics_metadata{{"query", id_str}});
-      self->send(self->state.accountant, "meta-index.lookup.candidates",
+      self->send(self->state.accountant, "catalog.lookup.candidates",
                  result.partitions.size(),
                  metrics_metadata{{"query", std::move(id_str)}});
       return result;
     },
     [=](atom::candidates,
-        const vast::query& query) -> caf::result<meta_index_result> {
+        const vast::query& query) -> caf::result<catalog_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query));
-      meta_index_result expression_candidates;
+      catalog_result expression_candidates;
       std::vector<vast::uuid> ids_candidates;
       bool has_expression = query.expr != vast::expression{};
       bool has_ids = !query.ids.empty();
@@ -483,14 +483,14 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self,
         result_candidates = std::move(ids_candidates);
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
-      self->send(self->state.accountant, "meta-index.lookup.runtime", runtime,
+      self->send(self->state.accountant, "catalog.lookup.runtime", runtime,
                  metrics_metadata{{"query", id_str}});
-      self->send(self->state.accountant, "meta-index.lookup.candidates",
+      self->send(self->state.accountant, "catalog.lookup.candidates",
                  result_candidates.size(),
                  metrics_metadata{{"query", std::move(id_str)}});
 
-      return meta_index_result{meta_index_result::probabilistic,
-                               std::move(result_candidates)};
+      return catalog_result{catalog_result::probabilistic,
+                            std::move(result_candidates)};
     },
     [=](atom::status, status_verbosity v) {
       record result;

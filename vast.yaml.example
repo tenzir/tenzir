@@ -98,11 +98,11 @@ vast:
   # The amount of queries that can be executed in parallel.
   max-queries: 10
 
-  # The directory to use for the partition synopses of the meta index.
-  #meta-index-dir: <dbdir>/index
+  # The directory to use for the partition synopses of the catalog.
+  #catalog-dir: <dbdir>/index
 
-  # The false positive rate for lossy structures in the meta index.
-  meta-index-fp-rate: 0.01
+  # The false positive rate for lossy structures in the catalog.
+  catalog-fp-rate: 0.01
 
   # The store backend to use. Can be either 'archive', 'segment-store', or
   # the name of a user-provided store plugin.

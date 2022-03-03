@@ -19,7 +19,7 @@ u = USDT(path=vast_path)
 # TODO: Later versions of bcc allow writing 'vast:query_new' to explicitly specify
 #       the provider, but the one from ubuntu doesn't have that feature yet.
 u.enable_probe("query_new", "query_new_handler")
-u.enable_probe("query_meta_index", "query_meta_index_handler")
+u.enable_probe("query_catalog", "query_catalog_handler")
 u.enable_probe("query_resume", "query_resume_handler")
 u.enable_probe("query_partition_done", "query_partition_done_handler")
 u.enable_probe("query_partition_error", "query_partition_error_handler")
@@ -81,7 +81,7 @@ void query_new_handler(struct pt_regs *ctx) {
   return; 
 }
 
-void query_meta_index_handler(struct pt_regs *ctx) { 
+void query_catalog_handler(struct pt_regs *ctx) { 
   uint64_t uuid = 0;
   uint64_t candidates = 0;
   bpf_usdt_readarg(1, ctx, &uuid);

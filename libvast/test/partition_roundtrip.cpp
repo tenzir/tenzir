@@ -20,8 +20,8 @@
 #include "vast/query.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/meta_index.hpp"
 #include "vast/system/passive_partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
@@ -194,16 +194,16 @@ TEST(empty partition roundtrip) {
   // the active partition, which makes this test irrelevant:
   //   CHECK_EQUAL(recovered_state.combined_layout_, state.combined_layout);
   CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
-  // Deserialize meta index state from this partition.
+  // Deserialize catalog state from this partition.
   auto ps = caf::make_copy_on_write<vast::partition_synopsis>();
   auto error2 = vast::system::unpack(*partition_legacy, ps.unshared());
   CHECK(!error2);
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
   CHECK_EQUAL(ps->offset, state.data.offset);
   CHECK_EQUAL(ps->events, state.data.events);
-  auto meta_index
-    = self->spawn(vast::system::meta_index, vast::system::accountant_actor{});
-  auto rp = self->request(meta_index, caf::infinite, vast::atom::merge_v,
+  auto catalog
+    = self->spawn(vast::system::catalog, vast::system::accountant_actor{});
+  auto rp = self->request(catalog, caf::infinite, vast::atom::merge_v,
                           recovered_state.id, ps);
   run();
   rp.receive([=](vast::atom::ok) {},
@@ -215,11 +215,11 @@ TEST(empty partition roundtrip) {
                                                vast::data{0u}}};
   auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
                                      std::move(expr));
-  auto rp2 = self->request(meta_index, caf::infinite, vast::atom::candidates_v,
+  auto rp2 = self->request(catalog, caf::infinite, vast::atom::candidates_v,
                            std::move(q));
   run();
   rp2.receive(
-    [&](const vast::system::meta_index_result& result) {
+    [&](const vast::system::catalog_result& result) {
       const auto& candidates = result.partitions;
       REQUIRE_EQUAL(candidates.size(), 1ull);
       CHECK_EQUAL(candidates[0], state.data.id);

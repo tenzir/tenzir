@@ -71,7 +71,7 @@ void partition_synopsis::add(const table_slice& slice,
     } else { // type == string
       // All strings share a partition-wide synopsis.
       // NOTE: if this is made configurable or removed, the pruning step from
-      // the meta index lookup must be adjusted acordingly.
+      // the catalog lookup must be adjusted acordingly.
       field_synopses_[key] = nullptr;
       // We need to prune the type's metadata here by converting it to a
       // concrete type and back, because the type synopses are looked up
