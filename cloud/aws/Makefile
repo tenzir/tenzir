@@ -49,8 +49,12 @@ get-task-ip:
 		--cluster vast-cluster-default \
 		--task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
-# provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
+# Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 # use | jq -r ".result" for a formated output
+# Inside the CMD variable, escape:
+# - " with \\\"
+# - ' with '\''
+# TODO automatic escaping
 run-lambda:
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \

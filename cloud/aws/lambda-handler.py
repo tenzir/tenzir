@@ -1,4 +1,4 @@
-import shlex
+import os
 import subprocess
 import logging
 
@@ -8,28 +8,20 @@ logging.basicConfig(level=logging.INFO)
 def handler(event, context):
     try:
         logging.info("event: ", event)
-        # parse the input command and check that it contains one vast command
-        cmd_split = event['cmd'].split(' ')
-        vast_positions = [i for i, x in enumerate(cmd_split) if x == "vast"]
-        if len(vast_positions) != 1:
-            raise Exception(
-                "Command should contain one and only one call to vast")
-        # if a host is specified in the event, add it to the command
-        if "host" in event:
-            cmd_split.insert(vast_positions[0]+1, "-e")
-            cmd_split.insert(vast_positions[0]+2, event['host'])
+        src_cmd = event["cmd"]
+        host = event["host"]
 
-        # run it as a bash command
-        cmd_split = ['/bin/bash', '-c', ' '.join(cmd_split)]
-
-        logging.info("cmd: ", cmd_split)
-        # execute the command and return the std outputs
-        process = subprocess.Popen(cmd_split,
+        # execute the command as bash and return the std outputs
+        parsed_cmd = ["/bin/bash", "-c", src_cmd]
+        os.environ['VAST_ENDPOINT'] = host
+        process = subprocess.Popen(parsed_cmd,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         res = stdout if stdout != b'' else stderr
-        return {"result": res.decode("utf-8"), "parsed_cmd": cmd_split}
+
+        return {"result": res.decode("utf-8"), "parsed_cmd": parsed_cmd}
+
     except Exception as err:
         err_string = "Exception caught: {0}".format(err)
         logging.error(err_string)
