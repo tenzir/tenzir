@@ -24,6 +24,8 @@ resource "aws_lambda_function" "lambda" {
   }
 
   tags = module.env.default_tags
+
+  depends_on = [aws_iam_role_policy_attachment.lamba_exec_role_eni]
 }
 
 resource "aws_lambda_function_event_invoke_config" "lambda_conf" {
