@@ -1,12 +1,10 @@
 resource "aws_lambda_function" "lambda" {
-  image_uri        = var.filename
-  function_name    = "${module.env.tags["module"]}-${var.function_base_name}-${module.env.stage}"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = var.handler
-  memory_size      = var.memory_size
-  timeout          = var.timeout
-  source_code_hash = filebase64sha256(var.filename)
-  runtime          = var.runtime
+  package_type  = "Image"
+  image_uri     = var.docker_image
+  function_name = "${module.env.module_name}-${var.function_base_name}-${module.env.stage}"
+  role          = aws_iam_role.lambda_role.arn
+  memory_size   = var.memory_size
+  timeout       = var.timeout
 
   environment {
     variables = merge(
@@ -25,7 +23,7 @@ resource "aws_lambda_function" "lambda" {
     }
   }
 
-  tags = module.env.tags
+  tags = module.env.default_tags
 }
 
 resource "aws_lambda_function_event_invoke_config" "lambda_conf" {
@@ -38,13 +36,13 @@ resource "aws_lambda_function_event_invoke_config" "lambda_conf" {
 resource "aws_cloudwatch_log_group" "lambda_log_group" {
   name              = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
   retention_in_days = 14
-  tags              = module.env.tags
+  tags              = module.env.default_tags
 }
 
 resource "aws_security_group" "lambda_sg" {
   count = var.in_vpc ? 1 : 0
 
-  name        = "${module.env.tags["module"]}-${var.function_base_name}-${module.env.stage}"
+  name        = "${module.env.module_name}-${var.function_base_name}-${module.env.stage}"
   description = "allow outbound access"
   vpc_id      = var.vpc_id
 
@@ -55,5 +53,5 @@ resource "aws_security_group" "lambda_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = module.env.tags
+  tags = module.env.default_tags
 }

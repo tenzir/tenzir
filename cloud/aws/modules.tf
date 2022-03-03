@@ -5,7 +5,7 @@ module "vast_server" {
   region_name = var.region_name
 
   vpc_id                      = var.vpc_id
-  subnets                     = [aws_subnet.ids.id]
+  ingress_subnet_cidrs        = [var.subnet_cidr]
   ecs_cluster_id              = aws_ecs_cluster.fargate_cluster.id
   ecs_cluster_name            = aws_ecs_cluster.fargate_cluster.name
   ecs_task_execution_role_arn = aws_iam_role.fargate_task_execution_role.arn
@@ -13,7 +13,7 @@ module "vast_server" {
   task_cpu    = 2048
   task_memory = 4096
 
-  docker_image = "tenzir/vast:${module.env.vast_image_version}"
+  docker_image = module.env.vast_server_image
   command      = ["start"]
   port         = 42000
 
@@ -26,9 +26,9 @@ module "vast_server" {
 module "vast_client" {
   source = "./lambda"
 
-  function_base_name = "vast-client"
+  function_base_name = "client"
   region_name        = var.region_name
-  docker_image       = "tenzir/vast:${module.env.vast_image_version}"
+  docker_image       = "${aws_ecr_repository.lambda.repository_url}:${time_static.last_image_upload.unix}"
   memory_size        = 2048
   timeout            = 10
 
@@ -36,6 +36,10 @@ module "vast_client" {
   vpc_id  = var.vpc_id
   subnets = [aws_subnet.ids.id]
 
-  additional_policies = [aws_iam_policy.s3-additional-policy.arn]
+  additional_policies = []
   environment         = {}
+
+  depends_on = [
+    null_resource.lambda_image_push
+  ]
 }

@@ -13,3 +13,7 @@ output "fargate_cluster_name" {
 output "ids_subnet_id" {
   value = aws_subnet.ids.id
 }
+
+output "vast_lambda_name" {
+  value = module.vast_client.lambda_name
+}

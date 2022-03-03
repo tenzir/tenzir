@@ -2,7 +2,7 @@ terraform {
   backend "local" {
     path = ".terraform/state/terraform.tfstate"
   }
-  required_version = ">=0.12"
+  required_version = ">=1"
 
   required_providers {
     aws = {
@@ -28,6 +28,8 @@ variable "subnet_cidr" {
 provider "aws" {
   region = var.region_name
 }
+
+provider "time" {}
 
 module "env" {
   source = "./env"

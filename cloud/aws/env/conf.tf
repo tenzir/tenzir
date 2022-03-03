@@ -1,10 +1,13 @@
 locals {
   envs = {
     default = {
-      vast_image_version = "latest"
+      # todo: pin release
+      vast_server_image = "tenzir/vast:latest"
+      vast_lambda_image = "cloudfuse/vast-lambda:latest"
     }
     test = {
-      vast_image_version = "latest"
+      vast_server_image = "tenzir/vast:latest"
+      vast_lambda_image = "cloudfuse/vast-lambda:latest"
     }
   }
   current_env = local.envs[terraform.workspace]
@@ -28,6 +31,10 @@ output "module_name" {
   value = local.module_name
 }
 
-output "vast_image_version" {
-  value = local.current_env["vast_image_version"]
+output "vast_server_image" {
+  value = local.current_env["vast_server_image"]
+}
+
+output "vast_lambda_image" {
+  value = local.current_env["vast_lambda_image"]
 }

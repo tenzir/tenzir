@@ -51,10 +51,6 @@ resource "aws_iam_role_policy" "fargate_task_execution_policy" {
     {
       "Effect": "Allow",
       "Action": [
-        "ecr:GetAuthorizationToken",
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage",
         "logs:CreateLogStream",
         "logs:PutLogEvents",
         "ecs:StartTelemetrySession"

@@ -18,7 +18,7 @@ RUN apt-get update && \
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
     ./aws/install --install-dir ${PREFIX}/lambda/aws-cli && \
-    pip install --target ${PREFIX}/lambda awslambdaric==${AWSLAMBDARIC_VERSION} pyvast
+    pip install --target ${PREFIX}/lambda awslambdaric==${AWSLAMBDARIC_VERSION}
 
 
 
@@ -32,6 +32,7 @@ COPY lambda-handler.py .
 
 USER root
 RUN ln -s ./aws-cli/v2/current/dist/aws /usr/local/bin/
+
 USER vast:vast
 
 ENTRYPOINT [ "/usr/bin/python3.9", "-m", "awslambdaric" ]

@@ -5,20 +5,16 @@ resource "aws_cloudwatch_log_group" "fargate_logging" {
 }
 
 
-data "aws_vpc" "selected" {
-  id = var.vpc_id
-}
-
 resource "aws_security_group" "ecs_tasks" {
   name        = "${module.env.module_name}_${var.name}_${module.env.stage}"
-  description = "allow inbound access from the ALB only"
+  description = "allow inbound access from the cidr blocks specified in the ingress_subnets only"
   vpc_id      = var.vpc_id
 
   ingress {
     protocol    = "tcp"
     from_port   = var.port
     to_port     = var.port
-    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+    cidr_blocks = var.ingress_subnet_cidrs
   }
 
   egress {

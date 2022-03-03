@@ -27,7 +27,7 @@ variable "ecs_task_execution_role_arn" {}
 
 variable "docker_image" {}
 
-variable "subnets" {}
+variable "ingress_subnet_cidrs" {}
 
 variable "command" {}
 

@@ -7,29 +7,48 @@ aws_region ?= $(eval aws_region := $(shell bash -c 'read -p "AWS Region: " input
 init:
 	terraform init
 
+docker-login:
+	aws ecr get-login-password --region "${aws_region}" | \
+	docker login --username AWS --password-stdin \
+		"$(shell aws sts get-caller-identity --query 'Account' --output text).dkr.ecr.${aws_region}.amazonaws.com"
+
+docker-build:
+	docker build -t cloudfuse/vast-lambda:latest .
+
 apply:
 	terraform apply -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"
 
-deploy: init apply
+deploy: init docker-login docker-build apply
 
 destroy:
 	terraform destroy -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"
 
 run-task:
 	aws ecs run-task \
-		--cluster $(shell bash -c 'terraform output fargate_cluster_name') \
+		--cluster $(shell terraform output fargate_cluster_name) \
 		--region ${aws_region} \
 		--count 1 \
 		--enable-ecs-managed-tags \
+		--enable-execute-command \
 		--propagate-tags TASK_DEFINITION \
 		--launch-type FARGATE  \
-		--network-configuration awsvpcConfiguration={subnets=[$(shell bash -c 'terraform output ids_subnet_id')],securityGroups=[$(shell bash -c 'terraform output vast_security_group')],assignPublicIp=ENABLED} \
-		--task-definition $(shell bash -c 'terraform output vast_task_definition')
+		--network-configuration awsvpcConfiguration={subnets=[$(shell terraform output ids_subnet_id)],securityGroups=[$(shell terraform output vast_security_group)],assignPublicIp=ENABLED} \
+		--task-definition $(shell terraform output vast_task_definition)
 
 list-tasks:
-	@aws --region ${aws_region} ecs list-tasks --cluster $(shell bash -c 'terraform output fargate_cluster_name') | jq -r '.taskArns | map(.[64:]) | reduce .[] as $$item (""; . + $$item + " ")'
+	@aws --region ${aws_region} ecs list-tasks --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(.[64:]) | reduce .[] as $$item (""; . + $$item + " ")'
 
 stop-all-tasks:
-	for task in $(shell bash -c '$(MAKE) list-tasks'); do \
-		aws --region ${aws_region} ecs stop-task --task $$task --cluster $(shell bash -c 'terraform output fargate_cluster_name'); \
+	for task in $(shell $(MAKE) list-tasks); do \
+		aws --region ${aws_region} ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name); \
 	done
+
+run-lambda:
+	@aws lambda invoke \
+		--function-name $(shell terraform output vast_lambda_name) \
+		--cli-binary-format raw-in-base64-out \
+		--region ${aws_region} \
+		--payload '{"cmd":"$(CMD)"}' \
+		lambda-result.json > /dev/null && \
+	cat lambda-result.json \
+	| jq -r ".result"
