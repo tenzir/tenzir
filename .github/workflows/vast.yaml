@@ -820,6 +820,10 @@ jobs:
         run: |
           docker build . -t tenzir/vast:latest --target production \
             --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+      - name: Build Lambda Docker Image
+        working-directory: cloud/aws
+        run: |
+          docker build . -t tenzir/vast-lambda:latest
       - name: Login to Docker Hub
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         uses: docker/login-action@v1
