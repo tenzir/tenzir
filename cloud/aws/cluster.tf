@@ -56,16 +56,6 @@ resource "aws_iam_role_policy" "fargate_task_execution_policy" {
         "ecs:StartTelemetrySession"
       ],
       "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ssmmessages:CreateControlChannel",
-        "ssmmessages:CreateDataChannel",
-        "ssmmessages:OpenControlChannel",
-        "ssmmessages:OpenDataChannel"
-      ],
-      "Resource": "*"
     }
   ]
 }

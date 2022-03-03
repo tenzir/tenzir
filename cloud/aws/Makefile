@@ -46,7 +46,8 @@ stop-all-tasks:
 
 get-task-ip:
 	@aws ecs describe-tasks \
-		--cluster vast-cluster-default \--task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
+		--cluster vast-cluster-default \
+		--task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
 # provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 # use | jq -r ".result" for a formated output
@@ -57,3 +58,10 @@ run-lambda:
 		--payload '{"cmd":"$(CMD)", "host":"$(shell $(MAKE) get-task-ip):42000"}' \
 		lambda-result.json > /dev/null && \
 	cat lambda-result.json
+
+execute-command:
+	aws ecs execute-command \
+		--cluster $(shell terraform output fargate_cluster_name) \
+		--task $(shell $(MAKE) list-tasks) \
+		--interactive \
+		--command /bin/bash
