@@ -19,29 +19,26 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The experimental aging feature is now deprecated. The [compaction plugin](https://docs.tenzir.com/vast/features/compaction) offers a superset of the aging functionality.
   [#2087](https://github.com/tenzir/vast/pull/2087)
 
-- Actor names in log messages now have an `-ID` suffix to make it easier to tell multiple instances of the same actor apart.
+- Actor names in log messages now have an `-ID` suffix to make it easier to tell multiple instances of the same actor apart, e.g., `exporter-42`.
   [#2119](https://github.com/tenzir/vast/pull/2119)
 
-- Fixed an issue where partition transforms that erase complete partitions would trigger an internal assertion failure.
+- We fixed an issue where partition transforms that erase complete partitions trigger an internal assertion failure.
   [#2123](https://github.com/tenzir/vast/pull/2123)
 
 ### :gift: Features
 
-- The built-in `select` and `project` transform steps now correctly handle dropping all rows and columns respectively, effectively deleting the data.
+- The built-in `select` and `project` transform steps now correctly handle dropping all rows and columns respectively, effectively deleting the input data.
   [#2064](https://github.com/tenzir/vast/pull/2064)
   [#2082](https://github.com/tenzir/vast/pull/2082)
 
 - VAST has a new *query language* plugin type that allows for adding additional query language frontends. The plugin performs one function: compile user input into a VAST expression. The new `sigma` plugin demonstrates usage of this plugin type.
   [#2074](https://github.com/tenzir/vast/pull/2074)
 
-- The new built-in `rename` transform step allows for renaming event types as part of a transformation. This is especially useful when you want to ensure that a repeatedly triggered transformation does not affect already transformed events.
+- The new built-in `rename` transform step allows for renaming event types during a transformation. This is useful when you want to ensure that a repeatedly triggered transformation does not affect already transformed events.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
 - The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://docs.tenzir.com/vast/features/compaction), e.g., for rolling up events into a more space-efficient representation after a certain amount of time.
   [#2076](https://github.com/tenzir/vast/pull/2076)
-
-- Add a parameter to the partition creation listener interface that allows plugins to get a view of the whole database state.
-  [#2103](https://github.com/tenzir/vast/pull/2103)
 
 ### :beetle: Bug Fixes
 
@@ -51,10 +48,10 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST does not lose query capacity when backlogged queries are cancelled any more.
   [#2092](https://github.com/tenzir/vast/pull/2092)
 
-- Correctly adjust the index statistics when applying partition transforms.
+- VAST now correctly adjusts the index statistics when applying partition transforms.
   [#2097](https://github.com/tenzir/vast/pull/2097)
 
-- Fixed a use-after-move bug that could have resulted in incorrect offset ranges being returned from the meta index.
+- We fixed a use-after-move bug could have resulted in incorrect offset ranges being returned from the meta index.
   [#2103](https://github.com/tenzir/vast/pull/2103)
 
 ## [v1.0.0]
