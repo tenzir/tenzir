@@ -13,7 +13,7 @@ docker-login:
 		"$(shell aws sts get-caller-identity --query 'Account' --output text).dkr.ecr.${aws_region}.amazonaws.com"
 
 docker-build:
-	docker build -t cloudfuse/vast-lambda:latest .
+	docker build -t tenzir/vast-lambda:latest .
 
 apply:
 	terraform apply -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"

@@ -3,11 +3,11 @@ locals {
     default = {
       # todo: pin release
       vast_server_image = "tenzir/vast:latest"
-      vast_lambda_image = "cloudfuse/vast-lambda:latest"
+      vast_lambda_image = "tenzir/vast-lambda:latest"
     }
     test = {
       vast_server_image = "tenzir/vast:latest"
-      vast_lambda_image = "cloudfuse/vast-lambda:latest"
+      vast_lambda_image = "tenzir/vast-lambda:latest"
     }
   }
   current_env = local.envs[terraform.workspace]
