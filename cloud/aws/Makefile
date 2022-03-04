@@ -23,13 +23,13 @@ docker-build:
 apply:
 	terraform apply -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"
 
-deploy: init docker-login docker-build apply ## One liner that builds and deploys the stack to AWS
+deploy: init docker-login docker-build apply ## One liner build and deploy of the stack to AWS
 
-destroy: stop-all-tasks
-	terraform destroy -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"
+destroy: stop-all-tasks ## Tear down the entire terraform stack
+	@terraform destroy -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"
 
-run-task: ## Start a VAST server instance as an AWS Fargate task
-	aws ecs run-task \
+run-vast-task:
+	@aws ecs run-task \
 		--cluster $(shell terraform output fargate_cluster_name) \
 		--count 1 \
 		--enable-ecs-managed-tags \
@@ -37,20 +37,41 @@ run-task: ## Start a VAST server instance as an AWS Fargate task
 		--propagate-tags TASK_DEFINITION \
 		--launch-type FARGATE  \
 		--network-configuration "awsvpcConfiguration={subnets=[$(shell terraform output ids_appliances_subnet_id)],securityGroups=[$(shell terraform output vast_security_group)]}" \
-		--task-definition $(shell terraform output vast_task_definition)
+		--task-definition $(shell terraform output vast_task_definition) \
+	| jq -r '.tasks[].taskArn? | split("/")[-1]' \
+	| xargs -I _ echo "Started task _" 
 
-list-tasks: ## List all running tasks on the ECS cluster created by Terraform
+
+
+start-vast-server: ## Start a VAST server instance as an AWS Fargate task. Noop if a VAST server is already running.
+	@if [ -n "$(shell $(MAKE) get-vast-tasks)" ]; then  \
+		echo "VAST server already running"; exit 1; \
+	fi
+	@$(MAKE) --no-print-directory run-vast-task 
+
+restart-vast-server: ## Stops all running VAST server Fargate tasks and start a new one.
+	@for task in $(shell $(MAKE) get-vast-tasks); do \
+		aws ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name) > /dev/null; \
+		echo "Stopped task $$task"; \
+	done
+	@$(MAKE) --no-print-directory run-vast-task
+
+get-vast-tasks: ## List all running tasks on the ECS cluster created by Terraform
+	@aws ecs list-tasks --family $(shell terraform output vast_task_family) --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
+
+list-all-tasks: ## List the ids of all tasks running on the ECS cluster
 	@aws ecs list-tasks --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
 
 stop-all-tasks: ## Stop all running tasks on the ECS cluster created by Terraform
-	for task in $(shell $(MAKE) list-tasks); do \
-		aws ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name); \
+	@for task in $(shell $(MAKE) list-all-tasks); do \
+		aws ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name) > /dev/null; \
+		echo "Stopped task $$task"; \
 	done
 
-get-task-ip:
+get-vast-task-ip:
 	@aws ecs describe-tasks \
 		--cluster vast-cluster-default \
-		--task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
+		--task $(shell $(MAKE) get-vast-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
 # Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 # Use | jq -r ".result" for a formated output
@@ -62,12 +83,14 @@ run-lambda: ## Run ad-hoc VAST clients from AWS Lambda
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
-		--payload '{"cmd":"$(CMD)", "host":"$(shell $(MAKE) get-task-ip):42000"}' \
+		--payload '{"cmd":"$(CMD)", "host":"$(shell $(MAKE) get-vast-task-ip):42000"}' \
 		/dev/stdout | jq -s -r .[0].result
 
+# Provide your bash command through the CMD variable (e.g make execute-command CMD="vast status")
+# Start an interactive session by leaving CMD empty
 execute-command: ## Start an interactive bash shell within the Fargate container
-	aws ecs execute-command \
+	@aws ecs execute-command \
 		--cluster $(shell terraform output fargate_cluster_name) \
-		--task $(shell $(MAKE) list-tasks) \
+		--task $(shell $(MAKE) get-vast-tasks) \
 		--interactive \
-		--command /bin/bash
+		--command "$(shell if [ -z "${CMD}" ]; then echo "/bin/bash"; else echo "${CMD}"; fi)"
