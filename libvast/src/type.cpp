@@ -238,7 +238,55 @@ type::type(std::string_view name, const type& nested,
     // types, which did not require an legacy alias type wrapping to have a name.
     *this = nested;
   } else {
-    const auto nested_bytes = as_bytes(nested);
+    auto nested_bytes = as_bytes(nested);
+    // Identify the first named metadata-layer, and store all attributes we
+    // encounter until then. We merge the attributes into the attributes
+    // provided to this constructor, priorising the new attributes, with the
+    // nested byte range being adjusted to the first named metadata-layer (or
+    // the underlying concrete type).
+    auto merged_attributes = std::vector<attribute_view>{};
+    for (const auto* root = fbs::GetType(nested_bytes.data());
+         root != nullptr;) {
+      switch (root->type_type()) {
+        case fbs::type::Type::NONE:
+        case fbs::type::Type::bool_type:
+        case fbs::type::Type::integer_type:
+        case fbs::type::Type::count_type:
+        case fbs::type::Type::real_type:
+        case fbs::type::Type::duration_type:
+        case fbs::type::Type::time_type:
+        case fbs::type::Type::string_type:
+        case fbs::type::Type::pattern_type:
+        case fbs::type::Type::address_type:
+        case fbs::type::Type::subnet_type:
+        case fbs::type::Type::enumeration_type:
+        case fbs::type::Type::list_type:
+        case fbs::type::Type::map_type:
+        case fbs::type::Type::record_type:
+          root = nullptr;
+          break;
+        case fbs::type::Type::enriched_type: {
+          const auto* enriched_type = root->type_as_enriched_type();
+          if (enriched_type->name()) {
+            root = nullptr;
+            break;
+          }
+          if (const auto* attributes = enriched_type->attributes()) {
+            for (const auto* attribute : *attributes) {
+              VAST_ASSERT(attribute->key());
+              merged_attributes.push_back({
+                attribute->key()->string_view(),
+                attribute->value() ? attribute->value()->string_view() : "",
+              });
+            }
+          }
+          nested_bytes = as_bytes(*enriched_type->type());
+          root = enriched_type->type_nested_root();
+          VAST_ASSERT(root);
+          break;
+        }
+      }
+    }
     const auto reserved_size = [&]() noexcept {
       // The total length is made up from the following terms:
       // - 52 bytes FlatBuffers table framing
@@ -251,7 +299,7 @@ type::type(std::string_view name, const type& nested,
       size += reserved_string_size(name);
       return size;
     };
-    auto builder = attributes.empty()
+    auto builder = attributes.empty() && merged_attributes.empty()
                      ? flatbuffers::FlatBufferBuilder{reserved_size()}
                      : flatbuffers::FlatBufferBuilder{};
     const auto nested_type_offset = builder.CreateVector(
@@ -261,15 +309,29 @@ type::type(std::string_view name, const type& nested,
     const auto attributes_offset = [&]() noexcept
       -> flatbuffers::Offset<
         flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
-      if (attributes.empty())
+      if (attributes.empty() && merged_attributes.empty())
         return 0;
       auto attributes_offsets
         = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
-      attributes_offsets.reserve(attributes.size());
+      attributes_offsets.reserve(attributes.size() + merged_attributes.size());
       for (const auto& attribute : attributes) {
         const auto key_offset = builder.CreateString(attribute.key);
         const auto value_offset
           = attribute.value ? builder.CreateString(*attribute.value) : 0;
+        attributes_offsets.emplace_back(fbs::type::detail::CreateAttribute(
+          builder, key_offset, value_offset));
+      }
+      for (const auto& attribute : merged_attributes) {
+        // Skip over any attributes that were already in the new list of
+        // attributes.
+        if (std::any_of(attributes.begin(), attributes.end(),
+                        [&](const auto& new_attribute) noexcept {
+                          return new_attribute.key == attribute.key;
+                        }))
+          continue;
+        const auto key_offset = builder.CreateString(attribute.key);
+        const auto value_offset
+          = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
         attributes_offsets.emplace_back(fbs::type::detail::CreateAttribute(
           builder, key_offset, value_offset));
       }
