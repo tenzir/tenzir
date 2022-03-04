@@ -47,14 +47,14 @@ endif ()
 # -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/fbs/*.fbs"
-     "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/fbs/legacy/*.fbs")
+     "${CMAKE_CURRENT_SOURCE_DIR}/fbs/*.fbs"
+     "${CMAKE_CURRENT_SOURCE_DIR}/fbs/legacy/*.fbs")
 list(SORT flatbuffers_schemas)
 
 VASTCompileFlatBuffers(
   TARGET libvast-fbs
   SCHEMAS ${flatbuffers_schemas}
-  INCLUDE_DIRECTORY "vast/fbs")
+  INCLUDE_DIRECTORY "vast/fbs/")
 
 # -- arrow ---------------------------------------------------------------------
 
