@@ -10,9 +10,11 @@ Running VAST on AWS relies on two serverless building blocks:
    tasks, such as executing queries and ingesting data ad hoc
 
 For storage on the VAST server in Fargate, VAST uses
-[EFS](https://aws.amazon.com/efs/) as a drop-in network filesystem with a
-reasonable throughput-latency trade-off. The sketch below illustrates the
-high-level architecture:
+[EFS](https://aws.amazon.com/efs/) as a drop-in network filesystem. It provides
+persistence of the database files across task executions with a reasonable
+throughput-latency trade-off.
+
+The sketch below illustrates the high-level architecture:
 
 ![AWS Architecture](https://user-images.githubusercontent.com/53797/156728636-9909c4aa-34a0-47f4-b6f0-50d7bfe96e28.png)
 
@@ -64,7 +66,10 @@ Caveats:
 - Access to the VAST server is enforced by limiting inbound traffic to its
   local private subnet.
 
-- A NAT Gateway is created automatically, you cannot specify an existing one
+- A NAT Gateway is created automatically, you cannot specify an existing one.
+  It will be billed at [an hourly rate](https://aws.amazon.com/vpc/pricing/)
+  even when you aren't running any workload, until you tear down the entire
+  stack.
 
 
 #### Start a VAST server (Fargate)
@@ -97,7 +102,7 @@ make run-lambda CMD="vast status"
 
 #### Shutdown
 
-To shutdown all Fargate and Lambda resources, run:
+To shutdown all Fargate resources, run:
 
 ```bash
 make stop-all-tasks
