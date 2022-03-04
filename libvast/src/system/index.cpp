@@ -642,8 +642,8 @@ index_state::status(status_verbosity v) const {
       sum += layout_stats.count;
     }
     auto xs = record{};
-    xs["count"] = count{sum};
-    layout_object["total"] = xs;
+    xs["total"] = count{sum};
+    stats_object["all-layouts"] = xs;
     stats_object["layouts"] = std::move(layout_object);
     rs->content["statistics"] = std::move(stats_object);
     rs->content["catalog-bytes"] = catalog_bytes;
