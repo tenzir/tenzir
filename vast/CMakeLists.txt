@@ -29,20 +29,34 @@ VASTInstallExampleConfiguration(vast "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 
 # -- init system integration ---------------------------------------------------
 
-# TODO: This should be behind an option, and work for macOS and Linux as well.
+# TODO: This should be behind an option, and work for Linux as well.
 
-# Install rc.d script on FreeBSD into PREFIX/etc/rc.d.
-if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/freebsd-rc-vast"
-       rc_template NEWLINE_CONSUME)
-  string(REPLACE "%%PREFIX%%" ${CMAKE_INSTALL_PREFIX} rc_content ${rc_template})
-  set(rc_file "${CMAKE_CURRENT_BINARY_DIR}/freebsd-rc-vast")
-  file(WRITE ${rc_file} ${rc_content})
+if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+  # Install rc.d script on FreeBSD into PREFIX/etc/rc.d.
+  # TODO: Technically this can break for relocatable binaries when the install
+  # prefix at build-time is different than the install prefix at install-time.
+  # The macOS installation below handles this correctly, and the FreeBSD
+  # installation should be adapted to work similarly.
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/rc.d/vast.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/vast" @ONLY)
   install(
-    FILES "${rc_file}"
-    DESTINATION "${CMAKE_INSTALL_PREFIX}/etc/rc.d"
-    RENAME "vast"
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/vast"
+    DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/rc.d"
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE)
+elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+  # Install launchd script on macOS into ~/Library/LaunchAgents
+  install(
+    CODE "\
+    if (NOT IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
+      string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
+    endif ()
+    set(VAST_BINARY \"\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:vast>\")
+    set(VAST_WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/vast\")
+    message(STATUS
+      \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
+    configure_file(
+      \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.vast.plist.in\"
+      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\" @ONLY)")
 endif ()
 
 # -- integration tests ---------------------------------------------------------
