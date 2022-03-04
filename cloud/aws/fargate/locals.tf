@@ -1,13 +1,19 @@
 locals {
   container_definition = [
     {
-      cpu         = var.task_cpu
-      image       = var.docker_image
-      memory      = var.task_memory
-      name        = var.name
-      essential   = true
-      mountPoints = []
-      command     = var.command
+      cpu       = var.task_cpu
+      image     = var.docker_image
+      memory    = var.task_memory
+      name      = var.name
+      essential = true
+      mountPoints = [
+        {
+          sourceVolume  = "storage",
+          containerPath = var.storage_mount_point,
+          readOnly      = false
+        }
+      ]
+      command = var.command
       portMappings = [
         {
           containerPort = var.port
@@ -25,6 +31,6 @@ locals {
           awslogs-stream-prefix = "ecs"
         }
       }
-    },
+    }
   ]
 }
