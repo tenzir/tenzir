@@ -52,7 +52,6 @@ get-task-ip:
 		--cluster vast-cluster-default \
 		--task $(shell $(MAKE) list-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
-
 # Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 # Use | jq -r ".result" for a formated output
 # Inside the CMD variable, escape:
@@ -64,12 +63,11 @@ run-lambda: ## Run ad-hoc VAST clients from AWS Lambda
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
 		--payload '{"cmd":"$(CMD)", "host":"$(shell $(MAKE) get-task-ip):42000"}' \
-		lambda-result.json > /dev/null && \
-	cat lambda-result.json
+		/dev/stdout | jq -s -r .[0].result
 
 execute-command: ## Start an interactive bash shell within the Fargate container
 	aws ecs execute-command \
 		--cluster $(shell terraform output fargate_cluster_name) \
 		--task $(shell $(MAKE) list-tasks) \
 		--interactive \
-		--command /bin/bash
+		--command "$(CMD)"
