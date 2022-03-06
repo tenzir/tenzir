@@ -48,6 +48,8 @@ caf::behavior
 transforming_sink(caf::stateful_actor<sink_state>* self,
                   format::writer_ptr&& writer,
                   std::vector<transform>&& transforms, uint64_t max_events) {
+  VAST_DEBUG("{} spawned ({}, {})", *self, writer->name(),
+             VAST_ARG(max_events));
   using namespace std::chrono;
   self->state.writer = std::move(writer);
   self->state.transforms = transformation_engine{std::move(transforms)};

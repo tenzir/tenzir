@@ -9,6 +9,7 @@
 #include "vast/system/explore_command.hpp"
 
 #include "vast/defaults.hpp"
+#include "vast/detail/saturating_arithmetic.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
@@ -38,7 +39,6 @@ namespace vast::system {
 caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   using namespace std::string_literals;
   VAST_DEBUG("{}", inv);
-  const auto& options = inv.options;
   if (auto error = explorer_validate_args(inv.options))
     return make_message(error);
   // Read options and arguments.
@@ -47,11 +47,24 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   auto query = read_query(inv, "vast.export.read", must_provide_query::yes, 0);
   if (!query)
     return caf::make_message(std::move(query.error()));
-  size_t max_events_search
-    = caf::get_or(options, "vast.explore.max-events-query",
+  uint64_t max_events_query
+    = caf::get_or(inv.options, "vast.explore.max-events-query",
                   defaults::explore::max_events_query);
+  uint64_t max_events_context
+    = caf::get_or(inv.options, "vast.explore.max-events-context",
+                  defaults::explore::max_events_context);
+  uint64_t max_events = caf::get_or(inv.options, "vast.explore.max-events",
+                                    defaults::explore::max_events);
   // Get a local actor to interact with `sys`.
   caf::scoped_actor self{sys};
+  auto alternative_max_events
+    = detail::saturating_mul(max_events_query, max_events_context);
+  if (alternative_max_events < max_events) {
+    max_events = alternative_max_events;
+    VAST_VERBOSE("{} adjusts max-events to {}", *self, max_events);
+    caf::put(const_cast<caf::settings&>(inv.options), // NOLINT
+             "vast.export.max-events", max_events);
+  }
   auto s = make_sink(sys, output_format, inv.options);
   if (!s)
     return make_message(s.error());
@@ -62,9 +75,9 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   });
   self->monitor(sink);
   // Get VAST node.
-  auto node_opt
-    = system::spawn_or_connect_to_node(self, options, content(sys.config()));
-  if (auto err = std::get_if<caf::error>(&node_opt))
+  auto node_opt = system::spawn_or_connect_to_node(self, inv.options,
+                                                   content(sys.config()));
+  if (auto* err = std::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
   const auto& node = std::holds_alternative<node_actor>(node_opt)
                        ? std::get<node_actor>(node_opt)
@@ -76,9 +89,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Spawn exporter for the passed query
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
-  if (max_events_search)
-    caf::put(spawn_exporter.options, "vast.export.max-events",
-             max_events_search);
+  caf::put(spawn_exporter.options, "vast.export.max-events", max_events_query);
   VAST_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
   if (!maybe_exporter)
