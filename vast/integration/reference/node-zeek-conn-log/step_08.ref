@@ -1,4 +1,0 @@
-type,ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,proto,service,duration,orig_bytes,resp_bytes,conn_state,local_orig,missed_bytes,history,orig_pkts,orig_ip_bytes,resp_pkts,resp_ip_bytes,tunnel_parents
-zeek.conn,2009-11-18T09:14:20.158200064,"WfzxgFx2lWb",192.168.1.104,1196,65.55.184.16,443,"tcp","ssl",1.13m,57041,8510,"RSTR",,0,"ShADdar",54,59209,26,9558,""
-zeek.conn,2009-11-18T09:14:20.158200064,"WfzxgFx2lWb",192.168.1.104,1196,65.55.184.16,443,"tcp","ssl",1.13m,57041,8510,"RSTR",,0,"ShADdar",54,59209,26,9558,""
-zeek.conn,2009-11-18T09:14:20.158200064,"WfzxgFx2lWb",192.168.1.104,1196,65.55.184.16,443,"tcp","ssl",1.13m,57041,8510,"RSTR",,0,"ShADdar",54,59209,26,9558,""
