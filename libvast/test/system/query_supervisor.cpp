@@ -32,7 +32,7 @@ dummy_partition(system::partition_actor::pointer self, ids x) {
     [=](const vast::query& q) {
       auto sink = caf::get<query::count>(q.cmd).sink;
       self->send(sink, rank(x));
-      return atom::done_v;
+      return uint64_t{42};
     },
     [=](atom::erase) -> atom::done {
       FAIL("dummy implementation not available");

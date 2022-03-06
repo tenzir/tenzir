@@ -493,8 +493,8 @@ active_partition_actor::behavior_type active_partition(
             });
       }
     },
-    [self](vast::query query) -> caf::result<atom::done> {
-      auto rp = self->make_response_promise<atom::done>();
+    [self](vast::query query) -> caf::result<uint64_t> {
+      auto rp = self->make_response_promise<uint64_t>();
       // Don't bother with with indexers, etc. if we already have an id set.
       if (!query.ids.empty()) {
         // TODO: Depending on the selectivity of the query and the rank of the
@@ -508,7 +508,7 @@ active_partition_actor::behavior_type active_partition(
       // return early if that doesn't yield any results.
       auto triples = detail::evaluate(self->state, query.expr);
       if (triples.empty()) {
-        rp.deliver(atom::done_v);
+        rp.deliver(uint64_t{0});
         return rp;
       }
       auto eval = self->spawn(evaluator, query.expr, triples);
@@ -530,7 +530,7 @@ active_partition_actor::behavior_type active_partition(
             auto* count = caf::get_if<query::count>(&query.cmd);
             if (count && count->mode == query::count::estimate) {
               self->send(count->sink, rank(hits));
-              rp.deliver(atom::done_v);
+              rp.deliver(rank(hits));
             } else {
               query.ids = hits;
               rp.delegate(self->state.store, std::move(query));

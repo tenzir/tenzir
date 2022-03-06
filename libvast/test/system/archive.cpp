@@ -40,6 +40,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   std::vector<table_slice> query(const ids& ids) {
     bool done = false;
+    uint64_t tally = 0;
+    uint64_t rows = 0;
     std::vector<table_slice> result;
     auto query
       = query::make_extract(self, query::extract::drop_ids, expression{});
@@ -47,11 +49,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     self->send(a, query);
     run();
     self
-      ->do_receive([&](vast::atom::done) { done = true; },
-                   [&](table_slice slice) {
-                     result.push_back(std::move(slice));
-                   })
+      ->do_receive(
+        [&](uint64_t x) {
+          tally = x;
+          done = true;
+        },
+        [&](table_slice slice) {
+          rows += slice.rows();
+          result.push_back(std::move(slice));
+        })
       .until(done);
+    REQUIRE_EQUAL(rows, tally);
     return result;
   }
 

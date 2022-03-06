@@ -95,7 +95,7 @@ struct passive_partition_state {
   chunk_ptr partition_chunk = {};
 
   /// Stores a list of expressions that could not be answered immediately.
-  std::vector<std::tuple<query, caf::typed_response_promise<atom::done>>>
+  std::vector<std::tuple<query, caf::typed_response_promise<uint64_t>>>
     deferred_evaluations = {};
 
   /// Actor handle of the accountant.

@@ -70,7 +70,7 @@ query_supervisor_actor::behavior_type query_supervisor(
         // TODO: Add a proper configurable timeout.
         self->request(partition, caf::infinite, query)
           .then(
-            [=](atom::done) {
+            [=](uint64_t) {
               auto delta = std::chrono::steady_clock::now() - start;
               VAST_TRACEPOINT(query_partition_done, query_trace_id,
                               partition_trace_id, delta.count());

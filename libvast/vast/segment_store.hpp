@@ -94,7 +94,7 @@ public:
 
   std::unique_ptr<lookup> extract(const ids& xs) const;
 
-  caf::error erase(const ids& xs);
+  caf::expected<uint64_t> erase(const ids& xs);
 
   caf::expected<std::vector<table_slice>> get(const ids& xs);
 

@@ -40,10 +40,10 @@
 
 vast::system::store_actor::behavior_type dummy_store() {
   return {[](const vast::query&) {
-            return vast::atom::done_v;
+            return uint64_t{0};
           },
           [](const vast::atom::erase&, const vast::ids&) {
-            return vast::atom::done_v;
+            return uint64_t{0};
           }};
 }
 
@@ -301,8 +301,8 @@ TEST(full partition roundtrip) {
     };
   };
   auto test_expression
-    = [&](const vast::expression& expression, size_t expected_ids) {
-        auto done = false;
+    = [&](const vast::expression& expression, size_t expected_hits) {
+        uint64_t tally = 0;
         auto result = std::make_shared<uint64_t>();
         auto dummy = self->spawn(dummy_client, result);
         auto rp = self->request(
@@ -311,8 +311,8 @@ TEST(full partition roundtrip) {
                                   expression));
         run();
         rp.receive(
-          [&done](vast::atom::done) {
-            done = true;
+          [&tally](uint64_t x) {
+            tally = x;
           },
           [](caf::error&) {
             REQUIRE(false);
@@ -320,8 +320,8 @@ TEST(full partition roundtrip) {
         run();
         self->send_exit(dummy, caf::exit_reason::user_shutdown);
         run();
-        CHECK_EQUAL(done, true);
-        CHECK_EQUAL(*result, expected_ids);
+        CHECK_EQUAL(*result, expected_hits);
+        CHECK_EQUAL(tally, expected_hits);
         return true;
       };
   auto x_equals_zero = vast::expression{

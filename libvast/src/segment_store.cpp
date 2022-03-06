@@ -132,7 +132,7 @@ segment_store::extract(const ids& xs) const {
   return std::make_unique<lookup>(*this, std::move(xs), std::move(candidates));
 }
 
-caf::error segment_store::erase(const ids& xs) {
+caf::expected<uint64_t> segment_store::erase(const ids& xs) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(xs));
   VAST_VERBOSE("erasing {} ids from store", rank(xs));
   // Get affected segments.
@@ -140,7 +140,7 @@ caf::error segment_store::erase(const ids& xs) {
   if (auto err = select_segments(xs, candidates))
     return err;
   if (candidates.empty())
-    return caf::none;
+    return uint64_t{0};
   auto is_subset_of_xs = [&](const ids& ys) {
     return is_subset(ys, xs);
   };
@@ -276,7 +276,7 @@ caf::error segment_store::erase(const ids& xs) {
     VAST_INFO("{} erased {} events", detail::pretty_type_name(this),
               erased_events);
   }
-  return caf::none;
+  return erased_events;
 }
 
 caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {

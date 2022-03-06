@@ -39,11 +39,11 @@ namespace {
 // Returns a the number of events that match the query.
 // Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
-caf::expected<size_t> handle_lookup(Actor& self, const vast::query& query,
-                                    const std::vector<table_slice>& slices) {
+caf::expected<uint64_t> handle_lookup(Actor& self, const vast::query& query,
+                                      const std::vector<table_slice>& slices) {
   const auto& ids = query.ids;
   std::vector<expression> checkers;
-  size_t num_hits = 0ull;
+  uint64_t num_hits = 0ull;
   for (const auto& slice : slices) {
     if (query.expr == expression{}) {
       checkers.emplace_back();
@@ -156,10 +156,10 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         self->quit(std::move(err));
       });
   return {
-    [self](query query) -> caf::result<atom::done> {
+    [self](query query) -> caf::result<uint64_t> {
       VAST_DEBUG("{} handles new query", *self);
       if (!self->state.segment) {
-        auto rp = self->make_response_promise<atom::done>();
+        auto rp = self->make_response_promise<uint64_t>();
         self->state.deferred_requests.emplace_back(query, rp);
         return rp;
       }
@@ -185,21 +185,24 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       self->send(self->state.accountant, "segment-store.lookup.hits", *num_hits,
                  metrics_metadata{{"query", id_str},
                                   {"store-type", "passive"}});
-      return atom::done_v;
+      return *num_hits;
     },
-    [self](atom::erase, ids xs) -> caf::result<atom::done> {
+    [self](atom::erase, ids xs) -> caf::result<uint64_t> {
       if (!self->state.segment) {
         // Treat this as an "erase" query for the purposes of storing it
         // until the segment is loaded.
-        auto rp = self->make_response_promise<atom::done>();
+        auto rp = self->make_response_promise<uint64_t>();
         auto query = query::make_erase({});
         query.ids = std::move(xs);
         self->state.deferred_requests.emplace_back(query, rp);
         return rp;
       }
-      VAST_DEBUG("{} erases {} of {} events", *self,
-                 rank(self->state.segment->ids() - xs),
-                 rank(self->state.segment->ids()));
+      auto segment_ids = self->state.segment->ids();
+      auto segment_size = rank(segment_ids);
+      auto intersection = segment_ids & xs;
+      auto intersection_size = rank(intersection);
+      VAST_DEBUG("{} erases {} of {} events", *self, intersection_size,
+                 segment_size);
       if (is_subset(self->state.segment->ids(), xs)) {
         VAST_VERBOSE("{} gets wholly erased from {}", *self, self->state.path);
         // There is a (small) chance one or more lookups are currently still in
@@ -207,7 +210,18 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         // ref-counting. The lookups can still finish normally because the
         // `mmap()` is still valid even after the underlying segment file was
         // removed.
-        return self->delegate(self->state.fs, atom::erase_v, self->state.path);
+        auto rp = self->make_response_promise<uint64_t>();
+        self
+          ->request(self->state.fs, caf::infinite, atom::erase_v,
+                    self->state.path)
+          .then(
+            [rp, intersection_size](atom::done) mutable {
+              rp.deliver(intersection_size);
+            },
+            [rp](caf::error& err) mutable {
+              rp.deliver(std::move(err));
+            });
+        return rp;
       }
       auto new_segment = segment::copy_without(*self->state.segment, xs);
       if (!new_segment) {
@@ -218,13 +232,13 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       VAST_ASSERT(self->state.path.has_filename());
       auto old_path = self->state.path;
       auto new_path = self->state.path.replace_extension("next");
-      auto rp = self->make_response_promise<atom::done>();
+      auto rp = self->make_response_promise<uint64_t>();
       self
         ->request(self->state.fs, caf::infinite, atom::write_v, new_path,
                   new_segment->chunk())
         .then(
-          [seg = std::move(*new_segment), self, old_path, new_path,
-           rp](atom::ok) mutable {
+          [seg = std::move(*new_segment), self, old_path, new_path, rp,
+           intersection_size](atom::ok) mutable {
             std::error_code ec;
             // Re-use the old filename so that we don't have to write a new
             // partition flatbuffer with the changed store header as well.
@@ -232,7 +246,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
             if (ec)
               VAST_ERROR("failed to erase old data {}", seg.id());
             self->state.segment = std::move(seg);
-            rp.deliver(atom::done_v);
+            rp.deliver(intersection_size);
           },
           [rp](caf::error& err) mutable {
             VAST_ERROR("failed to flush archive {}", to_string(err));
@@ -262,7 +276,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   });
   auto result = local_store_actor::behavior_type{
     // store api
-    [self](const query& query) -> caf::result<atom::done> {
+    [self](const query& query) -> caf::result<uint64_t> {
       auto start = std::chrono::steady_clock::now();
       caf::expected<std::vector<table_slice>> slices = caf::error{};
       if (self->state.builder) {
@@ -287,9 +301,9 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
                  metrics_metadata{{"query", id_str}, {"store_type", "active"}});
       self->send(self->state.accountant, "segment_store.lookup.hits", *num_hits,
                  metrics_metadata{{"query", id_str}, {"store_type", "active"}});
-      return atom::done_v;
+      return *num_hits;
     },
-    [self](const atom::erase&, const ids& ids) -> caf::result<atom::done> {
+    [self](const atom::erase&, const ids& ids) -> caf::result<uint64_t> {
       // TODO: There is a race here when ids are erased while we're waiting
       // for the filesystem actor to finish.
       auto seg = self->state.builder->finish();
@@ -300,7 +314,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
       self->state.builder->reset(id);
       for (auto&& slice : std::exchange(*slices, {}))
         self->state.builder->add(std::move(slice));
-      return atom::done_v;
+      return rank(self->state.builder->ids());
     },
     // store builder
     [self](

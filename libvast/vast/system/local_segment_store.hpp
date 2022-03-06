@@ -67,7 +67,7 @@ struct passive_store_state {
   /// Holds requests that did arrive while the segment data
   /// was still being loaded from disk.
   using request
-    = std::tuple<vast::query, caf::typed_response_promise<atom::done>>;
+    = std::tuple<vast::query, caf::typed_response_promise<uint64_t>>;
   std::vector<request> deferred_requests = {};
 
   /// Actor handle of the accountant.
