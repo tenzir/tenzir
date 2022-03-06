@@ -17,6 +17,51 @@
       }
     },
     {
+      "name": "clang-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++"
+      },
+      "environment": {
+        "LDFLAGS": "-fuse-ld=lld"
+      }
+    },
+    {
+      "name": "nix-clang-debug",
+      "inherits": ["nix-base", "clang-base"],
+      "displayName": "Clang Debug Config",
+      "binaryDir": "${sourceDir}/build/clang/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/debug",
+        "VAST_ENABLE_ASAN": "ON"
+      }
+    },
+    {
+      "name": "nix-clang-redeb",
+      "inherits": ["nix-base", "clang-base"],
+      "displayName": "Clang Redeb Config",
+      "binaryDir": "${sourceDir}/build/clang/redeb",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/redeb",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+      }
+    },
+    {
+      "name": "nix-clang-release",
+      "inherits": ["nix-base", "clang-base"],
+      "displayName": "Clang Release Config",
+      "binaryDir": "${sourceDir}/build/clang/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/release",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+      }
+    },
+    {
       "name": "gcc-base",
       "hidden": true,
       "cacheVariables": {
@@ -79,6 +124,18 @@
     {
       "name": "nix-gcc-release",
       "configurePreset": "nix-gcc-release"
+    },
+    {
+      "name": "nix-clang-debug",
+      "configurePreset": "nix-clang-debug"
+    },
+    {
+      "name": "nix-clang-redeb",
+      "configurePreset": "nix-clang-redeb"
+    },
+    {
+      "name": "nix-clang-release",
+      "configurePreset": "nix-clang-release"
     }
   ]
 }
