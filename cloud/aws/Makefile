@@ -70,4 +70,4 @@ execute-command: ## Start an interactive bash shell within the Fargate container
 		--cluster $(shell terraform output fargate_cluster_name) \
 		--task $(shell $(MAKE) list-tasks) \
 		--interactive \
-		--command "$(CMD)"
+		--command /bin/bash
