@@ -39,7 +39,7 @@ following variables:
   can use `aws ec2 describe-vpcs --region $region` to list available VPCs.
 
 - `subnet_cidr`: the subnet *within* the VPC where the VAST stack will be
-  placed. Terraform will create a this subnet and it must not overlap with an
+  placed. Terraform will create this subnet and it must not overlap with an
   existing subnet in this VPC and VPCs peered to it. You can use
   `aws ec2 describe-subnets --region $region` to list existing subnets to pick
   a non-overlapping one within the VPC subnet.
