@@ -33,7 +33,8 @@ To avoid having to provide required Terraform variables manually, the Makefile
 looks for a file `default.env` in the current directory. It must define the
 following variables:
 
-- `aws_region`: the region where to deploy the VPC
+- `aws_region`: the region of the VPC where to deploy Fargate and Lambda
+  resources.
 
 - `vpc_id`: an existing VPC to which you plan to attach your VAST stack. You
   can use `aws ec2 describe-vpcs --region $region` to list available VPCs.
