@@ -4,7 +4,7 @@
 vpc_id ?= $(eval vpc_id := $(shell bash -c 'read -p "VPC ID (existing): " input; echo $$input'))$(vpc_id)
 subnet_cidr ?= $(eval subnet_cidr := $(shell bash -c 'read -p "Subnet CIDR (to be created): " input; echo $$input'))$(subnet_cidr)
 aws_region ?= $(eval aws_region := $(shell bash -c 'read -p "AWS Region: " input; echo $$input'))$(aws_region)
-vast_version ?= v1.1.0
+vast_version ?= $(shell git describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*')
 
 # re-export these variable into the environement for Terraform and the AWS CLI to use
 export AWS_REGION = ${aws_region}
