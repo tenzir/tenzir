@@ -104,62 +104,46 @@ To shutdown all Fargate resources, run:
 make stop-all-tasks
 ```
 
----------------------------------------------
-
-WIP
-
----------------------------------------------
-
-
 ## Architecture
 
-Lambda is the perfect abstraction for short-running one-shot operation, e.g.,
-ingesting a file or executing a query.
+The AWS architecture builds on serverless principles to deliver a scalable
+cloud-native deployment option. To combine continuously running services with
+dynamic ad-hoc tasks, we employ Lambda and Fargate as building blocks for
+on-demand query capacity while continuously ingesting data.
+
+Specifically, we embed the long-running VAST server in a Fargate task
+definition, which allows for flexible resource allocation based on
+compute resource needs. VAST mounts EFS storage for maximum flexibility and
+pay-as-you-go scaling.
+
+The VAST client typically performs short-running ad-hoc tasks, like ingesting
+a file or running query. We map these type of actions to Lambda functions.
 
 ### VPC Infrastructure
 
-This script creates the networking infrastructure and the compute resources that VAST will run on.
+The provided Terraform script creates the following architecture within a given
+VPC:
 
-In terms of networking, we make the assumption that the user has a VPC with some appliances that he wishes to monitor. This VPC has a CIDR block of at least 32 IPs that is not yet assigned to any subnet and it also has an Internet Gateway attached.
+![VAST VPC Architecture](https://user-images.githubusercontent.com/53797/157026500-8845d8bc-59cf-4de2-881e-e82fbd84da26.png)
 
-The script takes the VPC ID and the CIDR block as input and from that it creates:
-- 2 subnets spanning that CIDR block:
-  - a public one where it places a NAT Gateway so that the VAST instances can communicate with the AWS APIs and if required, the internet
-  - a private one with the tooling resources themselves
-- the configurations to run VAST either on Fargate as a Server or on Lambda as a client.
+The assumption is that the VPC has an Internet Gateway attached. Given a CIDR
+block within this VPC, Terraform creates two subnets:
 
-<p align="center">
-<img src="https://user-images.githubusercontent.com/7913347/155995627-cb25056e-2c6d-49f9-a55a-e8dc5a90f28a.svg" width="90%">
-</p>
+1. **VAST Subnet**: a private subnet where the VAST nodes and other security
+   tools run.
+2. **Gateway Subnet**: a public subnet to talk to other AWS services and the
+   Internet
 
-### Images and registries
+### Images and Registries
 
-Both on Lambda and Fargate, VAST is deployed as a Docker image. Fargate runs the official [tenzir/vast](https://hub.docker.com/r/tenzir/vast) image. To run VAST on AWS Lambda, we need:
-- an extra image layer containing the Lambda Runtime Interface
-- the image to be hosted on ECR in the region where the Lambda is deployed
+Both Lambda and Fargate deploy VAST as a Docker image. Fargate runs the
+official [tenzir/vast](https://hub.docker.com/r/tenzir/vast) image. Lambda
+imposes two additional requirements:
 
-For that reason, when deploying VAST to AWS, the user will build the Lambda specific Docker image locally and push it to a private ECR repository created by the Terraform deployment script itself.
+1. The image must contain the Lambda Runtime Interface
+2. ECR must host the image in the region where the Lambda is deployed
 
-<p align="center">
-<img src="https://user-images.githubusercontent.com/7913347/156000070-c9857869-7621-4e95-a517-b4e065b36ed3.svg" width="70%">
-</p>
+For that reason, our toolchain builds a Lambda-specific image locally and
+pushes it to a private ECR repository.
 
-### VAST processes
-
-The VAST server is a long running process. We decided to use Fargate as the cloud resource to run it because it is simple, flexible and very well suited for this usecase.
-
-To interact with the VAST server you need a VAST client. The user can run VAST commands:
-
-
-<p align="center">
-<img src="https://user-images.githubusercontent.com/7913347/156000469-a0f8b519-64c1-43ec-91dc-1339b41f90be.svg" width="70%">
-</p>
-
-### Setup
-
-#### macOS
-
-```bash
-brew install awscli jq
-brew install --cask session-manager-plugin
-```
+![Docker workflow](https://user-images.githubusercontent.com/53797/157065561-82cf8bc6-b314-4439-b66f-c8e3a93e431b.png)
