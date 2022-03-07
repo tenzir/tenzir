@@ -232,7 +232,7 @@ type::type(chunk_ptr&& table) noexcept {
 }
 
 type::type(std::string_view name, const type& nested,
-           const std::vector<struct attribute>& attributes) noexcept {
+           const std::vector<attribute_view>& attributes) noexcept {
   if (name.empty() && attributes.empty()) {
     // This special case fbs::type::Type::exists for easier conversion of legacy
     // types, which did not require an legacy alias type wrapping to have a name.
@@ -274,10 +274,12 @@ type::type(std::string_view name, const type& nested,
           if (const auto* attributes = enriched_type->attributes()) {
             for (const auto* attribute : *attributes) {
               VAST_ASSERT(attribute->key());
-              merged_attributes.push_back({
-                attribute->key()->string_view(),
-                attribute->value() ? attribute->value()->string_view() : "",
-              });
+              if (attribute->value())
+                merged_attributes.push_back(
+                  {attribute->key()->string_view(),
+                   attribute->value()->string_view()});
+              else
+                merged_attributes.push_back({attribute->key()->string_view()});
             }
           }
           nested_bytes = as_bytes(*enriched_type->type());
@@ -314,13 +316,15 @@ type::type(std::string_view name, const type& nested,
       auto attributes_offsets
         = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
       attributes_offsets.reserve(attributes.size() + merged_attributes.size());
-      for (const auto& attribute : attributes) {
+      auto add_attribute = [&](const auto& attribute) noexcept {
         const auto key_offset = builder.CreateString(attribute.key);
         const auto value_offset
-          = attribute.value ? builder.CreateString(*attribute.value) : 0;
+          = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
         attributes_offsets.emplace_back(fbs::type::detail::CreateAttribute(
           builder, key_offset, value_offset));
-      }
+      };
+      for (const auto& attribute : attributes)
+        add_attribute(attribute);
       for (const auto& attribute : merged_attributes) {
         // Skip over any attributes that were already in the new list of
         // attributes.
@@ -329,11 +333,7 @@ type::type(std::string_view name, const type& nested,
                           return new_attribute.key == attribute.key;
                         }))
           continue;
-        const auto key_offset = builder.CreateString(attribute.key);
-        const auto value_offset
-          = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
-        attributes_offsets.emplace_back(fbs::type::detail::CreateAttribute(
-          builder, key_offset, value_offset));
+        add_attribute(attribute);
       }
       return builder.CreateVectorOfSortedTables(&attributes_offsets);
     }();
@@ -353,8 +353,8 @@ type::type(std::string_view name, const type& nested) noexcept
 }
 
 type::type(const type& nested,
-           const std::vector<struct attribute>& attributes) noexcept
-  : type("", nested, attributes) {
+           const std::vector<attribute_view>& attributes) noexcept
+  : type(std::string_view{}, nested, attributes) {
   // nop
 }
 
@@ -448,15 +448,16 @@ type type::infer(const data& value) noexcept {
 }
 
 type type::from_legacy_type(const legacy_type& other) noexcept {
-  const auto attributes = [&] {
-    auto result = std::vector<struct attribute>{};
+  const auto attributes = [&]() noexcept {
+    auto result = std::vector<attribute_view>{};
     const auto& attributes = other.attributes();
     result.reserve(attributes.size());
-    for (const auto& attribute : other.attributes())
-      result.push_back({
-        attribute.key,
-        attribute.value ? *attribute.value : std::optional<std::string>{},
-      });
+    for (const auto& attribute : other.attributes()) {
+      if (attribute.value)
+        result.push_back({attribute.key, *attribute.value});
+      else
+        result.push_back({attribute.key});
+    }
     return result;
   }();
   auto f = detail::overload{
@@ -733,7 +734,7 @@ std::string_view type::name() const& noexcept {
       case fbs::type::Type::list_type:
       case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
-        return "";
+        return std::string_view{};
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* name = enriched_type->name())
@@ -807,7 +808,7 @@ type::attribute(const char* key) const& noexcept {
           if (const auto* attribute = attributes->LookupByKey(key)) {
             if (const auto* value = attribute->value())
               return value->string_view();
-            return "";
+            return std::string_view{};
           }
         }
         root = enriched_type->type_nested_root();
@@ -885,13 +886,14 @@ type::names_and_attributes() const& noexcept {
               attrs.push_back({attribute->key()->string_view(),
                                attribute->value()->string_view()});
             else
-              attrs.push_back({attribute->key()->string_view(), ""});
+              attrs.push_back(
+                {attribute->key()->string_view(), std::string_view{}});
           }
         }
         if (enriched_type->name())
           co_yield std::make_pair(enriched_type->name()->string_view(), attrs);
         else
-          co_yield std::make_pair("", attrs);
+          co_yield std::make_pair(std::string_view{}, attrs);
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
@@ -930,7 +932,7 @@ detail::generator<type::attribute_view> type::attributes() const& noexcept {
               co_yield {attribute->key()->string_view(),
                         attribute->value()->string_view()};
             else
-              co_yield {attribute->key()->string_view(), ""};
+              co_yield {attribute->key()->string_view(), std::string_view{}};
           }
         }
         root = enriched_type->type_nested_root();
@@ -1600,7 +1602,7 @@ std::string_view enumeration_type::field(uint32_t key) const& noexcept {
   VAST_ASSERT(fields);
   if (const auto* field = fields->LookupByKey(key))
     return field->name()->string_view();
-  return "";
+  return std::string_view{};
 }
 
 std::vector<enumeration_type::field_view>
@@ -2487,15 +2489,10 @@ merge(const record_type& lhs, const record_type& rhs,
                                                    "field {}; failed to "
                                                    "merge {} and {}",
                                                    rfield.name, lhs, rhs));
-              auto attributes = std::vector<struct type::attribute>{};
-              for (const auto& attribute : lhs_attributes)
-                attributes.push_back(
-                  {std::string{attribute.key},
-                   std::optional{std::string{attribute.value}}});
-              for (const auto& attribute : rhs_attributes)
-                attributes.push_back(
-                  {std::string{attribute.key},
-                   std::optional{std::string{attribute.value}}});
+              auto attributes = lhs_attributes;
+              attributes.reserve(attributes.size() + rhs_attributes.size());
+              attributes.insert(attributes.end(), rhs_attributes.begin(),
+                                rhs_attributes.end());
               return type{lfield.type.name(), lfield.type, attributes};
             }
             return caf::make_error(ec::logic_error,

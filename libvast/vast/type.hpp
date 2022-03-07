@@ -118,15 +118,15 @@ using type_to_data_t = typename type_to_data<T>::type;
 class type final : public stateful_type_base {
 public:
   /// An owned key-value type annotation.
-  struct attribute final {
+  struct [[deprecated("use attribute_view instead")]] attribute final {
     std::string key;                       ///< The key.
     std::optional<std::string> value = {}; ///< The value (optional).
   };
 
   /// A view on a key-value type annotation.
   struct attribute_view final {
-    std::string_view key;   ///< The key.
-    std::string_view value; ///< The value (empty if unset).
+    std::string_view key;        ///< The key.
+    std::string_view value = {}; ///< The value (empty if unset).
     friend bool operator==(const attribute_view& lhs, const attribute_view& rhs)
       = default;
   };
@@ -193,11 +193,11 @@ public:
   /// @note Creates a copy of nested if the provided name and attributes are
   /// empty.
   type(std::string_view name, const type& nested,
-       const std::vector<struct attribute>& attributes) noexcept;
+       const std::vector<attribute_view>& attributes) noexcept;
 
   template <concrete_type T>
   type(std::string_view name, const T& nested,
-       const std::vector<struct attribute>& attributes) noexcept
+       const std::vector<attribute_view>& attributes) noexcept
     : type(name, type{nested}, attributes) {
     // nop
   }
@@ -219,11 +219,10 @@ public:
   /// @param attributes The key-value type annotations.
   /// @note Creates a copy of nested if the attributes are empty.
   type(const type& nested,
-       const std::vector<struct attribute>& attributes) noexcept;
+       const std::vector<attribute_view>& attributes) noexcept;
 
   template <concrete_type T>
-  type(const T& nested,
-       const std::vector<struct attribute>& attributes) noexcept
+  type(const T& nested, const std::vector<attribute_view>& attributes) noexcept
     : type(type{nested}, attributes) {
     // nop
   }
