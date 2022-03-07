@@ -1,10 +1,17 @@
 -include default.env
 
+# these are the variables you can set in the default.env file
 vpc_id ?= $(eval vpc_id := $(shell bash -c 'read -p "VPC ID (existing): " input; echo $$input'))$(vpc_id)
 subnet_cidr ?= $(eval subnet_cidr := $(shell bash -c 'read -p "Subnet CIDR (to be created): " input; echo $$input'))$(subnet_cidr)
 aws_region ?= $(eval aws_region := $(shell bash -c 'read -p "AWS Region: " input; echo $$input'))$(aws_region)
+vast_version ?= v1.1.0
 
+# re-export these variable into the environement for Terraform and the AWS CLI to use
 export AWS_REGION = ${aws_region}
+export TF_VAR_vpc_id = ${vpc_id}
+export TF_VAR_subnet_cidr = ${subnet_cidr}
+export TF_VAR_region_name = ${aws_region}
+export TF_VAR_vast_version = ${vast_version}
 
 help:     ## Show this help.
 	@egrep -h '\s##\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
@@ -18,15 +25,15 @@ docker-login:
 		"$(shell aws sts get-caller-identity --query 'Account' --output text).dkr.ecr.${aws_region}.amazonaws.com"
 
 docker-build:
-	docker build -t tenzir/vast-lambda:latest .
+	docker build --build-arg VAST_VERSION=${vast_version} -t tenzir/vast-lambda:${vast_version} .
 
 apply:
-	terraform apply -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"
+	terraform apply
 
 deploy: init docker-login docker-build apply ## One liner build and deploy of the stack to AWS
 
 destroy: stop-all-tasks ## Tear down the entire terraform stack
-	@terraform destroy -var="region_name=${aws_region}" -var="vpc_id=${vpc_id}" -var="subnet_cidr=${subnet_cidr}"
+	terraform destroy
 
 run-vast-task:
 	@aws ecs run-task \
