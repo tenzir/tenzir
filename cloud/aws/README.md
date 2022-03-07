@@ -16,7 +16,7 @@ throughput-latency trade-off.
 
 The sketch below illustrates the high-level architecture:
 
-![AWS Architecture](https://user-images.githubusercontent.com/53797/156728636-9909c4aa-34a0-47f4-b6f0-50d7bfe96e28.png)
+![AWS Architecture](https://user-images.githubusercontent.com/53797/157068659-41d7c9fe-8403-40d0-9cdd-dae66f0bf62e.png)
 
 ### Usage
 
