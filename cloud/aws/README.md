@@ -117,7 +117,7 @@ compute resource needs. VAST mounts EFS storage for maximum flexibility and
 pay-as-you-go scaling.
 
 The VAST client typically performs short-running ad-hoc tasks, like ingesting
-a file or running query. We map these type of actions to Lambda functions.
+a file or running query. We map such actions to Lambda functions.
 
 ### VPC Infrastructure
 
