@@ -18,10 +18,6 @@ The sketch below illustrates the high-level architecture:
 
 ![AWS Architecture](https://user-images.githubusercontent.com/53797/156728636-9909c4aa-34a0-47f4-b6f0-50d7bfe96e28.png)
 
-We are still evaluating local storage optimization using
-[EBS](https://aws.amazon.com/ebs/) and high-throughput scale-out using
-[S3](https://aws.amazon.com/s3/).
-
 ### Usage
 
 The provided [Makefile](Makefile) wraps [Terraform](https://www.terraform.io/)
