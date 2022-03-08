@@ -1,3 +1,7 @@
+output "vast_vpc_id" {
+  value = module.network.vast_vpc_id
+}
+
 output "vast_security_group" {
   value = module.vast_server.task_security_group_id
 }
@@ -15,7 +19,7 @@ output "fargate_cluster_name" {
 }
 
 output "ids_appliances_subnet_id" {
-  value = aws_subnet.ids_appliances.id
+  value = module.network.private_subnet_id
 }
 
 output "vast_lambda_name" {
