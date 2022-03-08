@@ -1,6 +1,7 @@
 import os
 import subprocess
 import logging
+import base64
 
 logging.basicConfig(level=logging.INFO)
 
@@ -9,7 +10,7 @@ def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
     try:
         logging.info("event: ", event)
-        src_cmd = event["cmd"]
+        src_cmd = base64.b64decode(event["cmd"]).decode("utf-8")
         host = event["host"]
 
         # execute the command as bash and return the std outputs

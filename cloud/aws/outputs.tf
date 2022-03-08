@@ -6,6 +6,10 @@ output "vast_task_definition" {
   value = module.vast_server.task_definition_arn
 }
 
+output "vast_task_family" {
+  value = module.vast_server.task_family
+}
+
 output "fargate_cluster_name" {
   value = aws_ecs_cluster.fargate_cluster.name
 }
