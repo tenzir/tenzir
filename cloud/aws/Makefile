@@ -82,7 +82,7 @@ stop-all-tasks: ## Stop all running tasks on the ECS cluster created by Terrafor
 	done
 
 # Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
-run-lambda: ## Run ad-hoc VAST clients from AWS Lambda
+run-lambda: ## Run ad-hoc VAST client commands from AWS Lambda
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
@@ -91,7 +91,7 @@ run-lambda: ## Run ad-hoc VAST clients from AWS Lambda
 
 # Provide your bash command through the CMD variable (e.g make execute-command CMD="vast status")
 # Start an interactive session by leaving CMD empty
-execute-command: ## Start an interactive bash shell within the Fargate container
+execute-command: ## Run ad-hoc or interactive commands from the VAST server Fargate task
 	@aws ecs execute-command \
 		--cluster $(shell terraform output fargate_cluster_name) \
 		--task $(shell $(MAKE) get-vast-server) \
