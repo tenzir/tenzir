@@ -30,8 +30,6 @@ variable "vast_version" {
 }
 
 variable "vast_server_storage_type" {
-  type        = string
-  default     = "EFS"
   description = <<EOF
 The storage type that should be used for the VAST server task:
 - ATTACHED will usually have better performances, but will be lost when the task is stopped

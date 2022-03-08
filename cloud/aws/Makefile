@@ -5,6 +5,7 @@ vpc_id ?= $(eval vpc_id := $(shell bash -c 'read -p "VPC ID (existing): " input;
 subnet_cidr ?= $(eval subnet_cidr := $(shell bash -c 'read -p "Subnet CIDR (to be created): " input; echo $$input'))$(subnet_cidr)
 aws_region ?= $(eval aws_region := $(shell bash -c 'read -p "AWS Region: " input; echo $$input'))$(aws_region)
 vast_version ?= $(shell git describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*')
+vast_server_storage_type ?= EFS
 
 # re-export these variable into the environement for Terraform and the AWS CLI to use
 export AWS_REGION = ${aws_region}
@@ -12,6 +13,7 @@ export TF_VAR_vpc_id = ${vpc_id}
 export TF_VAR_subnet_cidr = ${subnet_cidr}
 export TF_VAR_region_name = ${aws_region}
 export TF_VAR_vast_version = ${vast_version}
+export TF_VAR_vast_server_storage_type = ${vast_server_storage_type}
 
 help:     ## Show this help.
 	@egrep -h '\s##\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
