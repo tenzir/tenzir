@@ -25,6 +25,10 @@ variable "subnet_cidr" {
   description = "A new subnet to create in the targeted VPC to host VAST and IDS appliances"
 }
 
+variable "vast_version" {
+  description = "A VAST release version (vX.Y.Z), or 'latest' for the most recent commit on the main branch"
+}
+
 // split the cidr in half into a public and a private one
 locals {
   private_subnet_cidr = cidrsubnet(var.subnet_cidr, 1, 0)

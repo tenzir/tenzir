@@ -47,6 +47,12 @@ following variables:
   `aws ec2 describe-subnets --region $region` to list existing subnets to pick
   a non-overlapping one within the VPC subnet.
 
+Optionally, you can also define the following variables:
+
+- `vast_version`: the version of VAST that should be used. By default it is
+  set to the latest release. Version should be `v1.1.0` or higher. You can also 
+  use the latest commit on the main branch by specifying `latest`.
+
 Here's an example:
 
 ```bash
