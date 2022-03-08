@@ -49,9 +49,9 @@ following variables:
 
 Optionally, you can also define the following variables:
 
-- `vast_version`: the version of vast that should be used. By default it is
-  set to the latest release. You can also use the latest commit on the main
-  branch by specifying `latest`.
+- `vast_version`: the version of VAST that should be used. By default it is
+  set to the latest release. Version should be `v1.1.0` or higher. You can also 
+  use the latest commit on the main branch by specifying `latest`.
 
 Here's an example:
 
