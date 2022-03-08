@@ -232,7 +232,7 @@ type::type(chunk_ptr&& table) noexcept {
 }
 
 type::type(std::string_view name, const type& nested,
-           const std::vector<attribute_view>& attributes) noexcept {
+           std::vector<attribute_view>&& attributes) noexcept {
   if (name.empty() && attributes.empty()) {
     // This special case fbs::type::Type::exists for easier conversion of legacy
     // types, which did not require an legacy alias type wrapping to have a name.
@@ -244,7 +244,6 @@ type::type(std::string_view name, const type& nested,
     // provided to this constructor, priorising the new attributes, with the
     // nested byte range being adjusted to the first named metadata-layer (or
     // the underlying concrete type).
-    auto merged_attributes = std::vector<attribute_view>{};
     for (const auto* root = fbs::GetType(nested_bytes.data());
          root != nullptr;) {
       switch (root->type_type()) {
@@ -271,15 +270,25 @@ type::type(std::string_view name, const type& nested,
             root = nullptr;
             break;
           }
-          if (const auto* attributes = enriched_type->attributes()) {
-            for (const auto* attribute : *attributes) {
-              VAST_ASSERT(attribute->key());
-              if (attribute->value())
-                merged_attributes.push_back(
-                  {attribute->key()->string_view(),
-                   attribute->value()->string_view()});
+          if (const auto* stripped_attributes = enriched_type->attributes()) {
+            for (const auto* stripped_attribute : *stripped_attributes) {
+              // Skip over any attributes that were already in the new list of
+              // attributes.
+              if (std::any_of(
+                    attributes.begin(), attributes.end(),
+                    [&](const auto& attribute) noexcept {
+                      return attribute.key
+                             == stripped_attribute->key()->string_view();
+                    }))
+                continue;
+              VAST_ASSERT(stripped_attribute->key());
+              if (stripped_attribute->value())
+                attributes.push_back(
+                  {stripped_attribute->key()->string_view(),
+                   stripped_attribute->value()->string_view()});
               else
-                merged_attributes.push_back({attribute->key()->string_view()});
+                attributes.push_back(
+                  {stripped_attribute->key()->string_view()});
             }
           }
           nested_bytes = as_bytes(*enriched_type->type());
@@ -301,7 +310,7 @@ type::type(std::string_view name, const type& nested,
       size += reserved_string_size(name);
       return size;
     };
-    auto builder = attributes.empty() && merged_attributes.empty()
+    auto builder = attributes.empty()
                      ? flatbuffers::FlatBufferBuilder{reserved_size()}
                      : flatbuffers::FlatBufferBuilder{};
     const auto nested_type_offset = builder.CreateVector(
@@ -311,11 +320,11 @@ type::type(std::string_view name, const type& nested,
     const auto attributes_offset = [&]() noexcept
       -> flatbuffers::Offset<
         flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
-      if (attributes.empty() && merged_attributes.empty())
+      if (attributes.empty())
         return 0;
       auto attributes_offsets
         = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
-      attributes_offsets.reserve(attributes.size() + merged_attributes.size());
+      attributes_offsets.reserve(attributes.size());
       auto add_attribute = [&](const auto& attribute) noexcept {
         const auto key_offset = builder.CreateString(attribute.key);
         const auto value_offset
@@ -325,16 +334,6 @@ type::type(std::string_view name, const type& nested,
       };
       for (const auto& attribute : attributes)
         add_attribute(attribute);
-      for (const auto& attribute : merged_attributes) {
-        // Skip over any attributes that were already in the new list of
-        // attributes.
-        if (std::any_of(attributes.begin(), attributes.end(),
-                        [&](const auto& new_attribute) noexcept {
-                          return new_attribute.key == attribute.key;
-                        }))
-          continue;
-        add_attribute(attribute);
-      }
       return builder.CreateVectorOfSortedTables(&attributes_offsets);
     }();
     const auto enriched_type_offset = fbs::type::detail::CreateEnrichedType(
@@ -353,8 +352,8 @@ type::type(std::string_view name, const type& nested) noexcept
 }
 
 type::type(const type& nested,
-           const std::vector<attribute_view>& attributes) noexcept
-  : type(std::string_view{}, nested, attributes) {
+           std::vector<attribute_view>&& attributes) noexcept
+  : type(std::string_view{}, nested, std::move(attributes)) {
   // nop
 }
 
@@ -448,78 +447,76 @@ type type::infer(const data& value) noexcept {
 }
 
 type type::from_legacy_type(const legacy_type& other) noexcept {
-  const auto attributes = [&]() noexcept {
-    auto result = std::vector<attribute_view>{};
-    const auto& attributes = other.attributes();
-    result.reserve(attributes.size());
-    for (const auto& attribute : other.attributes()) {
-      if (attribute.value)
-        result.push_back({attribute.key, *attribute.value});
-      else
-        result.push_back({attribute.key});
-    }
-    return result;
-  }();
+  auto attributes = std::vector<attribute_view>{};
+  attributes.reserve(other.attributes().size());
+  for (const auto& attribute : other.attributes()) {
+    if (attribute.value)
+      attributes.push_back({attribute.key, *attribute.value});
+    else
+      attributes.push_back({attribute.key});
+  }
   auto f = detail::overload{
-    [&](const legacy_none_type&) {
-      return type{other.name(), type{}, attributes};
+    [&](const legacy_none_type&) noexcept {
+      return type{other.name(), type{}, std::move(attributes)};
     },
-    [&](const legacy_bool_type&) {
-      return type{other.name(), bool_type{}, attributes};
+    [&](const legacy_bool_type&) noexcept {
+      return type{other.name(), bool_type{}, std::move(attributes)};
     },
-    [&](const legacy_integer_type&) {
-      return type{other.name(), integer_type{}, attributes};
+    [&](const legacy_integer_type&) noexcept {
+      return type{other.name(), integer_type{}, std::move(attributes)};
     },
-    [&](const legacy_count_type&) {
-      return type{other.name(), count_type{}, attributes};
+    [&](const legacy_count_type&) noexcept {
+      return type{other.name(), count_type{}, std::move(attributes)};
     },
-    [&](const legacy_real_type&) {
-      return type{other.name(), real_type{}, attributes};
+    [&](const legacy_real_type&) noexcept {
+      return type{other.name(), real_type{}, std::move(attributes)};
     },
-    [&](const legacy_duration_type&) {
-      return type{other.name(), duration_type{}, attributes};
+    [&](const legacy_duration_type&) noexcept {
+      return type{other.name(), duration_type{}, std::move(attributes)};
     },
-    [&](const legacy_time_type&) {
-      return type{other.name(), time_type{}, attributes};
+    [&](const legacy_time_type&) noexcept {
+      return type{other.name(), time_type{}, std::move(attributes)};
     },
-    [&](const legacy_string_type&) {
-      return type{other.name(), string_type{}, attributes};
+    [&](const legacy_string_type&) noexcept {
+      return type{other.name(), string_type{}, std::move(attributes)};
     },
-    [&](const legacy_pattern_type&) {
-      return type{other.name(), pattern_type{}, attributes};
+    [&](const legacy_pattern_type&) noexcept {
+      return type{other.name(), pattern_type{}, std::move(attributes)};
     },
-    [&](const legacy_address_type&) {
-      return type{other.name(), address_type{}, attributes};
+    [&](const legacy_address_type&) noexcept {
+      return type{other.name(), address_type{}, std::move(attributes)};
     },
-    [&](const legacy_subnet_type&) {
-      return type{other.name(), subnet_type{}, attributes};
+    [&](const legacy_subnet_type&) noexcept {
+      return type{other.name(), subnet_type{}, std::move(attributes)};
     },
-    [&](const legacy_enumeration_type& enumeration) {
+    [&](const legacy_enumeration_type& enumeration) noexcept {
       auto fields = std::vector<struct enumeration_type::field>{};
       fields.reserve(enumeration.fields.size());
       for (const auto& field : enumeration.fields)
         fields.push_back({field});
-      return type{other.name(), enumeration_type{fields}, attributes};
+      return type{other.name(), enumeration_type{fields},
+                  std::move(attributes)};
     },
-    [&](const legacy_list_type& list) {
+    [&](const legacy_list_type& list) noexcept {
       return type{other.name(), list_type{from_legacy_type(list.value_type)},
-                  attributes};
+                  std::move(attributes)};
     },
-    [&](const legacy_map_type& map) {
+    [&](const legacy_map_type& map) noexcept {
       return type{other.name(),
                   map_type{from_legacy_type(map.key_type),
                            from_legacy_type(map.value_type)},
-                  attributes};
+                  std::move(attributes)};
     },
-    [&](const legacy_alias_type& alias) {
-      return type{other.name(), from_legacy_type(alias.value_type), attributes};
+    [&](const legacy_alias_type& alias) noexcept {
+      return type{other.name(), from_legacy_type(alias.value_type),
+                  std::move(attributes)};
     },
-    [&](const legacy_record_type& record) {
+    [&](const legacy_record_type& record) noexcept {
       auto fields = std::vector<struct record_type::field_view>{};
       fields.reserve(record.fields.size());
       for (const auto& field : record.fields)
         fields.push_back({field.name, from_legacy_type(field.type)});
-      return type{other.name(), record_type{fields}, attributes};
+      return type{other.name(), record_type{fields}, std::move(attributes)};
     },
   };
   return caf::visit(f, other);
@@ -527,37 +524,37 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
 
 legacy_type type::to_legacy_type() const noexcept {
   auto f = detail::overload{
-    [&](const bool_type&) -> legacy_type {
+    [&](const bool_type&) noexcept -> legacy_type {
       return legacy_bool_type{};
     },
-    [&](const integer_type&) -> legacy_type {
+    [&](const integer_type&) noexcept -> legacy_type {
       return legacy_integer_type{};
     },
-    [&](const count_type&) -> legacy_type {
+    [&](const count_type&) noexcept -> legacy_type {
       return legacy_count_type{};
     },
-    [&](const real_type&) -> legacy_type {
+    [&](const real_type&) noexcept -> legacy_type {
       return legacy_real_type{};
     },
-    [&](const duration_type&) -> legacy_type {
+    [&](const duration_type&) noexcept -> legacy_type {
       return legacy_duration_type{};
     },
-    [&](const time_type&) -> legacy_type {
+    [&](const time_type&) noexcept -> legacy_type {
       return legacy_time_type{};
     },
-    [&](const string_type&) -> legacy_type {
+    [&](const string_type&) noexcept -> legacy_type {
       return legacy_string_type{};
     },
-    [&](const pattern_type&) -> legacy_type {
+    [&](const pattern_type&) noexcept -> legacy_type {
       return legacy_pattern_type{};
     },
-    [&](const address_type&) -> legacy_type {
+    [&](const address_type&) noexcept -> legacy_type {
       return legacy_address_type{};
     },
-    [&](const subnet_type&) -> legacy_type {
+    [&](const subnet_type&) noexcept -> legacy_type {
       return legacy_subnet_type{};
     },
-    [&](const enumeration_type& enumeration) -> legacy_type {
+    [&](const enumeration_type& enumeration) noexcept -> legacy_type {
       auto result = legacy_enumeration_type{};
       for (uint32_t i = 0; const auto& field : enumeration.fields()) {
         VAST_ASSERT(i++ == field.key, "failed to convert enumeration type to "
@@ -566,16 +563,16 @@ legacy_type type::to_legacy_type() const noexcept {
       }
       return result;
     },
-    [&](const list_type& list) -> legacy_type {
+    [&](const list_type& list) noexcept -> legacy_type {
       return legacy_list_type{list.value_type().to_legacy_type()};
     },
-    [&](const map_type& map) -> legacy_type {
+    [&](const map_type& map) noexcept -> legacy_type {
       return legacy_map_type{
         map.key_type().to_legacy_type(),
         map.value_type().to_legacy_type(),
       };
     },
-    [&](const record_type& record) -> legacy_type {
+    [&](const record_type& record) noexcept -> legacy_type {
       auto result = legacy_record_type{};
       for (const auto& field : record.fields())
         result.fields.push_back({
@@ -2475,7 +2472,7 @@ merge(const record_type& lhs, const record_type& rhs,
                       result.push_back(std::move(elem));
                     return result;
                   };
-              const auto lhs_attributes = to_vector(lfield.type.attributes());
+              auto lhs_attributes = to_vector(lfield.type.attributes());
               const auto rhs_attributes = to_vector(rfield.type.attributes());
               const auto conflicting_attribute = std::any_of(
                 lhs_attributes.begin(), lhs_attributes.end(),
@@ -2489,11 +2486,13 @@ merge(const record_type& lhs, const record_type& rhs,
                                                    "field {}; failed to "
                                                    "merge {} and {}",
                                                    rfield.name, lhs, rhs));
-              auto attributes = lhs_attributes;
-              attributes.reserve(attributes.size() + rhs_attributes.size());
-              attributes.insert(attributes.end(), rhs_attributes.begin(),
-                                rhs_attributes.end());
-              return type{lfield.type.name(), lfield.type, attributes};
+              lhs_attributes.reserve(lhs_attributes.size()
+                                     + rhs_attributes.size());
+              lhs_attributes.insert(lhs_attributes.end(),
+                                    rhs_attributes.begin(),
+                                    rhs_attributes.end());
+              return type{lfield.type.name(), lfield.type,
+                          std::move(lhs_attributes)};
             }
             return caf::make_error(ec::logic_error,
                                    fmt::format("conflicting field {}; "

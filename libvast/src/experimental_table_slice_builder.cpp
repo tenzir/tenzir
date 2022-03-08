@@ -943,7 +943,7 @@ type enrich_type_with_metadata(
       else
         attributes.push_back({key});
     }
-    t = type{it->first, t, attributes};
+    t = type{it->first, t, std::move(attributes)};
   }
   return t;
 }

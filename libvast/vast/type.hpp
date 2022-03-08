@@ -193,12 +193,12 @@ public:
   /// @note Creates a copy of nested if the provided name and attributes are
   /// empty.
   type(std::string_view name, const type& nested,
-       const std::vector<attribute_view>& attributes) noexcept;
+       std::vector<attribute_view>&& attributes) noexcept;
 
   template <concrete_type T>
   type(std::string_view name, const T& nested,
-       const std::vector<attribute_view>& attributes) noexcept
-    : type(name, type{nested}, attributes) {
+       std::vector<attribute_view>&& attributes) noexcept
+    : type(name, type{nested}, std::move(attributes)) {
     // nop
   }
 
@@ -219,11 +219,11 @@ public:
   /// @param attributes The key-value type annotations.
   /// @note Creates a copy of nested if the attributes are empty.
   type(const type& nested,
-       const std::vector<attribute_view>& attributes) noexcept;
+       std::vector<attribute_view> && attributes) noexcept;
 
   template <concrete_type T>
-  type(const T& nested, const std::vector<attribute_view>& attributes) noexcept
-    : type(type{nested}, attributes) {
+  type(const T& nested, std::vector<attribute_view> &&attributes) noexcept
+    : type(type{nested}, std::move(attributes)) {
     // nop
   }
 
