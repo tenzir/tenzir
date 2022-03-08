@@ -218,11 +218,10 @@ public:
   /// @param nested The aliased type.
   /// @param attributes The key-value type annotations.
   /// @note Creates a copy of nested if the attributes are empty.
-  type(const type& nested,
-       std::vector<attribute_view> && attributes) noexcept;
+  type(const type& nested, std::vector<attribute_view>&& attributes) noexcept;
 
   template <concrete_type T>
-  type(const T& nested, std::vector<attribute_view> &&attributes) noexcept
+  type(const T& nested, std::vector<attribute_view>&& attributes) noexcept
     : type(type{nested}, std::move(attributes)) {
     // nop
   }

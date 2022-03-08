@@ -272,6 +272,7 @@ type::type(std::string_view name, const type& nested,
           }
           if (const auto* stripped_attributes = enriched_type->attributes()) {
             for (const auto* stripped_attribute : *stripped_attributes) {
+              VAST_ASSERT(stripped_attribute->key());
               // Skip over any attributes that were already in the new list of
               // attributes.
               if (std::any_of(
@@ -281,7 +282,6 @@ type::type(std::string_view name, const type& nested,
                              == stripped_attribute->key()->string_view();
                     }))
                 continue;
-              VAST_ASSERT(stripped_attribute->key());
               if (stripped_attribute->value())
                 attributes.push_back(
                   {stripped_attribute->key()->string_view(),
