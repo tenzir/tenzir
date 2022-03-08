@@ -51,7 +51,7 @@ run-vast-task:
 
 
 start-vast-server: ## Start a VAST server instance as an AWS Fargate task. Noop if a VAST server is already running.
-	@if [ -n "$(shell $(MAKE) get-vast-tasks)" ]; then  \
+	@if [ -n "$(shell $(MAKE) get-vast-server)" ]; then  \
 		echo "VAST server already running"; exit 1; \
 	fi
 	@$(MAKE) --no-print-directory run-vast-task 
@@ -68,8 +68,8 @@ get-vast-server: ## List the running VAST server task id(s) on the ECS cluster c
 	@aws ecs list-tasks --family $(shell terraform output vast_task_family) --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
 
 get-vast-server-ip:
-	@aws ecs describe-tasks \
-		--cluster vast-cluster-default \
+	aws ecs describe-tasks \
+		--cluster $(shell terraform output fargate_cluster_name) \
 		--task $(shell $(MAKE) get-vast-server) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
 list-all-tasks: ## List the ids of all tasks running on the ECS cluster
