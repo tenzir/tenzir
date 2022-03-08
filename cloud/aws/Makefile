@@ -68,7 +68,7 @@ get-vast-server: ## List the running VAST server task id(s) on the ECS cluster c
 	@aws ecs list-tasks --family $(shell terraform output vast_task_family) --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
 
 get-vast-server-ip:
-	aws ecs describe-tasks \
+	@aws ecs describe-tasks \
 		--cluster $(shell terraform output fargate_cluster_name) \
 		--task $(shell $(MAKE) get-vast-server) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
