@@ -87,8 +87,12 @@ You can replace the running task by a new one with:
 make restart-vast-server
 ```
 
-**Note**: the Fargate container currently uses local storage only, so restarting the 
+**Note**: 
+- the Fargate container currently uses local storage only, so restarting the 
 server task will empty the database.
+- multiple invocations of `make run-vast-task` create multiple Fargate tasks, 
+which prevents other Makefile targets from working correctly. Using
+`start-vast-server` and `restart-vast-server` only helps you avoid that.
 
 #### Run a VAST client on Fargate
 

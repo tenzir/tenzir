@@ -56,8 +56,14 @@ restart-vast-server: ## Stops all running VAST server Fargate tasks and start a 
 	done
 	@$(MAKE) --no-print-directory run-vast-task
 
-get-vast-tasks: ## List all running tasks on the ECS cluster created by Terraform
+# There should be only one VAST server running at once, but if we accidentally have multiple ones, this will list them all
+get-vast-server: ## List the running VAST server task id(s) on the ECS cluster created by Terraform
 	@aws ecs list-tasks --family $(shell terraform output vast_task_family) --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
+
+get-vast-server-ip:
+	@aws ecs describe-tasks \
+		--cluster vast-cluster-default \
+		--task $(shell $(MAKE) get-vast-server) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
 list-all-tasks: ## List the ids of all tasks running on the ECS cluster
 	@aws ecs list-tasks --cluster $(shell terraform output fargate_cluster_name) | jq -r '.taskArns | map(split("/")[-1]) | reduce .[] as $$item (""; . + $$item + " ")'
@@ -68,17 +74,12 @@ stop-all-tasks: ## Stop all running tasks on the ECS cluster created by Terrafor
 		echo "Stopped task $$task"; \
 	done
 
-get-vast-task-ip:
-	@aws ecs describe-tasks \
-		--cluster vast-cluster-default \
-		--task $(shell $(MAKE) get-vast-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
-
 # Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 run-lambda: ## Run ad-hoc VAST clients from AWS Lambda
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
-		--payload '{"cmd":"$(shell echo $(CMD) | base64)", "host":"$(shell $(MAKE) get-vast-task-ip):42000"}' \
+		--payload '{"cmd":"$(shell echo $(CMD) | base64)", "host":"$(shell $(MAKE) get-vast-server-ip):42000"}' \
 		/dev/stdout | jq -s -r .[0].result
 
 # Provide your bash command through the CMD variable (e.g make execute-command CMD="vast status")
@@ -86,6 +87,6 @@ run-lambda: ## Run ad-hoc VAST clients from AWS Lambda
 execute-command: ## Start an interactive bash shell within the Fargate container
 	@aws ecs execute-command \
 		--cluster $(shell terraform output fargate_cluster_name) \
-		--task $(shell $(MAKE) get-vast-tasks) \
+		--task $(shell $(MAKE) get-vast-server) \
 		--interactive \
 		--command "$(shell if [ -z "${CMD}" ]; then echo "/bin/bash"; else echo "${CMD}"; fi)"
