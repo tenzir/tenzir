@@ -9,6 +9,8 @@
 #include "vast/transform_steps/hash.hpp"
 
 #include "vast/arrow_table_slice_builder.hpp"
+#include "vast/concept/convertible/data.hpp"
+#include "vast/concept/convertible/to.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
 #include "vast/hash/default_hash.hpp"
@@ -23,9 +25,8 @@
 
 namespace vast {
 
-hash_step::hash_step(const std::string& fieldname, const std::string& out,
-                     const std::optional<std::string>& salt)
-  : field_(fieldname), out_(out), salt_(salt) {
+hash_step::hash_step(hash_step_configuration configuration)
+  : config_(std::move(configuration)) {
 }
 
 caf::error
@@ -33,7 +34,7 @@ hash_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   VAST_TRACE("hash step adds batch");
   // Get the target field if it exists.
   const auto& layout_rt = caf::get<record_type>(layout);
-  auto column_offset = layout_rt.resolve_key(field_);
+  auto column_offset = layout_rt.resolve_key(config_.field);
   if (!column_offset) {
     transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
@@ -47,15 +48,15 @@ hash_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
     const auto& item = column->GetScalar(i);
     auto h = default_hash{};
     hash_append(h, item.ValueOrDie()->ToString());
-    if (salt_)
-      hash_append(h, *salt_);
+    if (config_.salt)
+      hash_append(h, *config_.salt);
     auto digest = h.finish();
     auto x = fmt::format("{:x}", digest);
     cb->add(std::string_view{x});
   }
   auto hashes_column = cb->finish();
   auto result_batch
-    = batch->AddColumn(batch->num_columns(), out_, hashes_column);
+    = batch->AddColumn(batch->num_columns(), config_.out, hashes_column);
   if (!result_batch.ok()) {
     transformed_.emplace_back(std::move(layout), nullptr);
     return caf::none;
@@ -63,7 +64,7 @@ hash_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   // Adjust layout.
   auto adjusted_layout_rt = layout_rt.transform({{
     {layout_rt.num_fields() - 1},
-    record_type::insert_after({{out_, string_type{}}}),
+    record_type::insert_after({{config_.out, string_type{}}}),
   }});
   VAST_ASSERT(adjusted_layout_rt); // adding a field cannot fail.
   auto adjusted_layout = type{*adjusted_layout_rt};
@@ -91,19 +92,11 @@ public:
 
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& opts) const override {
-    auto field = caf::get_if<std::string>(&opts, "field");
-    if (!field)
-      return caf::make_error(ec::invalid_configuration,
-                             "key 'field' is missing or not a string in "
-                             "configuration for delete step");
-    auto out = caf::get_if<std::string>(&opts, "out");
-    if (!out)
-      return caf::make_error(ec::invalid_configuration,
-                             "key 'out' is missing or not a string in "
-                             "configuration for delete step");
-    auto salt = caf::get_if<std::string>(&opts, "salt");
-    return std::make_unique<hash_step>(*field, *out, to_std(std::move(salt)));
+  make_transform_step(const record& opts) const override {
+    auto config = to<hash_step_configuration>(opts);
+    if (!config)
+      return config.error(); // FIXME: Better error message?
+    return std::make_unique<hash_step>(std::move(*config));
   }
 };
 

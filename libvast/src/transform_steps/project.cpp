@@ -8,6 +8,8 @@
 
 #include "vast/transform_steps/project.hpp"
 
+#include "vast/concept/convertible/data.hpp"
+#include "vast/concept/convertible/to.hpp"
 #include "vast/error.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -21,8 +23,8 @@
 
 namespace vast {
 
-project_step::project_step(std::vector<std::string> fields)
-  : fields_(std::move(fields)) {
+project_step::project_step(project_step_configuration configuration)
+  : config_(std::move(configuration)) {
 }
 
 caf::expected<std::pair<vast::type, std::vector<int>>>
@@ -30,7 +32,7 @@ project_step::adjust_layout(const vast::type& layout) const {
   auto to_keep = std::unordered_set<vast::offset>{};
   auto flat_index_to_keep = std::vector<int>{};
   const auto& layout_rt = caf::get<record_type>(layout);
-  for (const auto& key : fields_) {
+  for (const auto& key : config_.fields) {
     auto offsets = layout_rt.resolve_key_suffix(key);
     for (const auto& offset : offsets) {
       if (to_keep.emplace(offset).second) {
@@ -99,13 +101,11 @@ public:
 
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& opts) const override {
-    auto fields = caf::get_if<std::vector<std::string>>(&opts, "fields");
-    if (!fields)
-      return caf::make_error(ec::invalid_configuration,
-                             "key 'fields' is missing or not a string list in "
-                             "configuration for project step");
-    return std::make_unique<project_step>(*fields);
+  make_transform_step(const record& opts) const override {
+    auto config = to<project_step_configuration>(opts);
+    if (!config)
+      return config.error(); // FIXME: Better error message?
+    return std::make_unique<project_step>(std::move(*config));
   }
 };
 

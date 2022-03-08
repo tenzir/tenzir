@@ -80,12 +80,13 @@ struct fixture : fixtures::events {
 FIXTURE_SCOPE(aggregate_tests, fixture)
 
 TEST(aggregate Zeek conn log) {
-  auto opts = caf::settings{};
-  caf::put(opts, "group-by", std::vector<std::string>{"ts"});
-  caf::put(opts, "time-resolution", "1 day");
-  caf::put(opts, "sum", std::vector<std::string>{"duration", "resp_pkts"});
-  caf::put(opts, "min", std::vector<std::string>{"orig_ip_bytes"});
-  caf::put(opts, "max", std::vector<std::string>{"resp_ip_bytes"});
+  auto opts = record{
+    {"group-by", list{"ts"}},
+    {"time-resolution", duration{std::chrono::days(1)}},
+    {"sum", list{"duration", "resp_pkts"}},
+    {"min", list{"orig_ip_bytes"}},
+    {"max", list{"resp_ip_bytes"}},
+  };
   auto aggregate_step = unbox(aggregate_plugin->make_transform_step(opts));
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
   for (const auto& slice : zeek_conn_log_full)
@@ -120,14 +121,15 @@ TEST(aggregate Zeek conn log) {
 }
 
 TEST(aggregate test) {
-  auto opts = caf::settings{};
-  caf::put(opts, "group-by", std::vector<std::string>{"time", "ip", "port"});
-  caf::put(opts, "time-resolution", "1 min");
-  caf::put(opts, "sum", std::vector<std::string>{"sum", "sum_null"});
-  caf::put(opts, "min", std::vector<std::string>{"min"});
-  caf::put(opts, "max", std::vector<std::string>{"max"});
-  caf::put(opts, "any", std::vector<std::string>{"any_true", "any_false"});
-  caf::put(opts, "all", std::vector<std::string>{"all_true", "all_false"});
+  auto opts = record{
+    {"time-resolution", duration{std::chrono::minutes(1)}},
+    {"group-by", list{"time", "ip", "port"}},
+    {"sum", list{"sum", "sum_null"}},
+    {"min", list{"min"}},
+    {"max", list{"max"}},
+    {"any", list{"any_true", "any_false"}},
+    {"all", list{"all_true", "all_false"}},
+  };
   auto aggregate_step = unbox(aggregate_plugin->make_transform_step(opts));
   REQUIRE_SUCCESS(
     aggregate_step->add(agg_test_layout, to_record_batch(make_testdata())));

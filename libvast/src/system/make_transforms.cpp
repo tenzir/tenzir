@@ -8,6 +8,7 @@
 
 #include "vast/system/make_transforms.hpp"
 
+#include "vast/concept/convertible/to.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -54,7 +55,10 @@ caf::error parse_transform_steps(transform& transform,
     if (!opts)
       return caf::make_error(ec::invalid_configuration,
                              "expected step configuration to be a dict");
-    auto step = make_transform_step(name, *opts);
+    auto rec = to<record>(*opts);
+    if (!rec)
+      return rec.error();
+    auto step = make_transform_step(name, *rec);
     if (!step)
       return step.error();
     transform.add_step(std::move(*step));

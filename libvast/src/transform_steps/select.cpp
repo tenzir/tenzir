@@ -9,6 +9,8 @@
 #include "vast/transform_steps/select.hpp"
 
 #include "vast/arrow_table_slice_builder.hpp"
+#include "vast/concept/convertible/data.hpp"
+#include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/error.hpp"
@@ -22,13 +24,14 @@
 
 namespace vast {
 
-select_step::select_step(std::string expr) : expression_(caf::no_error) {
-  auto e = to<vast::expression>(std::move(expr));
+select_step::select_step(select_step_configuration configuration)
+  : expression_(caf::no_error) {
+  auto e = to<vast::expression>(configuration.expression);
   if (!e) {
     // TODO: Implement a better way to report errors, for example, a separate
     // setup() function.
     VAST_ERROR("the select step cannot use the expression: '{}', reason: '{}'",
-               expr, e.error());
+               configuration.expression, e.error());
     expression_ = e;
     return;
   }
@@ -36,7 +39,7 @@ select_step::select_step(std::string expr) : expression_(caf::no_error) {
   if (!expression_) {
     VAST_ERROR("the select step cannot validate the expression: '{}', reason: "
                "'{}'",
-               expr, expression_.error());
+               configuration.expression, e.error());
   }
 }
 
@@ -81,13 +84,11 @@ public:
 
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& opts) const override {
-    auto expr = caf::get_if<std::string>(&opts, "expression");
-    if (!expr)
-      return caf::make_error(ec::invalid_configuration,
-                             "key 'expression' is missing or not a string in "
-                             "configuration for select step");
-    return std::make_unique<select_step>(*expr);
+  make_transform_step(const record& opts) const override {
+    auto config = to<select_step_configuration>(opts);
+    if (!config)
+      return config.error(); // FIXME: Better error message?
+    return std::make_unique<select_step>(std::move(*config));
   }
 };
 

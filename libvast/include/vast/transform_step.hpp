@@ -51,6 +51,6 @@ public:
 };
 
 caf::expected<std::unique_ptr<transform_step>>
-make_transform_step(const std::string& name, const caf::settings& opts);
+make_transform_step(const std::string& name, const vast::record& opts);
 
 } // namespace vast

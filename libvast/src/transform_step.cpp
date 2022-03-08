@@ -21,7 +21,7 @@ namespace vast {
 // refactoring since `plugins::get()` only gives us unique pointers, so we can't
 // really store the plugin anywhere to later create a step from it.
 caf::expected<std::unique_ptr<transform_step>>
-make_transform_step(const std::string& name, const caf::settings& opts) {
+make_transform_step(const std::string& name, const vast::record& opts) {
   for (const auto& plugin : plugins::get()) {
     if (name != plugin->name())
       continue;
