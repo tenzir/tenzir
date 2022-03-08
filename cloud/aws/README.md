@@ -21,13 +21,15 @@ The sketch below illustrates the high-level architecture:
 ### Usage
 
 The provided [Makefile](Makefile) wraps [Terraform](https://www.terraform.io/)
-and `aws` CLI commands for a streamlined UX. You need the following tools
-installed locally:
+and `aws` CLI commands for a streamlined UX. You can list the available higher
+level commands with `make help`.
+
+You need the following tools installed locally:
 
 - Terraform (> v1): `terraform` to provision the infrastructure
 - AWS CLI (v2): `aws` (plus `SessionManager`) to automate AWS interaction
 - Docker: `docker` to build a container for Lambda
-- `jq` for wrangling JSON output
+- `jq` for wrangling JSON output / `base64` to encode command line strings
 
 To avoid having to provide required Terraform variables manually, the Makefile
 looks for a file `default.env` in the current directory. It must define the
@@ -53,8 +55,8 @@ subnet_cidr=172.31.48.0/24
 aws_region=eu-north-1
 ```
 
-Next, we take a look at some use cases. To setup Fargate and one Lambda
-instance, use `make deploy`. You can tear down the resources using the dual
+Next, we take a look at some use cases. To setup Fargate and the Lambda
+function, use `make deploy`. You can tear down the resources using the dual
 command, `make destroy`. See `make help` for a brief description of available
 commands.
 
@@ -74,27 +76,42 @@ Caveats:
 To deploy a VAST server as Fargate task, run:
 
 ```bash
-make run-task
+make start-vast-server
 ```
 
 This launches the official `tenzir/vast` Docker image, which executes the
-command `vast start`. You can get a shell via ECS Exec to the image where the
-VAST server runs with `make execute-command`, e.g., to run `vast status` to see
-whether things are up and running.
+command `vast start`.
 
-**Caveat**: in the current setup, multiple invocations of `make run-task`
-create multiple Fargate tasks, which prevents other Makefile targets from
-working correctly.
+You can replace the running task by a new one with:
+```bash
+make restart-vast-server
+```
 
-**Note**: the Fargate container currently uses local storage only.
+**Note**: the Fargate container currently uses local storage only, so restarting the 
+server task will empty the database.
 
-#### Run a VAST client (Lambda)
+#### Run a VAST client on Fargate
 
-To run a VAST in Lambda, e.g., `vast status`, use the `run-lambda` target:
+You can run VAST client commands from within the Fargate server task using:
+
+```bash
+make execute-command CMD="vast status"
+```
+
+This uses ECS Exec to connect to the container. If you do not specify the `CMD`
+variable, it will start an interactive bash shell. This comes handy to inspect 
+the server environment and check whether things are up and running.
+
+#### Run a VAST client on Lambda
+
+To run a VAST client from Lambda, use the `run-lambda` target:
 
 ```bash
 make run-lambda CMD="vast status"
 ```
+
+The Lambda image also contains extra tooling, such as the AWS CLI, which is
+useful to run batch imports or exports to other AWS services.
 
 
 #### Shutdown

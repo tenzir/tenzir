@@ -74,16 +74,11 @@ get-vast-task-ip:
 		--task $(shell $(MAKE) get-vast-tasks) | jq -r '.. | .privateIpv4Address? | select(. != null)'
 
 # Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
-# Use | jq -r ".result" for a formated output
-# Inside the CMD variable, escape:
-# - " with \\\"
-# - ' with '\''
-# TODO automatic escaping
 run-lambda: ## Run ad-hoc VAST clients from AWS Lambda
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
-		--payload '{"cmd":"$(CMD)", "host":"$(shell $(MAKE) get-vast-task-ip):42000"}' \
+		--payload '{"cmd":"$(shell echo $(CMD) | base64)", "host":"$(shell $(MAKE) get-vast-task-ip):42000"}' \
 		/dev/stdout | jq -s -r .[0].result
 
 # Provide your bash command through the CMD variable (e.g make execute-command CMD="vast status")
