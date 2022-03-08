@@ -713,6 +713,8 @@ bool experimental_table_slice_builder::add_impl(data_view x) {
 
 namespace {
 
+VAST_DIAGNOSTIC_PUSH
+VAST_DIAGNOSTIC_IGNORE_DEPRECATED
 std::vector<struct type::attribute>
 deserialize_attributes(std::string_view serialized) {
   simdjson::padded_string json{serialized};
@@ -732,6 +734,7 @@ deserialize_attributes(std::string_view serialized) {
   }
   return attrs;
 }
+VAST_DIAGNOSTIC_POP
 
 std::string
 serialize_attributes(const std::vector<type::attribute_view>& attrs) {
@@ -900,6 +903,8 @@ type make_vast_type_int(const arrow::DataType& arrow_type) {
   return caf::visit(f, arrow_type);
 }
 
+VAST_DIAGNOSTIC_PUSH
+VAST_DIAGNOSTIC_IGNORE_DEPRECATED
 /// Enhances a VAST type based on the metadata extracted from Arrow.
 /// Metadata can be attached to both Arrow schema and an Arrow field, and VAST
 /// stores metadata on either of the two, using the exact same structure.
@@ -929,10 +934,20 @@ type enrich_type_with_metadata(
     }
     VAST_WARN("Unhandled VAST metadata key '{}'", key);
   }
-  for (auto it = names_and_attrs.rbegin(); it != names_and_attrs.rend(); ++it)
-    t = type{it->first, t, it->second};
+  for (auto it = names_and_attrs.rbegin(); it != names_and_attrs.rend(); ++it) {
+    auto attributes = std::vector<type::attribute_view>{};
+    attributes.reserve(it->second.size());
+    for (auto&& [key, value] : it->second) {
+      if (value)
+        attributes.push_back({key, *value});
+      else
+        attributes.push_back({key});
+    }
+    t = type{it->first, t, std::move(attributes)};
+  }
   return t;
 }
+VAST_DIAGNOSTIC_POP
 
 } // namespace
 
