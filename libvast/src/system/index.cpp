@@ -631,19 +631,22 @@ index_state::status(status_verbosity v) const {
     }
   };
   auto rs = make_status_request_state<extra_state>(self);
+  auto stats_object = record{};
+  auto sum = uint64_t{0};
+  for (const auto& [_, layout_stats] : stats.layouts)
+    sum += layout_stats.count;
+  auto xs = record{};
+  xs["total"] = count{sum};
+  stats_object["events"] = xs;
+  if (v == status_verbosity::info)
+    rs->content["statistics"] = std::move(stats_object);
   if (v >= status_verbosity::detailed) {
-    auto stats_object = record{};
     auto layout_object = record{};
-    auto sum = uint64_t{0};
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = record{};
       xs["count"] = count{layout_stats.count};
       layout_object[name] = xs;
-      sum += layout_stats.count;
     }
-    auto xs = record{};
-    xs["total"] = count{sum};
-    stats_object["all-layouts"] = xs;
     stats_object["layouts"] = std::move(layout_object);
     rs->content["statistics"] = std::move(stats_object);
     rs->content["catalog-bytes"] = catalog_bytes;
