@@ -17,11 +17,11 @@ variable "region_name" {
   description = "The AWS region name (eu-west-1, us-east2...) in which the stack will be deployed"
 }
 
-variable "vpc_id" {
+variable "peered_vpc_id" {
   description = "An existing VPC from which data will be collected into VAST"
 }
 
-variable "subnet_cidr" {
+variable "vast_cidr" {
   description = "A new subnet to host VAST and other monitoring appliances"
 }
 
@@ -40,12 +40,6 @@ The storage type that should be used for the VAST server task:
     condition     = contains(["EFS", "ATTACHED"], var.vast_server_storage_type)
     error_message = "Allowed values for vast_server_storage are \"EFS\" or \"ATTACHED\"."
   }
-}
-
-// split the cidr in half into a public and a private one
-locals {
-  private_subnet_cidr = cidrsubnet(var.subnet_cidr, 1, 0)
-  public_subnet_cidr  = cidrsubnet(var.subnet_cidr, 1, 1)
 }
 
 # The default provider manages VAST resources and other monitoring appliances
