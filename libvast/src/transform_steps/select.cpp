@@ -84,8 +84,12 @@ public:
 
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& opts) const override {
-    auto config = to<select_step_configuration>(opts);
+  make_transform_step(const record& options) const override {
+    if (!options.contains("expression"))
+      return caf::make_error(ec::invalid_configuration,
+                             "key 'expression' is missing in configuration for "
+                             "select step");
+    auto config = to<select_step_configuration>(options);
     if (!config)
       return config.error(); // FIXME: Better error message?
     return std::make_unique<select_step>(std::move(*config));

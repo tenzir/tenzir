@@ -92,10 +92,18 @@ public:
 
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& opts) const override {
-    auto config = to<hash_step_configuration>(opts);
+  make_transform_step(const record& options) const override {
+    if (!options.contains("field"))
+      return caf::make_error(ec::invalid_configuration,
+                             "key 'field' is missing in configuration for hash "
+                             "step");
+    if (!options.contains("out"))
+      return caf::make_error(ec::invalid_configuration, "key 'out' is missing "
+                                                        "in configuration for "
+                                                        "hash step");
+    auto config = to<hash_step_configuration>(options);
     if (!config)
-      return config.error(); // FIXME: Better error message?
+      return config.error();
     return std::make_unique<hash_step>(std::move(*config));
   }
 };

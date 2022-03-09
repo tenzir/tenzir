@@ -97,10 +97,14 @@ public:
 
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& opts) const override {
-    auto config = to<delete_step_configuration>(opts);
+  make_transform_step(const record& options) const override {
+    if (!options.contains("fields"))
+      return caf::make_error(ec::invalid_configuration,
+                             "key 'fields' is missing in configuration for "
+                             "delete step");
+    auto config = to<delete_step_configuration>(options);
     if (!config)
-      return config.error(); // FIXME: Better error message?
+      return config.error();
     return std::make_unique<delete_step>(std::move(*config));
   }
 };

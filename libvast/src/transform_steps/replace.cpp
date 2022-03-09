@@ -92,10 +92,18 @@ public:
 
   // Transform Plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& opts) const override {
-    auto config = to<replace_step_configuration>(opts);
+  make_transform_step(const record& options) const override {
+    if (!options.contains("field"))
+      return caf::make_error(ec::invalid_configuration,
+                             "key 'field' is missing in configuration for "
+                             "replace step");
+    if (!options.contains("value"))
+      return caf::make_error(ec::invalid_configuration,
+                             "key 'value' is missing in configuration for "
+                             "replace step");
+    auto config = to<replace_step_configuration>(options);
     if (!config)
-      return config.error(); // FIXME: Better error message?
+      return config.error();
     auto data = from_yaml(config->value);
     if (!data)
       return caf::make_error(ec::invalid_configuration,
