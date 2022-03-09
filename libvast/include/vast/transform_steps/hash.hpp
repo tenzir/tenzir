@@ -17,7 +17,7 @@ namespace vast {
 struct hash_step_configuration {
   std::string field;
   std::string out;
-  std::optional<std::string> salt; // FIXME: Is optional handled properly?
+  std::optional<std::string> salt;
 
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>

@@ -91,7 +91,7 @@ public:
                              "select step");
     auto config = to<select_step_configuration>(options);
     if (!config)
-      return config.error(); // FIXME: Better error message?
+      return config.error();
     return std::make_unique<select_step>(std::move(*config));
   }
 };
