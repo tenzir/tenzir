@@ -59,7 +59,7 @@ start-vast-server: ## Start a VAST server instance as an AWS Fargate task. Noop 
 	@$(MAKE) --no-print-directory run-vast-task 
 
 restart-vast-server: ## Stops all running VAST server Fargate tasks and start a new one.
-	@for task in $(shell $(MAKE) get-vast-tasks); do \
+	@for task in $(shell $(MAKE) get-vast-server); do \
 		aws ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name) > /dev/null; \
 		echo "Stopped task $$task"; \
 	done
