@@ -1,6 +1,6 @@
 ### VPC
 resource "aws_vpc" "vast" {
-  cidr_block = var.subnet_cidr
+  cidr_block = var.new_vpc_cidr
 
   tags = {
     Name = "${module.env.module_name}-vpc-${module.env.stage}"

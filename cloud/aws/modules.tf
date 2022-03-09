@@ -2,7 +2,7 @@ module "network" {
   source = "./network"
 
   peered_vpc_id = var.peered_vpc_id
-  subnet_cidr   = var.vast_cidr
+  new_vpc_cidr  = var.vast_cidr
 
   providers = {
     aws               = aws
@@ -16,7 +16,7 @@ module "vast_server" {
   name        = "vast-server"
   region_name = var.region_name
 
-  vpc_id                      = var.peered_vpc_id
+  vpc_id                      = module.network.vast_vpc_id
   subnet_id                   = module.network.private_subnet_id
   ingress_subnet_cidrs        = [module.network.private_subnet_cidr]
   ecs_cluster_id              = aws_ecs_cluster.fargate_cluster.id
@@ -48,7 +48,6 @@ module "vast_client" {
   memory_size        = 2048
   timeout            = 300
 
-  in_vpc  = true
   vpc_id  = module.network.vast_vpc_id
   subnets = [module.network.private_subnet_id]
 
