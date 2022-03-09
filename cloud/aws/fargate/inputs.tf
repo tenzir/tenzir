@@ -15,6 +15,8 @@ variable "environment" {
 
 variable "vpc_id" {}
 
+variable "subnet_id" {}
+
 variable "task_cpu" {}
 
 variable "task_memory" {}
@@ -32,3 +34,16 @@ variable "ingress_subnet_cidrs" {}
 variable "command" {}
 
 variable "port" {}
+
+variable "storage_type" {
+  default = "ATTACHED"
+
+  validation {
+    condition     = contains(["EFS", "ATTACHED"], var.storage_type)
+    error_message = "Allowed values for vast_server_storage are \"EFS\" or \"ATTACHED\"."
+  }
+}
+
+variable "storage_mount_point" {
+  description = "The path of the storage volume within the container."
+}

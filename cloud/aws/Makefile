@@ -5,6 +5,7 @@ vpc_id ?= $(eval vpc_id := $(shell bash -c 'read -p "VPC ID (existing): " input;
 subnet_cidr ?= $(eval subnet_cidr := $(shell bash -c 'read -p "Subnet CIDR (to be created): " input; echo $$input'))$(subnet_cidr)
 aws_region ?= $(eval aws_region := $(shell bash -c 'read -p "AWS Region: " input; echo $$input'))$(aws_region)
 vast_version ?= $(shell git describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*')
+vast_server_storage_type ?= EFS
 
 # re-export these variable into the environement for Terraform and the AWS CLI to use
 export AWS_REGION = ${aws_region}
@@ -12,6 +13,7 @@ export TF_VAR_vpc_id = ${vpc_id}
 export TF_VAR_subnet_cidr = ${subnet_cidr}
 export TF_VAR_region_name = ${aws_region}
 export TF_VAR_vast_version = ${vast_version}
+export TF_VAR_vast_server_storage_type = ${vast_server_storage_type}
 
 help:     ## Show this help.
 	@egrep -h '\s##\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
@@ -57,7 +59,7 @@ start-vast-server: ## Start a VAST server instance as an AWS Fargate task. Noop 
 	@$(MAKE) --no-print-directory run-vast-task 
 
 restart-vast-server: ## Stops all running VAST server Fargate tasks and start a new one.
-	@for task in $(shell $(MAKE) get-vast-tasks); do \
+	@for task in $(shell $(MAKE) get-vast-server); do \
 		aws ecs stop-task --task $$task --cluster $(shell terraform output fargate_cluster_name) > /dev/null; \
 		echo "Stopped task $$task"; \
 	done
@@ -83,11 +85,13 @@ stop-all-tasks: ## Stop all running tasks on the ECS cluster created by Terrafor
 
 # Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 run-lambda: ## Run ad-hoc VAST client commands from AWS Lambda
+	@$(file > lambda-cmd.tmp,$(CMD)) # write to file first to avoid escaping issues
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
-		--payload '{"cmd":"$(shell echo $(CMD) | base64)", "host":"$(shell $(MAKE) get-vast-server-ip):42000"}' \
+		--payload '{"cmd":"$(shell base64 lambda-cmd.tmp)", "host":"$(shell $(MAKE) get-vast-server-ip):42000"}' \
 		/dev/stdout | jq -s -r .[0].result
+	@rm lambda-cmd.tmp
 
 # Provide your bash command through the CMD variable (e.g make execute-command CMD="vast status")
 # Start an interactive session by leaving CMD empty

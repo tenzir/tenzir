@@ -53,6 +53,13 @@ Optionally, you can also define the following variables:
   set to the latest release. Version should be `v1.1.0` or higher. You can also 
   use the latest commit on the main branch by specifying `latest`.
 
+- `vast_server_storage_type`: the type of volume to use for the VAST server. Can
+  be set to either
+  - EFS (default) -> persistent accross task execution, infinitely scalable, but
+    higher latency.
+  - ATTACHED -> the local storage that comes by default with Fargate tasks. It is
+    lost when the task is stopped.
+
 Here's an example:
 
 ```bash
@@ -76,6 +83,10 @@ Caveats:
   even when you aren't running any workload, until you tear down the entire
   stack.
 
+- You might sometime bumb into _error waiting for Lambda Function creation: 
+  InsufficientRolePermissions_ while deploying the stack. You can usually
+  solve this by running `make deploy` again a few minutes later.
+
 
 #### Start a VAST server (Fargate)
 
@@ -93,12 +104,12 @@ You can replace the running task by a new one with:
 make restart-vast-server
 ```
 
-**Note**: 
-- the Fargate container currently uses local storage only, so restarting the 
-server task will empty the database.
+**Notes**: 
+- if you use `ATTACHED` for the storage type, restarting the server task will 
+  empty the database.
 - multiple invocations of `make run-vast-task` create multiple Fargate tasks, 
-which prevents other Makefile targets from working correctly. Using
-`start-vast-server` and `restart-vast-server` only helps you avoid that.
+  which prevents other Makefile targets from working correctly. We recommand using 
+  exclusively `start-vast-server` and `restart-vast-server`.
 
 #### Run a VAST client on Fargate
 
@@ -108,9 +119,13 @@ You can run VAST client commands from within the Fargate server task using:
 make execute-command CMD="vast status"
 ```
 
-This uses ECS Exec to connect to the container. If you do not specify the `CMD`
-variable, it will start an interactive bash shell. This comes handy to inspect 
-the server environment and check whether things are up and running.
+This uses ECS Exec to connect to the container. The Fargate task should be in
+`RUNNING` state and you sometime need a few extra seconds for the ECS Exec
+agent to start.
+
+If you do not specify the `CMD` variable, it will start an interactive bash shell. 
+This comes handy to inspect the server environment and check whether things are up 
+and running.
 
 #### Run a VAST client on Lambda
 
