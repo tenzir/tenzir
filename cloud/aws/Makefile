@@ -85,11 +85,13 @@ stop-all-tasks: ## Stop all running tasks on the ECS cluster created by Terrafor
 
 # Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 run-lambda: ## Run ad-hoc VAST client commands from AWS Lambda
+	@$(file > lambda-cmd.tmp,$(CMD)) # write to file first to avoid escaping issues
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
-		--payload '{"cmd":"$(shell echo $(CMD) | base64)", "host":"$(shell $(MAKE) get-vast-server-ip):42000"}' \
+		--payload '{"cmd":"$(shell base64 lambda-cmd.tmp)", "host":"$(shell $(MAKE) get-vast-server-ip):42000"}' \
 		/dev/stdout | jq -s -r .[0].result
+	@rm lambda-cmd.tmp
 
 # Provide your bash command through the CMD variable (e.g make execute-command CMD="vast status")
 # Start an interactive session by leaving CMD empty
