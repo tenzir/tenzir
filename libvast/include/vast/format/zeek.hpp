@@ -23,7 +23,7 @@
 #include "vast/format/reader.hpp"
 #include "vast/format/single_layout_reader.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/table_slice_builder.hpp"
 
 #include <caf/expected.hpp>

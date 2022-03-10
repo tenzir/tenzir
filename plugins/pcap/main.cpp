@@ -14,8 +14,8 @@
 #include <vast/format/single_layout_reader.hpp>
 #include <vast/format/writer.hpp>
 #include <vast/logger.hpp>
+#include <vast/module.hpp>
 #include <vast/plugin.hpp>
-#include <vast/schema.hpp>
 #include <vast/type.hpp>
 
 #include <caf/settings.hpp>

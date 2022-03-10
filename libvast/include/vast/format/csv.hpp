@@ -18,7 +18,7 @@
 #include "vast/detail/line_range.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/format/single_layout_reader.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <caf/fwd.hpp>
 #include <caf/none.hpp>

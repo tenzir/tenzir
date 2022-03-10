@@ -22,7 +22,7 @@
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/time.hpp"
 
 #include <caf/sum_type.hpp>

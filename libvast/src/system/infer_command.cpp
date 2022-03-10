@@ -24,7 +24,7 @@
 #include "vast/error.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/expected.hpp>

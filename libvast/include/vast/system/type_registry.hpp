@@ -11,7 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/expression.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"

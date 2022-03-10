@@ -18,7 +18,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 

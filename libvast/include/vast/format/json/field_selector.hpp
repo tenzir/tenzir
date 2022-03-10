@@ -12,7 +12,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/format/json/selector.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <simdjson.h>
 #include <unordered_map>

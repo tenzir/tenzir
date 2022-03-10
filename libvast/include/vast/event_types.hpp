@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <caf/optional.hpp>
 

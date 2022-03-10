@@ -16,8 +16,8 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/module.hpp"
 #include "vast/plugin.hpp"
-#include "vast/schema.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/error.hpp>

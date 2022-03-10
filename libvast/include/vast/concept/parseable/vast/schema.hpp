@@ -17,7 +17,7 @@
 #include "vast/error.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/type.hpp"
 
 namespace vast {

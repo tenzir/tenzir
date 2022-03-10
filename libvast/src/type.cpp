@@ -18,7 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/legacy_type.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <arrow/array.h>
 #include <arrow/type_traits.h>

@@ -14,7 +14,7 @@
 #include "vast/detail/random.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/variant.hpp>

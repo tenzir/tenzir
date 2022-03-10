@@ -15,8 +15,8 @@
 #include "vast/format/json/selector.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
+#include "vast/module.hpp"
 #include "vast/policy/omit_nulls.hpp"
-#include "vast/schema.hpp"
 #include "vast/view.hpp"
 
 #include <caf/expected.hpp>

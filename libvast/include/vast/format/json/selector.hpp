@@ -11,7 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/error.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <optional>
 #include <simdjson.h>
