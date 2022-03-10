@@ -72,7 +72,7 @@ struct fixture : fixtures::deterministic_actor_system {
     },
   };
 
-  schema s;
+  module s;
 
   fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
     s.add(l0);

@@ -50,7 +50,7 @@ struct field_selector final : selector {
     return it->second;
   }
 
-  inline caf::error schema(const vast::schema& s) override {
+  inline caf::error schema(const vast::module& s) override {
     for (const auto& t : s) {
       if (!caf::holds_alternative<record_type>(t))
         continue;
@@ -68,8 +68,8 @@ struct field_selector final : selector {
     return caf::none;
   }
 
-  inline vast::schema schema() const override {
-    vast::schema result;
+  inline vast::module schema() const override {
+    vast::module result;
     for (const auto& [key, value] : types)
       result.add(value);
     return result;

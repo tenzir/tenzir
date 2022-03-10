@@ -65,9 +65,9 @@ public:
 
   void reset(std::unique_ptr<std::istream> in) override;
 
-  caf::error schema(vast::schema sch) override;
+  caf::error schema(vast::module sch) override;
 
-  vast::schema schema() const override;
+  vast::module schema() const override;
 
   const char* name() const override;
 

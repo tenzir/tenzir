@@ -17,10 +17,10 @@ namespace vast::event_types {
 /// Initializes the system-wide type registry.
 /// @param s The schema.
 /// @returns true on success or false if registry was alread initialized.
-bool init(schema s);
+bool init(module s);
 
 /// Retrieves a pointer to the system-wide type registry.
 /// @returns nullptr if registry is not initialized.
-const schema* get();
+const module* get();
 
 } // namespace vast::event_types

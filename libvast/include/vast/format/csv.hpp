@@ -65,9 +65,9 @@ public:
 
   void reset(std::unique_ptr<std::istream> in) override;
 
-  caf::error schema(vast::schema sch) override;
+  caf::error schema(vast::module sch) override;
 
-  vast::schema schema() const override;
+  vast::module schema() const override;
 
   vast::system::report status() const override;
 
@@ -88,7 +88,7 @@ private:
 
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
-  vast::schema schema_;
+  vast::module schema_;
   std::vector<rec_table> records;
   caf::optional<parser_type> parser_;
   options opt_;

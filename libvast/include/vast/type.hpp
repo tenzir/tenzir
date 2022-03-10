@@ -410,7 +410,7 @@ std::strong_ordering operator<=>(const T& lhs, const U& rhs) noexcept {
 /// @returns an error if two types with the same name are not congruent.
 /// @relates type
 caf::error
-replace_if_congruent(std::initializer_list<type*> xs, const schema& with);
+replace_if_congruent(std::initializer_list<type*> xs, const module& with);
 
 // -- bool_type ---------------------------------------------------------------
 

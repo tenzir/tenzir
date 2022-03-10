@@ -116,7 +116,7 @@ make_source(caf::actor_system& sys, const std::string& format,
     VAST_VERBOSE("{} produces {} table slices of at most {} events",
                  (*reader)->name(), encoding, slice_size);
   // Spawn the source, falling back to the default spawn function.
-  auto local_schema = schema ? std::move(*schema) : vast::schema{};
+  auto local_schema = schema ? std::move(*schema) : vast::module{};
   auto type_filter = type ? std::move(*type) : std::string{};
   auto src =
     [&](auto&&... args) {

@@ -31,7 +31,7 @@
 
 namespace vast {
 
-caf::expected<schema> schema::merge(const schema& s1, const schema& s2) {
+caf::expected<module> module::merge(const module& s1, const module& s2) {
   auto result = s2;
   for (const auto& t : s1) {
     if (const auto* u = s2.find(t.name())) {
@@ -48,7 +48,7 @@ caf::expected<schema> schema::merge(const schema& s1, const schema& s2) {
   return result;
 }
 
-schema schema::combine(const schema& s1, const schema& s2) {
+module module::combine(const module& s1, const module& s2) {
   auto result = s1;
   for (const auto& t : s2) {
     if (auto* x = result.find(t.name()))
@@ -59,55 +59,55 @@ schema schema::combine(const schema& s1, const schema& s2) {
   return result;
 }
 
-bool schema::add(schema::value_type t) {
+bool module::add(module::value_type t) {
   if (!t || find(t.name()) != nullptr)
     return false;
   types_.push_back(std::move(t));
   return true;
 }
 
-schema::value_type* schema::find(std::string_view name) {
+module::value_type* module::find(std::string_view name) {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
   return nullptr;
 }
 
-const schema::value_type* schema::find(std::string_view name) const {
+const module::value_type* module::find(std::string_view name) const {
   for (const auto& t : types_)
     if (t.name() == name)
       return &t;
   return nullptr;
 }
 
-schema::const_iterator schema::begin() const {
+module::const_iterator module::begin() const {
   return types_.begin();
 }
 
-schema::const_iterator schema::end() const {
+module::const_iterator module::end() const {
   return types_.end();
 }
 
-size_t schema::size() const {
+size_t module::size() const {
   return types_.size();
 }
 
-bool schema::empty() const {
+bool module::empty() const {
   return types_.empty();
 }
 
-void schema::clear() {
+void module::clear() {
   types_.clear();
 }
 
-bool operator==(const schema& x, const schema& y) {
+bool operator==(const module& x, const module& y) {
   return x.types_ == y.types_;
 }
 
-caf::expected<schema> get_schema(const caf::settings& options) {
+caf::expected<module> get_schema(const caf::settings& options) {
   // Get the default schema from the registry.
   const auto* schema_reg_ptr = event_types::get();
-  auto schema = schema_reg_ptr ? *schema_reg_ptr : vast::schema{};
+  auto schema = schema_reg_ptr ? *schema_reg_ptr : vast::module{};
   // Update with an alternate schema, if requested.
   auto sc = caf::get_if<std::string>(&options, "vast.import.schema");
   auto sf = caf::get_if<std::string>(&options, "vast.import.schema-file");
@@ -117,14 +117,14 @@ caf::expected<schema> get_schema(const caf::settings& options) {
                     "provided");
   if (!sc && !sf)
     return schema;
-  caf::expected<vast::schema> update = caf::no_error;
+  caf::expected<vast::module> update = caf::no_error;
   if (sc)
-    update = to<vast::schema>(*sc);
+    update = to<vast::module>(*sc);
   else
     update = load_schema(*sf);
   if (!update)
     return update.error();
-  return schema::combine(schema, *update);
+  return module::combine(schema, *update);
 }
 
 detail::stable_set<std::filesystem::path>
@@ -157,13 +157,13 @@ get_schema_dirs(const caf::actor_system_config& cfg) {
   return result;
 }
 
-caf::expected<schema> load_schema(const std::filesystem::path& schema_file) {
+caf::expected<module> load_schema(const std::filesystem::path& schema_file) {
   if (schema_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
   auto str = detail::load_contents(schema_file);
   if (!str)
     return str.error();
-  return to<schema>(*str);
+  return to<module>(*str);
 }
 
 caf::error
@@ -180,12 +180,12 @@ load_symbols(const std::filesystem::path& schema_file, symbol_map& local) {
   return caf::none;
 }
 
-caf::expected<schema>
+caf::expected<module>
 load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
             size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
-  vast::schema types;
+  vast::module types;
   symbol_map global_symbols;
   for (const auto& dir : schema_dirs) {
     VAST_VERBOSE("loading schemas from {}", dir);
@@ -217,12 +217,12 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
                              dir.string(), directory_schema.error().context());
     local_symbols.merge(std::move(global_symbols));
     global_symbols = std::move(local_symbols);
-    types = schema::combine(types, *directory_schema);
+    types = module::combine(types, *directory_schema);
   }
   return types;
 }
 
-caf::expected<vast::schema> load_schema(const caf::actor_system_config& cfg) {
+caf::expected<vast::module> load_schema(const caf::actor_system_config& cfg) {
   return load_schema(get_schema_dirs(cfg));
 }
 

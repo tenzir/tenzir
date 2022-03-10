@@ -68,7 +68,7 @@ public:
   }
 
   /// Sets the schema.
-  inline caf::error schema(const vast::schema& sch) override {
+  inline caf::error schema(const vast::module& sch) override {
     if (sch.empty())
       return caf::make_error(ec::invalid_configuration,
                              "no schema provided or type "
@@ -91,8 +91,8 @@ public:
   }
 
   /// Retrieves the current schema.
-  inline vast::schema schema() const override {
-    vast::schema result;
+  inline vast::module schema() const override {
+    vast::module result;
     for (const auto& [k, v] : type_cache)
       result.add(v);
     return result;

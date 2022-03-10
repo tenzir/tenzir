@@ -181,13 +181,13 @@ void reader::reset(std::unique_ptr<std::istream> in) {
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
-caf::error reader::schema(vast::schema s) {
+caf::error reader::schema(vast::module s) {
   for (const auto& t : s)
     schema_.add(t);
   return caf::none;
 }
 
-vast::schema reader::schema() const {
+vast::module reader::schema() const {
   return schema_;
 }
 

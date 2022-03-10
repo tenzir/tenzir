@@ -78,7 +78,7 @@ struct source_state {
   std::optional<size_t> requested = {};
 
   /// The import-local schema.
-  vast::schema local_schema = {};
+  vast::module local_schema = {};
 
   /// The maximum size for a table slice.
   size_t table_slice_size = {};
@@ -124,7 +124,7 @@ struct source_state {
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
-       const type_registry_actor& type_registry, vast::schema local_schema,
+       const type_registry_actor& type_registry, vast::module local_schema,
        std::string type_filter, accountant_actor accountant,
        std::vector<transform>&& input_transformations);
 

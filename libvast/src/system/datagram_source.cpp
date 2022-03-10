@@ -41,7 +41,7 @@ caf::behavior datagram_source(
   caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
   uint16_t udp_listening_port, format::reader_ptr reader,
   size_t table_slice_size, std::optional<size_t> max_events,
-  const type_registry_actor& type_registry, vast::schema local_schema,
+  const type_registry_actor& type_registry, vast::module local_schema,
   std::string type_filter, accountant_actor accountant,
   std::vector<transform>&& transforms) {
   self->state.transformer
@@ -152,10 +152,10 @@ caf::behavior datagram_source(
       auto name = std::string{self->state.reader->name()};
       self->delegate(self->state.transformer, sink, name);
     },
-    [self](atom::get, atom::schema) -> caf::result<schema> {
+    [self](atom::get, atom::schema) -> caf::result<module> {
       return self->state.reader->schema();
     },
-    [self](atom::put, schema& sch) -> caf::result<void> {
+    [self](atom::put, module& sch) -> caf::result<void> {
       if (auto err = self->state.reader->schema(std::move(sch)))
         return err;
       return caf::unit;

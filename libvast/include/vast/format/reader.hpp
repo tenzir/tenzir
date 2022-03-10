@@ -100,11 +100,11 @@ public:
   /// Tries to set the schema for events to read.
   /// @param x The new schema.
   /// @returns `caf::none` on success.
-  virtual caf::error schema(vast::schema x) = 0;
+  virtual caf::error schema(vast::module x) = 0;
 
   /// Retrieves the currently used schema.
   /// @returns The current schema.
-  [[nodiscard]] virtual vast::schema schema() const = 0;
+  [[nodiscard]] virtual vast::module schema() const = 0;
 
   /// @returns The name of the reader type.
   [[nodiscard]] virtual const char* name() const = 0;

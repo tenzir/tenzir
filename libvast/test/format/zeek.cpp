@@ -310,7 +310,7 @@ TEST(zeek reader - custom schema) {
       community_id: string // not present in the data
     }
   )__";
-  auto sch = unbox(to<schema>(custom_schema));
+  auto sch = unbox(to<module>(custom_schema));
   using reader_type = format::zeek::reader;
   reader_type reader{caf::settings{}, std::make_unique<std::istringstream>(
                                         std::string{conn_log_100_events})};
@@ -344,7 +344,7 @@ TEST(zeek reader - custom schema) {
       resp_ip_bytes: count,
       tunnel_parents: list<string>,
     })__";
-  auto expected = unbox(to<schema>(ref_schema));
+  auto expected = unbox(to<module>(ref_schema));
   auto zeek_conn = unbox(expected.find("zeek.conn"));
   CHECK_EQUAL(slices[0].layout(), flatten(zeek_conn));
 }

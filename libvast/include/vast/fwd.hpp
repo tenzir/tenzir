@@ -111,7 +111,7 @@ class plugin_ptr;
 class port;
 class real_type;
 class record_type;
-class schema;
+class module;
 class segment;
 class segment_builder;
 class segment_store;
@@ -386,7 +386,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::query))
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
-  VAST_ADD_TYPE_ID((vast::schema))
+  VAST_ADD_TYPE_ID((vast::module))
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::taxonomies))

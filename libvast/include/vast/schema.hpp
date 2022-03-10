@@ -29,25 +29,25 @@ namespace vast {
 class data;
 
 /// A sequence of types.
-class schema : detail::equality_comparable<schema> {
+class module : detail::equality_comparable<module> {
 public:
   using value_type = type;
   using const_iterator = std::vector<value_type>::const_iterator;
   using iterator = std::vector<value_type>::iterator;
 
-  friend bool operator==(const schema& x, const schema& y);
+  friend bool operator==(const module& x, const module& y);
 
   /// Merges two schemata.
   /// @param s1 The first schema.
   /// @param s2 The second schema.
   /// @returns The union of *s1* and *s2* if the inputs are disjunct.
-  static caf::expected<schema> merge(const schema& s1, const schema& s2);
+  static caf::expected<module> merge(const module& s1, const module& s2);
 
   /// Combines two schemata, prefering definitions from s2 on conflicts.
   /// @param s1 The first schema.
   /// @param s2 The second schema.
   /// @returns The combination of *s1* and *s2*.
-  static schema combine(const schema& s1, const schema& s2);
+  static module combine(const module& s1, const module& s2);
 
   /// Adds a new type to the schema.
   /// @param t The type to add.
@@ -73,7 +73,7 @@ public:
   // -- CAF -------------------------------------------------------------------
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, schema& x) ->
+  friend auto inspect(Inspector& f, module& x) ->
     typename Inspector::result_type {
     return f(caf::meta::type_name("vast.schema"), x.types_);
   }
@@ -86,7 +86,7 @@ private:
 /// schemas with the ones passed directly as command line options.
 /// @param options The set of command line options.
 /// @returns The parsed schema.
-caf::expected<schema> get_schema(const caf::settings& options);
+caf::expected<module> get_schema(const caf::settings& options);
 
 /// Gathers the list of paths to traverse for loading schema or taxonomies data.
 /// @param cfg The application config.
@@ -98,7 +98,7 @@ get_schema_dirs(const caf::actor_system_config& cfg);
 /// Loads a single schema file.
 /// @param schema_file The file path.
 /// @returns The parsed schema.
-caf::expected<schema> load_schema(const std::filesystem::path& schema_file);
+caf::expected<module> load_schema(const std::filesystem::path& schema_file);
 
 /// Loads *.schema files from the given directories.
 /// @param schema_dirs The directories to load schemas from.
@@ -108,27 +108,27 @@ caf::expected<schema> load_schema(const std::filesystem::path& schema_file);
 /// combined. It is designed so types that exist in later paths can override the
 /// earlier ones, but the same mechanism makes no sense inside of a single
 /// directory unless we specify a specific order of traversal.
-caf::expected<vast::schema>
+caf::expected<vast::module>
 load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
             size_t max_recursion = defaults::max_recursion);
 
 /// Loads schemas according to the configuration. This is a convenience wrapper
 /// around *get_schema_dirs* and *load_schema*.
-caf::expected<vast::schema> load_schema(const caf::actor_system_config& cfg);
+caf::expected<vast::module> load_schema(const caf::actor_system_config& cfg);
 
 } // namespace vast
 
 namespace fmt {
 
 template <>
-struct formatter<vast::schema> {
+struct formatter<vast::module> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto format(const vast::schema& value, FormatContext& ctx) {
+  auto format(const vast::module& value, FormatContext& ctx) {
     auto out = ctx.out();
     for (const auto& t : value) {
       auto f = [&]<vast::concrete_type T>(const T& x) {

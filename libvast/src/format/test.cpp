@@ -244,7 +244,7 @@ std::string_view builtin_schema = R"__(
 )__";
 
 auto default_schema() {
-  schema result;
+  module result;
   auto success = parsers::schema(builtin_schema, result);
   VAST_ASSERT(success);
   return result;
@@ -272,11 +272,11 @@ void reader::reset(std::unique_ptr<std::istream>) {
   // with our reader abstraction.
 }
 
-caf::error reader::schema(vast::schema sch) {
+caf::error reader::schema(vast::module sch) {
   if (sch.empty())
     return caf::make_error(ec::format_error, "empty schema");
   std::unordered_map<type, blueprint> blueprints;
-  auto subset = vast::schema{};
+  auto subset = vast::module{};
   for (const auto& t : sch) {
     auto sn = detail::split(t.name(), ".");
     if (sn.size() != 2 || sn[0] != "test")
@@ -298,7 +298,7 @@ caf::error reader::schema(vast::schema sch) {
   return caf::none;
 }
 
-schema reader::schema() const {
+module reader::schema() const {
   return schema_;
 }
 

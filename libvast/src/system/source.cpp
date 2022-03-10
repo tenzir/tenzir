@@ -57,7 +57,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
-          auto merged_schema = schema{};
+          auto merged_schema = module{};
           for (const auto& type : local_schema)
             if (prefix_then_dot(type.name(), type_filter))
               if (caf::holds_alternative<record_type>(type))
@@ -142,7 +142,7 @@ void source_state::filter_and_push(
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
-       const type_registry_actor& type_registry, vast::schema local_schema,
+       const type_registry_actor& type_registry, vast::module local_schema,
        std::string type_filter, accountant_actor accountant,
        std::vector<transform>&& transforms) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(*self));
@@ -296,7 +296,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     [self](atom::get, atom::schema) { //
       return self->state.reader->schema();
     },
-    [self](atom::put, class schema schema) -> caf::result<void> {
+    [self](atom::put, class module schema) -> caf::result<void> {
       VAST_DEBUG("{} received schema {}", *self, schema);
       if (auto err = self->state.reader->schema(std::move(schema));
           err && err != caf::no_error)

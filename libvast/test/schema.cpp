@@ -37,7 +37,7 @@ TEST(offset finding) {
     type outer = record{ a: middle, b: record { y: string }, c: int }
     type foo = record{ a: int, b: real, c: outer, d: middle }
   )__";
-  auto sch = unbox(to<schema>(str));
+  auto sch = unbox(to<module>(str));
   auto* foo_type = sch.find("foo");
   REQUIRE_NOT_EQUAL(foo_type, nullptr);
   REQUIRE(holds_alternative<record_type>(*foo_type));
@@ -60,16 +60,16 @@ TEST(offset finding) {
 }
 
 TEST(combining) {
-  auto x = unbox(to<schema>(R"__(
+  auto x = unbox(to<module>(R"__(
     type b = real
     type int_custom = int
     type a = int_custom
   )__"));
-  auto y = unbox(to<schema>(R"__(
+  auto y = unbox(to<module>(R"__(
     type c = addr
     type d = pattern
   )__"));
-  auto z = schema::combine(x, y);
+  auto z = module::combine(x, y);
   CHECK_EQUAL(unbox(z.find("a")),
               (type{"a", type{"int_custom", integer_type{}}}));
   CHECK_EQUAL(unbox(z.find("b")), (type{"b", real_type{}}));
@@ -84,13 +84,13 @@ TEST(merging) {
     type a = int
     type inner = record{ x: int, y: real }
   )__";
-  auto s1 = to<schema>(str);
+  auto s1 = to<module>(str);
   REQUIRE(s1);
   str = "type a = int\n" // Same type allowed.
         "type b = int\n";
-  auto s2 = to<schema>(str);
+  auto s2 = to<module>(str);
   REQUIRE(s2);
-  auto merged = schema::merge(*s1, *s2);
+  auto merged = module::merge(*s1, *s2);
   REQUIRE(merged);
   CHECK(merged->find("a"));
   CHECK(merged->find("b"));
@@ -98,7 +98,7 @@ TEST(merging) {
 }
 
 TEST(serialization) {
-  schema sch;
+  module sch;
   auto t = type{
     "foo",
     record_type{
@@ -114,7 +114,7 @@ TEST(serialization) {
   // Save & load
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, sch), caf::none);
-  schema sch2;
+  module sch2;
   CHECK_EQUAL(detail::legacy_deserialize(buf, sch2), true);
   // Check integrity
   auto u = sch2.find("foo");
@@ -124,7 +124,7 @@ TEST(serialization) {
 
 TEST(parseable - simple sequential) {
   auto str = "type a = int type b = string type c = a"s;
-  schema sch;
+  module sch;
   CHECK(parsers::schema(str, sch));
   CHECK(sch.find("a"));
   CHECK(sch.find("b"));
@@ -137,7 +137,7 @@ TEST(parseable - toplevel comments) {
     type foo = int
     // A comment a the end of the schema.
   )__";
-  schema sch;
+  module sch;
   CHECK(parsers::schema(str, sch));
   CHECK(sch.find("foo"));
 }
@@ -150,7 +150,7 @@ TEST(parseable - inline comments) {
     }                   // detail,
     type bar = int      // jeez!
   )__";
-  schema sch;
+  module sch;
   CHECK(parsers::schema(str, sch));
   CHECK(sch.find("foo"));
   CHECK(sch.find("bar"));
@@ -176,7 +176,7 @@ TEST(schema : zeek - style) {
       client_issuer_subject: string
     }
   )__";
-  schema sch;
+  module sch;
   CHECK(parsers::schema(str, sch));
   auto ssl = sch.find("zeek.ssl");
   REQUIRE(ssl);
@@ -194,7 +194,7 @@ TEST(schema : aliases) {
                type baz = bar
                type x = baz
              )__";
-  schema sch;
+  module sch;
   CHECK(parsers::schema(std::string{str}, sch));
   auto foo = sch.find("foo");
   REQUIRE(foo);
@@ -229,7 +229,7 @@ TEST(parseable - basic types global) {
       a10: t10,
     }
   )__";
-  schema sch;
+  module sch;
   CHECK(parsers::schema(std::string{str}, sch));
   CHECK(sch.find("t1"));
   CHECK(sch.find("t10"));
@@ -257,7 +257,7 @@ TEST(parseable - basic types local) {
       a10: subnet,
     }
   )__";
-  schema sch;
+  module sch;
   CHECK(parsers::schema(std::string{str}, sch));
   auto foo = sch.find("foo");
   REQUIRE(foo);
@@ -279,7 +279,7 @@ TEST(parseable - complex types global) {
       t: map_t
     }
   )__";
-  schema sch;
+  module sch;
   CHECK(parsers::schema(std::string{str}, sch));
   auto enum_t = sch.find("enum_t");
   REQUIRE(enum_t);
@@ -303,7 +303,7 @@ TEST(parseable - out of order definitions) {
     }
     type foo = int
   )__"sv;
-  schema sch;
+  module sch;
   CHECK(parsers::schema(str, sch));
   auto baz = unbox(sch.find("baz"));
   auto expected = type{

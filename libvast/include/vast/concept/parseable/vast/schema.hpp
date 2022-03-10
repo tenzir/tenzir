@@ -190,7 +190,7 @@ struct symbol_resolver {
   // symbol is prioritized.
   // That means that a single iteration of this loop can remove between 1 and
   // all remaining elements from the local set.
-  caf::expected<schema> resolve() {
+  caf::expected<module> resolve() {
     while (!local.empty())
       if (auto x = resolve(local.begin()); !x)
         return x.error();
@@ -205,7 +205,7 @@ struct symbol_resolver {
   // use the resolved symbol_map to resolve symbols that are parsed later.
   symbol_map& local;
   symbol_map resolved = {};
-  schema sch = {};
+  module sch = {};
 };
 
 struct symbol_map_parser : parser_base<symbol_map_parser> {
@@ -258,7 +258,7 @@ constexpr auto symbol_map = symbol_map_parser{};
 } // namespace parsers
 
 struct schema_parser : parser_base<schema_parser> {
-  using attribute = schema;
+  using attribute = module;
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& out) const {
@@ -279,7 +279,7 @@ struct schema_parser : parser_base<schema_parser> {
 };
 
 template <>
-struct parser_registry<schema> {
+struct parser_registry<module> {
   using type = schema_parser;
 };
 

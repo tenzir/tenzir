@@ -208,12 +208,12 @@ public:
     // reader abstraction.
   }
 
-  caf::error schema(class schema new_schema) override {
+  caf::error schema(class module new_schema) override {
     return replace_if_congruent({&packet_type_}, new_schema);
   }
 
-  class schema schema() const override {
-    class schema result {};
+  class module schema() const override {
+    class module result {};
     result.add(packet_type_);
     return result;
   }
@@ -661,7 +661,7 @@ public:
   }
 
 private:
-  vast::schema schema_;
+  vast::module schema_;
   size_t flush_interval_ = 0;
   size_t snaplen_ = 65535;
   size_t total_packets_ = 0;

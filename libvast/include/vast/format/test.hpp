@@ -64,9 +64,9 @@ public:
 
   void reset(std::unique_ptr<std::istream> in) override;
 
-  caf::error schema(vast::schema sch) override;
+  caf::error schema(vast::module sch) override;
 
-  vast::schema schema() const override;
+  vast::module schema() const override;
 
   const char* name() const override;
 
@@ -75,10 +75,10 @@ protected:
                        consumer& f) override;
 
 private:
-  vast::schema schema_;
+  vast::module schema_;
   std::mt19937_64 generator_;
   size_t num_events_;
-  schema::const_iterator next_;
+  module::const_iterator next_;
   std::unordered_map<type, blueprint> blueprints_;
 };
 

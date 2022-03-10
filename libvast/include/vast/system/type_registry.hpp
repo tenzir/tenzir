@@ -55,7 +55,7 @@ struct type_registry_state {
   type_registry_actor::pointer self = {};
   accountant_actor accountant = {};
   std::map<std::string, type_set> data = {};
-  vast::schema configuration_schema = {};
+  vast::module configuration_schema = {};
   vast::taxonomies taxonomies = {};
   std::filesystem::path dir = {};
 };
