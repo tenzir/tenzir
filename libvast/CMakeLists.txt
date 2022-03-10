@@ -370,8 +370,8 @@ set_target_properties(
 
 target_include_directories(
   libvast
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/include
-         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/include
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 # Make dlopen and dlclose available if we're building a shared library.
