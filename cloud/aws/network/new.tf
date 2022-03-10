@@ -1,6 +1,7 @@
 ### VPC
-resource "aws_vpc" "vast" {
-  cidr_block = var.new_vpc_cidr
+resource "aws_vpc" "new" {
+  cidr_block           = var.new_vpc_cidr
+  enable_dns_hostnames = true
 
   tags = {
     Name = "${module.env.module_name}-vpc-${module.env.stage}"
@@ -8,7 +9,7 @@ resource "aws_vpc" "vast" {
 }
 
 resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.vast.id
+  vpc_id = aws_vpc.new.id
 
   tags = {
     Name = "${module.env.module_name}-igw-${module.env.stage}"
@@ -16,12 +17,12 @@ resource "aws_internet_gateway" "igw" {
 }
 
 resource "aws_subnet" "public" {
-  vpc_id     = aws_vpc.vast.id
+  vpc_id     = aws_vpc.new.id
   cidr_block = local.public_subnet_cidr
 }
 
 resource "aws_subnet" "private" {
-  vpc_id            = aws_vpc.vast.id
+  vpc_id            = aws_vpc.new.id
   cidr_block        = local.private_subnet_cidr
   availability_zone = aws_subnet.public.availability_zone
 }
@@ -37,7 +38,7 @@ resource "aws_nat_gateway" "nat_gateway" {
 
 resource "aws_vpc_peering_connection" "peering" {
   peer_vpc_id   = var.peered_vpc_id
-  vpc_id        = aws_vpc.vast.id
+  vpc_id        = aws_vpc.new.id
   peer_owner_id = data.aws_caller_identity.peer.account_id
   peer_region   = data.aws_region.peer.name
   auto_accept   = false
@@ -51,7 +52,7 @@ resource "aws_vpc_peering_connection" "peering" {
 ## ROUTING
 
 resource "aws_route_table" "routes_on_private_subnet" {
-  vpc_id = aws_vpc.vast.id
+  vpc_id = aws_vpc.new.id
 
   route {
     cidr_block                = data.aws_vpc.peer.cidr_block
@@ -70,7 +71,7 @@ resource "aws_route_table_association" "private" {
 }
 
 resource "aws_route_table" "routes_on_public_subnet" {
-  vpc_id = aws_vpc.vast.id
+  vpc_id = aws_vpc.new.id
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id

@@ -1,5 +1,5 @@
-output "vast_vpc_id" {
-  value = aws_vpc.vast.id
+output "new_vpc_id" {
+  value = aws_vpc.new.id
 }
 
 output "private_subnet_id" {

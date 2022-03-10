@@ -1,5 +1,5 @@
 output "vast_vpc_id" {
-  value = module.network.vast_vpc_id
+  value = module.network.new_vpc_id
 }
 
 output "vast_security_group" {
