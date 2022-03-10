@@ -39,7 +39,7 @@ select_step::select_step(select_step_configuration configuration)
   if (!expression_) {
     VAST_ERROR("the select step cannot validate the expression: '{}', reason: "
                "'{}'",
-               configuration.expression, e.error());
+               configuration.expression, expression_.error());
   }
 }
 
