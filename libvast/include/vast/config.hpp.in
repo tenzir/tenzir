@@ -30,6 +30,9 @@ extern const char* minor;
 extern const char* patch;
 extern const char* tweak;
 
+/// The CMake build type used to build VAST.
+extern const char* build_type;
+
 /// Contains a hash of VAST's build tree.
 extern const char* build_tree_hash;
 

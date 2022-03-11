@@ -40,6 +40,7 @@ record combine(const record& lhs, const record& rhs) {
 record retrieve_versions() {
   record result;
   result["VAST"] = version::version;
+  result["VAST Build Type"] = version::build_type;
   result["VAST Build Tree Hash"] = version::build_tree_hash;
   std::ostringstream caf_version;
   caf_version << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'

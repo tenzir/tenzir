@@ -506,12 +506,21 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/vast/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/vast/config.hpp")
 
+if (CMAKE_BUILD_TYPE)
+  set(VAST_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+elseif (CMAKE_CONFIGURATION_TYPES)
+  set(VAST_BUILD_TYPE "Multi-Config: ${CMAKE_CONFIGURATION_TYPES}")
+else ()
+  message(FATAL_ERROR "Failed to detect build or configuration types")
+endif ()
+
 file(
   WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
   "\
   get_filename_component(CMAKE_MODULE_PATH
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
   set(VAST_VERSION_TAG \"${VAST_VERSION_TAG_BACKUP}\")
+  set(VAST_BUILD_TYPE \"${VAST_BUILD_TYPE}\")
   include(VASTVersion)
   configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
                  \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\" @ONLY)")

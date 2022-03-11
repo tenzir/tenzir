@@ -15,6 +15,7 @@ const char* major = "@VAST_VERSION_MAJOR@";
 const char* minor = "@VAST_VERSION_MINOR@";
 const char* patch = "@VAST_VERSION_PATCH@";
 const char* tweak = "@VAST_VERSION_TWEAK@";
+const char* build_type = "@VAST_BUILD_TYPE@";
 const char* build_tree_hash = "@VAST_BUILD_TREE_HASH@";
 
 } // namespace vast::version
