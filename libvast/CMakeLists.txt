@@ -509,9 +509,26 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/vast/config.hpp.in"
 if (CMAKE_BUILD_TYPE)
   set(VAST_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
 elseif (CMAKE_CONFIGURATION_TYPES)
-  set(VAST_BUILD_TYPE "Multi-Config: ${CMAKE_CONFIGURATION_TYPES}")
+  list(JOIN CMAKE_CONFIGURATION_TYPES " " VAST_BUILD_TYPE)
+  string(PREPEND VAST_BUILD_TYPE "Multi-Config: ")
 else ()
   message(FATAL_ERROR "Failed to detect build or configuration types")
+endif ()
+
+if (VAST_ENABLE_ASSERTIONS
+    OR VAST_ENABLE_ASAN
+    OR VAST_ENABLE_UBSAN)
+  if (VAST_ENABLE_ASSERTIONS)
+    list(APPEND _vast_build_type_extras "Assertions")
+  endif ()
+  if (VAST_ENABLE_ASAN)
+    list(APPEND _vast_build_type_extras "Address Sanitizer")
+  endif ()
+  if (VAST_ENABLE_UBSAN)
+    list(APPEND _vast_build_type_extras "Undefined Behavior Sanitizer")
+  endif ()
+  list(JOIN _vast_build_type_extras ", " _vast_build_type_extras_joined)
+  string(APPEND VAST_BUILD_TYPE " with ${_vast_build_type_extras_joined}")
 endif ()
 
 file(
