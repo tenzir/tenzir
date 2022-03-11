@@ -367,7 +367,8 @@ unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
 # -- sanitizers ----------------------------------------------------------------
 
 # Address Sanitizer
-if ("${CMAKE_BUILD_TYPE}" IN_LIST "Debug;CI")
+set(_vast_build_types_with_default_asan "Debug;CI")
+if (CMAKE_BUILD_TYPE IN_LIST _vast_build_types_with_default_asan)
   set(_VAST_ENABLE_ASAN_DEFAULT ON)
 else ()
   set(_VAST_ENABLE_ASAN_DEFAULT OFF)
@@ -375,7 +376,7 @@ endif ()
 
 option(VAST_ENABLE_ASAN
        "Insert pointer and reference checks into the generated binaries"
-       _VAST_ENABLE_ASAN_DEFAULT)
+       "${_VAST_ENABLE_ASAN_DEFAULT}")
 add_feature_info(
   "VAST_ENABLE_ASAN" VAST_ENABLE_ASAN
   "inserts pointer and reference checks into the generated binaries.")
