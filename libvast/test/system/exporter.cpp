@@ -39,7 +39,7 @@ struct fixture : fixture_base {
                                 "&& :addr == 192.168.1.1"));
   }
 
-  ~fixture() {
+  ~fixture() override {
     self->send_exit(importer, caf::exit_reason::user_shutdown);
     self->send_exit(exporter, caf::exit_reason::user_shutdown);
     self->send_exit(index, caf::exit_reason::user_shutdown);
@@ -67,7 +67,7 @@ struct fixture : fixture_base {
     index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
                         catalog, type_registry, indexdir,
                         defaults::system::store_backend, 10000, duration{}, 5,
-                        5, 1, indexdir, 0.01);
+                        5, 1, indexdir, vast::index_config{});
   }
 
   void spawn_importer() {

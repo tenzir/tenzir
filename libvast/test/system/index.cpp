@@ -41,7 +41,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   static constexpr uint32_t in_mem_partitions = 8;
   static constexpr uint32_t taste_count = 4;
   static constexpr size_t num_query_supervisors = 1;
-  static constexpr double catalog_fp_rate = 0.01;
   static constexpr size_t segments = 1;
   static constexpr size_t max_segment_size = 8192;
 
@@ -58,10 +57,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
                         catalog, type_registry, index_dir,
                         defaults::system::store_backend, slice_size,
                         vast::duration{}, in_mem_partitions, taste_count,
-                        num_query_supervisors, index_dir, catalog_fp_rate);
+                        num_query_supervisors, index_dir, vast::index_config{});
   }
 
-  ~fixture() {
+  ~fixture() override {
     anon_send_exit(index, caf::exit_reason::user_shutdown);
   }
 

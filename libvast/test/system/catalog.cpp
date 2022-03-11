@@ -48,8 +48,8 @@ vast::time get_timestamp(std::optional<data_view> element) {
 
 partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
   auto result = partition_synopsis{};
-  auto synopsis_opts = caf::settings{};
-  result.add(ts, synopsis_opts);
+  auto synopsis_opts = vast::index_config{};
+  result.add(ts, defaults::system::max_partition_size, synopsis_opts);
   result.offset = ts.offset();
   result.events = ts.rows();
   result.min_import_time = ts.import_time();
