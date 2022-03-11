@@ -553,7 +553,6 @@ void index_state::create_active_partition(const type& layout) {
       self->quit(builder_and_header.error());
       return;
     }
-    VAST_ASSERT(builder_and_header); // FIXME
     auto& [builder, header] = *builder_and_header;
     store_header = header;
     active_partition.store = builder;
@@ -564,6 +563,7 @@ void index_state::create_active_partition(const type& layout) {
     store_name = "legacy_archive";
     active_partition.store = global_store;
   }
+  active_partition.spawn_time = std::chrono::steady_clock::now();
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
                   index_opts, synopsis_opts,
@@ -578,24 +578,26 @@ void index_state::create_active_partition(const type& layout) {
 }
 
 void index_state::decomission_active_partition(const type& layout) {
-  auto& active_partition = active_partitions[layout];
-  auto id = active_partition.id;
-  auto actor = std::exchange(active_partition.actor, {});
+  auto active_partition = active_partitions.find(layout);
+  VAST_ASSERT(active_partition != active_partitions.end());
+  auto id = active_partition->second.id;
+  auto actor = std::exchange(active_partition->second.actor, {});
   unpersisted[id] = actor;
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
-  stage->out().close(active_partition.stream_slot);
+  stage->out().close(active_partition->second.stream_slot);
   if (partition_local_stores)
-    stage->out().close(active_partition.store_slot);
+    stage->out().close(active_partition->second.store_slot);
   stage->out().force_emit_batches();
   // Persist active partition asynchronously.
   auto part_dir = partition_path(id);
   auto synopsis_dir = partition_synopsis_path(id);
-  VAST_DEBUG("{} persists active partition to {}", *self, part_dir);
+  VAST_DEBUG("{} persists active partition {} to {}", *self, layout, part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        VAST_DEBUG("{} successfully persisted partition {}", *self, id);
+        VAST_DEBUG("{} successfully persisted partition {} {}", *self, layout,
+                   id);
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
         catalog_bytes += ps->memusage();
@@ -604,8 +606,9 @@ void index_state::decomission_active_partition(const type& layout) {
         self->request(catalog, caf::infinite, atom::merge_v, id, ps)
           .then(
             [=, this](atom::ok) {
-              VAST_DEBUG("{} received ok for request to persist partition {}",
-                         *self, id);
+              VAST_DEBUG("{} received ok for request to persist partition {} "
+                         "{}",
+                         *self, layout, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
@@ -614,13 +617,14 @@ void index_state::decomission_active_partition(const type& layout) {
             },
             [=, this](const caf::error& err) {
               VAST_DEBUG("{} received error for request to persist partition "
+                         "{} "
                          "{}: {}",
-                         *self, id, err);
+                         *self, layout, id, err);
             });
       },
       [=, this](caf::error& err) {
-        VAST_ERROR("{} failed to persist partition {} with error: {}", *self,
-                   id, err);
+        VAST_ERROR("{} failed to persist partition {} {} with error: {}", *self,
+                   layout, id, err);
         self->quit(std::move(err));
       });
 }
@@ -748,13 +752,15 @@ index(index_actor::stateful_pointer<index_state> self,
       archive_actor archive, catalog_actor catalog,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
+      duration partition_timeout, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& catalog_dir, double synopsis_fp_rate) {
-  VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
+  VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
-                   VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
-                   VAST_ARG(taste_partitions), VAST_ARG(num_workers),
-                   VAST_ARG(catalog_dir), VAST_ARG(synopsis_fp_rate));
+                   VAST_ARG(partition_capacity), VAST_ARG(partition_timeout),
+                   VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
+                   VAST_ARG(num_workers), VAST_ARG(catalog_dir),
+                   VAST_ARG(synopsis_fp_rate));
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                *self, dir, partition_capacity, max_inmem_partitions);
@@ -796,6 +802,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
   self->state.partition_capacity = partition_capacity;
+  self->state.partition_timeout = partition_timeout;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
@@ -827,6 +834,9 @@ index(index_actor::stateful_pointer<index_state> self,
       } else if (x.rows() > active.capacity) {
         VAST_DEBUG("{} exceeds active capacity by {} rows", *self,
                    x.rows() - active.capacity);
+        VAST_VERBOSE("{} flushes active partition {} with {}/{} events", *self,
+                     layout, self->state.partition_capacity - active.capacity,
+                     self->state.partition_capacity);
         self->state.decomission_active_partition(layout);
         self->state.flush_to_disk();
         self->state.create_active_partition(layout);
@@ -925,11 +935,11 @@ index(index_actor::stateful_pointer<index_state> self,
     self->spawn(query_supervisor,
                 caf::actor_cast<query_supervisor_master_actor>(self));
   // Start metrics loop.
-  if (self->state.accountant) {
+  if (self->state.accountant)
     self->send(self->state.accountant, atom::announce_v, self->name());
+  if (self->state.accountant || self->state.partition_timeout.count() > 0)
     self->delayed_send(self, defaults::system::telemetry_rate,
                        atom::telemetry_v);
-  }
   return {
     [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", *self, partition_id);
@@ -940,9 +950,33 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->state.stage->add_inbound_path(in);
     },
     [self](atom::telemetry) {
-      self->state.send_report();
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
+      if (self->state.accountant)
+        self->state.send_report();
+      if (self->state.partition_timeout.count() > 0) {
+        auto decomissioned = std::vector<type>{};
+        for (const auto& [layout, active_partition] :
+             self->state.active_partitions) {
+          if (active_partition.spawn_time + self->state.partition_timeout
+              < std::chrono::steady_clock::now()) {
+            VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
+                         "after {} timeout",
+                         *self, layout,
+                         self->state.partition_capacity
+                           - active_partition.capacity,
+                         self->state.partition_capacity,
+                         data{self->state.partition_timeout});
+            self->state.decomission_active_partition(layout);
+            decomissioned.push_back(layout);
+          }
+        }
+        if (!decomissioned.empty()) {
+          for (const auto& layout : decomissioned)
+            self->state.active_partitions.erase(layout);
+          self->state.flush_to_disk();
+        }
+      }
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_DEBUG("{} adds flush listener", *self);

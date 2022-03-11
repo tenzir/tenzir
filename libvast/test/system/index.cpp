@@ -57,8 +57,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
                         catalog, type_registry, index_dir,
                         defaults::system::store_backend, slice_size,
-                        in_mem_partitions, taste_count, num_query_supervisors,
-                        index_dir, catalog_fp_rate);
+                        vast::duration{}, in_mem_partitions, taste_count,
+                        num_query_supervisors, index_dir, catalog_fp_rate);
   }
 
   ~fixture() {
@@ -99,13 +99,18 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
             // test
             result += slice.rows();
           },
-          [&](atom::done) { done = true; },
+          [&](atom::done) {
+            done = true;
+          },
           caf::others >>
             [](caf::message_view& msg) -> caf::result<caf::message> {
             FAIL("unexpected message: " << msg.content());
             return caf::none;
           },
-          after(0s) >> [&] { FAIL("ran out of messages"); });
+          after(0s) >>
+            [&] {
+              FAIL("ran out of messages");
+            });
       if (!self->mailbox().empty())
         FAIL("mailbox not empty after receiving all 'done' messages");
       collected += chunk;

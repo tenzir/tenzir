@@ -240,15 +240,17 @@ TEST(identity partition transform via the index) {
   auto archive = vast::system::archive_actor{};
   auto catalog = self->spawn(vast::system::catalog, accountant);
   const auto partition_capacity = 8;
+  const auto partition_timeout = vast::duration{};
   const auto in_mem_partitions = 10;
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
   const auto catalog_fp_rate = 0.01;
-  auto index = self->spawn(vast::system::index, accountant, filesystem, archive,
-                           catalog, type_registry, index_dir,
-                           vast::defaults::system::store_backend,
-                           partition_capacity, in_mem_partitions, taste_count,
-                           num_query_supervisors, index_dir, catalog_fp_rate);
+  auto index
+    = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
+                  type_registry, index_dir,
+                  vast::defaults::system::store_backend, partition_capacity,
+                  partition_timeout, in_mem_partitions, taste_count,
+                  num_query_supervisors, index_dir, catalog_fp_rate);
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
@@ -337,15 +339,17 @@ TEST(select transform with an empty result set) {
   auto archive = vast::system::archive_actor{};
   auto catalog = self->spawn(vast::system::catalog, accountant);
   const auto partition_capacity = 8;
+  const auto partition_timeout = vast::duration{};
   const auto in_mem_partitions = 10;
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
   const auto catalog_fp_rate = 0.01;
-  auto index = self->spawn(vast::system::index, accountant, filesystem, archive,
-                           catalog, type_registry, index_dir,
-                           vast::defaults::system::store_backend,
-                           partition_capacity, in_mem_partitions, taste_count,
-                           num_query_supervisors, index_dir, catalog_fp_rate);
+  auto index
+    = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
+                  type_registry, index_dir,
+                  vast::defaults::system::store_backend, partition_capacity,
+                  partition_timeout, in_mem_partitions, taste_count,
+                  num_query_supervisors, index_dir, catalog_fp_rate);
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
