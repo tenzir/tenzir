@@ -225,7 +225,8 @@ TEST(replace step) {
   CHECK_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(0).name,
     "uid");
-  CHECK_EQUAL((as_table_slice(replaced)).at(0, 0), vast::data_view{"xxx"sv});
+  const auto table_slice = as_table_slice(replaced);
+  CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
 }
 
 TEST(select step) {
