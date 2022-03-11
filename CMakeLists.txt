@@ -666,7 +666,7 @@ foreach (x ${doc_files})
   set(doc_header "${doc_header}\n${doc_statement}\n")
 endforeach ()
 set(doc_header "${doc_header}\n} // namespace vast::documentation")
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/vast/documentation.hpp
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/include/vast/documentation.hpp
      ${doc_header})
 
 # -- add subdirectories --------------------------------------------------------

@@ -1,77 +1,192 @@
-# VAST cloud deployment
+# VAST AWS deployment
 
-Deploy VAST easily to AWS with Terraform.
+*Disclaimer: the native cloud architecture is still highly experimental and
+subject to change without notice. Do not use in production yet.*
 
-## Proposed architecture
+Running VAST on AWS relies on two serverless building blocks:
 
-### Infrastructure overview
+1. [Fargate](https://aws.amazon.com/fargate/) for VAST server nodes
+2. [Lambda](https://aws.amazon.com/lambda/) as compute service to perform
+   tasks, such as executing queries and ingesting data ad hoc
 
-This script creates the networking infrastructure and the compute resources that VAST will run on.
+For storage on the VAST server in Fargate, VAST uses
+[EFS](https://aws.amazon.com/efs/) as a drop-in network filesystem. It provides
+persistence of the database files across task executions with a reasonable
+throughput-latency trade-off.
 
-In terms of networking, we make the assumption that the user has a VPC with some appliances that he wishes to monitor. This VPC has a CIDR block of at least 32 IPs that is not yet assigned to any subnet and it also has an Internet Gateway attached.
+The sketch below illustrates the high-level architecture:
 
-The script takes the VPC ID and the CIDR block as input and from that it creates:
-- 2 subnets spanning that CIDR block:
-  - a public one where it places a NAT Gateway so that the VAST instances can communicate with the AWS APIs and if required, the internet
-  - a private one with the tooling resources themselves
-- the configurations to run VAST either on Fargate as a Server or on Lambda as a client.
+![AWS Architecture](https://user-images.githubusercontent.com/53797/157068659-41d7c9fe-8403-40d0-9cdd-dae66f0bf62e.png)
 
-<p align="center">
-<img src="https://user-images.githubusercontent.com/7913347/155995627-cb25056e-2c6d-49f9-a55a-e8dc5a90f28a.svg" width="90%">
-</p>
+### Usage
 
-### Images and registries
+The provided [Makefile](Makefile) wraps [Terraform](https://www.terraform.io/)
+and `aws` CLI commands for a streamlined UX. You can list the available higher
+level commands with `make help`.
 
-Both on Lambda and Fargate, VAST is deployed as a Docker image. Fargate runs the official [tenzir/vast](https://hub.docker.com/r/tenzir/vast) image. To run VAST on AWS Lambda, we need:
-- an extra image layer containing the Lambda Runtime Interface
-- the image to be hosted on ECR in the region where the Lambda is deployed
+You need the following tools installed locally:
 
-For that reason, when deploying VAST to AWS, the user will build the Lambda specific Docker image locally and push it to a private ECR repository created by the Terraform deployment script itself.
+- Terraform (> v1): `terraform` to provision the infrastructure
+- AWS CLI (v2): `aws` (plus `SessionManager`) to automate AWS interaction
+- Docker: `docker` to build a container for Lambda
+- `jq` for wrangling JSON output / `base64` to encode command line strings
 
-<p align="center">
-<img src="https://user-images.githubusercontent.com/7913347/156000070-c9857869-7621-4e95-a517-b4e065b36ed3.svg" width="70%">
-</p>
+To avoid having to provide required Terraform variables manually, the Makefile
+looks for a file `default.env` in the current directory. It must define the
+following variables:
 
-### VAST processes
+- `aws_region`: the region of the VPC where to deploy Fargate and Lambda
+  resources.
 
-The VAST server is a long running process. We decided to use Fargate as the cloud resource to run it because it is simple, flexible and very well suited for this usecase.
+- `vpc_id`: an existing VPC to which you plan to attach your VAST stack. You
+  can use `aws ec2 describe-vpcs --region $region` to list available VPCs.
 
-To interact with the VAST server you need a VAST client. The user can run VAST commands:
-- directly within the Fargate container using `make execute-command`. In that case he will be limited by the tooling available in the image
-- from AWS lambda with `make run-lambda`, which makes it easier to integrate new tooling or allow connections to other AWS services
+- `subnet_cidr`: the subnet *within* the VPC where the VAST stack will be
+  placed. Terraform will create this subnet and it must not overlap with an
+  existing subnet in this VPC and VPCs peered to it. You can use
+  `aws ec2 describe-subnets --region $region` to list existing subnets to pick
+  a non-overlapping one within the VPC subnet.
 
-<p align="center">
-<img src="https://user-images.githubusercontent.com/7913347/156000469-a0f8b519-64c1-43ec-91dc-1339b41f90be.svg" width="70%">
-</p>
+Optionally, you can also define the following variables:
 
-## Requirements
+- `vast_version`: the version of VAST that should be used. By default it is
+  set to the latest release. Version should be `v1.1.0` or higher. You can also 
+  use the latest commit on the main branch by specifying `latest`.
 
-To run the provided tooling, you need to have installed locally:
-- Terraform version>=1 
-- the AWS CLI V2
-- jq for parsing AWS CLI results
+- `vast_server_storage_type`: the type of volume to use for the VAST server. Can
+  be set to either
+  - EFS (default) -> persistent accross task execution, infinitely scalable, but
+    higher latency.
+  - ATTACHED -> the local storage that comes by default with Fargate tasks. It is
+    lost when the task is stopped.
 
-Terraform variables to provide:
-- `vpc_id`: the existing VPC to which you plan to attach your VAST stack
-- `subnet_cidr`: the ip range of the subnet where the VAST stack will be placed. A subnet with that range will be created. It should not overlap with an existing subnet in specified VPC and the VPCs peered to it.
-- `aws_region`: the region in which this VPC is defined
+Here's an example:
 
-## Features
+```bash
+vpc_id=vpc-059a7ec8aac174fc9
+subnet_cidr=172.31.48.0/24
+aws_region=eu-north-1
+```
 
-Currently supported:
-- deploy VAST both as a Fargate task definition and a Lambda function with `make deploy`
-- start a VAST server task using `make run-task`
-- connect to the VAST server through a VAST client running on aws lambda:
-  - `make run-lambda CMD="vast status"`
-- connect directly to the VAST server through ECS Exec with `make execute-command`
-- stop all tasks using `make stop-all-tasks`
-- run `make help` for some basic inline documentation.
+Next, we take a look at some use cases. To setup Fargate and the Lambda
+function, use `make deploy`. You can tear down the resources using the dual
+command, `make destroy`. See `make help` for a brief description of available
+commands.
 
-Note: to avoid having to specify `vpc_id`, `subnet_cidr` and `aws_region` with each `make` call, you can set them up once and for all in a file called `default.env` (which will be included by the Makefile).
+Caveats:
 
-## Caveats
-- Only local ephemeral storage is supported for now
-- `get-task-ip`, `run-lambda` and `execute-command` will work properly only if you have one and only one task running on Fargate
-- Access to the VAST server is enforced by limiting inbound traffic to its local private subnet
-- Currently the AZ for the IDS appliance stack cannot be specified
-- A NAT Gateway is created automatically, you cannot specify an existing one
+- Access to the VAST server is enforced by limiting inbound traffic to its
+  local private subnet.
+
+- A NAT Gateway is created automatically, you cannot specify an existing one.
+  It will be billed at [an hourly rate](https://aws.amazon.com/vpc/pricing/)
+  even when you aren't running any workload, until you tear down the entire
+  stack.
+
+- You might sometime bumb into _error waiting for Lambda Function creation: 
+  InsufficientRolePermissions_ while deploying the stack. You can usually
+  solve this by running `make deploy` again a few minutes later.
+
+
+#### Start a VAST server (Fargate)
+
+To deploy a VAST server as Fargate task, run:
+
+```bash
+make start-vast-server
+```
+
+This launches the official `tenzir/vast` Docker image, which executes the
+command `vast start`.
+
+You can replace the running task by a new one with:
+```bash
+make restart-vast-server
+```
+
+**Notes**: 
+- if you use `ATTACHED` for the storage type, restarting the server task will 
+  empty the database.
+- multiple invocations of `make run-vast-task` create multiple Fargate tasks, 
+  which prevents other Makefile targets from working correctly. We recommand using 
+  exclusively `start-vast-server` and `restart-vast-server`.
+
+#### Run a VAST client on Fargate
+
+You can run VAST client commands from within the Fargate server task using:
+
+```bash
+make execute-command CMD="vast status"
+```
+
+This uses ECS Exec to connect to the container. The Fargate task should be in
+`RUNNING` state and you sometime need a few extra seconds for the ECS Exec
+agent to start.
+
+If you do not specify the `CMD` variable, it will start an interactive bash shell. 
+This comes handy to inspect the server environment and check whether things are up 
+and running.
+
+#### Run a VAST client on Lambda
+
+To run a VAST client from Lambda, use the `run-lambda` target:
+
+```bash
+make run-lambda CMD="vast status"
+```
+
+The Lambda image also contains extra tooling, such as the AWS CLI, which is
+useful to run batch imports or exports to other AWS services.
+
+
+#### Shutdown
+
+To shutdown all Fargate resources, run:
+
+```bash
+make stop-all-tasks
+```
+
+## Architecture
+
+The AWS architecture builds on serverless principles to deliver a scalable
+cloud-native deployment option. To combine continuously running services with
+dynamic ad-hoc tasks, we employ Lambda and Fargate as building blocks for
+on-demand query capacity while continuously ingesting data.
+
+Specifically, we embed the long-running VAST server in a Fargate task
+definition, which allows for flexible resource allocation based on
+compute resource needs. VAST mounts EFS storage for maximum flexibility and
+pay-as-you-go scaling.
+
+The VAST client typically performs short-running ad-hoc tasks, like ingesting
+a file or running query. We map such actions to Lambda functions.
+
+### VPC Infrastructure
+
+The provided Terraform script creates the following architecture within a given
+VPC:
+
+![VAST VPC Architecture](https://user-images.githubusercontent.com/53797/157026500-8845d8bc-59cf-4de2-881e-e82fbd84da26.png)
+
+The assumption is that the VPC has an Internet Gateway attached. Given a CIDR
+block within this VPC, Terraform creates two subnets:
+
+1. **VAST Subnet**: a private subnet where the VAST nodes and other security
+   tools run.
+2. **Gateway Subnet**: a public subnet to talk to other AWS services and the
+   Internet
+
+### Images and Registries
+
+Both Lambda and Fargate deploy VAST as a Docker image. Fargate runs the
+official [tenzir/vast](https://hub.docker.com/r/tenzir/vast) image. Lambda
+imposes two additional requirements:
+
+1. The image must contain the Lambda Runtime Interface
+2. ECR must host the image in the region where the Lambda is deployed
+
+For that reason, our toolchain builds a Lambda-specific image locally and
+pushes it to a private ECR repository.
+
+![Docker workflow](https://user-images.githubusercontent.com/53797/157065561-82cf8bc6-b314-4439-b66f-c8e3a93e431b.png)

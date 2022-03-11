@@ -5,6 +5,7 @@ module "vast_server" {
   region_name = var.region_name
 
   vpc_id                      = var.vpc_id
+  subnet_id                   = aws_subnet.ids_appliances.id
   ingress_subnet_cidrs        = [local.private_subnet_cidr]
   ecs_cluster_id              = aws_ecs_cluster.fargate_cluster.id
   ecs_cluster_name            = aws_ecs_cluster.fargate_cluster.name
@@ -13,9 +14,12 @@ module "vast_server" {
   task_cpu    = 2048
   task_memory = 4096
 
-  docker_image = module.env.vast_server_image
-  command      = ["-e", "0.0.0.0:42000", "start"]
-  port         = 42000
+  docker_image        = "${module.env.vast_server_image}:${var.vast_version}"
+  storage_type        = var.vast_server_storage_type
+  storage_mount_point = "/var/lib/vast"
+
+  command = ["-e", "0.0.0.0:42000", "start"]
+  port    = 42000
 
   environment = [{
     name  = "AWS_REGION"

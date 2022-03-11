@@ -699,14 +699,14 @@ TEST(named types) {
 }
 
 TEST(enriched types) {
-  const auto at = type{bool_type{}, {{"first", "value"}, {"second"}}};
+  const auto at = type{"l1", bool_type{}, {{"first", "value"}, {"second"}}};
   CHECK(caf::holds_alternative<bool_type>(at));
-  CHECK_EQUAL(at.name(), "");
+  CHECK_EQUAL(at.name(), "l1");
   CHECK_EQUAL(at.attribute("first"), "value");
   CHECK_EQUAL(at.attribute("second"), "");
   CHECK_EQUAL(at.attribute("third"), std::nullopt);
   CHECK_EQUAL(at.attribute("fourth"), std::nullopt);
-  CHECK_EQUAL(fmt::format("{}", at), "bool #first=value #second");
+  CHECK_EQUAL(fmt::format("{}", at), "l1 #first=value #second");
   const auto aat = type{"l2", at, {{"third", "nestingworks"}}};
   CHECK(caf::holds_alternative<bool_type>(aat));
   CHECK_EQUAL(aat.name(), "l2");
@@ -717,8 +717,46 @@ TEST(enriched types) {
   CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks #first=value "
                                       "#second");
   const auto lat = type::from_legacy_type(
-    legacy_bool_type{}.attributes({{"first", "value"}, {"second"}}));
+    legacy_bool_type{}.attributes({{"first", "value"}, {"second"}}).name("l1"));
   CHECK_EQUAL(lat, at);
+}
+
+TEST(metadata layer merging) {
+  const auto t1 = type{
+    "foo",
+    bool_type{},
+    {{"one", "eins"}, {"two", "zwei"}},
+  };
+  MESSAGE("attributes do get merged in unnamed metadata layers");
+  const auto t2 = type{
+    "foo",
+    type{
+      bool_type{},
+      {{"two", "zwei"}},
+    },
+    {{"one", "eins"}},
+  };
+  CHECK_EQUAL(t1, t2);
+  MESSAGE("attributes do not get merged in named metadata layers");
+  const auto t3 = type{
+    type{
+      "foo",
+      bool_type{},
+      {{"two", "zwei"}},
+    },
+    {{"one", "eins"}},
+  };
+  CHECK_NOT_EQUAL(t1, t3);
+  MESSAGE("attribute merging prefers new attributes");
+  const auto t4 = type{
+    "foo",
+    type{
+      bool_type{},
+      {{"one"}, {"two", "zwei"}},
+    },
+    {{"one", "eins"}},
+  };
+  CHECK_EQUAL(t1, t4);
 }
 
 TEST(names_and_attributes) {
@@ -734,16 +772,15 @@ TEST(names_and_attributes) {
     x{};
   for (const auto& l : layer4_no_attrs.names_and_attributes())
     x.push_back(l);
+  REQUIRE_EQUAL(x.size(), 3u);
   CHECK_EQUAL(x[0].first, "layer4");
-  CHECK(x[0].second.empty());
-  CHECK_EQUAL(x[1].first, "");
-  CHECK_EQUAL(x[1].second, (std::vector<type::attribute_view>{
+  CHECK_EQUAL(x[0].second, (std::vector<type::attribute_view>{
                              {"l3", "level3"}, {"layer_3_empty", ""}}));
-  CHECK_EQUAL(x[2].first, "layer2");
-  CHECK_EQUAL(x[2].second, (std::vector<type::attribute_view>{
+  CHECK_EQUAL(x[1].first, "layer2");
+  CHECK_EQUAL(x[1].second, (std::vector<type::attribute_view>{
                              {"l2", "level2"}, {"layer_2_empty", ""}}));
-  CHECK_EQUAL(x[3].first, "layer1_innermost");
-  CHECK_EQUAL(x[3].second, (std::vector<type::attribute_view>{
+  CHECK_EQUAL(x[2].first, "layer1_innermost");
+  CHECK_EQUAL(x[2].second, (std::vector<type::attribute_view>{
                              {"inner_1_empty", ""}, {"inner_2", "level1"}}));
 }
 

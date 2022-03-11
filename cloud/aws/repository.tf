@@ -21,8 +21,8 @@ resource "null_resource" "lambda_image_push" {
   # if local image does not exit, try to pull it from the public repository
   provisioner "local-exec" {
     command = <<EOT
-      test ! "$(docker images -q ${module.env.vast_lambda_image})" && docker pull ${module.env.vast_lambda_image}
-      docker tag "${module.env.vast_lambda_image}" "${aws_ecr_repository.lambda.repository_url}:${time_static.last_image_upload.unix}"
+      test ! "$(docker images -q ${module.env.vast_lambda_image}:${var.vast_version})" && docker pull ${module.env.vast_lambda_image}:${var.vast_version}
+      docker tag "${module.env.vast_lambda_image}:${var.vast_version}" "${aws_ecr_repository.lambda.repository_url}:${time_static.last_image_upload.unix}"
       docker push "${aws_ecr_repository.lambda.repository_url}:${time_static.last_image_upload.unix}"
     EOT
   }
