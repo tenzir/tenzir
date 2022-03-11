@@ -61,7 +61,7 @@ using concrete_types
 
 /// A concept that models any concrete type.
 template <class T>
-concept concrete_type = requires(const T& value, arrow::MemoryPool* pool) {
+concept concrete_type = requires(const T& value) {
   // The type must be explicitly whitelisted above.
   requires caf::detail::tl_contains<concrete_types, T>::value;
   // The type must not be inherited from to avoid slicing issues.
@@ -107,60 +107,6 @@ concept complex_type = requires {
   // from to avoid slicing issues.
   requires sizeof(T) == sizeof(stateful_type_base);
 };
-
-/// Maps type to corresponding data.
-template <type_or_concrete_type T>
-struct type_to_data
-  : std::remove_cvref<decltype(std::declval<T>().construct())> {};
-
-/// @copydoc type_to_data
-template <type_or_concrete_type T>
-using type_to_data_t = typename type_to_data<T>::type;
-
-/// Maps type to corresponding Arrow DataType.
-/// @related type_from_arrow
-template <type_or_concrete_type T>
-struct type_to_arrow_type : std::type_identity<typename T::arrow_type> {};
-
-/// @copydoc type_to_arrow_type
-template <type_or_concrete_type T>
-using type_to_arrow_type_t = typename type_to_arrow_type<T>::type;
-
-/// Maps type to corresponding Arrow Array.
-/// @related type_from_arrow
-template <type_or_concrete_type T>
-struct type_to_arrow_array
-  : std::type_identity<
-      typename arrow::TypeTraits<typename T::arrow_type>::ArrayType> {};
-
-template <>
-struct type_to_arrow_array<type> : std::type_identity<arrow::Array> {};
-
-/// @copydoc type_to_arrow_array
-template <type_or_concrete_type T>
-using type_to_arrow_array_t = typename type_to_arrow_array<T>::type;
-
-/// Maps type to corresponding Arrow Scalar.
-/// @related type_from_arrow
-template <type_or_concrete_type T>
-struct type_to_arrow_scalar
-  : std::type_identity<
-      typename arrow::TypeTraits<typename T::arrow_type>::ScalarType> {};
-
-/// @copydoc type_to_arrow_scalar
-template <type_or_concrete_type T>
-using type_to_arrow_scalar_t = typename type_to_arrow_scalar<T>::type;
-
-/// Maps type to corresponding Arrow ArrayBuilder.
-/// @related type_from_arrow
-template <type_or_concrete_type T>
-struct type_to_arrow_builder
-  : std::type_identity<
-      typename arrow::TypeTraits<typename T::arrow_type>::BuilderType> {};
-
-/// @copydoc type_to_arrow_builder
-template <type_or_concrete_type T>
-using type_to_arrow_builder_t = typename type_to_arrow_builder<T>::type;
 
 // -- type --------------------------------------------------------------------
 
@@ -728,7 +674,7 @@ struct pattern_type::arrow_type final : arrow::ExtensionType {
   Deserialize(std::shared_ptr<arrow::DataType> storage_type,
               const std::string& serialized) const override;
 
-  /// Create serialized representation of pattern, based on extension name.
+  /// Create serialized representation of pattern.
   /// @return the serialized representation.
   std::string Serialize() const override;
 };
@@ -807,7 +753,7 @@ struct address_type::arrow_type final : arrow::ExtensionType {
   std::shared_ptr<arrow::Array>
   MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
 
-  /// Create an instance of pattern given the actual storage type
+  /// Create an instance of address given the actual storage type
   /// and the serialized representation.
   /// @param storage_type the physical storage type of the extension.
   /// @param serialized the serialized form of the extension.
@@ -815,7 +761,7 @@ struct address_type::arrow_type final : arrow::ExtensionType {
   Deserialize(std::shared_ptr<arrow::DataType> storage_type,
               const std::string& serialized) const override;
 
-  /// Create serialized representation of pattern, based on extension name.
+  /// Create serialized representation of address.
   /// @return the serialized representation.
   std::string Serialize() const override;
 };
@@ -894,7 +840,7 @@ struct subnet_type::arrow_type final : arrow::ExtensionType {
   std::shared_ptr<arrow::Array>
   MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
 
-  /// Create an instance of pattern given the actual storage type
+  /// Create an instance of subnet given the actual storage type
   /// and the serialized representation.
   /// @param storage_type the physical storage type of the extension.
   /// @param serialized the serialized form of the extension.
@@ -902,7 +848,7 @@ struct subnet_type::arrow_type final : arrow::ExtensionType {
   Deserialize(std::shared_ptr<arrow::DataType> storage_type,
               const std::string& serialized) const override;
 
-  /// Create serialized representation of pattern, based on extension name.
+  /// Create serialized representation of subnet.
   /// @return the serialized representation.
   std::string Serialize() const override;
 };
@@ -1051,7 +997,7 @@ struct enumeration_type::arrow_type final : arrow::ExtensionType {
   std::shared_ptr<arrow::Array>
   MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
 
-  /// Create an instance of pattern given the actual storage type
+  /// Create an instance of enumeration given the actual storage type
   /// and the serialized representation.
   /// @param storage_type the physical storage type of the extension.
   /// @param serialized the serialized form of the extension.
@@ -1059,7 +1005,7 @@ struct enumeration_type::arrow_type final : arrow::ExtensionType {
   Deserialize(std::shared_ptr<arrow::DataType> storage_type,
               const std::string& serialized) const override;
 
-  /// Create serialized representation of pattern, based on extension name.
+  /// Create serialized representation of enumeration.
   /// @return the serialized representation.
   std::string Serialize() const override;
 
@@ -1413,7 +1359,7 @@ auto serialize_bytes(flatbuffers::FlatBufferBuilder&, const Type&) = delete;
 
 } // namespace vast::fbs
 
-// -- arrow type traits -------------------------------------------------------
+// -- type traits -------------------------------------------------------------
 
 namespace arrow {
 
@@ -1467,6 +1413,60 @@ public:
 } // namespace arrow
 
 namespace vast {
+
+/// Maps type to corresponding data.
+template <type_or_concrete_type T>
+struct type_to_data
+  : std::remove_cvref<decltype(std::declval<T>().construct())> {};
+
+/// @copydoc type_to_data
+template <type_or_concrete_type T>
+using type_to_data_t = typename type_to_data<T>::type;
+
+/// Maps type to corresponding Arrow DataType.
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_type : std::type_identity<typename T::arrow_type> {};
+
+/// @copydoc type_to_arrow_type
+template <type_or_concrete_type T>
+using type_to_arrow_type_t = typename type_to_arrow_type<T>::type;
+
+/// Maps type to corresponding Arrow Array.
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_array
+  : std::type_identity<
+      typename arrow::TypeTraits<typename T::arrow_type>::ArrayType> {};
+
+template <>
+struct type_to_arrow_array<type> : std::type_identity<arrow::Array> {};
+
+/// @copydoc type_to_arrow_array
+template <type_or_concrete_type T>
+using type_to_arrow_array_t = typename type_to_arrow_array<T>::type;
+
+/// Maps type to corresponding Arrow Scalar.
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_scalar
+  : std::type_identity<
+      typename arrow::TypeTraits<typename T::arrow_type>::ScalarType> {};
+
+/// @copydoc type_to_arrow_scalar
+template <type_or_concrete_type T>
+using type_to_arrow_scalar_t = typename type_to_arrow_scalar<T>::type;
+
+/// Maps type to corresponding Arrow ArrayBuilder.
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_builder
+  : std::type_identity<
+      typename arrow::TypeTraits<typename T::arrow_type>::BuilderType> {};
+
+/// @copydoc type_to_arrow_builder
+template <type_or_concrete_type T>
+using type_to_arrow_builder_t = typename type_to_arrow_builder<T>::type;
 
 /// Maps Arrow DataType to corresponding type.
 /// @related type_to_arrow_type
