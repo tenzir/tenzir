@@ -77,7 +77,9 @@ TEST(choice - unused LHS) {
 TEST(choice triple) {
   using namespace parsers;
   auto fired = false;
-  auto p = chr{'x'} | i32 | eps->*[&] { fired = true; };
+  auto p = chr{'x'} | i32 | eps->*[&] {
+    fired = true;
+  };
   caf::variant<char, int32_t> x;
   CHECK(skip_to_eoi(p)("foobar", x));
   CHECK(fired);
@@ -593,6 +595,50 @@ TEST(real) {
   //  CHECK(p(f, f + 3, d));
   //  CHECK(d == 123);
   //  CHECK(f == str.begin() + 4);
+}
+
+TEST(real - scientific) {
+  auto p = make_parser<real>{};
+  {
+    MESSAGE("null exponent");
+    auto str = ".456789e0"s;
+    real d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 0.456789);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("positive exponent");
+    auto str = ".456789e43"s;
+    real d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 4.56789e42);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("explicit positive exponent");
+    auto str = ".456789e+43"s;
+    real d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 4.56789e42);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("negative exponent");
+    auto str = ".456789e-322"s;
+    real d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 4.56789e-323);
+    CHECK_EQUAL(f, l);
+  }
 }
 
 TEST(byte) {

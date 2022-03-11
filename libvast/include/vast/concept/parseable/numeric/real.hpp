@@ -102,6 +102,23 @@ struct real_parser : parser_base<real_parser<T, Policies...>> {
     }
     // Put the value together.
     a = integral + fractional;
+    // Now check if we have an exponent
+    auto got_e = parsers::chr{'e'}(f, l);
+    if (got_e && f != l) {
+      uint16_t exp = 0;
+      int exp_sign = 1;
+      if (*f == '-') {
+        exp_sign = -1;
+        f++;
+      } else if (*f == '+') {
+        f++;
+      }
+      if (!integral_parser<uint16_t>::parse_pos(f, l, exp)) {
+        f = save;
+        return false;
+      }
+      scale(exp * exp_sign, a);
+    }
     // Flip negative values.
     if (negative)
       a = -a;
