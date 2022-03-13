@@ -343,6 +343,9 @@ public:
   [[nodiscard]] detail::generator<attribute_view> attributes() const& noexcept;
   [[nodiscard]] detail::generator<attribute_view> attributes() && = delete;
 
+  /// Returns all aliases of this type, excluding this type itself.
+  [[nodiscard]] detail::generator<type> aliases() const noexcept;
+
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
 
