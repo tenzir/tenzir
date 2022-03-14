@@ -85,19 +85,22 @@ stop-all-tasks: ## Stop all running tasks on the ECS cluster created by Terrafor
 
 # Provide your bash command through the CMD variable (e.g make run-lambda CMD="vast status")
 run-lambda: ## Run ad-hoc VAST client commands from AWS Lambda
-	@$(file > lambda-cmd.tmp,$(CMD)) # write to file first to avoid escaping issues
+	@$(file > cmd.tmp,$(CMD)) # write to file first and encode to avoid escaping issues
 	@aws lambda invoke \
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
-		--payload '{"cmd":"$(shell base64 lambda-cmd.tmp)", "host":"$(shell $(MAKE) get-vast-server-ip):42000"}' \
+		--payload '{"cmd":"$(shell base64 cmd.tmp)", "host":"$(shell $(MAKE) get-vast-server-ip):42000"}' \
+		--cli-read-timeout 900 \
 		/dev/stdout | jq -s -r .[0].result
-	@rm lambda-cmd.tmp
+	@rm cmd.tmp
 
 # Provide your bash command through the CMD variable (e.g make execute-command CMD="vast status")
 # Start an interactive session by leaving CMD empty
 execute-command: ## Run ad-hoc or interactive commands from the VAST server Fargate task
+	@$(file > cmd.tmp,$(CMD)) # write to file first and encode to avoid escaping issues
 	@aws ecs execute-command \
 		--cluster $(shell terraform output fargate_cluster_name) \
 		--task $(shell $(MAKE) get-vast-server) \
 		--interactive \
-		--command "$(shell if [ -z "${CMD}" ]; then echo "/bin/bash"; else echo "${CMD}"; fi)"
+		--command "$(shell if [ -z "${CMD}" ]; then echo "/bin/bash"; else echo "/bin/bash -c 'echo $(shell base64 -w 0 cmd.tmp) | base64 -d | /bin/bash'"; fi)"
+	@rm cmd.tmp
