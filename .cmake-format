@@ -41,7 +41,7 @@ with section("parse"):
         "vastinstallexampleconfiguration": {
             "spelling": "VASTInstallExampleConfiguration",
             "pargs": {
-                "nargs": 3,
+                "nargs": 4,
             },
         },
         "vastsystemizetarget": {
