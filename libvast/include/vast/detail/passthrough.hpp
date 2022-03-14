@@ -19,55 +19,49 @@
 namespace vast::detail {
 
 /// @copydoc passthrough
-template <class T>
+template <class T, class Forward>
 struct passthrough_type {
-  const T& ref;
+  [[no_unique_address]] Forward ref;
 };
 
 /// Binds the reference in a container that can be passed to `caf::visit` to
 /// disable visitation for an argument.
 template <class T>
-auto passthrough(const T& value) noexcept -> passthrough_type<T> {
-  return {.ref = value};
+auto passthrough(T&& value) noexcept
+  -> passthrough_type<std::remove_cvref_t<T>, T&&> {
+  return {.ref = std::forward<T>(value)};
 }
 
 } // namespace vast::detail
 
 namespace caf {
 
-template <class T>
-struct sum_type_access<vast::detail::passthrough_type<T>> final {
+template <class T, class Forward>
+struct sum_type_access<vast::detail::passthrough_type<T, Forward>> final {
   using type0 = T;
   using types = detail::type_list<T>;
   static constexpr bool specialized = true;
 
   template <int Index>
   static bool
-  is(const vast::detail::passthrough_type<T>&, sum_type_token<T, Index>) {
+  is(vast::detail::passthrough_type<T, Forward>, sum_type_token<T, Index>) {
     return true;
   }
 
   template <int Index>
-  static const T&
-  get(const vast::detail::passthrough_type<T>& x, sum_type_token<T, Index>) {
-    return x.ref;
-  }
-
-  template <int Index>
-  static const T*
-  get_if(const vast::detail::passthrough_type<T>* x, sum_type_token<T, Index>) {
-    return &x->ref;
+  static Forward
+  get(vast::detail::passthrough_type<T, Forward> x, sum_type_token<T, Index>) {
+    return static_cast<Forward>(x.ref);
   }
 
   template <class Result, class Visitor, class... Args>
-  static auto
-  apply(const vast::detail::passthrough_type<T>& x, Visitor&& v, Args&&... xs)
-    -> Result {
+  static Result apply(vast::detail::passthrough_type<T, Forward> x, Visitor&& v,
+                      Args&&... xs) {
     auto xs_as_tuple = std::forward_as_tuple(xs...);
     auto indices = detail::get_indices(xs_as_tuple);
-    return detail::apply_args_suffxied(std::forward<Visitor>(v),
-                                       std::move(indices), xs_as_tuple,
-                                       get(x, sum_type_token<type0, 0>{}));
+    return detail::apply_args_suffxied(
+      std::forward<Visitor>(v), std::move(indices), xs_as_tuple,
+      get(std::move(x), sum_type_token<type0, 0>{}));
   }
 };
 
