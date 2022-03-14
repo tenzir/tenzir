@@ -13,10 +13,30 @@
 
 namespace vast {
 
+/// The configuration of a project transform step.
+struct select_step_configuration {
+  // The expression in the config file.
+  std::string expression;
+
+  /// Support type inspection for easy parsing with convertible.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, select_step_configuration& x) {
+    return f(x.expression);
+  }
+
+  /// Enable parsing from a record via convertible.
+  static inline const record_type& layout() noexcept {
+    static auto result = record_type{
+      {"expression", string_type{}},
+    };
+    return result;
+  }
+};
+
 // Selects mathcing rows from the input
 class select_step : public transform_step {
 public:
-  select_step(std::string expr);
+  explicit select_step(select_step_configuration configuration);
 
   /// Applies the transformation to a record batch with a corresponding vast
   /// layout.

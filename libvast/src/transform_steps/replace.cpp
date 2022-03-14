@@ -9,6 +9,8 @@
 #include "vast/transform_steps/replace.hpp"
 
 #include "vast/arrow_table_slice_builder.hpp"
+#include "vast/concept/convertible/data.hpp"
+#include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
@@ -20,9 +22,8 @@
 
 namespace vast {
 
-replace_step::replace_step(const std::string& fieldname,
-                           const vast::data& value)
-  : field_(fieldname), value_(value) {
+replace_step::replace_step(replace_step_configuration configuration, data value)
+  : value_(std::move(value)), config_(std::move(configuration)) {
   VAST_ASSERT(is_basic(value_));
 }
 
@@ -30,7 +31,7 @@ caf::error
 replace_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   VAST_TRACE("replace step adds batch");
   const auto& layout_rt = caf::get<record_type>(layout);
-  auto column_offset = layout_rt.resolve_key(field_);
+  auto column_offset = layout_rt.resolve_key(config_.field);
   if (!column_offset) {
     transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
@@ -48,7 +49,7 @@ replace_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   auto values_column = cb->finish();
   auto adjusted_batch
     = batch->SetColumn(detail::narrow_cast<int>(column_index),
-                       arrow::field(field_, values_column->type()),
+                       arrow::field(config_.field, values_column->type()),
                        values_column);
   if (!adjusted_batch.ok()) {
     transformed_.clear();
@@ -91,28 +92,29 @@ public:
 
   // Transform Plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& opts) const override {
-    auto field = caf::get_if<std::string>(&opts, "field");
-    if (!field)
+  make_transform_step(const record& options) const override {
+    if (!options.contains("field"))
       return caf::make_error(ec::invalid_configuration,
-                             "key 'field' is missing or not a string in "
-                             "configuration for delete step");
-    auto value = caf::get_if<std::string>(&opts, "value");
-    if (!value)
+                             "key 'field' is missing in configuration for "
+                             "replace step");
+    if (!options.contains("value"))
       return caf::make_error(ec::invalid_configuration,
-                             "key 'value' is missing or not a string in "
-                             "configuration for delete step");
-    auto data = from_yaml(*value);
+                             "key 'value' is missing in configuration for "
+                             "replace step");
+    auto config = to<replace_step_configuration>(options);
+    if (!config)
+      return config.error();
+    auto data = from_yaml(config->value);
     if (!data)
       return caf::make_error(ec::invalid_configuration,
                              fmt::format("could not parse '{}' as valid data "
                                          "object: {}",
-                                         *value, render(data.error())));
+                                         config->value, render(data.error())));
     if (!is_basic(*data))
       return caf::make_error(ec::invalid_configuration, "only basic types are "
                                                         "allowed for 'replace' "
                                                         "transform");
-    return std::make_unique<replace_step>(*field, std::move(*data));
+    return std::make_unique<replace_step>(std::move(*config), std::move(*data));
   }
 };
 

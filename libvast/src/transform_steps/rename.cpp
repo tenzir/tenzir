@@ -132,11 +132,8 @@ public:
   /// transform definition. The configuration for the step is opaquely
   /// passed as the first argument.
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& options) const override {
-    auto rec = to<record>(options);
-    if (!rec)
-      return rec.error();
-    auto config = to<configuration>(*rec);
+  make_transform_step(const record& options) const override {
+    auto config = to<configuration>(options);
     if (!config)
       return config.error();
     return std::make_unique<rename_step>(std::move(*config));

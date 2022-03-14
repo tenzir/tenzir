@@ -84,7 +84,7 @@ TEST(identity transform / done before persist) {
   auto index_opts = caf::settings{};
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
-  auto identity_step = vast::make_transform_step("identity", caf::settings{});
+  auto identity_step = vast::make_transform_step("identity", vast::record{});
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
   auto transformer
@@ -155,11 +155,10 @@ TEST(delete transform / persist before done) {
   auto store_id = "segment-store"s;
   auto synopsis_opts = caf::settings{};
   auto index_opts = caf::settings{};
-  auto plugin_opts = caf::settings{};
-  plugin_opts["fields"] = std::vector<std::string>{"uid"};
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
-  auto delete_step = vast::make_transform_step("delete", plugin_opts);
+  auto delete_step_config = vast::record{{"fields", vast::list{"uid"}}};
+  auto delete_step = vast::make_transform_step("delete", delete_step_config);
   REQUIRE_NOERROR(delete_step);
   transform->add_step(std::move(*delete_step));
   auto transformer
@@ -296,7 +295,7 @@ TEST(identity partition transform via the index) {
   // Run a partition transformation.
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
-  auto identity_step = vast::make_transform_step("identity", caf::settings{});
+  auto identity_step = vast::make_transform_step("identity", vast::record{});
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
   auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, transform,
@@ -373,9 +372,10 @@ TEST(select transform with an empty result set) {
   // Run a partition transformation.
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
-  auto settings = caf::settings{};
-  caf::put(settings, "expression", "#type == \"does_not_exist\"");
-  auto identity_step = vast::make_transform_step("select", settings);
+  auto identity_step_config
+    = vast::record{{"expression", "#type == \"does_not_exist\""}};
+  auto identity_step
+    = vast::make_transform_step("select", identity_step_config);
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
   auto rp2 = self->request(index, caf::infinite, vast::atom::apply_v, transform,

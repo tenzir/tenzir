@@ -12,11 +12,30 @@
 
 namespace vast {
 
+/// The configuration of a project transform step.
+struct delete_step_configuration {
+  /// The key suffixes of the fields to delete.
+  std::vector<std::string> fields = {};
+
+  /// Support type inspection for easy parsing with convertible.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, delete_step_configuration& x) {
+    return f(x.fields);
+  }
+
+  /// Enable parsing from a record via convertible.
+  static inline const record_type& layout() noexcept {
+    static auto result = record_type{
+      {"fields", list_type{string_type{}}},
+    };
+    return result;
+  }
+};
+
 /// Deletes the specifed fields from the input
 class delete_step : public transform_step {
 public:
-  /// @param fields The key suffixes of the fields to delete.
-  delete_step(std::vector<std::string> fields);
+  explicit delete_step(delete_step_configuration configuration);
 
   /// Deletes fields from an arrow record batch.
   caf::error
@@ -33,11 +52,11 @@ private:
   [[nodiscard]] caf::expected<std::pair<vast::type, std::vector<int>>>
   adjust_layout(const vast::type& layout) const;
 
-  /// The key suffixes of the fields to delete.
-  const std::vector<std::string> fields_;
-
   /// The slices being transformed.
   std::vector<transform_batch> transformed_;
+
+  /// The underlying configuration of the transformation.
+  delete_step_configuration config_;
 };
 
 } // namespace vast

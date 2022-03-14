@@ -8,6 +8,8 @@
 
 #include "vast/transform_steps/delete.hpp"
 
+#include "vast/concept/convertible/data.hpp"
+#include "vast/concept/convertible/to.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -17,15 +19,15 @@
 
 namespace vast {
 
-delete_step::delete_step(std::vector<std::string> fields)
-  : fields_(std::move(fields)) {
+delete_step::delete_step(delete_step_configuration configuration)
+  : config_(std::move(configuration)) {
 }
 
 caf::expected<std::pair<vast::type, std::vector<int>>>
 delete_step::adjust_layout(const vast::type& layout) const {
   auto to_remove = std::set<vast::offset>{};
   const auto& layout_rt = caf::get<record_type>(layout);
-  for (const auto& key : fields_) {
+  for (const auto& key : config_.fields) {
     auto offsets = layout_rt.resolve_key_suffix(key);
     for (const auto& offset : offsets) {
       to_remove.emplace(offset);
@@ -95,13 +97,15 @@ public:
 
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& opts) const override {
-    auto fields = caf::get_if<std::vector<std::string>>(&opts, "fields");
-    if (!fields)
+  make_transform_step(const record& options) const override {
+    if (!options.contains("fields"))
       return caf::make_error(ec::invalid_configuration,
-                             "key 'fields' is missing or not a string list in "
-                             "configuration for delete step");
-    return std::make_unique<delete_step>(*fields);
+                             "key 'fields' is missing in configuration for "
+                             "delete step");
+    auto config = to<delete_step_configuration>(options);
+    if (!config)
+      return config.error();
+    return std::make_unique<delete_step>(std::move(*config));
   }
 };
 
