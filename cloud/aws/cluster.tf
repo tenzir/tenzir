@@ -6,7 +6,7 @@ resource "aws_ecs_cluster" "fargate_cluster" {
   }
   setting {
     name  = "containerInsights"
-    value = "disabled"
+    value = "enabled"
   }
   configuration {
     execute_command_configuration {
