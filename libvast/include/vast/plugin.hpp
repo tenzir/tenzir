@@ -486,7 +486,7 @@ extern const char* VAST_PLUGIN_VERSION;
       return ::vast::version::version;                                         \
     }                                                                          \
     extern "C" const char* vast_libvast_build_tree_hash() {                    \
-      return ::vast::version::build_tree_hash;                                 \
+      return ::vast::version::build::tree_hash;                                \
     }
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \

@@ -30,11 +30,20 @@ extern const char* minor;
 extern const char* patch;
 extern const char* tweak;
 
+namespace build {
+
 /// The CMake build type used to build VAST.
-extern const char* build_type;
+extern const char* type;
 
 /// Contains a hash of VAST's build tree.
-extern const char* build_tree_hash;
+extern const char* tree_hash;
+
+/// Whether assertions, ASan, and UBSan are enabled respectively.
+extern bool has_assertions;
+extern bool has_address_santiizer;
+extern bool has_undefined_behavior_sanitizer;
+
+} // namespace build
 
 } // namespace vast::version
 

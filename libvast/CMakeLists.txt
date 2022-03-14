@@ -515,22 +515,6 @@ else ()
   message(FATAL_ERROR "Failed to detect build or configuration types")
 endif ()
 
-if (VAST_ENABLE_ASSERTIONS
-    OR VAST_ENABLE_ASAN
-    OR VAST_ENABLE_UBSAN)
-  if (VAST_ENABLE_ASSERTIONS)
-    list(APPEND _vast_build_type_extras "Assertions")
-  endif ()
-  if (VAST_ENABLE_ASAN)
-    list(APPEND _vast_build_type_extras "Address Sanitizer")
-  endif ()
-  if (VAST_ENABLE_UBSAN)
-    list(APPEND _vast_build_type_extras "Undefined Behavior Sanitizer")
-  endif ()
-  list(JOIN _vast_build_type_extras ", " _vast_build_type_extras_joined)
-  string(APPEND VAST_BUILD_TYPE " with ${_vast_build_type_extras_joined}")
-endif ()
-
 file(
   WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
   "\
@@ -538,9 +522,12 @@ file(
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
   set(VAST_VERSION_TAG \"${VAST_VERSION_TAG_BACKUP}\")
   set(VAST_BUILD_TYPE \"${VAST_BUILD_TYPE}\")
+  set(VAST_ENABLE_ASSERTIONS \"${VAST_ENABLE_ASSERTIONS}\")
+  set(VAST_ENABLE_ASAN \"${VAST_ENABLE_ASAN}\")
+  set(VAST_ENABLE_UBSAN \"${VAST_ENABLE_UBSAN}\")
   include(VASTVersion)
   configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
-                 \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\" @ONLY)")
+                 \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
 
 # We generate config.cpp as a byproduct of a custom target so we can re-generate
 # the version string and build tree hash on every build. Note that this must not

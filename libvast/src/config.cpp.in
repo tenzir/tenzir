@@ -15,7 +15,36 @@ const char* major = "@VAST_VERSION_MAJOR@";
 const char* minor = "@VAST_VERSION_MINOR@";
 const char* patch = "@VAST_VERSION_PATCH@";
 const char* tweak = "@VAST_VERSION_TWEAK@";
-const char* build_type = "@VAST_BUILD_TYPE@";
-const char* build_tree_hash = "@VAST_BUILD_TREE_HASH@";
+
+namespace build {
+
+const char* type = "@VAST_BUILD_TYPE@";
+const char* tree_hash = "@VAST_BUILD_TREE_HASH@";
+
+#undef VAST_ENABLE_ASSERTIONS
+#cmakedefine01 VAST_ENABLE_ASSERTIONS
+#if VAST_ENABLE_ASSERTIONS
+bool has_assertions = true;
+#else
+bool has_assertions = false;
+#endif
+
+#undef VAST_ENABLE_ASAN
+#cmakedefine01 VAST_ENABLE_ASAN
+#if VAST_ENABLE_ASAN
+bool has_address_santiizer = true;
+#else
+bool has_address_santiizer = false;
+#endif
+
+#undef VAST_ENABLE_UBSAN
+#cmakedefine01 VAST_ENABLE_UBSAN
+#if VAST_ENABLE_UBSAN
+bool has_undefined_behavior_sanitizer = true;
+#else
+bool has_undefined_behavior_sanitizer = false;
+#endif
+
+} // namespace build
 
 } // namespace vast::version
