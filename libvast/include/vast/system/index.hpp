@@ -165,6 +165,38 @@ struct query_state {
   }
 };
 
+struct pending_queue {
+  struct pq {
+    uuid partition;
+    std::vector<uuid> queries;
+
+    friend auto operator<=>(const pq& lhs, const pq& rhs) {
+      return lhs.queries.size() <=> rhs.queries.size();
+    }
+  };
+
+  /// Inserts a new query into the queue.
+  [[nodiscard]] caf::error
+  insert(query_state&& query_state, std::vector<uuid>&& candidates);
+
+  /// Activates an inactive query.
+  [[nodiscard]] caf::error activate(const uuid& qid, uint32_t num_partitions);
+
+  [[nodiscard]] caf::error remove_query(const uuid& qid);
+
+  [[nodiscard]] size_t num_partitions() const;
+
+  [[nodiscard]] size_t num_queries() const;
+
+  [[nodiscard]] std::optional<pq> next();
+
+  /// Maps query IDs to pending queries lookup state.
+  std::unordered_map<uuid, query_state> queries = {};
+
+  std::vector<pq> partitions = {};
+  std::vector<pq> inactive_partitions = {};
+};
+
 /// The state of the index actor.
 struct index_state {
   // -- type aliases -----------------------------------------------------------
@@ -284,10 +316,12 @@ struct index_state {
   query_backlog backlog = {};
 
   /// Maps query IDs to pending queries lookup state.
-  std::unordered_map<uuid, query_state> pending_queries = {};
+  // std::unordered_map<uuid, query_state> pending_queries = {};
 
   /// Maps candidate partition IDs to the queries .
-  std::unordered_map<uuid, std::vector<uuid>> pending_partitions = {};
+  // std::unordered_map<uuid, std::vector<uuid>> pending_partitions = {};
+
+  pending_queue pending_queries = {};
 
   /// Maps exporter actor address to known query ID for monitoring
   /// purposes.

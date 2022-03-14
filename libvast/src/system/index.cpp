@@ -246,6 +246,131 @@ std::optional<query_backlog::job> query_backlog::take_next() {
   return std::nullopt;
 }
 
+size_t pending_queue::num_partitions() const {
+  return partitions.size() + inactive_partitions.size();
+}
+
+size_t pending_queue::num_queries() const {
+  return queries.size();
+}
+
+[[nodiscard]] caf::error pending_queue::insert(query_state&& query_state,
+                                               std::vector<uuid>&& candidates) {
+  auto qid = query_state.query.id;
+  auto [it, emplace_success] = queries.emplace(qid, std::move(query_state));
+  if (!emplace_success)
+    return caf::make_error(ec::unspecified, "A query with this ID exists "
+                                            "already");
+  const auto& qs = it->second;
+  for (const auto& cand : candidates) {
+    auto it = std::find_if(partitions.begin(), partitions.end(), [&](auto& x) {
+      return x.partition == cand;
+    });
+    if (it != partitions.end()) {
+      VAST_INFO("found active partition");
+      it->queries.push_back(qid);
+      continue;
+    }
+    it = std::find_if(inactive_partitions.begin(), inactive_partitions.end(),
+                      [&](auto& x) {
+                        return x.partition == cand;
+                      });
+    if (it != inactive_partitions.end()) {
+      VAST_INFO("found inactive partition");
+      it->queries.push_back(qid);
+      partitions.push_back(std::move(*it));
+      inactive_partitions.erase(it);
+      continue;
+    }
+    partitions.emplace_back(cand, std::vector{qid});
+    VAST_INFO("emplacing new {}", partitions.size());
+  }
+  // TODO: Insertion sort should be better.
+  std::sort(partitions.begin(), partitions.end());
+  return caf::none;
+}
+
+[[nodiscard]] caf::error
+pending_queue::activate(const uuid& qid, uint32_t num_partitions) {
+  auto it = queries.find(qid);
+  if (it == queries.end())
+    return caf::make_error(ec::unspecified, "cannot activate unknown query");
+  it->second.requested_partitions += num_partitions;
+  // Go over all currently inactive partitions and splice those relevant for
+  // `qid` back into the active queue.
+  auto new_inactive = std::vector<pending_queue::pq>{};
+  std::partition_copy(std::make_move_iterator(inactive_partitions.begin()),
+                      std::make_move_iterator(inactive_partitions.end()),
+                      std::back_inserter(partitions),
+                      std::back_inserter(new_inactive), [&](const auto& p) {
+                        return std::find(p.queries.begin(), p.queries.end(),
+                                         qid)
+                               != p.queries.end();
+                      });
+  inactive_partitions = std::move(new_inactive);
+  std::sort(partitions.begin(), partitions.end());
+  return caf::none;
+}
+
+[[nodiscard]] caf::error pending_queue::remove_query(const uuid& qid) {
+  // If we are currently working on this query we don't remove it from the
+  // list yet.
+  VAST_TRACE("index removes query {}", qid);
+  auto keep = false;
+  auto it = queries.find(qid);
+  if (it == queries.end())
+    return caf::make_error(ec::unspecified, "cannot remove unknown query");
+  if (it->second.completed_partitions < it->second.scheduled_partitions)
+    keep = true;
+  else {
+    queries.erase(it);
+  }
+  auto run = [&](auto& queue) {
+    auto it = queue.begin();
+    for (; it < queue.end(); ++it) {
+      auto queries_it = std::find(it->queries.begin(), it->queries.end(), qid);
+      if (queries_it == it->queries.end())
+        continue;
+      if (!keep) {
+        it->queries.erase(queries_it);
+        if (it->queries.empty())
+          it = queue.erase(it);
+      }
+    }
+  };
+  run(partitions);
+  run(inactive_partitions);
+  return caf::none;
+}
+
+// NOLINTNEXTLINE
+std::optional<pending_queue::pq> pending_queue::next() {
+  if (partitions.empty())
+    return std::nullopt;
+  auto result = partitions.back();
+  partitions.pop_back();
+  pq active = {result.partition, {}};
+  pq inactive = {result.partition, {}};
+  std::partition_copy(
+    std::make_move_iterator(result.queries.begin()),
+    std::make_move_iterator(result.queries.end()),
+    std::back_inserter(active.queries), std::back_inserter(inactive.queries),
+    [&](const auto& qid) {
+      const auto& qs = queries[qid];
+      return qs.requested_partitions > qs.scheduled_partitions;
+    });
+  if (!inactive.queries.empty())
+    inactive_partitions.push_back(std::move(inactive));
+  if (!active.queries.empty()) {
+    // TODO: Consider delaying the following loop until the next insert or
+    // activate.
+    for (const auto& qid : active.queries)
+      queries[qid].scheduled_partitions++;
+    return active;
+  }
+  return next();
+}
+
 // -- index_state --------------------------------------------------------------
 
 index_state::index_state(index_actor::pointer self)
@@ -514,12 +639,13 @@ void index_state::notify_flush_listeners() {
 
 // -- partition handling -----------------------------------------------------
 
+// TODO: remove
 vast::uuid index_state::create_query_id() {
   auto query_id = uuid::random();
-  // Ensure the query id is unique.
-  while (pending_queries.find(query_id) != pending_queries.end()
-         || query_id == uuid::nil())
-    query_id = uuid::random();
+  //// Ensure the query id is unique.
+  // while (pending_queries.find(query_id) != pending_queries.end()
+  //        || query_id == uuid::nil())
+  //   query_id = uuid::random();
   return query_id;
 }
 
@@ -618,13 +744,14 @@ void index_state::add_partition_creation_listener(
 // -- introspection ----------------------------------------------------------
 
 void index_state::send_report() {
-  auto msg = report{.data = {
-                      {"query.pending.partitions", pending_partitions.size()},
-                      {"query.pending.queries", pending_queries.size()},
-                      {"query.workers.idle", max_concurrent_partition_lookups
-                                               - running_partition_lookups},
-                      {"query.workers.busy", running_partition_lookups},
-                    }};
+  auto msg
+    = report{.data = {
+               {"query.pending.partitions", pending_queries.num_partitions()},
+               {"query.pending.queries", pending_queries.num_queries()},
+               {"query.workers.idle",
+                max_concurrent_partition_lookups - running_partition_lookups},
+               {"query.workers.busy", running_partition_lookups},
+             }};
   self->send(accountant, std::move(msg));
   auto r = performance_report{.data = {{{"scheduler", scheduler_measurement}}}};
   self->send(accountant, std::move(r));
@@ -669,12 +796,12 @@ index_state::status(status_verbosity v) const {
     worker_status["busy"] = running_partition_lookups;
     rs->content["workers"] = std::move(worker_status);
     auto pending_status = list{};
-    for (auto& [u, qs] : pending_queries) {
-      auto q = record{};
-      q["id"] = fmt::to_string(u);
-      q["query"] = fmt::to_string(qs);
-      pending_status.emplace_back(std::move(q));
-    }
+    // for (auto& [u, qs] : pending_queries) {
+    //   auto q = record{};
+    //   q["id"] = fmt::to_string(u);
+    //   q["query"] = fmt::to_string(qs);
+    //   pending_status.emplace_back(std::move(q));
+    // }
     rs->content["pending_queries"] = std::move(pending_status);
     rs->content["num-active-partitions"]
       = count{active_partition.actor == nullptr ? 0u : 1u};
@@ -744,65 +871,14 @@ void schedule_lookups(index_state& st) {
     t.stop(num_scheduled);
   });
   while (st.running_partition_lookups < st.max_concurrent_partition_lookups) {
-    if (st.pending_partitions.empty())
+    // 1. Get the partition with the highest accumulated priority.
+    auto next = st.pending_queries.next();
+    if (!next) {
+      VAST_INFO("{} did not find a partition to query", *st.self);
       return;
-    // 1. Find and remove the most requested partition.
-    // TODO: avoid recomputing the max_size at every step.
-    // auto it = std::transform_reduce(
-    //  st.pending_partitions.begin(), st.pending_partitions.end(), size_t{},
-    //  [](size_t lhs, size_t rhs) {
-    //    return lhs < rhs;
-    //  },
-    //  [&](const auto& pending_partition) {
-    //    returnjstd::count_if(
-    //      pending_partition.second.begin(), pending_partition.second.end(),
-    //      [&](const auto& qid) {
-    //        return st.pending_queries[qid].requested_partitions > 0;
-    //      });
-    //  });
-    auto active = [](const query_state& qs) {
-      return qs.requested_partitions > qs.scheduled_partitions;
-    };
-    auto weight = [&](const query_state& qs) -> uint8_t {
-      if (!active(qs))
-        return 0;
-      return qs.query.priority;
-    };
-    // TODO: The partition selector should add memory residency as an input to
-    // the formula.
-    // TODO: The selector should return end if no queries are pending. Luckily
-    // the logic further down handles this correctly.
-    // Real TODO: Use an ordered data structue to keep track of pending
-    // partitions.
-    auto less_weight = [&](auto current_max, auto x) {
-      auto partition_weight = [&](const auto& queries) {
-        return std::accumulate(queries.begin(), queries.end(), size_t{0},
-                               [&](size_t acc, const auto& qid) {
-                                 return acc + weight(st.pending_queries[qid]);
-                               });
-      };
-      return partition_weight(current_max.second) < partition_weight(x.second);
-    };
-    auto it = std::max_element(st.pending_partitions.begin(),
-                               st.pending_partitions.end(), less_weight);
-    // VAST_ASSERT(it != st.pending_partitions.end());
-    std::vector<uuid> active_query_ids = {};
-    std::vector<uuid> inactive_query_ids = {};
-    std::partition_copy(std::make_move_iterator(it->second.begin()),
-                        std::make_move_iterator(it->second.end()),
-                        std::back_inserter(active_query_ids),
-                        std::back_inserter(inactive_query_ids),
-                        [&](const auto& qid) {
-                          return active(st.pending_queries[qid]);
-                        });
-    auto partition_id = it->first;
-    if (inactive_query_ids.empty())
-      st.pending_partitions.erase(it);
-    else
-      it->second = std::move(inactive_query_ids);
-    // Return if no active queries.
-    if (active_query_ids.empty())
-      return;
+    }
+    VAST_INFO("{} schedules partition {} for {}", *st.self, next->partition,
+              next->queries);
     // 2. Spin up the partition.
     auto materialize = [&](const uuid& partition_id) -> partition_actor {
       // We need to first check whether the ID is the active partition or one
@@ -823,22 +899,21 @@ void schedule_lookups(index_state& st) {
                    *st.self, partition_id);
       return part;
     };
-    auto partition_actor = materialize(partition_id);
+    auto partition_actor = materialize(next->partition);
     if (!partition_actor) {
-      for (auto qid : active_query_ids) {
-        auto& query_state = st.pending_queries[qid];
-        query_state.candidate_partitions--;
-      }
+      // for (auto qid : next.queries) {
+      //   auto& query_state = st.pending_queries[qid];
+      //   query_state.candidate_partitions--;
+      // }
       continue;
     }
     // 3. request all relevant queries in a loop
-    auto cnt = std::make_shared<size_t>(active_query_ids.size());
-    for (auto qid : active_query_ids) {
-      auto& query_state = st.pending_queries[qid];
-      query_state.scheduled_partitions++;
+    auto cnt = std::make_shared<size_t>(next->queries.size());
+    for (auto qid : next->queries) {
+      auto& query_state = st.pending_queries.queries[qid];
       auto handle_completion = [cnt, qid, &st] {
         // TODO: use find
-        auto& query_state = st.pending_queries[qid];
+        auto& query_state = st.pending_queries.queries[qid];
         query_state.completed_partitions++;
         if (query_state.completed_partitions
             == query_state.requested_partitions) {
@@ -853,7 +928,7 @@ void schedule_lookups(index_state& st) {
         // pending_queries.
         if (query_state.completed_partitions
             == query_state.candidate_partitions)
-          st.pending_queries.erase(qid);
+          st.pending_queries.queries.erase(qid);
         // 5. recursively call schedule_lookups in the done handler. ...or
         //    when all done? (6)
         // 6. decrement st.running_partition_lookups when all queries that
@@ -1042,13 +1117,13 @@ index(index_actor::stateful_pointer<index_state> self,
                  "query results",
                  *self, ids_string);
       for (const auto& id : ids) {
-        self->state.pending_queries.erase(id);
-        // TODO: Use a better data structure.
-        std::erase_if(self->state.pending_partitions, [&](auto& x) {
-          auto& query_ids = x.second;
-          std::erase(query_ids, id);
-          return query_ids.empty();
-        });
+        self->state.pending_queries.remove_query(id);
+        // self->state.pending_queries.queries.erase(id);
+        //// TODO: Use a better data structure.
+        // std::erase_if(self->state.pending_partitions, [&](auto& x) {
+        //   std::erase(x.queries, id);
+        //   return query_ids.empty();
+        // });
       }
     }
     self->state.monitored_queries.erase(it);
@@ -1140,13 +1215,14 @@ index(index_actor::stateful_pointer<index_state> self,
             return;
           }
           auto num_candidates = detail::narrow<uint32_t>(candidates.size());
-          self->state.pending_queries.emplace(
-            query.id, query_state{.query = query,
-                                  .candidate_partitions = num_candidates,
-                                  .requested_partitions = num_candidates,
-                                  .rp = rp});
-          for (const auto& candidate : candidates)
-            self->state.pending_partitions[candidate].push_back(query.id);
+          auto qs = query_state{.query = query,
+                                .candidate_partitions = num_candidates,
+                                .requested_partitions = num_candidates,
+                                .rp = rp};
+          if (!self->state.pending_queries.insert(std::move(qs),
+                                                  std::move(candidates)))
+            rp.deliver(caf::make_error(ec::unspecified, "A query with this ID "
+                                                        "exists already"));
           schedule_lookups(self->state);
         });
       return rp;
@@ -1180,7 +1256,7 @@ index(index_actor::stateful_pointer<index_state> self,
           candidates.erase(std::unique(candidates.begin(), candidates.end()),
                            candidates.end());
           // Allows the client to query further results after initial taste.
-          auto query_id = self->state.create_query_id();
+          auto query_id = query.id;
           if (candidates.empty()) {
             VAST_DEBUG("{} returns without result: no partitions qualify",
                        *self);
@@ -1191,13 +1267,13 @@ index(index_actor::stateful_pointer<index_state> self,
           auto num_candidates = detail::narrow<uint32_t>(candidates.size());
           auto scheduled
             = std::min(num_candidates, self->state.taste_partitions);
-          self->state.pending_queries.emplace(
-            query_id, query_state{.query = query,
-                                  .client = client,
-                                  .candidate_partitions = num_candidates,
-                                  .requested_partitions = scheduled});
-          for (const auto& candidate : candidates)
-            self->state.pending_partitions[candidate].push_back(query_id);
+          if (auto err = self->state.pending_queries.insert(
+                query_state{.query = query,
+                            .client = client,
+                            .candidate_partitions = num_candidates,
+                            .requested_partitions = scheduled},
+                std::move(candidates)))
+            rp.deliver(err);
           rp.deliver(query_cursor{query_id, num_candidates, scheduled});
           schedule_lookups(self->state);
         });
@@ -1308,8 +1384,9 @@ index(index_actor::stateful_pointer<index_state> self,
       // return rp;
     },
     [self](const uuid& query_id, uint32_t num_partitions) {
-      self->state.pending_queries[query_id].requested_partitions
-        += num_partitions;
+      if (auto err
+          = self->state.pending_queries.activate(query_id, num_partitions))
+        VAST_WARN("{} can't activate unknown query: {}", *self, err);
       schedule_lookups(self->state);
     },
     [self](atom::erase, uuid partition_id) -> caf::result<atom::done> {
@@ -1444,14 +1521,12 @@ index(index_actor::stateful_pointer<index_state> self,
         = query::make_extract(sink, query::extract::drop_ids, match_everything);
       query.priority = 100;
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
-      self->state.pending_queries.emplace(
-        query.id,
+      self->state.pending_queries.insert(
         query_state{.query = query,
                     .client = caf::actor_cast<receiver_actor<atom::done>>(sink),
                     .candidate_partitions = input_size,
-                    .requested_partitions = input_size});
-      for (const auto& id : old_partition_ids)
-        self->state.pending_partitions[id].push_back(query.id);
+                    .requested_partitions = input_size},
+        std::vector{old_partition_ids});
       schedule_lookups(self->state);
       auto rp = self->make_response_promise<partition_info>();
       // TODO: Implement some kind of monadic composition instead of these
@@ -1561,7 +1636,7 @@ index(index_actor::stateful_pointer<index_state> self,
       //   self->state.idle_workers.insert(std::move(worker));
       // }
     },
-    [self](atom::worker, atom::wakeup, query_supervisor_actor worker) {
+    [self](atom::worker, atom::wakeup, query_supervisor_actor /*worker*/) {
       // auto lost = true;
       // for (const auto& [_, qs] : self->state.pending) {
       //   if (worker == qs.worker) {
