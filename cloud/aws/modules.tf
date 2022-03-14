@@ -30,8 +30,8 @@ module "vast_server" {
   storage_type        = var.vast_server_storage_type
   storage_mount_point = "/var/lib/vast"
 
-  command = ["-e", "0.0.0.0:42000", "start"]
-  port    = 42000
+  entrypoint = "echo '${file("./vast-server.yaml")}' > /opt/tenzir/vast/etc/vast/vast.yaml && vast start"
+  port       = 42000
 
   environment = [{
     name  = "AWS_REGION"

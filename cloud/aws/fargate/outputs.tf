@@ -9,3 +9,7 @@ output "task_security_group_id" {
 output "task_family" {
   value = aws_ecs_task_definition.fargate_task_def.family
 }
+
+output "log_group_name" {
+  value = aws_cloudwatch_log_group.fargate_logging.name
+}

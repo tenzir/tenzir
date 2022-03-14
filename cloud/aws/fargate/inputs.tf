@@ -31,7 +31,9 @@ variable "docker_image" {}
 
 variable "ingress_subnet_cidrs" {}
 
-variable "command" {}
+variable "entrypoint" {
+  type = string
+}
 
 variable "port" {}
 
