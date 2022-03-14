@@ -14,6 +14,7 @@
 #include <caf/sum_type_access.hpp>
 #include <caf/sum_type_token.hpp>
 
+#include <tuple>
 #include <utility>
 
 namespace vast::detail {
