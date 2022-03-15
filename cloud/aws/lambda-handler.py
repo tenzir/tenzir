@@ -61,7 +61,7 @@ def handler(event, context):
         stderr = stderr_thread.join()
 
         # multiplex stdout and stderr into the result field
-        res = stdout if stdout != b"" else stderr
+        res = stdout if stdout != "" else stderr
         return {"result": res, "parsed_cmd": parsed_cmd}
 
     except Exception as err:
