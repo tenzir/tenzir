@@ -9,6 +9,14 @@
 
 namespace vast::test {
 
+std::string BASE_SCHEMA = R"_(
+@BASE_SCHEMA@
+)_";
+
+std::string SURICATA_SCHEMA = R"_(
+@SURICATA_SCHEMA@
+)_";
+
 std::string EVE_JSON = R"_(
 @EVE_JSON@
 )_";
