@@ -75,9 +75,10 @@ private:
   /// @returns `true` on success.
   bool add_impl(data_view x) override;
 
-  /// A generator for leaf views that is always incremented when calling add.
-  detail::generator<record_type::leaf_view> leaves_;
-  detail::generator<record_type::leaf_view>::iterator current_leaf_;
+  /// A flattened representation of the schema that is iterated over when
+  /// calling add.
+  std::vector<record_type::leaf_view> leaves_;
+  std::vector<record_type::leaf_view>::iterator current_leaf_;
 
   /// Number of filled rows.
   size_t num_rows_ = 0;

@@ -337,13 +337,15 @@ experimental_table_slice_builder::experimental_table_slice_builder(
       this->layout().make_arrow_builder(arrow::default_memory_pool())},
     builder_{initial_buffer_size} {
   VAST_ASSERT(schema_);
+  for (auto&& leaf : caf::get<record_type>(this->layout()).leaves())
+    leaves_.push_back(std::move(leaf));
+  current_leaf_ = leaves_.end();
 }
 
 bool experimental_table_slice_builder::add_impl(data_view x) {
   auto* nested_builder
     = &caf::get<type_to_arrow_builder_t<record_type>>(*arrow_builder_);
   if (num_rows_ == 0 || current_leaf_ == leaves_.end()) {
-    leaves_ = caf::get<record_type>(layout()).leaves();
     current_leaf_ = leaves_.begin();
     if (auto status = nested_builder->Append(); !status.ok()) {
       VAST_ERROR("failed to add row to builder with schema {}: {}", layout(),
