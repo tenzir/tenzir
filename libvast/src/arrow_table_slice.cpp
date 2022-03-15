@@ -726,6 +726,9 @@ value_at([[maybe_unused]] const Type& type,
         int64_t value_offset;
         int64_t value_length;
       };
+      // Note that there's no `value_slice(...)` and `item_slice(...)` functions
+      // for map arrays in Arrow similar to the `value_slice(...)` function for
+      // list arrays, so we need to manually work with offsets and lengths here.
       return map_view_handle{map_view_ptr{caf::make_counted<map_view>(
         key_type, item_type, arr.keys(), arr.items(), arr.value_offset(row),
         arr.value_length(row))}};
