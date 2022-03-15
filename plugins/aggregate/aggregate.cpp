@@ -513,7 +513,7 @@ private:
 class aggregate_step : public transform_step {
 public:
   /// Create a new aggregate step from an already parsed configuration.
-  aggregate_step(configuration config) : config_{std::move(config)} {
+  explicit aggregate_step(configuration config) : config_{std::move(config)} {
     // nop
   }
 
@@ -589,11 +589,8 @@ public:
   /// transform definition. The configuration for the step is opaquely
   /// passed as the first argument.
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& options) const override {
-    auto rec = to<record>(options);
-    if (!rec)
-      return rec.error();
-    auto config = to<configuration>(*rec);
+  make_transform_step(const vast::record& options) const override {
+    auto config = to<configuration>(options);
     if (!config)
       return config.error();
     return std::make_unique<aggregate_step>(std::move(*config));

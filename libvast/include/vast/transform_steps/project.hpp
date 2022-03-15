@@ -13,13 +13,33 @@
 #include "vast/transform.hpp"
 
 #include <unordered_set>
+
 namespace vast {
+
+/// The configuration of a project transform step.
+struct project_step_configuration {
+  /// The key suffixes of the fields to keep.
+  std::vector<std::string> fields = {};
+
+  /// Support type inspection for easy parsing with convertible.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, project_step_configuration& x) {
+    return f(x.fields);
+  }
+
+  /// Enable parsing from a record via convertible.
+  static inline const record_type& layout() noexcept {
+    static auto result = record_type{
+      {"fields", list_type{string_type{}}},
+    };
+    return result;
+  }
+};
 
 /// Projects the input onto the specified fields(deletes unspecified fields).
 class project_step : public transform_step {
 public:
-  /// @param fields The key suffixes of the fields to keep.
-  explicit project_step(std::vector<std::string> fields);
+  explicit project_step(project_step_configuration configuration);
 
   /// Projects an arrow record batch.
   /// @returns The new layout and the projected record batch.
@@ -34,11 +54,11 @@ private:
   [[nodiscard]] caf::expected<std::pair<vast::type, std::vector<int>>>
   adjust_layout(const vast::type& layout) const;
 
-  /// The key suffixes of the fields to keep.
-  const std::vector<std::string> fields_;
-
   /// The slices being transformed.
   std::vector<transform_batch> transformed_;
+
+  /// The underlying configuration of the transformation.
+  project_step_configuration config_;
 };
 
 } // namespace vast

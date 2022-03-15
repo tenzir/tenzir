@@ -66,7 +66,7 @@ public:
   // transform definition. The configuration for the step is opaquely
   // passed as the first argument.
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings&) const override {
+  make_transform_step(const vast::record&) const override {
     return std::make_unique<vast::plugins::example_transform_step>();
   }
 };

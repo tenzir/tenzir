@@ -38,14 +38,13 @@ following variables:
 - `aws_region`: the region of the VPC where to deploy Fargate and Lambda
   resources.
 
-- `vpc_id`: an existing VPC to which you plan to attach your VAST stack. You
-  can use `aws ec2 describe-vpcs --region $region` to list available VPCs.
+- `peered_vpc_id`: an existing VPC to which you plan to attach your VAST stack. You
+  can use `aws ec2 describe-vpcs --region $region` to list available VPCs. The 
+  deployment script will create a new VPC and peer it to the existing one.
 
-- `subnet_cidr`: the subnet *within* the VPC where the VAST stack will be
-  placed. Terraform will create this subnet and it must not overlap with an
-  existing subnet in this VPC and VPCs peered to it. You can use
-  `aws ec2 describe-subnets --region $region` to list existing subnets to pick
-  a non-overlapping one within the VPC subnet.
+- `vast_cidr`: the IP range where the VAST stack will be placed. Terraform will 
+  create a new VPC with this CIDR, so it should not overlapp with any of your 
+  existing VPCs.
 
 Optionally, you can also define the following variables:
 
@@ -63,8 +62,8 @@ Optionally, you can also define the following variables:
 Here's an example:
 
 ```bash
-vpc_id=vpc-059a7ec8aac174fc9
-subnet_cidr=172.31.48.0/24
+peered_vpc_id=vpc-059a7ec8aac174fc9
+vast_cidr=172.31.48.0/24
 aws_region=eu-north-1
 ```
 
