@@ -41,13 +41,70 @@ resource "aws_cloudwatch_dashboard" "main" {
                 "region": "${var.region_name}",
                 "stat": "Average",
                 "period": 1,
-                "title": "Node throughput Rate"
+                "title": "VAST Server - Node throughput Rate"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "ECS/ContainerInsights", "NetworkTxBytes", "TaskDefinitionFamily", "vast-cloud-vast-server-default", "ClusterName", "vast-cloud-cluster-default" ],
+                    [ ".", "NetworkRxBytes", ".", ".", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${var.region_name}",
+                "stat": "Average",
+                "period": 60,
+                "title": "VAST Server - Network"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "ECS/ContainerInsights", "CpuUtilized", "TaskDefinitionFamily", "vast-cloud-vast-server-default", "ClusterName", "vast-cloud-cluster-default" ],
+                    [ ".", "CpuReserved", ".", ".", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${var.region_name}",
+                "stat": "Maximum",
+                "period": 60,
+                "title": "VAST Server - CPU"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "ECS/ContainerInsights", "MemoryUtilized", "TaskDefinitionFamily", "vast-cloud-vast-server-default", "ClusterName", "vast-cloud-cluster-default", { "region": "${var.region_name}" } ],
+                    [ "ECS/ContainerInsights", "MemoryReserved", "TaskDefinitionFamily", "vast-cloud-vast-server-default", "ClusterName", "vast-cloud-cluster-default", { "region": "${var.region_name}" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${var.region_name}",
+                "stat": "Maximum",
+                "period": 60,
+                "title": "VAST Server - Memory"
             }
         },
         {
             "type": "log",
             "x": 0,
-            "y": 6,
+            "y": 12,
             "width": 12,
             "height": 6,
             "properties": {
@@ -61,7 +118,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         {
             "type": "log",
             "x": 12,
-            "y": 6,
+            "y": 12,
             "width": 12,
             "height": 6,
             "properties": {
