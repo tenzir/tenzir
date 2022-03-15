@@ -490,7 +490,12 @@ index_state::collect_query_actors(query_state& lookup,
 void index_state::add_flush_listener(flush_listener_actor listener) {
   VAST_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
   flush_listeners.emplace_back(std::move(listener));
-  detail::notify_listeners_if_clean(*this, *stage);
+  // We may need to call `notify_listeners_if_clean` if the subscription
+  // happens after the data has already completely passed the index, but
+  // we must not to call it before any data at all has arrived it would
+  // create a false positive.
+  if (!active_partitions.empty())
+    detail::notify_listeners_if_clean(*this, *stage);
 }
 
 // The whole purpose of the `-b` flag is to somehow block until all imported
