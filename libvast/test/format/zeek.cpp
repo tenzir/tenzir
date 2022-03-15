@@ -187,6 +187,17 @@ std::string_view conn_log_100_events = R"__(#separator \x09
 1258535660.158200	WfzxgFx2lWb	192.168.1.104	1196	65.55.184.16	443	tcp	ssl	67.887666	57041	8510	RSTR	-	0	ShADdar	54	59209	26	9558	(empty)
 #close	2014-05-23-18-02-35)__";
 
+std::string_view custom_log_1_event = R"__(#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	custom
+#open	2022-03-15-11-01-00
+#fields	ts	uid
+#types	time	string
+1258532133.914401	"w7TADZKQmv7"
+#close	2022-03-15-11-01-01)__";
+
 struct fixture : fixtures::deterministic_actor_system {
   fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
   }
@@ -270,6 +281,20 @@ TEST(zeek reader - conn log) {
   CHECK_EQUAL(slices.size(), 5u);
   for (auto& slice : slices)
     CHECK_EQUAL(slice.rows(), 20u);
+}
+
+TEST(zeek reader - layout enrichment) {
+  auto slices = read(custom_log_1_event, 1, 1);
+  REQUIRE_EQUAL(slices.size(), 1u);
+  std::string ref_schema = R"__(
+    type timestamp = time
+    type zeek.custom = record{
+      ts: timestamp,
+      uid: string #index=hash,
+    })__";
+  auto expected = unbox(to<schema>(ref_schema));
+  auto zeek_conn = unbox(expected.find("zeek.custom"));
+  CHECK_EQUAL(slices[0].layout(), flatten(zeek_conn));
 }
 
 TEST(zeek reader - custom schema) {
