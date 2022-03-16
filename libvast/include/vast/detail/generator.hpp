@@ -205,13 +205,20 @@ public:
   generator(const generator& other) = delete;
 
   ~generator() {
-    if (m_coroutine) {
+    if (m_coroutine)
       m_coroutine.destroy();
-    }
   }
 
   generator& operator=(generator other) noexcept {
     swap(other);
+    return *this;
+  }
+
+  generator& operator=(generator&& other) noexcept {
+    if (m_coroutine)
+      m_coroutine.destroy();
+    m_coroutine = other.m_coroutine;
+    other.m_coroutine = nullptr;
     return *this;
   }
 
