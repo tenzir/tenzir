@@ -11,10 +11,8 @@ class ReturningThread(Thread):
     """A wrapper around the Thread class to actually return the threaded function
     return value when calling join()"""
 
-    def __init__(
-        self, group=None, target=None, name=None, args=(), kwargs={}, Verbose=None
-    ):
-        Thread.__init__(self, group, target, name, args, kwargs)
+    def __init__(self, target=None, args=()):
+        Thread.__init__(self, target, args)
         self._return = None
 
     def run(self):
