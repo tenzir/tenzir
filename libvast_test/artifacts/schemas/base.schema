@@ -1,0 +1,7 @@
+// This file contains common types and aliases.
+
+// Alias for transport-layer ports.
+type port = count
+
+// Alias for timestamps.
+type timestamp = time

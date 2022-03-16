@@ -34,6 +34,18 @@ const char* ssl = VAST_TEST_PATH "artifacts/logs/zeek/ssl.log";
 
 } // namespace zeek
 
+namespace suricata {
+
+const char* alert = VAST_TEST_PATH "artifacts/logs/suricata/alert.json";
+const char* dns = VAST_TEST_PATH "artifacts/logs/suricata/dns.json";
+const char* fileinfo = VAST_TEST_PATH "artifacts/logs/suricata/fileinfo.json";
+const char* flow = VAST_TEST_PATH "artifacts/logs/suricata/flow.json";
+const char* http = VAST_TEST_PATH "artifacts/logs/suricata/http.json";
+const char* netflow = VAST_TEST_PATH "artifacts/logs/suricata/netflow.json";
+const char* stats = VAST_TEST_PATH "artifacts/logs/suricata//stats.json";
+
+} // namespace suricata
+
 namespace syslog {
 
 const char* syslog_msgs
@@ -41,6 +53,13 @@ const char* syslog_msgs
 
 } // namespace syslog
 } // namespace logs
+
+namespace schemas {
+
+const char* base = VAST_TEST_PATH "artifacts/schemas/base.schema";
+const char* suricata = VAST_TEST_PATH "artifacts/schemas/suricata.schema";
+
+} // namespace schemas
 
 namespace traces {
 

@@ -8,10 +8,13 @@
 
 #include "fixtures/events.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/format/json.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -19,6 +22,7 @@
 #include "vast/type.hpp"
 
 #include <caf/settings.hpp>
+#include <caf/test/dsl.hpp>
 
 // Pull in the auto-generated serialized table slices.
 
@@ -92,6 +96,21 @@ inhale(const char* filename, table_slice::size_type slice_size) {
   return extract(reader, slice_size);
 }
 
+template <>
+std::vector<table_slice>
+inhale<format::json::reader>(const char* filename,
+                             table_slice::size_type slice_size) {
+  caf::settings settings;
+  // A non-positive value disables the timeout. We need to do this because the
+  // deterministic actor system is messing with the clocks.
+  caf::put(settings, "vast.import.batch-timeout", "0s");
+  caf::put(settings, "vast.import.json.selector", "event_type:suricata");
+  auto input = std::make_unique<std::ifstream>(filename);
+  format::json::reader reader{settings, std::move(input)};
+  reader.schema(events::suricata_schema);
+  return extract(reader, slice_size);
+}
+
 } // namespace
 
 std::vector<table_slice> events::zeek_conn_log;
@@ -99,8 +118,16 @@ std::vector<table_slice> events::zeek_conn_log_full;
 std::vector<table_slice> events::zeek_dns_log;
 std::vector<table_slice> events::zeek_http_log;
 std::vector<table_slice> events::random;
+std::vector<table_slice> events::suricata_alert_log;
+std::vector<table_slice> events::suricata_dns_log;
+std::vector<table_slice> events::suricata_fileinfo_log;
+std::vector<table_slice> events::suricata_flow_log;
+std::vector<table_slice> events::suricata_http_log;
+std::vector<table_slice> events::suricata_netflow_log;
+std::vector<table_slice> events::suricata_stats_log;
 std::vector<table_slice> events::ascending_integers;
 std::vector<table_slice> events::alternating_integers;
+vast::schema events::suricata_schema;
 
 events::events() {
   // Only read the fixture data once per process.
@@ -109,6 +136,17 @@ events::events() {
     return;
   factory<table_slice_builder>::initialize();
   initialized = true;
+  // Read schemas
+  std::ifstream base(artifacts::schemas::base);
+  std::stringstream buffer;
+  buffer << base.rdbuf();
+  auto base_raw_schema = buffer.str();
+  std::ifstream suricata(artifacts::schemas::suricata);
+  std::stringstream().swap(buffer);
+  buffer << suricata.rdbuf();
+  auto suricata_raw_schema = buffer.str();
+  suricata_schema
+    = unbox(to<vast::schema>(base_raw_schema + suricata_raw_schema));
   // Create Zeek log data.
   MESSAGE("inhaling unit test suite events");
   zeek_conn_log = inhale<format::zeek::reader>(
@@ -141,6 +179,35 @@ events::events() {
   alternating_integers = make_integers<alternating>(250);
   REQUIRE_EQUAL(rows(ascending_integers), 250u);
   REQUIRE_EQUAL(rows(alternating_integers), 250u);
+  // Create Suricata log data
+  suricata_alert_log = inhale<format::json::reader>(
+    artifacts::logs::suricata::alert, slice_size);
+  REQUIRE_EQUAL(rows(suricata_alert_log), 1u);
+  REQUIRE_EQUAL(suricata_alert_log[0].columns(), 39u);
+  suricata_dns_log
+    = inhale<format::json::reader>(artifacts::logs::suricata::dns, slice_size);
+  REQUIRE_EQUAL(rows(suricata_dns_log), 1u);
+  REQUIRE_EQUAL(suricata_dns_log[0].columns(), 37u);
+  suricata_fileinfo_log = inhale<format::json::reader>(
+    artifacts::logs::suricata::fileinfo, slice_size);
+  REQUIRE_EQUAL(rows(suricata_fileinfo_log), 1u);
+  REQUIRE_EQUAL(suricata_fileinfo_log[0].columns(), 35u);
+  suricata_flow_log
+    = inhale<format::json::reader>(artifacts::logs::suricata::flow, slice_size);
+  REQUIRE_EQUAL(rows(suricata_flow_log), 1u);
+  REQUIRE_EQUAL(suricata_flow_log[0].columns(), 23u);
+  suricata_http_log
+    = inhale<format::json::reader>(artifacts::logs::suricata::http, slice_size);
+  REQUIRE_EQUAL(rows(suricata_http_log), 1u);
+  REQUIRE_EQUAL(suricata_http_log[0].columns(), 24u);
+  suricata_netflow_log = inhale<format::json::reader>(
+    artifacts::logs::suricata::netflow, slice_size);
+  REQUIRE_EQUAL(rows(suricata_netflow_log), 1u);
+  REQUIRE_EQUAL(suricata_netflow_log[0].columns(), 18u);
+  suricata_stats_log = inhale<format::json::reader>(
+    artifacts::logs::suricata::stats, slice_size);
+  REQUIRE_EQUAL(rows(suricata_stats_log), 1u);
+  REQUIRE_EQUAL(suricata_stats_log[0].columns(), 1u);
   // Assign IDs.
   auto i = id{0};
   auto assign_ids = [&](auto& slices) {
@@ -158,6 +225,15 @@ events::events() {
   // The full conn.log stands out in that it has its own offset.
   i = 100'000;
   assign_ids(zeek_conn_log_full);
+  // The Suricata logs have separate offsets.
+  i = 200'000;
+  assign_ids(suricata_alert_log);
+  assign_ids(suricata_dns_log);
+  assign_ids(suricata_fileinfo_log);
+  assign_ids(suricata_flow_log);
+  assign_ids(suricata_http_log);
+  assign_ids(suricata_netflow_log);
+  assign_ids(suricata_stats_log);
 }
 
 } // namespace fixtures

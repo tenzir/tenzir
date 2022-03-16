@@ -33,6 +33,16 @@ struct events {
   static std::vector<table_slice> zeek_http_log;
   static std::vector<table_slice> random;
 
+  static std::vector<table_slice> suricata_alert_log;
+  static std::vector<table_slice> suricata_dns_log;
+  static std::vector<table_slice> suricata_fileinfo_log;
+  static std::vector<table_slice> suricata_flow_log;
+  static std::vector<table_slice> suricata_http_log;
+  static std::vector<table_slice> suricata_netflow_log;
+  static std::vector<table_slice> suricata_stats_log;
+
+  static vast::schema suricata_schema;
+
   static std::vector<table_slice> zeek_conn_log_full;
 
   /// 10000 ascending integer values, starting at 0.
