@@ -721,6 +721,25 @@ TEST(enriched types) {
   CHECK_EQUAL(lat, at);
 }
 
+TEST(aliases) {
+  const auto t1 = bool_type{};
+  const auto t2 = type{"quux", t1};
+  const auto t3 = type{"qux", t2, {{"first"}}};
+  const auto t4 = type{"baz", t3};
+  const auto t5 = type{t4, {{"second"}}};
+  const auto t6 = type{"bar", t5, {{"third"}}};
+  const auto t7 = type{"foo", t6, {{"fourth"}}};
+  auto aliases = std::vector<type>{};
+  for (auto&& alias : t7.aliases())
+    aliases.push_back(std::move(alias));
+  REQUIRE_EQUAL(aliases.size(), 5u);
+  CHECK_EQUAL(aliases[0], t6);
+  CHECK_EQUAL(aliases[1], t4);
+  CHECK_EQUAL(aliases[2], t3);
+  CHECK_EQUAL(aliases[3], t2);
+  CHECK_EQUAL(aliases[4], t1);
+}
+
 TEST(metadata layer merging) {
   const auto t1 = type{
     "foo",

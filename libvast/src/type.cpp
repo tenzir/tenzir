@@ -1114,6 +1114,39 @@ detail::generator<type::attribute_view> type::attributes() const& noexcept {
   __builtin_unreachable();
 }
 
+detail::generator<type> type::aliases() const noexcept {
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
+        co_return;
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
+        if (enriched_type->name())
+          co_yield type{table_->slice(as_bytes(*enriched_type->type()))};
+        root = enriched_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+      }
+    }
+  }
+  __builtin_unreachable();
+}
+
 bool is_container(const type& type) noexcept {
   const auto& root = type.table(type::transparent::yes);
   switch (root.type_type()) {
