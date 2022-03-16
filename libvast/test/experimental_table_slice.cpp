@@ -8,7 +8,6 @@
 
 #define SUITE experimental_table_slice
 
-#include "vast/arrow_extension_types.hpp"
 #include "vast/arrow_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
@@ -229,12 +228,14 @@ TEST(single column - string) {
 TEST(single column - pattern) {
   auto t = pattern_type{};
   auto p1 = pattern("foo.ar");
-  auto p2 = pattern("hello* world");
-  auto slice = make_single_column_slice(t, p1, p2, caf::none);
-  REQUIRE_EQUAL(slice.rows(), 3u);
+  auto p2 = pattern("hello*");
+  auto p4 = pattern("world");
+  auto slice = make_single_column_slice(t, p1, p2, caf::none, p4);
+  REQUIRE_EQUAL(slice.rows(), 4u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(p1));
   CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(p2));
   CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
+  CHECK_VARIANT_EQUAL(slice.at(3, 0, t), make_view(p4));
   CHECK_ROUNDTRIP(slice);
   record_batch_roundtrip(slice);
 }
@@ -359,25 +360,6 @@ TEST(list of structs) {
     = unbox_ref(caf::get_if<arrow::ListArray>(batch->column(0).get()));
   REQUIRE_EQUAL(list_col.length(), 4u);
   {
-    MESSAGE("access foo (across boundaries)");
-    const auto& foo_col
-      = unbox_ref(caf::get_if<arrow::StructArray>(list_col.values().get()));
-    const auto& bar_col
-      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo_col.field(0).get()));
-    const auto& baz_col
-      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo_col.field(1).get()));
-    REQUIRE_EQUAL(bar_col.length(), 4u);
-    CHECK_EQUAL(bar_col.Value(0), 1u);
-    CHECK_EQUAL(bar_col.Value(1), 3u);
-    CHECK(bar_col.IsNull(2));
-    CHECK(bar_col.IsNull(3));
-    REQUIRE_EQUAL(baz_col.length(), 4u);
-    CHECK_EQUAL(baz_col.Value(0), 2u);
-    CHECK(baz_col.IsNull(1));
-    CHECK_EQUAL(baz_col.Value(2), 6u);
-    CHECK(baz_col.IsNull(3));
-  }
-  {
     MESSAGE("access foo1");
     REQUIRE(!list_col.IsNull(0));
     auto foo1_col_slice = list_col.value_slice(0);
@@ -427,6 +409,25 @@ TEST(list of structs) {
     CHECK(bar4_col.IsNull(0));
     REQUIRE_EQUAL(baz4_col.length(), 1u);
     CHECK(baz4_col.IsNull(0));
+  }
+  {
+    MESSAGE("access foo (across boundaries)");
+    const auto& foo_col
+      = unbox_ref(caf::get_if<arrow::StructArray>(list_col.values().get()));
+    const auto& bar_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo_col.field(0).get()));
+    const auto& baz_col
+      = unbox_ref(caf::get_if<arrow::UInt64Array>(foo_col.field(1).get()));
+    REQUIRE_EQUAL(bar_col.length(), 4u);
+    CHECK_EQUAL(bar_col.Value(0), 1u);
+    CHECK_EQUAL(bar_col.Value(1), 3u);
+    CHECK(bar_col.IsNull(2));
+    CHECK(bar_col.IsNull(3));
+    REQUIRE_EQUAL(baz_col.length(), 4u);
+    CHECK_EQUAL(baz_col.Value(0), 2u);
+    CHECK(baz_col.IsNull(1));
+    CHECK_EQUAL(baz_col.Value(2), 6u);
+    CHECK(baz_col.IsNull(3));
   }
 }
 
@@ -528,24 +529,18 @@ TEST(record batch roundtrip - adding column) {
     table_slice_encoding::experimental);
   auto slice1 = make_single_column_slice(count_type{}, 0_c, 1_c, 2_c, 3_c);
   auto batch = to_record_batch(slice1);
-  auto cb = experimental_table_slice_builder::column_builder::make(
-    type{string_type{}}, arrow::default_memory_pool());
-  cb->add("0"sv);
-  cb->add("1"sv);
-  cb->add("2"sv);
-  cb->add("3"sv);
-  auto column = cb->finish();
-  REQUIRE(column);
-  auto new_batch = batch->AddColumn(1, "new", column);
+  auto cb = string_type::make_arrow_builder(arrow::default_memory_pool());
+  REQUIRE(cb);
+  REQUIRE(cb->Append("0").ok());
+  REQUIRE(cb->Append("1").ok());
+  REQUIRE(cb->Append("2").ok());
+  REQUIRE(cb->Append("3").ok());
+  auto column = cb->Finish();
+  REQUIRE(column.ok());
+  auto new_batch = batch->AddColumn(1, "new", column.MoveValueUnsafe());
   REQUIRE(new_batch.ok());
-  const auto& layout_rt = caf::get<record_type>(slice1.layout());
-  auto new_layout_rt = layout_rt.transform(
-    {{{layout_rt.num_fields() - 1},
-      record_type::insert_after({{"new", string_type{}}})}});
-  REQUIRE(new_layout_rt);
-  auto new_layout = type{*new_layout_rt};
-  new_layout.assign_metadata(slice1.layout());
-  auto slice2 = table_slice{new_batch.ValueUnsafe(), new_layout};
+  auto slice2
+    = experimental_table_slice_builder::create(new_batch.ValueUnsafe());
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, count_type{}), 0_c);
   CHECK_VARIANT_EQUAL(slice2.at(1, 0, count_type{}), 1_c);
   CHECK_VARIANT_EQUAL(slice2.at(2, 0, count_type{}), 2_c);
@@ -557,8 +552,8 @@ TEST(record batch roundtrip - adding column) {
 }
 
 auto field_roundtrip(const type& t) {
-  const auto& arrow_field = make_experimental_field({"x", t});
-  const auto& restored_t = make_vast_type(*arrow_field);
+  const auto& arrow_field = t.to_arrow_field(t.name());
+  const auto& restored_t = type::from_arrow(*arrow_field);
   CHECK_EQUAL(t, restored_t);
 }
 
@@ -611,13 +606,13 @@ TEST(arrow names and attrs roundtrip) {
 }
 
 auto schema_roundtrip(const type& t) {
-  const auto& arrow_schema = make_experimental_schema(t);
-  const auto& restored_t = make_vast_type(*arrow_schema);
+  const auto& arrow_schema = t.to_arrow_schema();
+  const auto& restored_t = type::from_arrow(*arrow_schema);
   CHECK_EQUAL(t, restored_t);
 }
 
 TEST(arrow record type to schema roundtrip tp) {
-  schema_roundtrip(type{record_type{{"a", integer_type{}}}});
+  schema_roundtrip(type{"somename", record_type{{"a", integer_type{}}}});
   schema_roundtrip(type{
     "alias",
     record_type{
@@ -636,6 +631,7 @@ TEST(arrow record type to schema roundtrip tp) {
     {{"top_level_key", "top_level_value"}},
   });
   schema_roundtrip(type{
+    "stub",
     record_type{{
       "inner",
       type{record_type{

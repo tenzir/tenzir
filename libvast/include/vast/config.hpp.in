@@ -91,7 +91,7 @@ extern bool has_undefined_behavior_sanitizer;
 #  define VAST_DIAGNOSTIC_PUSH _Pragma("GCC diagnostic push")
 #  define VAST_DIAGNOSTIC_POP _Pragma("GCC diagnostic pop")
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                    \
-    _Pragma("GCC diagnostic ignored \"-Wdeprecated\"")
+    _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"")
 #  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                                 \
     _Pragma("GCC diagnostic ignored \"-Wvla\"")
 #  define VAST_DIAGNOSTIC_IGNORE_ADDRESS                                       \

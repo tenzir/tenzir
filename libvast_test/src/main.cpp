@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/arrow_extension_types.hpp"
 #include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
+#include "vast/system/configuration.hpp"
 #include "vast/test/data.hpp"
 #include "vast/test/test.hpp"
 
@@ -101,7 +101,8 @@ int main(int argc, char** argv) {
   put(log_settings, "vast.console-verbosity", vast_loglevel);
   put(log_settings, "vast.console-format", "%^[%s:%#] %v%$");
   auto log_context = vast::create_log_context(vast::invocation{}, log_settings);
-  vast::register_extension_types();
+  // Initialize factories.
+  [[maybe_unused]] auto config = vast::system::configuration{};
   // Run the unit tests.
   return caf::test::main(argc, argv);
 }
