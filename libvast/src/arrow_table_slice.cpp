@@ -612,8 +612,13 @@ data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
 
 template <concrete_type Type>
 view<type_to_data_t<Type>>
+value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
+         int64_t row) noexcept;
+
+template <concrete_type Type>
+view<type_to_data_t<Type>>
 value_at([[maybe_unused]] const Type& type,
-         const type_to_arrow_array_t<Type>& arr, int64_t row) noexcept {
+         const type_to_arrow_array_storage_t<Type>& arr, int64_t row) noexcept {
   VAST_ASSERT(!arr.IsNull(row));
   if constexpr (detail::is_any_v<Type, bool_type, count_type, real_type>) {
     return arr.GetView(row);
@@ -632,32 +637,25 @@ value_at([[maybe_unused]] const Type& type,
     const auto str = arr.GetView(row);
     return {str.data(), str.size()};
   } else if constexpr (std::is_same_v<Type, pattern_type>) {
-    const auto& storage
-      = caf::get<type_to_arrow_array_t<string_type>>(*arr.storage());
     return view<type_to_data_t<pattern_type>>{
-      value_at(string_type{}, storage, row)};
+      value_at(string_type{}, arr, row)};
   } else if constexpr (std::is_same_v<Type, address_type>) {
-    const auto& storage
-      = static_cast<const arrow::FixedSizeBinaryArray&>(*arr.storage());
-    VAST_ASSERT(storage.byte_width() == 16);
+    VAST_ASSERT(arr.byte_width() == 16);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    const auto* bytes = storage.raw_values() + (row * 16);
+    const auto* bytes = arr.raw_values() + (row * 16);
     return address::v6(std::span<const uint8_t, 16>{bytes, 16});
   } else if constexpr (std::is_same_v<Type, subnet_type>) {
-    const auto& storage
-      = static_cast<const arrow::StructArray&>(*arr.storage());
-    VAST_ASSERT(storage.num_fields() == 2);
+    VAST_ASSERT(arr.num_fields() == 2);
     auto network = value_at(
       address_type{},
-      caf::get<type_to_arrow_array_t<address_type>>(*storage.field(0)), row);
+      *caf::get<type_to_arrow_array_t<address_type>>(*arr.field(0)).storage(),
+      row);
     auto length
-      = static_cast<const arrow::UInt8Array&>(*storage.field(1)).GetView(row);
+      = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
     return {network, length};
   } else if constexpr (std::is_same_v<Type, enumeration_type>) {
-    const auto& storage
-      = static_cast<const arrow::DictionaryArray&>(*arr.storage());
     return detail::narrow_cast<view<type_to_data_t<enumeration_type>>>(
-      storage.GetValueIndex(row));
+      arr.GetValueIndex(row));
   } else if constexpr (std::is_same_v<Type, list_type>) {
     auto f = [&]<concrete_type ValueType>(
                const ValueType& value_type) -> list_view_handle {
@@ -672,9 +670,7 @@ value_at([[maybe_unused]] const Type& type,
           const auto row = detail::narrow_cast<int64_t>(i);
           if (value_slice->IsNull(row))
             return caf::none;
-          return value_at(
-            value_type,
-            caf::get<type_to_arrow_array_t<ValueType>>(*value_slice), row);
+          return value_at(value_type, *value_slice, row);
         };
         size_type size() const noexcept override {
           return value_slice->length();
@@ -708,12 +704,8 @@ value_at([[maybe_unused]] const Type& type,
           if (item_array->IsNull(value_offset + i))
             return {};
           return {
-            value_at(key_type,
-                     caf::get<type_to_arrow_array_t<KeyType>>(*key_array),
-                     value_offset + i),
-            value_at(item_type,
-                     caf::get<type_to_arrow_array_t<ItemType>>(*item_array),
-                     value_offset + i),
+            value_at(key_type, *key_array, value_offset + i),
+            value_at(item_type, *item_array, value_offset + i),
           };
         };
         size_type size() const noexcept override {
@@ -761,12 +753,24 @@ value_at([[maybe_unused]] const Type& type,
   }
 }
 
+template <concrete_type Type>
+view<type_to_data_t<Type>>
+value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
+         int64_t row) noexcept {
+  VAST_ASSERT(!arr.IsNull(row));
+  if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value)
+    return value_at(type, *caf::get<type_to_arrow_array_t<Type>>(arr).storage(),
+                    row);
+  else
+    return value_at(type, caf::get<type_to_arrow_array_t<Type>>(arr), row);
+}
+
 data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
                    int64_t row) noexcept {
   if (arr.IsNull(row))
     return caf::none;
   auto f = [&]<concrete_type Type>(const Type& type) noexcept -> data_view {
-    return value_at(type, caf::get<type_to_arrow_array_t<Type>>(arr), row);
+    return value_at(type, arr, row);
   };
   return caf::visit(f, type);
 }
@@ -774,11 +778,20 @@ data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
 template <concrete_type Type>
 auto values(const Type& type, const type_to_arrow_array_t<Type>& arr)
   -> detail::generator<std::optional<view<type_to_data_t<Type>>>> {
-  for (int i = 0; i < arr.length(); ++i) {
-    if (arr.IsNull(i))
-      co_yield {};
-    else
-      co_yield value_at(type, arr, i);
+  auto impl = [](const Type& type,
+                 const type_to_arrow_array_storage_t<Type>& arr) noexcept
+    -> detail::generator<std::optional<view<type_to_data_t<Type>>>> {
+    for (int i = 0; i < arr.length(); ++i) {
+      if (arr.IsNull(i))
+        co_yield {};
+      else
+        co_yield value_at(type, arr, i);
+    }
+  };
+  if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value) {
+    return impl(type, *arr.storage());
+  } else {
+    return impl(type, arr);
   }
 }
 

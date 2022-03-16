@@ -614,6 +614,11 @@ public:
   struct array_type final : arrow::ExtensionArray {
     using TypeClass = arrow_type;
     using arrow::ExtensionArray::ExtensionArray;
+
+    [[nodiscard]] std::shared_ptr<arrow::StringArray> storage() const;
+
+  private:
+    using arrow::ExtensionArray::storage;
   };
 
   /// The corresponding Arrow Scalar.
@@ -695,6 +700,11 @@ public:
   struct array_type final : arrow::ExtensionArray {
     using TypeClass = arrow_type;
     using arrow::ExtensionArray::ExtensionArray;
+
+    [[nodiscard]] std::shared_ptr<arrow::FixedSizeBinaryArray> storage() const;
+
+  private:
+    using arrow::ExtensionArray::storage;
   };
 
   /// The corresponding Arrow Scalar.
@@ -782,6 +792,11 @@ public:
   struct array_type final : arrow::ExtensionArray {
     using TypeClass = arrow_type;
     using arrow::ExtensionArray::ExtensionArray;
+
+    [[nodiscard]] std::shared_ptr<arrow::StructArray> storage() const;
+
+  private:
+    using arrow::ExtensionArray::storage;
   };
 
   /// The corresponding Arrow Scalar.
@@ -916,6 +931,11 @@ public:
   struct array_type final : arrow::ExtensionArray {
     using TypeClass = arrow_type;
     using arrow::ExtensionArray::ExtensionArray;
+
+    [[nodiscard]] std::shared_ptr<arrow::DictionaryArray> storage() const;
+
+  private:
+    using arrow::ExtensionArray::storage;
   };
 
   /// The corresponding Arrow Scalar.
@@ -1445,6 +1465,31 @@ struct type_to_arrow_array<type> : std::type_identity<arrow::Array> {};
 /// @copydoc type_to_arrow_array
 template <type_or_concrete_type T>
 using type_to_arrow_array_t = typename type_to_arrow_array<T>::type;
+
+/// Maps type to corresponding Arrow Array or its underlying storage for
+/// extension Arrays.
+/// @related type_to_arrow_array
+/// @related type_from_arrow
+template <type_or_concrete_type T>
+struct type_to_arrow_array_storage;
+
+template <type_or_concrete_type T>
+  requires(arrow::is_extension_type<type_to_arrow_type_t<T>>::value)
+struct type_to_arrow_array_storage<T> {
+  using type = typename std::remove_cvref_t<
+    decltype(std::declval<type_to_arrow_array_t<T>>().storage())>::element_type;
+};
+
+template <type_or_concrete_type T>
+  requires(!arrow::is_extension_type<type_to_arrow_type_t<T>>::value)
+struct type_to_arrow_array_storage<T> {
+  using type = type_to_arrow_array_t<T>;
+};
+
+/// @copydoc type_to_arrow_array_storage
+template <type_or_concrete_type T>
+using type_to_arrow_array_storage_t =
+  typename type_to_arrow_array_storage<T>::type;
 
 /// Maps type to corresponding Arrow Scalar.
 /// @related type_from_arrow

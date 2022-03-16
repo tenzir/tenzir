@@ -20,6 +20,7 @@
 #include "vast/legacy_type.hpp"
 #include "vast/schema.hpp"
 
+#include <arrow/array.h>
 #include <arrow/type_traits.h>
 #include <arrow/util/key_value_metadata.h>
 #include <caf/sum_type.hpp>
@@ -1783,6 +1784,11 @@ std::string pattern_type::arrow_type::Serialize() const {
   return name;
 }
 
+std::shared_ptr<arrow::StringArray> pattern_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::StringArray>(
+    arrow::ExtensionArray::storage());
+}
+
 // -- address_type ------------------------------------------------------------
 
 static_assert(address_type::type_index
@@ -1876,6 +1882,12 @@ address_type::arrow_type::Deserialize(
 
 std::string address_type::arrow_type::Serialize() const {
   return name;
+}
+
+std::shared_ptr<arrow::FixedSizeBinaryArray>
+address_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::FixedSizeBinaryArray>(
+    arrow::ExtensionArray::storage());
 }
 
 // -- subnet_type -------------------------------------------------------------
@@ -1973,6 +1985,11 @@ subnet_type::arrow_type::Deserialize(
 
 std::string subnet_type::arrow_type::Serialize() const {
   return name;
+}
+
+std::shared_ptr<arrow::StructArray> subnet_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::StructArray>(
+    arrow::ExtensionArray::storage());
 }
 
 // -- enumeration_type --------------------------------------------------------
@@ -2187,6 +2204,12 @@ std::string enumeration_type::arrow_type::Serialize() const {
   }
   fmt::format_to(inserter, " }}");
   return result;
+}
+
+std::shared_ptr<arrow::DictionaryArray>
+enumeration_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::DictionaryArray>(
+    arrow::ExtensionArray::storage());
 }
 
 // -- list_type ---------------------------------------------------------------
