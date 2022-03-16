@@ -68,7 +68,8 @@ record_type zeekify(record_type layout) {
       });
     }
   }
-  return layout;
+  auto adjusted_layout = layout.transform(std::move(transformations));
+  return adjusted_layout ? std::move(*adjusted_layout) : std::move(layout);
 }
 
 } // namespace vast::detail
