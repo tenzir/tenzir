@@ -8,6 +8,7 @@
 
 #include "vast/partition_synopsis.hpp"
 
+#include "vast/detail/collect.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/index_config.hpp"
@@ -38,12 +39,13 @@ void partition_synopsis::shrink() {
 // TODO: Use a more efficient data structure for rule lookup.
 std::optional<double> get_field_fprate(const index_config& config,
                                        const qualified_record_field& field) {
-  for (const auto& [targets, fprate] : config.rules) {
-    for (const auto& name : targets) {
-      if (name == field.field_name())
+  for (const auto& [targets, fprate] : config.rules)
+    for (const auto& name : targets)
+      if (name.size()
+            == field.field_name().size() + field.layout_name().size() + 1
+          && name.starts_with(field.layout_name())
+          && name.ends_with(field.field_name()))
         return fprate;
-    }
-  }
   return std::nullopt;
 }
 
@@ -104,10 +106,8 @@ void partition_synopsis::add(const table_slice& slice,
         auto opts = synopsis_opts;
         opts["string-synopsis-fp-rate"] = *fprate;
         opts["address-synopsis-fp-rate"] = *fprate;
-        it
-          = field_synopses_
-              .emplace(std::move(key), make_synopsis(leaf.field.type, opts))
-              .first;
+        auto syn = make_synopsis(leaf.field.type, opts);
+        it = field_synopses_.emplace(std::move(key), std::move(syn)).first;
       }
       // If there exists a synopsis for a field, add the entire column.
       if (auto& syn = it->second)
@@ -213,7 +213,7 @@ caf::error unpack_(
     if (auto error = unpack(*synopsis, ptr))
       return error;
     // We mark type-level synopses by using an empty string as name.
-    if (qf.name().empty())
+    if (qf.is_standalone_type())
       ps.type_synopses_[qf.type()] = std::move(ptr);
     else
       ps.field_synopses_[qf] = std::move(ptr);

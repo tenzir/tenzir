@@ -778,11 +778,6 @@ index(index_actor::stateful_pointer<index_state> self,
                *self, dir, partition_capacity, max_inmem_partitions);
   self->state.index_opts["cardinality"] = partition_capacity;
   self->state.synopsis_opts = std::move(index_config);
-  // These options must be kept in sync with vast/address_synopsis.hpp and
-  // vast/string_synopsis.hpp respectively.
-  // self->state.synopsis_opts["max-partition-size"] = partition_capacity;
-  // self->state.synopsis_opts["address-synopsis-fp-rate"] = synopsis_fp_rate;
-  // self->state.synopsis_opts["string-synopsis-fp-rate"] = synopsis_fp_rate;
   // The global archive gets hard-coded special treatment for backwards
   // compatibility.
   self->state.partition_local_stores = store_backend != "archive";
