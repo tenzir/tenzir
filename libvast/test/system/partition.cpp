@@ -10,11 +10,15 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/collect.hpp"
+#include "vast/detail/spawn_container_source.hpp"
+#include "vast/qualified_record_field.hpp"
+#include "vast/string_synopsis.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/passive_partition.hpp"
 #include "vast/system/status.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
 namespace {
@@ -46,8 +50,10 @@ system::filesystem_actor::behavior_type mock_filesystem(
   };
 }
 
-struct fixture : fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+struct fixture : fixtures::deterministic_actor_system_and_events {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
   }
 };
 
@@ -55,7 +61,7 @@ struct fixture : fixtures::deterministic_actor_system {
 
 FIXTURE_SCOPE(partition_tests, fixture)
 
-TEST(load) {
+TEST(passive_partition - load) {
   using std::chrono_literals::operator""s;
   std::array<char, 16> bytes{0, 1, 2,  3,  4,  5,  6,  7,
                              8, 9, 10, 12, 12, 13, 14, 15};
