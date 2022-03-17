@@ -12,7 +12,7 @@ class ReturningThread(Thread):
     return value when calling join()"""
 
     def __init__(self, target=None, args=()):
-        Thread.__init__(self, target, args)
+        Thread.__init__(self, target=target, args=args)
         self._return = None
 
     def run(self):
