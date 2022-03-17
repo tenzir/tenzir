@@ -43,15 +43,16 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::lookup_error, "failed to find filesystem actor");
   const auto indexdir = args.dir / args.label;
   namespace sd = vast::defaults::system;
-  auto partition_timeout
-    = to<duration>(opt("vast.partition-timeout", sd::partition_timeout));
-  if (!partition_timeout)
-    return partition_timeout.error();
+  auto active_partition_timeout = to<duration>(
+    opt("vast.active-partition-timeout", sd::active_partition_timeout));
+  if (!active_partition_timeout)
+    return active_partition_timeout.error();
   auto handle = self->spawn(
     index, accountant, filesystem, archive, catalog, type_registry, indexdir,
     // TODO: Pass these options as a vast::data object instead.
     opt("vast.store-backend", std::string{sd::store_backend}),
-    opt("vast.max-partition-size", sd::max_partition_size), *partition_timeout,
+    opt("vast.max-partition-size", sd::max_partition_size),
+    *active_partition_timeout,
     opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
     opt("vast.max-taste-partitions", sd::taste_partitions),
     opt("vast.max-queries", sd::num_query_supervisors),

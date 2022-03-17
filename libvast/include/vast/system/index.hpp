@@ -263,8 +263,8 @@ struct index_state {
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
-  /// Timeout after which a partition is forcibly flushed.
-  duration partition_timeout = {};
+  /// Timeout after which an active partition is forcibly flushed.
+  duration active_partition_timeout = {};
 
   /// The maximum size of the partition LRU cache (or the maximum number of
   /// read-only partition loaded to memory).
@@ -350,7 +350,8 @@ struct index_state {
 /// @param dir The directory of the index.
 /// @param store_backend The store backend to use for new partitions.
 /// @param partition_capacity The maximum number of events per partition.
-/// @param partition_timeout Timeout after which a partition is forcibly flushed.
+/// @param active_partition_timeout Timeout after which an active partition is
+/// forcibly flushed.
 /// @param max_inmem_partitions The maximum number of passive partitions loaded
 /// into memory.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
@@ -366,7 +367,7 @@ index(index_actor::stateful_pointer<index_state> self,
       archive_actor archive, catalog_actor catalog,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
-      duration partition_timeout, size_t max_inmem_partitions,
+      duration active_partition_timeout, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& catalog_dir, double synopsis_fp_rate);
 

@@ -206,8 +206,8 @@ constexpr size_t disk_monitor_step_size = 1;
 /// Maximum number of events per INDEX partition.
 constexpr size_t max_partition_size = 1'048'576; // 1_Mi
 
-/// Timeout after which a partition is forcibly flushed.
-constexpr std::string_view partition_timeout = "1 hour";
+/// Timeout after which an active partition is forcibly flushed.
+constexpr std::string_view active_partition_timeout = "1 hour";
 
 /// Maximum number of in-memory INDEX partitions.
 constexpr size_t max_in_mem_partitions = 10;

@@ -88,8 +88,9 @@ vast:
   # be a power of 2.
   max-partition-size: 1048576
 
-  # Timeout after which a partition is forcibly flushed, regardless of its size.
-  partition-timeout: 1 hour
+  # Timeout after which an active partition is forcibly flushed, regardless of
+  # its size.
+  active-partition-timeout: 1 hour
 
   # The number of index shards that can be cached in memory.
   max-resident-partitions: 10

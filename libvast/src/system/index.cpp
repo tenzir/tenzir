@@ -758,12 +758,13 @@ index(index_actor::stateful_pointer<index_state> self,
       archive_actor archive, catalog_actor catalog,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
-      duration partition_timeout, size_t max_inmem_partitions,
+      duration active_partition_timeout, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& catalog_dir, double synopsis_fp_rate) {
   VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
-                   VAST_ARG(partition_capacity), VAST_ARG(partition_timeout),
+                   VAST_ARG(partition_capacity),
+                   VAST_ARG(active_partition_timeout),
                    VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
                    VAST_ARG(num_workers), VAST_ARG(catalog_dir),
                    VAST_ARG(synopsis_fp_rate));
@@ -808,7 +809,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
   self->state.partition_capacity = partition_capacity;
-  self->state.partition_timeout = partition_timeout;
+  self->state.active_partition_timeout = active_partition_timeout;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
@@ -943,7 +944,8 @@ index(index_actor::stateful_pointer<index_state> self,
   // Start metrics loop.
   if (self->state.accountant)
     self->send(self->state.accountant, atom::announce_v, self->name());
-  if (self->state.accountant || self->state.partition_timeout.count() > 0)
+  if (self->state.accountant
+      || self->state.active_partition_timeout.count() > 0)
     self->delayed_send(self, defaults::system::telemetry_rate,
                        atom::telemetry_v);
   return {
@@ -960,11 +962,11 @@ index(index_actor::stateful_pointer<index_state> self,
                          atom::telemetry_v);
       if (self->state.accountant)
         self->state.send_report();
-      if (self->state.partition_timeout.count() > 0) {
+      if (self->state.active_partition_timeout.count() > 0) {
         auto decomissioned = std::vector<type>{};
         for (const auto& [layout, active_partition] :
              self->state.active_partitions) {
-          if (active_partition.spawn_time + self->state.partition_timeout
+          if (active_partition.spawn_time + self->state.active_partition_timeout
               < std::chrono::steady_clock::now()) {
             VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
                          "after {} timeout",
@@ -972,7 +974,7 @@ index(index_actor::stateful_pointer<index_state> self,
                          self->state.partition_capacity
                            - active_partition.capacity,
                          self->state.partition_capacity,
-                         data{self->state.partition_timeout});
+                         data{self->state.active_partition_timeout});
             self->state.decomission_active_partition(layout);
             decomissioned.push_back(layout);
           }
