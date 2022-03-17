@@ -721,6 +721,25 @@ TEST(enriched types) {
   CHECK_EQUAL(lat, at);
 }
 
+TEST(aliases) {
+  const auto t1 = bool_type{};
+  const auto t2 = type{"quux", t1};
+  const auto t3 = type{"qux", t2, {{"first"}}};
+  const auto t4 = type{"baz", t3};
+  const auto t5 = type{t4, {{"second"}}};
+  const auto t6 = type{"bar", t5, {{"third"}}};
+  const auto t7 = type{"foo", t6, {{"fourth"}}};
+  auto aliases = std::vector<type>{};
+  for (auto&& alias : t7.aliases())
+    aliases.push_back(std::move(alias));
+  REQUIRE_EQUAL(aliases.size(), 5u);
+  CHECK_EQUAL(aliases[0], t6);
+  CHECK_EQUAL(aliases[1], t4);
+  CHECK_EQUAL(aliases[2], t3);
+  CHECK_EQUAL(aliases[3], t2);
+  CHECK_EQUAL(aliases[4], t1);
+}
+
 TEST(metadata layer merging) {
   const auto t1 = type{
     "foo",
@@ -757,31 +776,6 @@ TEST(metadata layer merging) {
     {{"one", "eins"}},
   };
   CHECK_EQUAL(t1, t4);
-}
-
-TEST(names_and_attributes) {
-  const auto layer1 = type{"layer1_innermost",
-                           bool_type{},
-                           {{"inner_1_empty"}, {"inner_2", "level1"}}};
-  const auto layer2
-    = type{"layer2", layer1, {{"l2", "level2"}, {"layer_2_empty"}}};
-  const auto layer3_unnamed
-    = type{layer2, {{"l3", "level3"}, {"layer_3_empty"}}};
-  const auto layer4_no_attrs = type{"layer4", layer3_unnamed};
-  std::vector<std::pair<std::string_view, std::vector<type::attribute_view>>>
-    x{};
-  for (const auto& l : layer4_no_attrs.names_and_attributes())
-    x.push_back(l);
-  REQUIRE_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(x[0].first, "layer4");
-  CHECK_EQUAL(x[0].second, (std::vector<type::attribute_view>{
-                             {"l3", "level3"}, {"layer_3_empty", ""}}));
-  CHECK_EQUAL(x[1].first, "layer2");
-  CHECK_EQUAL(x[1].second, (std::vector<type::attribute_view>{
-                             {"l2", "level2"}, {"layer_2_empty", ""}}));
-  CHECK_EQUAL(x[2].first, "layer1_innermost");
-  CHECK_EQUAL(x[2].second, (std::vector<type::attribute_view>{
-                             {"inner_1_empty", ""}, {"inner_2", "level1"}}));
 }
 
 TEST(sorting) {

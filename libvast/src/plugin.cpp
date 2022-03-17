@@ -324,10 +324,11 @@ plugin_ptr::make_dynamic(const char* filename,
                            "failed to resolve symbol "
                            "vast_libvast_build_tree_hash in",
                            filename, dlerror());
-  if (strcmp(libvast_build_tree_hash(), version::build_tree_hash) != 0)
+  if (strcmp(libvast_build_tree_hash(), version::build::tree_hash) != 0)
     return caf::make_error(ec::version_error,
                            "libvast build tree hash mismatch in", filename,
-                           libvast_build_tree_hash(), version::build_tree_hash);
+                           libvast_build_tree_hash(),
+                           version::build::tree_hash);
   auto plugin_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "vast_plugin_version"));
   if (!plugin_version)

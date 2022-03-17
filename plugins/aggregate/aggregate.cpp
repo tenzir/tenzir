@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/arrow_extension_types.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -266,9 +265,13 @@ struct aggregation {
             // experimental arrow encoding the default.
             constexpr auto is_non_primitive_array
               = detail::is_any_v<Array, arrow::FixedSizeBinaryArray,
-                                 arrow::ListArray, arrow::MapArray,
-                                 arrow::StructArray, enum_array, pattern_array,
-                                 subnet_array, address_array>;
+                                 type_to_arrow_array_t<pattern_type>,
+                                 type_to_arrow_array_t<address_type>,
+                                 type_to_arrow_array_t<subnet_type>,
+                                 type_to_arrow_array_t<enumeration_type>,
+                                 type_to_arrow_array_t<list_type>,
+                                 type_to_arrow_array_t<map_type>,
+                                 type_to_arrow_array_t<record_type>>;
             auto make_non_primitive_error = [&]() {
               return caf::make_error(ec::invalid_configuration,
                                      fmt::format("aggregate transform step "
@@ -392,8 +395,15 @@ struct aggregation {
           }
           return caf::none;
         };
-        if (auto err = caf::visit(f, *batch->column(column)))
+        auto arr = batch->column(column);
+        // TODO: Remove this workaround to support old fixed size binary arrays.
+        if (arr->type_id() == arrow::Type::FIXED_SIZE_BINARY) {
+          if (auto err
+              = f(static_cast<const arrow::FixedSizeBinaryArray&>(*arr)))
+            return err;
+        } else if (auto err = caf::visit(f, *batch->column(column))) {
           return err;
+        }
       }
     }
     return caf::none;
@@ -503,7 +513,7 @@ private:
 class aggregate_step : public transform_step {
 public:
   /// Create a new aggregate step from an already parsed configuration.
-  aggregate_step(configuration config) : config_{std::move(config)} {
+  explicit aggregate_step(configuration config) : config_{std::move(config)} {
     // nop
   }
 
@@ -579,11 +589,8 @@ public:
   /// transform definition. The configuration for the step is opaquely
   /// passed as the first argument.
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& options) const override {
-    auto rec = to<record>(options);
-    if (!rec)
-      return rec.error();
-    auto config = to<configuration>(*rec);
+  make_transform_step(const vast::record& options) const override {
+    auto config = to<configuration>(options);
     if (!config)
       return config.error();
     return std::make_unique<aggregate_step>(std::move(*config));

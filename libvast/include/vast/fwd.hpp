@@ -30,11 +30,22 @@ namespace arrow {
 
 class Array;
 class ArrayBuilder;
+class BooleanType;
 class Buffer;
 class DataType;
+class DoubleType;
+class DurationType;
+class Field;
+class Int64Type;
+class ListType;
+class MapType;
 class MemoryPool;
 class RecordBatch;
 class Schema;
+class StringType;
+class StructType;
+class TimestampType;
+class UInt64Type;
 
 } // namespace arrow
 

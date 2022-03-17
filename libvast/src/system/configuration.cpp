@@ -8,7 +8,6 @@
 
 #include "vast/system/configuration.hpp"
 
-#include "vast/arrow_extension_types.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
@@ -25,6 +24,7 @@
 #include "vast/plugin.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/type.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/io/middleman.hpp>
@@ -42,6 +42,10 @@ namespace vast::system {
 namespace {
 
 std::vector<std::filesystem::path> loaded_config_files_singleton = {};
+
+template <concrete_type T>
+struct has_extension_type
+  : std::is_base_of<arrow::ExtensionType, typename T::arrow_type> {};
 
 } // namespace
 
@@ -71,7 +75,13 @@ configuration::configuration() {
   factory<synopsis>::initialize();
   factory<table_slice_builder>::initialize();
   factory<value_index>::initialize();
-  register_extension_types();
+  // Register Arrow extension types.
+  auto register_extension_types =
+    []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
+    (static_cast<void>(Ts::arrow_type::register_extension()), ...);
+  };
+  register_extension_types(
+    caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
 caf::error configuration::parse(int argc, char** argv) {

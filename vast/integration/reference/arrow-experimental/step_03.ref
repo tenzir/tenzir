@@ -1,6 +1,6 @@
     -- field metadata --
     -- field metadata --
-    VAST:attributes:0: '{ "ioc": ""}'
+    VAST:attributes:0: '{ "ioc": "" }'
     VAST:name:0: 'port'
   -- field metadata --
   -- field metadata --
@@ -14,9 +14,9 @@
   ARROW:extension:metadata: 'vast.address'
   ARROW:extension:name: 'vast.address'
   ARROW:extension:name: 'vast.address'
-  VAST:attributes:0: '{ "index": "hash"}'
-  VAST:attributes:0: '{ "index": "hash"}'
-  VAST:attributes:0: '{ "index": "hash"}'
+  VAST:attributes:0: '{ "index": "hash" }'
+  VAST:attributes:0: '{ "index": "hash" }'
+  VAST:attributes:0: '{ "index": "hash" }'
   VAST:name:0: 'port'
   VAST:name:0: 'port'
   VAST:name:0: 'timestamp'

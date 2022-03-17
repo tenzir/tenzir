@@ -244,7 +244,7 @@ public:
   /// VAST configuration.
   /// @param options The settings configured for this step.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings& options) const = 0;
+  make_transform_step(const vast::record& options) const = 0;
 };
 
 // -- store plugin ------------------------------------------------------------
@@ -486,7 +486,7 @@ extern const char* VAST_PLUGIN_VERSION;
       return ::vast::version::version;                                         \
     }                                                                          \
     extern "C" const char* vast_libvast_build_tree_hash() {                    \
-      return ::vast::version::build_tree_hash;                                 \
+      return ::vast::version::build::tree_hash;                                \
     }
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \

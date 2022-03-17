@@ -45,9 +45,10 @@ void partition_synopsis::add(const table_slice& slice,
   auto each = caf::get<record_type>(layout).leaves();
   auto leaf_it = each.begin();
   for (size_t col = 0; col < slice.columns(); ++col, ++leaf_it) {
+    auto&& leaf = *leaf_it;
     auto add_column = [&](const synopsis_ptr& syn) {
       for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col, leaf_it->field.type);
+        auto view = slice.at(row, col, leaf.field.type);
         // TODO: It would probably make sense to allow `nil` in the
         // synopsis API, so we can treat queries like `x == nil` just
         // like normal queries.
@@ -55,14 +56,14 @@ void partition_synopsis::add(const table_slice& slice,
           syn->add(std::move(view));
       }
     };
-    auto key = qualified_record_field{layout, leaf_it->index};
-    if (!caf::holds_alternative<string_type>(leaf_it->field.type)) {
+    auto key = qualified_record_field{layout, leaf.index};
+    if (!caf::holds_alternative<string_type>(leaf.field.type)) {
       // Locate the relevant synopsis.
       auto it = field_synopses_.find(key);
       if (it == field_synopses_.end()) {
         // Attempt to create a synopsis if we have never seen this key before.
         it = field_synopses_
-               .emplace(std::move(key), make_synopsis(leaf_it->field.type))
+               .emplace(std::move(key), make_synopsis(leaf.field.type))
                .first;
       }
       // If there exists a synopsis for a field, add the entire column.
@@ -79,12 +80,12 @@ void partition_synopsis::add(const table_slice& slice,
       auto prune = [&]<concrete_type T>(const T& x) {
         return type{x};
       };
-      auto cleaned_type = caf::visit(prune, leaf_it->field.type);
+      auto cleaned_type = caf::visit(prune, leaf.field.type);
       auto tt = type_synopses_.find(cleaned_type);
       if (tt == type_synopses_.end())
-        tt = type_synopses_
-               .emplace(cleaned_type, make_synopsis(leaf_it->field.type))
-               .first;
+        tt
+          = type_synopses_.emplace(cleaned_type, make_synopsis(leaf.field.type))
+              .first;
       if (auto& syn = tt->second)
         add_column(syn);
     }

@@ -27,11 +27,6 @@ variable "environment" {
 
 # VPC 
 
-variable "in_vpc" {
-  description = "Set this to true if the lambda should be placed into a VPC. In that case vpc_id and subnets should also be specified"
-  default     = false
-}
-
 variable "vpc_id" {
   default = ""
 }

@@ -15,12 +15,9 @@ resource "aws_lambda_function" "lambda" {
     )
   }
 
-  dynamic "vpc_config" {
-    for_each = var.in_vpc == "" ? [] : [1]
-    content {
-      security_group_ids = [aws_security_group.lambda_sg[0].id]
-      subnet_ids         = var.subnets
-    }
+  vpc_config {
+    security_group_ids = [aws_security_group.lambda_sg.id]
+    subnet_ids         = var.subnets
   }
 
   depends_on = [aws_iam_role_policy_attachment.lamba_exec_role_eni]
@@ -39,8 +36,6 @@ resource "aws_cloudwatch_log_group" "lambda_log_group" {
 }
 
 resource "aws_security_group" "lambda_sg" {
-  count = var.in_vpc ? 1 : 0
-
   name        = "${module.env.module_name}-${var.function_base_name}-${module.env.stage}"
   description = "allow outbound access"
   vpc_id      = var.vpc_id

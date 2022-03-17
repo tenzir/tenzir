@@ -657,8 +657,14 @@ index_state::status(status_verbosity v) const {
     }
   };
   auto rs = make_status_request_state<extra_state>(self);
+  auto stats_object = record{};
+  auto sum = uint64_t{0};
+  for (const auto& [_, layout_stats] : stats.layouts)
+    sum += layout_stats.count;
+  auto xs = record{};
+  xs["total"] = count{sum};
+  stats_object["events"] = xs;
   if (v >= status_verbosity::detailed) {
-    auto stats_object = record{};
     auto layout_object = record{};
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = record{};
@@ -666,7 +672,6 @@ index_state::status(status_verbosity v) const {
       layout_object[name] = xs;
     }
     stats_object["layouts"] = std::move(layout_object);
-    rs->content["statistics"] = std::move(stats_object);
     rs->content["catalog-bytes"] = catalog_bytes;
     auto backlog_status = record{};
     backlog_status["num-normal-priority"] = backlog.normal.size();
@@ -741,6 +746,7 @@ index_state::status(status_verbosity v) const {
     rs->content["partitions"] = std::move(partitions);
     // General state such as open streams.
   }
+  rs->content["statistics"] = std::move(stats_object);
   if (v >= status_verbosity::debug)
     detail::fill_status_map(rs->content, self);
   return rs->promise;

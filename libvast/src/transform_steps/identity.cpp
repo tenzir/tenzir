@@ -42,7 +42,7 @@ public:
 
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const caf::settings&) const override {
+  make_transform_step(const record&) const override {
     return std::make_unique<identity_step>();
   }
 };

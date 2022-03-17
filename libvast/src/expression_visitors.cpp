@@ -449,7 +449,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
   std::vector<expression> connective;
   // First, interpret the field as a suffix of a record field name.
   auto suffixes = layout_.resolve_key_suffix(ex.field, layout_name_);
-  for (auto& offset : suffixes) {
+  for (auto&& offset : suffixes) {
     const auto f = layout_.field(offset);
     if (!compatible(f.type, op_, d))
       continue;

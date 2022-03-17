@@ -64,7 +64,7 @@ template <typename T>
 class generator_promise {
 public:
   using value_type = std::remove_reference_t<T>;
-  using reference_type = std::conditional_t<std::is_reference_v<T>, T, T&>;
+  using reference_type = T&&;
   using pointer_type = value_type*;
 
   generator_promise() = default;
@@ -78,12 +78,19 @@ public:
     return {};
   }
 
-  template <typename U = T,
-            std::enable_if_t<!std::is_rvalue_reference<U>::value, int> = 0>
-  stdcoro::suspend_always
-  yield_value(std::remove_reference_t<T>& value) noexcept {
-    m_value = std::addressof(value);
-    return {};
+  // This overload copies v to a temporary, then yields a pointer to that.
+  // This allows passing an lvalue to co_yield for a generator<NotReference>.
+  // Looks crazy, but taken from the reference implementation in P2529R0.
+  auto yield_value(const T& v) requires(
+    !std::is_reference_v<T> && std::copy_constructible<T>) {
+    struct Owner : stdcoro::suspend_always {
+      Owner(const T& val, pointer_type& out) : v(val) {
+        out = &v;
+      }
+      Owner(Owner&&) = delete;
+      T v;
+    };
+    return Owner(v, m_value);
   }
 
   stdcoro::suspend_always
@@ -179,10 +186,6 @@ public:
     return m_coroutine.promise().value();
   }
 
-  pointer operator->() const noexcept {
-    return std::addressof(operator*());
-  }
-
 private:
   coroutine_handle m_coroutine;
 };
@@ -205,13 +208,20 @@ public:
   generator(const generator& other) = delete;
 
   ~generator() {
-    if (m_coroutine) {
+    if (m_coroutine)
       m_coroutine.destroy();
-    }
   }
 
   generator& operator=(generator other) noexcept {
     swap(other);
+    return *this;
+  }
+
+  generator& operator=(generator&& other) noexcept {
+    if (m_coroutine)
+      m_coroutine.destroy();
+    m_coroutine = other.m_coroutine;
+    other.m_coroutine = nullptr;
     return *this;
   }
 

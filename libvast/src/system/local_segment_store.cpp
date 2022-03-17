@@ -397,9 +397,8 @@ public:
   make_store(accountant_actor accountant, filesystem_actor fs,
              std::span<const std::byte> header) const override {
     auto path = store_path_from_header(header);
-    // TODO: This should use `spawn<caf::lazy_init>`, but this leads to a
-    // deadlock in unit tests.
-    return fs->home_system().spawn(passive_local_store, accountant, fs, path);
+    return fs->home_system().spawn<caf::lazy_init>(passive_local_store,
+                                                   accountant, fs, path);
   }
 };
 

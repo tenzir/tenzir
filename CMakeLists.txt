@@ -364,42 +364,6 @@ add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
 
 unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
 
-# -- sanitizers ----------------------------------------------------------------
-
-# Address Sanitizer
-if ("${CMAKE_BUILD_TYPE}" IN_LIST "Debug;CI")
-  set(_VAST_ENABLE_ASAN_DEFAULT ON)
-else ()
-  set(_VAST_ENABLE_ASAN_DEFAULT OFF)
-endif ()
-
-option(VAST_ENABLE_ASAN
-       "Insert pointer and reference checks into the generated binaries"
-       _VAST_ENABLE_ASAN_DEFAULT)
-add_feature_info(
-  "VAST_ENABLE_ASAN" VAST_ENABLE_ASAN
-  "inserts pointer and reference checks into the generated binaries.")
-
-unset(_VAST_ENABLE_ASAN_DEFAULT)
-
-if (VAST_ENABLE_ASAN)
-  target_compile_options(libvast_internal INTERFACE -fsanitize=address
-                                                    -fno-omit-frame-pointer)
-  target_link_libraries(libvast_internal INTERFACE -fsanitize=address)
-endif ()
-
-# Undefined Behavior Sanitizer
-option(VAST_ENABLE_UBSAN
-       "Add run-time checks for undefined behavior into the generated binaries"
-       OFF)
-add_feature_info(
-  "VAST_ENABLE_UBSAN" VAST_ENABLE_UBSAN
-  "adds run-time checks for undefined behavior into the generated binaries.")
-if (VAST_ENABLE_UBSAN)
-  target_compile_options(libvast_internal INTERFACE -fsanitize=undefined)
-  target_link_libraries(libvast_internal INTERFACE -fsanitize=undefined)
-endif ()
-
 # -- static build support ------------------------------------------------------
 
 cmake_dependent_option(
@@ -441,6 +405,51 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   file(RELATIVE_PATH VAST_LIBDIR_TO_PREFIX "${_libdir}"
        "${CMAKE_INSTALL_PREFIX}")
   unset(_libdir)
+endif ()
+
+# -- sanitizers ----------------------------------------------------------------
+
+# Address Sanitizer
+set(_vast_build_types_with_default_asan "Debug;CI")
+if (NOT VAST_ENABLE_STATIC_EXECUTABLE AND CMAKE_BUILD_TYPE IN_LIST
+                                          _vast_build_types_with_default_asan)
+  set(_VAST_ENABLE_ASAN_DEFAULT ON)
+else ()
+  set(_VAST_ENABLE_ASAN_DEFAULT OFF)
+endif ()
+
+option(VAST_ENABLE_ASAN
+       "Insert pointer and reference checks into the generated binaries"
+       "${_VAST_ENABLE_ASAN_DEFAULT}")
+add_feature_info(
+  "VAST_ENABLE_ASAN" VAST_ENABLE_ASAN
+  "inserts pointer and reference checks into the generated binaries.")
+
+unset(_VAST_ENABLE_ASAN_DEFAULT)
+
+if (VAST_ENABLE_ASAN)
+  # We need to enable the address sanitizer both globally and for the
+  # libvast_internal targets in order to build (1) the bundled CAF with it and
+  # (2) build external plugins with it.
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address)
+  target_compile_options(libvast_internal INTERFACE -fsanitize=address
+                                                    -fno-omit-frame-pointer)
+  target_link_libraries(libvast_internal INTERFACE -fsanitize=address)
+endif ()
+
+# Undefined Behavior Sanitizer
+option(VAST_ENABLE_UBSAN
+       "Add run-time checks for undefined behavior into the generated binaries"
+       OFF)
+add_feature_info(
+  "VAST_ENABLE_UBSAN" VAST_ENABLE_UBSAN
+  "adds run-time checks for undefined behavior into the generated binaries.")
+if (VAST_ENABLE_UBSAN)
+  add_compile_options(-fsanitize=undefined)
+  add_link_options(-fsanitize=undefined)
+  target_compile_options(libvast_internal INTERFACE -fsanitize=undefined)
+  target_link_libraries(libvast_internal INTERFACE -fsanitize=undefined)
 endif ()
 
 # -- jemalloc ------------------------------------------------------------------

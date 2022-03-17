@@ -8,17 +8,25 @@
 
 #include "vast/type.hpp"
 
+#include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/zip_iterator.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/schema.hpp"
 
+#include <arrow/array.h>
+#include <arrow/type_traits.h>
+#include <arrow/util/key_value_metadata.h>
 #include <caf/sum_type.hpp>
 #include <fmt/format.h>
+
+#include <simdjson.h>
 
 // -- utility functions -------------------------------------------------------
 
@@ -196,6 +204,125 @@ void construct_record_type(stateful_type_base& self, const T& begin,
   VAST_ASSERT(result.size() == reserved_size);
   auto chunk = chunk::make(std::move(result));
   self = type{std::move(chunk)};
+}
+
+/// Enhances a VAST type based on the metadata extracted from Arrow.
+/// Metadata can be attached to both Arrow schema and an Arrow field, and VAST
+/// stores metadata on either of the two, using the exact same structure.
+type enrich_type_with_arrow_metadata(class type type,
+                                     const arrow::KeyValueMetadata& metadata) {
+  auto deserialize_attributes = [](std::string_view serialized) noexcept
+    -> std::vector<std::pair<std::string, std::string>> {
+    if (serialized.empty())
+      return {};
+    auto json = simdjson::padded_string{serialized};
+    auto parser = simdjson::dom::parser{};
+    auto doc = parser.parse(json);
+    std::vector<std::pair<std::string, std::string>> attributes{};
+    for (auto f : doc.get_object()) {
+      if (!f.value.is_string()) {
+        VAST_WARN("ignoring non-string Arrow metadata: {}",
+                  simdjson::to_string(f));
+        continue;
+      }
+      auto value = std::string{f.value.get_string().value()};
+      attributes.push_back({std::string{f.key}, std::move(value)});
+    }
+    return attributes;
+  };
+  auto names_and_attributes = std::vector<
+    std::pair<std::string, std::vector<std::pair<std::string, std::string>>>>{};
+  auto name_parser = "VAST:name:" >> parsers::u32 >> parsers::eoi;
+  auto attribute_parser = "VAST:attributes:" >> parsers::u32 >> parsers::eoi;
+  for (const auto& [key, value] :
+       detail::zip(metadata.keys(), metadata.values())) {
+    if (!key.starts_with("VAST:"))
+      continue;
+    if (uint32_t index{}; name_parser(key, index)) {
+      if (index >= names_and_attributes.size())
+        names_and_attributes.resize(index + 1);
+      names_and_attributes[index].first = value;
+      continue;
+    }
+    if (uint32_t index{}; attribute_parser(key, index)) {
+      if (index >= names_and_attributes.size())
+        names_and_attributes.resize(index + 1);
+      names_and_attributes[index].second = deserialize_attributes(value);
+      continue;
+    }
+    VAST_WARN("unhandled Arrow metadata key '{}'", key);
+  }
+  for (auto it = names_and_attributes.rbegin();
+       it != names_and_attributes.rend(); ++it) {
+    auto attributes = std::vector<type::attribute_view>{};
+    attributes.reserve(it->second.size());
+    for (const auto& [key, value] : it->second)
+      attributes.push_back({key, value});
+    type = {it->first, type, std::move(attributes)};
+  }
+  return type;
+}
+
+/// Creates Arrow Metadata from a type's name and attributes.
+std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
+  // Helper function for serializing attributes to a string.
+  auto serialize_attributes = [](const auto& attributes) noexcept {
+    auto result = std::string{};
+    auto inserter = std::back_inserter(result);
+    fmt::format_to(inserter, "{{ ");
+    for (auto add_comma = false; const auto* attribute : attributes) {
+      if (std::exchange(add_comma, true))
+        fmt::format_to(inserter, ", ");
+      if (attribute->value())
+        fmt::format_to(inserter, R"("{}": "{}")",
+                       attribute->key()->string_view(),
+                       attribute->value()->string_view());
+      else
+        fmt::format_to(inserter, R"("{}": "")",
+                       attribute->key()->string_view());
+    }
+    fmt::format_to(inserter, " }}");
+    return result;
+  };
+  auto keys = std::vector<std::string>{};
+  auto values = std::vector<std::string>{};
+  const auto* root = &type.table(type::transparent::no);
+  for (auto nesting_depth = 0; root != nullptr; ++nesting_depth) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
+        root = nullptr;
+        break;
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
+        if (enriched_type->name()) {
+          keys.push_back(fmt::format("VAST:name:{}", nesting_depth));
+          values.push_back(enriched_type->name()->str());
+        }
+        if (enriched_type->attributes()) {
+          keys.push_back(fmt::format("VAST:attributes:{}", nesting_depth));
+          values.push_back(serialize_attributes(*enriched_type->attributes()));
+        }
+        root = enriched_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+      }
+    }
+  }
+  return arrow::KeyValueMetadata::Make(std::move(keys), std::move(values));
 }
 
 } // namespace
@@ -656,6 +783,100 @@ data type::construct() const noexcept {
   return *this ? caf::visit(f, *this) : data{};
 }
 
+type type::from_arrow(const arrow::DataType& other) noexcept {
+  auto f = detail::overload{
+    []<class T>(const T&) noexcept -> type {
+      using vast_type = type_from_arrow_t<T>;
+      static_assert(basic_type<vast_type>, "unhandled complex type");
+      return type{vast_type{}};
+    },
+    [](const duration_type::arrow_type& dt) noexcept -> type {
+      VAST_ASSERT(dt.unit() == arrow::TimeUnit::NANO);
+      return type{duration_type{}};
+    },
+    [](const time_type::arrow_type& dt) noexcept -> type {
+      VAST_ASSERT(dt.unit() == arrow::TimeUnit::NANO);
+      return type{time_type{}};
+    },
+    [](const enumeration_type::arrow_type& et) noexcept -> type {
+      return type{et.vast_type_};
+    },
+    [](const list_type::arrow_type& lt) noexcept -> type {
+      const auto value_field = lt.value_field();
+      VAST_ASSERT(value_field);
+      return type{list_type{from_arrow(*value_field)}};
+    },
+    [](const map_type::arrow_type& mt) noexcept -> type {
+      const auto key_field = mt.key_field();
+      const auto item_field = mt.item_field();
+      VAST_ASSERT(key_field);
+      VAST_ASSERT(item_field);
+      return type{map_type{from_arrow(*key_field), from_arrow(*item_field)}};
+    },
+    [](const record_type::arrow_type& rt) noexcept -> type {
+      auto fields = std::vector<record_type::field_view>{};
+      fields.reserve(rt.num_fields());
+      for (const auto& field : rt.fields()) {
+        VAST_ASSERT(field);
+        fields.emplace_back(field->name(), from_arrow(*field));
+      }
+      return type{record_type{fields}};
+    },
+  };
+  return caf::visit(f, other);
+}
+
+type type::from_arrow(const arrow::Field& field) noexcept {
+  VAST_ASSERT(field.type());
+  auto result = from_arrow(*field.type());
+  if (const auto& metadata = field.metadata())
+    result = enrich_type_with_arrow_metadata(std::move(result), *metadata);
+  return result;
+}
+
+type type::from_arrow(const arrow::Schema& schema) noexcept {
+  auto fields = std::vector<record_type::field_view>{};
+  fields.reserve(schema.num_fields());
+  for (const auto& field : schema.fields()) {
+    VAST_ASSERT(field);
+    fields.emplace_back(field->name(), from_arrow(*field));
+  }
+  auto result = type{record_type{fields}};
+  if (const auto& metadata = schema.metadata())
+    result = enrich_type_with_arrow_metadata(std::move(result), *metadata);
+  return result;
+}
+
+std::shared_ptr<arrow::DataType> type::to_arrow_type() const noexcept {
+  auto f = []<concrete_type T>(
+             const T& x) noexcept -> std::shared_ptr<arrow::DataType> {
+    return x.to_arrow_type();
+  };
+  return *this ? caf::visit(f, *this) : nullptr;
+}
+
+std::shared_ptr<arrow::Field>
+type::to_arrow_field(std::string_view name, bool nullable) const noexcept {
+  return arrow::field(std::string{name}, to_arrow_type(), nullable,
+                      make_arrow_metadata(*this));
+}
+
+std::shared_ptr<arrow::Schema> type::to_arrow_schema() const noexcept {
+  VAST_ASSERT(!name().empty());
+  VAST_ASSERT(caf::holds_alternative<record_type>(*this));
+  return arrow::schema(caf::get<record_type>(*this).to_arrow_type()->fields(),
+                       make_arrow_metadata(*this));
+}
+
+std::shared_ptr<arrow::ArrayBuilder>
+type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
+  auto f = [&]<concrete_type T>(
+             const T& x) noexcept -> std::shared_ptr<arrow::ArrayBuilder> {
+    return x.make_arrow_builder(pool);
+  };
+  return *this ? caf::visit(f, *this) : nullptr;
+}
+
 void inspect(caf::detail::stringification_inspector& f, type& x) {
   static_assert(
     std::is_same_v<caf::detail::stringification_inspector::result_type, void>);
@@ -852,54 +1073,6 @@ bool type::has_attributes() const noexcept {
   __builtin_unreachable();
 }
 
-detail::generator<std::pair<std::string_view, std::vector<type::attribute_view>>>
-type::names_and_attributes() const& noexcept {
-  const auto* root = &table(transparent::no);
-  while (true) {
-    switch (root->type_type()) {
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type:
-      case fbs::type::Type::integer_type:
-      case fbs::type::Type::count_type:
-      case fbs::type::Type::real_type:
-      case fbs::type::Type::duration_type:
-      case fbs::type::Type::time_type:
-      case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
-      case fbs::type::Type::address_type:
-      case fbs::type::Type::subnet_type:
-      case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
-      case fbs::type::Type::record_type:
-        co_return;
-      case fbs::type::Type::enriched_type: {
-        const auto* enriched_type = root->type_as_enriched_type();
-        std::vector<attribute_view> attrs{};
-        if (const auto* attributes = enriched_type->attributes()) {
-          for (const auto& attribute : *attributes) {
-            if (attribute->value() != nullptr
-                && attribute->value()->begin() != attribute->value()->end())
-              attrs.push_back({attribute->key()->string_view(),
-                               attribute->value()->string_view()});
-            else
-              attrs.push_back(
-                {attribute->key()->string_view(), std::string_view{}});
-          }
-        }
-        if (enriched_type->name())
-          co_yield std::make_pair(enriched_type->name()->string_view(), attrs);
-        else
-          co_yield std::make_pair(std::string_view{}, attrs);
-        root = enriched_type->type_nested_root();
-        VAST_ASSERT(root);
-        break;
-      }
-    }
-  }
-  __builtin_unreachable();
-}
-
 detail::generator<type::attribute_view> type::attributes() const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
@@ -932,6 +1105,39 @@ detail::generator<type::attribute_view> type::attributes() const& noexcept {
               co_yield {attribute->key()->string_view(), std::string_view{}};
           }
         }
+        root = enriched_type->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+      }
+    }
+  }
+  __builtin_unreachable();
+}
+
+detail::generator<type> type::aliases() const noexcept {
+  const auto* root = &table(transparent::no);
+  while (true) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
+        co_return;
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
+        if (enriched_type->name())
+          co_yield type{table_->slice(as_bytes(*enriched_type->type()))};
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
@@ -1308,6 +1514,16 @@ bool bool_type::construct() noexcept {
   return {};
 }
 
+std::shared_ptr<arrow::BooleanType> bool_type::to_arrow_type() noexcept {
+  return std::static_pointer_cast<arrow_type>(arrow::boolean());
+}
+
+std::shared_ptr<typename arrow::TypeTraits<bool_type::arrow_type>::BuilderType>
+bool_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
+}
+
 // -- integer_type ------------------------------------------------------------
 
 static_assert(integer_type::type_index
@@ -1332,6 +1548,17 @@ integer integer_type::construct() noexcept {
   return {};
 }
 
+std::shared_ptr<integer_type::arrow_type>
+integer_type::to_arrow_type() noexcept {
+  return std::static_pointer_cast<arrow_type>(arrow::int64());
+}
+
+std::shared_ptr<typename arrow::TypeTraits<integer_type::arrow_type>::BuilderType>
+integer_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
+}
+
 // -- count_type --------------------------------------------------------------
 
 static_assert(count_type::type_index
@@ -1354,6 +1581,16 @@ std::span<const std::byte> as_bytes(const count_type&) noexcept {
 
 count count_type::construct() noexcept {
   return {};
+}
+
+std::shared_ptr<count_type::arrow_type> count_type::to_arrow_type() noexcept {
+  return std::static_pointer_cast<arrow_type>(arrow::uint64());
+}
+
+std::shared_ptr<typename arrow::TypeTraits<count_type::arrow_type>::BuilderType>
+count_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
 }
 
 // -- real_type ---------------------------------------------------------------
@@ -1381,6 +1618,16 @@ real real_type::construct() noexcept {
   return {};
 }
 
+std::shared_ptr<real_type::arrow_type> real_type::to_arrow_type() noexcept {
+  return std::static_pointer_cast<arrow_type>(arrow::float64());
+}
+
+std::shared_ptr<typename arrow::TypeTraits<real_type::arrow_type>::BuilderType>
+real_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
+}
+
 // -- duration_type -----------------------------------------------------------
 
 static_assert(duration_type::type_index
@@ -1404,6 +1651,19 @@ std::span<const std::byte> as_bytes(const duration_type&) noexcept {
 
 duration duration_type::construct() noexcept {
   return {};
+}
+
+std::shared_ptr<duration_type::arrow_type>
+duration_type::to_arrow_type() noexcept {
+  return std::static_pointer_cast<arrow_type>(
+    arrow::duration(arrow::TimeUnit::NANO));
+}
+
+std::shared_ptr<
+  typename arrow::TypeTraits<duration_type::arrow_type>::BuilderType>
+duration_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
 }
 
 // -- time_type ---------------------------------------------------------------
@@ -1431,6 +1691,17 @@ time time_type::construct() noexcept {
   return {};
 }
 
+std::shared_ptr<time_type::arrow_type> time_type::to_arrow_type() noexcept {
+  return std::static_pointer_cast<arrow_type>(
+    arrow::timestamp(arrow::TimeUnit::NANO));
+}
+
+std::shared_ptr<typename arrow::TypeTraits<time_type::arrow_type>::BuilderType>
+time_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
+}
+
 // -- string_type --------------------------------------------------------------
 
 static_assert(string_type::type_index
@@ -1454,6 +1725,16 @@ std::span<const std::byte> as_bytes(const string_type&) noexcept {
 
 std::string string_type::construct() noexcept {
   return {};
+}
+
+std::shared_ptr<string_type::arrow_type> string_type::to_arrow_type() noexcept {
+  return std::static_pointer_cast<arrow_type>(arrow::utf8());
+}
+
+std::shared_ptr<typename arrow::TypeTraits<string_type::arrow_type>::BuilderType>
+string_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
 }
 
 // -- pattern_type ------------------------------------------------------------
@@ -1481,6 +1762,66 @@ pattern pattern_type::construct() noexcept {
   return {};
 }
 
+std::shared_ptr<pattern_type::arrow_type>
+pattern_type::to_arrow_type() noexcept {
+  return std::make_shared<arrow_type>();
+}
+
+void pattern_type::arrow_type::register_extension() noexcept {
+  if (arrow::GetExtensionType(name))
+    return;
+  auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
+  VAST_ASSERT(status.ok());
+}
+
+std::shared_ptr<arrow::DataType> pattern_type::builder_type::type() const {
+  return pattern_type::to_arrow_type();
+}
+
+pattern_type::arrow_type::arrow_type() noexcept
+  : arrow::ExtensionType(string_type::to_arrow_type()) {
+  // nop
+}
+
+std::shared_ptr<pattern_type::builder_type>
+pattern_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<builder_type>(to_arrow_type()->storage_type(), pool);
+}
+
+std::string pattern_type::arrow_type::extension_name() const {
+  return name;
+}
+
+bool pattern_type::arrow_type::ExtensionEquals(
+  const arrow::ExtensionType& other) const {
+  return other.extension_name() == name;
+}
+
+std::shared_ptr<arrow::Array> pattern_type::arrow_type::MakeArray(
+  std::shared_ptr<arrow::ArrayData> data) const {
+  return std::make_shared<array_type>(std::move(data));
+}
+
+arrow::Result<std::shared_ptr<arrow::DataType>>
+pattern_type::arrow_type::Deserialize(
+  std::shared_ptr<arrow::DataType> storage_type,
+  const std::string& serialized) const {
+  if (serialized != name)
+    return arrow::Status::Invalid("type identifier does not match");
+  if (!storage_type->Equals(storage_type_))
+    return arrow::Status::Invalid("storage type does not match");
+  return std::make_shared<arrow_type>();
+}
+
+std::string pattern_type::arrow_type::Serialize() const {
+  return name;
+}
+
+std::shared_ptr<arrow::StringArray> pattern_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::StringArray>(
+    arrow::ExtensionArray::storage());
+}
+
 // -- address_type ------------------------------------------------------------
 
 static_assert(address_type::type_index
@@ -1495,7 +1836,6 @@ std::span<const std::byte> as_bytes(const address_type&) noexcept {
                                       address_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-
     VAST_ASSERT(result.size() == reserved_size);
     return result;
   }();
@@ -1504,6 +1844,83 @@ std::span<const std::byte> as_bytes(const address_type&) noexcept {
 
 address address_type::construct() noexcept {
   return {};
+}
+
+std::shared_ptr<address_type::arrow_type>
+address_type::to_arrow_type() noexcept {
+  return std::make_shared<arrow_type>();
+}
+
+std::shared_ptr<address_type::builder_type>
+address_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<builder_type>(pool);
+}
+
+void address_type::arrow_type::register_extension() noexcept {
+  if (arrow::GetExtensionType(name))
+    return;
+  auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
+  VAST_ASSERT(status.ok());
+}
+
+address_type::builder_type::builder_type(arrow::MemoryPool* pool)
+  : arrow::FixedSizeBinaryBuilder(address_type::to_arrow_type()->storage_type(),
+                                  pool) {
+  // nop
+}
+
+std::shared_ptr<arrow::DataType> address_type::builder_type::type() const {
+  return address_type::to_arrow_type();
+}
+
+arrow::Status address_type::builder_type::FinishInternal(
+  std::shared_ptr<arrow::ArrayData>* out) {
+  if (auto status = arrow::FixedSizeBinaryBuilder::FinishInternal(out);
+      !status.ok())
+    return status;
+  auto result = caf::get<arrow_type>(*type()).MakeArray(*out);
+  *out = result->data();
+  return arrow::Status::OK();
+}
+
+address_type::arrow_type::arrow_type() noexcept
+  : arrow::ExtensionType(arrow::fixed_size_binary(16)) {
+  // nop
+}
+
+std::string address_type::arrow_type::extension_name() const {
+  return name;
+}
+
+bool address_type::arrow_type::ExtensionEquals(
+  const arrow::ExtensionType& other) const {
+  return other.extension_name() == name;
+}
+
+std::shared_ptr<arrow::Array> address_type::arrow_type::MakeArray(
+  std::shared_ptr<arrow::ArrayData> data) const {
+  return std::make_shared<array_type>(std::move(data));
+}
+
+arrow::Result<std::shared_ptr<arrow::DataType>>
+address_type::arrow_type::Deserialize(
+  std::shared_ptr<arrow::DataType> storage_type,
+  const std::string& serialized) const {
+  if (serialized != name)
+    return arrow::Status::Invalid("type identifier does not match");
+  if (!storage_type->Equals(storage_type_))
+    return arrow::Status::Invalid("storage type does not match");
+  return std::make_shared<arrow_type>();
+}
+
+std::string address_type::arrow_type::Serialize() const {
+  return name;
+}
+
+std::shared_ptr<arrow::FixedSizeBinaryArray>
+address_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::FixedSizeBinaryArray>(
+    arrow::ExtensionArray::storage());
 }
 
 // -- subnet_type -------------------------------------------------------------
@@ -1529,6 +1946,83 @@ std::span<const std::byte> as_bytes(const subnet_type&) noexcept {
 
 subnet subnet_type::construct() noexcept {
   return {};
+}
+
+std::shared_ptr<subnet_type::arrow_type> subnet_type::to_arrow_type() noexcept {
+  return std::make_shared<arrow_type>();
+}
+
+std::shared_ptr<subnet_type::builder_type>
+subnet_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<builder_type>(pool);
+}
+
+subnet_type::builder_type::builder_type(arrow::MemoryPool* pool)
+  : arrow::StructBuilder(subnet_type::to_arrow_type()->storage_type(), pool,
+                         {std::make_shared<address_type::builder_type>(),
+                          std::make_shared<arrow::UInt8Builder>()}) {
+  // nop
+}
+
+std::shared_ptr<arrow::DataType> subnet_type::builder_type::type() const {
+  return subnet_type::to_arrow_type();
+}
+
+address_type::builder_type&
+subnet_type::builder_type::address_builder() noexcept {
+  return static_cast<address_type::builder_type&>(*field_builder(0));
+}
+
+arrow::UInt8Builder& subnet_type::builder_type::length_builder() noexcept {
+  return static_cast<arrow::UInt8Builder&>(*field_builder(1));
+}
+
+void subnet_type::arrow_type::register_extension() noexcept {
+  if (arrow::GetExtensionType(name))
+    return;
+  auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
+  VAST_ASSERT(status.ok());
+}
+
+subnet_type::arrow_type::arrow_type() noexcept
+  : arrow::ExtensionType(
+    arrow::struct_({arrow::field("address", address_type::to_arrow_type()),
+                    arrow::field("length", arrow::uint8())})) {
+  // nop
+}
+
+std::string subnet_type::arrow_type::extension_name() const {
+  return name;
+}
+
+bool subnet_type::arrow_type::ExtensionEquals(
+  const arrow::ExtensionType& other) const {
+  return other.extension_name() == name;
+}
+
+std::shared_ptr<arrow::Array> subnet_type::arrow_type::MakeArray(
+  std::shared_ptr<arrow::ArrayData> data) const {
+  return std::make_shared<array_type>(std::move(data));
+}
+
+arrow::Result<std::shared_ptr<arrow::DataType>>
+subnet_type::arrow_type::Deserialize(
+  std::shared_ptr<arrow::DataType> storage_type,
+  const std::string& serialized) const {
+  if (serialized != name)
+    return arrow::Status::Invalid("type identifier does not match");
+  if (!storage_type->Equals(storage_type_))
+    return arrow::Status::Invalid("storage type does not match");
+  return std::make_shared<arrow_type>();
+}
+
+std::string subnet_type::arrow_type::Serialize() const {
+  return name;
+}
+
+std::shared_ptr<arrow::StructArray> subnet_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::StructArray>(
+    arrow::ExtensionArray::storage());
 }
 
 // -- enumeration_type --------------------------------------------------------
@@ -1594,6 +2088,16 @@ enumeration enumeration_type::construct() const noexcept {
   return static_cast<enumeration>(value);
 }
 
+std::shared_ptr<enumeration_type::arrow_type>
+enumeration_type::to_arrow_type() const noexcept {
+  return std::make_shared<arrow_type>(*this);
+}
+
+std::shared_ptr<enumeration_type::builder_type>
+enumeration_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
+  return std::make_shared<builder_type>(to_arrow_type(), pool);
+}
+
 std::string_view enumeration_type::field(uint32_t key) const& noexcept {
   const auto* fields = table().type_as_enumeration_type()->fields();
   VAST_ASSERT(fields);
@@ -1621,6 +2125,124 @@ enumeration_type::resolve(std::string_view key) const noexcept {
     if (field->name()->string_view() == key)
       return field->key();
   return std::nullopt;
+}
+
+void enumeration_type::arrow_type::register_extension() noexcept {
+  if (arrow::GetExtensionType(name))
+    return;
+  auto status = arrow::RegisterExtensionType(
+    std::make_shared<arrow_type>(enumeration_type{{"stub"}}));
+  VAST_ASSERT(status.ok());
+}
+
+enumeration_type::builder_type::builder_type(std::shared_ptr<arrow_type> type,
+                                             arrow::MemoryPool* pool)
+  : arrow::StringDictionaryBuilder(string_type::to_arrow_type(), pool),
+    type_{std::move(type)} {
+  for (auto memo_index = int32_t{-1};
+       const auto& [canonical, internal] : type_->vast_type_.fields()) {
+    // TODO: If we want to support gaps in the enumeration type, we need to have
+    // a second stage integer -> integer lookup table.
+    const auto memo_table_status
+      = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
+        arrow::util::string_view{canonical.data(), canonical.size()},
+        &memo_index);
+    VAST_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
+    VAST_ASSERT(memo_index == detail::narrow_cast<int32_t>(internal));
+  }
+}
+
+std::shared_ptr<arrow::DataType> enumeration_type::builder_type::type() const {
+  return type_;
+}
+
+arrow::Status enumeration_type::builder_type::Append(enumeration index) {
+#if VAST_ENABLE_ASSERTIONS
+  // In builds with assertions, we additionally check that the index was already
+  // in the prepopulated memo table.
+  const auto canonical = type_->vast_type_.field(index);
+  VAST_ASSERT(!canonical.empty());
+  auto memo_index = int32_t{-1};
+  const auto memo_table_status
+    = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
+      arrow::util::string_view{canonical.data(), canonical.size()},
+      &memo_index);
+  VAST_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
+  VAST_ASSERT(memo_index == index);
+#endif // VAST_ENABLE_ASSERTIONS
+  ARROW_RETURN_NOT_OK(Reserve(1));
+  ARROW_RETURN_NOT_OK(indices_builder_.Append(index));
+  length_ += 1;
+  return arrow::Status::OK();
+}
+
+enumeration_type::arrow_type::arrow_type(const enumeration_type& type) noexcept
+  : arrow::ExtensionType(
+    arrow::dictionary(arrow::uint8(), string_type::to_arrow_type())),
+    vast_type_{caf::get<enumeration_type>(vast::type{chunk::copy(type)})} {
+  // nop
+  static_assert(std::is_same_v<enumeration, arrow::UInt8Type::c_type>,
+                "mismatch between dictionary index and enumeration type");
+}
+
+std::string enumeration_type::arrow_type::extension_name() const {
+  return name;
+}
+
+bool enumeration_type::arrow_type::ExtensionEquals(
+  const arrow::ExtensionType& other) const {
+  return other.extension_name() == name
+         && static_cast<const arrow_type&>(other).vast_type_ == vast_type_;
+}
+
+std::shared_ptr<arrow::Array> enumeration_type::arrow_type::MakeArray(
+  std::shared_ptr<arrow::ArrayData> data) const {
+  return std::make_shared<array_type>(std::move(data));
+}
+
+arrow::Result<std::shared_ptr<arrow::DataType>>
+enumeration_type::arrow_type::Deserialize(
+  std::shared_ptr<arrow::DataType> storage_type,
+  const std::string& serialized) const {
+  if (!storage_type->Equals(storage_type_))
+    return arrow::Status::Invalid("storage type does not match");
+  // Parse the JSON-serialized enumeration_type content.
+  const auto json = simdjson::padded_string{serialized};
+  auto parser = simdjson::dom::parser{};
+  auto doc = parser.parse(json);
+  // TODO: use field_view once we can use simdjson::ondemand hits to avoid a
+  // copy of the field name.
+  auto fields = std::vector<struct enumeration_type::field>{};
+  for (const auto& [key, value] : doc.get_object()) {
+    if (!value.is<uint64_t>())
+      return arrow::Status::SerializationError(value, " is not an uint64_t");
+    fields.push_back({
+      std::string{key},
+      detail::narrow_cast<uint32_t>(value.get_uint64()),
+    });
+  }
+  return std::make_shared<arrow_type>(enumeration_type{fields});
+}
+
+std::string enumeration_type::arrow_type::Serialize() const {
+  auto result = std::string{};
+  auto inserter = std::back_inserter(result);
+  fmt::format_to(inserter, "{{ ");
+  for (auto first = true; const auto& f : vast_type_.fields()) {
+    if (first)
+      first = false;
+    else
+      fmt::format_to(inserter, ", ");
+    fmt::format_to(inserter, "\"{}\": {}", f.name, f.key);
+  }
+  fmt::format_to(inserter, " }}");
+  return result;
+}
+
+std::shared_ptr<arrow::DictionaryArray>
+enumeration_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::DictionaryArray>(
+    arrow::ExtensionArray::storage());
 }
 
 // -- list_type ---------------------------------------------------------------
@@ -1669,6 +2291,18 @@ std::span<const std::byte> as_bytes(const list_type& x) noexcept {
 
 list list_type::construct() noexcept {
   return {};
+}
+
+std::shared_ptr<list_type::arrow_type>
+list_type::to_arrow_type() const noexcept {
+  return std::static_pointer_cast<arrow_type>(
+    arrow::list(value_type().to_arrow_field("item")));
+}
+
+std::shared_ptr<typename arrow::TypeTraits<list_type::arrow_type>::BuilderType>
+list_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    pool, value_type().make_arrow_builder(pool), to_arrow_type());
 }
 
 type list_type::value_type() const noexcept {
@@ -1729,6 +2363,18 @@ std::span<const std::byte> as_bytes(const map_type& x) noexcept {
 
 map map_type::construct() noexcept {
   return {};
+}
+
+std::shared_ptr<map_type::arrow_type> map_type::to_arrow_type() const noexcept {
+  return std::make_shared<arrow_type>(key_type().to_arrow_field("key", false),
+                                      value_type().to_arrow_field("item"));
+}
+
+std::shared_ptr<typename arrow::TypeTraits<map_type::arrow_type>::BuilderType>
+map_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    pool, key_type().make_arrow_builder(pool),
+    value_type().make_arrow_builder(pool), to_arrow_type());
 }
 
 type map_type::key_type() const noexcept {
@@ -1798,6 +2444,24 @@ record record_type::construct() const noexcept {
   for (const auto& field : fields())
     result.emplace_back(field.name, field.type.construct());
   return record::make_unsafe(std::move(result));
+}
+
+std::shared_ptr<record_type::arrow_type>
+record_type::to_arrow_type() const noexcept {
+  auto arrow_fields = arrow::FieldVector{};
+  arrow_fields.reserve(num_fields());
+  for (const auto& [name, type] : fields())
+    arrow_fields.push_back(type.to_arrow_field(name));
+  return std::static_pointer_cast<arrow_type>(arrow::struct_(arrow_fields));
+}
+
+std::shared_ptr<typename arrow::TypeTraits<record_type::arrow_type>::BuilderType>
+record_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
+  auto field_builders = std::vector<std::shared_ptr<arrow::ArrayBuilder>>{};
+  for (auto&& field : fields())
+    field_builders.push_back(field.type.make_arrow_builder(pool));
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool, std::move(field_builders));
 }
 
 detail::generator<record_type::field_view>
@@ -2564,6 +3228,17 @@ record_type flatten(const record_type& type) noexcept {
 
 namespace caf {
 
+/// Sanity-check whether all the type lists are set up correctly.
+static_assert(detail::tl_is_distinct<sum_type_access<vast::type>::types>::value);
+static_assert(
+  detail::tl_is_distinct<sum_type_access<arrow::DataType>::types>::value);
+static_assert(
+  detail::tl_is_distinct<sum_type_access<arrow::Array>::types>::value);
+static_assert(
+  detail::tl_is_distinct<sum_type_access<arrow::Scalar>::types>::value);
+static_assert(
+  detail::tl_is_distinct<sum_type_access<arrow::ArrayBuilder>::types>::value);
+
 uint8_t
 sum_type_access<vast::type>::index_from_type(const vast::type& x) noexcept {
   static const auto table = []<vast::concrete_type... Ts, uint8_t... Indices>(
@@ -2581,5 +3256,66 @@ sum_type_access<vast::type>::index_from_type(const vast::type& x) noexcept {
   VAST_ASSERT(result != std::numeric_limits<uint8_t>::max());
   return result;
 }
+
+int sum_type_access<arrow::DataType>::index_from_type(
+  const arrow::DataType& x) noexcept {
+  using extension_types = detail::tl_filter_t<types, arrow::is_extension_type>;
+  static constexpr int extension_id = -1;
+  static constexpr int unknown_id = -2;
+  // The first-stage O(1) lookup table from arrow::DataType id to the sum type
+  // variant index defined by the type list. Returns unknown_id if the DataType
+  // is not in the type list, and extension_id if the type is an extension type.
+  static const auto table = []<class... Ts, int... Indices>(
+    caf::detail::type_list<Ts...>,
+    std::integer_sequence<int, Indices...>) noexcept {
+    std::array<int, arrow::Type::type::MAX_ID> tbl{};
+    tbl.fill(unknown_id);
+    (static_cast<void>(tbl[Ts::type_id] = arrow::is_extension_type<Ts>::value
+                                            ? extension_id
+                                            : Indices),
+     ...);
+    return tbl;
+  }
+  (sum_type_access<arrow::DataType>::types{},
+   std::make_integer_sequence<int, caf::detail::tl_size<types>::value>());
+  // The second-stage O(n) lookup table for extension types that identifies the
+  // types by their unique identifier string.
+  static const auto extension_table = []<class... Ts, int... Indices>(
+    caf::detail::type_list<Ts...>, std::integer_sequence<int, Indices...>) {
+    std::array<std::pair<std::string_view, int>,
+               detail::tl_size<extension_types>::value>
+      tbl{};
+    (static_cast<void>(
+       tbl[Indices]
+       = {Ts::name, detail::tl_index_of<sum_type_access<arrow::DataType>::types,
+                                        Ts>::value}),
+     ...);
+    return tbl;
+  }
+  (extension_types{},
+   std::make_integer_sequence<int,
+                              caf::detail::tl_size<extension_types>::value>());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+  auto result = table[x.id()];
+  VAST_ASSERT(result != unknown_id,
+              "unexpected Arrow type id is not in "
+              "caf::sum_type_access<arrow::DataType>::types");
+  if (result == extension_id) {
+    for (const auto& [id, index] : extension_table) {
+      if (id == static_cast<const arrow::ExtensionType&>(x).extension_name())
+        return index;
+    }
+    vast::die("unexpected Arrow extension type");
+  }
+  return result;
+}
+
+/// Explicit template instantiations for all defined sum type access
+/// specializations.
+template struct sum_type_access<vast::type>;
+template struct sum_type_access<arrow::DataType>;
+template struct sum_type_access<arrow::Array>;
+template struct sum_type_access<arrow::Scalar>;
+template struct sum_type_access<arrow::ArrayBuilder>;
 
 } // namespace caf
