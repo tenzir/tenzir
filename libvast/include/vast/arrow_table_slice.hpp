@@ -44,7 +44,7 @@ struct arrow_table_slice_state<fbs::table_slice::arrow::v1> {
 };
 
 template <>
-struct arrow_table_slice_state<fbs::table_slice::arrow::experimental> {
+struct arrow_table_slice_state<fbs::table_slice::arrow::v2> {
   /// The deserialized table layout.
   type layout;
 
@@ -74,16 +74,11 @@ public:
 
   /// Whether the most recent version of the encoding is used.
   inline static constexpr bool is_latest_version
-    = std::is_same_v<
-        FlatBuffer,
-        fbs::table_slice::arrow::
-          v1> || std::is_same_v<FlatBuffer, fbs::table_slice::arrow::experimental>;
+    = std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>;
 
   /// The encoding of the slice.
   inline static constexpr enum table_slice_encoding encoding
-    = std::is_same_v<FlatBuffer, fbs::table_slice::arrow::experimental>
-        ? table_slice_encoding::experimental
-        : table_slice_encoding::arrow;
+    = table_slice_encoding::arrow;
 
   /// @returns The table layout.
   [[nodiscard]] const type& layout() const noexcept;
@@ -148,7 +143,7 @@ arrow_table_slice(const FlatBuffer&) -> arrow_table_slice<FlatBuffer>;
 /// Extern template declarations for all Arrow encoding versions.
 extern template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 extern template class arrow_table_slice<fbs::table_slice::arrow::v1>;
-extern template class arrow_table_slice<fbs::table_slice::arrow::experimental>;
+extern template class arrow_table_slice<fbs::table_slice::arrow::v2>;
 
 // -- utility functions --------------------------------------------------------
 

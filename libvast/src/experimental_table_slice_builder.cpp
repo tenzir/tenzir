@@ -251,12 +251,11 @@ table_slice create_table_slice(const arrow::RecordBatch& record_batch,
   // something other than 0, as it cannot be modified otherwise. We then later
   // reset it to the clock's epoch.
   constexpr int64_t stub_ns_since_epoch = 1337;
-  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createexperimental(
+  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv2(
     builder, fbs_ipc_buffer, stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
-    = fbs::CreateTableSlice(builder,
-                            fbs::table_slice::TableSlice::arrow_experimental,
+    = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::arrow_v2,
                             arrow_table_slice_buffer.Union());
   fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
   // Create the table slice from the chunk.
@@ -319,7 +318,7 @@ size_t experimental_table_slice_builder::rows() const noexcept {
 
 table_slice_encoding
 experimental_table_slice_builder::implementation_id() const noexcept {
-  return table_slice_encoding::experimental;
+  return table_slice_encoding::arrow;
 }
 
 void experimental_table_slice_builder::reserve(

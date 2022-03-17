@@ -74,8 +74,6 @@ auto make_single_column_slice(const VastType& t, const Ts&... xs) {
 }
 
 table_slice roundtrip(table_slice slice) {
-  factory<table_slice_builder>::add<experimental_table_slice_builder>(
-    table_slice_encoding::experimental);
   table_slice slice_copy;
   std::vector<char> buf;
   caf::binary_serializer sink{nullptr, buf};
@@ -493,8 +491,6 @@ TEST(single column - map) {
 }
 
 TEST(single column - serialization) {
-  factory<table_slice_builder>::add<experimental_table_slice_builder>(
-    table_slice_encoding::experimental);
   auto t = count_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
   decltype(slice1) slice2 = {};
@@ -512,8 +508,6 @@ TEST(single column - serialization) {
 }
 
 TEST(record batch roundtrip) {
-  factory<table_slice_builder>::add<experimental_table_slice_builder>(
-    table_slice_encoding::experimental);
   auto t = count_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
   auto batch = to_record_batch(slice1);
@@ -526,8 +520,6 @@ TEST(record batch roundtrip) {
 }
 
 TEST(record batch roundtrip - adding column) {
-  factory<table_slice_builder>::add<experimental_table_slice_builder>(
-    table_slice_encoding::experimental);
   auto slice1 = make_single_column_slice(count_type{}, 0_c, 1_c, 2_c, 3_c);
   auto batch = to_record_batch(slice1);
   auto cb = string_type::make_arrow_builder(arrow::default_memory_pool());
@@ -768,6 +760,6 @@ struct fixture : public fixtures::table_slices {
 
 FIXTURE_SCOPE(experimental_table_slice_tests, fixture)
 
-TEST_TABLE_SLICE(experimental_table_slice_builder, experimental)
+TEST_TABLE_SLICE(experimental_table_slice_builder, arrow)
 
 FIXTURE_SCOPE_END()

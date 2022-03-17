@@ -272,7 +272,7 @@ namespace arrow {
 
 struct v0;
 struct v1;
-struct experimental;
+struct v2;
 
 } // namespace arrow
 

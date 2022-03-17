@@ -948,8 +948,7 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
       as_arrow_buffer(parent->slice(as_bytes(*slice.schema()))),
       as_arrow_buffer(parent->slice(as_bytes(*slice.record_batch()))));
     VAST_DIAGNOSTIC_POP
-  } else if constexpr (std::is_same_v<FlatBuffer,
-                                      fbs::table_slice::arrow::experimental>) {
+  } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     // We decouple the sliced type from the layout intentionally. This is an
     // absolute must because we store the state in the deletion step of the
     // table slice's chunk, and storing a sliced chunk in there would cause a
@@ -998,8 +997,7 @@ table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
                                  fbs::table_slice::arrow::v1>) {
     if (auto&& batch = record_batch())
       return batch->num_columns();
-  } else if constexpr (std::is_same_v<FlatBuffer,
-                                      fbs::table_slice::arrow::experimental>) {
+  } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     if (auto&& batch = record_batch())
       return state_.flat_columns.size();
   } else {
@@ -1026,8 +1024,7 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
       legacy::decode(layout.field(o).type, *array, f);
     }
     VAST_DIAGNOSTIC_POP
-  } else if constexpr (std::is_same_v<FlatBuffer,
-                                      fbs::table_slice::arrow::experimental>) {
+  } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     if (auto&& batch = record_batch()) {
       auto&& array = state_.flat_columns[column];
       const auto& layout = caf::get<record_type>(this->layout());
@@ -1059,8 +1056,7 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
     auto offset = layout.resolve_flat_index(column);
     return legacy::value_at(layout.field(offset).type, *array, row);
     VAST_DIAGNOSTIC_POP
-  } else if constexpr (std::is_same_v<FlatBuffer,
-                                      fbs::table_slice::arrow::experimental>) {
+  } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     auto&& array = state_.flat_columns[column];
     const auto& layout = caf::get<record_type>(this->layout());
     auto offset = layout.resolve_flat_index(column);
@@ -1089,8 +1085,7 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
     auto array = batch->column(detail::narrow_cast<int>(column));
     return legacy::value_at(t, *array, row);
     VAST_DIAGNOSTIC_POP
-  } else if constexpr (std::is_same_v<FlatBuffer,
-                                      fbs::table_slice::arrow::experimental>) {
+  } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     VAST_ASSERT(congruent(
       caf::get<record_type>(this->layout())
         .field(caf::get<record_type>(this->layout()).resolve_flat_index(column))
@@ -1109,7 +1104,7 @@ time arrow_table_slice<FlatBuffer>::import_time() const noexcept {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>) {
     return {};
   } else if constexpr (detail::is_any_v<FlatBuffer, fbs::table_slice::arrow::v1,
-                                        fbs::table_slice::arrow::experimental>) {
+                                        fbs::table_slice::arrow::v2>) {
     return time{} + duration{slice_.import_time()};
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled table slice "
@@ -1123,7 +1118,7 @@ void arrow_table_slice<FlatBuffer>::import_time(
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>) {
     die("cannot set import time in arrow.v0 table slice encoding");
   } else if constexpr (detail::is_any_v<FlatBuffer, fbs::table_slice::arrow::v1,
-                                        fbs::table_slice::arrow::experimental>) {
+                                        fbs::table_slice::arrow::v2>) {
     auto result = const_cast<FlatBuffer&>(slice_).mutate_import_time(
       import_time.time_since_epoch().count());
     VAST_ASSERT(result, "failed to mutate import time");
@@ -1144,7 +1139,7 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 /// Explicit template instantiations for all Arrow encoding versions.
 template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 template class arrow_table_slice<fbs::table_slice::arrow::v1>;
-template class arrow_table_slice<fbs::table_slice::arrow::experimental>;
+template class arrow_table_slice<fbs::table_slice::arrow::v2>;
 
 // -- utility functions --------------------------------------------------------
 

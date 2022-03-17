@@ -284,7 +284,7 @@ private:
     const void* none = {};
     const arrow_table_slice<fbs::table_slice::arrow::v0>* arrow_v0;
     const arrow_table_slice<fbs::table_slice::arrow::v1>* arrow_v1;
-    const arrow_table_slice<fbs::table_slice::arrow::experimental>* experimental;
+    const arrow_table_slice<fbs::table_slice::arrow::v2>* arrow_v2;
     const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
     const msgpack_table_slice<fbs::table_slice::msgpack::v1>* msgpack_v1;
   } state_;

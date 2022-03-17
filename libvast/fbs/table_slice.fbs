@@ -39,7 +39,7 @@ table v1 {
 }
 
 /// A table slice encoded with Apache Arrow (unstable).
-table experimental {
+table v2 {
   /// The Arrow IPC data.
   arrow_ipc: [ubyte];
 
@@ -88,7 +88,7 @@ union TableSlice {
   msgpack.v0,
   arrow.v1,
   msgpack.v1,
-  arrow.experimental,
+  arrow.v2,
 }
 
 namespace vast.fbs;
