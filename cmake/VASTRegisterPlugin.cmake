@@ -40,6 +40,15 @@ macro (VASTNormalizeInstallDirs)
       )
     endif ()
   endforeach ()
+  # For the docdir especially, lowercase the project name.
+  if ("${CMAKE_INSTALL_DOCDIR}" STREQUAL
+      "${CMAKE_INSTALL_DATAROOTDIR}/doc/${PROJECT_NAME}")
+    string(TOLOWER "${PROJECT_NAME}" _name)
+    set(CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DATAROOTDIR}/doc/${_name}")
+    set(CMAKE_INSTALL_FULL_DOCDIR
+        "${CMAKE_INSTALL_FULL_DATAROOTDIR}/doc/${_name}")
+    unset(_name)
+  endif ()
   unset(_install)
 endmacro ()
 
