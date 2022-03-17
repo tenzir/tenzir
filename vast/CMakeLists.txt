@@ -25,7 +25,7 @@ install(
 # -- example configuration file -----------------------------------------------
 
 VASTInstallExampleConfiguration(vast "${PROJECT_SOURCE_DIR}/vast.yaml.example"
-                                "vast.yaml")
+                                "" "vast.yaml")
 
 # -- init system integration ---------------------------------------------------
 

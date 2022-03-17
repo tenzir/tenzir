@@ -40,6 +40,15 @@ macro (VASTNormalizeInstallDirs)
       )
     endif ()
   endforeach ()
+  # For the docdir especially, lowercase the project name.
+  if ("${CMAKE_INSTALL_DOCDIR}" STREQUAL
+      "${CMAKE_INSTALL_DATAROOTDIR}/doc/${PROJECT_NAME}")
+    string(TOLOWER "${PROJECT_NAME}" _name)
+    set(CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DATAROOTDIR}/doc/${_name}")
+    set(CMAKE_INSTALL_FULL_DOCDIR
+        "${CMAKE_INSTALL_FULL_DATAROOTDIR}/doc/${_name}")
+    unset(_name)
+  endif ()
   unset(_install)
 endmacro ()
 
@@ -216,7 +225,7 @@ function (VASTCompileFlatBuffers)
 endfunction ()
 
 # Install a commented-out version of an example configuration file.
-macro (VASTInstallExampleConfiguration target source destination)
+macro (VASTInstallExampleConfiguration target source prefix destination)
   # Sanity checks macro inputs.
   if (NOT TARGET "${target}")
     message(FATAL_ERROR "target '${target}' does not exist")
@@ -224,8 +233,19 @@ macro (VASTInstallExampleConfiguration target source destination)
   if (NOT IS_ABSOLUTE "${source}")
     message(FATAL_ERROR "source '${source}' must be absolute")
   endif ()
+  if (prefix AND IS_ABSOLUTE "${prefix}")
+    message(FATAL_ERROR "prefix '${prefix}' must be relative")
+  endif ()
   if (IS_ABSOLUTE "${destination}")
     message(FATAL_ERROR "destination '${destination}' must be relative")
+  endif ()
+
+  # Set a temporary variable for the example dir location. Because we're in a
+  # macro we're unsetting the variable again later on.
+  if (VAST_CMAKE_INSTALL_DOCDIR)
+    set(_example_dir "${VAST_CMAKE_INSTALL_DOCDIR}/examples")
+  else ()
+    set(_example_dir "${CMAKE_INSTALL_DOCDIR}/examples")
   endif ()
 
   # Write a CMake file that does the desired text transformations.
@@ -242,15 +262,14 @@ macro (VASTInstallExampleConfiguration target source destination)
     string(REPLACE \";\" \"\\n\" content \"\${content}\")
     string(REPLACE \"\${dummy}\" \";\" content \"\${content}\")
     file(WRITE
-      \"${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/${destination}\"
+      \"${CMAKE_BINARY_DIR}/${_example_dir}/${prefix}${destination}\"
       \"# NOTE: For this file to take effect, move it to:\\n\"
-      \"#   <prefix>/${CMAKE_INSTALL_SYSCONFDIR}/vast/${destination}\\n\"
+      \"#   <prefix>/${CMAKE_INSTALL_SYSCONFDIR}/vast/${prefix}${destination}\\n\"
       \"\\n\"
       \"\${content}\")")
 
   add_custom_command(
-    OUTPUT
-      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/${destination}"
+    OUTPUT "${CMAKE_BINARY_DIR}/${_example_dir}/${prefix}${destination}"
     MAIN_DEPENDENCY "${source}"
     COMMENT "Copying example configuration file ${source}"
     COMMAND ${CMAKE_COMMAND} -P
@@ -258,16 +277,14 @@ macro (VASTInstallExampleConfiguration target source destination)
 
   add_custom_target(
     ${target}-copy-example-configuration-file
-    DEPENDS
-      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/${destination}"
-  )
+    DEPENDS "${CMAKE_BINARY_DIR}/${_example_dir}/${prefix}${destination}")
 
   add_dependencies(${target} ${target}-copy-example-configuration-file)
 
-  install(
-    FILES
-      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/${destination}"
-    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/vast/examples/")
+  install(FILES "${CMAKE_BINARY_DIR}/${_example_dir}/${prefix}${destination}"
+          DESTINATION "${_example_dir}/${prefix}")
+
+  unset(_example_dir)
 endmacro ()
 
 # Support tools like clang-tidy by creating a compilation database and copying
@@ -389,6 +406,11 @@ function (VASTRegisterPlugin)
   # still specifying the entrypoint manually.
   if ("${PLUGIN_ENTRYPOINT}" IN_LIST PLUGIN_SOURCES)
     list(REMOVE_ITEM PLUGIN_SOURCES "${PLUGIN_ENTRYPOINT}")
+  endif ()
+
+  # Set a fallback for the docdir.
+  if (NOT VAST_CMAKE_INSTALL_DOCDIR)
+    set(VAST_CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
   endif ()
 
   # Create an object library target for our plugin _without_ the entrypoint.
@@ -528,14 +550,11 @@ function (VASTRegisterPlugin)
     VASTInstallExampleConfiguration(
       ${PLUGIN_TARGET}
       "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example"
-      "plugin/${PLUGIN_TARGET}.yaml")
+      "plugin/${PLUGIN_TARGET}/" "${PLUGIN_TARGET}.yaml")
   endif ()
 
   # Install README.md and CHANGELOG.md files to <docdir>/plugin/<plugin>, if
   # they exist at the plugin project root.
-  if (NOT VAST_CMAKE_INSTALL_DOCDIR)
-    set(VAST_CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
-  endif ()
   foreach (doc IN ITEMS "README.md" "CHANGELOG.md")
     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${doc}")
       install(
