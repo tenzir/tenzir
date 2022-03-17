@@ -69,7 +69,9 @@ RUN ln -sf ../../pyvast/pyvast examples/jupyter/pyvast && \
     ln -sf ../../vast.yaml.example vast/integration/vast.yaml.example && \
     ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
     ln -sf ../../vast/integration/data/ plugins/sigma/integration/data/ && \
-    ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py
+    ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py && \
+    ln -sf ../../../schema/types/base.schema libvast_test/artifacts/schemas/base.schema && \
+    ln -sf ../../../schema/types/suricata.schema libvast_test/artifacts/schemas/suricata.schema
 
 # -- development ---------------------------------------------------------------
 
