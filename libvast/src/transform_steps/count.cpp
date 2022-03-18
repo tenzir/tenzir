@@ -8,9 +8,9 @@
 
 #include "vast/transform_steps/count.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"

@@ -8,6 +8,7 @@
 
 #include "vast/arrow_table_slice.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
@@ -15,7 +16,6 @@
 #include "vast/detail/passthrough.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
-#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/legacy_type.hpp"
@@ -1293,7 +1293,7 @@ convert_record_batch(const std::shared_ptr<arrow::RecordBatch>& legacy,
 table_slice convert_legacy_table_slice(const table_slice& legacy) {
   const auto& record_batch
     = convert_record_batch(to_record_batch(legacy), legacy.layout());
-  auto result = experimental_table_slice_builder::create(record_batch);
+  auto result = arrow_table_slice_builder::create(record_batch);
   return result;
 }
 

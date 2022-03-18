@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/experimental_table_slice_builder.hpp"
+#include "vast/arrow_table_slice_builder.hpp"
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
@@ -32,20 +32,19 @@ namespace vast {
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_builder_ptr
-experimental_table_slice_builder::make(type layout,
-                                       size_t initial_buffer_size) {
-  return table_slice_builder_ptr{new experimental_table_slice_builder{
-                                   std::move(layout), initial_buffer_size},
-                                 false};
+arrow_table_slice_builder::make(type layout, size_t initial_buffer_size) {
+  return table_slice_builder_ptr{
+    new arrow_table_slice_builder{std::move(layout), initial_buffer_size},
+    false};
 }
 
-experimental_table_slice_builder::~experimental_table_slice_builder() noexcept {
+arrow_table_slice_builder::~arrow_table_slice_builder() noexcept {
   // nop
 }
 
 // -- properties ---------------------------------------------------------------
 
-size_t experimental_table_slice_builder::columns() const noexcept {
+size_t arrow_table_slice_builder::columns() const noexcept {
   auto result = schema_->num_fields();
   VAST_ASSERT(result >= 0);
   return detail::narrow_cast<size_t>(result);
@@ -117,7 +116,7 @@ void verify_record_batch(const arrow::RecordBatch& record_batch) {
 
 } // namespace
 
-table_slice experimental_table_slice_builder::finish() {
+table_slice arrow_table_slice_builder::finish() {
   // Sanity check: If this triggers, the calls to add() did not match the number
   // of fields in the layout.
   VAST_ASSERT(current_leaf_ == leaves_.end());
@@ -131,7 +130,7 @@ table_slice experimental_table_slice_builder::finish() {
   return create_table_slice(*record_batch, this->builder_);
 }
 
-table_slice experimental_table_slice_builder::create(
+table_slice arrow_table_slice_builder::create(
   const std::shared_ptr<arrow::RecordBatch>& record_batch,
   size_t initial_buffer_size) {
   verify_record_batch(*record_batch);
@@ -139,24 +138,23 @@ table_slice experimental_table_slice_builder::create(
   return create_table_slice(*record_batch, builder);
 }
 
-size_t experimental_table_slice_builder::rows() const noexcept {
+size_t arrow_table_slice_builder::rows() const noexcept {
   return num_rows_;
 }
 
 table_slice_encoding
-experimental_table_slice_builder::implementation_id() const noexcept {
+arrow_table_slice_builder::implementation_id() const noexcept {
   return table_slice_encoding::arrow;
 }
 
-void experimental_table_slice_builder::reserve(
-  [[maybe_unused]] size_t num_rows) {
+void arrow_table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {
   // nop
 }
 
 // -- implementation details ---------------------------------------------------
 
-experimental_table_slice_builder::experimental_table_slice_builder(
-  type layout, size_t initial_buffer_size)
+arrow_table_slice_builder::arrow_table_slice_builder(type layout,
+                                                     size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
     schema_{this->layout().to_arrow_schema()},
     arrow_builder_{
@@ -168,7 +166,7 @@ experimental_table_slice_builder::experimental_table_slice_builder(
   current_leaf_ = leaves_.end();
 }
 
-bool experimental_table_slice_builder::add_impl(data_view x) {
+bool arrow_table_slice_builder::add_impl(data_view x) {
   auto* nested_builder
     = &caf::get<type_to_arrow_builder_t<record_type>>(*arrow_builder_);
   if (num_rows_ == 0 || current_leaf_ == leaves_.end()) {

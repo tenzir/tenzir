@@ -8,11 +8,11 @@
 
 #include "vast/transform_steps/hash.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
-#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/hash/default_hash.hpp"
 #include "vast/hash/hash_append.hpp"
 #include "vast/optional.hpp"

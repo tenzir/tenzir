@@ -8,12 +8,12 @@
 
 #include "vast/transform_steps/select.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/error.hpp"
-#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"

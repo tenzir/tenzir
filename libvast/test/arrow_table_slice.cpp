@@ -6,15 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE experimental_table_slice
+#define SUITE arrow_table_slice
 
 #include "vast/arrow_table_slice.hpp"
+
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/narrow.hpp"
-#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/io/read.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
@@ -35,7 +35,7 @@ namespace {
 
 template <class... Ts>
 auto make_slice(const record_type& layout, Ts&&... xs) {
-  auto builder = experimental_table_slice_builder::make(type{"stub", layout});
+  auto builder = arrow_table_slice_builder::make(type{"stub", layout});
   auto ok = builder->add(std::forward<Ts>(xs)...);
   if (!ok)
     FAIL("builder failed to add given values");
@@ -48,7 +48,7 @@ auto make_slice(const record_type& layout, Ts&&... xs) {
 template <class T, class... Ts>
 auto make_slice(const record_type& layout, std::vector<T> x0,
                 std::vector<Ts>... xs) {
-  auto builder = experimental_table_slice_builder::make(type{"rec", layout});
+  auto builder = arrow_table_slice_builder::make(type{"rec", layout});
   for (size_t i = 0; i < x0.size(); ++i) {
     CHECK(builder->add(x0.at(i)));
     CHECK(builder->add(xs.at(i)...));
@@ -83,8 +83,7 @@ table_slice roundtrip(table_slice slice) {
 }
 
 void record_batch_roundtrip(const table_slice& slice) {
-  const auto copy
-    = experimental_table_slice_builder::create(to_record_batch(slice));
+  const auto copy = arrow_table_slice_builder::create(to_record_batch(slice));
   CHECK_EQUAL(slice, copy);
 }
 
@@ -532,8 +531,7 @@ TEST(record batch roundtrip - adding column) {
   REQUIRE(column.ok());
   auto new_batch = batch->AddColumn(1, "new", column.MoveValueUnsafe());
   REQUIRE(new_batch.ok());
-  auto slice2
-    = experimental_table_slice_builder::create(new_batch.ValueUnsafe());
+  auto slice2 = arrow_table_slice_builder::create(new_batch.ValueUnsafe());
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, count_type{}), 0_c);
   CHECK_VARIANT_EQUAL(slice2.at(1, 0, count_type{}), 1_c);
   CHECK_VARIANT_EQUAL(slice2.at(2, 0, count_type{}), 2_c);
@@ -758,8 +756,8 @@ struct fixture : public fixtures::table_slices {
 
 } // namespace
 
-FIXTURE_SCOPE(experimental_table_slice_tests, fixture)
+FIXTURE_SCOPE(arrow_table_slice_tests, fixture)
 
-TEST_TABLE_SLICE(experimental_table_slice_builder, arrow)
+TEST_TABLE_SLICE(arrow_table_slice_builder, arrow)
 
 FIXTURE_SCOPE_END()

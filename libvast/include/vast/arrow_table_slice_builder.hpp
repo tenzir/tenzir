@@ -24,7 +24,7 @@ namespace vast {
 
 /// A builder for table slices that store elements encoded in the
 /// [Arrow](https://arrow.apache.org) format.
-class experimental_table_slice_builder final : public table_slice_builder {
+class arrow_table_slice_builder final : public table_slice_builder {
 public:
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -36,7 +36,7 @@ public:
   make(type layout, size_t initial_buffer_size = default_buffer_size);
 
   /// Destroys an Arrow table slice builder.
-  ~experimental_table_slice_builder() noexcept override;
+  ~arrow_table_slice_builder() noexcept override;
 
   // -- properties -------------------------------------------------------------
 
@@ -66,9 +66,8 @@ private:
   /// Constructs an Arrow table slice.
   /// @param layout The layout of the slice.
   /// @param initial_buffer_size The buffer size the builder starts with.
-  explicit experimental_table_slice_builder(type layout,
-                                            size_t initial_buffer_size
-                                            = default_buffer_size);
+  explicit arrow_table_slice_builder(type layout, size_t initial_buffer_size
+                                                  = default_buffer_size);
 
   /// Adds data to the builder.
   /// @param x The data to add.
