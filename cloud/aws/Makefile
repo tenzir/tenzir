@@ -90,7 +90,7 @@ run-lambda: ## Run ad-hoc VAST client commands from AWS Lambda
 		--function-name $(shell terraform output vast_lambda_name) \
 		--cli-binary-format raw-in-base64-out \
 		--payload '{"cmd":"$(shell base64 cmd.tmp)", "host":"$(shell $(MAKE) get-vast-server-ip):42000"}' \
-		--cli-read-timeout 1000 \
+		--cli-read-timeout 0 \
 		/dev/stdout | jq -s -r .[0].result
 	@rm cmd.tmp
 
