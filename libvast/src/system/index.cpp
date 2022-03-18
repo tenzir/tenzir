@@ -254,6 +254,14 @@ size_t pending_queue::num_queries() const {
   return queries.size();
 }
 
+[[nodiscard]] uuid pending_queue::create_query_id() const {
+  auto query_id = uuid::random();
+  // Ensure the query id is unique.
+  while (queries.find(query_id) != queries.end() || query_id == uuid::nil())
+    query_id = uuid::random();
+  return query_id;
+}
+
 [[nodiscard]] caf::error pending_queue::insert(query_state&& query_state,
                                                std::vector<uuid>&& candidates) {
   auto qid = query_state.query.id;
@@ -261,7 +269,6 @@ size_t pending_queue::num_queries() const {
   if (!emplace_success)
     return caf::make_error(ec::unspecified, "A query with this ID exists "
                                             "already");
-  const auto& qs = it->second;
   for (const auto& cand : candidates) {
     auto it = std::find_if(partitions.begin(), partitions.end(), [&](auto& x) {
       return x.partition == cand;
@@ -638,16 +645,6 @@ void index_state::notify_flush_listeners() {
 }
 
 // -- partition handling -----------------------------------------------------
-
-// TODO: remove
-vast::uuid index_state::create_query_id() {
-  auto query_id = uuid::random();
-  //// Ensure the query id is unique.
-  // while (pending_queries.find(query_id) != pending_queries.end()
-  //        || query_id == uuid::nil())
-  //   query_id = uuid::random();
-  return query_id;
-}
 
 void index_state::create_active_partition() {
   auto id = uuid::random();
@@ -1117,13 +1114,8 @@ index(index_actor::stateful_pointer<index_state> self,
                  "query results",
                  *self, ids_string);
       for (const auto& id : ids) {
-        self->state.pending_queries.remove_query(id);
-        // self->state.pending_queries.queries.erase(id);
-        //// TODO: Use a better data structure.
-        // std::erase_if(self->state.pending_partitions, [&](auto& x) {
-        //   std::erase(x.queries, id);
-        //   return query_ids.empty();
-        // });
+        if (auto err = self->state.pending_queries.remove_query(id))
+          VAST_DEBUG("{} {}", *self, err);
       }
     }
     self->state.monitored_queries.erase(it);
@@ -1519,14 +1511,16 @@ index(index_actor::stateful_pointer<index_state> self,
                           relational_operator::ni, data{""}};
       auto query
         = query::make_extract(sink, query::extract::drop_ids, match_everything);
+      query.id = self->state.pending_queries.create_query_id();
       query.priority = 100;
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
-      self->state.pending_queries.insert(
+      auto err = self->state.pending_queries.insert(
         query_state{.query = query,
                     .client = caf::actor_cast<receiver_actor<atom::done>>(sink),
                     .candidate_partitions = input_size,
                     .requested_partitions = input_size},
         std::vector{old_partition_ids});
+      VAST_ASSERT(err == caf::none);
       schedule_lookups(self->state);
       auto rp = self->make_response_promise<partition_info>();
       // TODO: Implement some kind of monadic composition instead of these

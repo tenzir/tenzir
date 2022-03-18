@@ -188,6 +188,8 @@ struct pending_queue {
 
   [[nodiscard]] size_t num_queries() const;
 
+  [[nodiscard]] uuid create_query_id() const;
+
   [[nodiscard]] std::optional<pq> next();
 
   /// Maps query IDs to pending queries lookup state.
