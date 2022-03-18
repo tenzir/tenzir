@@ -74,9 +74,7 @@ public:
   /// layout. Note that the record batch's schema and the layout must match
   /// exactly.
   /// @param record_batch The record batch containing the table slice data.
-  /// @param layout The layout of the table slice.
-  table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-              const type& layout);
+  explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch);
 
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.

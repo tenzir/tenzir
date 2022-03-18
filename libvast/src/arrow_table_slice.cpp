@@ -8,7 +8,6 @@
 
 #include "vast/arrow_table_slice.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"

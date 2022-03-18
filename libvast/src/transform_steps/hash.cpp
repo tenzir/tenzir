@@ -8,11 +8,11 @@
 
 #include "vast/transform_steps/hash.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
+#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/hash/default_hash.hpp"
 #include "vast/hash/hash_append.hpp"
 #include "vast/optional.hpp"
@@ -42,8 +42,7 @@ hash_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   auto column_index = layout_rt.flat_index(*column_offset);
   // Compute the hash values.
   auto column = batch->column(detail::narrow_cast<int>(column_index));
-  auto cb = arrow_table_slice_builder::column_builder::make(
-    type{string_type{}}, arrow::default_memory_pool());
+  auto cb = string_type::make_arrow_builder(arrow::default_memory_pool());
   for (int i = 0; i < batch->num_rows(); ++i) {
     const auto& item = column->GetScalar(i);
     auto h = default_hash{};
@@ -52,9 +51,10 @@ hash_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
       hash_append(h, *config_.salt);
     auto digest = h.finish();
     auto x = fmt::format("{:x}", digest);
-    cb->add(std::string_view{x});
+    auto status = append_builder(string_type{}, *cb, x);
+    VAST_ASSERT(status.ok(), status.ToString().c_str());
   }
-  auto hashes_column = cb->finish();
+  auto hashes_column = cb->Finish().ValueOrDie();
   auto result_batch
     = batch->AddColumn(batch->num_columns(), config_.out, hashes_column);
   if (!result_batch.ok()) {

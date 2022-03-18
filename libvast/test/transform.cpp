@@ -140,7 +140,7 @@ vast::type layout(caf::expected<std::vector<vast::transform_batch>> batches) {
 
 vast::table_slice
 as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
-  return {(*batches)[0].batch, (*batches)[0].layout};
+  return vast::table_slice{(*batches)[0].batch};
 }
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)

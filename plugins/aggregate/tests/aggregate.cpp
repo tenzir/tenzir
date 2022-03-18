@@ -94,7 +94,7 @@ TEST(aggregate Zeek conn log) {
                 caf::none);
   const auto result = unbox(aggregate_step->finish());
   REQUIRE_EQUAL(result.size(), 1u);
-  const auto aggregated_slice = table_slice{result[0].batch, result[0].layout};
+  const auto aggregated_slice = table_slice{result[0].batch};
   // NOTE: I calculated this data ahead of time using jq, so it can safely be
   // used for comparison here. As an example, here's how to calculate the
   // grouped sums of the duration values using jq:
@@ -135,7 +135,7 @@ TEST(aggregate test) {
     aggregate_step->add(agg_test_layout, to_record_batch(make_testdata())));
   const auto result = unbox(aggregate_step->finish());
   REQUIRE_EQUAL(result.size(), 1u);
-  const auto aggregated_slice = table_slice{result[0].batch, result[0].layout};
+  const auto aggregated_slice = table_slice{result[0].batch};
   CHECK_EQUAL(aggregated_slice.at(0, 0),
               data_view{vast::time{std::chrono::seconds(1258329600)}});
   CHECK_EQUAL(aggregated_slice.at(0, 1), data_view{address::v4(0xC0A80101)});

@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/experimental_table_slice_builder.hpp>
 #include <vast/plugin.hpp>
 #include <vast/transform_step.hpp>
 #include <vast/type.hpp>
@@ -86,7 +86,7 @@ public:
       return type{name_mapping->to, pruned_layout};
     };
     layout = caf::visit(rename_layout, layout);
-    auto schema = make_arrow_schema(layout);
+    auto schema = layout.to_arrow_schema();
     batch
       = arrow::RecordBatch::Make(schema, batch->num_rows(), batch->columns());
     transformed_batches_.emplace_back(std::move(layout), std::move(batch));

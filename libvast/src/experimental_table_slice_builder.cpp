@@ -29,179 +29,6 @@
 
 namespace vast {
 
-// -- column builder implementations ------------------------------------------
-
-namespace {
-
-// Generic version, which has to be defined last in order to see all the
-// specific overloads.
-template <type_or_concrete_type Type>
-arrow::Status append_builder(const Type& hint,
-                             std::same_as<arrow::ArrayBuilder> auto& builder,
-                             const std::same_as<data_view> auto& view) noexcept;
-
-arrow::Status
-append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,
-               const view<type_to_data_t<bool_type>>& view) noexcept {
-  return builder.Append(view);
-}
-
-arrow::Status
-append_builder(const integer_type&,
-               type_to_arrow_builder_t<integer_type>& builder,
-               const view<type_to_data_t<integer_type>>& view) noexcept {
-  return builder.Append(view.value);
-}
-
-arrow::Status
-append_builder(const count_type&, type_to_arrow_builder_t<count_type>& builder,
-               const view<type_to_data_t<count_type>>& view) noexcept {
-  return builder.Append(view);
-}
-
-arrow::Status
-append_builder(const real_type&, type_to_arrow_builder_t<real_type>& builder,
-               const view<type_to_data_t<real_type>>& view) noexcept {
-  return builder.Append(view);
-}
-
-arrow::Status
-append_builder(const duration_type&,
-               type_to_arrow_builder_t<duration_type>& builder,
-               const view<type_to_data_t<duration_type>>& view) noexcept {
-  return builder.Append(view.count());
-}
-
-arrow::Status
-append_builder(const time_type&, type_to_arrow_builder_t<time_type>& builder,
-               const view<type_to_data_t<time_type>>& view) noexcept {
-  return builder.Append(view.time_since_epoch().count());
-}
-
-arrow::Status
-append_builder(const string_type&,
-               type_to_arrow_builder_t<string_type>& builder,
-               const view<type_to_data_t<string_type>>& view) noexcept {
-  return builder.Append(arrow::util::string_view{view.data(), view.size()});
-}
-
-arrow::Status
-append_builder(const pattern_type&,
-               type_to_arrow_builder_t<pattern_type>& builder,
-               const view<type_to_data_t<pattern_type>>& view) noexcept {
-  const auto str = view.string();
-  return builder.Append(arrow::util::string_view{str.data(), str.size()});
-}
-
-arrow::Status
-append_builder(const address_type&,
-               type_to_arrow_builder_t<address_type>& builder,
-               const view<type_to_data_t<address_type>>& view) noexcept {
-  const auto bytes = as_bytes(view);
-  VAST_ASSERT(bytes.size() == 16);
-  return builder.Append(arrow::util::string_view{
-    reinterpret_cast<const char*>(bytes.data()), bytes.size()});
-}
-
-arrow::Status
-append_builder(const subnet_type&,
-               type_to_arrow_builder_t<subnet_type>& builder,
-               const view<type_to_data_t<subnet_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok())
-    return status;
-  if (auto status = append_builder(address_type{}, builder.address_builder(),
-                                   view.network());
-      !status.ok())
-    return status;
-  return builder.length_builder().Append(view.length());
-}
-
-arrow::Status
-append_builder(const enumeration_type&,
-               type_to_arrow_builder_t<enumeration_type>& builder,
-               const view<type_to_data_t<enumeration_type>>& view) noexcept {
-  return builder.Append(view);
-}
-
-arrow::Status
-append_builder(const list_type& hint,
-               type_to_arrow_builder_t<list_type>& builder,
-               const view<type_to_data_t<list_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok())
-    return status;
-  auto append_values = [&](const concrete_type auto& value_type) noexcept {
-    auto& value_builder = *builder.value_builder();
-    for (const auto& value_view : view)
-      if (auto status = append_builder(value_type, value_builder, value_view);
-          !status.ok())
-        return status;
-    return arrow::Status::OK();
-  };
-  return caf::visit(append_values, hint.value_type());
-}
-
-arrow::Status
-append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
-               const view<type_to_data_t<map_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok())
-    return status;
-  auto append_values = [&](const concrete_type auto& key_type,
-                           const concrete_type auto& item_type) noexcept {
-    auto& key_builder = *builder.key_builder();
-    auto& item_builder = *builder.item_builder();
-    for (const auto& [key_view, item_view] : view) {
-      if (auto status = append_builder(key_type, key_builder, key_view);
-          !status.ok())
-        return status;
-      if (auto status = append_builder(item_type, item_builder, item_view);
-          !status.ok())
-        return status;
-    }
-    return arrow::Status::OK();
-  };
-  return caf::visit(append_values, hint.key_type(), hint.value_type());
-}
-
-arrow::Status
-append_builder(const record_type& hint,
-               type_to_arrow_builder_t<record_type>& builder,
-               const view<type_to_data_t<record_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok())
-    return status;
-  for (int index = 0; const auto& [_, field_type] : hint.fields()) {
-    if (auto status = append_builder(field_type, *builder.field_builder(index),
-                                     view->at(index).second);
-        !status.ok())
-      return status;
-    ++index;
-  }
-  return arrow::Status::OK();
-}
-
-template <type_or_concrete_type Type>
-arrow::Status
-append_builder(const Type& hint,
-               std::same_as<arrow::ArrayBuilder> auto& builder,
-               const std::same_as<data_view> auto& view) noexcept {
-  if (caf::holds_alternative<caf::none_t>(view))
-    return builder.AppendNull();
-  if constexpr (concrete_type<Type>) {
-    return append_builder(hint,
-                          caf::get<type_to_arrow_builder_t<Type>>(builder),
-                          caf::get<vast::view<type_to_data_t<Type>>>(view));
-  } else {
-    auto f
-      = [&]<concrete_type ResolvedType>(const ResolvedType& hint) noexcept {
-          return append_builder(
-            hint, caf::get<type_to_arrow_builder_t<ResolvedType>>(builder),
-            caf::get<vast::view<type_to_data_t<ResolvedType>>>(view));
-        };
-    return caf::visit(f, hint);
-  }
-}
-
-} // namespace
-
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_builder_ptr
@@ -377,6 +204,146 @@ bool experimental_table_slice_builder::add_impl(data_view x) {
   }
   ++current_leaf_;
   return true;
+}
+
+// -- column builder helpers --------------------------------------------------
+
+arrow::Status
+append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,
+               const view<type_to_data_t<bool_type>>& view) noexcept {
+  return builder.Append(view);
+}
+
+arrow::Status
+append_builder(const integer_type&,
+               type_to_arrow_builder_t<integer_type>& builder,
+               const view<type_to_data_t<integer_type>>& view) noexcept {
+  return builder.Append(view.value);
+}
+
+arrow::Status
+append_builder(const count_type&, type_to_arrow_builder_t<count_type>& builder,
+               const view<type_to_data_t<count_type>>& view) noexcept {
+  return builder.Append(view);
+}
+
+arrow::Status
+append_builder(const real_type&, type_to_arrow_builder_t<real_type>& builder,
+               const view<type_to_data_t<real_type>>& view) noexcept {
+  return builder.Append(view);
+}
+
+arrow::Status
+append_builder(const duration_type&,
+               type_to_arrow_builder_t<duration_type>& builder,
+               const view<type_to_data_t<duration_type>>& view) noexcept {
+  return builder.Append(view.count());
+}
+
+arrow::Status
+append_builder(const time_type&, type_to_arrow_builder_t<time_type>& builder,
+               const view<type_to_data_t<time_type>>& view) noexcept {
+  return builder.Append(view.time_since_epoch().count());
+}
+
+arrow::Status
+append_builder(const string_type&,
+               type_to_arrow_builder_t<string_type>& builder,
+               const view<type_to_data_t<string_type>>& view) noexcept {
+  return builder.Append(arrow::util::string_view{view.data(), view.size()});
+}
+
+arrow::Status
+append_builder(const pattern_type&,
+               type_to_arrow_builder_t<pattern_type>& builder,
+               const view<type_to_data_t<pattern_type>>& view) noexcept {
+  const auto str = view.string();
+  return builder.Append(arrow::util::string_view{str.data(), str.size()});
+}
+
+arrow::Status
+append_builder(const address_type&,
+               type_to_arrow_builder_t<address_type>& builder,
+               const view<type_to_data_t<address_type>>& view) noexcept {
+  const auto bytes = as_bytes(view);
+  VAST_ASSERT(bytes.size() == 16);
+  return builder.Append(arrow::util::string_view{
+    reinterpret_cast<const char*>(bytes.data()), bytes.size()});
+}
+
+arrow::Status
+append_builder(const subnet_type&,
+               type_to_arrow_builder_t<subnet_type>& builder,
+               const view<type_to_data_t<subnet_type>>& view) noexcept {
+  if (auto status = builder.Append(); !status.ok())
+    return status;
+  if (auto status = append_builder(address_type{}, builder.address_builder(),
+                                   view.network());
+      !status.ok())
+    return status;
+  return builder.length_builder().Append(view.length());
+}
+
+arrow::Status
+append_builder(const enumeration_type&,
+               type_to_arrow_builder_t<enumeration_type>& builder,
+               const view<type_to_data_t<enumeration_type>>& view) noexcept {
+  return builder.Append(view);
+}
+
+arrow::Status
+append_builder(const list_type& hint,
+               type_to_arrow_builder_t<list_type>& builder,
+               const view<type_to_data_t<list_type>>& view) noexcept {
+  if (auto status = builder.Append(); !status.ok())
+    return status;
+  auto append_values = [&](const concrete_type auto& value_type) noexcept {
+    auto& value_builder = *builder.value_builder();
+    for (const auto& value_view : view)
+      if (auto status = append_builder(value_type, value_builder, value_view);
+          !status.ok())
+        return status;
+    return arrow::Status::OK();
+  };
+  return caf::visit(append_values, hint.value_type());
+}
+
+arrow::Status
+append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
+               const view<type_to_data_t<map_type>>& view) noexcept {
+  if (auto status = builder.Append(); !status.ok())
+    return status;
+  auto append_values = [&](const concrete_type auto& key_type,
+                           const concrete_type auto& item_type) noexcept {
+    auto& key_builder = *builder.key_builder();
+    auto& item_builder = *builder.item_builder();
+    for (const auto& [key_view, item_view] : view) {
+      if (auto status = append_builder(key_type, key_builder, key_view);
+          !status.ok())
+        return status;
+      if (auto status = append_builder(item_type, item_builder, item_view);
+          !status.ok())
+        return status;
+    }
+    return arrow::Status::OK();
+  };
+  return caf::visit(append_values, hint.key_type(), hint.value_type());
+}
+
+arrow::Status
+append_builder(const record_type& hint,
+               type_to_arrow_builder_t<record_type>& builder,
+               const view<type_to_data_t<record_type>>& view) noexcept {
+  if (auto status = builder.Append(); !status.ok())
+    return status;
+  for (int index = 0; const auto& [_, field_type] : hint.fields()) {
+    if (auto status = append_builder(field_type, *builder.field_builder(index),
+                                     view->at(index).second);
+        !status.ok())
+      return status;
+    ++index;
+  }
+  return arrow::Status::OK();
 }
 
 } // namespace vast

@@ -10,13 +10,13 @@
 
 #include "vast/system/transformer.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/framed.hpp"
 #include "vast/detail/logger_formatters.hpp"
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/system/make_transforms.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"

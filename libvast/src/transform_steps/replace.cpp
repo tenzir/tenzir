@@ -8,12 +8,12 @@
 
 #include "vast/transform_steps/replace.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
+#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
@@ -41,12 +41,12 @@ replace_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   // TODO: Consider making this strongly typed so we don't need to infer the
   // type at this point.
   const auto inferred_type = type::infer(value_);
-  auto cb = arrow_table_slice_builder::column_builder::make(
-    inferred_type, arrow::default_memory_pool());
+  auto cb = inferred_type.make_arrow_builder(arrow::default_memory_pool());
   for (int i = 0; i < batch->num_rows(); ++i) {
-    cb->add(make_view(value_));
+    auto status = append_builder(inferred_type, *cb, make_view(value_));
+    VAST_ASSERT(status.ok(), status.ToString().c_str());
   }
-  auto values_column = cb->finish();
+  auto values_column = cb->Finish().ValueOrDie();
   auto adjusted_batch
     = batch->SetColumn(detail::narrow_cast<int>(column_index),
                        arrow::field(config_.field, values_column->type()),

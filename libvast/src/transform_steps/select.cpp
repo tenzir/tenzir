@@ -8,12 +8,12 @@
 
 #include "vast/transform_steps/select.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/error.hpp"
+#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -57,8 +57,7 @@ select_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   }
   // TODO: Replace this with an Arrow-native filter function as soon as we are
   // able to directly evaluate expressions on a record batch.
-  auto new_slice
-    = filter(arrow_table_slice_builder::create(batch, layout), *tailored_expr);
+  auto new_slice = filter(table_slice{batch}, *tailored_expr);
   if (new_slice) {
     auto as_batch = to_record_batch(*new_slice);
     transformed_.emplace_back(new_slice->layout(), std::move(as_batch));

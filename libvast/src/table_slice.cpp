@@ -9,13 +9,13 @@
 #include "vast/table_slice.hpp"
 
 #include "vast/arrow_table_slice.hpp"
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/experimental_table_slice_builder.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
@@ -184,8 +184,8 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout) {
-  *this = arrow_table_slice_builder::create(record_batch, layout);
+  const std::shared_ptr<arrow::RecordBatch>& record_batch) {
+  *this = experimental_table_slice_builder::create(record_batch);
 }
 
 table_slice::table_slice(const table_slice& other) noexcept = default;

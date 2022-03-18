@@ -97,4 +97,93 @@ private:
   flatbuffers::FlatBufferBuilder builder_;
 };
 
+// -- column builder helpers --------------------------------------------------
+
+arrow::Status
+append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,
+               const view<type_to_data_t<bool_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const integer_type&,
+               type_to_arrow_builder_t<integer_type>& builder,
+               const view<type_to_data_t<integer_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const count_type&, type_to_arrow_builder_t<count_type>& builder,
+               const view<type_to_data_t<count_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const real_type&, type_to_arrow_builder_t<real_type>& builder,
+               const view<type_to_data_t<real_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const duration_type&,
+               type_to_arrow_builder_t<duration_type>& builder,
+               const view<type_to_data_t<duration_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const time_type&, type_to_arrow_builder_t<time_type>& builder,
+               const view<type_to_data_t<time_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const string_type&,
+               type_to_arrow_builder_t<string_type>& builder,
+               const view<type_to_data_t<string_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const pattern_type&,
+               type_to_arrow_builder_t<pattern_type>& builder,
+               const view<type_to_data_t<pattern_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const address_type&,
+               type_to_arrow_builder_t<address_type>& builder,
+               const view<type_to_data_t<address_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const subnet_type&,
+               type_to_arrow_builder_t<subnet_type>& builder,
+               const view<type_to_data_t<subnet_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const enumeration_type&,
+               type_to_arrow_builder_t<enumeration_type>& builder,
+               const view<type_to_data_t<enumeration_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const list_type& hint,
+               type_to_arrow_builder_t<list_type>& builder,
+               const view<type_to_data_t<list_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
+               const view<type_to_data_t<map_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const record_type& hint,
+               type_to_arrow_builder_t<record_type>& builder,
+               const view<type_to_data_t<record_type>>& view) noexcept;
+
+template <type_or_concrete_type Type>
+arrow::Status
+append_builder(const Type& hint,
+               std::same_as<arrow::ArrayBuilder> auto& builder,
+               const std::same_as<data_view> auto& view) noexcept {
+  if (caf::holds_alternative<caf::none_t>(view))
+    return builder.AppendNull();
+  if constexpr (concrete_type<Type>) {
+    return append_builder(hint,
+                          caf::get<type_to_arrow_builder_t<Type>>(builder),
+                          caf::get<vast::view<type_to_data_t<Type>>>(view));
+  } else {
+    auto f
+      = [&]<concrete_type ResolvedType>(const ResolvedType& hint) noexcept {
+          return append_builder(
+            hint, caf::get<type_to_arrow_builder_t<ResolvedType>>(builder),
+            caf::get<vast::view<type_to_data_t<ResolvedType>>>(view));
+        };
+    return caf::visit(f, hint);
+  }
+}
+
 } // namespace vast
