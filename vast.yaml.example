@@ -152,12 +152,12 @@ vast:
   # period without escalation into a hard kill.
   shutdown-grace-period: 3m
 
-  # The `indexing` key is used to adjust the false-positive rate of
+  # The `index` key is used to adjust the false-positive rate of
   # the first-level lookup data structures (called synopses) in the
   # catalog. The lower the false-positive rate the more space will be
   # required, so this setting can be used to manually tune the trade-off
   # of performance vs. space.
-  indexing:
+  index:
     rules:
       # Every rule adjusts the false-positive rate of a set of targets.
       # VAST creates one synopsis per target. Targets can be either types

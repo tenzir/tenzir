@@ -49,7 +49,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   if (!active_partition_timeout)
     return active_partition_timeout.error();
   vast::index_config index_config;
-  const auto* settings = get_if(&args.inv.options, "vast.indexing");
+  const auto* settings = get_if(&args.inv.options, "vast.index");
   if (settings) {
     vast::data as_data{};
     if (auto err = convert(*settings, as_data))
