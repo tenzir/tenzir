@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
+#include "vast/index_config.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/query.hpp"
@@ -115,7 +116,8 @@ struct active_partition_state {
   bool streaming_initiated = {};
 
   /// Options to be used when adding events to the partition_synopsis.
-  caf::settings synopsis_opts = {};
+  uint64_t partition_capacity = 0ull;
+  index_config synopsis_index_config = {};
 
   /// A readable name for this partition
   std::string name = {};
@@ -178,17 +180,18 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 /// @param accountant The actor handle of the accountant.
 /// @param filesystem The actor handle of the filesystem.
 /// @param index_opts Settings that are forwarded when creating indexers.
-/// @param synopsis_opts Settings that are forwarded when creating synopses.
 /// @param store The store to retrieve the events from.
 /// @param store_id The name of the store backend that should be stored
 ///                      on disk.
 /// @param store_header A binary blob that allows reconstructing the store
 ///                     plugin when reading this partition from disk.
+/// @param index_config The meta-index configuration of the false-positives
+/// rates for the types and fields.
 // TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
-  caf::settings index_opts, caf::settings synopsis_opts, store_actor store,
-  std::string store_id, chunk_ptr store_header);
+  caf::settings index_opts, const index_config& synopsis_opts,
+  store_actor store, std::string store_id, chunk_ptr store_header);
 
 } // namespace vast::system

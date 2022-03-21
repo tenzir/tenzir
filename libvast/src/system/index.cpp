@@ -490,7 +490,12 @@ index_state::collect_query_actors(query_state& lookup,
 void index_state::add_flush_listener(flush_listener_actor listener) {
   VAST_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
   flush_listeners.emplace_back(std::move(listener));
-  detail::notify_listeners_if_clean(*this, *stage);
+  // We may need to call `notify_listeners_if_clean` if the subscription
+  // happens after the data has already completely passed the index, but
+  // we must not to call it before any data at all has arrived it would
+  // create a false positive.
+  if (!active_partitions.empty())
+    detail::notify_listeners_if_clean(*this, *stage);
 }
 
 // The whole purpose of the `-b` flag is to somehow block until all imported
@@ -760,23 +765,19 @@ index(index_actor::stateful_pointer<index_state> self,
       std::string store_backend, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
-      const std::filesystem::path& catalog_dir, double synopsis_fp_rate) {
+      const std::filesystem::path& catalog_dir, index_config index_config) {
   VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity),
                    VAST_ARG(active_partition_timeout),
                    VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
                    VAST_ARG(num_workers), VAST_ARG(catalog_dir),
-                   VAST_ARG(synopsis_fp_rate));
+                   VAST_ARG(index_config));
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                *self, dir, partition_capacity, max_inmem_partitions);
   self->state.index_opts["cardinality"] = partition_capacity;
-  // These options must be kept in sync with vast/address_synopsis.hpp and
-  // vast/string_synopsis.hpp respectively.
-  self->state.synopsis_opts["max-partition-size"] = partition_capacity;
-  self->state.synopsis_opts["address-synopsis-fp-rate"] = synopsis_fp_rate;
-  self->state.synopsis_opts["string-synopsis-fp-rate"] = synopsis_fp_rate;
+  self->state.synopsis_opts = std::move(index_config);
   // The global archive gets hard-coded special treatment for backwards
   // compatibility.
   self->state.partition_local_stores = store_backend != "archive";

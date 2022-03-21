@@ -80,7 +80,7 @@ TEST(identity transform / done before persist) {
   // Spawn partition transformer
   auto uuid = vast::uuid::random();
   auto store_id = "segment-store"s;
-  auto synopsis_opts = caf::settings{};
+  auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
@@ -153,7 +153,7 @@ TEST(delete transform / persist before done) {
   // Spawn partition transformer
   auto uuid = vast::uuid::random();
   auto store_id = "segment-store"s;
-  auto synopsis_opts = caf::settings{};
+  auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
@@ -243,13 +243,13 @@ TEST(identity partition transform via the index) {
   const auto in_mem_partitions = 10;
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
-  const auto catalog_fp_rate = 0.01;
+  const auto index_config = vast::index_config{};
   auto index
     = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
                   type_registry, index_dir,
                   vast::defaults::system::store_backend, partition_capacity,
                   active_partition_timeout, in_mem_partitions, taste_count,
-                  num_query_supervisors, index_dir, catalog_fp_rate);
+                  num_query_supervisors, index_dir, index_config);
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
@@ -342,13 +342,12 @@ TEST(select transform with an empty result set) {
   const auto in_mem_partitions = 10;
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
-  const auto catalog_fp_rate = 0.01;
   auto index
     = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
                   type_registry, index_dir,
                   vast::defaults::system::store_backend, partition_capacity,
                   active_partition_timeout, in_mem_partitions, taste_count,
-                  num_query_supervisors, index_dir, catalog_fp_rate);
+                  num_query_supervisors, index_dir, vast::index_config{});
   self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
