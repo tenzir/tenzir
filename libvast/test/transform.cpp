@@ -264,7 +264,7 @@ TEST(anonymize step) {
   REQUIRE_EQUAL(anonymized->size(), 1ull);
   REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).num_fields(),
                 4ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(*anonymized)).field(3).name,
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(*anonymized)).field(1).name,
                 "hashed_uid");
   // TODO: not sure how we can check that the data was correctly hashed.
 }
