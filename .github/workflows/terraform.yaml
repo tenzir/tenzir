@@ -3,7 +3,7 @@ on: workflow_dispatch
 
 # This CI configuration has multiple dependencies:
 # - You need an AWS account with a user having sufficient IAM access to run
-#   the Terraform scripts. Its crendientials should be set in the repository
+#   the Terraform scripts. Its credentials should be set in the repository
 #   secrets as AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
 # - You need to choose an AWS region and a VPC within that region. These
 #   should be configured in the repository secrets as AWS_REGION and
@@ -15,6 +15,14 @@ on: workflow_dispatch
 #   account setup, configure its organization name and the desired workspace
 #   in the repository secrets as TF_ORGANIZATION and TF_WORKSPACE. You also
 #   need the API key from Terraform cloud and set it in TF_API_TOKEN
+
+# Notes:
+# - If this workflow is executed multiple times at in parallel, the Terraform
+#   state will be protected against inconsistencies by the lock provided by
+#   Terraform Cloud but the other tests will result in undefined behavior.
+# - If Terraform fails or is interrupted during deployment or destruction, the
+#   state might end up locked and subsequent runs will fail. In this case the
+#   state first needs to be unlocked, for instance from the Terraform Cloud UI.
 
 # Set these secrets to configure the CI run
 env:
