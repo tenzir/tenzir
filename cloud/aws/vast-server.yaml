@@ -1,0 +1,17 @@
+vast:
+  endpoint: "0.0.0.0:42000"
+  console-verbosity: verbose
+  file-verbosity: quiet
+  db-directory: /var/lib/vast
+  plugins:
+    - all
+  enable-metrics: true
+
+  console-format: "{\"ts\": \"%Y-%m-%dT%H:%M:%S.%f\", \"key\": \"vast_log\", \"level\": \"%^%l%$\", \"message\": \"%v\"}"
+  metrics:
+    self-sink:
+      enable: false
+    file-sink:
+      enable: true
+      real-time: true
+      path: "/dev/stdout"

@@ -65,9 +65,6 @@ TEST(uuid roundtrip) {
 
 TEST(index roundtrip) {
   vast::system::index_state state(/*self = */ nullptr);
-  // The active partition is not supposed to appear in the
-  // created flatbuffer
-  state.active_partition.id = vast::uuid::random();
   // Both unpersisted and persisted partitions should show up in the created
   // flatbuffer.
   state.unpersisted[vast::uuid::random()] = nullptr;

@@ -66,8 +66,8 @@ struct fixture : fixture_base {
     auto indexdir = directory / "index";
     index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
                         catalog, type_registry, indexdir,
-                        defaults::system::store_backend, 10000, 5, 5, 1,
-                        indexdir, 0.01);
+                        defaults::system::store_backend, 10000, duration{}, 5,
+                        5, 1, indexdir, 0.01);
   }
 
   void spawn_importer() {
@@ -122,7 +122,10 @@ struct fixture : fixture_base {
       },
       error_handler(),
       // Do a one-pass can over the mailbox without waiting for messages.
-      caf::after(0ms) >> [&] { running = false; });
+      caf::after(0ms) >>
+        [&] {
+          running = false;
+        });
 
     MESSAGE("got " << total_events << " events in total");
     return result;

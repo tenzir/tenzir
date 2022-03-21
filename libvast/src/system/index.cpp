@@ -573,9 +573,12 @@ index_state::collect_query_actors(query_state& lookup,
   //   return result;
   //// Prefer partitions that are already available in RAM.
   // auto partition_is_loaded = [&](const uuid& candidate) {
-  //   return (active_partition.actor != nullptr
-  //           && active_partition.id == candidate)
-  //          || (unpersisted.count(candidate) != 0u)
+  //   for (const auto& [_, active_partition] : active_partitions) {
+  //     if (active_partition.actor != nullptr && active_partition.id ==
+  //     candidate)
+  //       return true;
+  //   }
+  //   return (unpersisted.count(candidate) != 0u)
   //          || inmem_partitions.contains(candidate);
   // };
   // std::partition(lookup.partitions.begin(), lookup.partitions.end(),
@@ -585,15 +588,20 @@ index_state::collect_query_actors(query_state& lookup,
   //   // We need to first check whether the ID is the active partition or one
   //   // of our unpersisted ones. Only then can we dispatch to our LRU cache.
   //   partition_actor part;
-  //   if (active_partition.actor != nullptr
-  //       && active_partition.id == partition_id)
-  //     part = active_partition.actor;
-  //   else if (auto it = unpersisted.find(partition_id); it !=
-  //   unpersisted.end())
-  //     part = it->second;
-  //   else if (auto it = persisted_partitions.find(partition_id);
-  //            it != persisted_partitions.end())
-  //     part = inmem_partitions.get_or_load(partition_id);
+  //   for (const auto& [_, active_partition] : active_partitions) {
+  //     if (active_partition.actor != nullptr
+  //         && active_partition.id == partition_id) {
+  //       part = active_partition.actor;
+  //       break;
+  //     }
+  //   }
+  //   if (!part) {
+  //     if (auto it = unpersisted.find(partition_id); it != unpersisted.end())
+  //       part = it->second;
+  //     else if (auto it = persisted_partitions.find(partition_id);
+  //              it != persisted_partitions.end())
+  //       part = inmem_partitions.get_or_load(partition_id);
+  //   }
   //   if (!part)
   //     VAST_ERROR("{} could not load partition {} that was part of a "
   //                "query",
@@ -635,10 +643,15 @@ void index_state::notify_flush_listeners() {
   VAST_DEBUG("{} sends 'flush' messages to {} listeners", *self,
              flush_listeners.size());
   for (auto& listener : flush_listeners) {
-    if (active_partition.actor)
-      self->send(active_partition.actor, atom::subscribe_v, atom::flush_v,
-                 listener);
-    else
+    bool downstream = false;
+    for (const auto& [_, active_partition] : active_partitions) {
+      if (active_partition.actor) {
+        self->send(active_partition.actor, atom::subscribe_v, atom::flush_v,
+                   listener);
+        downstream = true;
+      }
+    }
+    if (!downstream)
       self->send(listener, atom::flush_v);
   }
   flush_listeners.clear();
@@ -646,8 +659,14 @@ void index_state::notify_flush_listeners() {
 
 // -- partition handling -----------------------------------------------------
 
-void index_state::create_active_partition() {
+bool i_partition_selector::operator()(const type& filter,
+                                      const table_slice& slice) const {
+  return filter == slice.layout();
+}
+
+void index_state::create_active_partition(const type& layout) {
   auto id = uuid::random();
+  auto& active_partition = active_partitions[layout];
   // If we're using the global store, the importer already sends the table
   // slices. (In the long run, this should probably be streamlined so that all
   // data moves through the index. However, that requires some refactoring of
@@ -664,16 +683,17 @@ void index_state::create_active_partition() {
       self->quit(builder_and_header.error());
       return;
     }
-    VAST_ASSERT(builder_and_header); // FIXME
     auto& [builder, header] = *builder_and_header;
     store_header = header;
     active_partition.store = builder;
     active_partition.store_slot
       = stage->add_outbound_path(active_partition.store);
+    stage->out().set_filter(active_partition.store_slot, layout);
   } else {
     store_name = "legacy_archive";
     active_partition.store = global_store;
   }
+  active_partition.spawn_time = std::chrono::steady_clock::now();
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
                   index_opts, synopsis_opts,
@@ -681,29 +701,33 @@ void index_state::create_active_partition() {
                   store_header);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
+  stage->out().set_filter(active_partition.stream_slot, layout);
   active_partition.capacity = partition_capacity;
   active_partition.id = id;
   VAST_DEBUG("{} created new partition {}", *self, id);
 }
 
-void index_state::decomission_active_partition() {
-  auto id = active_partition.id;
-  auto actor = std::exchange(active_partition.actor, {});
+void index_state::decomission_active_partition(const type& layout) {
+  auto active_partition = active_partitions.find(layout);
+  VAST_ASSERT(active_partition != active_partitions.end());
+  auto id = active_partition->second.id;
+  auto actor = std::exchange(active_partition->second.actor, {});
   unpersisted[id] = actor;
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
-  stage->out().close(active_partition.stream_slot);
+  stage->out().close(active_partition->second.stream_slot);
   if (partition_local_stores)
-    stage->out().close(active_partition.store_slot);
+    stage->out().close(active_partition->second.store_slot);
   stage->out().force_emit_batches();
   // Persist active partition asynchronously.
   auto part_dir = partition_path(id);
   auto synopsis_dir = partition_synopsis_path(id);
-  VAST_DEBUG("{} persists active partition to {}", *self, part_dir);
+  VAST_DEBUG("{} persists active partition {} to {}", *self, layout, part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        VAST_DEBUG("{} successfully persisted partition {}", *self, id);
+        VAST_DEBUG("{} successfully persisted partition {} {}", *self, layout,
+                   id);
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
         catalog_bytes += ps->memusage();
@@ -712,8 +736,9 @@ void index_state::decomission_active_partition() {
         self->request(catalog, caf::infinite, atom::merge_v, id, ps)
           .then(
             [=, this](atom::ok) {
-              VAST_DEBUG("{} received ok for request to persist partition {}",
-                         *self, id);
+              VAST_DEBUG("{} received ok for request to persist partition {} "
+                         "{}",
+                         *self, layout, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
@@ -722,13 +747,14 @@ void index_state::decomission_active_partition() {
             },
             [=, this](const caf::error& err) {
               VAST_DEBUG("{} received error for request to persist partition "
+                         "{} "
                          "{}: {}",
-                         *self, id, err);
+                         *self, layout, id, err);
             });
       },
       [=, this](caf::error& err) {
-        VAST_ERROR("{} failed to persist partition {} with error: {}", *self,
-                   id, err);
+        VAST_ERROR("{} failed to persist partition {} {} with error: {}", *self,
+                   layout, id, err);
         self->quit(std::move(err));
       });
 }
@@ -793,15 +819,14 @@ index_state::status(status_verbosity v) const {
     worker_status["busy"] = running_partition_lookups;
     rs->content["workers"] = std::move(worker_status);
     auto pending_status = list{};
-    // for (auto& [u, qs] : pending_queries) {
-    //   auto q = record{};
-    //   q["id"] = fmt::to_string(u);
-    //   q["query"] = fmt::to_string(qs);
-    //   pending_status.emplace_back(std::move(q));
-    // }
-    rs->content["pending_queries"] = std::move(pending_status);
-    rs->content["num-active-partitions"]
-      = count{active_partition.actor == nullptr ? 0u : 1u};
+    for (auto& [u, qs] : pending_queries.queries) {
+      auto q = record{};
+      q["id"] = fmt::to_string(u);
+      q["query"] = fmt::to_string(qs);
+      pending_status.emplace_back(std::move(q));
+    }
+    rs->content["pending"] = std::move(pending_status);
+    rs->content["num-active-partitions"] = count{active_partitions.size()};
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
@@ -839,9 +864,11 @@ index_state::status(status_verbosity v) const {
     partitions.reserve(3u);
     auto& active
       = caf::get<list>(partitions.emplace("active", list{}).first->second);
-    active.reserve(1);
-    if (active_partition.actor != nullptr)
-      partition_status(active_partition.id, active_partition.actor, active);
+    active.reserve(active_partitions.size());
+    for (const auto& [_, active_partition] : active_partitions) {
+      if (active_partition.actor != nullptr)
+        partition_status(active_partition.id, active_partition.actor, active);
+    }
     auto& cached
       = caf::get<list>(partitions.emplace("cached", list{}).first->second);
     cached.reserve(inmem_partitions.size());
@@ -881,15 +908,21 @@ void schedule_lookups(index_state& st) {
       // We need to first check whether the ID is the active partition or one
       // of our unpersisted ones. Only then can we dispatch to our LRU cache.
       partition_actor part;
-      if (st.active_partition.actor != nullptr
-          && st.active_partition.id == partition_id)
-        part = st.active_partition.actor;
-      else if (auto it = st.unpersisted.find(partition_id);
-               it != st.unpersisted.end())
-        part = it->second;
-      else if (auto it = st.persisted_partitions.find(partition_id);
-               it != st.persisted_partitions.end())
-        part = st.inmem_partitions.get_or_load(partition_id);
+      for (const auto& [_, active_partition] : st.active_partitions) {
+        if (active_partition.actor != nullptr
+            && active_partition.id == partition_id) {
+          part = active_partition.actor;
+          break;
+        }
+      }
+      if (!part) {
+        if (auto it = st.unpersisted.find(partition_id);
+            it != st.unpersisted.end())
+          part = it->second;
+        else if (auto it = st.persisted_partitions.find(partition_id);
+                 it != st.persisted_partitions.end())
+          part = st.inmem_partitions.get_or_load(partition_id);
+      }
       if (!part)
         VAST_ERROR("{} could not load partition {} that was part of a "
                    "query",
@@ -957,13 +990,16 @@ index(index_actor::stateful_pointer<index_state> self,
       archive_actor archive, catalog_actor catalog,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
+      duration active_partition_timeout, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& catalog_dir, double synopsis_fp_rate) {
-  VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
+  VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
-                   VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
-                   VAST_ARG(taste_partitions), VAST_ARG(num_workers),
-                   VAST_ARG(catalog_dir), VAST_ARG(synopsis_fp_rate));
+                   VAST_ARG(partition_capacity),
+                   VAST_ARG(active_partition_timeout),
+                   VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
+                   VAST_ARG(num_workers), VAST_ARG(catalog_dir),
+                   VAST_ARG(synopsis_fp_rate));
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                *self, dir, partition_capacity, max_inmem_partitions);
@@ -1005,6 +1041,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
   self->state.partition_capacity = partition_capacity;
+  self->state.active_partition_timeout = active_partition_timeout;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
@@ -1030,15 +1067,18 @@ index(index_actor::stateful_pointer<index_state> self,
       // transparent key lookup with string views, avoding the copy of the name
       // here.
       self->state.stats.layouts[std::string{layout.name()}].count += x.rows();
-      auto& active = self->state.active_partition;
+      auto& active = self->state.active_partitions[layout];
       if (!active.actor) {
-        self->state.create_active_partition();
+        self->state.create_active_partition(layout);
       } else if (x.rows() > active.capacity) {
         VAST_DEBUG("{} exceeds active capacity by {} rows", *self,
                    x.rows() - active.capacity);
-        self->state.decomission_active_partition();
+        VAST_VERBOSE("{} flushes active partition {} with {}/{} events", *self,
+                     layout, self->state.partition_capacity - active.capacity,
+                     self->state.partition_capacity);
+        self->state.decomission_active_partition(layout);
         self->state.flush_to_disk();
-        self->state.create_active_partition();
+        self->state.create_active_partition(layout);
       }
       out.push(x);
       if (active.capacity == self->state.partition_capacity
@@ -1069,15 +1109,19 @@ index(index_actor::stateful_pointer<index_state> self,
         // importer.
         self->send_exit(self, err);
       }
-    });
+    },
+    caf::policy::arg<caf::broadcast_downstream_manager<
+      table_slice, vast::type, i_partition_selector>>{});
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
     // Flush buffered batches and end stream.
     detail::shutdown_stream_stage(self->state.stage);
     // Bring down active partition.
-    if (self->state.active_partition.actor)
-      self->state.decomission_active_partition();
+    for (auto& [layout, partinfo] : self->state.active_partitions) {
+      if (partinfo.actor)
+        self->state.decomission_active_partition(layout);
+    }
     // Collect partitions for termination.
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
     // on 'std::vector<caf::actor>' only. That should probably be generalized
@@ -1125,11 +1169,12 @@ index(index_actor::stateful_pointer<index_state> self,
   //  self->spawn(query_supervisor,
   //              caf::actor_cast<query_supervisor_master_actor>(self));
   // Start metrics loop.
-  if (self->state.accountant) {
+  if (self->state.accountant)
     self->send(self->state.accountant, atom::announce_v, self->name());
+  if (self->state.accountant
+      || self->state.active_partition_timeout.count() > 0)
     self->delayed_send(self, defaults::system::telemetry_rate,
                        atom::telemetry_v);
-  }
   return {
     [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", *self, partition_id);
@@ -1140,9 +1185,33 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->state.stage->add_inbound_path(in);
     },
     [self](atom::telemetry) {
-      self->state.send_report();
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
+      if (self->state.accountant)
+        self->state.send_report();
+      if (self->state.active_partition_timeout.count() > 0) {
+        auto decomissioned = std::vector<type>{};
+        for (const auto& [layout, active_partition] :
+             self->state.active_partitions) {
+          if (active_partition.spawn_time + self->state.active_partition_timeout
+              < std::chrono::steady_clock::now()) {
+            VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
+                         "after {} timeout",
+                         *self, layout,
+                         self->state.partition_capacity
+                           - active_partition.capacity,
+                         self->state.partition_capacity,
+                         data{self->state.active_partition_timeout});
+            self->state.decomission_active_partition(layout);
+            decomissioned.push_back(layout);
+          }
+        }
+        if (!decomissioned.empty()) {
+          for (const auto& layout : decomissioned)
+            self->state.active_partitions.erase(layout);
+          self->state.flush_to_disk();
+        }
+      }
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_DEBUG("{} adds flush listener", *self);
@@ -1184,8 +1253,8 @@ index(index_actor::stateful_pointer<index_state> self,
       // we must do it before.
       auto rp = self->make_response_promise<query_response>();
       std::vector<uuid> candidates;
-      if (self->state.active_partition.actor)
-        candidates.push_back(self->state.active_partition.id);
+      for (const auto& [_, active_partition] : self->state.active_partitions)
+        candidates.push_back(active_partition.id);
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
       self
@@ -1231,8 +1300,8 @@ index(index_actor::stateful_pointer<index_state> self,
         = caf::actor_cast<receiver_actor<atom::done>>(self->current_sender());
       auto rp = self->make_response_promise<query_cursor>();
       std::vector<uuid> candidates;
-      if (self->state.active_partition.actor)
-        candidates.push_back(self->state.active_partition.id);
+      for (const auto& [_, active_partition] : self->state.active_partitions)
+        candidates.push_back(active_partition.id);
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
       self
@@ -1277,8 +1346,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->delegate(self->state.catalog, atom::candidates_v, lookup_id,
                             std::move(expr));
     },
-    [/*self*/](atom::internal, vast::query& /*query*/,
-               query_supervisor_actor& /*worker*/) -> caf::result<query_cursor> {
+    [self](atom::internal, vast::query /*query*/,
+           query_supervisor_actor /*worker*/) -> caf::result<query_cursor> {
       return ec::unimplemented;
       //// Query handling
       // auto sender = self->current_sender();
@@ -1314,9 +1383,10 @@ index(index_actor::stateful_pointer<index_state> self,
       //// probe having to read a user-space pointer, and 64 bit should
       //// be unique enough for any tracing run.
       // VAST_TRACEPOINT(query_new, query_id.as_u64().first,
-      // query_string.c_str()); std::vector<uuid> candidates; if
-      // (self->state.active_partition.actor)
-      //   candidates.push_back(self->state.active_partition.id);
+      // query_string.c_str()); std::vector<uuid> candidates; for (const auto&
+      // [_, active_partition] : self->state.active_partitions)
+      //   if (active_partition.actor)
+      //     candidates.push_back(active_partition.id);
       // for (const auto& [id, _] : self->state.unpersisted)
       //   candidates.push_back(id);
       // auto rp = self->make_response_promise<query_cursor>();
@@ -1324,13 +1394,11 @@ index(index_actor::stateful_pointer<index_state> self,
       // auto start = std::chrono::steady_clock::now();
       // self
       //   ->request(self->state.catalog, caf::infinite, atom::candidates_v,
-      //             query)
-      //   .then(
+      //   query) .then(
       //     [=, candidates
-      //         = std::move(candidates)](catalog_result& midx_result)
-      //         mutable {
+      //         = std::move(candidates)](catalog_result& midx_result) mutable {
       //       auto& midx_candidates = midx_result.partitions;
-      //       VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
+      //       VAST_DEBUG("{} got initial candidates {} and from catalog {}",
       //                  *self, candidates, midx_candidates);
       //       candidates.insert(candidates.end(), midx_candidates.begin(),
       //                         midx_candidates.end());
@@ -1355,7 +1423,7 @@ index(index_actor::stateful_pointer<index_state> self,
       //         = self->state.pending.emplace(query_id, std::move(lookup));
       //       VAST_ASSERT(result.second);
       //       auto delta = std::chrono::steady_clock::now() - start;
-      //       VAST_TRACEPOINT(query_meta_index, query_id.as_u64().first, total,
+      //       VAST_TRACEPOINT(query_catalog, query_id.as_u64().first, total,
       //                       delta.count());
       //       rp.deliver(query_cursor{query_id,
       //       detail::narrow<uint32_t>(total),
@@ -1368,7 +1436,7 @@ index(index_actor::stateful_pointer<index_state> self,
       //                    scheduled);
       //     },
       //     [=](caf::error err) mutable {
-      //       VAST_ERROR("{} failed to receive candidates from meta-index: {}",
+      //       VAST_ERROR("{} failed to receive candidates from catalog: {}",
       //                  *self, render(err));
       //       self->send(self, atom::worker_v, worker);
       //       rp.deliver(std::move(err));

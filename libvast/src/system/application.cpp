@@ -35,6 +35,9 @@ command::opts_builder add_index_opts(command::opts_builder ob) {
   return std::move(ob)
     .add<size_t>("max-partition-size", "maximum number of events in a "
                                        "partition")
+    .add<std::string>("active-partition-timeout",
+                      "timespan after which an active partition is "
+                      "forcibly flushed")
     .add<size_t>("max-resident-partitions", "maximum number of in-memory "
                                             "partitions")
     .add<size_t>("max-taste-partitions", "maximum number of immediately "
