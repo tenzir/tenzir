@@ -1,0 +1,117 @@
+name: "Terraform"
+on: workflow_dispatch
+
+# This CI configuration has multiple dependencies:
+# - You need an AWS account with a user having sufficient IAM access to run 
+#   the Terraform scripts. Its crendientials should be set in the repository 
+#   secrets as AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+# - You need to choose an AWS region and a VPC within that region. These
+#   should be configured in the repository secrets as AWS_REGION and
+#   PEERED_VPC_ID.
+# - The VAST deployment creates a new VPC. Its CIDR should not overlap an
+#   existing one in your account. Configure it in the repository secrets as 
+#   VAST_CIDR
+# - The CI run uses Terraform Cloud to store the state. Once you have an
+#   account setup, configure its organization name and the desired workspace
+#   in the repository secrets as TF_ORGANIZATION and TF_WORKSPACE. You also
+#   need the API key from Terraform cloud and set it in TF_API_TOKEN
+
+# Set these secrets to configure the CI run
+env:
+  PEERED_VPC_ID: "${{ secrets.PEERED_VPC_ID }}"
+  VAST_CIDR: "${{ secrets.VAST_CIDR }}"
+  TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
+  TF_WORKSPACE: "${{ secrets.TF_WORKSPACE }}"
+  AWS_REGION: "${{ secrets.AWS_REGION }}"
+  AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+  AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+  TF_CLI_ARGS_apply: "-auto-approve"
+  TF_CLI_ARGS_destroy: "-auto-approve"
+
+jobs:
+  vast_on_aws:
+    name: "VAST ON AWS"
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: "Substitute backend with Terraform Cloud"
+        run: |
+          cat<<EOF > backend.tf
+          terraform {
+            cloud {
+              organization = "$TF_ORGANIZATION"
+              workspaces {
+                name = "$TF_WORKSPACE"
+              }
+            }
+          }
+          EOF
+
+      - name: "Print backend config"
+        run: |
+          cat ./backend.tf
+
+      - name: "Create config file"
+        if: ${{ !env.ACT }}
+        run: |
+          echo "peered_vpc_id = $PEERED_VPC_ID" >> default.env
+          echo "vast_cidr = $VAST_CIDR" >> default.env
+          echo "aws_region = $AWS_REGION" >> default.env
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+          terraform_wrapper: false
+
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      - name: Make - deploy
+        run: make deploy
+
+      - name: Make - start and restart VAST server
+        run: |
+          echo "Run start-vast-server" 
+          make start-vast-server
+
+          echo "Run start-vast-server again" 
+          make start-vast-server 2> /dev/null && { echo "Starting server again should fail"; false; } || true
+          [[ $(make get-vast-server | wc -w) = "1" ]] || { echo "Only one task should be started"; false; }
+
+          echo "Run restart-vast-server" 
+          make restart-vast-server
+          [[ $(make get-vast-server | wc -w) = "1" ]] || { echo "Only one task should be started"; false; }
+
+          echo "The task needs a bit of time to boot, sleeping for a while..."
+          sleep 100
+
+      - name: Make - test db empty from Lambda
+        run: |
+          result=$(make run-lambda CMD="vast count")
+          echo "Expected vast count 0, got $result"
+          [[ $result = "0" ]]
+
+      - name: Make - import data
+        run: |
+          DATA_URL=https://raw.githubusercontent.com/tenzir/vast/master/vast/integration/data/suricata/eve.json
+          make execute-command \
+            CMD="wget -O - -o /dev/null $DATA_URL | vast import suricata"
+
+      - name: Make - test db not empty from Lambda
+        run: |
+          result=$(make run-lambda CMD="vast count")
+          echo "Expected vast count 7, got $result"
+          [[ $result = "7" ]]
+
+      - name: Make - destroy
+        if: always()
+        run: |
+          make destroy
