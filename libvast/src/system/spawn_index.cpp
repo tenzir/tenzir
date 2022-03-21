@@ -52,10 +52,10 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   const auto* settings = get_if(&args.inv.options, "vast.index");
   if (settings) {
     vast::data as_data{};
-    if (auto err = convert(*settings, as_data))
+    if (!convert(*settings, as_data))
       return caf::make_error(ec::convert_error, fmt::format("failed to convert "
-                                                            "{} to data: {}",
-                                                            *settings, err));
+                                                            "{} to data",
+                                                            *settings));
     if (auto err = convert(as_data, index_config))
       return err;
     VAST_VERBOSE("using customized indexing configuration {}", index_config);
