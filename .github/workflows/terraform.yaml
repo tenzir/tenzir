@@ -89,16 +89,20 @@ jobs:
 
       - name: Make - start and restart VAST server
         run: |
-          echo "Run start-vast-server" 
+          echo "Run start-vast-server"
           make start-vast-server
 
-          echo "Run start-vast-server again" 
-          make start-vast-server 2> /dev/null && { echo "Starting server again should fail"; false; } || true
-          [[ $(make get-vast-server | wc -w) = "1" ]] || { echo "Only one task should be started"; false; }
+          echo "Run start-vast-server again"
+          make start-vast-server 2> /dev/null \
+            && { echo "Starting server again should fail"; false; } \
+            || true
+          [[ $(make get-vast-server | wc -w) = "1" ]] \
+            || { echo "Only one task should be started"; false; }
 
-          echo "Run restart-vast-server" 
+          echo "Run restart-vast-server"
           make restart-vast-server
-          [[ $(make get-vast-server | wc -w) = "1" ]] || { echo "Only one task should be started"; false; }
+          [[ $(make get-vast-server | wc -w) = "1" ]] \
+            || { echo "Only one task should be started"; false; }
 
           echo "The task needs a bit of time to boot, sleeping for a while..."
           sleep 100
