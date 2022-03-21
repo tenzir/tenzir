@@ -134,6 +134,41 @@ private:
   arrow_table_slice_state<FlatBuffer> state_;
 };
 
+// -- utility functions -------------------------------------------------------
+
+struct indexed_transformation {
+  using function_type = std::function<std::vector<
+    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>(
+    struct record_type::field, std::shared_ptr<arrow::Array>)>;
+
+  offset index;      ///< The index of the field to transform.
+  function_type fun; /// The transformation function to apply.
+
+  friend auto operator<=>(const indexed_transformation& lhs,
+                          const indexed_transformation& rhs) noexcept {
+    return lhs.index <=> rhs.index;
+  }
+};
+
+/// Applies a list of transformations to both a VAST layout and an Arrow record
+/// batch.
+/// @pre VAST layout and Arrow schema must match.
+/// @pre Transformations must be sorted by index.
+/// @pre Transformation indices must not be a subset of the following
+/// transformation's index.
+std::pair<type, std::shared_ptr<arrow::RecordBatch>>
+transform(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+          const std::vector<indexed_transformation>& transformations) noexcept;
+
+/// Removed all unspecified columns from both a VAST layout and an Arrow record
+/// batch.
+/// @pre VAST layout and Arrow schema must match.
+/// @pre Indices must be sorted.
+/// @pre Indices must not be a subset of the following index.
+std::pair<type, std::shared_ptr<arrow::RecordBatch>>
+project(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+        const std::vector<offset>& indices) noexcept;
+
 // -- template machinery -------------------------------------------------------
 
 /// Explicit deduction guide (not needed as of C++20).

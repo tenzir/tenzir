@@ -129,6 +129,116 @@ TEST(nested multi - column roundtrip) {
   record_batch_roundtrip(slice);
 }
 
+TEST(batch transform nested column) {
+  auto t = record_type{
+    {"f1", type{string_type{}, {{"key", "value"}}}},
+    {"f2", type{"alt_name", count_type{}}},
+    {
+      "f3_rec",
+      type{
+        "nested",
+        record_type{
+          {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
+          {"f3.2", integer_type{}},
+        },
+        {{"attr"}, {"other_attr", "val"}},
+      },
+    },
+  };
+  auto f1s = std::vector<std::string>{"n1", "n2", "n3", "n4"};
+  auto f2s = std::vector<count>{1_c, 2_c, 3_c, 4_c};
+  auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
+                                  pattern("p4")};
+  auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
+  auto slice = make_slice(t, f1s, f2s, f3s, f4s);
+  auto transform_fn =
+    [](struct record_type::field field, std::shared_ptr<arrow::Array>) noexcept
+    -> std::vector<
+      std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+    field.type = type{string_type{}};
+    auto builder
+      = string_type::make_arrow_builder(arrow::default_memory_pool());
+    REQUIRE(builder->Append("foo").ok());
+    REQUIRE(builder->Append("bar").ok());
+    REQUIRE(builder->AppendNull().ok());
+    REQUIRE(builder->Append("baz").ok());
+    auto new_array = builder->Finish();
+    REQUIRE(new_array.ok());
+    return {{field, new_array.MoveValueUnsafe()}};
+  };
+  auto [layout, batch] = transform(slice.layout(), to_record_batch(slice),
+                                   {{{2, 0}, transform_fn}});
+  REQUIRE(caf::holds_alternative<record_type>(layout));
+  const auto expected_t = record_type{
+    {"f3.1", string_type{}},
+    {"f3.2", integer_type{}},
+  };
+  CHECK_EQUAL(caf::get<record_type>(layout).field(2).name, "f3_rec");
+  CHECK_EQUAL(
+    type{caf::get<record_type>(caf::get<record_type>(layout).field(2).type)},
+    type{expected_t});
+  auto fp = arrow::FieldPath{2, 0};
+  auto col = fp.Get(*batch);
+  if (!col.ok())
+    FAIL(col.status().ToString());
+  const auto& typed_col
+    = caf::get<type_to_arrow_array_t<string_type>>(*col.ValueUnsafe());
+  CHECK_EQUAL(typed_col.GetView(0), "foo");
+  CHECK_EQUAL(typed_col.GetView(1), "bar");
+  CHECK(typed_col.IsNull(2));
+  CHECK_EQUAL(typed_col.GetView(3), "baz");
+}
+
+TEST(batch project nested column) {
+  auto t = record_type{
+    {"f1", type{string_type{}, {{"key", "value"}}}},
+    {"f2", type{"alt_name", count_type{}}},
+    {
+      "f3_rec",
+      type{
+        "nested",
+        record_type{
+          {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
+          {"f3.2", integer_type{}},
+        },
+        {{"attr"}, {"other_attr", "val"}},
+      },
+    },
+  };
+  auto f1s = std::vector<std::string>{"n1", "n2", "n3", "n4"};
+  auto f2s = std::vector<count>{1_c, 2_c, 3_c, 4_c};
+  auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
+                                  pattern("p4")};
+  auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
+  auto slice = make_slice(t, f1s, f2s, f3s, f4s);
+  auto [layout, batch]
+    = project(slice.layout(), to_record_batch(slice), {{0}, {2, 1}});
+  REQUIRE(caf::holds_alternative<record_type>(layout));
+  const auto expected_t = record_type{
+    {"f1", type{string_type{}, {{"key", "value"}}}},
+    {
+      "f3_rec",
+      type{
+        "nested",
+        record_type{
+          {"f3.2", integer_type{}},
+        },
+        {{"attr"}, {"other_attr", "val"}},
+      },
+    },
+  };
+  CHECK_EQUAL(caf::get<record_type>(layout), expected_t);
+  const auto old_batch = to_record_batch(slice);
+  CHECK(arrow::FieldPath{0}
+          .Get(*old_batch)
+          .ValueOrDie()
+          ->Equals(arrow::FieldPath{0}.Get(*batch).ValueOrDie()));
+  CHECK(arrow::FieldPath{2, 1}
+          .Get(*old_batch)
+          .ValueOrDie()
+          ->Equals(arrow::FieldPath{1, 0}.Get(*batch).ValueOrDie()));
+}
+
 TEST(single column - equality) {
   auto t = count_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, caf::none, 3_c);
@@ -748,7 +858,6 @@ TEST(convert_legacy_table_slice) {
 }
 
 namespace {
-
 struct fixture : public fixtures::table_slices {
   fixture() : fixtures::table_slices(VAST_PP_STRINGIFY(SUITE)) {
   }
