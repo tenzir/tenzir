@@ -2,14 +2,14 @@ name: "Terraform"
 on: workflow_dispatch
 
 # This CI configuration has multiple dependencies:
-# - You need an AWS account with a user having sufficient IAM access to run 
-#   the Terraform scripts. Its crendientials should be set in the repository 
+# - You need an AWS account with a user having sufficient IAM access to run
+#   the Terraform scripts. Its crendientials should be set in the repository
 #   secrets as AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
 # - You need to choose an AWS region and a VPC within that region. These
 #   should be configured in the repository secrets as AWS_REGION and
 #   PEERED_VPC_ID.
 # - The VAST deployment creates a new VPC. Its CIDR should not overlap an
-#   existing one in your account. Configure it in the repository secrets as 
+#   existing one in your account. Configure it in the repository secrets as
 #   VAST_CIDR
 # - The CI run uses Terraform Cloud to store the state. Once you have an
 #   account setup, configure its organization name and the desired workspace
@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      
+
       - name: "Substitute backend with Terraform Cloud"
         run: |
           cat<<EOF > backend.tf
@@ -76,7 +76,7 @@ jobs:
 
       - name: Make - deploy
         id: makedeploy
-        continue-on-error: true 
+        continue-on-error: true
         run: make deploy
 
       - name: Retry deploy
@@ -85,7 +85,7 @@ jobs:
           echo "Deploy sometimes fails for an unexplained reason."
           echo "Retrying after a few minutes usually works."
           sleep 300
-          make deploy  
+          make deploy
 
       - name: Make - start and restart VAST server
         run: |
@@ -122,7 +122,7 @@ jobs:
           [[ $result = "7" ]]
 
       - name: Make - destroy
-        continue-on-error: true 
+        continue-on-error: true
         id: makedestroy
         if: always()
         run: make destroy
@@ -133,4 +133,4 @@ jobs:
           echo "Destroy sometimes fails for an unexplained reason."
           echo "Retrying after a few minutes usually works."
           sleep 300
-          make destroy  
+          make destroy
