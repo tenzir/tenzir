@@ -13,7 +13,8 @@ locals {
           readOnly      = false
         }
       ]
-      command = var.command
+      entrypoint = ["/bin/sh", "-c", "${var.entrypoint}"]
+      command    = []
       portMappings = [
         {
           containerPort = var.port
