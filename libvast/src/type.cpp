@@ -2135,6 +2135,23 @@ void enumeration_type::arrow_type::register_extension() noexcept {
   VAST_ASSERT(status.ok());
 }
 
+arrow::Result<std::shared_ptr<enumeration_type::array_type>>
+enumeration_type::array_type::make(
+  const std::shared_ptr<enumeration_type::arrow_type>& type,
+  const std::shared_ptr<arrow::UInt8Array>& indices) {
+  auto dict_builder
+    = string_type::make_arrow_builder(arrow::default_memory_pool());
+  for (const auto& [canonical, internal] : type->vast_type_.fields()) {
+    const auto append_status = dict_builder->Append(
+      arrow::util::string_view{canonical.data(), canonical.size()});
+    VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+  }
+  ARROW_ASSIGN_OR_RAISE(auto dict, dict_builder->Finish());
+  ARROW_ASSIGN_OR_RAISE(auto storage, arrow::DictionaryArray::FromArrays(
+                                        type->storage_type(), indices, dict));
+  return std::make_shared<enumeration_type::array_type>(type, storage);
+}
+
 enumeration_type::builder_type::builder_type(std::shared_ptr<arrow_type> type,
                                              arrow::MemoryPool* pool)
   : arrow::StringDictionaryBuilder(string_type::to_arrow_type(), pool),

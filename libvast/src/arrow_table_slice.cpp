@@ -14,7 +14,6 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/passthrough.hpp"
-#include "vast/detail/zip_iterator.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/experimental_table_slice_builder.hpp"
@@ -28,6 +27,7 @@
 #include <arrow/compute/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
+#include <arrow/status.h>
 
 #include <type_traits>
 #include <utility>
@@ -1150,26 +1150,23 @@ template class arrow_table_slice<fbs::table_slice::arrow::experimental>;
 
 namespace {
 
-std::shared_ptr<arrow::Array>
+arrow::Result<std::shared_ptr<arrow::Array>>
 convert_subnet_array(const arrow::FixedSizeBinaryArray& arr) {
   auto* pool = arrow::default_memory_pool();
   auto subnet_builder = subnet_type::make_arrow_builder(pool);
   auto& address_builder = subnet_builder->address_builder();
   auto& length_builder = subnet_builder->length_builder();
-  if (!address_builder.Resize(arr.length()).ok()
-      || !length_builder.Resize(arr.length()).ok()
-      || !subnet_builder->Resize(arr.length()).ok())
-    die("unable to resize builders to target capacity");
+  ARROW_RETURN_NOT_OK(address_builder.Resize(arr.length()));
+  ARROW_RETURN_NOT_OK(length_builder.Resize(arr.length()));
+  ARROW_RETURN_NOT_OK(subnet_builder->Resize(arr.length()));
   for (int row = 0; row < arr.length(); ++row) {
     if (arr.IsNull(row)) {
-      if (!subnet_builder->AppendNull().ok())
-        die("append null value to subnet builder failed");
+      ARROW_RETURN_NOT_OK(subnet_builder->AppendNull());
     } else {
       auto span = std::span<const uint8_t, 17>{arr.GetValue(row), 17};
-      if (!(subnet_builder->Append().ok()
-            && address_builder.Append(arr.GetValue(row)).ok()
-            && length_builder.Append(span[16]).ok()))
-        die("rebuilding of subnet struct array failed");
+      ARROW_RETURN_NOT_OK(subnet_builder->Append());
+      ARROW_RETURN_NOT_OK(address_builder.Append(arr.GetValue(row)));
+      ARROW_RETURN_NOT_OK(length_builder.Append(span[16]));
     }
   }
   if (auto result = subnet_builder->Finish(); result.ok())
@@ -1177,26 +1174,12 @@ convert_subnet_array(const arrow::FixedSizeBinaryArray& arr) {
   die("failed to finish Arrow subnet column builder");
 }
 
-// TODO: this is copied from
-// experimental_table_slice_builder/enum_column_builder, can this live somewhere
-// shared?
-std::shared_ptr<arrow::Array> make_dict_array(const enumeration_type& et) {
-  arrow::StringBuilder dict_builder{};
-  for (const auto& f : et.fields())
-    if (!dict_builder.Append(std::string{f.name}).ok())
-      die("failed to build Arrow enum field array");
-  if (auto array = dict_builder.Finish(); array.ok()) {
-    return *array;
-  }
-  die("failed to finish Arrow enum field array");
-}
-
 /// Converts an array representing a single column from a previous arrow
-/// format to `arrow::experimental`.
+/// format to the according representation in the current arrow format.
 std::shared_ptr<arrow::Array>
 convert_column(const std::shared_ptr<arrow::Array>& arr, const type& t) {
   auto f = detail::overload{
-    [&](const auto& t) -> std::shared_ptr<arrow::Array> {
+    [&](const basic_type auto& t) -> std::shared_ptr<arrow::Array> {
       VAST_ASSERT(arr->type()->Equals(t.to_arrow_type()));
       return arr;
     },
@@ -1216,7 +1199,7 @@ convert_column(const std::shared_ptr<arrow::Array>& arr, const type& t) {
       auto res = arrow::StructArray::Make(children, field_names);
       if (!res.ok())
         die("unable to construct nested struct array");
-      return *res;
+      return res.MoveValueUnsafe();
     },
     [&](const pattern_type&) -> std::shared_ptr<arrow::Array> {
       return std::make_shared<pattern_type::array_type>(
@@ -1229,34 +1212,42 @@ convert_column(const std::shared_ptr<arrow::Array>& arr, const type& t) {
     [&](const subnet_type&) -> std::shared_ptr<arrow::Array> {
       auto ba = static_pointer_cast<arrow::FixedSizeBinaryArray>(arr);
       VAST_ASSERT(ba->byte_width() == 17);
-      return convert_subnet_array(*ba);
+      auto subnet_array = convert_subnet_array(*ba);
+      if (!subnet_array.ok())
+        die("failed building subnet array from fixedsizebinary(17)");
+      return subnet_array.MoveValueUnsafe();
     },
     [&](const enumeration_type& et) -> std::shared_ptr<arrow::Array> {
-      auto dict = make_dict_array(et);
       auto indices = arrow::compute::Cast(*arr, arrow::uint8());
-      auto dict_array = std::make_shared<arrow::DictionaryArray>(
-        et.to_arrow_type()->storage_type(), indices.ValueUnsafe(), dict);
-      return std::make_shared<enumeration_type::array_type>(et.to_arrow_type(),
-                                                            dict_array);
+      if (!indices.ok())
+        die("failed casting int64 to uint8");
+      auto enum_value = enumeration_type::array_type::make(
+        et.to_arrow_type(),
+        static_pointer_cast<arrow::UInt8Array>(indices.MoveValueUnsafe()));
+      if (!enum_value.ok()) {
+        fmt::print(stderr, "tp;enum: {}\n", enum_value.status());
+        die("failed constructing extension type array");
+      }
+      return enum_value.MoveValueUnsafe();
     },
     [&](const list_type& lt) -> std::shared_ptr<arrow::Array> {
-      auto la = static_pointer_cast<arrow::ListArray>(arr);
-      const auto& inner = convert_column(la->values(), lt.value_type());
+      const auto& la = static_cast<const arrow::ListArray&>(*arr);
+      const auto& inner = convert_column(la.values(), lt.value_type());
       const auto& list_array = std::make_shared<arrow::ListArray>(
-        arrow::list(inner->type()), la->length(), la->value_offsets(), inner,
-        la->null_bitmap(), la->null_count());
+        arrow::list(inner->type()), la.length(), la.value_offsets(), inner,
+        la.null_bitmap(), la.null_count());
       return list_array;
     },
     [&](const map_type& mt) -> std::shared_ptr<arrow::Array> {
-      auto la = static_pointer_cast<arrow::ListArray>(arr);
+      const auto& la = static_cast<const arrow::ListArray&>(*arr);
       const auto& structs
-        = static_pointer_cast<arrow::StructArray>(la->values());
-      const auto& keys = convert_column(structs->field(0), mt.key_type());
-      const auto& items = convert_column(structs->field(1), mt.value_type());
-      return std::make_shared<arrow::MapArray>(mt.to_arrow_type(), la->length(),
-                                               la->value_offsets(), keys, items,
-                                               la->null_bitmap(),
-                                               la->null_count());
+        = static_cast<const arrow::StructArray&>(*la.values());
+      const auto& keys = convert_column(structs.field(0), mt.key_type());
+      const auto& items = convert_column(structs.field(1), mt.value_type());
+      return std::make_shared<arrow::MapArray>(mt.to_arrow_type(), la.length(),
+                                               la.value_offsets(), keys, items,
+                                               la.null_bitmap(),
+                                               la.null_count());
     },
   };
   return caf::visit(f, t);
