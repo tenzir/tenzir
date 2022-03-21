@@ -75,7 +75,17 @@ jobs:
         run: terraform fmt -check
 
       - name: Make - deploy
+        id: makedeploy
+        continue-on-error: true 
         run: make deploy
+
+      - name: Retry deploy
+        if: steps.makedeploy.outcome=='failure'
+        run: |
+          echo "Deploy sometimes fails for an unexplained reason."
+          echo "Retrying after a few minutes usually works."
+          sleep 300
+          make deploy  
 
       - name: Make - start and restart VAST server
         run: |
@@ -112,6 +122,15 @@ jobs:
           [[ $result = "7" ]]
 
       - name: Make - destroy
+        continue-on-error: true 
+        id: makedestroy
         if: always()
+        run: make destroy
+
+      - name: Retry destroy
+        if: steps.makedestroy.outcome=='failure'
         run: |
-          make destroy
+          echo "Destroy sometimes fails for an unexplained reason."
+          echo "Retrying after a few minutes usually works."
+          sleep 300
+          make destroy  
