@@ -608,9 +608,6 @@ VAST_DIAGNOSTIC_POP
 
 } // namespace legacy
 
-data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
-                   int64_t row) noexcept;
-
 template <concrete_type Type>
 view<type_to_data_t<Type>>
 value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
@@ -769,6 +766,8 @@ value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
     return value_at(type, caf::get<type_to_arrow_array_t<Type>>(arr), row);
 }
 
+} // namespace
+
 data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
                    int64_t row) noexcept {
   if (arr.IsNull(row))
@@ -779,8 +778,10 @@ data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
   return caf::visit(f, type);
 }
 
+namespace {
+
 template <concrete_type Type>
-auto values(const Type& type, const type_to_arrow_array_t<Type>& arr)
+auto values(const Type& type, const type_to_arrow_array_t<Type>& arr) noexcept
   -> detail::generator<std::optional<view<type_to_data_t<Type>>>> {
   auto impl = [](const Type& type,
                  const type_to_arrow_array_storage_t<Type>& arr) noexcept
@@ -799,7 +800,10 @@ auto values(const Type& type, const type_to_arrow_array_t<Type>& arr)
   }
 }
 
-auto values(const type& type, const std::same_as<arrow::Array> auto& array)
+} // namespace
+
+auto values(const type& type,
+            const std::same_as<arrow::Array> auto& array) noexcept
   -> detail::generator<data_view> {
   const auto f = []<concrete_type Type>(
                    const Type& type,
@@ -816,6 +820,8 @@ auto values(const type& type, const std::same_as<arrow::Array> auto& array)
 }
 
 // -- utility for converting Buffer to RecordBatch -----------------------------
+
+namespace {
 
 template <class Callback>
 class record_batch_listener final : public arrow::ipc::Listener {

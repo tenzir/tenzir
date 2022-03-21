@@ -136,6 +136,15 @@ private:
 
 // -- utility functions -------------------------------------------------------
 
+/// Access a VAST data view for a given row in an Array Array.
+data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
+                   int64_t row) noexcept;
+
+/// Access VAST data views for all elements of an Arrow Array.
+auto values(const type& type,
+            const std::same_as<arrow::Array> auto& array) noexcept
+  -> detail::generator<data_view>;
+
 struct indexed_transformation {
   using function_type = std::function<std::vector<
     std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>(
