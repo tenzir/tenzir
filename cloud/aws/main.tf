@@ -1,7 +1,4 @@
 terraform {
-  backend "local" {
-    path = ".terraform/state/terraform.tfstate"
-  }
   required_version = ">=1"
 
   required_providers {
