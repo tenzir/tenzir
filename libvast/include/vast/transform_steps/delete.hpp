@@ -46,12 +46,6 @@ public:
   caf::expected<std::vector<transform_batch>> finish() override;
 
 private:
-  /// Adjust the layout by deleting columns.
-  /// @returns A pair containing the adjusted layout and the indices of the
-  ///          columns keep.
-  [[nodiscard]] caf::expected<std::pair<vast::type, std::vector<int>>>
-  adjust_layout(const vast::type& layout) const;
-
   /// The slices being transformed.
   std::vector<transform_batch> transformed_;
 
