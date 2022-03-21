@@ -51,6 +51,12 @@ enum class send_initial_dbstate : bool {
   no = false,
 };
 
+/// Helper class used to route table slice columns to the correct indexer
+/// in the CAF stream stage.
+struct i_partition_selector {
+  bool operator()(const type& filter, const table_slice& slice) const;
+};
+
 /// Extract a partition synopsis from the partition at `partition_path`
 /// and write it to `partition_synopsis_path`.
 //  TODO: Move into separate header.
@@ -90,10 +96,13 @@ struct active_partition_info {
   /// The UUID of the partition.
   uuid id = {};
 
+  /// The spawn timestamp of the partition.
+  std::chrono::steady_clock::time_point spawn_time = {};
+
   template <class Inspector>
   friend auto inspect(Inspector& f, active_partition_info& x) {
     return f(caf::meta::type_name("active_partition_info"), x.actor,
-             x.stream_slot, x.capacity, x.id);
+             x.stream_slot, x.capacity, x.id, x.spawn_time);
   }
 };
 
@@ -150,9 +159,9 @@ struct query_state {
 struct index_state {
   // -- type aliases -----------------------------------------------------------
 
-  using index_stream_stage_ptr
-    = caf::stream_stage_ptr<table_slice,
-                            caf::broadcast_downstream_manager<table_slice>>;
+  using index_stream_stage_ptr = caf::stream_stage_ptr<
+    table_slice, caf::broadcast_downstream_manager<table_slice, vast::type,
+                                                   i_partition_selector>>;
 
   // -- constructor ------------------------------------------------------------
 
@@ -199,10 +208,10 @@ struct index_state {
   vast::uuid create_query_id();
 
   /// Creates a new active partition.
-  void create_active_partition();
+  void create_active_partition(const type& layout);
 
   /// Decommissions the active partition.
-  void decomission_active_partition();
+  void decomission_active_partition(const type& layout);
 
   /// Adds a new partition creation listener.
   void
@@ -225,8 +234,8 @@ struct index_state {
   /// The streaming stage.
   index_stream_stage_ptr stage;
 
-  /// The single active (read/write) partition.
-  active_partition_info active_partition = {};
+  /// One active (read/write) partition per layout.
+  std::unordered_map<type, active_partition_info> active_partitions = {};
 
   /// Partitions that are currently in the process of persisting.
   // TODO: An alternative to keeping an explicit set of unpersisted partitions
@@ -253,6 +262,9 @@ struct index_state {
 
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
+
+  /// Timeout after which an active partition is forcibly flushed.
+  duration active_partition_timeout = {};
 
   /// The maximum size of the partition LRU cache (or the maximum number of
   /// read-only partition loaded to memory).
@@ -338,6 +350,8 @@ struct index_state {
 /// @param dir The directory of the index.
 /// @param store_backend The store backend to use for new partitions.
 /// @param partition_capacity The maximum number of events per partition.
+/// @param active_partition_timeout Timeout after which an active partition is
+/// forcibly flushed.
 /// @param max_inmem_partitions The maximum number of passive partitions loaded
 /// into memory.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
@@ -353,7 +367,8 @@ index(index_actor::stateful_pointer<index_state> self,
       archive_actor archive, catalog_actor catalog,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
+      duration active_partition_timeout, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& catalog_dir, double synopsis_fp_rate);
 
 } // namespace vast::system

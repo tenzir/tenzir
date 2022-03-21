@@ -526,8 +526,8 @@ tests:
     steps:
       - command: import zeek
         input: data/zeek/conn.log.gz
-      - command: import suricata
-        input: data/suricata/eve.json
+      - command: import -n 1 zeek
+        input: data/zeek/conn.log.gz
         transformation: sleep 4
       - command: count '#type == /zeek.*/'
   Transforms:
