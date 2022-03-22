@@ -1434,6 +1434,7 @@ index(index_actor::stateful_pointer<index_state> self,
       }
     },
     [self](atom::worker, atom::wakeup, query_supervisor_actor worker) {
+      VAST_DEBUG("{} checks whether worker {} is lost", *self, worker.id());
       auto lost = true;
       for (const auto& [_, qs] : self->state.pending) {
         if (worker == qs.worker) {

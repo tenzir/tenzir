@@ -35,8 +35,8 @@ namespace {
 } // namespace
 
 query_supervisor_state::query_supervisor_state(
-  query_supervisor_actor::stateful_pointer<query_supervisor_state> self)
-  : open_requests(0), log_identifier(std::to_string(self->id())) {
+  query_supervisor_actor::stateful_pointer<query_supervisor_state>)
+  : open_requests(0) {
 }
 
 query_supervisor_actor::behavior_type query_supervisor(
@@ -52,13 +52,22 @@ query_supervisor_actor::behavior_type query_supervisor(
            const vast::query& query,
            const std::vector<std::pair<uuid, partition_actor>>& qm,
            const receiver_actor<atom::done>& client) {
-      VAST_DEBUG("{} {} got a new query for {} partitions: {}", *self,
-                 self->state.log_identifier, qm.size(), get_ids(qm));
+      VAST_DEBUG("{} got a new query for {} partitions: {}", *self, qm.size(),
+                 get_ids(qm));
       // TODO: We can save one message here if we handle this case in the
       // index immediately.
       if (qm.empty()) {
         self->send(client, atom::done_v);
-        self->send(self->state.master, atom::worker_v, self);
+        self->request(self->state.master, caf::infinite, atom::worker_v, self)
+          .then(
+            [self]() {
+              VAST_DEBUG("{} returns to query supervisor master", *self);
+            },
+            [self](const caf::error&) {
+              VAST_ERROR("{} failed to return to query supervisor "
+                         "master",
+                         *self);
+            });
         return;
       }
       VAST_ASSERT(self->state.open_requests == 0);
@@ -75,9 +84,9 @@ query_supervisor_actor::behavior_type query_supervisor(
               VAST_TRACEPOINT(query_partition_done, query_trace_id,
                               partition_trace_id, delta.count());
               if (--self->state.open_requests == 0) {
-                VAST_DEBUG("{} {} collected all results for the current batch "
+                VAST_DEBUG("{} collected all results for the current batch "
                            "of partitions",
-                           *self, self->state.log_identifier);
+                           *self);
                 VAST_TRACEPOINT(query_supervisor_done, query_trace_id);
                 // Ask master for more work after receiving the last sub
                 // result.
@@ -85,20 +94,44 @@ query_supervisor_actor::behavior_type query_supervisor(
                 // previous one has finished, otherwise each batch will be as
                 // slow as the worst case of the batch.
                 self->send(client, atom::done_v);
-                self->send(self->state.master, atom::worker_v, self);
+                self
+                  ->request(self->state.master, caf::infinite, atom::worker_v,
+                            self)
+                  .then(
+                    [self]() {
+                      VAST_DEBUG("{} returns to query supervisor master",
+                                 *self);
+                    },
+                    [self](const caf::error&) {
+                      VAST_ERROR("{} failed to return to query supervisor "
+                                 "master",
+                                 *self);
+                    });
               }
             },
             [=](const caf::error& e) {
               // TODO: Add a proper error handling path to escalate the error to
               // the client.
-              VAST_ERROR("{} {} encountered error while supervising query {}",
-                         *self, self->state.log_identifier, e);
+              VAST_ERROR("{} encountered error while supervising query {}",
+                         *self, e);
               auto delta = std::chrono::steady_clock::now() - start;
               VAST_TRACEPOINT(query_partition_error, query_trace_id,
                               partition_trace_id, delta.count());
               if (--self->state.open_requests == 0) {
                 self->send(client, atom::done_v);
-                self->send(self->state.master, atom::worker_v, self);
+                self
+                  ->request(self->state.master, caf::infinite, atom::worker_v,
+                            self)
+                  .then(
+                    [self]() {
+                      VAST_DEBUG("{} returns to query supervisor master",
+                                 *self);
+                    },
+                    [self](const caf::error&) {
+                      VAST_ERROR("{} failed to return to query supervisor "
+                                 "master",
+                                 *self);
+                    });
               }
             });
       }
@@ -109,7 +142,21 @@ query_supervisor_actor::behavior_type query_supervisor(
       // the in-progress work.
       if (self->state.open_requests > 0)
         return caf::skip;
-      self->send(self->state.master, atom::worker_v, atom::wakeup_v, self);
+      self
+        ->request(self->state.master, caf::infinite, atom::worker_v,
+                  atom::wakeup_v, self)
+        .then(
+          [self]() {
+            VAST_DEBUG("{} returns to query supervisor master after shutdown "
+                       "request from sink",
+                       *self);
+          },
+          [self](const caf::error&) {
+            VAST_ERROR("{} failed to return to query supervisor "
+                       "master after shutdown request from sink",
+                       *self);
+          });
+
       return {};
     },
   };
