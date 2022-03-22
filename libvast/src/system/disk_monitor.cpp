@@ -191,6 +191,23 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // Delete up to `step_size` partitions at once.
       auto idx = std::min(partitions.size(), self->state.config.step_size);
       self->state.pending_partitions += idx;
+      auto continuation = [=] {
+        if (--self->state.pending_partitions == 0) {
+          if (const auto size
+              = compute_dbdir_size(self->state.dbdir, self->state.config);
+              !size) {
+            VAST_WARN("{} failed to calculate size of {}: {}", *self,
+                      self->state.dbdir, size.error());
+          } else {
+            VAST_VERBOSE("{} erased ids from index; leftover size is {}", *self,
+                         *size);
+            if (*size > self->state.config.low_water_mark) {
+              // Repeat until we're below the low water mark
+              self->send(self, atom::erase_v);
+            }
+          }
+        }
+      };
       for (size_t i = 0; i < idx; ++i) {
         auto& partition = partitions.at(i);
         VAST_VERBOSE("{} erases partition {} from index", *self, partition.id);
@@ -200,27 +217,13 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           .then(
             [=](atom::done) {
               VAST_DEBUG("{} erased partition {}", *self, partition.id);
-              if (--self->state.pending_partitions == 0) {
-                if (const auto size
-                    = compute_dbdir_size(self->state.dbdir, self->state.config);
-                    !size) {
-                  VAST_WARN("{} failed to calculate size of {}: {}", *self,
-                            self->state.dbdir, size.error());
-                } else {
-                  VAST_VERBOSE("{} erased ids from index; leftover size is {}",
-                               *self, *size);
-                  if (*size > self->state.config.low_water_mark) {
-                    // Repeat until we're below the low water mark
-                    self->send(self, atom::erase_v);
-                  }
-                }
-              }
+              continuation();
             },
             [=, id = partition.id](caf::error e) {
               VAST_WARN("{} failed to erase partition {}: {}", *self, id, e);
               // TODO: Consider storing failed partitions so we don't retry them
               // again and again.
-              self->state.pending_partitions--;
+              continuation();
             });
       }
       return {};
