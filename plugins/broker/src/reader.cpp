@@ -108,15 +108,15 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   return finish(f);
 }
 
-caf::error reader::schema([[maybe_unused]] class module schema) {
+caf::error reader::module([[maybe_unused]] class module module) {
   // The VAST types are automatically generated and cannot be changed.
   return caf::make_error(ec::no_error,
                          "schema cannot be changed as it is generated "
                          "dynamically");
 }
 
-module reader::schema() const {
-  return schema_;
+module reader::module() const {
+  return module_;
 }
 
 const char* reader::name() const {

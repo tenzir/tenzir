@@ -39,8 +39,8 @@ public:
 
   void reset(std::unique_ptr<std::istream> in) override;
 
-  caf::error schema(class module schema) override;
-  class module schema() const override;
+  caf::error module(class module module) override;
+  class module module() const override;
   const char* name() const override;
 
 protected:
@@ -52,7 +52,7 @@ private:
   dispatch(const ::broker::data& msg, size_t max_slice_size, consumer& f);
 
   // TODO: do not ignore.
-  class module schema_ = {};
+  class module module_ = {};
 
   std::unique_ptr<::broker::endpoint> endpoint_;
   std::unique_ptr<::broker::status_subscriber> status_subscriber_;
