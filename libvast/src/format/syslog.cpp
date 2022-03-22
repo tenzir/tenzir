@@ -64,7 +64,7 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
     reset(std::move(in));
 }
 
-caf::error reader::schema(vast::module x) {
+caf::error reader::module(vast::module x) {
   // clang-format off
   return replace_if_congruent({
     &syslog_rfc5424_type_,
@@ -73,7 +73,7 @@ caf::error reader::schema(vast::module x) {
   // clang-format on
 }
 
-vast::module reader::schema() const {
+vast::module reader::module() const {
   vast::module sch;
   sch.add(syslog_rfc5424_type_);
   sch.add(syslog_unkown_type_);

@@ -208,11 +208,11 @@ public:
     // reader abstraction.
   }
 
-  caf::error schema(class module new_schema) override {
-    return replace_if_congruent({&packet_type_}, new_schema);
+  caf::error module(class module new_module) override {
+    return replace_if_congruent({&packet_type_}, new_module);
   }
 
-  class module schema() const override {
+  class module module() const override {
     class module result {};
     result.add(packet_type_);
     return result;

@@ -310,11 +310,11 @@ TEST(zeek reader - custom schema) {
       community_id: string // not present in the data
     }
   )__";
-  auto sch = unbox(to<module>(custom_schema));
+  auto mod = unbox(to<module>(custom_schema));
   using reader_type = format::zeek::reader;
   reader_type reader{caf::settings{}, std::make_unique<std::istringstream>(
                                         std::string{conn_log_100_events})};
-  reader.schema(sch);
+  reader.module(mod);
   std::vector<table_slice> slices;
   auto add_slice
     = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };

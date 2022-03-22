@@ -78,7 +78,7 @@ struct source_state {
   std::optional<size_t> requested = {};
 
   /// The import-local schema.
-  vast::module local_schema = {};
+  vast::module local_module = {};
 
   /// The maximum size for a table slice.
   size_t table_slice_size = {};

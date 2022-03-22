@@ -181,14 +181,14 @@ void reader::reset(std::unique_ptr<std::istream> in) {
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
-caf::error reader::schema(vast::module s) {
-  for (const auto& t : s)
-    schema_.add(t);
+caf::error reader::module(vast::module m) {
+  for (const auto& t : m)
+    module_.add(t);
   return caf::none;
 }
 
-vast::module reader::schema() const {
-  return schema_;
+vast::module reader::module() const {
+  return module_;
 }
 
 const char* reader::name() const {
@@ -197,7 +197,7 @@ const char* reader::name() const {
 
 caf::optional<type> reader::make_layout(const std::vector<std::string>& names) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(names));
-  for (const auto& t : schema_) {
+  for (const auto& t : module_) {
     if (const auto* r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<type> {
         std::vector<record_type::field_view> result_raw;

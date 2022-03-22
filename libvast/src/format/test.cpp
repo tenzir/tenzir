@@ -243,7 +243,7 @@ std::string_view builtin_schema = R"__(
   }
 )__";
 
-auto default_schema() {
+auto default_module() {
   module result;
   auto success = parsers::schema(builtin_schema, result);
   VAST_ASSERT(success);
@@ -272,12 +272,12 @@ void reader::reset(std::unique_ptr<std::istream>) {
   // with our reader abstraction.
 }
 
-caf::error reader::schema(vast::module sch) {
-  if (sch.empty())
+caf::error reader::module(vast::module mod) {
+  if (mod.empty())
     return caf::make_error(ec::format_error, "empty schema");
   std::unordered_map<type, blueprint> blueprints;
   auto subset = vast::module{};
-  for (const auto& t : sch) {
+  for (const auto& t : mod) {
     auto sn = detail::split(t.name(), ".");
     if (sn.size() != 2 || sn[0] != "test")
       continue;
@@ -298,7 +298,7 @@ caf::error reader::schema(vast::module sch) {
   return caf::none;
 }
 
-module reader::schema() const {
+module reader::module() const {
   return schema_;
 }
 
@@ -312,7 +312,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
                    VAST_ARG(num_events_));
   // Sanity checks.
   if (schema_.empty())
-    if (auto err = schema(default_schema()))
+    if (auto err = module(default_module()))
       return err;
   VAST_ASSERT(next_ != schema_.end());
   if (num_events_ == 0)

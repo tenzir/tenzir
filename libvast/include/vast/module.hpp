@@ -114,7 +114,7 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
 
 /// Loads schemas according to the configuration. This is a convenience wrapper
 /// around *get_schema_dirs* and *load_schema*.
-caf::expected<vast::module> load_schema(const caf::actor_system_config& cfg);
+caf::expected<vast::module> load_module(const caf::actor_system_config& cfg);
 
 } // namespace vast
 

@@ -57,18 +57,18 @@ void source_state::initialize(const type_registry_actor& type_registry,
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
-          auto merged_schema = module{};
-          for (const auto& type : local_schema)
+          auto merged_module = module{};
+          for (const auto& type : local_module)
             if (prefix_then_dot(type.name(), type_filter))
               if (caf::holds_alternative<record_type>(type))
-                merged_schema.add(type);
+                merged_module.add(type);
           // Second, filter valid types from all available record types.
           for (const auto& type : types)
             if (prefix_then_dot(type.name(), type_filter))
               if (caf::holds_alternative<record_type>(type))
-                merged_schema.add(type);
+                merged_module.add(type);
           // Third, try to set the new schema.
-          if (auto err = reader->schema(std::move(merged_schema));
+          if (auto err = reader->module(std::move(merged_module));
               err && err != caf::no_error)
             VAST_ERROR("{} source failed to set schema: {}", reader->name(),
                        err);
@@ -83,7 +83,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
     VAST_WARN("{} source failed to retrieve registered types and only "
               "considers types local to the import command",
               reader->name());
-    if (auto err = reader->schema(std::move(local_schema));
+    if (auto err = reader->module(std::move(local_module));
         err && err != caf::no_error)
       VAST_ERROR("{} source failed to set schema: {}", reader->name(), err);
   }
@@ -142,7 +142,7 @@ void source_state::filter_and_push(
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
-       const type_registry_actor& type_registry, vast::module local_schema,
+       const type_registry_actor& type_registry, vast::module local_module,
        std::string type_filter, accountant_actor accountant,
        std::vector<transform>&& transforms) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(*self));
@@ -151,7 +151,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.name = reader->name();
   self->state.reader = std::move(reader);
   self->state.requested = max_events;
-  self->state.local_schema = std::move(local_schema);
+  self->state.local_module = std::move(local_module);
   self->state.accountant = std::move(accountant);
   self->state.table_slice_size = table_slice_size;
   self->state.has_sink = false;
@@ -294,11 +294,11 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       VAST_DEBUG("{} ended a generation round regularly", *self);
     },
     [self](atom::get, atom::schema) { //
-      return self->state.reader->schema();
+      return self->state.reader->module();
     },
-    [self](atom::put, class module schema) -> caf::result<void> {
-      VAST_DEBUG("{} received schema {}", *self, schema);
-      if (auto err = self->state.reader->schema(std::move(schema));
+    [self](atom::put, class module module) -> caf::result<void> {
+      VAST_DEBUG("{} received schema {}", *self, module);
+      if (auto err = self->state.reader->module(std::move(module));
           err && err != caf::no_error)
         return err;
       return caf::unit;

@@ -246,9 +246,9 @@ public:
 
   void reset(std::unique_ptr<std::istream> in) override;
 
-  caf::error schema(vast::module sch) override;
+  caf::error module(vast::module mod) override;
 
-  vast::module schema() const override;
+  vast::module module() const override;
 
   const char* name() const override;
 
@@ -267,7 +267,7 @@ private:
   std::string set_separator_;
   std::string empty_field_;
   std::string unset_field_;
-  vast::module schema_;
+  vast::module module_;
   type layout_;
   std::optional<size_t> proto_field_;
   std::vector<rule<iterator_type, data>> parsers_;

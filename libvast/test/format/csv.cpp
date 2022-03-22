@@ -72,13 +72,13 @@ struct fixture : fixtures::deterministic_actor_system {
     },
   };
 
-  module s;
+  module m;
 
   fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
-    s.add(l0);
-    s.add(l1);
-    s.add(l2);
-    s.add(l3);
+    m.add(l0);
+    m.add(l1);
+    m.add(l2);
+    m.add(l3);
   }
 
   const caf::settings options = {};
@@ -87,7 +87,7 @@ struct fixture : fixtures::deterministic_actor_system {
   run(std::string_view data, size_t max_events, size_t max_slice_size) {
     auto in = std::make_unique<std::istringstream>(std::string{data});
     format::csv::reader reader{options, std::move(in)};
-    reader.schema(s);
+    reader.module(m);
     std::vector<table_slice> slices;
     auto add_slice = [&](table_slice slice) {
       slices.emplace_back(std::move(slice));

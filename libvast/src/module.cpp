@@ -222,7 +222,7 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
   return types;
 }
 
-caf::expected<vast::module> load_schema(const caf::actor_system_config& cfg) {
+caf::expected<vast::module> load_module(const caf::actor_system_config& cfg) {
   return load_schema(get_schema_dirs(cfg));
 }
 

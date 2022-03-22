@@ -270,9 +270,9 @@ public:
 
   ~reader() override = default;
 
-  caf::error schema(vast::module sch) override;
+  caf::error module(vast::module mod) override;
 
-  vast::module schema() const override;
+  vast::module module() const override;
 
   const char* name() const override;
 

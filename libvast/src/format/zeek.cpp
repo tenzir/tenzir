@@ -197,12 +197,12 @@ void reader::reset(std::unique_ptr<std::istream> in) {
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
-caf::error reader::schema(vast::module sch) {
-  schema_ = std::move(sch);
+caf::error reader::module(vast::module mod) {
+  module_ = std::move(mod);
   return caf::none;
 }
 
-module reader::schema() const {
+module reader::module() const {
   vast::module result;
   result.add(layout_);
   return result;
@@ -420,7 +420,7 @@ caf::error reader::parse_header() {
   auto name = std::string{type_name_prefix} + path;
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
-  if (auto* t = schema_.find(name)) {
+  if (auto* t = module_.find(name)) {
     const auto* r = caf::get_if<record_type>(t);
     if (!r)
       return caf::make_error(ec::format_error,
