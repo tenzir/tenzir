@@ -1187,19 +1187,23 @@ index(index_actor::stateful_pointer<index_state> self,
         adjust_stats = false;
       }
       self
-        ->request(self->state.catalog, caf::infinite, atom::erase_v,
-                  partition_id)
+        ->request<caf::message_priority::high>(
+          self->state.catalog, caf::infinite, atom::erase_v, partition_id)
         .then(
           [self, partition_id, path, synopsis_path, rp,
            adjust_stats](atom::ok) mutable {
+            VAST_DEBUG("{} erased partition {} from meta-index", *self,
+                       partition_id);
             auto partition_actor
               = self->state.inmem_partitions.eject(partition_id);
             self->state.persisted_partitions.erase(partition_id);
             self
-              ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
-                        path)
+              ->request<caf::message_priority::high>(
+                self->state.filesystem, caf::infinite, atom::mmap_v, path)
               .then(
                 [=](const chunk_ptr& chunk) mutable {
+                  VAST_DEBUG("{} erased partition {} from filesystem", *self,
+                             partition_id);
                   if (!chunk) {
                     rp.deliver(caf::make_error( //
                       ec::filesystem_error,
@@ -1240,14 +1244,21 @@ index(index_actor::stateful_pointer<index_state> self,
                   // file, so unlinking should not affect indexers that are
                   // currently loaded and answering a query.
                   self
-                    ->request(self->state.filesystem, caf::infinite,
-                              atom::erase_v, synopsis_path)
-                    .then([](atom::done) { /* nop */ },
-                          [synopsis_path](const caf::error& err) {
-                            VAST_WARN("index could not unlink partition "
-                                      "synopsis at {}: {}",
-                                      synopsis_path, err);
-                          });
+                    ->request<caf::message_priority::high>(
+                      self->state.filesystem, caf::infinite, atom::erase_v,
+                      synopsis_path)
+                    .then(
+                      [self, partition_id](atom::done) {
+                        VAST_DEBUG("{} erased partition synopsis {} from "
+                                   "filesystem",
+                                   *self, partition_id);
+                      },
+                      [self, partition_id,
+                       synopsis_path](const caf::error& err) {
+                        VAST_WARN("{} failed to erase partition "
+                                  "synopsis {} at {}: {}",
+                                  *self, partition_id, synopsis_path, err);
+                      });
                   // TODO: We could send `all_ids` as the second argument
                   // here, which doesn't really make sense from an interface
                   // perspective but would save the partition from recomputing
@@ -1255,13 +1266,15 @@ index(index_actor::stateful_pointer<index_state> self,
                   rp.delegate(partition_actor, atom::erase_v);
                 },
                 [=](caf::error& err) mutable {
+                  VAST_WARN("{} failed to erase partition {} from filesystem: "
+                            "{}",
+                            *self, partition_id, err);
                   rp.deliver(std::move(err));
                 });
           },
-          [partition_id, rp](caf::error& err) mutable {
-            VAST_WARN("index encountered an error trying to erase "
-                      "partition {} from the catalog: {}",
-                      partition_id, err);
+          [self, partition_id, rp](caf::error& err) mutable {
+            VAST_WARN("{} failed to erase partition {} from meta-index: {}",
+                      *self, partition_id, err);
             rp.deliver(std::move(err));
           });
       return rp;
