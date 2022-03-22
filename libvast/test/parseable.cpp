@@ -24,6 +24,7 @@
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
+#include <fmt/format.h>
 
 #include <array>
 #include <map>
@@ -638,6 +639,46 @@ TEST(real - scientific) {
     CHECK(p(f, l, d));
     CHECK_EQUAL(d, 4.56789e-323);
     CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("generated");
+    union real_cast {
+      real value;
+      struct comp {
+        uint64_t mantissa : 52;
+        uint16_t exponent : 11;
+        int sign : 1;
+      } components;
+    };
+    uint64_t n = 0;
+    for (uint64_t mantissa = 0; mantissa < 10000; ++mantissa) {
+      for (uint16_t exp = 0x400; exp < 0x7fe; ++exp, ++n) {
+        auto cast = real_cast{
+          .components
+          = real_cast::comp{.mantissa = mantissa, .exponent = exp, .sign = 0}};
+        auto value = cast.value;
+        // We trust {fmt}.
+        auto rendered = fmt::format("{:e}", value);
+        auto f = rendered.begin();
+        auto l = rendered.end();
+        real d = 0;
+        if (!p(f, l, d))
+          FAIL("failed to parse " << rendered);
+        if (value != d) {
+          const auto& ic = cast.components;
+          const auto& oc = real_cast{.value = d}.components;
+          FAIL(fmt::format("[{}] parser output mismatch: {} != {}\n   input = "
+                           "{{ .mantissa = {:#015x}, .exponent = {:#05x}, sign "
+                           "= {} }}\n  output = {{ .mantissa = {:#015x}, "
+                           ".exponent = {:#05x}, sign = {} }}",
+                           n, value, d, ic.mantissa, ic.exponent, ic.sign,
+                           oc.mantissa, oc.exponent, oc.sign));
+          FAIL("[" << n << "] parser output mismatch: " << value
+                   << " != " << d);
+        }
+      }
+    }
+    MESSAGE("successfully checked " << n << " generated real values");
   }
 }
 
