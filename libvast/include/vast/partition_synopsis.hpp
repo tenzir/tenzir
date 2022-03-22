@@ -10,6 +10,7 @@
 
 #include "vast/detail/friend_attribute.hpp"
 #include "vast/fbs/partition_synopsis.hpp"
+#include "vast/index_config.hpp"
 #include "vast/index_statistics.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
@@ -37,7 +38,10 @@ struct partition_synopsis final : public caf::ref_counted {
   partition_synopsis& operator=(partition_synopsis&&) = default;
 
   /// Add data to the synopsis.
-  void add(const table_slice& slice, const caf::settings& synopsis_options);
+  // TODO: It would make sense to pass an index_config to partition synopsis
+  // constructor instead.
+  void add(const table_slice& slice, size_t partition_capacity,
+           const index_config& synopsis_options);
 
   /// Optimizes the partition synopsis contents for size.
   /// @related buffered_synopsis

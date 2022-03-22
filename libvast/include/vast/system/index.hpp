@@ -399,7 +399,7 @@ struct index_state {
   filesystem_actor filesystem = {};
 
   /// Config options to be used for new synopses; passed to active partitions.
-  caf::settings synopsis_opts;
+  index_config synopsis_opts;
 
   /// Config options for the index.
   caf::settings index_opts;
@@ -424,8 +424,8 @@ struct index_state {
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param num_workers The maximum amount of concurrent lookups.
 /// @param catalog_dir The directory used by the catalog.
-/// @param synopsis_fp_rate The false positive rate for new address and string
-/// synopses.
+/// @param index_config The meta-index configuration of the false-positives
+/// rates for the types and fields.
 /// @pre `partition_capacity > 0
 //  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
@@ -436,7 +436,7 @@ index(index_actor::stateful_pointer<index_state> self,
       std::string store_backend, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers,
-      const std::filesystem::path& catalog_dir, double synopsis_fp_rate);
+      const std::filesystem::path& catalog_dir, index_config);
 
 } // namespace vast::system
 

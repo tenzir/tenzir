@@ -77,6 +77,10 @@ struct partition_transformer_state {
   /// Cached table slices in this partition.
   std::vector<table_slice> slices = {};
 
+  /// The maximum number of events in this partition. (not really necessary, but
+  /// required by the partition synopsis)
+  size_t partition_capacity = 0ull;
+
   /// Total number of rows in `slices`.
   size_t events = 0ull;
 
@@ -91,7 +95,7 @@ struct partition_transformer_state {
   detail::stable_map<qualified_record_field, value_index_ptr> indexers = {};
 
   /// Options for creating new synopses.
-  caf::settings synopsis_opts = {};
+  index_config synopsis_opts = {};
 
   /// Options for creating new value indices.
   caf::settings index_opts = {};
@@ -109,7 +113,7 @@ struct partition_transformer_state {
 /// Spawns a PARTITION TRANSFORMER actor with the given parameters.
 partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
-  uuid id, std::string store_id, const caf::settings& synopsis_opts,
+  uuid id, std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
   idspace_distributor_actor idspace_distributor,
   type_registry_actor type_registry, filesystem_actor fs,

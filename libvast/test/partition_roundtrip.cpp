@@ -156,7 +156,8 @@ TEST(empty partition roundtrip) {
   auto slice = slice_builder->finish();
   slice.offset(0);
   REQUIRE_NOT_EQUAL(slice.encoding(), vast::table_slice_encoding::none);
-  state.data.synopsis.unshared().add(slice, caf::settings{});
+  state.data.synopsis.unshared().add(
+    slice, vast::defaults::system::max_partition_size, vast::index_config{});
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {
@@ -236,11 +237,11 @@ TEST(full partition roundtrip) {
     vast::system::posix_filesystem,
     directory); // `directory` is provided by the unit test fixture
   auto partition_uuid = vast::uuid::random();
-  auto store_id = "legacy_archive";
+  auto store_id = std::string{"legacy_archive"};
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
-                caf::settings{}, vast::system::store_actor{}, store_id,
+                vast::index_config{}, vast::system::store_actor{}, store_id,
                 vast::chunk::make_empty());
   run();
   REQUIRE(partition);

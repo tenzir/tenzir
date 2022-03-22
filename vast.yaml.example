@@ -152,6 +152,20 @@ vast:
   # period without escalation into a hard kill.
   shutdown-grace-period: 3m
 
+  # The `index` key is used to adjust the false-positive rate of
+  # the first-level lookup data structures (called synopses) in the
+  # catalog. The lower the false-positive rate the more space will be
+  # required, so this setting can be used to manually tune the trade-off
+  # of performance vs. space.
+  index:
+    rules:
+      # Every rule adjusts the false-positive rate of a set of targets.
+      # VAST creates one synopsis per target. Targets can be either types
+      # or field names. All rules for types other than string and address
+      # are currently ignored.
+      - targets: [:string, :address]
+        fp-rate: 0.0001
+
   # The `vast start` command starts a new VAST server process.
   start:
 
@@ -187,6 +201,7 @@ vast:
     # Must be the absolute path to an executable file, which will get passed
     # the database directory as its first and only argument.
     #disk-budget-check-binary:
+
 
   # The `vast count` command counts hits for a query without exporting data.
   count:
