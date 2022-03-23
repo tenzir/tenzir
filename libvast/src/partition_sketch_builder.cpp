@@ -31,9 +31,6 @@ make_sketch_builder(const type& t, const index_config::rule* rule) {
   using min_max_sketch_builder
     = sketch::accumulator_builder<sketch::min_max_accumulator>;
   auto f = detail::overload{
-    [](const none_type&) -> sketch_builder_ptr {
-      die("sketch builders require none-null types");
-    },
     [](const bool_type&) -> sketch_builder_ptr {
       // We (ab)use the min-max sketch to represent min = false and max = true.
       return std::make_unique<min_max_sketch_builder>();
@@ -160,9 +157,8 @@ partition_sketch_builder::make(index_config config) {
   top_up(subnet_type{});
   // The inner types don't matter here, since we only register the factory for
   // the name of the outer type, i.e., "list", and "map".
-  auto n = none_type{};
-  top_up(list_type{n});
-  top_up(map_type{n, n});
+  top_up(list_type{type{}});
+  top_up(map_type{type{}, type{}});
   return builder;
 }
 
@@ -209,46 +205,43 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
   // a single top-level name. E.g., list<string>, list<count>, etc. will result
   // in creation of *one* builder for the list type (under the name "list").
   for (auto&& leaf : layout.leaves()) {
-    // TODO: Do this more efficiently rather than going through a string
-    // vector. We could offer another generator that goes over the names in
-    // reverse order, or consider changing the order in the first place.
-    std::vector<std::string> names;
-    for (auto name : leaf.field.type.names())
-      names.push_back(std::string{name});
-    auto begin = names.rbegin();
-    auto end = names.rend();
-    // We only allow aliases of the types that exist in the factory, so unless
-    // we have a valid starting point, we do not proceed.
-    if (!type_factory_.contains(*begin))
-      continue;
-    builder_factory parent_factory;
-    for (; begin != end; ++begin) {
-      auto&& name = *begin;
-      auto& factory = type_factory_[name];
-      if (factory)
-        parent_factory = factory;
-      else
-        factory = parent_factory;
-      auto& builder = type_builders_[name];
+    auto add = [&, this](const type& t) -> caf::error {
+      auto i = type_factory_.find(t.name());
+      if (i == type_factory_.end())
+        return caf::none;
+      auto& factory = i->second;
+      auto& builder = type_builders_[t];
+      if (!builder) {
+        VAST_DEBUG("constructing new builder for type '{}'", t);
+        builder = factory(t);
+      }
       if (!builder)
-        builder = factory(leaf.field.type);
-      if (!builder)
-        return caf::make_error(ec::unspecified,
-                               fmt::format("failed to construct sketch "
-                                           "builder for type '{}'",
-                                           name));
+        return caf::make_error(
+          ec::unspecified,
+          fmt::format("failed to construct sketch builder for type '{}'", t));
       auto xs = record_batch->column(layout.flat_index(leaf.index));
       if (auto err = builder->add(xs))
         return err;
-    }
+      return caf::none;
+    };
+    if (auto err = add(leaf.field.type))
+      return err;
+    for (auto alias : leaf.field.type.aliases())
+      if (auto err = add(alias))
+        return err;
   }
   return caf::none;
 }
 
 caf::expected<partition_sketch> partition_sketch_builder::finish() {
-  // TODO: implement.
+  // FIXME: implement.
   return ec::unimplemented;
 }
+
+double partition_sketch_builder::lookup(const expression&) const noexcept {
+  // FIXME: implement.
+  return 0.0;
+};
 
 detail::generator<std::string_view> partition_sketch_builder::fields() const {
   for (const auto& [key, _] : field_builders_)
@@ -256,9 +249,9 @@ detail::generator<std::string_view> partition_sketch_builder::fields() const {
   co_return;
 }
 
-detail::generator<std::string_view> partition_sketch_builder::types() const {
-  for (const auto& [name, _] : type_builders_)
-    co_yield std::string_view{name};
+detail::generator<type> partition_sketch_builder::types() const {
+  for (const auto& [key, _] : type_builders_)
+    co_yield key;
   co_return;
 }
 

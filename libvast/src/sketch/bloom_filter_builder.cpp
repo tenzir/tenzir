@@ -10,7 +10,6 @@
 
 #include "vast/error.hpp"
 #include "vast/fbs/bloom_filter.hpp"
-#include "vast/fbs/probabilistic_filter.hpp"
 #include "vast/fbs/sketch.hpp"
 #include "vast/sketch/bloom_filter.hpp"
 #include "vast/sketch/sketch.hpp"

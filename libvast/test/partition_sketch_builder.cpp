@@ -75,7 +75,7 @@ TEST(builder instantiation) {
   auto expected_types = std::set<std::string>{
     "time", "string", "addr", "port", "duration", "count", "bool", "list"};
   for (auto type : builder.types())
-    actual_types.insert(std::string{type});
+    actual_types.insert(std::string{type.name()});
   CHECK_EQUAL(actual_types, expected_types);
 }
 

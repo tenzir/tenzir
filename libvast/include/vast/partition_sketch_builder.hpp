@@ -45,13 +45,23 @@ public:
   /// @returns The partition sketch.
   caf::expected<partition_sketch> finish();
 
+  /// Checks whether the partition sketch fulfils an expression.
+  /// @param expr The expression to check.
+  /// @returns A probability in [0,1] that indicates the relevancy of this
+  /// partition for *expr*. The semantics are as follows:
+  /// - `= 0: guaranteed no results
+  /// - 1: guaranteed results
+  /// -
+  /// and 1 means definitely results. A value between 0 and 1 means "maybe".
+  double lookup(const expression& expr) const noexcept;
+
   /// Gets all field extractors.
   /// @returns the list of field extractors for which builders exists.
   detail::generator<std::string_view> fields() const;
 
   /// Gets all type extractors.
   /// @returns the list of type extractors for which builders exists.
-  detail::generator<std::string_view> types() const;
+  detail::generator<type> types() const;
 
 private:
   /// Construct a partion sketch builder from an index configuration.
@@ -71,8 +81,7 @@ private:
     field_builders_;
 
   /// Sketches for types, tracked by type name.
-  detail::heterogenous_string_hashmap<std::unique_ptr<sketch::builder>>
-    type_builders_;
+  std::unordered_map<type, std::unique_ptr<sketch::builder>> type_builders_;
 
   const index_config config_;
 };

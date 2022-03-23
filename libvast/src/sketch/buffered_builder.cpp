@@ -33,4 +33,8 @@ caf::expected<sketch> buffered_builder::finish() {
   return result;
 }
 
+const std::unordered_set<uint64_t>& buffered_builder::digests() const {
+  return digests_;
+}
+
 } // namespace vast::sketch

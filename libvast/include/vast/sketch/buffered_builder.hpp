@@ -31,6 +31,9 @@ public:
   virtual caf::expected<sketch>
   build(const std::unordered_set<uint64_t>& digests) = 0;
 
+  /// Retrieves the set of currently accumulated digests.
+  const std::unordered_set<uint64_t>& digests() const;
+
 private:
   std::unordered_set<uint64_t> digests_;
 };
