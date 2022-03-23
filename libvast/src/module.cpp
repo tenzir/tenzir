@@ -104,10 +104,10 @@ bool operator==(const module& x, const module& y) {
   return x.types_ == y.types_;
 }
 
-caf::expected<module> get_schema(const caf::settings& options) {
+caf::expected<module> get_module(const caf::settings& options) {
   // Get the default schema from the registry.
-  const auto* schema_reg_ptr = event_types::get();
-  auto schema = schema_reg_ptr ? *schema_reg_ptr : vast::module{};
+  const auto* module_reg_ptr = event_types::get();
+  auto module = module_reg_ptr ? *module_reg_ptr : vast::module{};
   // Update with an alternate schema, if requested.
   auto sc = caf::get_if<std::string>(&options, "vast.import.schema");
   auto sf = caf::get_if<std::string>(&options, "vast.import.schema-file");
@@ -116,23 +116,23 @@ caf::expected<module> get_schema(const caf::settings& options) {
                     "had both schema and schema-file "
                     "provided");
   if (!sc && !sf)
-    return schema;
+    return module;
   caf::expected<vast::module> update = caf::no_error;
   if (sc)
     update = to<vast::module>(*sc);
   else
-    update = load_schema(*sf);
+    update = load_module(*sf);
   if (!update)
     return update.error();
-  return module::combine(schema, *update);
+  return module::combine(module, *update);
 }
 
 detail::stable_set<std::filesystem::path>
 get_schema_dirs(const caf::actor_system_config& cfg) {
   const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
   detail::stable_set<std::filesystem::path> result;
-  if (auto vast_schema_directories = detail::locked_getenv("VAST_SCHEMA_DIRS"))
-    for (auto&& path : detail::split(*vast_schema_directories, ":"))
+  if (auto vast_module_directories = detail::locked_getenv("VAST_SCHEMA_DIRS"))
+    for (auto&& path : detail::split(*vast_module_directories, ":"))
       result.insert({path});
   const auto datadir = detail::install_datadir();
   result.insert(datadir / "schema");
@@ -157,37 +157,37 @@ get_schema_dirs(const caf::actor_system_config& cfg) {
   return result;
 }
 
-caf::expected<module> load_schema(const std::filesystem::path& schema_file) {
-  if (schema_file.empty())
+caf::expected<module> load_module(const std::filesystem::path& module_file) {
+  if (module_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
-  auto str = detail::load_contents(schema_file);
+  auto str = detail::load_contents(module_file);
   if (!str)
     return str.error();
   return to<module>(*str);
 }
 
 caf::error
-load_symbols(const std::filesystem::path& schema_file, symbol_map& local) {
-  if (schema_file.empty())
+load_symbols(const std::filesystem::path& module_file, symbol_map& local) {
+  if (module_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
-  auto str = detail::load_contents(schema_file);
+  auto str = detail::load_contents(module_file);
   if (!str)
     return str.error();
   auto p = symbol_map_parser{};
   if (!p(*str, local))
     return caf::make_error(ec::parse_error, "failed to load symbols from",
-                           schema_file.string());
+                           module_file.string());
   return caf::none;
 }
 
 caf::expected<module>
-load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
+load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
             size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
   vast::module types;
   symbol_map global_symbols;
-  for (const auto& dir : schema_dirs) {
+  for (const auto& dir : module_dirs) {
     VAST_VERBOSE("loading schemas from {}", dir);
     std::error_code err{};
     if (!std::filesystem::exists(dir, err)) {
@@ -197,33 +197,33 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
     auto filter = [](const std::filesystem::path& f) {
       return f.extension() == ".schema";
     };
-    auto schema_files
+    auto module_files
       = detail::filter_dir(dir, std::move(filter), max_recursion);
-    if (!schema_files)
+    if (!module_files)
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to filter schema dir at {}: "
                                          "{}",
-                                         dir, schema_files.error()));
+                                         dir, module_files.error()));
     symbol_map local_symbols;
-    for (const auto& f : *schema_files) {
+    for (const auto& f : *module_files) {
       VAST_DEBUG("loading schema {}", f);
       if (auto err = load_symbols(f, local_symbols))
         return err;
     }
     auto r = symbol_resolver{global_symbols, local_symbols};
-    auto directory_schema = r.resolve();
-    if (!directory_schema)
+    auto directory_module = r.resolve();
+    if (!directory_module)
       return caf::make_error(ec::format_error, "failed to resolve types in",
-                             dir.string(), directory_schema.error().context());
+                             dir.string(), directory_module.error().context());
     local_symbols.merge(std::move(global_symbols));
     global_symbols = std::move(local_symbols);
-    types = module::combine(types, *directory_schema);
+    types = module::combine(types, *directory_module);
   }
   return types;
 }
 
 caf::expected<vast::module> load_module(const caf::actor_system_config& cfg) {
-  return load_schema(get_schema_dirs(cfg));
+  return load_module(get_schema_dirs(cfg));
 }
 
 } // namespace vast

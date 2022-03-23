@@ -286,19 +286,19 @@ TEST(zeek reader - conn log) {
 TEST(zeek reader - layout enrichment) {
   auto slices = read(custom_log_1_event, 1, 1);
   REQUIRE_EQUAL(slices.size(), 1u);
-  std::string ref_schema = R"__(
+  std::string ref_module = R"__(
     type timestamp = time
     type zeek.custom = record{
       ts: timestamp,
       uid: string #index=hash,
     })__";
-  auto expected = unbox(to<schema>(ref_schema));
+  auto expected = unbox(to<module>(ref_module));
   auto zeek_conn = unbox(expected.find("zeek.custom"));
   CHECK_EQUAL(slices[0].layout(), flatten(zeek_conn));
 }
 
-TEST(zeek reader - custom schema) {
-  std::string custom_schema = R"__(
+TEST(zeek reader - custom module) {
+  std::string custom_module = R"__(
     type port = count
     type timestamp = time
     type zeek.conn = record{
@@ -310,7 +310,7 @@ TEST(zeek reader - custom schema) {
       community_id: string // not present in the data
     }
   )__";
-  auto mod = unbox(to<module>(custom_schema));
+  auto mod = unbox(to<module>(custom_module));
   using reader_type = format::zeek::reader;
   reader_type reader{caf::settings{}, std::make_unique<std::istringstream>(
                                         std::string{conn_log_100_events})};
@@ -321,7 +321,7 @@ TEST(zeek reader - custom schema) {
   auto [err, num] = reader.read(20, 20, add_slice);
   CHECK_EQUAL(slices.size(), 1u);
   CHECK_EQUAL(slices[0].rows(), 20u);
-  std::string ref_schema = R"__(
+  std::string ref_module = R"__(
     type port = count
     type timestamp = time
     type zeek.conn = record{
@@ -344,7 +344,7 @@ TEST(zeek reader - custom schema) {
       resp_ip_bytes: count,
       tunnel_parents: list<string>,
     })__";
-  auto expected = unbox(to<module>(ref_schema));
+  auto expected = unbox(to<module>(ref_module));
   auto zeek_conn = unbox(expected.find("zeek.conn"));
   CHECK_EQUAL(slices[0].layout(), flatten(zeek_conn));
 }

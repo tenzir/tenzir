@@ -293,7 +293,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       }
       VAST_DEBUG("{} ended a generation round regularly", *self);
     },
-    [self](atom::get, atom::schema) { //
+    [self](atom::get, atom::module) { //
       return self->state.reader->module();
     },
     [self](atom::put, class module module) -> caf::result<void> {

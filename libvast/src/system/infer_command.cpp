@@ -125,8 +125,8 @@ caf::expected<module> infer_json(const std::string& input) {
   return result;
 }
 
-auto show(const module& schema) {
-  std::cout << fmt::to_string(schema);
+auto show(const module& module) {
+  std::cout << fmt::to_string(module);
   return caf::none;
 }
 

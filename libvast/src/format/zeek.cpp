@@ -429,17 +429,17 @@ caf::error reader::parse_header() {
     auto transformations = std::vector<record_type::transformation>{};
     for (const auto& [layout_field, layout_index] : layout.leaves()) {
       const auto key = layout.key(layout_index);
-      if (auto schema_index = r->resolve_key(key)) {
-        const auto schema_field = r->field(*schema_index);
-        if (!congruent(schema_field.type, layout_field.type))
+      if (auto module_index = r->resolve_key(key)) {
+        const auto module_field = r->field(*module_index);
+        if (!congruent(module_field.type, layout_field.type))
           VAST_WARN("{} encountered a type mismatch between the schema "
                     "definition ({}) and the input data ({}",
-                    detail::pretty_type_name(this), schema_field, layout_field);
+                    detail::pretty_type_name(this), module_field, layout_field);
         else {
           transformations.push_back({
             layout_index,
             record_type::assign({
-              {std::string{layout_field.name}, schema_field.type},
+              {std::string{layout_field.name}, module_field.type},
             }),
           });
         }

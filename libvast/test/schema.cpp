@@ -124,11 +124,11 @@ TEST(serialization) {
 
 TEST(parseable - simple sequential) {
   auto str = "type a = int type b = string type c = a"s;
-  module sch;
-  CHECK(parsers::schema(str, sch));
-  CHECK(sch.find("a"));
-  CHECK(sch.find("b"));
-  CHECK(sch.find("c"));
+  module mod;
+  CHECK(parsers::module(str, mod));
+  CHECK(mod.find("a"));
+  CHECK(mod.find("b"));
+  CHECK(mod.find("c"));
 }
 
 TEST(parseable - toplevel comments) {
@@ -137,9 +137,9 @@ TEST(parseable - toplevel comments) {
     type foo = int
     // A comment a the end of the schema.
   )__";
-  module sch;
-  CHECK(parsers::schema(str, sch));
-  CHECK(sch.find("foo"));
+  module mod;
+  CHECK(parsers::module(str, mod));
+  CHECK(mod.find("foo"));
 }
 
 TEST(parseable - inline comments) {
@@ -150,10 +150,10 @@ TEST(parseable - inline comments) {
     }                   // detail,
     type bar = int      // jeez!
   )__";
-  module sch;
-  CHECK(parsers::schema(str, sch));
-  CHECK(sch.find("foo"));
-  CHECK(sch.find("bar"));
+  module mod;
+  CHECK(parsers::module(str, mod));
+  CHECK(mod.find("foo"));
+  CHECK(mod.find("bar"));
 }
 
 TEST(schema : zeek - style) {
@@ -176,9 +176,9 @@ TEST(schema : zeek - style) {
       client_issuer_subject: string
     }
   )__";
-  module sch;
-  CHECK(parsers::schema(str, sch));
-  auto ssl = sch.find("zeek.ssl");
+  module mod;
+  CHECK(parsers::module(str, mod));
+  auto ssl = mod.find("zeek.ssl");
   REQUIRE(ssl);
   auto r = get_if<record_type>(ssl);
   REQUIRE(r);
@@ -194,14 +194,14 @@ TEST(schema : aliases) {
                type baz = bar
                type x = baz
              )__";
-  module sch;
-  CHECK(parsers::schema(std::string{str}, sch));
-  auto foo = sch.find("foo");
+  module mod;
+  CHECK(parsers::module(std::string{str}, mod));
+  auto foo = mod.find("foo");
   REQUIRE(foo);
   CHECK(holds_alternative<address_type>(*foo));
-  CHECK(sch.find("bar"));
-  CHECK(sch.find("baz"));
-  CHECK(sch.find("x"));
+  CHECK(mod.find("bar"));
+  CHECK(mod.find("baz"));
+  CHECK(mod.find("x"));
 }
 
 TEST(parseable - basic types global) {
@@ -229,11 +229,11 @@ TEST(parseable - basic types global) {
       a10: t10,
     }
   )__";
-  module sch;
-  CHECK(parsers::schema(std::string{str}, sch));
-  CHECK(sch.find("t1"));
-  CHECK(sch.find("t10"));
-  auto foo = sch.find("foo");
+  module mod;
+  CHECK(parsers::module(std::string{str}, mod));
+  CHECK(mod.find("t1"));
+  CHECK(mod.find("t10"));
+  auto foo = mod.find("foo");
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
@@ -257,9 +257,9 @@ TEST(parseable - basic types local) {
       a10: subnet,
     }
   )__";
-  module sch;
-  CHECK(parsers::schema(std::string{str}, sch));
-  auto foo = sch.find("foo");
+  module mod;
+  CHECK(parsers::module(std::string{str}, mod));
+  auto foo = mod.find("foo");
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
@@ -279,13 +279,13 @@ TEST(parseable - complex types global) {
       t: map_t
     }
   )__";
-  module sch;
-  CHECK(parsers::schema(std::string{str}, sch));
-  auto enum_t = sch.find("enum_t");
+  module mod;
+  CHECK(parsers::module(std::string{str}, mod));
+  auto enum_t = mod.find("enum_t");
   REQUIRE(enum_t);
-  CHECK(sch.find("list_t"));
-  CHECK(sch.find("map_t"));
-  auto foo = sch.find("foo");
+  CHECK(mod.find("list_t"));
+  CHECK(mod.find("map_t"));
+  auto foo = mod.find("foo");
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
@@ -303,9 +303,9 @@ TEST(parseable - out of order definitions) {
     }
     type foo = int
   )__"sv;
-  module sch;
-  CHECK(parsers::schema(str, sch));
-  auto baz = unbox(sch.find("baz"));
+  module mod;
+  CHECK(parsers::module(str, mod));
+  auto baz = unbox(mod.find("baz"));
   auto expected = type{
     "baz",
     list_type{

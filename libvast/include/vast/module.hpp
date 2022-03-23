@@ -86,7 +86,7 @@ private:
 /// schemas with the ones passed directly as command line options.
 /// @param options The set of command line options.
 /// @returns The parsed schema.
-caf::expected<module> get_schema(const caf::settings& options);
+caf::expected<module> get_module(const caf::settings& options);
 
 /// Gathers the list of paths to traverse for loading schema or taxonomies data.
 /// @param cfg The application config.
@@ -98,7 +98,7 @@ get_schema_dirs(const caf::actor_system_config& cfg);
 /// Loads a single schema file.
 /// @param schema_file The file path.
 /// @returns The parsed schema.
-caf::expected<module> load_schema(const std::filesystem::path& schema_file);
+caf::expected<module> load_module(const std::filesystem::path& schema_file);
 
 /// Loads *.schema files from the given directories.
 /// @param schema_dirs The directories to load schemas from.
@@ -109,7 +109,7 @@ caf::expected<module> load_schema(const std::filesystem::path& schema_file);
 /// earlier ones, but the same mechanism makes no sense inside of a single
 /// directory unless we specify a specific order of traversal.
 caf::expected<vast::module>
-load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
+load_module(const detail::stable_set<std::filesystem::path>& schema_dirs,
             size_t max_recursion = defaults::max_recursion);
 
 /// Loads schemas according to the configuration. This is a convenience wrapper

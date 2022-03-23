@@ -285,7 +285,7 @@ struct parser_registry<module> {
 
 namespace parsers {
 
-constexpr auto schema = schema_parser{};
+constexpr auto module = schema_parser{};
 
 } // namespace parsers
 } // namespace vast

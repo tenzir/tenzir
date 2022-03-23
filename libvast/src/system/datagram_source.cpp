@@ -152,7 +152,7 @@ caf::behavior datagram_source(
       auto name = std::string{self->state.reader->name()};
       self->delegate(self->state.transformer, sink, name);
     },
-    [self](atom::get, atom::schema) -> caf::result<module> {
+    [self](atom::get, atom::module) -> caf::result<module> {
       return self->state.reader->module();
     },
     [self](atom::put, module& mod) -> caf::result<void> {

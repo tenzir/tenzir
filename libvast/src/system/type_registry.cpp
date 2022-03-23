@@ -217,7 +217,7 @@ void type_registry_state::insert(vast::type layout) {
 
 type_set type_registry_state::types() const {
   auto result = type_set{};
-  for (const auto& x : configuration_schema)
+  for (const auto& x : configuration_module)
     result.insert(x);
   return result;
 }
@@ -244,8 +244,8 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   }
   // Load loaded schema types from the singleton.
   // TODO: Move to the load handler and re-parse the files.
-  if (const auto* schema = vast::event_types::get())
-    self->state.configuration_schema = *schema;
+  if (const auto* module = vast::event_types::get())
+    self->state.configuration_module = *module;
   // The behavior of the type-registry.
   return {
     [self](atom::telemetry) {

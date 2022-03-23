@@ -75,11 +75,11 @@ caf::expected<expression> get_expression(const spawn_arguments& args) {
   return *expr;
 }
 
-caf::expected<std::optional<module>> read_schema(const spawn_arguments& args) {
-  auto schema_file_ptr = caf::get_if<std::string>(&args.inv.options, "schema");
-  if (!schema_file_ptr)
+caf::expected<std::optional<module>> read_module(const spawn_arguments& args) {
+  auto module_file_ptr = caf::get_if<std::string>(&args.inv.options, "schema");
+  if (!module_file_ptr)
     return std::optional<module>{std::nullopt};
-  auto str = detail::load_contents(std::filesystem::path{*schema_file_ptr});
+  auto str = detail::load_contents(std::filesystem::path{*module_file_ptr});
   if (!str)
     return str.error();
   auto result = to<module>(*str);

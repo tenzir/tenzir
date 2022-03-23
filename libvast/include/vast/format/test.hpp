@@ -75,7 +75,7 @@ protected:
                        consumer& f) override;
 
 private:
-  vast::module schema_;
+  vast::module module_;
   std::mt19937_64 generator_;
   size_t num_events_;
   module::const_iterator next_;

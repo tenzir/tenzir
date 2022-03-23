@@ -661,7 +661,7 @@ public:
   }
 
 private:
-  vast::module schema_;
+  vast::module module_;
   size_t flush_interval_ = 0;
   size_t snaplen_ = 65535;
   size_t total_packets_ = 0;
