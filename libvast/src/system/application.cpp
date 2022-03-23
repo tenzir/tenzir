@@ -152,7 +152,7 @@ auto make_export_command() {
 
 auto make_infer_command() {
   return std::make_unique<command>(
-    "infer", "infers the schema from data", documentation::vast_infer,
+    "infer", "infers a single schema from data", documentation::vast_infer,
     opts("?vast.infer")
       .add<size_t>("buffer,b", "maximum number of bytes to buffer")
       .add<std::string>("read,r", "path to the input data"));
@@ -201,8 +201,8 @@ auto make_spawn_source_command() {
       .add<size_t>("max-events,n", "the maximum number of events to import")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("read-timeout", "timeout for waiting for incoming data")
-      .add<std::string>("schema,S", "alternate schema as string")
-      .add<std::string>("schema-file,s", "path to alternate schema")
+      .add<std::string>("module-file,m", "use schemas from the given module "
+                                         "only")
       .add<std::string>("type,t", "filter event type based on prefix matching")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
   spawn_source->add_subcommand("csv",
@@ -418,10 +418,10 @@ auto make_root_command(std::string_view path) {
   // For documentation, we use the complete man-page formatted as Markdown
   const auto binary = detail::objectpath();
   auto module_desc
-    = "list of directories to look for schema files ([/etc/vast/schema"s;
+    = "list of directories to look for module files ([/etc/vast/modules"s;
   if (binary) {
     const auto relative_module_dir
-      = binary->parent_path().parent_path() / "share" / "vast" / "schema";
+      = binary->parent_path().parent_path() / "share" / "vast" / "modules";
     module_desc += ", " + relative_module_dir.string();
   }
   module_desc += "])";
@@ -429,8 +429,8 @@ auto make_root_command(std::string_view path) {
     = opts("?vast")
         .add<std::string>("config", "path to a configuration file")
         .add<bool>("bare-mode",
-                   "disable user and system configuration, schema and plugin "
-                   "directoriegs lookup and static and dynamic plugin "
+                   "disable user and system configuration, module and plugin "
+                   "directories lookup and static and dynamic plugin "
                    "autoloading (this may only be used on the command line)")
         .add<std::string>("console-verbosity", "output verbosity level on the "
                                                "console")
@@ -500,8 +500,8 @@ std::unique_ptr<command> make_import_command() {
       .add<size_t>("max-events,n", "the maximum number of events to import")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("read-timeout", "timeout for waiting for incoming data")
-      .add<std::string>("schema,S", "alternate schema as string")
-      .add<std::string>("schema-file,s", "path to alternate schema")
+      .add<std::string>("module-file,m", "use schemas from the given module "
+                                         "only")
       .add<std::string>("type,t", "filter event type based on prefix matching")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
   import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
@@ -515,7 +515,7 @@ std::unique_ptr<command> make_import_command() {
                           documentation::vast_import_csv,
                           opts("?vast.import.csv"));
   import_->add_subcommand(
-    "json", "imports JSON with schema", documentation::vast_import_json,
+    "json", "imports JSON with module", documentation::vast_import_json,
     opts("?vast.import.json")
       .add<std::string>("selector", "read the event type from the given field "
                                     "(specify as '<field>[:<prefix>]')"));
