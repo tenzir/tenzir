@@ -17,6 +17,7 @@
 #include "vast/detail/recursive_size.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/status.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/detail/scope_guard.hpp>
@@ -35,12 +36,29 @@ struct partition_diskstate {
   std::filesystem::file_time_type mtime;
 };
 
+struct diskstate_blacklist_comparator {
+  bool operator()(const partition_diskstate& lhs,
+                  const disk_monitor_state::blacklist_entry& rhs) const {
+    return lhs.id < rhs.id;
+  }
+
+  bool operator()(const disk_monitor_state::blacklist_entry& lhs,
+                  const partition_diskstate& rhs) const {
+    return lhs.id < rhs.id;
+  }
+};
+
 template <typename Fun>
 std::shared_ptr<caf::detail::scope_guard<Fun>> make_shared_guard(Fun f) {
   return std::make_shared<caf::detail::scope_guard<Fun>>(std::forward<Fun>(f));
 }
 
 } // namespace
+
+bool operator<(const disk_monitor_state::blacklist_entry& lhs,
+               const disk_monitor_state::blacklist_entry& rhs) {
+  return lhs.id < rhs.id;
+}
 
 caf::error validate(const disk_monitor_config& config) {
   if (config.step_size < 1)
@@ -188,9 +206,19 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                 [](const auto& lhs, const auto& rhs) {
                   return lhs.mtime < rhs.mtime;
                 });
+      auto& blacklist = self->state.blacklist;
+      if (!blacklist.empty()) {
+        std::vector<partition_diskstate> good_partitions;
+        std::set_difference(partitions.begin(), partitions.end(),
+                            blacklist.begin(), blacklist.end(),
+                            good_partitions.end(),
+                            diskstate_blacklist_comparator{});
+        partitions = std::move(good_partitions);
+      }
       // Delete up to `step_size` partitions at once.
       auto idx = std::min(partitions.size(), self->state.config.step_size);
       self->state.pending_partitions += idx;
+      constexpr auto erase_timeout = std::chrono::seconds{60};
       auto continuation = [=] {
         if (--self->state.pending_partitions == 0) {
           if (const auto size
@@ -212,25 +240,38 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         auto& partition = partitions.at(i);
         VAST_VERBOSE("{} erases partition {} from index", *self, partition.id);
         self
-          ->request<caf::message_priority::high>(
-            self->state.index, caf::infinite, atom::erase_v, partition.id)
+          ->request(self->state.index, erase_timeout, atom::erase_v,
+                    partition.id)
           .then(
             [=](atom::done) {
-              VAST_DEBUG("{} erased partition {}", *self, partition.id);
               continuation();
             },
-            [=, id = partition.id](caf::error e) {
-              VAST_WARN("{} failed to erase partition {}: {}", *self, id, e);
-              // TODO: Consider storing failed partitions so we don't retry them
-              // again and again.
+            [=, id = partition.id](caf::error& e) {
+              VAST_WARN("{} failed to erase partition {} within {}: {}", *self,
+                        id, erase_timeout, e);
+              self->state.blacklist.insert(
+                disk_monitor_state::blacklist_entry{id, std::move(e)});
               continuation();
             });
       }
       return {};
     },
-    [](atom::status, status_verbosity) {
-      // TODO: Return some useful information here.
-      return record{};
+    [self](atom::status, status_verbosity sv) {
+      auto result = record{};
+      auto disk_monitor = record{};
+      disk_monitor["blacklist-size"] = self->state.blacklist.size();
+      if (sv >= status_verbosity::debug) {
+        auto blacklist = list{};
+        for (auto& blacklisted : self->state.blacklist) {
+          auto entry = record{};
+          entry["id"] = fmt::format("{}", blacklisted.id);
+          entry["error"] = fmt::format("{}", blacklisted.error);
+          blacklist.emplace_back(entry);
+        }
+        disk_monitor["blacklist"] = std::move(blacklist);
+      }
+      result["disk-monitor"] = std::move(disk_monitor);
+      return result;
     },
   };
 }
