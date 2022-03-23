@@ -275,8 +275,9 @@ struct index_state {
   /// The number of query supervisors.
   size_t workers = 0;
 
-  /// Caches idle workers.
+  /// Caches idle/busy workers.
   detail::stable_set<query_supervisor_actor> idle_workers = {};
+  detail::stable_set<query_supervisor_actor> busy_workers = {};
 
   /// The META INDEX actor.
   meta_index_actor meta_index = {};

@@ -421,9 +421,10 @@ std::optional<query_supervisor_actor> index_state::next_worker() {
     return std::nullopt;
   }
   VAST_ASSERT(!idle_workers.empty());
-  auto it = idle_workers.begin() + (idle_workers.size() - 1);
+  auto it = idle_workers.begin() + (idle_workers.size() - 1u);
   auto result = *it;
   idle_workers.erase(it);
+  busy_workers.insert(result);
   return result;
 }
 
@@ -611,11 +612,12 @@ void index_state::add_partition_creation_listener(
 // -- introspection ----------------------------------------------------------
 
 void index_state::send_report() {
+  VAST_ASSERT(workers == idle_workers.size() + busy_workers.size());
   auto msg = report{.data = {
                       {"query.backlog.normal", backlog.normal.size()},
                       {"query.backlog.low", backlog.low.size()},
                       {"query.workers.idle", idle_workers.size()},
-                      {"query.workers.busy", workers - idle_workers.size()},
+                      {"query.workers.busy", busy_workers.size()},
                     }};
   self->send(accountant, msg);
 }
@@ -649,7 +651,7 @@ index_state::status(status_verbosity v) const {
     auto worker_status = record{};
     worker_status["count"] = workers;
     worker_status["idle"] = idle_workers.size();
-    worker_status["busy"] = workers - idle_workers.size();
+    worker_status["busy"] = busy_workers.size();
     rs->content["workers"] = std::move(worker_status);
     auto pending_status = list{};
     for (auto& [u, qs] : pending) {
@@ -1362,6 +1364,7 @@ index(index_actor::stateful_pointer<index_state> self,
       } else {
         VAST_VERBOSE(
           "{} finished work on a query and has no jobs in the backlog", *self);
+        self->state.busy_workers.erase(worker);
         self->state.idle_workers.insert(std::move(worker));
       }
     },
