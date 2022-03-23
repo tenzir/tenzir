@@ -29,8 +29,9 @@ struct query_supervisor_state {
   explicit query_supervisor_state(
     query_supervisor_actor::stateful_pointer<query_supervisor_state> self);
 
-  /// Maps partition IDs to the number of outstanding responses.
-  size_t open_requests;
+  /// The set of queries currently in progress. This should
+  /// have size <= 1 in normal operation.
+  std::set<vast::uuid> in_progress;
 
   /// The master of the QUERY SUPERVISOR.
   query_supervisor_master_actor master;
