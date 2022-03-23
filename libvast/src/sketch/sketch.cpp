@@ -9,11 +9,13 @@
 #include "vast/sketch/sketch.hpp"
 
 #include "vast/data.hpp"
+#include "vast/detail/hash_scalar.hpp"
 #include "vast/die.hpp"
 #include "vast/fbs/sketch.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/operator.hpp"
 #include "vast/sketch/bloom_filter_view.hpp"
+#include "vast/view.hpp"
 
 namespace vast::sketch {
 
@@ -36,15 +38,20 @@ sketch::lookup(relational_operator op, const data& x) const noexcept {
       // TODO: also consider `X in [a,b,c]`.
       if (op != relational_operator::equal)
         return {};
-      immutable_bloom_filter_view view;
-      auto err = unpack(*flatbuffer_->sketch_as_bloom_filter(), view);
+      immutable_bloom_filter_view bf;
+      auto err = unpack(*flatbuffer_->sketch_as_bloom_filter(), bf);
       VAST_ASSERT(!err);
-      // FIXME: Hash data exactly as in src/sketch/buffered_builder.cpp.
-      auto h = [](const auto& x) {
-        return hash(x);
-      };
-      auto digest = caf::visit(h, x);
-      return view.lookup(digest);
+      auto inferred_type = type::infer(x);
+      auto h = detail::overload{
+        [&]<basic_type T>(const T&) {
+          const auto& concrete = caf::get<type_to_data_t<T>>(x);
+          return bf.lookup(detail::hash_scalar<T>(make_view(concrete)));
+        },
+        [&]<complex_type T>(const T&) {
+          // FIXME: perform disjunction of all values in complex types.
+          return false;
+        }};
+      return caf::visit(h, inferred_type);
     }
   }
   return {};
