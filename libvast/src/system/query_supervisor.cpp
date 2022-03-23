@@ -35,8 +35,8 @@ namespace {
 } // namespace
 
 query_supervisor_state::query_supervisor_state(
-  query_supervisor_actor::stateful_pointer<query_supervisor_state>)
-  : open_requests(0) {
+  query_supervisor_actor::stateful_pointer<query_supervisor_state>) {
+  // nop
 }
 
 query_supervisor_actor::behavior_type query_supervisor(
@@ -70,12 +70,18 @@ query_supervisor_actor::behavior_type query_supervisor(
             });
         return;
       }
-      VAST_ASSERT(self->state.open_requests == 0);
+      self->state.in_progress.insert(query_id);
+      // This should never happen, but empirically it does and
+      // we still want to keep working.
+      if (self->state.in_progress.size() > 1)
+        VAST_WARN("{} saw more than one active query: {}", *self,
+                  fmt::join(self->state.in_progress, ", "));
+      auto open_requests = std::make_shared<int64_t>(0);
       auto start = std::chrono::steady_clock::now();
       auto query_trace_id = query_id.as_u64().first;
       for (const auto& [id, partition] : qm) {
         auto partition_trace_id = id.as_u64().first;
-        ++self->state.open_requests;
+        ++*open_requests;
         // TODO: Add a proper configurable timeout.
         self->request(partition, caf::infinite, query)
           .then(
@@ -83,7 +89,7 @@ query_supervisor_actor::behavior_type query_supervisor(
               auto delta = std::chrono::steady_clock::now() - start;
               VAST_TRACEPOINT(query_partition_done, query_trace_id,
                               partition_trace_id, delta.count());
-              if (--self->state.open_requests == 0) {
+              if (--*open_requests == 0) {
                 VAST_DEBUG("{} collected all results for the current batch "
                            "of partitions",
                            *self);
@@ -93,6 +99,7 @@ query_supervisor_actor::behavior_type query_supervisor(
                 // TODO: We should schedule a new partition as soon as the
                 // previous one has finished, otherwise each batch will be as
                 // slow as the worst case of the batch.
+                self->state.in_progress.erase(query_id);
                 self->send(client, atom::done_v);
                 self
                   ->request(self->state.master, caf::infinite, atom::worker_v,
@@ -117,7 +124,8 @@ query_supervisor_actor::behavior_type query_supervisor(
               auto delta = std::chrono::steady_clock::now() - start;
               VAST_TRACEPOINT(query_partition_error, query_trace_id,
                               partition_trace_id, delta.count());
-              if (--self->state.open_requests == 0) {
+              if (--*open_requests == 0) {
+                self->state.in_progress.erase(query_id);
                 self->send(client, atom::done_v);
                 self
                   ->request(self->state.master, caf::infinite, atom::worker_v,
@@ -137,27 +145,8 @@ query_supervisor_actor::behavior_type query_supervisor(
       }
     },
     [self](atom::shutdown, atom::sink) -> caf::result<void> {
-      // If there are still open requests, the message will be sent when
-      // the count drops to zero. We currently don't have a way of aborting
-      // the in-progress work.
-      if (self->state.open_requests > 0)
-        return caf::skip;
-      self
-        ->request(self->state.master, caf::infinite, atom::worker_v,
-                  atom::wakeup_v, self)
-        .then(
-          [self]() {
-            VAST_DEBUG("{} returns to query supervisor master after shutdown "
-                       "request from sink",
-                       *self);
-          },
-          [self](const caf::error&) {
-            VAST_ERROR("{} failed to return to query supervisor "
-                       "master after shutdown request from sink",
-                       *self);
-          });
-
-      return {};
+      return self->delegate(self->state.master, atom::worker_v, atom::wakeup_v,
+                            self);
     },
   };
 }
