@@ -71,11 +71,15 @@ query_supervisor_actor::behavior_type query_supervisor(
       }
       self->state.in_progress.insert(query_id);
       // This should only happen if an exporter exited while a query was still
-      // in progress. (empirically, there is another race condition that will
-      // cause it that is not currently understood)
-      if (self->state.in_progress.size() > 1)
-        VAST_DEBUG("{} saw more than one active query: {}",
-                   self->state.in_progress);
+      // in progress.
+      if (self->state.in_progress.size() > 1) {
+        // Workaround to {fmt} 7 / gcc 10 combo, which errors when not
+        // formatting the join view separately.
+        const auto in_progress_string
+          = fmt::to_string(fmt::join(self->state.in_progress, ", "));
+        VAST_DEBUG("{} saw more than one active query: {}", *self,
+                   in_progress_string);
+      }
       auto open_requests = std::make_shared<int64_t>(0);
       auto start = std::chrono::steady_clock::now();
       auto query_trace_id = query_id.as_u64().first;
