@@ -99,8 +99,6 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
                detail::pretty_type_name(inv.full_name));
     self->send(snk, caf::actor_cast<accountant_actor>(accountant));
   }
-  // Register sink at the node.
-  self->send(node, atom::put_v, snk, "sink");
   // Register self as the statistics actor.
   self->send(exporter, atom::statistics_v, self);
   self->send(snk, atom::statistics_v, self);
