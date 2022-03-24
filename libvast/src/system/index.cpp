@@ -981,7 +981,8 @@ void schedule_lookups(index_state& st) {
       };
       st.self->request(partition_actor, caf::infinite, query_state.query)
         .then(
-          [handle_completion](uint64_t) {
+          [handle_completion, pid = next->partition, &st](uint64_t n) {
+            VAST_ERROR("{} received {} results from {}", *st.self, n, pid);
             handle_completion();
           },
           [handle_completion, &st](const caf::error& err) {
