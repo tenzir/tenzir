@@ -31,13 +31,14 @@ save(const std::filesystem::path& filename, std::span<const std::byte> xs) {
       VAST_WARN("failed to remove file {} : {}", tmp, ec.message());
     return err;
   }
-  std::error_code err{};
-  std::filesystem::rename(tmp, filename, err);
-  if (err) {
-    std::filesystem::remove(tmp, err);
-    return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to rename {} : {}", filename,
-                                       err.message()));
+  std::error_code ec{};
+  std::filesystem::rename(tmp, filename, ec);
+  if (ec) {
+    auto err = caf::make_error(ec::filesystem_error,
+                               fmt::format("failed to rename {} : {}", filename,
+                                           ec.message()));
+    std::filesystem::remove(tmp, ec);
+    return err;
   }
   return caf::none;
 }
