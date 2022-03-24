@@ -210,7 +210,7 @@ partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
   if (std::find(state_.persisted_partitions.begin(),
                 state_.persisted_partitions.end(), id)
-      != state_.persisted_partitions.end()) {
+      == state_.persisted_partitions.end()) {
     VAST_WARN("{} can't load unknown partition {}", *state_.self, id);
     // FIXME: returning a null actor crashes soon after.
     // return {};
