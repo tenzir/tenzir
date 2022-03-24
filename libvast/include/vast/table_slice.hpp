@@ -53,6 +53,7 @@ public:
   /// `vast.fbs.TableSlice` FlatBuffers table.
   /// @param chunk A `vast.fbs.TableSlice` FlatBuffers table in a chunk.
   /// @param verify Controls whether the table should be verified.
+  /// @pre !chunk || chunk->unique()
   /// @note Constructs an invalid table slice if the verification of the
   /// FlatBuffers table fails.
   explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;

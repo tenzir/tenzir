@@ -144,7 +144,8 @@ table_slice::table_slice() noexcept = default;
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
-  if (chunk_ && chunk_->unique()) {
+  VAST_ASSERT(!chunk_ || chunk_->unique());
+  if (chunk_) {
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept {

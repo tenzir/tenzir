@@ -15,6 +15,7 @@
 #include "vast/config.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/experimental_table_slice_builder.hpp"
+#include "vast/io/read.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
@@ -42,17 +43,6 @@ auto make_slice(const record_type& layout, Ts&&... xs) {
   if (slice.encoding() == table_slice_encoding::none)
     FAIL("builder failed to produce a table slice");
   return slice;
-}
-
-template <class T, class... Ts>
-auto make_legacy_slice(const record_type& layout, std::vector<T> x0,
-                       std::vector<Ts>... xs) {
-  auto builder = arrow_table_slice_builder::make(type{"rec", layout});
-  for (size_t i = 0; i < x0.size(); ++i) {
-    CHECK(builder->add(x0.at(i)));
-    CHECK(builder->add(xs.at(i)...));
-  }
-  return builder->finish();
 }
 
 template <class T, class... Ts>
@@ -745,15 +735,10 @@ TEST(convert_legacy_table_slice) {
     list{record{{"f9_1", 0_e}, {"f9_2", "rest"}},
          record{{"f9_1", 1_e}, {"f9_2", {}}}},
   };
-  list list1{record{{"a", "123"}}, caf::none};
-  auto legacy_slice = make_legacy_slice(
-    t, f1_string, f2_count, f3_pattern, f4_address, f5_subnet, f6_enum,
-    f7_list_subnet, f8_map_enum_count, f9_1_enum, f9_2_string, f10_list_record,
-    f6_enum,    // f11_1_1 re-using existing data arrays for convenience
-    f2_count,   // f11_1_2
-    f4_address, // f11_2_1
-    f3_pattern  // f11_2_2
-  );
+  auto bytes = unbox(vast::io::read(VAST_TEST_PATH "artifacts/table_slices/"
+                                                   "arrow_v1.bytes"));
+  auto legacy_slice
+    = table_slice{chunk::make(std::move(bytes)), table_slice::verify::yes};
   auto slice = convert_legacy_table_slice(legacy_slice);
   check_column(slice, 0, string_type{}, f1_string);
   check_column(slice, 1, count_type{}, f2_count);

@@ -1177,7 +1177,7 @@ convert_subnet_array(const arrow::FixedSizeBinaryArray& arr) {
 /// Converts an array representing a single column from a previous arrow
 /// format to the according representation in the current arrow format.
 std::shared_ptr<arrow::Array>
-convert_column(const std::shared_ptr<arrow::Array>& arr, const type& t) {
+upgrade_array_to_v2(const std::shared_ptr<arrow::Array>& arr, const type& t) {
   auto f = detail::overload{
     [&](const basic_type auto& t) -> std::shared_ptr<arrow::Array> {
       VAST_ASSERT(arr->type()->Equals(t.to_arrow_type()));
@@ -1193,7 +1193,7 @@ convert_column(const std::shared_ptr<arrow::Array>& arr, const type& t) {
       int index = 0;
       for (const auto& f : rt.fields()) {
         const auto& arr = sa->field(index++);
-        children.push_back(convert_column(arr, f.type));
+        children.push_back(upgrade_array_to_v2(arr, f.type));
         field_names.emplace_back(f.name);
       }
       auto res = arrow::StructArray::Make(children, field_names);
@@ -1224,15 +1224,13 @@ convert_column(const std::shared_ptr<arrow::Array>& arr, const type& t) {
       auto enum_value = enumeration_type::array_type::make(
         et.to_arrow_type(),
         static_pointer_cast<arrow::UInt8Array>(indices.MoveValueUnsafe()));
-      if (!enum_value.ok()) {
-        fmt::print(stderr, "tp;enum: {}\n", enum_value.status());
+      if (!enum_value.ok())
         die("failed constructing extension type array");
-      }
       return enum_value.MoveValueUnsafe();
     },
     [&](const list_type& lt) -> std::shared_ptr<arrow::Array> {
       const auto& la = static_cast<const arrow::ListArray&>(*arr);
-      const auto& inner = convert_column(la.values(), lt.value_type());
+      const auto& inner = upgrade_array_to_v2(la.values(), lt.value_type());
       const auto& list_array = std::make_shared<arrow::ListArray>(
         arrow::list(inner->type()), la.length(), la.value_offsets(), inner,
         la.null_bitmap(), la.null_count());
@@ -1242,8 +1240,9 @@ convert_column(const std::shared_ptr<arrow::Array>& arr, const type& t) {
       const auto& la = static_cast<const arrow::ListArray&>(*arr);
       const auto& structs
         = static_cast<const arrow::StructArray&>(*la.values());
-      const auto& keys = convert_column(structs.field(0), mt.key_type());
-      const auto& items = convert_column(structs.field(1), mt.value_type());
+      const auto& keys = upgrade_array_to_v2(structs.field(0), mt.key_type());
+      const auto& items
+        = upgrade_array_to_v2(structs.field(1), mt.value_type());
       return std::make_shared<arrow::MapArray>(mt.to_arrow_type(), la.length(),
                                                la.value_offsets(), keys, items,
                                                la.null_bitmap(),
@@ -1262,7 +1261,7 @@ make_arrow_array(arrow::ArrayVector::const_iterator& array_iterator,
                  const type& t) {
   auto f = detail::overload{
     [&](const auto& t) -> std::shared_ptr<arrow::Array> {
-      return convert_column(*array_iterator++, type{t});
+      return upgrade_array_to_v2(*array_iterator++, type{t});
     },
     [&](const record_type& rt) -> std::shared_ptr<arrow::Array> {
       arrow::ArrayVector children{};
