@@ -174,6 +174,11 @@ struct query_state {
   }
 };
 
+struct index_counters {
+  size_t partition_materializations = 0;
+  size_t partition_lookups = 0;
+};
+
 struct pending_queue {
   struct pq {
     uuid partition;
@@ -350,6 +355,9 @@ struct index_state {
   /// A counter to track the number of partitions that are currently serving
   /// lookups.
   size_t running_partition_lookups = 0;
+
+  /// Keeps temporary statistics that are flushed with the metrics.
+  index_counters counters;
 
   /// Caches idle workers.
   detail::stable_set<query_supervisor_actor> idle_workers = {};

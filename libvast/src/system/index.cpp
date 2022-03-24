@@ -772,14 +772,17 @@ void index_state::add_partition_creation_listener(
 // -- introspection ----------------------------------------------------------
 
 void index_state::send_report() {
-  auto msg
-    = report{.data = {
-               {"query.pending.partitions", pending_queries.num_partitions()},
-               {"query.pending.queries", pending_queries.num_queries()},
-               {"query.workers.idle",
-                max_concurrent_partition_lookups - running_partition_lookups},
-               {"query.workers.busy", running_partition_lookups},
-             }};
+  auto counters = std::exchange(this->counters, {});
+  auto msg = report{
+    .data = {
+      {"query.pending.partitions", pending_queries.num_partitions()},
+      {"query.pending.queries", pending_queries.num_queries()},
+      {"query.partition.materializations", counters.partition_materializations},
+      {"query.partition.lookups", counters.partition_lookups},
+      {"query.workers.idle",
+       max_concurrent_partition_lookups - running_partition_lookups},
+      {"query.workers.busy", running_partition_lookups},
+    }};
   self->send(accountant, std::move(msg));
   auto r = performance_report{.data = {{{"scheduler", scheduler_measurement}}}};
   self->send(accountant, std::move(r));
@@ -942,6 +945,8 @@ void schedule_lookups(index_state& st) {
       // }
       continue;
     }
+    st.counters.partition_materializations++;
+    st.counters.partition_lookups += next->queries.size();
     // 3. request all relevant queries in a loop
     auto cnt = std::make_shared<size_t>(next->queries.size());
     for (auto qid : next->queries) {
