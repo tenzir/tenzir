@@ -115,15 +115,21 @@ struct query_backlog {
   struct job {
     vast::query query;
     caf::typed_response_promise<query_cursor> rp;
+    caf::actor_addr sender;
   };
 
   // Emplace a job.
-  void emplace(vast::query query, caf::typed_response_promise<query_cursor> rp);
+  void emplace(vast::query query, caf::typed_response_promise<query_cursor> rp,
+               caf::actor_addr sender);
+
+  /// Cancels jobs associated with the given sender.
+  /// @returns The number of cancelled jobs.
+  uint64_t cancel(caf::actor_addr sender);
 
   [[nodiscard]] std::optional<job> take_next();
 
-  std::queue<job> normal;
-  std::queue<job> low;
+  std::deque<job> normal;
+  std::deque<job> low;
 };
 
 struct query_state {
