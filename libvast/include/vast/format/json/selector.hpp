@@ -25,10 +25,10 @@ struct selector {
   [[nodiscard]] virtual std::optional<type>
   operator()(const ::simdjson::dom::object& obj) const = 0;
 
-  /// Sets the schema.
+  /// Sets the module.
   [[nodiscard]] virtual caf::error module(const vast::module& mod) = 0;
 
-  /// Retrieves the current schema.
+  /// Retrieves the current module.
   [[nodiscard]] virtual vast::module module() const = 0;
 };
 

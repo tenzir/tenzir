@@ -67,7 +67,7 @@ public:
     return {};
   }
 
-  /// Sets the schema.
+  /// Sets the module.
   inline caf::error module(const vast::module& mod) override {
     if (mod.empty())
       return caf::make_error(ec::invalid_configuration,
@@ -90,7 +90,7 @@ public:
     return caf::none;
   }
 
-  /// Retrieves the current schema.
+  /// Retrieves the current module.
   inline vast::module module() const override {
     vast::module result;
     for (const auto& [k, v] : type_cache)

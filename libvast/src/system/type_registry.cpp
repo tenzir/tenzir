@@ -293,7 +293,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     [self](atom::load) -> caf::result<atom::ok> {
       VAST_DEBUG("{} loads taxonomies", *self);
       std::error_code err{};
-      auto dirs = get_schema_dirs(self->system().config());
+      auto dirs = get_module_dirs(self->system().config());
       concepts_map concepts;
       models_map models;
       for (const auto& dir : dirs) {

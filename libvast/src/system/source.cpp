@@ -40,7 +40,7 @@ namespace vast::system {
 
 void source_state::initialize(const type_registry_actor& type_registry,
                               std::string type_filter) {
-  // Figure out which schemas we need.
+  // Figure out which modules we need.
   if (type_registry) {
     auto blocking = caf::scoped_actor{self->system()};
     blocking->request(type_registry, caf::infinite, atom::get_v)
@@ -55,7 +55,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
             return prefix_mismatch == prefix.end()
                    && (name_mismatch == name.end() || *name_mismatch == '.');
           };
-          // First, merge and de-duplicate the local schema with types from the
+          // First, merge and de-duplicate the local module with types from the
           // type-registry.
           auto merged_module = module{};
           for (const auto& type : local_module)
@@ -67,7 +67,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
             if (prefix_then_dot(type.name(), type_filter))
               if (caf::holds_alternative<record_type>(type))
                 merged_module.add(type);
-          // Third, try to set the new schema.
+          // Third, try to set the new module.
           if (auto err = reader->module(std::move(merged_module));
               err && err != caf::no_error)
             VAST_ERROR("{} source failed to set schema: {}", reader->name(),
@@ -79,7 +79,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
         });
   } else {
     // We usually expect to have the type registry at the ready, but if we
-    // don't we fall back to only using the schemas from disk.
+    // don't we fall back to only using the modules from disk.
     VAST_WARN("{} source failed to retrieve registered types and only "
               "considers types local to the import command",
               reader->name());

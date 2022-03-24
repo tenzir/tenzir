@@ -74,10 +74,10 @@ caf::error reader::module(vast::module x) {
 }
 
 vast::module reader::module() const {
-  vast::module sch;
-  sch.add(syslog_rfc5424_type_);
-  sch.add(syslog_unkown_type_);
-  return sch;
+  vast::module mod;
+  mod.add(syslog_rfc5424_type_);
+  mod.add(syslog_unkown_type_);
+  return mod;
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {

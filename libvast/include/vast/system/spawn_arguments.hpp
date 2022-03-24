@@ -63,9 +63,9 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
 
 caf::expected<expression> get_expression(const spawn_arguments& args);
 
-/// Attemps to read a schema file and parse its content. Can either 1) return
-/// nothing if the user didn't specifiy a schema file in `args.options`, 2)
-/// produce a valid schema, or 3) run into an error.
+/// Attemps to read a module file and parse its content. Can either 1) return
+/// nothing if the user didn't specifiy a module file in `args.options`, 2)
+/// produce a valid module, or 3) run into an error.
 caf::expected<std::optional<module>> read_module(const spawn_arguments& args);
 
 /// Generates an error for unexpected CLI arguments in `args`.

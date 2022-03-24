@@ -48,7 +48,7 @@ private:
 };
 
 /// A reader for CSV data. It operates with a *selector* to determine the
-/// mapping of CSV object to the appropriate record type in the schema.
+/// mapping of CSV object to the appropriate record type in the module.
 class reader final : public single_layout_reader {
 public:
   using super = single_layout_reader;

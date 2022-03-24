@@ -77,7 +77,7 @@ struct source_state {
   /// The maximum number of events to ingest.
   std::optional<size_t> requested = {};
 
-  /// The import-local schema.
+  /// The import-local module.
   vast::module local_module = {};
 
   /// The maximum size for a table slice.
@@ -117,7 +117,7 @@ struct source_state {
 /// @param table_slice_size The maximum size for a table slice.
 /// @param max_events The optional maximum amount of events to import.
 /// @param type_registry The actor handle for the type-registry component.
-/// @oaram local_schema Additional local schemas to consider.
+/// @param local_module Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
 /// @param input_transformations The input transformations to be applied.

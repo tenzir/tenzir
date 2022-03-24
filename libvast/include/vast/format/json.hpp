@@ -51,7 +51,7 @@ private:
 };
 
 /// A reader for JSON data. It operates with a *selector* to determine the
-/// mapping of JSON object to the appropriate record type in the schema.
+/// mapping of JSON object to the appropriate record type in the module.
 class reader final : public multi_layout_reader {
 public:
   using super = multi_layout_reader;

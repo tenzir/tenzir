@@ -37,8 +37,8 @@ TEST(offset finding) {
     type outer = record{ a: middle, b: record { y: string }, c: int }
     type foo = record{ a: int, b: real, c: outer, d: middle }
   )__";
-  auto sch = unbox(to<module>(str));
-  auto* foo_type = sch.find("foo");
+  auto mod = unbox(to<module>(str));
+  auto* foo_type = mod.find("foo");
   REQUIRE_NOT_EQUAL(foo_type, nullptr);
   REQUIRE(holds_alternative<record_type>(*foo_type));
   const auto& foo_record = get<record_type>(*foo_type);
@@ -98,7 +98,7 @@ TEST(merging) {
 }
 
 TEST(serialization) {
-  module sch;
+  module mod;
   auto t = type{
     "foo",
     record_type{
@@ -110,14 +110,14 @@ TEST(serialization) {
       {"d2", real_type{}},
     },
   };
-  sch.add(t);
+  mod.add(t);
   // Save & load
   std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, sch), caf::none);
-  module sch2;
-  CHECK_EQUAL(detail::legacy_deserialize(buf, sch2), true);
+  CHECK_EQUAL(detail::serialize(buf, mod), caf::none);
+  module mod2;
+  CHECK_EQUAL(detail::legacy_deserialize(buf, mod2), true);
   // Check integrity
-  auto u = sch2.find("foo");
+  auto u = mod2.find("foo");
   REQUIRE(u);
   CHECK(t == *u);
 }
@@ -156,7 +156,7 @@ TEST(parseable - inline comments) {
   CHECK(mod.find("bar"));
 }
 
-TEST(schema : zeek - style) {
+TEST(module : zeek - style) {
   std::string str = R"__(
     type port = count
     type zeek.ssl = record{

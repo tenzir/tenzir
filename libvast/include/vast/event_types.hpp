@@ -15,7 +15,7 @@
 namespace vast::event_types {
 
 /// Initializes the system-wide type registry.
-/// @param s The schema.
+/// @param s The module.
 /// @returns true on success or false if registry was alread initialized.
 bool init(module m);
 

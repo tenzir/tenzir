@@ -105,30 +105,30 @@ bool operator==(const module& x, const module& y) {
 }
 
 caf::expected<module> get_module(const caf::settings& options) {
-  // Get the default schema from the registry.
+  // Get the default module from the registry.
   const auto* module_reg_ptr = event_types::get();
   auto module = module_reg_ptr ? *module_reg_ptr : vast::module{};
-  // Update with an alternate schema, if requested.
+  // Update with an alternate module, if requested.
   auto sc = caf::get_if<std::string>(&options, "vast.import.schema");
-  auto sf = caf::get_if<std::string>(&options, "vast.import.schema-file");
-  if (sc && sf)
+  auto mf = caf::get_if<std::string>(&options, "vast.import.schema-file");
+  if (sc && mf)
     caf::make_error(ec::invalid_configuration,
                     "had both schema and schema-file "
                     "provided");
-  if (!sc && !sf)
+  if (!sc && !mf)
     return module;
   caf::expected<vast::module> update = caf::no_error;
   if (sc)
     update = to<vast::module>(*sc);
   else
-    update = load_module(*sf);
+    update = load_module(*mf);
   if (!update)
     return update.error();
   return module::combine(module, *update);
 }
 
 detail::stable_set<std::filesystem::path>
-get_schema_dirs(const caf::actor_system_config& cfg) {
+get_module_dirs(const caf::actor_system_config& cfg) {
   const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
   detail::stable_set<std::filesystem::path> result;
   if (auto vast_module_directories = detail::locked_getenv("VAST_SCHEMA_DIRS"))
@@ -223,7 +223,7 @@ load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
 }
 
 caf::expected<vast::module> load_module(const caf::actor_system_config& cfg) {
-  return load_module(get_schema_dirs(cfg));
+  return load_module(get_module_dirs(cfg));
 }
 
 } // namespace vast

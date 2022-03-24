@@ -74,7 +74,7 @@ make_source(caf::actor_system& sys, const std::string& format,
                                 defaults::import::table_slice_size);
   if (slice_size == 0)
     slice_size = std::numeric_limits<decltype(slice_size)>::max();
-  // Parse schema local to the import command.
+  // Parse module local to the import command.
   auto module = get_module(options);
   if (!module)
     return module.error();

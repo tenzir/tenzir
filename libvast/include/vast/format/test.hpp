@@ -50,7 +50,7 @@ struct blueprint {
   std::vector<distribution> distributions;
 };
 
-/// Produces random events according to a given schema.
+/// Produces random events according to a given module.
 class reader : public multi_layout_reader {
 public:
   using super = multi_layout_reader;

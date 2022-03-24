@@ -418,7 +418,7 @@ caf::error reader::parse_header() {
   VAST_DEBUG("{}     #fields:", detail::pretty_type_name(this));
   layout = detail::zeekify(layout);
   auto name = std::string{type_name_prefix} + path;
-  // If a congruent type exists in the schema, we give the schema type
+  // If a congruent type exists in the module, we give the type in the module
   // precedence.
   if (auto* t = module_.find(name)) {
     const auto* r = caf::get_if<record_type>(t);
