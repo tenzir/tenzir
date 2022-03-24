@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/detail/generator.hpp"
+
 #include <caf/expected.hpp>
 
 #include <optional>
@@ -24,5 +26,8 @@ namespace vast::detail {
 /// @param var The environment variable.
 /// @returns True on success.
 [[nodiscard]] caf::expected<void> locked_unsetenv(const char* var);
+
+/// Retrieves all environment variables as list of key-value pairs.
+generator<std::pair<std::string_view, std::string_view>> environment();
 
 } // namespace vast::detail

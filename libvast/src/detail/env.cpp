@@ -8,12 +8,16 @@
 
 #include "vast/detail/env.hpp"
 
+#include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 
 #include <fmt/format.h>
 
+#include <cstdio>
 #include <cstdlib>
 #include <mutex>
+
+extern char** environ;
 
 namespace vast::detail {
 
@@ -41,6 +45,18 @@ caf::expected<void> locked_unsetenv(const char* var) {
   return caf::make_error( //
     ec::system_error,
     fmt::format("failed in unsetenv(3): {}", ::strerror(errno)));
+}
+
+generator<std::pair<std::string_view, std::string_view>> environment() {
+  // Envrionment variables come as "key=value" pair strings.
+  for (auto env = environ; *env != nullptr; ++env) {
+    auto str = std::string_view{*env};
+    auto i = str.find('=');
+    VAST_ASSERT(i != std::string::npos);
+    auto key = str.substr(0, i);
+    auto value = str.substr(i + 1);
+    co_yield std::pair{key, value};
+  }
 }
 
 } // namespace vast::detail
