@@ -1147,11 +1147,11 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 }
 
 caf::error reader::module(vast::module m) {
-  return selector_->schema(m);
+  return selector_->module(m);
 }
 
 vast::module reader::module() const {
-  return selector_->schema();
+  return selector_->module();
 }
 
 const char* reader::name() const {

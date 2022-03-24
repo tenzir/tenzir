@@ -124,7 +124,7 @@ struct source_state {
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
-       const type_registry_actor& type_registry, vast::module local_schema,
+       const type_registry_actor& type_registry, vast::module local_module,
        std::string type_filter, accountant_actor accountant,
        std::vector<transform>&& input_transformations);
 
