@@ -73,9 +73,15 @@ query_supervisor_actor::behavior_type query_supervisor(
       self->state.in_progress.insert(query_id);
       // This should never happen, but empirically it does and
       // we still want to keep working.
-      if (self->state.in_progress.size() > 1)
+      if (self->state.in_progress.size() > 1) {
+        // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing
+        // views as lvalues is disallowed" when not formatting the join view
+        // separately.
+        const auto in_progress_string
+          = fmt::to_string(fmt::join(self->state.in_progress, ", "));
         VAST_WARN("{} saw more than one active query: {}", *self,
-                  fmt::join(self->state.in_progress, ", "));
+                  in_progress_string);
+      }
       auto open_requests = std::make_shared<int64_t>(0);
       auto start = std::chrono::steady_clock::now();
       auto query_trace_id = query_id.as_u64().first;
