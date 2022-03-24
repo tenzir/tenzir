@@ -34,6 +34,7 @@
 #endif
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <unordered_set>
 
@@ -85,6 +86,11 @@ configuration::configuration() {
 }
 
 caf::error configuration::parse(int argc, char** argv) {
+  // Parsing precedence:
+  // 1. CLI argument
+  // 2. Environment variables
+  // 3. Config files
+  // 4. Defaults
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
@@ -235,6 +241,19 @@ caf::error configuration::parse(int argc, char** argv) {
     else
       ++i;
   }
+  // Overwrite current config with (CAF|VAST)_ environment variables.
+  for (const auto& [key, value] : detail::environment()) {
+    if (key.starts_with("VAST_") || key.starts_with("CAF_")) {
+      // A '.' in the YAML config maps to '_' in the env key. A literal '_' in a
+      // key requires double-escaping, i.e., "__".
+      auto components = detail::to_strings(detail::split(key, "_", "_"));
+      for (auto& component : components)
+        for (auto& c : component)
+          c = tolower(c);
+      auto config_key = detail::join(components, ".");
+      merged_config[std::string{config_key}] = std::string{value};
+    }
+  }
   // Convert to CAF-readable data structure.
   auto settings = to<caf::settings>(merged_config);
   if (!settings)
@@ -292,13 +311,6 @@ caf::error configuration::parse(int argc, char** argv) {
       put(content, key, value);
     }
   }
-  // If the user specifies a VAST_ENDPOINT, potentially use it. Precedence:
-  // 1. CLI argument
-  // 2. Environment variables
-  // 3. Config files
-  // 4. Defaults
-  if (auto vast_endpoint_env = detail::locked_getenv("VAST_ENDPOINT"))
-    caf::put(content, "vast.endpoint", *vast_endpoint_env);
   // Try parsing all --caf.* settings. First, strip caf. prefix for the
   // CAF parser.
   for (auto& arg : caf_args)
