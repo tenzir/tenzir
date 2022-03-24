@@ -19,6 +19,72 @@
 
 namespace vast::sketch {
 
+namespace {
+
+/// Checks whether the hash digest(s) exist according to a provided lookup
+/// function.
+std::optional<bool> hash_lookup(const type& t, const data& x, auto lookup) {
+  if (caf::holds_alternative<caf::none_t>(x))
+    return lookup(detail::nil_hash_digest);
+  if (!t)
+    return std::nullopt;
+  auto f = detail::overload{
+    [&]<basic_type T>(const T&) -> std::optional<bool> {
+      const auto& concrete = caf::get<type_to_data_t<T>>(x);
+      return lookup(detail::hash_scalar<T>(make_view(concrete)));
+    },
+    [&](const enumeration_type&) -> std::optional<bool> {
+      VAST_ASSERT(false, "enum should not be an inferred type");
+      return std::nullopt;
+    },
+    [&](const list_type& t) -> std::optional<bool> {
+      /// Check if any value is part of the list.
+      auto num_false = size_t{0};
+      const auto& xs = caf::get<list>(x);
+      for (auto&& elem : xs) {
+        if (auto result = hash_lookup(t.value_type(), elem, lookup)) {
+          if (*result)
+            return true;
+          ++num_false;
+        }
+      }
+      // Only if all values are "false", the list doesn't qualify.
+      if (num_false == xs.size())
+        return false;
+      return std::nullopt;
+    },
+    [&](const map_type& t) -> std::optional<bool> {
+      /// Check if any value is part of the map, either as key or value.
+      auto num_false = size_t{0};
+      const auto& xs = caf::get<map>(x);
+      for (auto&& [k, v] : xs) {
+        if (auto result = hash_lookup(t.key_type(), k, lookup)) {
+          if (*result)
+            return true;
+          ++num_false;
+        }
+        if (auto result = hash_lookup(t.value_type(), v, lookup)) {
+          if (*result)
+            return true;
+          ++num_false;
+        }
+      }
+      // Only if all keys and values are "false", the map doesn't qualify.
+      if (num_false == xs.size() * 2)
+        return false;
+      return std::nullopt;
+    },
+    [&](const record_type&) -> std::optional<bool> {
+      // A record is a product type, so all values must be present.
+      // FIXME: implement
+      return std::nullopt;
+    },
+  };
+  return caf::visit(f, t);
+}
+
+} // namespace
+
 sketch::sketch(flatbuffer<fbs::Sketch> fb) noexcept
   : flatbuffer_{std::move(fb)} {
 }
@@ -41,17 +107,10 @@ sketch::lookup(relational_operator op, const data& x) const noexcept {
       immutable_bloom_filter_view bf;
       auto err = unpack(*flatbuffer_->sketch_as_bloom_filter(), bf);
       VAST_ASSERT(!err);
-      auto inferred_type = type::infer(x);
-      auto h = detail::overload{
-        [&]<basic_type T>(const T&) {
-          const auto& concrete = caf::get<type_to_data_t<T>>(x);
-          return bf.lookup(detail::hash_scalar<T>(make_view(concrete)));
-        },
-        [&]<complex_type T>(const T&) {
-          // FIXME: perform disjunction of all values in complex types.
-          return false;
-        }};
-      return caf::visit(h, inferred_type);
+      auto f = [&](uint64_t digest) {
+        return bf.lookup(digest);
+      };
+      return hash_lookup(type::infer(x), x, f);
     }
   }
   return {};
