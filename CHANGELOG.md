@@ -6,6 +6,19 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [v1.1.1]
+
+### :beetle: Bug Fixes
+
+- The disk monitor now correctly continues deleting until below the low water mark after a partition failed to delete.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
+- We fixed a rarely occurring race condition caused query workers to become stuck after delivering all results until the corresponding client process terminated.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
+- Queries that timed out or were externally terminated while in the query backlog and with more than five unhandled candidate partitions no longer permanently get stuck.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
 ## [v1.1.0]
 
 ### :warning: Changes
@@ -1565,6 +1578,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
 [v1.1.0]: https://github.com/tenzir/vast/releases/tag/v1.1.0
 [v1.0.0]: https://github.com/tenzir/vast/releases/tag/v1.0.0
 [2021.12.16]: https://github.com/tenzir/vast/releases/tag/2021.12.16
