@@ -38,7 +38,7 @@ table v1 {
   import_time: long;
 }
 
-/// A table slice encoded with Apache Arrow (unstable).
+/// A table slice encoded with Apache Arrow.
 table v2 {
   /// The Arrow IPC data.
   arrow_ipc: [ubyte];

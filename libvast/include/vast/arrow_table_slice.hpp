@@ -138,7 +138,7 @@ private:
 
 // -- utility functions -------------------------------------------------------
 
-/// Access a VAST data view for a given row in an Array Array.
+/// Access a VAST data view for a given row in an Arrow Array.
 data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
                    int64_t row) noexcept;
 
@@ -318,7 +318,7 @@ struct indexed_transformation {
     struct record_type::field, std::shared_ptr<arrow::Array>)>;
 
   offset index;      ///< The index of the field to transform.
-  function_type fun; /// The transformation function to apply.
+  function_type fun; ///< The transformation function to apply.
 
   friend auto operator<=>(const indexed_transformation& lhs,
                           const indexed_transformation& rhs) noexcept {
