@@ -937,6 +937,11 @@ public:
 
     [[nodiscard]] std::shared_ptr<arrow::DictionaryArray> storage() const;
 
+    /// Create an array from a prepopulated indices Array.
+    static arrow::Result<std::shared_ptr<enumeration_type::array_type>>
+    make(const std::shared_ptr<enumeration_type::arrow_type>& type,
+         const std::shared_ptr<arrow::UInt8Array>& indices);
+
   private:
     using arrow::ExtensionArray::storage;
   };
@@ -997,6 +1002,7 @@ public:
 struct enumeration_type::arrow_type final : arrow::ExtensionType {
   friend class type;
   friend struct enumeration_type::builder_type;
+  friend struct enumeration_type::array_type;
 
   /// A unique identifier for this extension type.
   static constexpr auto name = "vast.enumeration";

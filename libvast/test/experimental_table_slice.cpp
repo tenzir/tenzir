@@ -9,11 +9,13 @@
 #define SUITE experimental_table_slice
 
 #include "vast/arrow_table_slice.hpp"
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/experimental_table_slice_builder.hpp"
+#include "vast/io/read.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
@@ -54,11 +56,11 @@ auto make_slice(const record_type& layout, std::vector<T> x0,
   return builder->finish();
 }
 
-template <concrete_type T, class V>
+template <concrete_type T>
 auto check_column(const table_slice& slice, int c, const T& t,
-                  const std::vector<V>& ref) {
+                  const std::vector<data>& ref) {
   for (size_t r = 0; r < ref.size(); ++r)
-    CHECK_VARIANT_EQUAL(slice.at(r, c, t), make_view(ref[r]));
+    CHECK_VARIANT_EQUAL(slice.at(r, c, type{t}), make_view(ref[r]));
 }
 
 count operator"" _c(unsigned long long int x) {
@@ -118,11 +120,10 @@ TEST(nested multi - column roundtrip) {
       },
     },
   };
-  auto f1s = std::vector<std::string>{"n1", "n2", "n3", "n4"};
-  auto f2s = std::vector<count>{1_c, 2_c, 3_c, 4_c};
-  auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
-                                  pattern("p4")};
-  auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
+  auto f1s = list{"n1", "n2", "n3", "n4"};
+  auto f2s = list{1_c, 2_c, 3_c, 4_c};
+  auto f3s = list{pattern("p1"), pattern("p2"), pattern("p3"), pattern("p4")};
+  auto f4s = list{8_i, 7_i, 6_i, 5_i};
   auto slice = make_slice(t, f1s, f2s, f3s, f4s);
   check_column(slice, 0, string_type{}, f1s);
   check_column(slice, 1, count_type{}, f2s);
@@ -481,7 +482,7 @@ TEST(single column - map) {
   auto t = map_type{string_type{}, count_type{}};
   record_type layout{{"values", t}};
   map map1{{"foo"s, 42_c}, {"bar"s, 23_c}};
-  map map2{{"a"s, 0_c}, {"b"s, 1_c}, {"c", 2_c}};
+  map map2{{"a"s, 0_c}, {"b"s, {}}, {"c", 2_c}};
   auto slice = make_slice(layout, map1, map2, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(map1));
@@ -660,6 +661,100 @@ TEST(arrow record type to schema roundtrip tp) {
     {{"keyx", "vx"}},
   };
   schema_roundtrip(outer);
+}
+
+TEST(convert_legacy_table_slice) {
+  auto et = enumeration_type{{"foo"}, {"bar"}, {"baz"}};
+  auto mt = map_type{et, count_type{}};
+  auto lt = list_type{subnet_type{}};
+  auto rt = record_type{
+    {"f9_1", et},
+    {"f9_2", string_type{}},
+  };
+  // nested record of record to simulate multiple nesting levels
+  auto rrt = record_type{
+    {"f11_1",
+     record_type{
+       {"f11_1_1", et},
+       {"f11_1_2", count_type{}},
+     }},
+    {"f11_2",
+     record_type{
+       {"f11_2_1", address_type{}},
+       {"f11_2_2", pattern_type{}},
+     }},
+  };
+  auto lrt = list_type{rt};
+  auto t = record_type{
+    {"f1", type{string_type{}, {{"key", "value"}}}},
+    {"f2", count_type{}},
+    {"f3", pattern_type{}},
+    {"f4", address_type{}},
+    {"f5", subnet_type{}},
+    {"f6", et},
+    {"f7", lt},
+    {"f8", mt},
+    {"f9", rt},
+    {"f10", lrt},
+    {"f11", rrt},
+  };
+  auto f1_string = list{"n1", "n2", {}, "n4"};
+  auto f2_count = list{1_c, {}, 3_c, 4_c};
+  auto f3_pattern = list{pattern("p1"), {}, pattern("p3"), {}};
+  auto f4_address = list{
+    unbox(to<address>("172.16.7.29")),
+    {},
+    unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")),
+    unbox(to<address>("2001:db8::")),
+  };
+  auto f5_subnet = list{
+    unbox(to<subnet>("172.16.7.0/8")),
+    unbox(to<subnet>("172.16.0.0/16")),
+    unbox(to<subnet>("172.0.0.0/24")),
+    {},
+  };
+  auto f6_enum = list{1_e, {}, 0_e, 0_e};
+  auto f7_list_subnet = list{
+    list{f5_subnet[0], f5_subnet[1]},
+    list{},
+    list{f5_subnet[3], f5_subnet[2]},
+    {},
+  };
+  auto f8_map_enum_count = list{
+    map{{0_e, 42_c}, {1_e, 23_c}},
+    map{{2_e, 0_c}, {0_e, caf::none}, {1_e, 2_c}},
+    map{{1_e, 42_c}, {2_e, caf::none}},
+    map{},
+  };
+  auto f9_1_enum = list{0_e, 1_e, 0_e, 2_e};
+  auto f9_2_string = list{"some", "string", "stuff", ""};
+  auto f10_list_record = list{
+    list{},
+    list{record{{"f9_1", {}}, {"f9_2", "vest"}}},
+    {},
+    list{record{{"f9_1", 0_e}, {"f9_2", "rest"}},
+         record{{"f9_1", 1_e}, {"f9_2", {}}}},
+  };
+  auto bytes = unbox(vast::io::read(VAST_TEST_PATH "artifacts/table_slices/"
+                                                   "arrow_v1.bytes"));
+  auto legacy_slice
+    = table_slice{chunk::make(std::move(bytes)), table_slice::verify::yes};
+  auto slice = convert_legacy_table_slice(legacy_slice);
+  check_column(slice, 0, string_type{}, f1_string);
+  check_column(slice, 1, count_type{}, f2_count);
+  check_column(slice, 2, pattern_type{}, f3_pattern);
+  check_column(slice, 3, address_type{}, f4_address);
+  check_column(slice, 4, subnet_type{}, f5_subnet);
+  check_column(slice, 5, et, f6_enum);
+  check_column(slice, 6, lt, f7_list_subnet);
+  check_column(slice, 7, mt, f8_map_enum_count);
+  check_column(slice, 8, et, f9_1_enum);
+  check_column(slice, 9, string_type{}, f9_2_string);
+  check_column(slice, 10, lrt, f10_list_record);
+  check_column(slice, 11, et, f6_enum);                // f11_1_1
+  check_column(slice, 12, count_type{}, f2_count);     // f11_1_2
+  check_column(slice, 13, address_type{}, f4_address); // f11_2_1
+  check_column(slice, 14, pattern_type{}, f3_pattern); // f11_2_2
 }
 
 namespace {

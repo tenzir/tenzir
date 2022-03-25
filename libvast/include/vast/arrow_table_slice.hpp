@@ -150,4 +150,11 @@ extern template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 extern template class arrow_table_slice<fbs::table_slice::arrow::v1>;
 extern template class arrow_table_slice<fbs::table_slice::arrow::experimental>;
 
+// -- utility functions --------------------------------------------------------
+
+/// Converts legacy (v0/v1) table slice to the new representation, re-using
+/// existing Arrow arrays to make this a cheap operation.
+/// @note subnet structure changed in a way that array is built from scratch.
+table_slice convert_legacy_table_slice(const table_slice& legacy);
+
 } // namespace vast
