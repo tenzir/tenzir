@@ -165,12 +165,11 @@ caf::error configuration::parse(int argc, char** argv) {
   VAST_ASSERT(it == plugin_args.end());
   // If there are no plugin options on the command line, look at the
   // corresponding evironment variables VAST_PLUGIN_DIRS and VAST_PLUGINS.
-  if (auto vast_plugin_directories = detail::locked_getenv( //
-        "VAST_PLUGIN_DIRS")) {
+  if (auto vast_plugin_dirs = detail::locked_getenv("VAST_PLUGIN_DIRS")) {
     auto cli_plugin_dirs
       = caf::get_or(content, "vast.plugin-dirs", std::vector<std::string>{});
     if (cli_plugin_dirs.empty()) {
-      for (auto&& dir : detail::split(*vast_plugin_directories, ":"))
+      for (auto&& dir : detail::split(*vast_plugin_dirs, ":"))
         cli_plugin_dirs.emplace_back(std::move(dir));
       caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
     }
