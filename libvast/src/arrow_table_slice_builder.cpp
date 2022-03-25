@@ -344,4 +344,17 @@ append_builder(const record_type& hint,
   return arrow::Status::OK();
 }
 
+arrow::Status append_builder(const type& hint,
+                             std::same_as<arrow::ArrayBuilder> auto& builder,
+                             const view<type_to_data_t<type>>& value) noexcept {
+  if (caf::holds_alternative<caf::none_t>(value))
+    return builder.AppendNull();
+  auto f = [&]<concrete_type Type>(const Type& hint) {
+    return append_builder(hint,
+                          caf::get<type_to_arrow_builder_t<Type>>(builder),
+                          caf::get<view<type_to_data_t<Type>>>(value));
+  };
+  return caf::visit(f, hint);
+}
+
 } // namespace vast
