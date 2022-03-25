@@ -33,24 +33,24 @@ To avoid having to provide required Terraform variables manually, the CLI looks
 for a `.env` file in the current directory. It must define the following
 variables:
 
-- `aws_region`: the region of the VPC where to deploy Fargate and Lambda
+- `VAST_AWS_REGION`: the region of the VPC where to deploy Fargate and Lambda
   resources.
 
-- `peered_vpc_id`: an existing VPC to which you plan to attach your VAST stack.
+- `VAST_PEERED_VPC_ID`: an existing VPC to which you plan to attach your VAST stack.
   You can use `aws ec2 describe-vpcs --region $region` to list available VPCs.
   The deployment script will create a new VPC and peer it to the existing one.
 
-- `vast_cidr`: the IP range where the VAST stack will be placed. Terraform will
+- `VAST_CIDR`: the IP range where the VAST stack will be placed. Terraform will
   create a new VPC with this CIDR, so it should not overlapp with any of your
   existing VPCs.
 
 Optionally, you can also define the following variables:
 
-- `vast_version`: the version of VAST that should be used. By default it is set
+- `VAST_VERSION`: the version of VAST that should be used. By default it is set
   to the latest release. Version should be `v1.1.0` or higher. You can also use
   the latest commit on the main branch by specifying `latest`.
 
-- `vast_server_storage_type`: the type of volume to use for the VAST server. Can
+- `VAST_SERVER_STORAGE_TYPE`: the type of volume to use for the VAST server. Can
   be set to either
   - EFS (default) -> persistent accross task execution, infinitely scalable, but
     higher latency.
@@ -60,9 +60,9 @@ Optionally, you can also define the following variables:
 Here's an example:
 
 ```bash
-peered_vpc_id=vpc-059a7ec8aac174fc9
-vast_cidr=172.31.48.0/24
-aws_region=eu-north-1
+VAST_PEERED_VPC_ID=vpc-059a7ec8aac174fc9
+VAST_CIDR=172.31.48.0/24
+VAST_AWS_REGION=eu-north-1
 ```
 
 Next, we take a look at some use cases. To setup Fargate and the Lambda
@@ -80,7 +80,8 @@ Caveats:
   when you aren't running any workload, until you tear down the entire stack.
 
 - You might sometime bumb into _error waiting for Lambda Function creation:
-  InsufficientRolePermissions_ while deploying the stack. You can usually solve this by running `./vast-cloud deploy` again a few minutes later.
+  InsufficientRolePermissions_ while deploying the stack. You can usually solve
+  this by running `./vast-cloud deploy` again a few minutes later.
 
 
 #### Start a VAST server (Fargate)

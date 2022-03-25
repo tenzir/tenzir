@@ -1,4 +1,4 @@
-from invoke import task, Context, Exit
+from invoke import task, Context, Exit, Program, Collection
 import boto3
 import botocore.client
 import os
@@ -6,9 +6,10 @@ from dotenv import load_dotenv
 import time
 import base64
 import json
+import sys
 
 load_dotenv()
-AWS_REGION = os.getenv("aws_region")
+AWS_REGION = os.getenv("VAST_AWS_REGION")
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
 
 
@@ -23,8 +24,8 @@ def _terraform_output(c: Context, step, key) -> str:
 
 
 def _vast_lambda_image(c: Context) -> str:
-    if os.getenv("vast_lambda_image") is not None:
-        return os.getenv("vast_lambda_image")
+    if os.getenv("VAST_LAMBDA_IMAGE") is not None:
+        return os.getenv("VAST_LAMBDA_IMAGE")
     repo_arn = _terraform_output(c, "step-1", "vast_lambda_repository_arn")
     tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
     current = next((tag["Value"] for tag in tags if tag["Key"] == "current"))
@@ -33,7 +34,7 @@ def _vast_lambda_image(c: Context) -> str:
 
 def _vast_version(c: Context):
     # TODO use git describe
-    return os.getenv("vast_version", "v1.1.0")
+    return os.getenv("VAST_VERSION", "v1.1.0")
 
 
 def _step_1_variables() -> dict:
@@ -45,9 +46,9 @@ def _step_1_variables() -> dict:
 def _step_2_variables(c: Context) -> dict:
     return {
         "TF_VAR_vast_version": _vast_version(c),
-        "TF_VAR_vast_server_storage_type": os.getenv("vast_server_storage_type", "EFS"),
-        "TF_VAR_peered_vpc_id": os.getenv("peered_vpc_id"),
-        "TF_VAR_vast_cidr": os.getenv("vast_cidr"),
+        "TF_VAR_vast_server_storage_type": os.getenv("VAST_SERVER_STORAGE_TYPE", "EFS"),
+        "TF_VAR_peered_vpc_id": os.getenv("VAST_PEERED_VPC_ID"),
+        "TF_VAR_vast_cidr": os.getenv("VAST_CIDR"),
         "TF_VAR_region_name": AWS_REGION,
         "TF_VAR_vast_lambda_image": _vast_lambda_image(c),
     }
@@ -127,6 +128,7 @@ def destroy(c):
 
 @task
 def run_vast_task(c):
+    """Start a new VAST server task on Fargate. DANGER: might lead to inconsistant state"""
     cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
     subnet = _terraform_output(c, "step-2", "ids_appliances_subnet_id")
     sg = _terraform_output(c, "step-2", "vast_security_group")
@@ -185,6 +187,7 @@ def describe_vast_server(c):
 
 @task
 def start_vast_server(c):
+    """Start a VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
     try:
         get_vast_server(c)
     except Exit as e:
@@ -194,6 +197,7 @@ def start_vast_server(c):
 
 @task
 def restart_vast_server(c):
+    """Stops the running VAST server Fargate task and start a new one"""
     try:
         task_id = get_vast_server(c)
         cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
@@ -226,6 +230,7 @@ def stop_all_tasks(c):
 
 @task(autoprint=True)
 def run_lambda(c, cmd):
+    """Run ad-hoc VAST client commands from AWS Lambda"""
     lambda_name = _terraform_output(c, "step-2", "vast_lambda_name")
     task_ip = describe_vast_server(c)["ip"]
     cmd_b64 = base64.b64encode(cmd.encode()).decode()
@@ -258,3 +263,12 @@ def execute_command(c, cmd="/bin/bash"):
 		--command "{cmd}" \
         --region {AWS_REGION} """
     )
+
+
+if __name__ == "__main__":
+    program = Program(
+        binary="./vast-cloud",
+        namespace=Collection.from_module(sys.modules[__name__]),
+        version="0.1.0",
+    )
+    program.run()
