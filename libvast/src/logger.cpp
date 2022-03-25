@@ -127,18 +127,6 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       console_verbosity = *cfg_console_verbosity;
     }
   }
-  // Allow `vast.verbosity` from the command-line to overwrite
-  // the `vast.console-verbosity` setting from the config file.
-  auto verbosity = caf::get_if<std::string>(&cfg_cmd, "vast.verbosity");
-  if (verbosity) {
-    if (loglevel_to_int(*verbosity, -1) < 0) {
-      fmt::print(stderr,
-                 "failed to start logger; vast.verbosity '{}' is invalid\n",
-                 *verbosity);
-      return false;
-    }
-    console_verbosity = *verbosity;
-  }
   std::string file_verbosity = vast::defaults::logger::file_verbosity;
   auto cfg_file_verbosity
     = caf::get_if<std::string>(&cfg_file, "vast.file-verbosity");

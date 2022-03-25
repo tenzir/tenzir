@@ -122,9 +122,12 @@ caf::error configuration::parse(int argc, char** argv) {
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
   const auto replacements = std::vector<std::pair<std::string, std::string>>{
-    {"-qqq", "--verbosity=quiet"}, {"-qq", "--verbosity=error"},
-    {"-q", "--verbosity=warning"}, {"-v", "--verbosity=verbose"},
-    {"-vv", "--verbosity=debug"},  {"-vvv", "--verbosity=trace"},
+    {"-qqq", "--console-verbosity=quiet"},
+    {"-qq", "--console-verbosity=error"},
+    {"-q", "--console-verbosity=warning"},
+    {"-v", "--console-verbosity=verbose"},
+    {"-vv", "--console-verbosity=debug"},
+    {"-vvv", "--console-verbosity=trace"},
   };
   for (auto& option : command_line)
     for (const auto& [old, new_] : replacements)
