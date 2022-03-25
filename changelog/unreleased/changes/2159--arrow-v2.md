@@ -7,3 +7,5 @@ arrow` command without needing information about VAST' type system.
 Transform steps that add or modify columns now add or modify the columns
 in-place rather than at the end, preserving the nesting structure of the
 original data.
+
+The deprecated `msgpack` encoding no longer exists.
