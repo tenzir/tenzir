@@ -117,14 +117,14 @@ struct query {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query& q) {
-    return f(caf::meta::type_name("vast.query"), q.cmd, q.expr, q.ids,
+    return f(caf::meta::type_name("vast.query"), q.id, q.cmd, q.expr, q.ids,
              q.priority);
   }
 
   // -- data members -----------------------------------------------------------
 
   /// The query id.
-  uuid id = uuid::random();
+  uuid id = uuid::nil();
 
   /// The query command.
   command cmd;

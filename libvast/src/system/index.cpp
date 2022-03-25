@@ -56,6 +56,7 @@
 #include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <deque>
 #include <filesystem>
 #include <memory>
 #include <span>
@@ -220,22 +221,33 @@ partition_actor partition_factory::operator()(const uuid& id) const {
 // -- query_backlog ------------------------------------------------------------
 
 void query_backlog::emplace(vast::query query,
-                            caf::typed_response_promise<query_cursor> rp) {
+                            caf::typed_response_promise<query_cursor> rp,
+                            caf::actor_addr sender) {
   auto& q = query.priority == query::priority::normal ? normal : low;
   // TODO: emplace does not work with libc++ <= 12.0. Switch to it once
   // we updated to LLVM 13.
-  q.push(job{std::move(query), std::move(rp)});
+  q.push_back(job{std::move(query), std::move(rp), std::move(sender)});
+}
+
+uint64_t query_backlog::cancel(caf::actor_addr sender) {
+  auto num = std::erase_if(low, [&](const auto& job) {
+    return job.sender == sender;
+  });
+  num += std::erase_if(normal, [&](const auto& job) {
+    return job.sender == sender;
+  });
+  return num;
 }
 
 std::optional<query_backlog::job> query_backlog::take_next() {
   if (!normal.empty()) {
     auto result = normal.front();
-    normal.pop();
+    normal.pop_front();
     return result;
   }
   if (!low.empty()) {
     auto result = low.front();
-    low.pop();
+    low.pop_front();
     return result;
   }
   return std::nullopt;
@@ -421,9 +433,10 @@ std::optional<query_supervisor_actor> index_state::next_worker() {
     return std::nullopt;
   }
   VAST_ASSERT(!idle_workers.empty());
-  auto it = idle_workers.begin() + (idle_workers.size() - 1);
+  auto it = idle_workers.begin() + (idle_workers.size() - 1u);
   auto result = *it;
   idle_workers.erase(it);
+  busy_workers.insert(result);
   return result;
 }
 
@@ -611,11 +624,12 @@ void index_state::add_partition_creation_listener(
 // -- introspection ----------------------------------------------------------
 
 void index_state::send_report() {
+  VAST_ASSERT(workers == idle_workers.size() + busy_workers.size());
   auto msg = report{.data = {
                       {"query.backlog.normal", backlog.normal.size()},
                       {"query.backlog.low", backlog.low.size()},
                       {"query.workers.idle", idle_workers.size()},
-                      {"query.workers.busy", workers - idle_workers.size()},
+                      {"query.workers.busy", busy_workers.size()},
                     }};
   self->send(accountant, msg);
 }
@@ -649,7 +663,7 @@ index_state::status(status_verbosity v) const {
     auto worker_status = record{};
     worker_status["count"] = workers;
     worker_status["idle"] = idle_workers.size();
-    worker_status["busy"] = workers - idle_workers.size();
+    worker_status["busy"] = busy_workers.size();
     rs->content["workers"] = std::move(worker_status);
     auto pending_status = list{};
     for (auto& [u, qs] : pending) {
@@ -873,6 +887,10 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_WARN("{} received DOWN from unexpected sender", *self);
       return;
     }
+    const auto num_cancelled = self->state.backlog.cancel(msg.source);
+    if (num_cancelled > 0)
+      VAST_DEBUG("{} cancelled {} queries in the backlog", *self,
+                 num_cancelled);
     const auto& [_, ids] = *it;
     if (!ids.empty()) {
       // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing views
@@ -943,6 +961,26 @@ index(index_actor::stateful_pointer<index_state> self,
           });
     },
     [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
+      // Query handling
+      auto sender = self->current_sender();
+      // Sanity check.
+      if (!sender) {
+        VAST_WARN("{} ignores an anonymous query", *self);
+        return caf::sec::invalid_argument;
+      }
+      // Allows the client to query further results after initial taste.
+      VAST_ASSERT(query.id == uuid::nil());
+      query.id = self->state.create_query_id();
+      // Monitor the sender so we can cancel the query in case it goes down.
+      if (const auto it = self->state.monitored_queries.find(sender->address());
+          it == self->state.monitored_queries.end()) {
+        self->state.monitored_queries.emplace_hint(
+          it, sender->address(), std::unordered_set{query.id});
+        self->monitor(sender);
+      } else {
+        auto& [_, ids] = *it;
+        ids.emplace(query.id);
+      }
       if (!self->state.accept_queries) {
         VAST_VERBOSE("{} delays query {} because it is still starting up",
                      *self, query);
@@ -954,8 +992,9 @@ index(index_actor::stateful_pointer<index_state> self,
                               std::move(query), std::move(*worker));
       }
       VAST_VERBOSE("{} pushes query {} to the backlog", *self, query);
+      auto addr = self->current_sender()->address();
       auto rp = self->make_response_promise<query_cursor>();
-      self->state.backlog.emplace(std::move(query), rp);
+      self->state.backlog.emplace(std::move(query), rp, addr);
       return rp;
     },
     [self](atom::resolve,
@@ -968,12 +1007,7 @@ index(index_actor::stateful_pointer<index_state> self,
            query_supervisor_actor worker) -> caf::result<query_cursor> {
       // Query handling
       auto sender = self->current_sender();
-      // Sanity check.
-      if (!sender) {
-        VAST_WARN("{} ignores an anonymous query", *self);
-        self->send(self, atom::worker_v, worker);
-        return caf::sec::invalid_argument;
-      }
+      VAST_ASSERT(sender);
       auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
       // FIXME: This is a quick and dirty attempt to verify that the problem
       // is because clients exit before we arrive here.
@@ -982,23 +1016,11 @@ index(index_actor::stateful_pointer<index_state> self,
         self->send(self, atom::worker_v, worker);
         return caf::sec::invalid_argument;
       }
-      // Allows the client to query further results after initial taste.
-      auto query_id = self->state.create_query_id();
-      // Monitor the sender so we can cancel the query in case it goes down.
-      if (const auto it = self->state.monitored_queries.find(sender->address());
-          it == self->state.monitored_queries.end()) {
-        self->state.monitored_queries.emplace_hint(
-          it, sender->address(), std::unordered_set{query_id});
-        self->monitor(sender);
-      } else {
-        auto& [_, ids] = *it;
-        ids.emplace(query_id);
-      }
       auto query_string = to_string(query.expr);
       // We only use the first 64 bit of the id as key to avoid every
       // probe having to read a user-space pointer, and 64 bit should
       // be unique enough for any tracing run.
-      VAST_TRACEPOINT(query_new, query_id.as_u64().first, query_string.c_str());
+      VAST_TRACEPOINT(query_new, query.id.as_u64().first, query_string.c_str());
       std::vector<uuid> candidates;
       if (self->state.active_partition.actor)
         candidates.push_back(self->state.active_partition.id);
@@ -1025,27 +1047,27 @@ index(index_actor::stateful_pointer<index_state> self,
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          *self);
               self->send(self, atom::worker_v, worker);
-              rp.deliver(query_cursor{query_id, 0u, 0u});
+              rp.deliver(query_cursor{query.id, 0u, 0u});
               self->send(client, atom::done_v);
               return;
             }
             auto total = candidates.size();
             auto scheduled = detail::narrow<uint32_t>(
               std::min(candidates.size(), self->state.taste_partitions));
-            auto lookup = query_state{query_id, query, std::move(candidates),
+            auto lookup = query_state{query.id, query, std::move(candidates),
                                       std::move(worker)};
             auto result
-              = self->state.pending.emplace(query_id, std::move(lookup));
+              = self->state.pending.emplace(query.id, std::move(lookup));
             VAST_ASSERT(result.second);
             auto delta = std::chrono::steady_clock::now() - start;
-            VAST_TRACEPOINT(query_meta_index, query_id.as_u64().first, total,
+            VAST_TRACEPOINT(query_meta_index, query.id.as_u64().first, total,
                             delta.count());
-            rp.deliver(query_cursor{query_id, detail::narrow<uint32_t>(total),
+            rp.deliver(query_cursor{query.id, detail::narrow<uint32_t>(total),
                                     scheduled});
             // We "delegate" the first continuation back to self by spoofing
             // the client as source. This is done so the response gets delivered
             // to the correct recipient: the client.
-            caf::send_as(client, static_cast<index_actor>(self), query_id,
+            caf::send_as(client, static_cast<index_actor>(self), query.id,
                          scheduled);
           },
           [=](caf::error err) mutable {
@@ -1117,19 +1139,23 @@ index(index_actor::stateful_pointer<index_state> self,
         adjust_stats = false;
       }
       self
-        ->request(self->state.meta_index, caf::infinite, atom::erase_v,
-                  partition_id)
+        ->request<caf::message_priority::high>(
+          self->state.meta_index, caf::infinite, atom::erase_v, partition_id)
         .then(
           [self, partition_id, path, synopsis_path, rp,
            adjust_stats](atom::ok) mutable {
+            VAST_DEBUG("{} erased partition {} from meta-index", *self,
+                       partition_id);
             auto partition_actor
               = self->state.inmem_partitions.eject(partition_id);
             self->state.persisted_partitions.erase(partition_id);
             self
-              ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
-                        path)
+              ->request<caf::message_priority::high>(
+                self->state.filesystem, caf::infinite, atom::mmap_v, path)
               .then(
                 [=](const chunk_ptr& chunk) mutable {
+                  VAST_DEBUG("{} erased partition {} from filesystem", *self,
+                             partition_id);
                   if (!chunk) {
                     rp.deliver(caf::make_error( //
                       ec::filesystem_error,
@@ -1170,14 +1196,21 @@ index(index_actor::stateful_pointer<index_state> self,
                   // file, so unlinking should not affect indexers that are
                   // currently loaded and answering a query.
                   self
-                    ->request(self->state.filesystem, caf::infinite,
-                              atom::erase_v, synopsis_path)
-                    .then([](atom::done) { /* nop */ },
-                          [synopsis_path](const caf::error& err) {
-                            VAST_WARN("index could not unlink partition "
-                                      "synopsis at {}: {}",
-                                      synopsis_path, err);
-                          });
+                    ->request<caf::message_priority::high>(
+                      self->state.filesystem, caf::infinite, atom::erase_v,
+                      synopsis_path)
+                    .then(
+                      [self, partition_id](atom::done) {
+                        VAST_DEBUG("{} erased partition synopsis {} from "
+                                   "filesystem",
+                                   *self, partition_id);
+                      },
+                      [self, partition_id,
+                       synopsis_path](const caf::error& err) {
+                        VAST_WARN("{} failed to erase partition "
+                                  "synopsis {} at {}: {}",
+                                  *self, partition_id, synopsis_path, err);
+                      });
                   // TODO: We could send `all_ids` as the second argument
                   // here, which doesn't really make sense from an interface
                   // perspective but would save the partition from recomputing
@@ -1185,13 +1218,15 @@ index(index_actor::stateful_pointer<index_state> self,
                   rp.delegate(partition_actor, atom::erase_v);
                 },
                 [=](caf::error& err) mutable {
+                  VAST_WARN("{} failed to erase partition {} from filesystem: "
+                            "{}",
+                            *self, partition_id, err);
                   rp.deliver(std::move(err));
                 });
           },
-          [partition_id, rp](caf::error& err) mutable {
-            VAST_WARN("index encountered an error trying to erase "
-                      "partition {} from the meta index: {}",
-                      partition_id, err);
+          [self, partition_id, rp](caf::error& err) mutable {
+            VAST_WARN("{} failed to erase partition {} from meta-index: {}",
+                      *self, partition_id, err);
             rp.deliver(std::move(err));
           });
       return rp;
@@ -1349,10 +1384,12 @@ index(index_actor::stateful_pointer<index_state> self,
       } else {
         VAST_VERBOSE(
           "{} finished work on a query and has no jobs in the backlog", *self);
+        self->state.busy_workers.erase(worker);
         self->state.idle_workers.insert(std::move(worker));
       }
     },
     [self](atom::worker, atom::wakeup, query_supervisor_actor worker) {
+      VAST_DEBUG("{} checks whether worker {} is lost", *self, worker.id());
       auto lost = true;
       for (const auto& [_, qs] : self->state.pending) {
         if (worker == qs.worker) {
