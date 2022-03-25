@@ -192,10 +192,10 @@ caf::error configuration::parse(int argc, char** argv) {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // Collect config files. Instead of the CAF-supplied `config_file_path`, we
-  // use our own `config_files` variable in order to support multiple
-  // configuration files.
-  auto add_configs = [&](std::filesystem::path&& dir) -> caf::error {
+  // Collect config files from config dirs. Instead of the CAF-supplied
+  // `config_file_path`, we use our own `config_files` variable in order to
+  // support multiple configuration files.
+  auto add_config_dir = [&](const std::filesystem::path& dir) -> caf::error {
     auto conf_yaml = dir / "vast.yaml";
     auto conf_yml = dir / "vast.yml";
     std::error_code err{};
@@ -217,27 +217,35 @@ caf::error configuration::parse(int argc, char** argv) {
     return caf::none;
   };
   for (auto&& config_dir : config_dirs(*this))
-    if (auto err = add_configs(std::move(config_dir)))
+    if (auto err = add_config_dir(config_dir))
       return err;
-  // If the user provided a config file on the command line, we attempt to
-  // parse it last.
-  for (auto& arg : command_line) {
-    if (arg.starts_with("--config=")) {
-      std::error_code err{};
-      if (auto config = std::filesystem::path{arg.substr(9)};
-          std::filesystem::exists(config, err))
-        config_files.push_back(std::move(config));
-      else if (err)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("cannot find configuration file {}: "
-                                           "{}",
-                                           config, err.message()));
-      else
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("cannot find configuration file {}",
-                                           config));
-    }
-  }
+  // Add config file(s) provided on the command line to the list of
+  // to-be-parsed files.
+  auto add_config_file = [&](std::filesystem::path file) -> caf::error {
+    std::error_code err{};
+    if (std::filesystem::exists(file, err))
+      config_files.push_back(std::move(file));
+    else if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}: "
+                                         "{}",
+                                         file, err.message()));
+    else
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}",
+                                         file));
+    return caf::none;
+  };
+  auto num_config_files = config_files.size();
+  for (auto& arg : command_line)
+    if (arg.starts_with("--config="))
+      if (auto err = add_config_file(std::filesystem::path{arg.substr(9)}))
+        return err;
+  // Only check environment if we don't have a config on the command line.
+  if (config_files.size() == num_config_files)
+    if (auto file = detail::locked_getenv("VAST_CONFIG"))
+      if (auto err = add_config_file(std::filesystem::path{std::move(*file)}))
+        return err;
   // Parse and merge all configuration files.
   record merged_config;
   for (const auto& config : config_files) {
@@ -277,7 +285,8 @@ caf::error configuration::parse(int argc, char** argv) {
         // These have been handled manually above.
         if (!(*config_key == "vast.config" || *config_key == "vast.plugins"
               || *config_key == "vast.plugin-dirs"
-              || *config_key == "vast.bare-mode"))
+              || *config_key == "vast.bare-mode"
+              || *config_key == "vast.config"))
           merged_config[*config_key] = std::string{value};
       }
   // Strip the "caf." prefix from all keys.
