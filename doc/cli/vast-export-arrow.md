@@ -4,20 +4,19 @@ with bindings for many different programming languages.
 
 Primitive VAST types are mapped to Arrow types as follows:
 
-  |   VAST         |  Arrow               |
-  |---------------:|---------------------:|
-  |   none         |  NullType            |
-  |   bool         |  BooleanType         |
-  |   integer      |  Int64Type           |
-  |   count        |  UInt64Type          |
-  |   real         |  DoubleType          |
-  |   time         |  TimestampType       |
-  |   duration     |  Int64Type           |
-  |   string       |  StringType          |
-  |   pattern      |  StringType          |
-  |   enumeration  |  Uint64Type          |
-  |   address      |  FixedSizeBinary(16) |
-  |   subnet       |  FixedSizeBinary(17) |
+  |   VAST         |  Arrow                           |
+  |---------------:|---------------------------------:|
+  |   bool         |  BooleanType                     |
+  |   integer      |  Int64Type                       |
+  |   count        |  UInt64Type                      |
+  |   real         |  DoubleType                      |
+  |   time         |  TimestampType[ns]               |
+  |   duration     |  DurationType[ns]                |
+  |   string       |  StringType                      |
+  |   pattern      |  ExtensionType<vast.pattern>     |
+  |   enumeration  |  ExtensionType<vast.enumeration> |
+  |   address      |  ExtensionType<vast.address>     |
+  |   subnet       |  ExtensionType<vast.subnet>      |
 
 The name of the event_type present in a record batch is encoded into the
 metadata field of the schema at the key "name".
