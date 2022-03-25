@@ -79,8 +79,8 @@ query_supervisor_actor::behavior_type query_supervisor(
         // separately.
         const auto in_progress_string
           = fmt::to_string(fmt::join(self->state.in_progress, ", "));
-        VAST_WARN("{} saw more than one active query: {}", *self,
-                  in_progress_string);
+        VAST_DEBUG("{} saw more than one active query: {}", *self,
+                   in_progress_string);
       }
       auto open_requests = std::make_shared<int64_t>(0);
       auto start = std::chrono::steady_clock::now();

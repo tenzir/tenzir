@@ -889,7 +889,8 @@ index(index_actor::stateful_pointer<index_state> self,
     }
     const auto num_cancelled = self->state.backlog.cancel(msg.source);
     if (num_cancelled > 0)
-      VAST_WARN("{} cancelled {} queries in the backlog", *self, num_cancelled);
+      VAST_DEBUG("{} cancelled {} queries in the backlog", *self,
+                 num_cancelled);
     const auto& [_, ids] = *it;
     if (!ids.empty()) {
       // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing views
