@@ -44,7 +44,7 @@ module "vast_client" {
 
   function_base_name = "client"
   region_name        = var.region_name
-  docker_image       = "${aws_ecr_repository.lambda.repository_url}:${time_static.last_image_upload.unix}"
+  docker_image       = var.vast_lambda_image
   memory_size        = 2048
   timeout            = 300
 
@@ -54,7 +54,4 @@ module "vast_client" {
   additional_policies = []
   environment         = {}
 
-  depends_on = [
-    null_resource.lambda_image_push
-  ]
 }

@@ -1,0 +1,26 @@
+#!/bin/bash
+
+DOCKER_SOCKET=/var/run/docker.sock
+
+# Set the VAST_CLOUD_REBUILD env variable to any value to force docker rebuild.
+# The CLI runs Docker commands from Docker, so it needs to have access to the Docker socket.
+# The calling user id and group id are propagated to the image at build time. 
+# Rebuild is required when changing the user.
+
+docker image inspect tenzir/vast-cloud-cli > /dev/null \
+    && [[ -z $VAST_CLOUD_REBUILD ]] \
+    || docker build \
+        -t tenzir/vast-cloud-cli \
+        -f docker/cli.Dockerfile \
+        --build-arg UID=$(id -u) \
+        --build-arg GID=$(id -g) \
+        --build-arg DOCKER_ID=$(stat -c '%g' ${DOCKER_SOCKET}) \
+        .
+
+docker run -it \
+    --mount type=bind,source=${DOCKER_SOCKET},target=/var/run/docker.sock \
+    --mount type=bind,source=$PWD/../..,target=/vast \
+    --mount type=bind,source=$HOME/.aws/credentials,target=/.aws/credentials,readonly \
+    -e AWS_PROFILE \
+    -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
+    tenzir/vast-cloud-cli "$@"

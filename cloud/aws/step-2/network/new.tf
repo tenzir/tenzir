@@ -19,12 +19,18 @@ resource "aws_internet_gateway" "igw" {
 resource "aws_subnet" "public" {
   vpc_id     = aws_vpc.new.id
   cidr_block = local.public_subnet_cidr
+  tags = {
+    Name = "${module.env.module_name}-public-${module.env.stage}"
+  }
 }
 
 resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.new.id
   cidr_block        = local.private_subnet_cidr
   availability_zone = aws_subnet.public.availability_zone
+  tags = {
+    Name = "${module.env.module_name}-private-${module.env.stage}"
+  }
 }
 
 resource "aws_eip" "nat_gateway" {
@@ -34,6 +40,9 @@ resource "aws_eip" "nat_gateway" {
 resource "aws_nat_gateway" "nat_gateway" {
   allocation_id = aws_eip.nat_gateway.id
   subnet_id     = aws_subnet.public.id
+  tags = {
+    Name = "${module.env.module_name}-${module.env.stage}"
+  }
 }
 
 resource "aws_vpc_peering_connection" "peering" {
@@ -45,6 +54,7 @@ resource "aws_vpc_peering_connection" "peering" {
 
   tags = {
     Side = "Requester"
+    Name = "${module.env.module_name}-${module.env.stage}"
   }
 }
 
@@ -63,6 +73,10 @@ resource "aws_route_table" "routes_on_private_subnet" {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat_gateway.id
   }
+
+  tags = {
+    Name = "${module.env.module_name}-private-${module.env.stage}"
+  }
 }
 
 resource "aws_route_table_association" "private" {
@@ -75,6 +89,10 @@ resource "aws_route_table" "routes_on_public_subnet" {
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name = "${module.env.module_name}-public-${module.env.stage}"
   }
 }
 
