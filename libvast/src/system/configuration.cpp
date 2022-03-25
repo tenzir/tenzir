@@ -133,8 +133,6 @@ caf::error configuration::parse(int argc, char** argv) {
     for (const auto& [old, new_] : replacements)
       if (option == old)
         option = new_;
-  // FIXME(MV): why does this need to be here? The comment doesn't explain the
-  // need for this. Is there a hidden side-effect?
   // Detect when running with --bare-mode, and remove the option from the
   // command line.
   if (auto it
@@ -142,6 +140,9 @@ caf::error configuration::parse(int argc, char** argv) {
       it != command_line.end()) {
     caf::put(content, "vast.bare-mode", true);
     command_line.erase(it);
+  } else if (auto bare_mode = detail::locked_getenv("VAST_BARE_MODE")) {
+    if (*bare_mode == "true")
+      caf::put(content, "vast.bare-mode", true);
   }
   // Detect when plugins or plugin-dirs are specified on the command line. This
   // needs to happen before the regular parsing of the command line since
@@ -273,8 +274,10 @@ caf::error configuration::parse(int argc, char** argv) {
       if (auto config_key = env_to_config(key)) {
         if (!config_key->starts_with("caf."))
           config_key->insert(0, "vast.");
+        // These have been handled manually above.
         if (!(*config_key == "vast.config" || *config_key == "vast.plugins"
-              || *config_key == "vast.plugin-dirs"))
+              || *config_key == "vast.plugin-dirs"
+              || *config_key == "vast.bare-mode"))
           merged_config[*config_key] = std::string{value};
       }
   // Strip the "caf." prefix from all keys.
