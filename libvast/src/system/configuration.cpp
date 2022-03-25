@@ -251,7 +251,9 @@ caf::error configuration::parse(int argc, char** argv) {
         for (auto& c : component)
           c = tolower(c);
       auto config_key = detail::join(components, ".");
-      merged_config[std::string{config_key}] = std::string{value};
+      // We do not support null values in our typed configuration.
+      if (!value.empty())
+        merged_config[std::string{config_key}] = std::string{value};
     }
   }
   // Convert to CAF-readable data structure.
