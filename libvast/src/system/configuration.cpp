@@ -161,23 +161,26 @@ caf::error configuration::parse(int argc, char** argv) {
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   VAST_ASSERT(ec == caf::pec::success);
   VAST_ASSERT(it == plugin_args.end());
-  // Support specifying VAST_PLUGIN_DIRS and VAST_PLUGINS on the environment.
+  // If there are no plugin options on the command line, look at the
+  // corresponding evironment variables VAST_PLUGIN_DIRS and VAST_PLUGINS.
   if (auto vast_plugin_directories = detail::locked_getenv( //
         "VAST_PLUGIN_DIRS")) {
     auto cli_plugin_dirs
       = caf::get_or(content, "vast.plugin-dirs", std::vector<std::string>{});
-    for (auto&& dir : detail::split(*vast_plugin_directories, ":"))
-      cli_plugin_dirs.emplace_back(dir);
-    if (!cli_plugin_dirs.empty())
+    if (cli_plugin_dirs.empty()) {
+      for (auto&& dir : detail::split(*vast_plugin_directories, ":"))
+        cli_plugin_dirs.emplace_back(std::move(dir));
       caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
+    }
   }
   if (auto vast_plugins = detail::locked_getenv("VAST_PLUGINS")) {
     auto cli_plugins
       = caf::get_or(content, "vast.plugins", std::vector<std::string>{});
-    for (auto&& plugin : detail::split(*vast_plugins, ":"))
-      cli_plugins.emplace_back(plugin);
-    if (!cli_plugins.empty())
+    if (cli_plugins.empty()) {
+      for (auto&& plugin : detail::split(*vast_plugins, ","))
+        cli_plugins.emplace_back(std::move(plugin));
       caf::put(content, "vast.plugins", std::move(cli_plugins));
+    }
   }
   // Separate CAF options from the command line; we'll parse them later.
   auto is_vast_opt = [](const auto& x) {
@@ -270,7 +273,9 @@ caf::error configuration::parse(int argc, char** argv) {
       if (auto config_key = env_to_config(key)) {
         if (!config_key->starts_with("caf."))
           config_key->insert(0, "vast.");
-        merged_config[*config_key] = std::string{value};
+        if (!(*config_key == "vast.config" || *config_key == "vast.plugins"
+              || *config_key == "vast.plugin-dirs"))
+          merged_config[*config_key] = std::string{value};
       }
   // Strip the "caf." prefix from all keys.
   // TODO: Remove this after switching to CAF 0.18.
