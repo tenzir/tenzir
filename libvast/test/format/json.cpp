@@ -25,12 +25,6 @@ using namespace std::string_literals;
 
 namespace {
 
-#if 0
-std::string_view eve_log
-  = R"json({"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1}}
-  {"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1},"resp_mime_types":null})json";
-#endif
-
 struct fixture : public fixtures::deterministic_actor_system {
   fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
   }
@@ -117,24 +111,6 @@ TEST(json to data) {
   reference[count{1024}] = data{"BAR!"};
   CHECK_EQUAL(materialize(slice.at(0, 17)), data{reference});
 }
-
-#if 0
-TEST(json suricata) {
-  using reader_type = format::json::reader<format::json::suricata_selector>;
-  auto input = std::make_unique<std::istringstream>(std::string{eve_log});
-  reader_type reader{caf::settings{}, std::move(input)};
-  std::vector<table_slice> slices;
-  auto add_slice = [&](table_slice slice) {
-    slices.emplace_back(std::move(slice));
-  };
-  auto [err, num] = reader.read(2, 5, add_slice);
-  CHECK_EQUAL(err, ec::end_of_input);
-  REQUIRE_EQUAL(num, 2u);
-  CHECK_EQUAL(slices[0].columns(), 36u);
-  CHECK_EQUAL(slices[0].rows(), 2u);
-  CHECK(slices[0].at(0, 19) == data{count{4520}});
-}
-#endif
 
 TEST(json hex number parser) {
   using namespace parsers;
