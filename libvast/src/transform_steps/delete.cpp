@@ -41,7 +41,7 @@ delete_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
       transformations.push_back({std::move(index), transform_fn});
   std::sort(transformations.begin(), transformations.end());
   auto [adjusted_layout, adjusted_batch]
-    = transform(layout, batch, transformations);
+    = transform_columns(layout, batch, transformations);
   if (adjusted_layout) {
     VAST_ASSERT(adjusted_batch);
     transformed_.emplace_back(std::move(adjusted_layout),

@@ -37,7 +37,8 @@ project_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
          caf::get<record_type>(layout).resolve_key_suffix(field, layout.name()))
       indices.push_back(std::move(index));
   std::sort(indices.begin(), indices.end());
-  auto [adjusted_layout, adjusted_batch] = project(layout, batch, indices);
+  auto [adjusted_layout, adjusted_batch]
+    = select_columns(layout, batch, indices);
   if (adjusted_layout) {
     VAST_ASSERT(adjusted_batch);
     transformed_.emplace_back(std::move(adjusted_layout),

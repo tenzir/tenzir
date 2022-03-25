@@ -166,8 +166,8 @@ TEST(batch transform nested column) {
     REQUIRE(new_array.ok());
     return {{field, new_array.MoveValueUnsafe()}};
   };
-  auto [layout, batch] = transform(slice.layout(), to_record_batch(slice),
-                                   {{{2, 0}, transform_fn}});
+  auto [layout, batch] = transform_columns(
+    slice.layout(), to_record_batch(slice), {{{2, 0}, transform_fn}});
   REQUIRE(caf::holds_alternative<record_type>(layout));
   const auto expected_t = record_type{
     {"f3.1", string_type{}},
@@ -212,7 +212,7 @@ TEST(batch project nested column) {
   auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
   auto slice = make_slice(t, f1s, f2s, f3s, f4s);
   auto [layout, batch]
-    = project(slice.layout(), to_record_batch(slice), {{0}, {2, 1}});
+    = select_columns(slice.layout(), to_record_batch(slice), {{0}, {2, 1}});
   REQUIRE(caf::holds_alternative<record_type>(layout));
   const auto expected_t = record_type{
     {"f1", type{string_type{}, {{"key", "value"}}}},
@@ -858,6 +858,7 @@ TEST(convert_legacy_table_slice) {
 }
 
 namespace {
+
 struct fixture : public fixtures::table_slices {
   fixture() : fixtures::table_slices(VAST_PP_STRINGIFY(SUITE)) {
   }

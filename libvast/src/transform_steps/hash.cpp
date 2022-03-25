@@ -76,8 +76,8 @@ hash_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
       },
     };
   };
-  auto [adjusted_layout, adjusted_batch]
-    = transform(layout, batch, {{*column_index, std::move(transform_fn)}});
+  auto [adjusted_layout, adjusted_batch] = transform_columns(
+    layout, batch, {{*column_index, std::move(transform_fn)}});
   VAST_ASSERT(adjusted_layout);
   VAST_ASSERT(adjusted_batch);
   transformed_.emplace_back(std::move(adjusted_layout),

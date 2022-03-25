@@ -969,9 +969,9 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 
 // -- utility functions -------------------------------------------------------
 
-std::pair<type, std::shared_ptr<arrow::RecordBatch>>
-transform(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
-          const std::vector<indexed_transformation>& transformations) noexcept {
+std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
+  type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+  const std::vector<indexed_transformation>& transformations) noexcept {
   VAST_ASSERT(batch->schema()->Equals(layout.to_arrow_schema()),
               "VAST layout and Arrow schema must match");
   VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
@@ -1093,8 +1093,8 @@ transform(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
 }
 
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
-project(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
-        const std::vector<offset>& indices) noexcept {
+select_columns(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+               const std::vector<offset>& indices) noexcept {
   VAST_ASSERT(batch->schema()->Equals(layout.to_arrow_schema()),
               "VAST layout and Arrow schema must match");
   VAST_ASSERT(std::is_sorted(indices.begin(), indices.end()), "indices must be "
@@ -1202,7 +1202,6 @@ project(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
     arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
                              std::move(layer.arrays)),
   };
-  return {};
 }
 
 // -- template machinery -------------------------------------------------------

@@ -332,9 +332,9 @@ struct indexed_transformation {
 /// @pre Transformations must be sorted by index.
 /// @pre Transformation indices must not be a subset of the following
 /// transformation's index.
-std::pair<type, std::shared_ptr<arrow::RecordBatch>>
-transform(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
-          const std::vector<indexed_transformation>& transformations) noexcept;
+std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
+  type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+  const std::vector<indexed_transformation>& transformations) noexcept;
 
 /// Removed all unspecified columns from both a VAST layout and an Arrow record
 /// batch.
@@ -342,8 +342,8 @@ transform(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
 /// @pre Indices must be sorted.
 /// @pre Indices must not be a subset of the following index.
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
-project(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
-        const std::vector<offset>& indices) noexcept;
+select_columns(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+               const std::vector<offset>& indices) noexcept;
 
 // -- template machinery -------------------------------------------------------
 
