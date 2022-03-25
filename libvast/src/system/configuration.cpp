@@ -133,8 +133,9 @@ caf::error configuration::parse(int argc, char** argv) {
     for (const auto& [old, new_] : replacements)
       if (option == old)
         option = new_;
-  // Detect when running with --bare-mode, and remove the option from the
-  // command line.
+  // Detect when running with --bare-mode. We need to parse this option early
+  // because when we call vast::config_dirs below this needs to be parsed
+  // already.
   if (auto it
       = std::find(command_line.begin(), command_line.end(), "--bare-mode");
       it != command_line.end()) {
