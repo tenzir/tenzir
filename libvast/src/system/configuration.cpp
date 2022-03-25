@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <optional>
 #include <unordered_set>
 
 namespace vast::system {
@@ -48,14 +49,27 @@ template <concrete_type T>
 struct has_extension_type
   : std::is_base_of<arrow::ExtensionType, typename T::arrow_type> {};
 
-/// Translates an environment variable to a config key.
-/// A '.' in the YAML config maps to '_' in the env key. A literal '_' in a
-/// key requires double-escaping, i.e., "__".
-std::string env_to_config_key(std::string_view key) {
-  auto xs = detail::to_strings(detail::split(key, "_", "_"));
+/// Translates an environment variable to a config key. All keys follow the
+/// pattern by PREFIX_SUFFIX, where PREFIX is the application-spefic prefix
+/// that gets stripped. Thereafter, SUFFIX adheres to the following
+/// substitution rules:
+/// 1. A '_' translates into '-'
+/// 2. A "__" translates into the record separator '.'
+/// @pre `!prefix.empty()`
+std::optional<std::string>
+env_to_config(std::string_view key, std::string_view prefix = "VAST") {
+  VAST_ASSERT(!prefix.empty());
+  // PREFIX_X is the shortest allowed key.
+  if (prefix.size() + 2 > key.size())
+    return std::nullopt;
+  if (!key.starts_with(prefix) || key[prefix.size()] != '_')
+    return std::nullopt;
+  auto suffix = key.substr(prefix.size() + 1);
+  // From here on, "__" is the record separator and '_' translates into '-'.
+  auto xs = detail::to_strings(detail::split(suffix, "__"));
   for (auto& x : xs)
     for (auto& c : x)
-      c = tolower(c);
+      c = (c == '_') ? '-' : tolower(c);
   return detail::join(xs, ".");
 }
 
@@ -116,6 +130,8 @@ caf::error configuration::parse(int argc, char** argv) {
     for (const auto& [old, new_] : replacements)
       if (option == old)
         option = new_;
+  // FIXME(MV): why does this need to be here? The comment doesn't explain the
+  // need for this. Is there a hidden side-effect?
   // Detect when running with --bare-mode, and remove the option from the
   // command line.
   if (auto it
@@ -142,18 +158,23 @@ caf::error configuration::parse(int argc, char** argv) {
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   VAST_ASSERT(ec == caf::pec::success);
   VAST_ASSERT(it == plugin_args.end());
-  // Support specifying VAST_PLUGIN_DIRS on the environment.
-  {
+  // Support specifying VAST_PLUGIN_DIRS and VAST_PLUGINS on the environment.
+  if (auto vast_plugin_directories = detail::locked_getenv( //
+        "VAST_PLUGIN_DIRS")) {
     auto cli_plugin_dirs
       = caf::get_or(content, "vast.plugin-dirs", std::vector<std::string>{});
-    if (auto vast_plugin_directories = detail::locked_getenv( //
-          "VAST_PLUGIN_DIRS")) {
-      const auto env_plugin_dirs = detail::split(*vast_plugin_directories, ":");
-      for (const auto& dir : env_plugin_dirs)
-        cli_plugin_dirs.emplace_back(dir);
-      if (!cli_plugin_dirs.empty())
-        caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
-    }
+    for (auto&& dir : detail::split(*vast_plugin_directories, ":"))
+      cli_plugin_dirs.emplace_back(dir);
+    if (!cli_plugin_dirs.empty())
+      caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
+  }
+  if (auto vast_plugins = detail::locked_getenv("VAST_PLUGINS")) {
+    auto cli_plugins
+      = caf::get_or(content, "vast.plugins", std::vector<std::string>{});
+    for (auto&& plugin : detail::split(*vast_plugins, ":"))
+      cli_plugins.emplace_back(plugin);
+    if (!cli_plugins.empty())
+      caf::put(content, "vast.plugins", std::move(cli_plugins));
   }
   // Separate CAF options from the command line; we'll parse them later.
   auto is_vast_opt = [](const auto& x) {
@@ -162,12 +183,6 @@ caf::error configuration::parse(int argc, char** argv) {
   auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
                                        is_vast_opt);
   std::vector<std::string> caf_args;
-  // Prepopulate CAF args with environment variables so that the CLI can
-  // override them.
-  for (const auto& [key, value] : detail::environment())
-    if (key.starts_with("CAF_") && !value.empty())
-      caf_args.emplace_back(
-        fmt::format("--{}={}", env_to_config_key(key), value));
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
   // Collect config files. Instead of the CAF-supplied `config_file_path`, we
@@ -246,12 +261,15 @@ caf::error configuration::parse(int argc, char** argv) {
   }
   // Flatten everything for simplicity.
   merged_config = flatten(merged_config);
-  // Overwrite current config with VAST_ environment variables, potentially
-  // appending new config keys at the end.
+  // Overwrite config file settings with environment variables.
   for (const auto& [key, value] : detail::environment())
-    if (key.starts_with("VAST_") && !value.empty())
-      merged_config[env_to_config_key(key)] = std::string{value};
-  // Strip the caf. prefix from all keys.
+    if (!value.empty())
+      if (auto config_key = env_to_config(key)) {
+        if (!config_key->starts_with("caf."))
+          config_key->insert(0, "vast.");
+        merged_config[*config_key] = std::string{value};
+      }
+  // Strip the "caf." prefix from all keys.
   // TODO: Remove this after switching to CAF 0.18.
   for (auto& option : merged_config)
     if (auto& key = option.first; std::string_view{key}.starts_with("caf."))
