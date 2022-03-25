@@ -48,6 +48,17 @@ template <concrete_type T>
 struct has_extension_type
   : std::is_base_of<arrow::ExtensionType, typename T::arrow_type> {};
 
+/// Translates an environment variable to a config key.
+/// A '.' in the YAML config maps to '_' in the env key. A literal '_' in a
+/// key requires double-escaping, i.e., "__".
+std::string env_to_config_key(std::string_view key) {
+  auto xs = detail::to_strings(detail::split(key, "_", "_"));
+  for (auto& x : xs)
+    for (auto& c : x)
+      c = tolower(c);
+  return detail::join(xs, ".");
+}
+
 } // namespace
 
 std::vector<std::filesystem::path>
@@ -87,7 +98,7 @@ configuration::configuration() {
 
 caf::error configuration::parse(int argc, char** argv) {
   // Parsing precedence:
-  // 1. CLI argument
+  // 1. CLI arguments
   // 2. Environment variables
   // 3. Config files
   // 4. Defaults
@@ -144,18 +155,24 @@ caf::error configuration::parse(int argc, char** argv) {
         caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
     }
   }
-  // Move CAF options to the end of the command line, parse them, and then
-  // remove them.
+  // Separate CAF options from the command line; we'll parse them later.
   auto is_vast_opt = [](const auto& x) {
     return !x.starts_with("--caf.");
   };
   auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
                                        is_vast_opt);
   std::vector<std::string> caf_args;
+  // Prepopulate CAF args with environment variables so that the CLI can
+  // override them.
+  for (const auto& [key, value] : detail::environment())
+    if (key.starts_with("CAF_") && !value.empty())
+      caf_args.emplace_back(
+        fmt::format("--{}={}", env_to_config_key(key), value));
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // Instead of the CAF-supplied `config_file_path`, we use our own
-  // `config_files` variable in order to support multiple configuration files.
+  // Collect config files. Instead of the CAF-supplied `config_file_path`, we
+  // use our own `config_files` variable in order to support multiple
+  // configuration files.
   auto add_configs = [&](std::filesystem::path&& dir) -> caf::error {
     auto conf_yaml = dir / "vast.yaml";
     auto conf_yml = dir / "vast.yml";
@@ -229,6 +246,11 @@ caf::error configuration::parse(int argc, char** argv) {
   }
   // Flatten everything for simplicity.
   merged_config = flatten(merged_config);
+  // Overwrite current config with VAST_ environment variables, potentially
+  // appending new config keys at the end.
+  for (const auto& [key, value] : detail::environment())
+    if (key.starts_with("VAST_") && !value.empty())
+      merged_config[env_to_config_key(key)] = std::string{value};
   // Strip the caf. prefix from all keys.
   // TODO: Remove this after switching to CAF 0.18.
   for (auto& option : merged_config)
@@ -240,21 +262,6 @@ caf::error configuration::parse(int argc, char** argv) {
       i = merged_config.erase(i);
     else
       ++i;
-  }
-  // Overwrite current config with (CAF|VAST)_ environment variables.
-  for (const auto& [key, value] : detail::environment()) {
-    if (key.starts_with("VAST_") || key.starts_with("CAF_")) {
-      // A '.' in the YAML config maps to '_' in the env key. A literal '_' in a
-      // key requires double-escaping, i.e., "__".
-      auto components = detail::to_strings(detail::split(key, "_", "_"));
-      for (auto& component : components)
-        for (auto& c : component)
-          c = tolower(c);
-      auto config_key = detail::join(components, ".");
-      // We do not support null values in our typed configuration.
-      if (!value.empty())
-        merged_config[std::string{config_key}] = std::string{value};
-    }
   }
   // Convert to CAF-readable data structure.
   auto settings = to<caf::settings>(merged_config);
