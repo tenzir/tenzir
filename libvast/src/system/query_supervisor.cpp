@@ -71,7 +71,8 @@ query_supervisor_actor::behavior_type query_supervisor(
       }
       self->state.in_progress.insert(query_id);
       // This should only happen if an exporter exited while a query was still
-      // in progress.
+      // in progress. (there is another race condition which also causes this,
+      // which has been empirically observed but not yet understood)
       if (self->state.in_progress.size() > 1) {
         // Workaround to {fmt} 7 / gcc 10 combo, which errors when not
         // formatting the join view separately.
