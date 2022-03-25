@@ -56,13 +56,7 @@ unflatten_batch(const vast::type& layout,
   columns.reserve(caf::get<record_type>(layout).num_fields());
   const auto& flattened_columns = batch.columns();
   auto current_flattened_column = flattened_columns.begin();
-  auto iteration = 0;
-  fmt::print(stderr, "layout: {}\n", caf::get<record_type>(layout));
   auto f = [&](auto&& f, const type& t) -> std::shared_ptr<arrow::Array> {
-    fmt::print(stderr, "iteration: {}; distance: {}/{}\n", iteration++,
-               std::distance(flattened_columns.begin(),
-                             current_flattened_column),
-               flattened_columns.size());
     if (const auto* rt = caf::get_if<record_type>(&t)) {
       auto arrays = arrow::ArrayVector{};
       auto fields = arrow::FieldVector{};
@@ -558,9 +552,7 @@ public:
       VAST_ASSERT(ok);
       aggregation = new_aggregation;
     }
-    // fmt::print(stderr, "pre-flatten: {}\n", batch->ToString());
     batch = flatten_batch(layout, *batch);
-    // fmt::print(stderr, "post-flatten: {}\n", batch->ToString());
     return aggregation->second.add(std::move(batch));
   }
 
