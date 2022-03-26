@@ -46,7 +46,10 @@ public:
   std::vector<std::filesystem::path> config_files = {};
 
 private:
-  caf::error collect_config_files(std::vector<std::string> cli_configs);
+  caf::expected<std::vector<std::filesystem::path>>
+  collect_config_files(std::vector<std::string> cli_configs);
+
+  caf::error embed_config(const caf::settings& settings);
 };
 
 } // namespace vast::system

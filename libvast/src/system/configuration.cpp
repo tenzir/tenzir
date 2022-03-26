@@ -73,6 +73,71 @@ env_to_config(std::string_view key, std::string_view prefix = "VAST") {
   return detail::join(xs, ".");
 }
 
+caf::expected<record>
+load_config_files(std::vector<std::filesystem::path> config_files) {
+  // Parse and merge all configuration files.
+  record merged_config;
+  for (const auto& config : config_files) {
+    std::error_code err{};
+    if (std::filesystem::exists(config, err)) {
+      auto contents = detail::load_contents(config);
+      if (!contents)
+        return caf::make_error(ec::parse_error,
+                               fmt::format("failed to read config file {}: {}",
+                                           config, contents.error()));
+      auto yaml = from_yaml(*contents);
+      if (!yaml)
+        return caf::make_error(ec::parse_error,
+                               fmt::format("failed to read config file {}: {}",
+                                           config, yaml.error()));
+      // Skip empty config files.
+      if (caf::holds_alternative<caf::none_t>(*yaml))
+        continue;
+      auto* rec = caf::get_if<record>(&*yaml);
+      if (!rec)
+        return caf::make_error(ec::parse_error,
+                               fmt::format("failed to read config file {}: not "
+                                           "a map of key-value pairs",
+                                           config));
+      merge(*rec, merged_config, policy::merge_lists::yes);
+      loaded_config_files_singleton.push_back(config);
+    }
+  }
+  auto flattened_config = flatten(merged_config);
+  // Environment variables are an "overlay" on top of the configuration file,
+  // which is why we inject the additional layer here.
+  for (const auto& [key, value] : detail::environment())
+    if (!value.empty())
+      if (auto config_key = env_to_config(key)) {
+        if (!config_key->starts_with("caf."))
+          config_key->insert(0, "vast.");
+        // These have been handled manually above.
+        if (!(*config_key == "vast.config" || *config_key == "vast.plugins"
+              || *config_key == "vast.plugin-dirs"
+              || *config_key == "vast.bare-mode"
+              || *config_key == "vast.config"))
+          flattened_config[*config_key] = std::string{value};
+      }
+  return flattened_config;
+}
+
+caf::expected<caf::settings> to_settings(record config) {
+  // Pre-process our configuration so that it can be properly parsed later.
+  // Strip the "caf." prefix from all keys.
+  // TODO: Remove this after switching to CAF 0.18.
+  for (auto& option : config)
+    if (auto& key = option.first; std::string_view{key}.starts_with("caf."))
+      key.erase(0, 4);
+  // Erase all null values because a caf::config_value has no such notion.
+  for (auto i = config.begin(); i != config.end();) {
+    if (caf::holds_alternative<caf::none_t>(i->second))
+      i = config.erase(i);
+    else
+      ++i;
+  }
+  return to<caf::settings>(config);
+}
+
 } // namespace
 
 std::vector<std::filesystem::path>
@@ -192,72 +257,106 @@ caf::error configuration::parse(int argc, char** argv) {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // Gather all to-be-considered configuration files.
+  // Gather and parse all to-be-considered configuration files.
   std::vector<std::string> cli_configs;
   for (auto& arg : command_line)
     if (arg.starts_with("--config="))
       cli_configs.push_back(arg.substr(9));
-  if (auto err = collect_config_files(cli_configs))
-    return err;
-  // Parse and merge all configuration files.
-  record merged_config;
-  for (const auto& config : config_files) {
-    std::error_code err{};
-    if (std::filesystem::exists(config, err)) {
-      auto contents = detail::load_contents(config);
-      if (!contents)
-        return caf::make_error(ec::parse_error,
-                               fmt::format("failed to read config file {}: {}",
-                                           config, contents.error()));
-      auto yaml = from_yaml(*contents);
-      if (!yaml)
-        return caf::make_error(ec::parse_error,
-                               fmt::format("failed to read config file {}: {}",
-                                           config, yaml.error()));
-      // Skip empty config files.
-      if (caf::holds_alternative<caf::none_t>(*yaml))
-        continue;
-      auto* rec = caf::get_if<record>(&*yaml);
-      if (!rec)
-        return caf::make_error(ec::parse_error,
-                               fmt::format("failed to read config file {}: not "
-                                           "a map of key-value pairs",
-                                           config));
-      merge(*rec, merged_config, policy::merge_lists::yes);
-      loaded_config_files_singleton.push_back(config);
-    }
-  }
-  // Flatten everything for simplicity.
-  merged_config = flatten(merged_config);
-  // Overwrite config file settings with environment variables.
-  for (const auto& [key, value] : detail::environment())
-    if (!value.empty())
-      if (auto config_key = env_to_config(key)) {
-        if (!config_key->starts_with("caf."))
-          config_key->insert(0, "vast.");
-        // These have been handled manually above.
-        if (!(*config_key == "vast.config" || *config_key == "vast.plugins"
-              || *config_key == "vast.plugin-dirs"
-              || *config_key == "vast.bare-mode"
-              || *config_key == "vast.config"))
-          merged_config[*config_key] = std::string{value};
-      }
-  // Strip the "caf." prefix from all keys.
-  // TODO: Remove this after switching to CAF 0.18.
-  for (auto& option : merged_config)
-    if (auto& key = option.first; std::string_view{key}.starts_with("caf."))
-      key.erase(0, 4);
-  // Erase all null values because a caf::config_value has no such notion.
-  for (auto i = merged_config.begin(); i != merged_config.end();) {
-    if (caf::holds_alternative<caf::none_t>(i->second))
-      i = merged_config.erase(i);
-    else
-      ++i;
-  }
-  // Convert to CAF-readable data structure.
-  auto settings = to<caf::settings>(merged_config);
+  if (auto configs = collect_config_files(cli_configs))
+    config_files = std::move(*configs);
+  else
+    return configs.error();
+  auto config = load_config_files(config_files);
+  if (!config)
+    return config.error();
+  // From here on, we go into CAF land with the goal to put the configuration
+  // into the actor_system_config.
+  auto settings = to_settings(std::move(*config));
   if (!settings)
     return settings.error();
+  if (auto err = embed_config(*settings))
+    return err;
+  // Try parsing all --caf.* settings. First, strip caf. prefix for the
+  // CAF parser.
+  for (auto& arg : caf_args)
+    if (arg.starts_with("--caf."))
+      arg.erase(2, 4);
+  // We clear the config_file_path first so it does not use
+  // caf-application.ini as fallback during actor_system_config::parse().
+  config_file_path.clear();
+  auto result = actor_system_config::parse(std::move(caf_args));
+  // Load OpenSSL module if configured to do so. This uses the parsed
+  // configuration, so it must come at the very end.
+#if VAST_ENABLE_OPENSSL
+  const auto use_encryption
+    = !openssl_certificate.empty() || !openssl_key.empty()
+      || !openssl_passphrase.empty() || !openssl_capath.empty()
+      || !openssl_cafile.empty();
+  if (use_encryption)
+    load<caf::openssl::manager>();
+#endif // VAST_ENABLE_OPENSSL
+  return result;
+}
+
+caf::expected<std::vector<std::filesystem::path>>
+configuration::collect_config_files(std::vector<std::string> cli_configs) {
+  std::vector<std::filesystem::path> result;
+  // First, go through all config file directories and gather config files
+  // there. We populate the member variable `config_files` instead of
+  // `config_file_path` in the base class so that we can support multiple
+  // configuration files.
+  for (auto&& dir : config_dirs(*this)) {
+    // Support both *.yaml and *.yml extensions.
+    auto conf_yaml = dir / "vast.yaml";
+    auto conf_yml = dir / "vast.yml";
+    std::error_code err{};
+    const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
+    if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("failed to check if vast.yaml file "
+                                         "exists in {}: {}",
+                                         dir, err.message()));
+    const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
+    if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("failed to check if vast.yml file "
+                                         "exists in {}: {}",
+                                         dir, err.message()));
+    // We cannot decide which one to pick if we have two, so bail out.
+    if (exists_conf_yaml && exists_conf_yml)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("detected both 'vast.yaml' and "
+                                         "'vast.yml' files in {}",
+                                         dir));
+    if (exists_conf_yaml)
+      result.emplace_back(std::move(conf_yaml));
+    else if (exists_conf_yml)
+      result.emplace_back(std::move(conf_yml));
+  }
+  // Second, consider command line and environment overrides. But only check
+  // the environment if we don't have a config on the command line.
+  if (cli_configs.empty())
+    if (auto file = detail::locked_getenv("VAST_CONFIG"))
+      cli_configs.push_back(std::move(*file));
+  for (const auto& file : cli_configs) {
+    auto config_file = std::filesystem::path{file};
+    std::error_code err{};
+    if (std::filesystem::exists(config_file, err))
+      result.push_back(std::move(config_file));
+    else if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}: "
+                                         "{}",
+                                         config_file, err.message()));
+    else
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}",
+                                         config_file));
+  }
+  return result;
+}
+
+caf::error configuration::embed_config(const caf::settings& settings) {
   // TODO: Revisit this after we are on CAF 0.18.
   // Helper function to parse a config_value with the type information
   // contained in an config_option. Because our YAML config only knows about
@@ -294,8 +393,8 @@ caf::error configuration::parse(int argc, char** argv) {
     }
     return result;
   };
-  for (auto& [key, value] : *settings) {
-    // We have flattened the YAML contents above, so dictionaries cannot occur.
+  for (auto& [key, value] : settings) {
+    // This needs to be flattened so dictionaries cannot occur.
     VAST_ASSERT(!caf::holds_alternative<caf::config_value::dictionary>(value));
     // Now this is incredibly ugly, but custom_options_ (a config_option_set)
     // is the only place that contains the valid type information that our
@@ -310,75 +409,6 @@ caf::error configuration::parse(int argc, char** argv) {
       // the value directly in the content.
       put(content, key, value);
     }
-  }
-  // Try parsing all --caf.* settings. First, strip caf. prefix for the
-  // CAF parser.
-  for (auto& arg : caf_args)
-    if (arg.starts_with("--caf."))
-      arg.erase(2, 4);
-  // We clear the config_file_path first so it does not use
-  // caf-application.ini as fallback during actor_system_config::parse().
-  config_file_path.clear();
-  auto result = actor_system_config::parse(std::move(caf_args));
-  // Load OpenSSL module if configured to do so.
-#if VAST_ENABLE_OPENSSL
-  const auto use_encryption
-    = !openssl_certificate.empty() || !openssl_key.empty()
-      || !openssl_passphrase.empty() || !openssl_capath.empty()
-      || !openssl_cafile.empty();
-  if (use_encryption)
-    load<caf::openssl::manager>();
-#endif // VAST_ENABLE_OPENSSL
-  return result;
-}
-
-caf::error
-configuration::collect_config_files(std::vector<std::string> cli_configs) {
-  // First, go through all config file directories and gather config files
-  // there. We populate the member variable `config_files` instead of
-  // `config_file_path` in the base class so that we can support multiple
-  // configuration files.
-  for (auto&& dir : config_dirs(*this)) {
-    // Support both *.yaml and *.yml extensions.
-    auto conf_yaml = dir / "vast.yaml";
-    auto conf_yml = dir / "vast.yml";
-    std::error_code err{};
-    const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
-    const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
-    if (err) {
-      VAST_WARN("failed to check if vast.yaml file exists in {}: {}", dir,
-                err.message());
-      return caf::none;
-    }
-    // We cannot decide which one to pick if we have two, so bail out.
-    if (exists_conf_yaml && exists_conf_yml)
-      return caf::make_error(
-        ec::invalid_configuration,
-        "detected both 'vast.yaml' and 'vast.yml' files in " + dir.string());
-    if (exists_conf_yaml)
-      config_files.emplace_back(std::move(conf_yaml));
-    else if (exists_conf_yml)
-      config_files.emplace_back(std::move(conf_yml));
-  }
-  // Second, consider command line and environment overrides. But only check
-  // the environment if we don't have a config on the command line.
-  if (cli_configs.empty())
-    if (auto file = detail::locked_getenv("VAST_CONFIG"))
-      cli_configs.push_back(std::move(*file));
-  for (const auto& file : cli_configs) {
-    auto config_file = std::filesystem::path{file};
-    std::error_code err{};
-    if (std::filesystem::exists(config_file, err))
-      config_files.push_back(std::move(config_file));
-    else if (err)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("cannot find configuration file {}: "
-                                         "{}",
-                                         config_file, err.message()));
-    else
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("cannot find configuration file {}",
-                                         config_file));
   }
   return caf::none;
 }
