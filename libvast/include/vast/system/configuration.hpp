@@ -44,6 +44,9 @@ public:
 
   /// The configuration files to load.
   std::vector<std::filesystem::path> config_files = {};
+
+private:
+  caf::error collect_config_files(std::vector<std::string> cli_configs);
 };
 
 } // namespace vast::system

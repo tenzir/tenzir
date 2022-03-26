@@ -192,60 +192,13 @@ caf::error configuration::parse(int argc, char** argv) {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // Collect config files from config dirs. Instead of the CAF-supplied
-  // `config_file_path`, we use our own `config_files` variable in order to
-  // support multiple configuration files.
-  auto add_config_dir = [&](const std::filesystem::path& dir) -> caf::error {
-    auto conf_yaml = dir / "vast.yaml";
-    auto conf_yml = dir / "vast.yml";
-    std::error_code err{};
-    const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
-    const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
-    if (err) {
-      VAST_WARN("failed to check if vast.yaml file exists in {}: {}", dir,
-                err.message());
-      return caf::none;
-    }
-    if (exists_conf_yaml && exists_conf_yml)
-      return caf::make_error(
-        ec::invalid_configuration,
-        "detected both 'vast.yaml' and 'vast.yml' files in " + dir.string());
-    if (exists_conf_yaml)
-      config_files.emplace_back(std::move(conf_yaml));
-    else if (exists_conf_yml)
-      config_files.emplace_back(std::move(conf_yml));
-    return caf::none;
-  };
-  for (auto&& config_dir : config_dirs(*this))
-    if (auto err = add_config_dir(config_dir))
-      return err;
-  // Add config file(s) provided on the command line to the list of
-  // to-be-parsed files.
-  auto add_config_file = [&](std::filesystem::path file) -> caf::error {
-    std::error_code err{};
-    if (std::filesystem::exists(file, err))
-      config_files.push_back(std::move(file));
-    else if (err)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("cannot find configuration file {}: "
-                                         "{}",
-                                         file, err.message()));
-    else
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("cannot find configuration file {}",
-                                         file));
-    return caf::none;
-  };
-  auto num_config_files = config_files.size();
+  // Gather all to-be-considered configuration files.
+  std::vector<std::string> cli_configs;
   for (auto& arg : command_line)
     if (arg.starts_with("--config="))
-      if (auto err = add_config_file(std::filesystem::path{arg.substr(9)}))
-        return err;
-  // Only check environment if we don't have a config on the command line.
-  if (config_files.size() == num_config_files)
-    if (auto file = detail::locked_getenv("VAST_CONFIG"))
-      if (auto err = add_config_file(std::filesystem::path{std::move(*file)}))
-        return err;
+      cli_configs.push_back(arg.substr(9));
+  if (auto err = collect_config_files(cli_configs))
+    return err;
   // Parse and merge all configuration files.
   record merged_config;
   for (const auto& config : config_files) {
@@ -377,6 +330,57 @@ caf::error configuration::parse(int argc, char** argv) {
     load<caf::openssl::manager>();
 #endif // VAST_ENABLE_OPENSSL
   return result;
+}
+
+caf::error
+configuration::collect_config_files(std::vector<std::string> cli_configs) {
+  // First, go through all config file directories and gather config files
+  // there. We populate the member variable `config_files` instead of
+  // `config_file_path` in the base class so that we can support multiple
+  // configuration files.
+  for (auto&& dir : config_dirs(*this)) {
+    // Support both *.yaml and *.yml extensions.
+    auto conf_yaml = dir / "vast.yaml";
+    auto conf_yml = dir / "vast.yml";
+    std::error_code err{};
+    const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
+    const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
+    if (err) {
+      VAST_WARN("failed to check if vast.yaml file exists in {}: {}", dir,
+                err.message());
+      return caf::none;
+    }
+    // We cannot decide which one to pick if we have two, so bail out.
+    if (exists_conf_yaml && exists_conf_yml)
+      return caf::make_error(
+        ec::invalid_configuration,
+        "detected both 'vast.yaml' and 'vast.yml' files in " + dir.string());
+    if (exists_conf_yaml)
+      config_files.emplace_back(std::move(conf_yaml));
+    else if (exists_conf_yml)
+      config_files.emplace_back(std::move(conf_yml));
+  }
+  // Second, consider command line and environment overrides. But only check
+  // the environment if we don't have a config on the command line.
+  if (cli_configs.empty())
+    if (auto file = detail::locked_getenv("VAST_CONFIG"))
+      cli_configs.push_back(std::move(*file));
+  for (const auto& file : cli_configs) {
+    auto config_file = std::filesystem::path{file};
+    std::error_code err{};
+    if (std::filesystem::exists(config_file, err))
+      config_files.push_back(std::move(config_file));
+    else if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}: "
+                                         "{}",
+                                         config_file, err.message()));
+    else
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}",
+                                         config_file));
+  }
+  return caf::none;
 }
 
 } // namespace vast::system
