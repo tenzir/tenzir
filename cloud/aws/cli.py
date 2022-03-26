@@ -7,6 +7,7 @@ import time
 import base64
 import json
 import sys
+import io
 
 load_dotenv()
 AWS_REGION = os.getenv("VAST_AWS_REGION")
@@ -24,6 +25,7 @@ def _terraform_output(c: Context, step, key) -> str:
 
 
 def _vast_lambda_image(c: Context) -> str:
+    """If VAST_LAMBDA_IMAGE not defined, use the one tagged as "current" """
     if os.getenv("VAST_LAMBDA_IMAGE") is not None:
         return os.getenv("VAST_LAMBDA_IMAGE")
     repo_arn = _terraform_output(c, "step-1", "vast_lambda_repository_arn")
@@ -33,8 +35,13 @@ def _vast_lambda_image(c: Context) -> str:
 
 
 def _vast_version(c: Context):
-    # TODO use git describe
-    return os.getenv("VAST_VERSION", "v1.1.0")
+    """If VAST_VERSION not defined, use latest release"""
+    if os.getenv("VAST_VERSION") is not None:
+        return os.getenv("VAST_VERSION")
+    version = c.run(
+        "git describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*'", hide="out"
+    ).stdout.strip()
+    return version
 
 
 def _step_1_variables() -> dict:
@@ -72,7 +79,8 @@ def docker_login(c):
     )
     registry = token["authorizationData"][0]["proxyEndpoint"]
     c.run(
-        f"docker login --username {user_pass[0]} --password {user_pass[1]} {registry}"
+        f"docker login --username {user_pass[0]} --password-stdin {registry}",
+        in_stream=io.StringIO(user_pass[1]),
     )
 
 
@@ -118,12 +126,12 @@ def deploy(c, auto_approve=False):
 
 
 @task
-def destroy(c):
+def destroy(c, auto_approve=False):
     """Tear down the entire terraform stack"""
     env = _step_2_variables(c)
-    c.run('terraform -chdir="step-2" destroy', env=env)
+    c.run(f'terraform -chdir="step-2" destroy {_auto_approve(auto_approve)}', env=env)
     env = _step_1_variables()
-    c.run('terraform -chdir="step-1" destroy', env=env)
+    c.run(f'terraform -chdir="step-1" destroy {_auto_approve(auto_approve)}', env=env)
 
 
 @task
