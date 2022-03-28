@@ -1035,6 +1035,12 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [=, candidates
               = std::move(candidates)](meta_index_result& midx_result) mutable {
+            if (auto it = self->state.monitored_queries.find(sender->address());
+                it != self->state.monitored_queries.end()) {
+              VAST_VERBOSE("{} discards candidates for discarded query {}",
+                           *self, query.id);
+              return;
+            }
             auto& midx_candidates = midx_result.partitions;
             VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
                        *self, candidates, midx_candidates);
