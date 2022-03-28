@@ -41,7 +41,7 @@ RUN groupadd -g $GID -o $UNAME && \
 USER $UNAME
 
 # Install Python dependencies
-RUN pip install boto3 python-dotenv invoke
+RUN pip install boto3 dynaconf invoke
 
 WORKDIR /vast/cloud/aws
 

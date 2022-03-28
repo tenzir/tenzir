@@ -1,17 +1,33 @@
 from invoke import task, Context, Exit, Program, Collection
 import boto3
 import botocore.client
-import os
-from dotenv import load_dotenv
+import dynaconf
 import time
 import base64
 import json
 import sys
 import io
 
-load_dotenv()
-AWS_REGION = os.getenv("VAST_AWS_REGION")
+conf = dynaconf.Dynaconf(
+    load_dotenv=True,
+    envvar_prefix=False,
+    validators=[
+        dynaconf.Validator("VAST_AWS_REGION", must_exist=True),
+        dynaconf.Validator("VAST_CIDR", must_exist=True),
+        dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True),
+        dynaconf.Validator("VAST_LAMBDA_IMAGE"),  # usually resolved lazily
+        dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
+        dynaconf.Validator("VAST_SERVER_STORAGE_TYPE", default="EFS"),
+    ],
+)
+
+##  Aliases
+
+AWS_REGION = conf.VAST_AWS_REGION
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
+
+
+## Helper functions
 
 
 def aws(service):
@@ -20,52 +36,55 @@ def aws(service):
     return boto3.client(service, region_name=AWS_REGION, config=config)
 
 
-def _terraform_output(c: Context, step, key) -> str:
+def terraform_output(c: Context, step, key) -> str:
     return c.run(f"terraform -chdir={step} output --raw {key}", hide="out").stdout
 
 
-def _vast_lambda_image(c: Context) -> str:
+def VAST_LAMBDA_IMAGE(c: Context) -> str:
     """If VAST_LAMBDA_IMAGE not defined, use the one tagged as "current" """
-    if os.getenv("VAST_LAMBDA_IMAGE") is not None:
-        return os.getenv("VAST_LAMBDA_IMAGE")
-    repo_arn = _terraform_output(c, "step-1", "vast_lambda_repository_arn")
+    if "VAST_LAMBDA_IMAGE" in conf:
+        return conf.VAST_LAMBDA_IMAGE
+    repo_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
     tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
     current = next((tag["Value"] for tag in tags if tag["Key"] == "current"))
     return current
 
 
-def _vast_version(c: Context):
+def VAST_VERSION(c: Context):
     """If VAST_VERSION not defined, use latest release"""
-    if os.getenv("VAST_VERSION") is not None:
-        return os.getenv("VAST_VERSION")
+    if "VAST_VERSION" in conf:
+        return conf.VAST_VERSION
     version = c.run(
         "git describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*'", hide="out"
     ).stdout.strip()
     return version
 
 
-def _step_1_variables() -> dict:
+def step_1_variables() -> dict:
     return {
         "TF_VAR_region_name": AWS_REGION,
     }
 
 
-def _step_2_variables(c: Context) -> dict:
+def step_2_variables(c: Context) -> dict:
     return {
-        "TF_VAR_vast_version": _vast_version(c),
-        "TF_VAR_vast_server_storage_type": os.getenv("VAST_SERVER_STORAGE_TYPE", "EFS"),
-        "TF_VAR_peered_vpc_id": os.getenv("VAST_PEERED_VPC_ID"),
-        "TF_VAR_vast_cidr": os.getenv("VAST_CIDR"),
+        "TF_VAR_vast_version": VAST_VERSION(c),
+        "TF_VAR_vast_server_storage_type": conf.VAST_SERVER_STORAGE_TYPE,
+        "TF_VAR_peered_vpc_id": conf.VAST_PEERED_VPC_ID,
+        "TF_VAR_vast_cidr": conf.VAST_CIDR,
         "TF_VAR_region_name": AWS_REGION,
-        "TF_VAR_vast_lambda_image": _vast_lambda_image(c),
+        "TF_VAR_vast_lambda_image": VAST_LAMBDA_IMAGE(c),
     }
 
 
-def _auto_approve(val: bool) -> str:
+def auto_app_fmt(val: bool) -> str:
     if val:
         return "-auto-approve"
     else:
         return ""
+
+
+## Tasks
 
 
 @task
@@ -87,21 +106,21 @@ def docker_login(c):
 @task
 def deploy_step_1(c, auto_approve=False):
     """Deploy only step 1 of the stack"""
-    env = _step_1_variables()
+    env = step_1_variables()
     c.run('terraform -chdir="step-1" init', env=env)
-    c.run(f'terraform -chdir="step-1" apply {_auto_approve(auto_approve)}', env=env)
+    c.run(f'terraform -chdir="step-1" apply  {auto_app_fmt(auto_approve)}', env=env)
 
 
 @task
 def lambda_image(c):
     """Build and push the lambda image, fails if step 1 is not deployed"""
-    image_url = _terraform_output(c, "step-1", "vast_lambda_repository_url")
+    image_url = terraform_output(c, "step-1", "vast_lambda_repository_url")
     image_tag = int(time.time())
     c.run(
-        f"docker build --build-arg VAST_VERSION={_vast_version(c)} -f docker/lambda.Dockerfile -t {image_url}:{image_tag} ."
+        f"docker build --build-arg VAST_VERSION={VAST_VERSION(c)} -f docker/lambda.Dockerfile -t {image_url}:{image_tag} ."
     )
     c.run(f"docker push {image_url}:{image_tag}")
-    image_arn = _terraform_output(c, "step-1", "vast_lambda_repository_arn")
+    image_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
     aws("ecr").tag_resource(
         resourceArn=image_arn,
         tags=[{"Key": "current", "Value": f"{image_url}:{image_tag}"}],
@@ -111,9 +130,9 @@ def lambda_image(c):
 @task
 def deploy_step_2(c, auto_approve=False):
     """Deploy only step 2 of the stack"""
-    env = _step_2_variables(c)
+    env = step_2_variables(c)
     c.run('terraform -chdir="step-2" init', env=env)
-    c.run(f'terraform -chdir="step-2" apply {_auto_approve(auto_approve)}', env=env)
+    c.run(f'terraform -chdir="step-2" apply {auto_app_fmt(auto_approve)}', env=env)
 
 
 @task
@@ -126,21 +145,35 @@ def deploy(c, auto_approve=False):
 
 
 @task
+def destroy_step_1(c, auto_approve=False):
+    env = step_2_variables(c)
+    c.run(f'terraform -chdir="step-2" destroy {auto_app_fmt(auto_approve)}', env=env)
+
+
+@task
+def destroy_step_2(c, auto_approve=False):
+    env = step_1_variables()
+    c.run(f'terraform -chdir="step-1" destroy {auto_app_fmt(auto_approve)}', env=env)
+
+
+@task
 def destroy(c, auto_approve=False):
     """Tear down the entire terraform stack"""
-    env = _step_2_variables(c)
-    c.run(f'terraform -chdir="step-2" destroy {_auto_approve(auto_approve)}', env=env)
-    env = _step_1_variables()
-    c.run(f'terraform -chdir="step-1" destroy {_auto_approve(auto_approve)}', env=env)
+    try:
+        destroy_step_2(c, auto_approve)
+    except Exception as e:
+        print(str(e))
+        print("Destroying step 2 failed. Continuing...")
+    destroy_step_1(c, auto_approve)
 
 
 @task
 def run_vast_task(c):
     """Start a new VAST server task on Fargate. DANGER: might lead to inconsistant state"""
-    cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
-    subnet = _terraform_output(c, "step-2", "ids_appliances_subnet_id")
-    sg = _terraform_output(c, "step-2", "vast_security_group")
-    task_def = _terraform_output(c, "step-2", "vast_task_definition")
+    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
+    subnet = terraform_output(c, "step-2", "ids_appliances_subnet_id")
+    sg = terraform_output(c, "step-2", "vast_security_group")
+    task_def = terraform_output(c, "step-2", "vast_task_definition")
     task_res = aws("ecs").run_task(
         cluster=cluster,
         count=1,
@@ -164,8 +197,8 @@ def run_vast_task(c):
 @task(autoprint=True)
 def get_vast_server(c):
     """Get the task id of the VAST server"""
-    cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
-    family = _terraform_output(c, "step-2", "vast_task_family")
+    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
+    family = terraform_output(c, "step-2", "vast_task_family")
     task_res = aws("ecs").list_tasks(family=family, cluster=cluster)
     nb_vast_tasks = len(task_res["taskArns"])
     if nb_vast_tasks == 0:
@@ -181,7 +214,7 @@ def get_vast_server(c):
 def describe_vast_server(c):
     """Get a complete description of the VAST server"""
     task_id = get_vast_server(c)
-    cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
+    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     task_res = aws("ecs").describe_tasks(cluster=cluster, tasks=[task_id])
     meta = {
         "task_id": task_id,
@@ -208,7 +241,7 @@ def restart_vast_server(c):
     """Stops the running VAST server Fargate task and start a new one"""
     try:
         task_id = get_vast_server(c)
-        cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
+        cluster = terraform_output(c, "step-2", "fargate_cluster_name")
         aws("ecs").stop_task(task=task_id, cluster=cluster)
         print(f"Stopped task {task_id}")
     except Exit as e:
@@ -220,7 +253,7 @@ def restart_vast_server(c):
 @task(autoprint=True)
 def list_all_tasks(c):
     """List the ids of all tasks running on the ECS cluster"""
-    cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
+    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     task_res = aws("ecs").list_tasks(cluster=cluster)
     task_ids = [task.split("/")[-1] for task in task_res["taskArns"]]
     return task_ids
@@ -230,7 +263,7 @@ def list_all_tasks(c):
 def stop_all_tasks(c):
     """Stop all running tasks on the ECS cluster created by Terraform"""
     task_ids = list_all_tasks(c)
-    cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
+    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     for task_id in task_ids:
         aws("ecs").stop_task(task=task_id, cluster=cluster)
         print(f"Stopped task {task_id}")
@@ -239,7 +272,7 @@ def stop_all_tasks(c):
 @task(autoprint=True)
 def run_lambda(c, cmd):
     """Run ad-hoc VAST client commands from AWS Lambda"""
-    lambda_name = _terraform_output(c, "step-2", "vast_lambda_name")
+    lambda_name = terraform_output(c, "step-2", "vast_lambda_name")
     task_ip = describe_vast_server(c)["ip"]
     cmd_b64 = base64.b64encode(cmd.encode()).decode()
     lambda_res = aws("lambda").invoke(
@@ -258,7 +291,7 @@ def run_lambda(c, cmd):
 def execute_command(c, cmd="/bin/bash"):
     """Run ad-hoc or interactive commands from the VAST server Fargate task"""
     task_id = get_vast_server(c)
-    cluster = _terraform_output(c, "step-2", "fargate_cluster_name")
+    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues
     if cmd != "/bin/bash":
         cmd = "/bin/bash -c 'echo {base64.b64encode(cmd.encode()).decode()} | base64 -d | /bin/bash"
@@ -272,6 +305,8 @@ def execute_command(c, cmd="/bin/bash"):
         --region {AWS_REGION} """
     )
 
+
+## Bootstrap
 
 if __name__ == "__main__":
     program = Program(
