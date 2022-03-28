@@ -1106,7 +1106,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // Delegate to query supervisor (uses up this worker) and report
       // query ID + some stats to the client.
       VAST_DEBUG("{} scheduled {} more partition(s) for query id {}"
-                 "with {} partitions remaining",
+                 " with {} partitions remaining",
                  *self, actors.size(), query_id, query_state.partitions.size());
       auto delta = std::chrono::steady_clock::now() - now;
       VAST_TRACEPOINT(query_resume, query_id.as_u64().first, actors.size(),
