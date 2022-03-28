@@ -94,7 +94,7 @@ auto inspect(Inspector& f, type_extractor& x) {
 
 /// Extracts a specific data value from a type according to an offset. During
 /// AST resolution, the ::field_extractor generates multiple instantiations of
-/// this extractor for a given ::schema.
+/// this extractor for a given schema.
 struct data_extractor : detail::totally_ordered<data_extractor> {
   data_extractor() = default;
 

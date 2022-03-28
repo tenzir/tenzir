@@ -18,7 +18,7 @@
 #include "vast/detail/line_range.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/format/single_layout_reader.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <caf/fwd.hpp>
 #include <caf/none.hpp>
@@ -48,7 +48,7 @@ private:
 };
 
 /// A reader for CSV data. It operates with a *selector* to determine the
-/// mapping of CSV object to the appropriate record type in the schema.
+/// mapping of CSV object to the appropriate record type in the module.
 class reader final : public single_layout_reader {
 public:
   using super = single_layout_reader;
@@ -65,9 +65,9 @@ public:
 
   void reset(std::unique_ptr<std::istream> in) override;
 
-  caf::error schema(vast::schema sch) override;
+  caf::error module(vast::module mod) override;
 
-  vast::schema schema() const override;
+  vast::module module() const override;
 
   vast::system::report status() const override;
 
@@ -88,7 +88,7 @@ private:
 
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
-  vast::schema schema_;
+  vast::module module_;
   std::vector<rec_table> records;
   caf::optional<parser_type> parser_;
   options opt_;

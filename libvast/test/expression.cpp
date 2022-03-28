@@ -22,7 +22,7 @@
 #include "vast/detail/serialize.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>

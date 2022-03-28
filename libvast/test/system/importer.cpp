@@ -94,7 +94,7 @@ struct importer_fixture : Base {
                                                          std::move(stream));
     return this->self->spawn(system::source, std::move(reader), slice_size,
                              std::nullopt, vast::system::type_registry_actor{},
-                             vast::schema{}, std::string{},
+                             vast::module{}, std::string{},
                              vast::system::accountant_actor{},
                              std::vector<vast::transform>{});
   }

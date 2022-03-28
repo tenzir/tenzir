@@ -197,13 +197,13 @@ void reader::reset(std::unique_ptr<std::istream> in) {
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
-caf::error reader::schema(vast::schema sch) {
-  schema_ = std::move(sch);
+caf::error reader::module(vast::module mod) {
+  module_ = std::move(mod);
   return caf::none;
 }
 
-schema reader::schema() const {
-  vast::schema result;
+module reader::module() const {
+  vast::module result;
   result.add(layout_);
   return result;
 }
@@ -418,9 +418,9 @@ caf::error reader::parse_header() {
   VAST_DEBUG("{}     #fields:", detail::pretty_type_name(this));
   layout = detail::zeekify(layout);
   auto name = std::string{type_name_prefix} + path;
-  // If a congruent type exists in the schema, we give the schema type
+  // If a congruent type exists in the module, we give the type in the module
   // precedence.
-  if (auto* t = schema_.find(name)) {
+  if (auto* t = module_.find(name)) {
     const auto* r = caf::get_if<record_type>(t);
     if (!r)
       return caf::make_error(ec::format_error,
@@ -429,17 +429,17 @@ caf::error reader::parse_header() {
     auto transformations = std::vector<record_type::transformation>{};
     for (const auto& [layout_field, layout_index] : layout.leaves()) {
       const auto key = layout.key(layout_index);
-      if (auto schema_index = r->resolve_key(key)) {
-        const auto schema_field = r->field(*schema_index);
-        if (!congruent(schema_field.type, layout_field.type))
+      if (auto module_index = r->resolve_key(key)) {
+        const auto module_field = r->field(*module_index);
+        if (!congruent(module_field.type, layout_field.type))
           VAST_WARN("{} encountered a type mismatch between the schema "
                     "definition ({}) and the input data ({}",
-                    detail::pretty_type_name(this), schema_field, layout_field);
+                    detail::pretty_type_name(this), module_field, layout_field);
         else {
           transformations.push_back({
             layout_index,
             record_type::assign({
-              {std::string{layout_field.name}, schema_field.type},
+              {std::string{layout_field.name}, module_field.type},
             }),
           });
         }

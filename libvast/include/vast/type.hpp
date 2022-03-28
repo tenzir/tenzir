@@ -406,11 +406,11 @@ std::strong_ordering operator<=>(const T& lhs, const U& rhs) noexcept {
 
 /// Replaces all types in `xs` that are congruent to a type in `with`.
 /// @param xs Pointers to the types that should get replaced.
-/// @param with Schema containing potentially congruent types.
+/// @param with Module containing potentially congruent types.
 /// @returns an error if two types with the same name are not congruent.
 /// @relates type
 caf::error
-replace_if_congruent(std::initializer_list<type*> xs, const schema& with);
+replace_if_congruent(std::initializer_list<type*> xs, const module& with);
 
 // -- bool_type ---------------------------------------------------------------
 

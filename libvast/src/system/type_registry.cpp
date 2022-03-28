@@ -217,7 +217,7 @@ void type_registry_state::insert(vast::type layout) {
 
 type_set type_registry_state::types() const {
   auto result = type_set{};
-  for (const auto& x : configuration_schema)
+  for (const auto& x : configuration_module)
     result.insert(x);
   return result;
 }
@@ -244,8 +244,8 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   }
   // Load loaded schema types from the singleton.
   // TODO: Move to the load handler and re-parse the files.
-  if (const auto* schema = vast::event_types::get())
-    self->state.configuration_schema = *schema;
+  if (const auto* module = vast::event_types::get())
+    self->state.configuration_module = *module;
   // The behavior of the type-registry.
   return {
     [self](atom::telemetry) {
@@ -293,7 +293,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     [self](atom::load) -> caf::result<atom::ok> {
       VAST_DEBUG("{} loads taxonomies", *self);
       std::error_code err{};
-      auto dirs = get_schema_dirs(self->system().config());
+      auto dirs = get_module_dirs(self->system().config());
       concepts_map concepts;
       models_map models;
       for (const auto& dir : dirs) {

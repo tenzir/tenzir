@@ -67,13 +67,13 @@ public:
     return {};
   }
 
-  /// Sets the schema.
-  inline caf::error schema(const vast::schema& sch) override {
-    if (sch.empty())
+  /// Sets the module.
+  inline caf::error module(const vast::module& mod) override {
+    if (mod.empty())
       return caf::make_error(ec::invalid_configuration,
                              "no schema provided or type "
                              "too restricted");
-    for (const auto& entry : sch) {
+    for (const auto& entry : mod) {
       if (!caf::holds_alternative<record_type>(entry))
         continue;
       if (entry.name().empty()) {
@@ -90,9 +90,9 @@ public:
     return caf::none;
   }
 
-  /// Retrieves the current schema.
-  inline vast::schema schema() const override {
-    vast::schema result;
+  /// Retrieves the current module.
+  inline vast::module module() const override {
+    vast::module result;
     for (const auto& [k, v] : type_cache)
       result.add(v);
     return result;
