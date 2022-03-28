@@ -36,8 +36,8 @@ namespace vast {
 caf::expected<std::vector<table_slice>>
 make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
                          id offset, size_t seed) {
-  schema sc;
-  sc.add(layout);
+  module mo;
+  mo.add(layout);
   // We have no access to the actor system, so we can only pick the default
   // table slice type here. This ignores any user-defined overrides. However,
   // this function is only meant for testing anyways.
@@ -45,7 +45,7 @@ make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
   caf::put(opts, "vast.import.test.seed", seed);
   caf::put(opts, "vast.import.max-events", std::numeric_limits<size_t>::max());
   format::test::reader src{std::move(opts), nullptr};
-  src.schema(std::move(sc));
+  src.module(std::move(mo));
   std::vector<table_slice> result;
   auto add_slice = [&](table_slice slice) {
     slice.offset(offset);

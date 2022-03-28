@@ -18,7 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/legacy_type.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <arrow/array.h>
 #include <arrow/type_traits.h>
@@ -1479,7 +1479,7 @@ bool type_check(const type& x, const data& y) noexcept {
 }
 
 caf::error
-replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
+replace_if_congruent(std::initializer_list<type*> xs, const module& with) {
   for (auto* x : xs)
     if (const auto* t = with.find(x->name())) {
       if (!congruent(*x, *t))

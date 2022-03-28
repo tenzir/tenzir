@@ -23,8 +23,8 @@
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
+#include "vast/module.hpp"
 #include "vast/optional.hpp"
-#include "vast/schema.hpp"
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
@@ -74,10 +74,10 @@ make_source(caf::actor_system& sys, const std::string& format,
                                 defaults::import::table_slice_size);
   if (slice_size == 0)
     slice_size = std::numeric_limits<decltype(slice_size)>::max();
-  // Parse schema local to the import command.
-  auto schema = get_schema(options);
-  if (!schema)
-    return schema.error();
+  // Parse module local to the import command.
+  auto module = get_module(options);
+  if (!module)
+    return module.error();
   // Discern the input source (file, stream, or socket).
   if (uri && file)
     return caf::make_error(ec::invalid_configuration, //
@@ -116,7 +116,7 @@ make_source(caf::actor_system& sys, const std::string& format,
     VAST_VERBOSE("{} produces {} table slices of at most {} events",
                  (*reader)->name(), encoding, slice_size);
   // Spawn the source, falling back to the default spawn function.
-  auto local_schema = schema ? std::move(*schema) : vast::schema{};
+  auto local_module = module ? std::move(*module) : vast::module{};
   auto type_filter = type ? std::move(*type) : std::string{};
   auto src =
     [&](auto&&... args) {
@@ -132,7 +132,7 @@ make_source(caf::actor_system& sys, const std::string& format,
                                         std::forward<decltype(args)>(args)...);
       return sys.spawn(source, std::forward<decltype(args)>(args)...);
     }(std::move(*reader), slice_size, max_events, std::move(type_registry),
-      std::move(local_schema), std::move(type_filter), std::move(accountant),
+      std::move(local_module), std::move(type_filter), std::move(accountant),
       std::move(transforms));
   VAST_ASSERT(src);
   // Attempt to parse the remainder as an expression.

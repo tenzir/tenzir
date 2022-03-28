@@ -97,14 +97,14 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  /// Tries to set the schema for events to read.
-  /// @param x The new schema.
+  /// Tries to set the module for events to read.
+  /// @param x The new module.
   /// @returns `caf::none` on success.
-  virtual caf::error schema(vast::schema x) = 0;
+  virtual caf::error module(vast::module x) = 0;
 
-  /// Retrieves the currently used schema.
-  /// @returns The current schema.
-  [[nodiscard]] virtual vast::schema schema() const = 0;
+  /// Retrieves the currently used module.
+  /// @returns The current module.
+  [[nodiscard]] virtual vast::module module() const = 0;
 
   /// @returns The name of the reader type.
   [[nodiscard]] virtual const char* name() const = 0;

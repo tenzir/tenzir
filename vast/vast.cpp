@@ -21,8 +21,8 @@
 #include "vast/format/reader_factory.hpp"
 #include "vast/format/writer_factory.hpp"
 #include "vast/logger.hpp"
+#include "vast/module.hpp"
 #include "vast/plugin.hpp"
-#include "vast/schema.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
 #include "vast/system/make_transforms.hpp"
@@ -128,10 +128,10 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Set up the event types singleton.
-  if (auto schema = load_schema(cfg)) {
-    event_types::init(*std::move(schema));
+  if (auto module = load_module(cfg)) {
+    event_types::init(*std::move(module));
   } else {
-    VAST_ERROR("failed to read schema dirs: {}", schema.error());
+    VAST_ERROR("failed to read schema dirs: {}", module.error());
     return EXIT_FAILURE;
   }
   // Lastly, initialize the actor system context, and execute the given command.

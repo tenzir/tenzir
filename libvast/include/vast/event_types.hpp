@@ -8,19 +8,19 @@
 
 #pragma once
 
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <caf/optional.hpp>
 
 namespace vast::event_types {
 
 /// Initializes the system-wide type registry.
-/// @param s The schema.
+/// @param s The module.
 /// @returns true on success or false if registry was alread initialized.
-bool init(schema s);
+bool init(module m);
 
 /// Retrieves a pointer to the system-wide type registry.
 /// @returns nullptr if registry is not initialized.
-const schema* get();
+const module* get();
 
 } // namespace vast::event_types

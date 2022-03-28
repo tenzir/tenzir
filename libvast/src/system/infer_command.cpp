@@ -24,7 +24,7 @@
 #include "vast/error.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/expected.hpp>
@@ -43,7 +43,7 @@ namespace vast::system {
 namespace {
 
 template <class Reader>
-caf::expected<schema>
+caf::expected<module>
 infer(const std::string& input, const caf::settings& options) {
   auto rec = std::optional<type>{};
   auto layout = [&](auto x) {
@@ -55,7 +55,7 @@ infer(const std::string& input, const caf::settings& options) {
   if (error)
     return error;
   VAST_ASSERT(n == 1);
-  schema result;
+  module result;
   if (rec)
     result.add(*rec);
   return result;
@@ -103,7 +103,7 @@ type deduce(simdjson::dom::element e) {
   return {};
 }
 
-caf::expected<schema> infer_json(const std::string& input) {
+caf::expected<module> infer_json(const std::string& input) {
   using namespace vast;
   // Try JSONLD.
   auto lines = detail::split(input, "\r\n");
@@ -120,13 +120,13 @@ caf::expected<schema> infer_json(const std::string& input) {
   if (!rec_ptr)
     return caf::make_error(ec::parse_error, "could not parse JSON object");
   auto rec = type{"json", *rec_ptr};
-  schema result;
+  module result;
   result.add(rec);
   return result;
 }
 
-auto show(const schema& schema) {
-  std::cout << fmt::to_string(schema);
+auto show(const module& module) {
+  std::cout << fmt::to_string(module);
   return caf::none;
 }
 

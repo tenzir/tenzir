@@ -11,7 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/expression.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
@@ -55,7 +55,7 @@ struct type_registry_state {
   type_registry_actor::pointer self = {};
   accountant_actor accountant = {};
   std::map<std::string, type_set> data = {};
-  vast::schema configuration_schema = {};
+  vast::module configuration_module = {};
   vast::taxonomies taxonomies = {};
   std::filesystem::path dir = {};
 };

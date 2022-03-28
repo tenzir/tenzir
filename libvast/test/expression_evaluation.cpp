@@ -14,7 +14,7 @@
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"

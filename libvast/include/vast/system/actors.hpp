@@ -428,10 +428,10 @@ using analyzer_plugin_actor = typed_actor_fwd<>
 using source_actor = typed_actor_fwd<
   // INTERNAL: Progress.
   caf::reacts_to<atom::internal, atom::run, uint64_t>,
-  // Retrieve the currently used schema of the SOURCE.
-  caf::replies_to<atom::get, atom::schema>::with<schema>,
-  // Update the currently used schema of the SOURCE.
-  caf::reacts_to<atom::put, schema>,
+  // Retrieve the currently used module of the SOURCE.
+  caf::replies_to<atom::get, atom::module>::with<module>,
+  // Update the currently used module of the SOURCE.
+  caf::reacts_to<atom::put, module>,
   // Update the expression used for filtering data in the SOURCE.
   caf::reacts_to<expression>,
   // Set up a new stream sink for the generated data.
