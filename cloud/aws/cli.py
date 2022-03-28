@@ -129,7 +129,7 @@ def lambda_image(c):
 
 @task
 def deploy_step_2(c, auto_approve=False):
-    """Deploy only step 2 of the stack"""
+    """Deploy only step 2 of the stack. Step 1 should be deployed first"""
     env = step_2_variables(c)
     c.run('terraform -chdir="step-2" init', env=env)
     c.run(f'terraform -chdir="step-2" apply {auto_app_fmt(auto_approve)}', env=env)
@@ -146,14 +146,16 @@ def deploy(c, auto_approve=False):
 
 @task
 def destroy_step_1(c, auto_approve=False):
-    env = step_2_variables(c)
-    c.run(f'terraform -chdir="step-2" destroy {auto_app_fmt(auto_approve)}', env=env)
+    """Destroy resources of the step 1 only. Step 2 should be destroyed first"""
+    env = step_1_variables()
+    c.run(f'terraform -chdir="step-1" destroy {auto_app_fmt(auto_approve)}', env=env)
 
 
 @task
 def destroy_step_2(c, auto_approve=False):
-    env = step_1_variables()
-    c.run(f'terraform -chdir="step-1" destroy {auto_app_fmt(auto_approve)}', env=env)
+    """Destroy resources of the step 2 only"""
+    env = step_2_variables(c)
+    c.run(f'terraform -chdir="step-2" destroy {auto_app_fmt(auto_approve)}', env=env)
 
 
 @task
