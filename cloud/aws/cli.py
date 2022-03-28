@@ -294,7 +294,7 @@ def execute_command(c, cmd="/bin/bash"):
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues
     if cmd != "/bin/bash":
-        cmd = "/bin/bash -c 'echo {base64.b64encode(cmd.encode()).decode()} | base64 -d | /bin/bash"
+        cmd = f"/bin/bash -c 'echo {base64.b64encode(cmd.encode()).decode()} | base64 -d | /bin/bash'"
     # we use the CLI here because boto does not know how to use the session-manager-plugin
     c.run(
         f"""aws ecs execute-command \
