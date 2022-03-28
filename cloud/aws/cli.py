@@ -314,9 +314,11 @@ def destroy(c, auto_approve=False):
 ## Bootstrap
 
 if __name__ == "__main__":
+    collection = Collection.from_module(sys.modules[__name__])
+    collection.configure({"run": {"pty": True}})
     program = Program(
         binary="./vast-cloud",
-        namespace=Collection.from_module(sys.modules[__name__]),
+        namespace=collection,
         version="0.1.0",
     )
     program.run()
