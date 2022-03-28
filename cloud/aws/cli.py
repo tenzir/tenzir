@@ -157,17 +157,6 @@ def destroy_step_2(c, auto_approve=False):
 
 
 @task
-def destroy(c, auto_approve=False):
-    """Tear down the entire terraform stack"""
-    try:
-        destroy_step_2(c, auto_approve)
-    except Exception as e:
-        print(str(e))
-        print("Destroying step 2 failed. Continuing...")
-    destroy_step_1(c, auto_approve)
-
-
-@task
 def run_vast_task(c):
     """Start a new VAST server task on Fargate. DANGER: might lead to inconsistant state"""
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
@@ -304,6 +293,22 @@ def execute_command(c, cmd="/bin/bash"):
 		--command "{cmd}" \
         --region {AWS_REGION} """
     )
+
+
+@task
+def destroy(c, auto_approve=False):
+    """Tear down the entire terraform stack"""
+    try:
+        stop_all_tasks(c)
+    except Exception as e:
+        print(str(e))
+        print("Failed to stop tasks. Continuing destruction...")
+    try:
+        destroy_step_2(c, auto_approve)
+    except Exception as e:
+        print(str(e))
+        print("Failed to destroy step 2. Continuing destruction...")
+    destroy_step_1(c, auto_approve)
 
 
 ## Bootstrap
