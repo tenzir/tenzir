@@ -43,6 +43,7 @@ namespace vast::system {
 
 namespace {
 
+std::vector<std::filesystem::path> config_dirs_singleton = {};
 std::vector<std::filesystem::path> loaded_config_files_singleton = {};
 
 template <concrete_type T>
@@ -71,6 +72,65 @@ env_to_config(std::string_view key, std::string_view prefix = "VAST") {
     for (auto& c : x)
       c = (c == '_') ? '-' : tolower(c);
   return detail::join(xs, ".");
+}
+
+caf::expected<std::vector<std::filesystem::path>>
+collect_config_files(std::vector<std::filesystem::path> dirs,
+                     std::vector<std::string> cli_configs) {
+  std::vector<std::filesystem::path> result;
+  // First, go through all config file directories and gather config files
+  // there. We populate the member variable `config_files` instead of
+  // `config_file_path` in the base class so that we can support multiple
+  // configuration files.
+  for (auto&& dir : dirs) {
+    // Support both *.yaml and *.yml extensions.
+    auto conf_yaml = dir / "vast.yaml";
+    auto conf_yml = dir / "vast.yml";
+    std::error_code err{};
+    const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
+    if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("failed to check if vast.yaml file "
+                                         "exists in {}: {}",
+                                         dir, err.message()));
+    const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
+    if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("failed to check if vast.yml file "
+                                         "exists in {}: {}",
+                                         dir, err.message()));
+    // We cannot decide which one to pick if we have two, so bail out.
+    if (exists_conf_yaml && exists_conf_yml)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("detected both 'vast.yaml' and "
+                                         "'vast.yml' files in {}",
+                                         dir));
+    if (exists_conf_yaml)
+      result.emplace_back(std::move(conf_yaml));
+    else if (exists_conf_yml)
+      result.emplace_back(std::move(conf_yml));
+  }
+  // Second, consider command line and environment overrides. But only check
+  // the environment if we don't have a config on the command line.
+  if (cli_configs.empty())
+    if (auto file = detail::locked_getenv("VAST_CONFIG"))
+      cli_configs.push_back(std::move(*file));
+  for (const auto& file : cli_configs) {
+    auto config_file = std::filesystem::path{file};
+    std::error_code err{};
+    if (std::filesystem::exists(config_file, err))
+      result.push_back(std::move(config_file));
+    else if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}: "
+                                         "{}",
+                                         config_file, err.message()));
+    else
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}",
+                                         config_file));
+  }
+  return result;
 }
 
 caf::expected<record>
@@ -138,20 +198,20 @@ caf::expected<caf::settings> to_settings(record config) {
   return to<caf::settings>(config);
 }
 
+void populate_config_dirs() {
+  if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
+    config_dirs_singleton.push_back(std::filesystem::path{*xdg_config_home}
+                                    / "vast");
+  else if (auto home = detail::locked_getenv("HOME"))
+    config_dirs_singleton.push_back(std::filesystem::path{*home} / ".config"
+                                    / "vast");
+  config_dirs_singleton.push_back(detail::install_configdir());
+}
+
 } // namespace
 
-std::vector<std::filesystem::path>
-config_dirs(const caf::actor_system_config& config) {
-  const auto bare_mode = caf::get_or(config.content, "vast.bare-mode", false);
-  if (bare_mode)
-    return {};
-  auto result = std::vector<std::filesystem::path>{};
-  if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
-    result.push_back(std::filesystem::path{*xdg_config_home} / "vast");
-  else if (auto home = detail::locked_getenv("HOME"))
-    result.push_back(std::filesystem::path{*home} / ".config" / "vast");
-  result.push_back(detail::install_configdir());
-  return result;
+const std::vector<std::filesystem::path>& config_dirs() {
+  return config_dirs_singleton;
 }
 
 const std::vector<std::filesystem::path>& loaded_config_files() {
@@ -176,7 +236,20 @@ configuration::configuration() {
 }
 
 caf::error configuration::parse(int argc, char** argv) {
-  // Parsing precedence:
+  // The main objective of this function is to parse the command line and put
+  // it into the actor_system_config instance (`content`), which components
+  // throughout VAST query to find out the application settings. This process
+  // has several sequencing intricacies because it also loads configuration
+  // files and considers environment variables while parsing the command line.
+  //
+  // A major issue is that we have to use caf::settings and cannot use
+  // vast::record as unified representation, exacerbating the complexity of
+  // this function. (We have plans to switch to a single, unified
+  // representations.)
+  //
+  // When reviewing this function, it's important to keep the parsing
+  // precedence in mind:
+  //
   // 1. CLI arguments
   // 2. Environment variables
   // 3. Config files
@@ -198,21 +271,31 @@ caf::error configuration::parse(int argc, char** argv) {
     for (const auto& [old, new_] : replacements)
       if (option == old)
         option = new_;
-  // Detect when running with --bare-mode. We need to parse this option early
-  // because when we call vast::config_dirs below this needs to be parsed
-  // already.
+  // Remove CAF options from the command line; we'll parse them at the very
+  // end.
+  auto is_vast_opt = [](const auto& x) {
+    return !x.starts_with("--caf.");
+  };
+  auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
+                                       is_vast_opt);
+  std::vector<std::string> caf_args;
+  std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
+  for (auto& arg : caf_args)
+    arg.erase(2, 4); // Strip --caf. prefix
+  command_line.erase(caf_opt, command_line.end());
+  // Do not use builtin config directories in "bare mode".
   if (auto it
       = std::find(command_line.begin(), command_line.end(), "--bare-mode");
-      it != command_line.end()) {
+      it != command_line.end())
     caf::put(content, "vast.bare-mode", true);
-    command_line.erase(it);
-  } else if (auto bare_mode = detail::locked_getenv("VAST_BARE_MODE")) {
-    if (*bare_mode == "true")
+  else if (auto vast_bare_mode = detail::locked_getenv("VAST_BARE_MODE"))
+    if (*vast_bare_mode != "true")
       caf::put(content, "vast.bare-mode", true);
-  }
-  // Detect when plugins or plugin-dirs are specified on the command line. This
-  // needs to happen before the regular parsing of the command line since
-  // plugins may add additional commands.
+  if (!caf::get_or(content, "vast.bare-mode", false))
+    populate_config_dirs();
+  // Detect when plugins or plugin-dirs are specified on the command line.
+  // This needs to happen before the regular parsing of the command line
+  // since plugins may add additional commands.
   auto is_not_plugin_opt = [](auto& x) {
     return !x.starts_with("--plugins=") && !x.starts_with("--plugin-dirs=");
   };
@@ -248,21 +331,12 @@ caf::error configuration::parse(int argc, char** argv) {
       caf::put(content, "vast.plugins", std::move(cli_plugins));
     }
   }
-  // Separate CAF options from the command line; we'll parse them later.
-  auto is_vast_opt = [](const auto& x) {
-    return !x.starts_with("--caf.");
-  };
-  auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
-                                       is_vast_opt);
-  std::vector<std::string> caf_args;
-  std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
-  command_line.erase(caf_opt, command_line.end());
   // Gather and parse all to-be-considered configuration files.
   std::vector<std::string> cli_configs;
   for (auto& arg : command_line)
     if (arg.starts_with("--config="))
       cli_configs.push_back(arg.substr(9));
-  if (auto configs = collect_config_files(cli_configs))
+  if (auto configs = collect_config_files(config_dirs(), cli_configs))
     config_files = std::move(*configs);
   else
     return configs.error();
@@ -270,23 +344,18 @@ caf::error configuration::parse(int argc, char** argv) {
   if (!config)
     return config.error();
   // From here on, we go into CAF land with the goal to put the configuration
-  // into the actor_system_config.
+  // into the members of this actor_system_config instance.
   auto settings = to_settings(std::move(*config));
   if (!settings)
     return settings.error();
   if (auto err = embed_config(*settings))
     return err;
-  // Try parsing all --caf.* settings. First, strip caf. prefix for the
-  // CAF parser.
-  for (auto& arg : caf_args)
-    if (arg.starts_with("--caf."))
-      arg.erase(2, 4);
-  // We clear the config_file_path first so it does not use
-  // caf-application.ini as fallback during actor_system_config::parse().
+  // Now parse all CAF options from the command line. Prior to doing so, we
+  // clear the config_file_path first so it does not use caf-application.ini as
+  // fallback during actor_system_config::parse().
   config_file_path.clear();
   auto result = actor_system_config::parse(std::move(caf_args));
-  // Load OpenSSL module if configured to do so. This uses the parsed
-  // configuration, so it must come at the very end.
+  // Load OpenSSL last because it uses the parsed configuration.
 #if VAST_ENABLE_OPENSSL
   const auto use_encryption
     = !openssl_certificate.empty() || !openssl_key.empty()
@@ -295,64 +364,6 @@ caf::error configuration::parse(int argc, char** argv) {
   if (use_encryption)
     load<caf::openssl::manager>();
 #endif // VAST_ENABLE_OPENSSL
-  return result;
-}
-
-caf::expected<std::vector<std::filesystem::path>>
-configuration::collect_config_files(std::vector<std::string> cli_configs) {
-  std::vector<std::filesystem::path> result;
-  // First, go through all config file directories and gather config files
-  // there. We populate the member variable `config_files` instead of
-  // `config_file_path` in the base class so that we can support multiple
-  // configuration files.
-  for (auto&& dir : config_dirs(*this)) {
-    // Support both *.yaml and *.yml extensions.
-    auto conf_yaml = dir / "vast.yaml";
-    auto conf_yml = dir / "vast.yml";
-    std::error_code err{};
-    const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
-    if (err)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("failed to check if vast.yaml file "
-                                         "exists in {}: {}",
-                                         dir, err.message()));
-    const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
-    if (err)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("failed to check if vast.yml file "
-                                         "exists in {}: {}",
-                                         dir, err.message()));
-    // We cannot decide which one to pick if we have two, so bail out.
-    if (exists_conf_yaml && exists_conf_yml)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("detected both 'vast.yaml' and "
-                                         "'vast.yml' files in {}",
-                                         dir));
-    if (exists_conf_yaml)
-      result.emplace_back(std::move(conf_yaml));
-    else if (exists_conf_yml)
-      result.emplace_back(std::move(conf_yml));
-  }
-  // Second, consider command line and environment overrides. But only check
-  // the environment if we don't have a config on the command line.
-  if (cli_configs.empty())
-    if (auto file = detail::locked_getenv("VAST_CONFIG"))
-      cli_configs.push_back(std::move(*file));
-  for (const auto& file : cli_configs) {
-    auto config_file = std::filesystem::path{file};
-    std::error_code err{};
-    if (std::filesystem::exists(config_file, err))
-      result.push_back(std::move(config_file));
-    else if (err)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("cannot find configuration file {}: "
-                                         "{}",
-                                         config_file, err.message()));
-    else
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("cannot find configuration file {}",
-                                         config_file));
-  }
   return result;
 }
 

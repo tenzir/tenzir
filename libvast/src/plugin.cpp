@@ -216,7 +216,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     }
     // Second, try to read the configuration from the plugin-specific
     // configuration files at <config-dir>/plugin/<plugin-name>.yaml.
-    for (auto&& config_dir : system::config_dirs(cfg)) {
+    for (auto&& config_dir : system::config_dirs()) {
       const auto yaml_path
         = config_dir / "plugin" / fmt::format("{}.yaml", plugin->name());
       const auto yml_path
