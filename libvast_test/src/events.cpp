@@ -107,7 +107,7 @@ inhale<format::json::reader>(const char* filename,
   caf::put(settings, "vast.import.json.selector", "event_type:suricata");
   auto input = std::make_unique<std::ifstream>(filename);
   format::json::reader reader{settings, std::move(input)};
-  reader.schema(events::suricata_schema);
+  reader.module(events::suricata_module);
   return extract(reader, slice_size);
 }
 
@@ -127,7 +127,7 @@ std::vector<table_slice> events::suricata_netflow_log;
 std::vector<table_slice> events::suricata_stats_log;
 std::vector<table_slice> events::ascending_integers;
 std::vector<table_slice> events::alternating_integers;
-vast::schema events::suricata_schema;
+vast::module events::suricata_module;
 
 events::events() {
   // Only read the fixture data once per process.
@@ -145,8 +145,8 @@ events::events() {
   std::stringstream().swap(buffer);
   buffer << suricata.rdbuf();
   auto suricata_raw_schema = buffer.str();
-  suricata_schema
-    = unbox(to<vast::schema>(base_raw_schema + suricata_raw_schema));
+  suricata_module
+    = unbox(to<vast::module>(base_raw_schema + suricata_raw_schema));
   // Create Zeek log data.
   MESSAGE("inhaling unit test suite events");
   zeek_conn_log = inhale<format::zeek::reader>(

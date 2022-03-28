@@ -41,7 +41,7 @@ struct events {
   static std::vector<table_slice> suricata_netflow_log;
   static std::vector<table_slice> suricata_stats_log;
 
-  static vast::schema suricata_schema;
+  static vast::module suricata_module;
 
   static std::vector<table_slice> zeek_conn_log_full;
 
