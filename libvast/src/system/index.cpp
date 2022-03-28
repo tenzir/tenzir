@@ -1059,7 +1059,8 @@ index(index_actor::stateful_pointer<index_state> self,
       if (auto worker = self->state.next_worker()) {
         VAST_VERBOSE("{} starts executing {} from a new request", *self, query);
         return self->delegate(static_cast<index_actor>(self), atom::internal_v,
-                              std::move(query), std::move(*worker));
+                              std::move(query), std::move(*worker),
+                              sender->address());
       }
       VAST_VERBOSE("{} pushes query {} to the backlog", *self, query);
       auto addr = self->current_sender()->address();
@@ -1073,15 +1074,12 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->delegate(self->state.catalog, atom::candidates_v, lookup_id,
                             std::move(expr));
     },
-    [self](atom::internal, vast::query query,
-           query_supervisor_actor worker) -> caf::result<query_cursor> {
+    [self](atom::internal, vast::query query, query_supervisor_actor worker,
+           const caf::actor_addr& sender) -> caf::result<query_cursor> {
       // Query handling
-      auto sender = self->current_sender();
       VAST_ASSERT(sender);
-      auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
-      // FIXME: This is a quick and dirty attempt to verify that the problem
-      // is because clients exit before we arrive here.
-      if (client->getf(caf::monitorable_actor::is_terminated_flag)) {
+      if (auto it = self->state.monitored_queries.find(sender);
+          it == self->state.monitored_queries.end()) {
         VAST_DEBUG("{} ignores terminated query: {}", *self, query);
         self->send(self, atom::worker_v, worker);
         return caf::sec::invalid_argument;
@@ -1105,6 +1103,15 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [=, candidates
               = std::move(candidates)](catalog_result& midx_result) mutable {
+            if (auto it = self->state.monitored_queries.find(sender);
+                it == self->state.monitored_queries.end()) {
+              VAST_VERBOSE("{} discards candidates for discarded query {}",
+                           *self, query.id);
+              self->send(self, atom::worker_v, worker);
+              rp.deliver(ec::timeout);
+              return;
+            }
+            auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
             auto& midx_candidates = midx_result.partitions;
             VAST_DEBUG("{} got initial candidates {} and from catalog {}",
                        *self, candidates, midx_candidates);
@@ -1448,7 +1455,7 @@ index(index_actor::stateful_pointer<index_state> self,
         VAST_VERBOSE("{} starts executing {} from the backlog", *self,
                      job->query);
         job->rp.delegate(static_cast<index_actor>(self), atom::internal_v,
-                         std::move(job->query), std::move(worker));
+                         std::move(job->query), std::move(worker), job->sender);
       } else {
         VAST_VERBOSE(
           "{} finished work on a query and has no jobs in the backlog", *self);
