@@ -80,8 +80,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::subscribe, atom::flush, system::flush_listener_actor&) {
       FAIL("no mock implementation available");
     },
-    [=](atom::internal, vast::query&,
-        system::query_supervisor_actor&) -> caf::result<system::query_cursor> {
+    [=](atom::internal, vast::query&, system::query_supervisor_actor&,
+        const caf::actor_addr&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
     [=](atom::subscribe, atom::create,
