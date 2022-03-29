@@ -1,0 +1,156 @@
+name: "Terraform"
+on: workflow_dispatch
+
+# This CI configuration has multiple dependencies:
+# - You need an AWS account with a user having sufficient IAM access to run the
+#   Terraform scripts and other CLI commands.
+# - AWS credentials should be set in the Github repository secrets as
+#   AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY. They should have sufficient IAM
+#   priviledges to run Fargate tasks and Lambda functions.
+# - You need to choose an AWS region and a VPC within that region. These should
+#   be configured in the repository secrets as AWS_REGION and PEERED_VPC_ID.
+# - The VAST deployment creates a new VPC. Its ip range should not overlap an
+#   existing one in your account. Configure its CIDR in the repository secrets
+#   as VAST_CIDR (for example 172.30.0.0/16).
+# - The CI run uses Terraform Cloud to store the state. Within your Terraform
+#   Cloud account, you need to create two workspaces with the suffixes -step-1
+#   and -step-2. For each workspace, you also need to configure AWS credentials
+#   with sufficient priviledges to deploy the stack. Once this is done,
+#   configure the organization name and the common workspace prefix in the
+#   Github repository secrets as TF_ORGANIZATION and TF_WORKSPACE_PREFIX (the
+#   workspaces in Terraform Cloud should be $TF_WORKSPACE_PREFIX-step-1 and
+#   $TF_WORKSPACE_PREFIX-step-2).
+#   - You also need the API key from Terraform Cloud and set it in TF_API_TOKEN.
+
+# Notes:
+# - If this workflow is executed multiple times at in parallel, the Terraform
+#   state will be protected against inconsistencies by the lock provided by
+#   Terraform Cloud but the other tests will result in undefined behavior.
+# - If Terraform fails or is interrupted during deployment or destruction, the
+#   state might end up locked and subsequent runs will fail. In this case the
+#   state first needs to be unlocked, for instance from the Terraform Cloud UI.
+
+# Set these secrets to configure the CI run
+env:
+  VAST_PEERED_VPC_ID: "${{ secrets.VAST_PEERED_VPC_ID }}"
+  VAST_CIDR: "${{ secrets.VAST_CIDR }}"
+  VAST_AWS_REGION: "${{ secrets.VAST_AWS_REGION }}"
+  TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
+  TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX }}"
+  TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+  AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+  AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+  VASTCLOUD_NOTTY: 1
+
+jobs:
+  vast_on_aws:
+    name: "VAST ON AWS"
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive -diff
+
+      - name: "Create config file"
+        if: ${{ !env.ACT }}
+        run: |
+          echo "vast_peered_vpc_id = $VAST_PEERED_VPC_ID" >> .env
+          echo "vast_cidr = $VAST_CIDR" >> .env
+          echo "vast_aws_region = $VAST_AWS_REGION" >> .env
+
+      - name: "Substitute backend with Terraform Cloud"
+        run: |
+          cat<<EOF > step-1/backend.tf
+          terraform {
+            cloud {
+              organization = "$TF_ORGANIZATION"
+              token        = "$TF_API_TOKEN"
+              workspaces {
+                name = "$TF_WORKSPACE_PREFIX-step-1"
+              }
+            }
+          }
+          EOF
+          cat<<EOF > step-2/backend.tf
+          terraform {
+            cloud {
+              organization = "$TF_ORGANIZATION"
+              token        = "$TF_API_TOKEN"
+              workspaces {
+                name = "$TF_WORKSPACE_PREFIX-step-2"
+              }
+            }
+          }
+          EOF
+
+      - name: Deploy
+        id: deploy
+        continue-on-error: true
+        run: ./vast-cloud deploy --auto-approve
+
+      - name: Retry deploy
+        if: steps.deploy.outcome=='failure'
+        run: |
+          echo "Deploy sometimes fails for an unexplained reason."
+          echo "Retrying after a few minutes usually works."
+          sleep 200
+          ./vast-cloud deploy --auto-approve
+
+      - name: Start and restart VAST server
+        run: |
+          echo "Run start-vast-server"
+          ./vast-cloud start-vast-server
+
+          echo "Run start-vast-server again"
+          ./vast-cloud start-vast-server 2> /dev/null \
+            && { echo "Starting server again should fail"; false; } \
+            || true
+          [[ $(./vast-cloud get-vast-server | wc -w) = "1" ]] \
+            || { echo "Only one task should be started"; false; }
+
+          echo "Run restart-vast-server"
+          ./vast-cloud restart-vast-server
+          [[ $(./vast-cloud get-vast-server | wc -w) = "1" ]] \
+            || { echo "Only one task should be started"; false; }
+
+          echo "The task needs a bit of time to boot, sleeping for a while..."
+          sleep 100
+
+      - name: Test db empty from Lambda
+        run: |
+          result=$(./vast-cloud run-lambda -c "vast count")
+          echo "Expected vast count 0, got $result"
+          [[ $result = "0" ]]
+
+      - name: Import data
+        run: |
+          DATA_URL=https://raw.githubusercontent.com/tenzir/vast/master/vast/integration/data/suricata/eve.json
+          ./vast-cloud execute-command \
+            -c "wget -O - -o /dev/null $DATA_URL | vast import suricata"
+
+      - name: Test db not empty from Lambda
+        run: |
+          result=$(./vast-cloud run-lambda -c "vast count")
+          echo "Expected vast count 7, got $result"
+          [[ $result = "7" ]]
+
+      - name: Destroy
+        continue-on-error: true
+        id: destroy
+        if: always()
+        run: ./vast-cloud destroy --auto-approve
+
+      - name: Retry destroy
+        if: steps.destroy.outcome=='failure'
+        run: |
+          echo "Destroy sometimes fails for an unexplained reason."
+          echo "Retrying after a few minutes usually works."
+          sleep 300
+          ./vast-cloud destroy --auto-approve
