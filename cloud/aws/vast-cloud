@@ -7,15 +7,24 @@ DOCKER_SOCKET=/var/run/docker.sock
 # The calling user id and group id are propagated to the image at build time. 
 # Rebuild is required when changing the calling user.
 
+export USER_ID=$(id -u)
+export GROUP_ID=$(id -g)
+export DOCKER_ID=$(stat -c '%g' ${DOCKER_SOCKET})
+
+build () {
+  echo "(UID=$USER_ID,GID=$GROUP_ID,DOCKER_ID=$DOCKER_ID)"
+  docker build \
+    -t tenzir/vast-cloud-cli \
+    -f docker/cli.Dockerfile \
+    --build-arg UID=$USER_ID \
+    --build-arg GID=$GROUP_ID \
+    --build-arg DOCKER_ID \
+    .
+}
+
 docker image inspect tenzir/vast-cloud-cli > /dev/null \
     && [[ -z $VAST_CLOUD_REBUILD ]] \
-    || docker build \
-        -t tenzir/vast-cloud-cli \
-        -f docker/cli.Dockerfile \
-        --build-arg UID=$(id -u) \
-        --build-arg GID=$(id -g) \
-        --build-arg DOCKER_ID=$(stat -c '%g' ${DOCKER_SOCKET}) \
-        .
+    || build
 
 docker run -it \
     --mount type=bind,source=${DOCKER_SOCKET},target=/var/run/docker.sock \
