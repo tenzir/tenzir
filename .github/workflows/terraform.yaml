@@ -2,19 +2,25 @@ name: "Terraform"
 on: workflow_dispatch
 
 # This CI configuration has multiple dependencies:
-# - You need an AWS account with a user having sufficient IAM access to run
-#   the Terraform scripts. Its credentials should be set in the repository
-#   secrets as AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
-# - You need to choose an AWS region and a VPC within that region. These
-#   should be configured in the repository secrets as AWS_REGION and
-#   PEERED_VPC_ID.
-# - The VAST deployment creates a new VPC. Its CIDR should not overlap an
-#   existing one in your account. Configure it in the repository secrets as
-#   VAST_CIDR
-# - The CI run uses Terraform Cloud to store the state. Once you have an
-#   account setup, configure its organization name and the desired workspace
-#   in the repository secrets as TF_ORGANIZATION and TF_WORKSPACE. You also
-#   need the API key from Terraform cloud and set it in TF_API_TOKEN
+# - You need an AWS account with a user having sufficient IAM access to run the
+#   Terraform scripts and other CLI commands.
+# - AWS credentials should be set in the Github repository secrets as
+#   AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY. They should have sufficient IAM
+#   priviledges to run Fargate tasks and Lambda functions.
+# - You need to choose an AWS region and a VPC within that region. These should
+#   be configured in the repository secrets as AWS_REGION and PEERED_VPC_ID.
+# - The VAST deployment creates a new VPC. Its ip range should not overlap an
+#   existing one in your account. Configure its CIDR in the repository secrets
+#   as VAST_CIDR (for example 172.30.0.0/16).
+# - The CI run uses Terraform Cloud to store the state. Within your Terraform
+#   Cloud account, you need to create two workspaces with the suffixes -step-1
+#   and -step-2. For each workspace, you also need to configure AWS credentials
+#   with sufficient priviledges to deploy the stack. Once this is done,
+#   configure the organization name and the common workspace prefix in the
+#   Github repository secrets as TF_ORGANIZATION and TF_WORKSPACE_PREFIX (the
+#   workspaces in Terraform Cloud should be $TF_WORKSPACE_PREFIX-step-1 and
+#   $TF_WORKSPACE_PREFIX-step-2).
+#   - You also need the API key from Terraform Cloud and set it in TF_API_TOKEN.
 
 # Notes:
 # - If this workflow is executed multiple times at in parallel, the Terraform
@@ -26,13 +32,14 @@ on: workflow_dispatch
 
 # Set these secrets to configure the CI run
 env:
-  PEERED_VPC_ID: "${{ secrets.PEERED_VPC_ID }}"
+  VAST_PEERED_VPC_ID: "${{ secrets.VAST_PEERED_VPC_ID }}"
   VAST_CIDR: "${{ secrets.VAST_CIDR }}"
+  VAST_AWS_REGION: "${{ secrets.VAST_AWS_REGION }}"
   TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
   TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX }}"
-  AWS_REGION: "${{ secrets.AWS_REGION }}"
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+  VASTCLOUD_NOTTY: 1
 
 jobs:
   vast_on_aws:
@@ -73,9 +80,9 @@ jobs:
       - name: "Create config file"
         if: ${{ !env.ACT }}
         run: |
-          echo "peered_vpc_id = $PEERED_VPC_ID" >> .env
+          echo "vast_peered_vpc_id = $VAST_PEERED_VPC_ID" >> .env
           echo "vast_cidr = $VAST_CIDR" >> .env
-          echo "aws_region = $AWS_REGION" >> .env
+          echo "vast_aws_region = $VAST_AWS_REGION" >> .env
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
