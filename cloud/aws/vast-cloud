@@ -1,26 +1,40 @@
 #!/usr/bin/env bash
 
+# Input:
+# - VASTCLOUD_REBUILD: set to any value to force docker rebuild
+# - VASTCLOUD_NOTTY: set to any value to disable TTY
+
+# The CLI runs Docker commands from Docker, so it needs to have access to the
+# Docker socket. The calling user id and group id as well as the docker group id
+# are propagated to the image at build time. This enables the image to be runned
+# using the host user, but a rebuild is required when changing the calling user.
+
 DOCKER_SOCKET=/var/run/docker.sock
+export CALLER_UID=$(id -u)
+export CALLER_GID=$(id -g)
+export DOCKER_GID=$(stat -c '%g' ${DOCKER_SOCKET})
 
-# Set the VAST_CLOUD_REBUILD env variable to any value to force docker rebuild.
-# The CLI runs Docker commands from Docker, so it needs to have access to the Docker socket.
-# The calling user id and group id are propagated to the image at build time. 
-# Rebuild is required when changing the calling user.
+build () {
+  echo "(CALLER_UID=$CALLER_UID,CALLER_GID=$CALLER_GID,DOCKER_GID=$DOCKER_GID)"
+  docker build \
+    -t tenzir/vast-cloud-cli \
+    -f docker/cli.Dockerfile \
+    --build-arg CALLER_UID \
+    --build-arg CALLER_GID \
+    --build-arg DOCKER_GID \
+    .
+}
 
+# if image exists and VASTCLOUD_REBUILD not set, don't rebuild
 docker image inspect tenzir/vast-cloud-cli > /dev/null \
-    && [[ -z $VAST_CLOUD_REBUILD ]] \
-    || docker build \
-        -t tenzir/vast-cloud-cli \
-        -f docker/cli.Dockerfile \
-        --build-arg UID=$(id -u) \
-        --build-arg GID=$(id -g) \
-        --build-arg DOCKER_ID=$(stat -c '%g' ${DOCKER_SOCKET}) \
-        .
+    && [[ -z $VASTCLOUD_REBUILD ]] \
+    || build
 
-docker run -it \
+# Run image with both AWS credentials file and env credentials if available
+docker run -i $([[ -z $VASTCLOUD_NOTTY ]] && echo "-t") \
     --mount type=bind,source=${DOCKER_SOCKET},target=/var/run/docker.sock \
     --mount type=bind,source=$PWD/../..,target=/vast \
-    --mount type=bind,source=$HOME/.aws/credentials,target=/.aws/credentials,readonly \
+    $([[ -f "$HOME/.aws/credentials" ]] && echo "--mount type=bind,source=$HOME/.aws/credentials,target=/.aws/credentials,readonly") \
     -e AWS_PROFILE \
     -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
     -e AWS_ACCESS_KEY_ID \
