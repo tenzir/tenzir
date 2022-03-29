@@ -135,6 +135,7 @@ collect_config_files(std::vector<std::filesystem::path> dirs,
 
 caf::expected<record>
 load_config_files(std::vector<std::filesystem::path> config_files) {
+  loaded_config_files_singleton.clear();
   // Parse and merge all configuration files.
   record merged_config;
   for (const auto& config : config_files) {
@@ -201,6 +202,7 @@ caf::expected<caf::settings> to_settings(record config) {
 }
 
 void populate_config_dirs() {
+  config_dirs_singleton.clear();
   if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
     config_dirs_singleton.push_back(std::filesystem::path{*xdg_config_home}
                                     / "vast");
