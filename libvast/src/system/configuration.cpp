@@ -113,8 +113,8 @@ collect_config_files(std::vector<std::filesystem::path> dirs,
   // Second, consider command line and environment overrides. But only check
   // the environment if we don't have a config on the command line.
   if (cli_configs.empty())
-    if (auto file = detail::locked_getenv("VAST_CONFIG"))
-      cli_configs.push_back(std::move(*file));
+    if (auto file = detail::getenv("VAST_CONFIG"))
+      cli_configs.emplace_back(*file);
   for (const auto& file : cli_configs) {
     auto config_file = std::filesystem::path{file};
     std::error_code err{};
@@ -201,10 +201,10 @@ caf::expected<caf::settings> to_settings(record config) {
 }
 
 void populate_config_dirs() {
-  if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
+  if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
     config_dirs_singleton.push_back(std::filesystem::path{*xdg_config_home}
                                     / "vast");
-  else if (auto home = detail::locked_getenv("HOME"))
+  else if (auto home = detail::getenv("HOME"))
     config_dirs_singleton.push_back(std::filesystem::path{*home} / ".config"
                                     / "vast");
   config_dirs_singleton.push_back(detail::install_configdir());
@@ -290,7 +290,7 @@ caf::error configuration::parse(int argc, char** argv) {
       = std::find(command_line.begin(), command_line.end(), "--bare-mode");
       it != command_line.end())
     caf::put(content, "vast.bare-mode", true);
-  else if (auto vast_bare_mode = detail::locked_getenv("VAST_BARE_MODE"))
+  else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE"))
     if (*vast_bare_mode == "true")
       caf::put(content, "vast.bare-mode", true);
   if (!caf::get_or(content, "vast.bare-mode", false))
@@ -315,7 +315,7 @@ caf::error configuration::parse(int argc, char** argv) {
   VAST_ASSERT(it == plugin_args.end());
   // If there are no plugin options on the command line, look at the
   // corresponding evironment variables VAST_PLUGIN_DIRS and VAST_PLUGINS.
-  if (auto vast_plugin_dirs = detail::locked_getenv("VAST_PLUGIN_DIRS")) {
+  if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGIN_DIRS")) {
     auto cli_plugin_dirs
       = caf::get_or(content, "vast.plugin-dirs", std::vector<std::string>{});
     if (cli_plugin_dirs.empty()) {
@@ -324,7 +324,7 @@ caf::error configuration::parse(int argc, char** argv) {
       caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
     }
   }
-  if (auto vast_plugins = detail::locked_getenv("VAST_PLUGINS")) {
+  if (auto vast_plugins = detail::getenv("VAST_PLUGINS")) {
     auto cli_plugins
       = caf::get_or(content, "vast.plugins", std::vector<std::string>{});
     if (cli_plugins.empty()) {

@@ -131,7 +131,7 @@ detail::stable_set<std::filesystem::path>
 get_module_dirs(const caf::actor_system_config& cfg) {
   const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
   detail::stable_set<std::filesystem::path> result;
-  if (auto vast_module_directories = detail::locked_getenv("VAST_SCHEMA_DIRS"))
+  if (auto vast_module_directories = detail::getenv("VAST_SCHEMA_DIRS"))
     for (auto&& path : detail::split(*vast_module_directories, ":"))
       result.insert({path});
   const auto datadir = detail::install_datadir();
@@ -144,10 +144,10 @@ get_module_dirs(const caf::actor_system_config& cfg) {
   }
   if (!bare_mode) {
     result.insert(detail::install_configdir() / "schema");
-    if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
+    if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
       result.insert(std::filesystem::path{*xdg_config_home} / "vast"
                     / "schema");
-    else if (auto home = detail::locked_getenv("HOME"))
+    else if (auto home = detail::getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".config" / "vast"
                     / "schema");
   }
