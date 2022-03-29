@@ -88,7 +88,7 @@ jobs:
           echo "vast_aws_region = $VAST_AWS_REGION" >> .env
 
       - name: Terraform Format
-        run: terraform fmt -check
+        run: terraform fmt -check -recursive -diff
 
       - name: Deploy
         id: deploy
