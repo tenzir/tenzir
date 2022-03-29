@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 DOCKER_SOCKET=/var/run/docker.sock
 
