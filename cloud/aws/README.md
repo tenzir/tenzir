@@ -21,17 +21,16 @@ Architecture](https://user-images.githubusercontent.com/53797/157068659-41d7c9fe
 
 ### Usage
 
-The provided CLI using [PyInvoke tasks module](tasks) wraps
+We provide a CLI powered by [PyInvoke](cli.py) that wraps
 [Terraform](https://www.terraform.io/) and `aws` CLI commands for a streamlined
 UX. You can list the available higher level commands with `./vast-cloud --list`.
 
 We provide a Docker executor to package all the dependencies required to run the
-CLI. The [`./vast-cloud`](vast-cloud) automatically builds and runs the
-[pre-configured](docker/cli.Dockerfile) image for you.
+CLI. The [`./vast-cloud`](vast-cloud) executable script automatically builds and
+runs the [pre-configured image](docker/cli.Dockerfile) for you.
 
-To avoid having to provide required Terraform variables manually, the CLI looks
-for a `.env` file in the current directory. It must define the following
-variables:
+The CLI looks for a `.env` file in the current directory. That file, together
+with the environment variables, must define the following:
 
 - `VAST_AWS_REGION`: the region of the VPC where to deploy Fargate and Lambda
   resources.
