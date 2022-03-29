@@ -171,7 +171,9 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
       if (auto config_key = env_to_config(key)) {
         if (!config_key->starts_with("caf."))
           config_key->insert(0, "vast.");
-        // These have been handled manually above.
+        // These environment variables have been manually checked already.
+        // Inserting them into the config would ignore higher-precedence values
+        // from the command line.
         if (!(*config_key == "vast.config" || *config_key == "vast.plugins"
               || *config_key == "vast.plugin-dirs"
               || *config_key == "vast.bare-mode"
@@ -289,7 +291,7 @@ caf::error configuration::parse(int argc, char** argv) {
       it != command_line.end())
     caf::put(content, "vast.bare-mode", true);
   else if (auto vast_bare_mode = detail::locked_getenv("VAST_BARE_MODE"))
-    if (*vast_bare_mode != "true")
+    if (*vast_bare_mode == "true")
       caf::put(content, "vast.bare-mode", true);
   if (!caf::get_or(content, "vast.bare-mode", false))
     populate_config_dirs();
