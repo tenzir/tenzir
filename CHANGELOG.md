@@ -6,6 +6,13 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [v1.1.2]
+
+### :beetle: Bug Fixes
+
+- Fixed a race condition that would cause queries to become stuck when an exporter would time out during the meta index lookup.
+  [#2165](https://github.com/tenzir/vast/pull/2165)
+
 ## [v1.1.1]
 
 ### :beetle: Bug Fixes
@@ -1578,6 +1585,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
 [v1.1.0]: https://github.com/tenzir/vast/releases/tag/v1.1.0
 [v1.0.0]: https://github.com/tenzir/vast/releases/tag/v1.0.0
