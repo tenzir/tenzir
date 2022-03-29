@@ -8,7 +8,6 @@
 
 #include "vast/detail/env.hpp"
 
-#include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 
 #include <fmt/format.h>
@@ -62,10 +61,11 @@ generator<std::pair<std::string_view, std::string_view>> environment() {
   for (auto env = environ; *env != nullptr; ++env) {
     auto str = std::string_view{*env};
     auto i = str.find('=');
-    VAST_ASSERT(i != std::string::npos);
-    auto key = str.substr(0, i);
-    auto value = str.substr(i + 1);
-    co_yield std::pair{key, value};
+    if (i != std::string::npos) {
+      auto key = str.substr(0, i);
+      auto value = str.substr(i + 1);
+      co_yield std::pair{key, value};
+    }
   }
 }
 
