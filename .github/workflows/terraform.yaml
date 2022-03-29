@@ -137,7 +137,7 @@ jobs:
 
       - name: Test db not empty from Lambda
         run: |
-          result=$(./vast-cloud run-lambda -v "vast count")
+          result=$(./vast-cloud run-lambda -c "vast count")
           echo "Expected vast count 7, got $result"
           [[ $result = "7" ]]
 
