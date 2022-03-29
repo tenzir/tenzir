@@ -10,7 +10,3 @@ output "module_name" {
 output "vast_server_image" {
   value = "tenzir/vast"
 }
-
-output "vast_lambda_image" {
-  value = "tenzir/vast-lambda"
-}

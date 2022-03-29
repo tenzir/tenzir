@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       arguments:
-        description: 'Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`'
+        description: "Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`"
         required: false
-        default: ''
+        default: ""
   push:
     branches:
       - master
@@ -17,7 +17,7 @@ env:
   # 10G cache total w/ 2 runs per branch and a target size of 325M per branch
   # allows for master + 14 PRs to be cached at the same time with a little room
   # for error.
-  CCACHE_MAXSIZE: '325M'
+  CCACHE_MAXSIZE: "325M"
 
 jobs:
   cancel-previous-runs:
@@ -150,9 +150,9 @@ jobs:
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 0
-      CCACHE_DIR: '${{ github.workspace }}/.ccache'
+      CCACHE_DIR: "${{ github.workspace }}/.ccache"
       CCACHE_HASH_DIR: true
-      CCACHE_SLOPPINESS: 'file_macro,time_macros'
+      CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -321,8 +321,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: 'vast-integration-test-debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}'
-          path: '${{ env.BUILD_DIR }}/vast/vast-integration-test'
+          name: "vast-integration-test-debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}"
+          path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
           if-no-files-found: ignore
 
       - name: Package
@@ -415,9 +415,9 @@ jobs:
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 0
-      CCACHE_DIR: '${{ github.workspace }}/.ccache'
+      CCACHE_DIR: "${{ github.workspace }}/.ccache"
       CCACHE_HASH_DIR: true
-      CCACHE_SLOPPINESS: 'file_macro,time_macros'
+      CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -438,7 +438,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v3
         with:
-          python-version: '3.9'
+          python-version: "3.9"
 
       - name: Install Dependencies
         env:
@@ -579,8 +579,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: 'vast-integration-test-macos-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}'
-          path: '${{ env.BUILD_DIR }}/vast/vast-integration-test'
+          name: "vast-integration-test-macos-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}"
+          path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
           if-no-files-found: ignore
 
       - name: Package
@@ -653,15 +653,15 @@ jobs:
             target: sigma
             path: plugins/sigma
     env:
-      INSTALL_DIR: '${{ github.workspace }}/_install'
-      BUILD_DIR: '${{ github.workspace }}/_build'
-      CC: 'gcc'
-      CXX: 'g++'
+      INSTALL_DIR: "${{ github.workspace }}/_install"
+      BUILD_DIR: "${{ github.workspace }}/_build"
+      CC: "gcc"
+      CXX: "g++"
       CMAKE_GENERATOR: Ninja
       CMAKE_MAKE_PROGRAM: ninja
       CTEST_OUTPUT_ON_FAILURE: YES
       DEBIAN_FRONTEND: noninteractive
-      DESTDIR: '${{ github.workspace }}'
+      DESTDIR: "${{ github.workspace }}"
     name: ${{ matrix.plugin.name }} Plugin
     steps:
       - name: Install Dependencies
@@ -722,7 +722,7 @@ jobs:
       - name: Download VAST
         uses: actions/download-artifact@v2
         with:
-          name: '${{ env.PACKAGE_NAME }}.tar.gz'
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Install VAST
         run: |
           mkdir ${INSTALL_DIR}
@@ -730,7 +730,7 @@ jobs:
           echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
       - name: Configure Build
         env:
-          VAST_DIR: '${{ env.INSTALL_DIR }}'
+          VAST_DIR: "${{ env.INSTALL_DIR }}"
         run: |
           python3 --version
           python3 -m pip --version
@@ -760,8 +760,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: 'vast-${{ matrix.plugin.target }}-integration-test'
-          path: '${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test'
+          name: "vast-${{ matrix.plugin.target }}-integration-test"
+          path: "${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test"
           if-no-files-found: ignore
       - name: Install
         run: |
@@ -819,7 +819,7 @@ jobs:
       - name: Build Lambda Docker Image
         working-directory: cloud/aws
         run: |
-          docker build . -t tenzir/vast-lambda:latest \
+          docker build . -f docker/lambda.Dockerfile -t tenzir/vast-lambda:latest \
             --build-arg VAST_VERSION=latest
       - name: Login to Docker Hub
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
@@ -869,11 +869,11 @@ jobs:
       fail-fast: false
       matrix:
         nix:
-          - target: 'vast'
+          - target: "vast"
             build-options: >-
               -DVAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
               -DVAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
-          - target: 'vast-ci'
+          - target: "vast-ci"
             build-options: >-
               -DVAST_ENABLE_AUTO_VECTORIZATION:BOOL=OFF
     env:
@@ -893,7 +893,7 @@ jobs:
         uses: cachix/cachix-action@v10
         with:
           name: vast
-          signingKey: '${{ secrets.CACHIX_VAST_SIGNING_KEY }}'
+          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
 
       - name: Build Static Binary
         env:
@@ -917,7 +917,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v3
         with:
-          python-version: '3.9'
+          python-version: "3.9"
 
       - name: Configure GCS Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
