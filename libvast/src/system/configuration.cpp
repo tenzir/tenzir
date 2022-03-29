@@ -164,9 +164,11 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
       loaded_config_files_singleton.push_back(config);
     }
   }
-  auto flattened_config = flatten(merged_config);
-  // Environment variables are an "overlay" on top of the configuration file,
-  // which is why we inject the additional layer here.
+  return merged_config;
+}
+
+/// Merges VAST environment variables into a configuration.
+void merge_environment(record& config) {
   for (const auto& [key, value] : detail::environment())
     if (!value.empty())
       if (auto config_key = env_to_config(key)) {
@@ -179,9 +181,8 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
               || *config_key == "vast.plugin-dirs"
               || *config_key == "vast.bare-mode"
               || *config_key == "vast.config"))
-          flattened_config[*config_key] = std::string{value};
+          config[*config_key] = std::string{value};
       }
-  return flattened_config;
 }
 
 caf::expected<caf::settings> to_settings(record config) {
@@ -347,6 +348,8 @@ caf::error configuration::parse(int argc, char** argv) {
   auto config = load_config_files(config_files);
   if (!config)
     return config.error();
+  *config = flatten(*config);
+  merge_environment(*config);
   // From here on, we go into CAF land with the goal to put the configuration
   // into the members of this actor_system_config instance.
   auto settings = to_settings(std::move(*config));
