@@ -55,13 +55,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Terraform Format
+        run: terraform fmt -check -recursive -diff
+
+      - name: "Create config file"
+        if: ${{ !env.ACT }}
+        run: |
+          echo "vast_peered_vpc_id = $VAST_PEERED_VPC_ID" >> .env
+          echo "vast_cidr = $VAST_CIDR" >> .env
+          echo "vast_aws_region = $VAST_AWS_REGION" >> .env
+
       - name: "Substitute backend with Terraform Cloud"
         run: |
           cat<<EOF > step-1/backend.tf
           terraform {
             cloud {
               organization = "$TF_ORGANIZATION"
-              token = "$TF_API_TOKEN"
+              token        = "$TF_API_TOKEN"
               workspaces {
                 name = "$TF_WORKSPACE_PREFIX-step-1"
               }
@@ -72,23 +82,13 @@ jobs:
           terraform {
             cloud {
               organization = "$TF_ORGANIZATION"
-              token = "$TF_API_TOKEN"
+              token        = "$TF_API_TOKEN"
               workspaces {
                 name = "$TF_WORKSPACE_PREFIX-step-2"
               }
             }
           }
           EOF
-
-      - name: "Create config file"
-        if: ${{ !env.ACT }}
-        run: |
-          echo "vast_peered_vpc_id = $VAST_PEERED_VPC_ID" >> .env
-          echo "vast_cidr = $VAST_CIDR" >> .env
-          echo "vast_aws_region = $VAST_AWS_REGION" >> .env
-
-      - name: Terraform Format
-        run: terraform fmt -check -recursive -diff
 
       - name: Deploy
         id: deploy
