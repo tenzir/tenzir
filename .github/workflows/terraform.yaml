@@ -132,7 +132,7 @@ jobs:
       - name: Import data
         run: |
           DATA_URL=https://raw.githubusercontent.com/tenzir/vast/master/vast/integration/data/suricata/eve.json
-          make execute-command \
+          ./vast-cloud execute-command \
             -c "wget -O - -o /dev/null $DATA_URL | vast import suricata"
 
       - name: Test db not empty from Lambda
