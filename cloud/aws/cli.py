@@ -121,7 +121,7 @@ def lambda_image(c):
     image_url = terraform_output(c, "step-1", "vast_lambda_repository_url")
     image_tag = int(time.time())
     c.run(
-        f"docker build --build-arg VAST_VERSION={VAST_VERSION(c)} -f docker/lambda.Dockerfile -t {image_url}:{image_tag} ."
+        f"docker build --no-cache --build-arg VAST_VERSION={VAST_VERSION(c)} -f docker/lambda.Dockerfile -t {image_url}:{image_tag} ./docker"
     )
     c.run(f"docker push {image_url}:{image_tag}")
     image_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
