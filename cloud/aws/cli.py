@@ -108,7 +108,11 @@ def deploy_step_1(c, auto_approve=False):
     """Deploy only step 1 of the stack"""
     env = step_1_variables()
     c.run('terraform -chdir="step-1" init', env=env)
-    c.run(f'terraform -chdir="step-1" apply  {auto_app_fmt(auto_approve)}', env=env)
+    c.run(
+        f'terraform -chdir="step-1" apply  {auto_app_fmt(auto_approve)}',
+        env=env,
+        pty=True,
+    )
 
 
 @task
@@ -132,7 +136,11 @@ def deploy_step_2(c, auto_approve=False):
     """Deploy only step 2 of the stack. Step 1 should be deployed first"""
     env = step_2_variables(c)
     c.run('terraform -chdir="step-2" init', env=env)
-    c.run(f'terraform -chdir="step-2" apply {auto_app_fmt(auto_approve)}', env=env)
+    c.run(
+        f'terraform -chdir="step-2" apply {auto_app_fmt(auto_approve)}',
+        env=env,
+        pty=True,
+    )
 
 
 @task
@@ -148,14 +156,22 @@ def deploy(c, auto_approve=False):
 def destroy_step_1(c, auto_approve=False):
     """Destroy resources of the step 1 only. Step 2 should be destroyed first"""
     env = step_1_variables()
-    c.run(f'terraform -chdir="step-1" destroy {auto_app_fmt(auto_approve)}', env=env)
+    c.run(
+        f'terraform -chdir="step-1" destroy {auto_app_fmt(auto_approve)}',
+        env=env,
+        pty=True,
+    )
 
 
 @task
 def destroy_step_2(c, auto_approve=False):
     """Destroy resources of the step 2 only"""
     env = step_2_variables(c)
-    c.run(f'terraform -chdir="step-2" destroy {auto_app_fmt(auto_approve)}', env=env)
+    c.run(
+        f'terraform -chdir="step-2" destroy {auto_app_fmt(auto_approve)}',
+        env=env,
+        pty=True,
+    )
 
 
 @task
@@ -293,7 +309,8 @@ def execute_command(c, cmd="/bin/bash"):
 		--task {task_id} \
 		--interactive \
 		--command "{cmd}" \
-        --region {AWS_REGION} """
+        --region {AWS_REGION} """,
+        pty=True,
     )
 
 
@@ -317,7 +334,6 @@ def destroy(c, auto_approve=False):
 
 if __name__ == "__main__":
     collection = Collection.from_module(sys.modules[__name__])
-    collection.configure({"run": {"pty": True}})
     program = Program(
         binary="./vast-cloud",
         namespace=collection,
