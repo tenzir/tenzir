@@ -30,10 +30,11 @@ docker image inspect tenzir/vast-cloud-cli > /dev/null \
     && [[ -z $VASTCLOUD_REBUILD ]] \
     || build
 
+# Run image with both AWS credentials file and env credentials if available
 docker run -i $([[ -z $VASTCLOUD_NOTTY ]] && echo "-t") \
     --mount type=bind,source=${DOCKER_SOCKET},target=/var/run/docker.sock \
     --mount type=bind,source=$PWD/../..,target=/vast \
-    --mount type=bind,source=$HOME/.aws/credentials,target=/.aws/credentials,readonly \
+    $([[ -f "$HOME/.aws/credentials" ]] && echo "--mount type=bind,source=$HOME/.aws/credentials,target=/.aws/credentials,readonly") \
     -e AWS_PROFILE \
     -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
     -e AWS_ACCESS_KEY_ID \
