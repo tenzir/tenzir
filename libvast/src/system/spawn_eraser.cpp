@@ -53,7 +53,7 @@ spawn_eraser(node_actor::stateful_pointer<node_state> self,
   // Spawn the eraser.
   auto handle = self->spawn(eraser, aging_frequency, eraser_query, index);
   VAST_VERBOSE("{} spawned an eraser for {}", *self, eraser_query);
-  return handle;
+  return caf::actor_cast<caf::actor>(handle);
 }
 
 } // namespace vast::system

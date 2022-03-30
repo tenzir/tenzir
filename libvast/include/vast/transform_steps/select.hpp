@@ -33,7 +33,7 @@ struct select_step_configuration {
   }
 };
 
-// Selects mathcing rows from the input
+// Selects matching rows from the input
 class select_step : public transform_step {
 public:
   explicit select_step(select_step_configuration configuration);
@@ -48,6 +48,9 @@ public:
 
 private:
   caf::expected<vast::expression> expression_;
+
+  /// Whether to select or to filter.
+  bool invert_ = false;
 
   /// The slices being transformed.
   std::vector<transform_batch> transformed_;

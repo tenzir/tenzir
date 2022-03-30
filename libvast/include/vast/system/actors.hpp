@@ -99,6 +99,15 @@ using status_client_actor = typed_actor_fwd<
   // Reply to a status request from the NODE.
   caf::replies_to<atom::status, status_verbosity>::with<record>>::unwrap;
 
+/// The ERASER actor interface.
+using eraser_actor = typed_actor_fwd<
+  /// The periodic loop of the ERASER.
+  caf::reacts_to<atom::ping>,
+  // Trigger a new eraser cycle.
+  caf::replies_to<atom::run>::with<atom::ok>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
+
 /// The STORE actor interface.
 using store_actor = typed_actor_fwd<
   // Handles an extraction for the given expression.
@@ -137,7 +146,7 @@ using query_supervisor_actor = typed_actor_fwd<
   caf::reacts_to<atom::supervise, uuid, query, query_map,
                  receiver_actor<atom::done>>,
   /// Tells the supervisor that the sink for this query has exited and
-  /// Further work is unnecessary.
+  /// further work is unnecessary.
   caf::reacts_to<atom::shutdown, atom::sink>>::unwrap;
 
 /// The EVALUATOR actor interface.

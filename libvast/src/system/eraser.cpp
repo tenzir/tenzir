@@ -14,6 +14,10 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/query.hpp"
+#include "vast/system/catalog.hpp"
+#include "vast/system/index.hpp"
+#include "vast/system/make_transforms.hpp"
+#include "vast/transform_steps/select.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -21,73 +25,84 @@
 
 namespace vast::system {
 
-eraser_state::eraser_state(caf::event_based_actor* self) : super{self} {
-  // nop
-}
-
-void eraser_state::init(caf::timespan interval, std::string query,
-                        index_actor index) {
-  VAST_WARN("the experimental aging mechanism is deprecated and will be "
-            "removed in VAST v2.0");
-  VAST_TRACE_SCOPE("{} {} {} {}", VAST_ARG(interval), VAST_ARG(query),
-                   VAST_ARG(index));
-  // Set member variables.
-  interval_ = interval;
-  query_ = std::move(query);
-  index_ = std::move(index);
-  // Override the behavior for the idle state.
-  behaviors_[idle].assign(
-    [this](atom::run) {
-      if (self_->current_sender() != self_->ctrl())
-        promise_ = self_->make_response_promise();
-      auto expr = to<expression>(query_);
-      if (!expr) {
-        VAST_ERROR("{} failed to parse query {}", *self_, query_);
-        return;
-      }
-      if (expr = normalize_and_validate(std::move(*expr)); !expr) {
-        VAST_ERROR("{} failed to normalize and validate {}", *self_, query_);
-        return;
-      }
-      self_->send(index_, atom::evaluate_v,
-                  query::make_erase(std::move(*expr)));
-      transition_to(await_query_id);
-    },
-    [this](atom::status, status_verbosity v) {
-      return status(v);
-    });
-  // Trigger the delayed send message.
-  transition_to(idle);
-}
-
-void eraser_state::transition_to(query_processor::state_name x) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG("state_name", x));
-  if (state_ == idle && x != idle)
-    VAST_INFO("{} triggers new aging cycle", *self_);
-  super::transition_to(x);
-  if (x == idle) {
-    if (promise_.pending())
-      promise_.deliver(atom::ok_v);
-    else
-      self_->delayed_send(self_, interval_, atom::run_v);
-  }
-}
-
-record eraser_state::status(status_verbosity v) {
-  auto result = super::status(v);
+record eraser_state::status(status_verbosity) const {
+  auto result = record{};
   result["query"] = query_;
   result["interval"] = interval_;
   return result;
 }
 
-caf::behavior
-eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
-       std::string query, index_actor index) {
-  VAST_TRACE_SCOPE("{} {} {} {} {}", VAST_ARG(*self), VAST_ARG(interval),
-                   VAST_ARG(query), VAST_ARG(index));
-  auto& st = self->state;
-  st.init(interval, std::move(query), std::move(index));
-  return st.behavior();
+eraser_actor::behavior_type
+eraser(eraser_actor::stateful_pointer<eraser_state> self,
+       caf::timespan interval, std::string query, index_actor index) {
+  VAST_TRACE_SCOPE("eraser: {} {} {} {} {}", VAST_ARG(self->id()),
+                   VAST_ARG(interval), VAST_ARG(query), VAST_ARG(index));
+  // Set member variables.
+  self->state.interval_ = interval;
+  self->state.query_ = std::move(query);
+  self->state.index_ = std::move(index);
+  self->delayed_send(self, interval, atom::ping_v);
+  return {
+    [self](atom::ping) {
+      self
+        ->request(static_cast<eraser_actor>(self), self->state.interval_,
+                  atom::run_v)
+        .then(
+          [self](atom::ok) {
+            self->delayed_send(static_cast<eraser_actor>(self),
+                               self->state.interval_, atom::ping_v);
+          },
+          [self](const caf::error& e) {
+            VAST_WARN("{} encountered error while erasing: {}", *self, e);
+            self->delayed_send(static_cast<eraser_actor>(self),
+                               self->state.interval_, atom::ping_v);
+          });
+    },
+    [self](atom::run) -> caf::result<atom::ok> {
+      auto const& query = self->state.query_;
+      auto expr = to<expression>(query);
+      if (!expr)
+        return caf::make_error(ec::invalid_query, fmt::format("{} failed to "
+                                                              "parse query {}",
+                                                              *self, query));
+      if (expr = normalize_and_validate(std::move(*expr)); !expr)
+        return caf::make_error(
+          ec::invalid_query,
+          fmt::format("{} failed to normalize and validate {}", *self, query));
+      auto transform
+        = std::make_shared<vast::transform>("eraser_transform", std::nullopt);
+      auto select_config = select_step_configuration{
+        .expression = self->state.query_,
+      };
+      transform->add_step(std::make_unique<select_step>(select_config));
+      auto rp = self->make_response_promise<atom::ok>();
+      self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
+        .then(
+          [=](catalog_result& result) {
+            // TODO: Test if the candidate is a false positive before applying
+            // the transform to avoid unnecessary noise.
+            self
+              ->request(self->state.index_, caf::infinite, atom::apply_v,
+                        transform, result.partitions,
+                        keep_original_partition::no)
+              .then(
+                [rp = rp](const partition_info&) mutable {
+                  rp.deliver(atom::ok_v);
+                },
+                [rp = rp](const caf::error& e) mutable {
+                  rp.deliver(e);
+                });
+          },
+          [=](const caf::error& err) {
+            self->state.promise_.deliver(err);
+          });
+      return self->state.promise_;
+    },
+    // -- status_client_actor -------------------------------------------------
+    [self](atom::status, status_verbosity v) {
+      return self->state.status(v);
+    },
+  };
 }
 
 } // namespace vast::system
