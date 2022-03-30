@@ -36,6 +36,10 @@ setenv(std::string_view key, std::string_view value, int overwrite = 1);
 [[nodiscard]] caf::error unsetenv(std::string_view var);
 
 /// Retrieves all environment variables as list of key-value pairs.
+/// The function processes the global variable `environ` that holds an array of
+/// strings, each of which has the form `key=value` by convention (per `man
+/// environ`). The results does not include variables that violate this
+/// convention.
 generator<std::pair<std::string_view, std::string_view>> environment();
 
 } // namespace vast::detail
