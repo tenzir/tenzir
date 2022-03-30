@@ -234,7 +234,7 @@ value_at([[maybe_unused]] const Type& type,
         value_type at(size_type i) const override {
           VAST_ASSERT(!key_array->IsNull(value_offset + i));
           if (item_array->IsNull(value_offset + i))
-            return {};
+            return {value_at(key_type, *key_array, value_offset + i), {}};
           return {
             value_at(key_type, *key_array, value_offset + i),
             value_at(item_type, *item_array, value_offset + i),
@@ -357,10 +357,13 @@ extern template class arrow_table_slice<fbs::table_slice::arrow::v1>;
 extern template class arrow_table_slice<fbs::table_slice::arrow::v2>;
 
 // -- utility functions --------------------------------------------------------
-
-/// Converts legacy (v0/v1) table slice to the new representation, re-using
+/// Converts a legacy (v0/v1) record batch to the new representation, re-using
 /// existing Arrow arrays to make this a cheap operation.
+/// @param legacy record batch structured according to v0 or v1 implementation.
+/// @param t layout of the type represented by this record batch.
 /// @note subnet structure changed in a way that array is built from scratch.
-table_slice convert_legacy_table_slice(const table_slice& legacy);
+std::shared_ptr<arrow::RecordBatch>
+convert_record_batch(const std::shared_ptr<arrow::RecordBatch>& legacy,
+                     const type& t);
 
 } // namespace vast

@@ -115,7 +115,7 @@ public:
     auto col = arr_.field(i);
     VAST_ASSERT(col);
     VAST_ASSERT(col->Equals(arr_.GetFieldByName(std::string{field.name})));
-    return {field.name, value_at(field.type, *col, row_)};
+    return {field.name, ::vast::legacy::value_at(field.type, *col, row_)};
   }
 
   size_type size() const noexcept override {
@@ -1344,6 +1344,8 @@ make_arrow_array(arrow::ArrayVector::const_iterator& array_iterator,
   return caf::visit(f, t);
 }
 
+} // namespace
+
 std::shared_ptr<arrow::RecordBatch>
 convert_record_batch(const std::shared_ptr<arrow::RecordBatch>& legacy,
                      const type& t) {
@@ -1357,15 +1359,6 @@ convert_record_batch(const std::shared_ptr<arrow::RecordBatch>& legacy,
     output_columns.push_back(make_arrow_array(it, field.type));
   return arrow::RecordBatch::Make(schema, legacy->num_rows(),
                                   std::move(output_columns));
-}
-
-} // namespace
-
-table_slice convert_legacy_table_slice(const table_slice& legacy) {
-  const auto& record_batch
-    = convert_record_batch(to_record_batch(legacy), legacy.layout());
-  auto result = arrow_table_slice_builder::create(record_batch);
-  return result;
 }
 
 } // namespace vast

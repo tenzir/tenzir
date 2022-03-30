@@ -406,8 +406,9 @@ std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
         // a new table slice from the returned record batch leads to undefined
         // behavior.
         if (!state(encoded, slice.state_)->is_latest_version) {
-          auto copy = rebuild(slice, encoding);
-          return to_record_batch(copy);
+          const auto& legacy = state(encoded, slice.state_)->record_batch();
+          return convert_record_batch(legacy,
+                                      state(encoded, slice.state_)->layout());
         }
         return state(encoded, slice.state_)->record_batch();
       } else {
