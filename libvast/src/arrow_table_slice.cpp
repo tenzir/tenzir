@@ -647,6 +647,9 @@ auto values(const type& type,
   return caf::visit(f, type, detail::passthrough(array));
 }
 
+template auto values(const type& type, const arrow::Array& array) noexcept
+  -> detail::generator<data_view>;
+
 // -- utility for converting Buffer to RecordBatch -----------------------------
 
 namespace {
