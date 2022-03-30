@@ -22,8 +22,12 @@
 
 namespace vast {
 
-transform::transform(std::string name, std::vector<std::string>&& event_types)
+transform::transform(std::string name,
+                     std::optional<std::vector<std::string>>&& event_types)
   : name_(std::move(name)), event_types_(std::move(event_types)) {
+  if (event_types_ && event_types_->empty())
+    VAST_WARN("transform without 'event_types' will not apply to any event, "
+              "did you mean to pass 'nullopt' instead?");
 }
 
 void transform::add_step(std::unique_ptr<transform_step> step) {
@@ -34,7 +38,7 @@ const std::string& transform::name() const {
   return name_;
 }
 
-const std::vector<std::string>& transform::event_types() const {
+const std::optional<std::vector<std::string>>& transform::event_types() const {
   return event_types_;
 }
 
@@ -42,6 +46,14 @@ bool transform::is_aggregate() const {
   return std::any_of(steps_.begin(), steps_.end(), [](const auto& step) {
     return step->is_aggregate();
   });
+}
+
+bool transform::applies_to(std::string_view event_name) const {
+  if (!event_types_)
+    return true;
+  auto first
+    = std::find(event_types_->begin(), event_types_->end(), event_name);
+  return first != event_types_->end();
 }
 
 caf::error transform::add(table_slice&& x) {
@@ -80,12 +92,10 @@ caf::error transform::process_queue(const std::unique_ptr<transform_step>& step,
   for (size_t i = 0; i < size; ++i) {
     auto [layout, batch] = std::move(to_transform_.front());
     to_transform_.pop_front();
-    // TODO: Add a private method `unchecked_apply()` that the transformation
-    // engine can call directly to avoid repeating the check.
-    if (check_layout
-        && std::find(event_types_.begin(), event_types_.end(),
+    if (check_layout && event_types_
+        && std::find(event_types_->begin(), event_types_->end(),
                      std::string{layout.name()})
-             == event_types_.end()) {
+             == event_types_->end()) {
       // The transform does not change slices of unconfigured event types.
       VAST_TRACE("{} transform skips a '{}' layout slice with {} event(s)",
                  this->name(), std::string{layout.name()}, batch->num_rows());
@@ -135,9 +145,14 @@ caf::expected<std::vector<transform_batch>> transform::finish_batch() {
 
 transformation_engine::transformation_engine(std::vector<transform>&& transforms)
   : transforms_(std::move(transforms)) {
-  for (size_t i = 0; i < transforms_.size(); ++i)
-    for (const auto& type : transforms_[i].event_types())
-      layout_mapping_[type].push_back(i);
+  for (size_t i = 0; i < transforms_.size(); ++i) {
+    auto const& event_types = transforms_[i].event_types();
+    if (event_types)
+      for (const auto& type : *event_types)
+        layout_mapping_[type].push_back(i);
+    else
+      general_transforms_.push_back(i);
+  }
 }
 
 caf::error transformation_engine::validate(
@@ -200,11 +215,10 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
   for (auto& [layout, queue] : to_transform) {
     // TODO: Consider using a tsl robin map instead for transparent key lookup.
     const auto& matching = layout_mapping_.find(std::string{layout.name()});
-    if (matching == layout_mapping_.end()) {
-      if (!layout_mapping_.empty()) {
+    if (matching == layout_mapping_.end() && general_transforms_.empty()) {
+      if (!layout_mapping_.empty())
         VAST_TRACE("transform_engine cannot find a transform for layout {}",
                    layout);
-      }
       for (auto& s : queue)
         result.emplace_back(std::move(s));
       queue.clear();
@@ -216,7 +230,19 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
       bq.emplace_back(layout, b);
     }
     queue.clear();
-    const auto& indices = matching->second;
+    auto indices = matching->second;
+    // If we have transforms that always apply, make some effort
+    // to apply them in the same order as they appear in the
+    // configuration. While we do not officially guarantee this
+    // currently, some kind of rule is required so the user is
+    // able to reason about the behavior.
+    if (!general_transforms_.empty()) {
+      std::vector<size_t> all_indices;
+      all_indices.reserve(indices.size() + general_transforms_.size());
+      std::merge(indices.begin(), indices.end(), general_transforms_.begin(),
+                 general_transforms_.end(), std::back_inserter(all_indices));
+      indices = std::move(all_indices);
+    }
     VAST_DEBUG("transformation engine applies {} transforms on received table "
                "slices with layout {}",
                indices.size(), layout);
