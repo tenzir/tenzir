@@ -166,13 +166,13 @@ make_transforms(transforms_location loc, const caf::settings& opts) {
 
 caf::expected<transform_ptr>
 make_transform(const std::string& name,
-               const std::vector<std::string>& event_types,
+               const std::optional<std::vector<std::string>>& event_types,
                const caf::settings& transforms) {
   if (!transforms.contains(name))
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("unknown transform '{}'", name));
   auto transform = std::make_shared<vast::transform>(
-    name, std::vector<std::string>{event_types});
+    name, std::optional<std::vector<std::string>>{event_types});
   auto list = caf::get_if<caf::config_value::list>(&transforms, name);
   if (!list)
     return caf::make_error(

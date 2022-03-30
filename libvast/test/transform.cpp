@@ -270,7 +270,7 @@ TEST(anonymize step) {
 }
 
 TEST(transform with multiple steps) {
-  vast::transform transform("test_transform", {"testdata"});
+  vast::transform transform("test_transform", {{"testdata"}});
   auto rsc = vast::replace_step_configuration{"uid", "xxx"};
   transform.add_step(
     std::make_unique<vast::replace_step>(rsc, vast::data{"xxx"}));
@@ -317,7 +317,7 @@ TEST(transform with multiple steps) {
 }
 
 TEST(transform rename layout) {
-  vast::transform transform("test_transform", {"testdata"});
+  vast::transform transform("test_transform", {{"testdata"}});
   auto rename_settings = vast::record{
     {"layout-names", vast::list{vast::record{
                        {"from", std::string{"testdata"}},

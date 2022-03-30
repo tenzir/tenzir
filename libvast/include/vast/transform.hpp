@@ -18,7 +18,8 @@ namespace vast {
 
 class transform {
 public:
-  transform(std::string name, std::vector<std::string>&& event_types);
+  transform(std::string name,
+            std::optional<std::vector<std::string>>&& event_types);
 
   ~transform() = default;
 
@@ -40,11 +41,12 @@ public:
   /// @note The offsets of the slices may not be preserved.
   [[nodiscard]] caf::expected<std::vector<table_slice>> finish();
 
-  [[nodiscard]] const std::vector<std::string>& event_types() const;
-
   [[nodiscard]] const std::string& name() const;
 
 private:
+  [[nodiscard]] const std::optional<std::vector<std::string>>&
+  event_types() const;
+
   /// Add the batch to the internal queue of batches to be transformed.
   [[nodiscard]] caf::error
   add_batch(vast::type layout, std::shared_ptr<arrow::RecordBatch> batch);
@@ -69,7 +71,7 @@ private:
   std::vector<std::unique_ptr<transform_step>> steps_;
 
   /// Triggers for this transform
-  std::vector<std::string> event_types_;
+  std::optional<std::vector<std::string>> event_types_;
 
   /// The slices being transformed.
   std::deque<transform_batch> to_transform_;
@@ -115,6 +117,9 @@ private:
 
   /// Mapping from event type to applicable transforms.
   std::unordered_map<std::string, std::vector<size_t>> layout_mapping_;
+
+  /// The transforms that will be applied to *all* types.
+  std::vector<size_t> general_transforms_;
 
   /// The slices being transformed.
   std::unordered_map<vast::type, std::deque<table_slice>> to_transform_;

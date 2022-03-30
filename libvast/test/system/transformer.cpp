@@ -138,8 +138,7 @@ TEST(transformer) {
     vast::system::transforms_location::server_import, transform_config);
   REQUIRE_EQUAL(transforms.size(), 1ull);
   CHECK_EQUAL(transforms[0].name(), "delete_uid");
-  CHECK_EQUAL(transforms[0].event_types(), std::vector<std::string>{"vast."
-                                                                    "test"});
+  CHECK(transforms[0].applies_to("vast.test"));
   auto transformer = self->spawn(vast::system::transformer, "test_transformer",
                                  std::move(transforms));
   this->self->send(transformer, snk);
