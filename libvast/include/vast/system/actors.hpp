@@ -273,7 +273,8 @@ using index_actor = typed_actor_fwd<
   // INTERNAL: The actual query evaluation handler. Does the catalog lookup,
   // sends the response triple to the client, and schedules the first batch of
   // partitions.
-  caf::replies_to<atom::internal, query, query_supervisor_actor>::with< //
+  caf::replies_to<atom::internal, query, query_supervisor_actor,
+                  caf::actor_addr>::with< //
     query_cursor>,
   // Erases the given partition from the INDEX.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
