@@ -12,7 +12,10 @@
 
 #include "vast/ids.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/query_processor.hpp"
+#include "vast/system/index.hpp"
+
+#include <caf/settings.hpp>
+#include <caf/typed_response_promise.hpp>
 
 #include <string>
 
@@ -20,34 +23,25 @@ namespace vast::system {
 
 /// Periodically queries the INDEX with a configurable expression and erases
 /// all hits from the ARCHIVE.
-class eraser_state : public query_processor {
+class eraser_state {
 public:
-  // -- member types -----------------------------------------------------------
-
-  using super = system::query_processor;
-
   // -- constants --------------------------------------------------------------
 
   static inline constexpr auto name = "eraser";
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  eraser_state(caf::event_based_actor* self);
+  eraser_state() = default;
 
-  void init(caf::timespan interval, std::string query, index_actor index);
-
-protected:
   // -- implementation hooks ---------------------------------------------------
 
-  void transition_to(state_name x) override;
+  [[nodiscard]] record status(status_verbosity) const;
 
-  record status(status_verbosity) override;
-
-private:
   // -- member variables -------------------------------------------------------
+  index_actor index_ = {};
 
   /// Configures the time between two query executions.
-  caf::timespan interval_;
+  caf::timespan interval_ = {};
 
   /// The query expression that selects events scheduled for deletion. Note
   /// that we get the query as string on purpose. Taking an ::expression here
@@ -60,7 +54,7 @@ private:
 
   /// Keeps track whether we were triggered remotely and need to send a
   /// confirmation message and suppress the delayed message.
-  caf::response_promise promise_;
+  caf::typed_response_promise<atom::ok> promise_ = {};
 };
 
 /// Periodically queries `index` and erases all hits from `archive`.
@@ -71,8 +65,9 @@ private:
 ///              `:timestamp < 1 week ago` to the time of its parsing and not
 ///              update properly.
 /// @param index A handle to the INDEX under investigation.
-caf::behavior
-eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
-       std::string query, index_actor index);
+/// @param transforms The transform config of the node.
+eraser_actor::behavior_type
+eraser(eraser_actor::stateful_pointer<eraser_state> self,
+       caf::timespan interval, std::string query, index_actor index);
 
 } // namespace vast::system
