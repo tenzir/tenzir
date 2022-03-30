@@ -43,7 +43,6 @@ namespace vast::system {
 
 namespace {
 
-std::vector<std::filesystem::path> config_dirs_singleton = {};
 std::vector<std::filesystem::path> loaded_config_files_singleton = {};
 
 template <concrete_type T>
@@ -202,21 +201,20 @@ caf::expected<caf::settings> to_settings(record config) {
   return to<caf::settings>(config);
 }
 
-void populate_config_dirs() {
-  config_dirs_singleton.clear();
-  if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
-    config_dirs_singleton.push_back(std::filesystem::path{*xdg_config_home}
-                                    / "vast");
-  else if (auto home = detail::getenv("HOME"))
-    config_dirs_singleton.push_back(std::filesystem::path{*home} / ".config"
-                                    / "vast");
-  config_dirs_singleton.push_back(detail::install_configdir());
-}
-
 } // namespace
 
-const std::vector<std::filesystem::path>& config_dirs() {
-  return config_dirs_singleton;
+std::vector<std::filesystem::path>
+config_dirs(const caf::actor_system_config& config) {
+  const auto bare_mode = caf::get_or(config.content, "vast.bare-mode", false);
+  if (bare_mode)
+    return {};
+  auto result = std::vector<std::filesystem::path>{};
+  if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
+    result.push_back(std::filesystem::path{*xdg_config_home} / "vast");
+  else if (auto home = detail::getenv("HOME"))
+    result.push_back(std::filesystem::path{*home} / ".config" / "vast");
+  result.push_back(detail::install_configdir());
+  return result;
 }
 
 const std::vector<std::filesystem::path>& loaded_config_files() {
@@ -288,7 +286,9 @@ caf::error configuration::parse(int argc, char** argv) {
   for (auto& arg : caf_args)
     arg.erase(2, 4); // Strip --caf. prefix
   command_line.erase(caf_opt, command_line.end());
-  // Do not use builtin config directories in "bare mode".
+  // Do not use builtin config directories in "bare mode". We're checking this
+  // here and putting directly into the actor_system_config because
+  // the function config_dirs() relies on this already being there.
   if (auto it
       = std::find(command_line.begin(), command_line.end(), "--bare-mode");
       it != command_line.end())
@@ -296,8 +296,6 @@ caf::error configuration::parse(int argc, char** argv) {
   else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE"))
     if (*vast_bare_mode == "true")
       caf::put(content, "vast.bare-mode", true);
-  if (!caf::get_or(content, "vast.bare-mode", false))
-    populate_config_dirs();
   // Detect when plugins or plugin-dirs are specified on the command line.
   // This needs to happen before the regular parsing of the command line
   // since plugins may add additional commands.
@@ -341,7 +339,7 @@ caf::error configuration::parse(int argc, char** argv) {
   for (auto& arg : command_line)
     if (arg.starts_with("--config="))
       cli_configs.push_back(arg.substr(9));
-  if (auto configs = collect_config_files(config_dirs(), cli_configs))
+  if (auto configs = collect_config_files(config_dirs(*this), cli_configs))
     config_files = std::move(*configs);
   else
     return configs.error();
