@@ -69,8 +69,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::send_initial_dbstate) {
       FAIL("no mock implementation available");
     },
-    [=](atom::internal, vast::query&,
-        system::query_supervisor_actor&) -> caf::result<system::query_cursor> {
+    [=](atom::internal, vast::query&, system::query_supervisor_actor&,
+        caf::actor_addr) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
     [=](atom::apply, transform_ptr, std::vector<uuid>,
