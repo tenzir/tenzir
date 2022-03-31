@@ -437,6 +437,7 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("log-file", "log filename")
         .add<std::string>("client-log-file", "client log file (default: "
                                              "disabled)")
+        .add<size_t>("log-queue-size", "the queue size for the logger")
         .add<std::string>("endpoint,e", "node endpoint")
         .add<std::string>("node-id,i", "the unique ID of this node")
         .add<bool>("node,N", "spawn a node instead of connecting to one")
