@@ -3,16 +3,18 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/arrow_table_slice_builder.hpp"
 
-#include "vast/arrow_table_slice.hpp"
+#include "vast/concept/parseable/core.hpp"
+#include "vast/concept/parseable/numeric.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/zip_iterator.hpp"
 #include "vast/die.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
@@ -21,457 +23,11 @@
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
-#include <arrow/ipc/api.h>
-#include <arrow/util/config.h>
+#include <arrow/ipc/writer.h>
+
+#include <simdjson.h>
 
 namespace vast {
-
-// -- column builder implementations ------------------------------------------
-
-namespace {
-
-template <class VastType, class ArrowType>
-struct column_builder_trait_base : arrow::TypeTraits<ArrowType> {
-  using data_type = type_to_data_t<VastType>;
-  using view_type = view<data_type>;
-  using meta_type = VastType;
-};
-
-template <class VastType, class ArrowType>
-struct primitive_column_builder_trait_base
-  : column_builder_trait_base<VastType, ArrowType> {
-  using super = column_builder_trait_base<VastType, ArrowType>;
-
-  static auto make_arrow_type() {
-    return super::type_singleton();
-  }
-
-  static bool
-  append(typename super::BuilderType& builder, typename super::view_type x) {
-    return builder.Append(x).ok();
-  }
-};
-
-template <class T>
-struct column_builder_trait;
-
-#define PRIMITIVE_COLUMN_BUILDER_TRAIT(VastType, ArrowType)                    \
-  template <>                                                                  \
-  struct column_builder_trait<VastType>                                        \
-    : primitive_column_builder_trait_base<VastType, ArrowType> {}
-
-PRIMITIVE_COLUMN_BUILDER_TRAIT(bool_type, arrow::BooleanType);
-PRIMITIVE_COLUMN_BUILDER_TRAIT(count_type, arrow::UInt64Type);
-PRIMITIVE_COLUMN_BUILDER_TRAIT(real_type, arrow::DoubleType);
-
-#undef PRIMITIVE_COLUMN_BUILDER_TRAIT
-
-template <>
-struct column_builder_trait<integer_type>
-  : column_builder_trait_base<integer_type, arrow::Int64Type> {
-  using super = column_builder_trait_base<integer_type, arrow::Int64Type>;
-
-  static auto make_arrow_type() {
-    return super::type_singleton();
-  }
-
-  static bool
-  append(typename super::BuilderType& builder, typename super::view_type x) {
-    return builder.Append(x.value).ok();
-  }
-};
-
-template <>
-struct column_builder_trait<time_type>
-  : column_builder_trait_base<time_type, arrow::TimestampType> {
-  using super = column_builder_trait_base<time_type, arrow::TimestampType>;
-
-  static auto make_arrow_type() {
-    return arrow::timestamp(arrow::TimeUnit::NANO);
-  }
-
-  static bool
-  append(typename super::BuilderType& builder, typename super::view_type x) {
-    return builder.Append(x.time_since_epoch().count()).ok();
-  }
-};
-
-// Arrow does not have a duration type. There is TIME32/TIME64, but they
-// represent the time of day, i.e., nano- or milliseconds since midnight.
-// Hence, we fall back to storing the duration is 64-bit integer.
-template <>
-struct column_builder_trait<duration_type>
-  : column_builder_trait_base<duration_type, arrow::Int64Type> {
-  using super = column_builder_trait_base<duration_type, arrow::Int64Type>;
-
-  static auto make_arrow_type() {
-    return super::type_singleton();
-  }
-
-  static bool
-  append(typename super::BuilderType& builder, typename super::view_type x) {
-    return builder.Append(x.count()).ok();
-  }
-};
-
-template <>
-struct column_builder_trait<string_type>
-  : column_builder_trait_base<string_type, arrow::StringType> {
-  using super = column_builder_trait_base<string_type, arrow::StringType>;
-
-  static auto make_arrow_type() {
-    return super::type_singleton();
-  }
-
-  static bool
-  append(typename super::BuilderType& builder, typename super::view_type x) {
-    auto str = arrow::util::string_view(x.data(), x.size());
-    return builder.Append(str).ok();
-  }
-};
-
-template <>
-struct column_builder_trait<pattern_type>
-  : column_builder_trait_base<pattern_type, arrow::StringType> {
-  using super = column_builder_trait_base<pattern_type, arrow::StringType>;
-
-  static auto make_arrow_type() {
-    return super::type_singleton();
-  }
-
-  static bool
-  append(typename super::BuilderType& builder, typename super::view_type x) {
-    auto str = arrow::util::string_view(x.string().data(), x.string().size());
-    return builder.Append(str).ok();
-  }
-};
-
-template <>
-struct column_builder_trait<enumeration_type>
-  : column_builder_trait_base<enumeration_type, arrow::UInt64Type> {
-  using super = column_builder_trait_base<enumeration_type, arrow::UInt64Type>;
-
-  static auto make_arrow_type() {
-    return super::type_singleton();
-  }
-
-  static bool
-  append(typename super::BuilderType& builder, typename super::view_type x) {
-    return builder.Append(x).ok();
-  }
-};
-
-template <>
-struct column_builder_trait<address_type>
-  : arrow::TypeTraits<arrow::FixedSizeBinaryType> {
-  // -- member types -----------------------------------------------------------
-
-  using super = arrow::TypeTraits<arrow::FixedSizeBinaryType>;
-
-  using data_type = address;
-
-  using view_type = view<data_type>;
-
-  using meta_type = address_type;
-
-  // -- static member functions ------------------------------------------------
-
-  static auto make_arrow_type() {
-    return std::make_shared<arrow::FixedSizeBinaryType>(16);
-  }
-
-  static bool append(typename super::BuilderType& builder, view_type x) {
-    auto bytes = as_bytes(x);
-    auto ptr = reinterpret_cast<const char*>(bytes.data());
-    auto str = arrow::util::string_view{ptr, bytes.size()};
-    return builder.Append(str).ok();
-  }
-};
-
-template <>
-struct column_builder_trait<subnet_type>
-  : arrow::TypeTraits<arrow::FixedSizeBinaryType> {
-  // -- member types -----------------------------------------------------------
-
-  using super = arrow::TypeTraits<arrow::FixedSizeBinaryType>;
-
-  using data_type = subnet;
-
-  using view_type = view<data_type>;
-
-  using meta_type = subnet_type;
-
-  // -- static member functions ------------------------------------------------
-
-  static auto make_arrow_type() {
-    return std::make_shared<arrow::FixedSizeBinaryType>(17);
-  }
-
-  static bool append(typename super::BuilderType& builder, view_type x) {
-    std::array<uint8_t, 17> data;
-    auto bytes = as_bytes(x.network());
-    VAST_ASSERT(bytes.size() == 16);
-    std::memcpy(&data, bytes.data(), bytes.size());
-    data[16] = x.length();
-    return builder.Append(data).ok();
-  }
-};
-
-template <class Trait>
-class column_builder_impl final
-  : public arrow_table_slice_builder::column_builder {
-public:
-  using arrow_builder_type = typename Trait::BuilderType;
-
-  explicit column_builder_impl(arrow::MemoryPool* pool) {
-    if constexpr (Trait::is_parameter_free)
-      reset(pool);
-    else
-      reset(Trait::make_arrow_type(), pool);
-  }
-
-  bool add(data_view x) override {
-    if (auto xptr = caf::get_if<typename Trait::view_type>(&x))
-      return Trait::append(*arrow_builder_, *xptr);
-    else if (caf::holds_alternative<view<caf::none_t>>(x))
-      return arrow_builder_->AppendNull().ok();
-    else
-      return false;
-  }
-
-  std::shared_ptr<arrow::Array> finish() override {
-    std::shared_ptr<arrow::Array> result;
-    if (!arrow_builder_->Finish(&result).ok())
-      die("failed to finish Arrow column builder");
-    return result;
-  }
-
-  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
-  arrow_builder() const override {
-    return arrow_builder_;
-  }
-
-private:
-  template <class... Ts>
-  void reset(Ts&&... xs) {
-    arrow_builder_
-      = std::make_shared<arrow_builder_type>(std::forward<Ts>(xs)...);
-  }
-
-  std::shared_ptr<arrow_builder_type> arrow_builder_;
-};
-
-class list_column_builder : public arrow_table_slice_builder::column_builder {
-public:
-  using arrow_builder_type = arrow::ListBuilder;
-
-  using data_type = type_to_data_t<list_type>;
-
-  list_column_builder(arrow::MemoryPool* pool,
-                      std::unique_ptr<column_builder> nested)
-    : nested_(std::move(nested)) {
-    reset(pool, nested_->arrow_builder());
-  }
-
-  bool add(data_view x) override {
-    if (caf::holds_alternative<view<caf::none_t>>(x))
-      return arrow_builder_->AppendNull().ok();
-    if (!arrow_builder_->Append().ok())
-      return false;
-    if (auto xptr = caf::get_if<view<data_type>>(&x)) {
-      auto n = (*xptr)->size();
-      for (size_t i = 0; i < n; ++i)
-        if (!nested_->add((*xptr)->at(i)))
-          return false;
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  std::shared_ptr<arrow::Array> finish() override {
-    std::shared_ptr<arrow::Array> result;
-    if (!arrow_builder_->Finish(&result).ok())
-      die("failed to finish Arrow column builder");
-    return result;
-  }
-
-  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
-  arrow_builder() const override {
-    return arrow_builder_;
-  }
-
-private:
-  template <class... Ts>
-  void reset(Ts&&... xs) {
-    arrow_builder_
-      = std::make_shared<arrow_builder_type>(std::forward<Ts>(xs)...);
-  }
-
-  std::shared_ptr<arrow::ListBuilder> arrow_builder_;
-
-  std::unique_ptr<column_builder> nested_;
-};
-
-template <class VastType>
-using column_builder_impl_t
-  = column_builder_impl<column_builder_trait<VastType>>;
-
-class map_column_builder : public arrow_table_slice_builder::column_builder {
-public:
-  // There is no MapBuilder in Arrow. A map is simply a list of structs
-  // (key-value pairs).
-  using arrow_builder_type = arrow::ListBuilder;
-
-  using data_type = view<map>;
-
-  map_column_builder(arrow::MemoryPool* pool,
-                     std::shared_ptr<arrow::DataType> struct_type,
-                     std::unique_ptr<column_builder> key_builder,
-                     std::unique_ptr<column_builder> val_builder)
-    : key_builder_(std::move(key_builder)),
-      val_builder_(std::move(val_builder)) {
-    std::vector fields{key_builder_->arrow_builder(),
-                       val_builder_->arrow_builder()};
-    kvp_builder_ = std::make_shared<arrow::StructBuilder>(struct_type, pool,
-                                                          std::move(fields));
-    list_builder_ = std::make_shared<arrow::ListBuilder>(pool, kvp_builder_);
-  }
-
-  bool add(data_view x) override {
-    if (caf::holds_alternative<view<caf::none_t>>(x))
-      return list_builder_->AppendNull().ok();
-    if (!list_builder_->Append().ok())
-      return false;
-    if (auto xptr = caf::get_if<data_type>(&x)) {
-      for (auto kvp : **xptr)
-        if (!kvp_builder_->Append().ok() || !key_builder_->add(kvp.first)
-            || !val_builder_->add(kvp.second))
-          return false;
-      return true;
-    }
-    return false;
-  }
-
-  std::shared_ptr<arrow::Array> finish() override {
-    std::shared_ptr<arrow::Array> result;
-    if (!list_builder_->Finish(&result).ok())
-      die("failed to finish Arrow column builder");
-    return result;
-  }
-
-  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
-  arrow_builder() const override {
-    return list_builder_;
-  }
-
-private:
-  std::shared_ptr<arrow::StructBuilder> kvp_builder_;
-  std::shared_ptr<arrow_builder_type> list_builder_;
-
-  std::unique_ptr<column_builder> key_builder_;
-  std::unique_ptr<column_builder> val_builder_;
-};
-
-class record_column_builder : public arrow_table_slice_builder::column_builder {
-public:
-  using data_type = view<record>;
-
-  record_column_builder(
-    arrow::MemoryPool* pool, std::shared_ptr<arrow::DataType> struct_type,
-    std::vector<std::unique_ptr<column_builder>>&& field_builders)
-    : field_builders_{std::move(field_builders)} {
-    auto fields = std::vector<std::shared_ptr<arrow::ArrayBuilder>>{};
-    fields.reserve(field_builders_.size());
-    for (auto& field_builder : field_builders_) {
-      auto underlying_builder = field_builder->arrow_builder();
-      VAST_ASSERT(underlying_builder);
-      fields.push_back(std::move(underlying_builder));
-    }
-    struct_builder_ = std::make_shared<arrow::StructBuilder>(struct_type, pool,
-                                                             std::move(fields));
-  }
-
-  bool add(data_view x) override {
-    if (caf::holds_alternative<view<caf::none_t>>(x)) {
-      auto status = struct_builder_->AppendNull();
-      return status.ok();
-    }
-    // Verify that we're actually holding a record.
-    auto* xptr = caf::get_if<data_type>(&x);
-    if (!xptr)
-      return false;
-    if (auto status = struct_builder_->Append(); !status.ok())
-      return false;
-    const auto& r = **xptr;
-    VAST_ASSERT(r.size() == field_builders_.size(), "record size mismatch");
-    for (size_t i = 0; i < r.size(); ++i) {
-      VAST_ASSERT(struct_builder_->type()->field(i)->name() == r.at(i).first,
-                  "field name mismatch");
-      if (!field_builders_[i]->add(r.at(i).second))
-        return false;
-    }
-    return true;
-  }
-
-  std::shared_ptr<arrow::Array> finish() override {
-    std::shared_ptr<arrow::Array> result;
-    if (!struct_builder_->Finish(&result).ok())
-      die("failed to finish Arrow column builder");
-    return result;
-  }
-
-  [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
-  arrow_builder() const override {
-    return struct_builder_;
-  }
-
-private:
-  std::shared_ptr<arrow::StructBuilder> struct_builder_;
-
-  std::vector<std::unique_ptr<column_builder>> field_builders_;
-};
-
-} // namespace
-
-// -- member types -------------------------------------------------------------
-
-arrow_table_slice_builder::column_builder::~column_builder() noexcept {
-  // nop
-}
-
-std::unique_ptr<arrow_table_slice_builder::column_builder>
-arrow_table_slice_builder::column_builder::make(const type& t,
-                                                arrow::MemoryPool* pool) {
-  auto f = detail::overload{
-    [=](const auto& x) -> std::unique_ptr<column_builder> {
-      return std::make_unique<column_builder_impl_t<std::decay_t<decltype(x)>>>(
-        pool);
-    },
-    [=](const list_type& x) -> std::unique_ptr<column_builder> {
-      auto nested = column_builder::make(x.value_type(), pool);
-      return std::make_unique<list_column_builder>(pool, std::move(nested));
-    },
-    [=](const map_type& x) -> std::unique_ptr<column_builder> {
-      auto key_builder = column_builder::make(x.key_type(), pool);
-      auto value_builder = column_builder::make(x.value_type(), pool);
-      record_type fields{{"key", x.key_type()}, {"value", x.value_type()}};
-      return std::make_unique<map_column_builder>(pool,
-                                                  make_arrow_type(type{fields}),
-                                                  std::move(key_builder),
-                                                  std::move(value_builder));
-    },
-    [=](const record_type& x) -> std::unique_ptr<column_builder> {
-      auto field_builders = std::vector<std::unique_ptr<column_builder>>{};
-      field_builders.reserve(x.num_fields());
-      for (const auto& field : x.fields())
-        field_builders.push_back(column_builder::make(field.type, pool));
-      return std::make_unique<record_column_builder>(
-        pool, make_arrow_type(type{x}), std::move(field_builders));
-    },
-  };
-  return caf::visit(f, t);
-}
 
 // -- constructors, destructors, and assignment operators ----------------------
 
@@ -494,86 +50,38 @@ size_t arrow_table_slice_builder::columns() const noexcept {
   return detail::narrow_cast<size_t>(result);
 }
 
-table_slice arrow_table_slice_builder::finish() {
-  // Sanity check: If this triggers, the calls to add() did not match the number
-  // of fields in the layout.
-  VAST_ASSERT(column_ == 0);
-  // Pack layout.
-  const auto layout_bytes = as_bytes(layout());
-  auto layout_buffer = builder_.CreateVector(
-    reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
-  // Pack schema.
-  auto flat_schema = arrow::ipc::SerializeSchema(*schema_).ValueOrDie();
-  auto schema_buffer
-    = builder_.CreateVector(flat_schema->data(), flat_schema->size());
-  // Pack record batch.
-  auto columns = std::vector<std::shared_ptr<arrow::Array>>{};
-  columns.reserve(column_builders_.size());
-  for (auto&& builder : column_builders_)
-    columns.emplace_back(builder->finish());
-  auto record_batch
-    = arrow::RecordBatch::Make(schema_, rows_, std::move(columns));
-  auto flat_record_batch
-    = arrow::ipc::SerializeRecordBatch(*record_batch,
-                                       arrow::ipc::IpcWriteOptions::Defaults())
-        .ValueOrDie();
-  auto record_batch_buffer = builder_.CreateVector(flat_record_batch->data(),
-                                                   flat_record_batch->size());
-  // Create Arrow-encoded table slices. We need to set the import time to
-  // something other than 0, as it cannot be modified otherwise. We then later
-  // reset it to the clock's epoch.
-  constexpr int64_t stub_ns_since_epoch = 1337;
-  auto arrow_table_slice_buffer
-    = fbs::table_slice::arrow::Createv1(builder_, layout_buffer, schema_buffer,
-                                        record_batch_buffer,
-                                        stub_ns_since_epoch);
-  // Create and finish table slice.
-  auto table_slice_buffer
-    = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::arrow_v1,
-                            arrow_table_slice_buffer.Union());
-  fbs::FinishTableSliceBuffer(builder_, table_slice_buffer);
-  // Reset the builder state.
-  rows_ = {};
-  // Create the table slice from the chunk.
-  auto chunk = fbs::release(builder_);
-  auto result = table_slice{std::move(chunk), table_slice::verify::no};
-  result.import_time(time{});
-  return result;
-}
+namespace {
 
-table_slice arrow_table_slice_builder::create(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout,
-  size_t initial_buffer_size) {
-  VAST_ASSERT(record_batch->schema()->Equals(make_arrow_schema(layout)),
-              "record layout doesn't match record batch schema");
-  auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
-  // Pack layout.
-  const auto layout_bytes = as_bytes(layout);
-  auto layout_buffer = builder.CreateVector(
-    reinterpret_cast<const uint8_t*>(layout_bytes.data()), layout_bytes.size());
-  // Pack schema.
-  auto flat_schema
-    = arrow::ipc::SerializeSchema(*record_batch->schema()).ValueOrDie();
-  auto schema_buffer
-    = builder.CreateVector(flat_schema->data(), flat_schema->size());
-  // Pack record batch.
-  auto flat_record_batch
-    = arrow::ipc::SerializeRecordBatch(*record_batch,
-                                       arrow::ipc::IpcWriteOptions::Defaults())
+/// Create a table slice from a record batch.
+/// @param record_batch The record batch to encode.
+/// @param builder The flatbuffers builder to use.
+table_slice create_table_slice(const arrow::RecordBatch& record_batch,
+                               flatbuffers::FlatBufferBuilder& builder) {
+#if VAST_ENABLE_ASSERTIONS
+  // NOTE: There's also a ValidateFull function, but that always errors when
+  // using nested struct arrays. Last tested with Arrow 7.0.0. -- DL.
+  auto validate_status = record_batch.Validate();
+  VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+#endif // VAST_ENABLE_ASSERTIONS
+  auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto stream_writer
+    = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch.schema())
         .ValueOrDie();
-  auto record_batch_buffer = builder.CreateVector(flat_record_batch->data(),
-                                                  flat_record_batch->size());
+  auto status = stream_writer->WriteRecordBatch(record_batch);
+  if (!status.ok())
+    VAST_ERROR("failed to write record batch: {}", status);
+  auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
+  auto fbs_ipc_buffer
+    = builder.CreateVector(arrow_ipc_buffer->data(), arrow_ipc_buffer->size());
   // Create Arrow-encoded table slices. We need to set the import time to
   // something other than 0, as it cannot be modified otherwise. We then later
   // reset it to the clock's epoch.
   constexpr int64_t stub_ns_since_epoch = 1337;
-  auto arrow_table_slice_buffer
-    = fbs::table_slice::arrow::Createv1(builder, layout_buffer, schema_buffer,
-                                        record_batch_buffer,
-                                        stub_ns_since_epoch);
+  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv2(
+    builder, fbs_ipc_buffer, stub_ns_since_epoch);
   // Create and finish table slice.
   auto table_slice_buffer
-    = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::arrow_v1,
+    = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::arrow_v2,
                             arrow_table_slice_buffer.Union());
   fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
   // Create the table slice from the chunk.
@@ -583,8 +91,55 @@ table_slice arrow_table_slice_builder::create(
   return result;
 }
 
+void verify_record_batch(const arrow::RecordBatch& record_batch) {
+  auto check_col
+    = [](auto&& check_col, const arrow::Array& column) noexcept -> void {
+    auto f = detail::overload{
+      [&](const arrow::StructArray& sa) noexcept {
+        for (const auto& column : sa.fields())
+          check_col(check_col, *column);
+      },
+      [&](const arrow::ListArray& la) noexcept {
+        check_col(check_col, *la.values());
+      },
+      [&](const arrow::MapArray& ma) noexcept {
+        check_col(check_col, *ma.keys());
+        check_col(check_col, *ma.items());
+      },
+      [](const arrow::Array&) noexcept {},
+    };
+    caf::visit(f, column);
+  };
+  for (const auto& column : record_batch.columns())
+    check_col(check_col, *column);
+}
+
+} // namespace
+
+table_slice arrow_table_slice_builder::finish() {
+  // Sanity check: If this triggers, the calls to add() did not match the number
+  // of fields in the layout.
+  VAST_ASSERT(current_leaf_ == leaves_.end());
+  // Pack record batch.
+  auto combined_array = arrow_builder_->Finish().ValueOrDie();
+  auto record_batch = arrow::RecordBatch::Make(
+    schema_, detail::narrow_cast<int64_t>(num_rows_),
+    caf::get<type_to_arrow_array_t<record_type>>(*combined_array).fields());
+  // Reset the builder state.
+  num_rows_ = {};
+  return create_table_slice(*record_batch, this->builder_);
+}
+
+table_slice arrow_table_slice_builder::create(
+  const std::shared_ptr<arrow::RecordBatch>& record_batch,
+  size_t initial_buffer_size) {
+  verify_record_batch(*record_batch);
+  auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
+  return create_table_slice(*record_batch, builder);
+}
+
 size_t arrow_table_slice_builder::rows() const noexcept {
-  return rows_;
+  return num_rows_;
 }
 
 table_slice_encoding
@@ -601,72 +156,205 @@ void arrow_table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {
 arrow_table_slice_builder::arrow_table_slice_builder(type layout,
                                                      size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
-    schema_{make_arrow_schema(this->layout())},
+    schema_{this->layout().to_arrow_schema()},
+    arrow_builder_{
+      this->layout().make_arrow_builder(arrow::default_memory_pool())},
     builder_{initial_buffer_size} {
   VAST_ASSERT(schema_);
-  const auto& rt = caf::get<record_type>(this->layout());
-  VAST_ASSERT(schema_->num_fields()
-              == detail::narrow_cast<int>(rt.num_leaves()));
-  column_builders_.reserve(columns());
-  auto* pool = arrow::default_memory_pool();
-  for (const auto& [field, _] : rt.leaves())
-    column_builders_.emplace_back(column_builder::make(field.type, pool));
+  for (auto&& leaf : caf::get<record_type>(this->layout()).leaves())
+    leaves_.push_back(std::move(leaf));
+  current_leaf_ = leaves_.end();
 }
 
 bool arrow_table_slice_builder::add_impl(data_view x) {
-  if (!column_builders_[column_]->add(x))
-    return false;
-  if (++column_ == columns()) {
-    ++rows_;
-    column_ = 0;
+  auto* nested_builder
+    = &caf::get<type_to_arrow_builder_t<record_type>>(*arrow_builder_);
+  if (num_rows_ == 0 || current_leaf_ == leaves_.end()) {
+    current_leaf_ = leaves_.begin();
+    if (auto status = nested_builder->Append(); !status.ok()) {
+      VAST_ERROR("failed to add row to builder with schema {}: {}", layout(),
+                 status.ToString());
+      return false;
+    }
+    ++num_rows_;
   }
+  auto&& [field, index] = std::move(*current_leaf_);
+  for (size_t i = 0; i < index.size() - 1; ++i) {
+    nested_builder = &caf::get<type_to_arrow_builder_t<record_type>>(
+      *nested_builder->field_builder(detail::narrow_cast<int>(index[i])));
+    if (index.back() == 0) {
+      if (auto status = nested_builder->Append(); !status.ok()) {
+        VAST_ERROR("failed to add nested record to builder with schema {}: "
+                   "{}",
+                   layout(), status.ToString());
+        return false;
+      }
+    }
+  }
+  if (auto status = append_builder(
+        field.type,
+        *nested_builder->field_builder(detail::narrow_cast<int>(index.back())),
+        x);
+      !status.ok()) {
+    VAST_ERROR("failed to add {} to builder for field {}: {}", x, field,
+               status.ToString());
+    return false;
+  }
+  ++current_leaf_;
   return true;
 }
 
-// -- utility functions --------------------------------------------------------
+// -- column builder helpers --------------------------------------------------
 
-std::shared_ptr<arrow::Schema> make_arrow_schema(const type& t) {
-  VAST_ASSERT(caf::holds_alternative<record_type>(t));
-  const auto& rt = caf::get<record_type>(t);
-  std::vector<std::shared_ptr<arrow::Field>> arrow_fields;
-  arrow_fields.reserve(rt.num_leaves());
-  for (const auto& [field, index] : rt.leaves()) {
-    auto field_ptr = arrow::field(rt.key(index), make_arrow_type(field.type));
-    arrow_fields.emplace_back(std::move(field_ptr));
-  }
-  auto metadata = arrow::key_value_metadata({{"name", std::string{t.name()}}});
-  return std::make_shared<arrow::Schema>(arrow_fields, metadata);
+arrow::Status
+append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,
+               const view<type_to_data_t<bool_type>>& view) noexcept {
+  return builder.Append(view);
 }
 
-std::shared_ptr<arrow::DataType> make_arrow_type(const type& t) {
-  using data_type_ptr = std::shared_ptr<arrow::DataType>;
-  auto f = detail::overload{
-    [=](const auto& x) -> data_type_ptr {
-      using trait = column_builder_trait<std::decay_t<decltype(x)>>;
-      return trait::make_arrow_type();
-    },
-    [=](const list_type& x) -> data_type_ptr {
-      return arrow::list(make_arrow_type(x.value_type()));
-    },
-    [=](const map_type& x) -> data_type_ptr {
-      // A map in arrow is a list of structs holding key/value pairs.
-      std::vector fields{arrow::field("key", make_arrow_type(x.key_type())),
-                         arrow::field("value",
-                                      make_arrow_type(x.value_type()))};
-      return arrow::list(arrow::struct_(fields));
-    },
-    [=](const record_type& x) -> data_type_ptr {
-      std::vector<std::shared_ptr<arrow::Field>> fields;
-      fields.reserve(x.num_fields());
-      for (const auto& field : x.fields()) {
-        auto ptr
-          = arrow::field(std::string{field.name}, make_arrow_type(field.type));
-        fields.emplace_back(std::move(ptr));
-      }
-      return arrow::struct_(fields);
-    },
+arrow::Status
+append_builder(const integer_type&,
+               type_to_arrow_builder_t<integer_type>& builder,
+               const view<type_to_data_t<integer_type>>& view) noexcept {
+  return builder.Append(view.value);
+}
+
+arrow::Status
+append_builder(const count_type&, type_to_arrow_builder_t<count_type>& builder,
+               const view<type_to_data_t<count_type>>& view) noexcept {
+  return builder.Append(view);
+}
+
+arrow::Status
+append_builder(const real_type&, type_to_arrow_builder_t<real_type>& builder,
+               const view<type_to_data_t<real_type>>& view) noexcept {
+  return builder.Append(view);
+}
+
+arrow::Status
+append_builder(const duration_type&,
+               type_to_arrow_builder_t<duration_type>& builder,
+               const view<type_to_data_t<duration_type>>& view) noexcept {
+  return builder.Append(view.count());
+}
+
+arrow::Status
+append_builder(const time_type&, type_to_arrow_builder_t<time_type>& builder,
+               const view<type_to_data_t<time_type>>& view) noexcept {
+  return builder.Append(view.time_since_epoch().count());
+}
+
+arrow::Status
+append_builder(const string_type&,
+               type_to_arrow_builder_t<string_type>& builder,
+               const view<type_to_data_t<string_type>>& view) noexcept {
+  return builder.Append(arrow::util::string_view{view.data(), view.size()});
+}
+
+arrow::Status
+append_builder(const pattern_type&,
+               type_to_arrow_builder_t<pattern_type>& builder,
+               const view<type_to_data_t<pattern_type>>& view) noexcept {
+  const auto str = view.string();
+  return builder.Append(arrow::util::string_view{str.data(), str.size()});
+}
+
+arrow::Status
+append_builder(const address_type&,
+               type_to_arrow_builder_t<address_type>& builder,
+               const view<type_to_data_t<address_type>>& view) noexcept {
+  const auto bytes = as_bytes(view);
+  VAST_ASSERT(bytes.size() == 16);
+  return builder.Append(arrow::util::string_view{
+    reinterpret_cast<const char*>(bytes.data()), bytes.size()});
+}
+
+arrow::Status
+append_builder(const subnet_type&,
+               type_to_arrow_builder_t<subnet_type>& builder,
+               const view<type_to_data_t<subnet_type>>& view) noexcept {
+  if (auto status = builder.Append(); !status.ok())
+    return status;
+  if (auto status = append_builder(address_type{}, builder.address_builder(),
+                                   view.network());
+      !status.ok())
+    return status;
+  return builder.length_builder().Append(view.length());
+}
+
+arrow::Status
+append_builder(const enumeration_type&,
+               type_to_arrow_builder_t<enumeration_type>& builder,
+               const view<type_to_data_t<enumeration_type>>& view) noexcept {
+  return builder.Append(view);
+}
+
+arrow::Status
+append_builder(const list_type& hint,
+               type_to_arrow_builder_t<list_type>& builder,
+               const view<type_to_data_t<list_type>>& view) noexcept {
+  if (auto status = builder.Append(); !status.ok())
+    return status;
+  auto append_values = [&](const concrete_type auto& value_type) noexcept {
+    auto& value_builder = *builder.value_builder();
+    for (const auto& value_view : view)
+      if (auto status = append_builder(value_type, value_builder, value_view);
+          !status.ok())
+        return status;
+    return arrow::Status::OK();
   };
-  return caf::visit(f, t);
+  return caf::visit(append_values, hint.value_type());
+}
+
+arrow::Status
+append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
+               const view<type_to_data_t<map_type>>& view) noexcept {
+  if (auto status = builder.Append(); !status.ok())
+    return status;
+  auto append_values = [&](const concrete_type auto& key_type,
+                           const concrete_type auto& item_type) noexcept {
+    auto& key_builder = *builder.key_builder();
+    auto& item_builder = *builder.item_builder();
+    for (const auto& [key_view, item_view] : view) {
+      if (auto status = append_builder(key_type, key_builder, key_view);
+          !status.ok())
+        return status;
+      if (auto status = append_builder(item_type, item_builder, item_view);
+          !status.ok())
+        return status;
+    }
+    return arrow::Status::OK();
+  };
+  return caf::visit(append_values, hint.key_type(), hint.value_type());
+}
+
+arrow::Status
+append_builder(const record_type& hint,
+               type_to_arrow_builder_t<record_type>& builder,
+               const view<type_to_data_t<record_type>>& view) noexcept {
+  if (auto status = builder.Append(); !status.ok())
+    return status;
+  for (int index = 0; const auto& [_, field_type] : hint.fields()) {
+    if (auto status = append_builder(field_type, *builder.field_builder(index),
+                                     view->at(index).second);
+        !status.ok())
+      return status;
+    ++index;
+  }
+  return arrow::Status::OK();
+}
+
+arrow::Status append_builder(const type& hint,
+                             std::same_as<arrow::ArrayBuilder> auto& builder,
+                             const view<type_to_data_t<type>>& value) noexcept {
+  if (caf::holds_alternative<caf::none_t>(value))
+    return builder.AppendNull();
+  auto f = [&]<concrete_type Type>(const Type& hint) {
+    return append_builder(hint,
+                          caf::get<type_to_arrow_builder_t<Type>>(builder),
+                          caf::get<view<type_to_data_t<Type>>>(value));
+  };
+  return caf::visit(f, hint);
 }
 
 } // namespace vast

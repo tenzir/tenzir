@@ -8,6 +8,7 @@
 
 #include "vast/transform_steps/hash.hpp"
 
+#include "vast/arrow_table_slice.hpp"
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
@@ -34,43 +35,53 @@ hash_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   VAST_TRACE("hash step adds batch");
   // Get the target field if it exists.
   const auto& layout_rt = caf::get<record_type>(layout);
-  auto column_offset = layout_rt.resolve_key(config_.field);
-  if (!column_offset) {
+  auto column_index = layout_rt.resolve_key(config_.field);
+  if (!column_index) {
     transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
   }
-  auto column_index = layout_rt.flat_index(*column_offset);
-  // Compute the hash values.
-  auto column = batch->column(detail::narrow_cast<int>(column_index));
-  auto cb = arrow_table_slice_builder::column_builder::make(
-    type{string_type{}}, arrow::default_memory_pool());
-  for (int i = 0; i < batch->num_rows(); ++i) {
-    const auto& item = column->GetScalar(i);
-    auto h = default_hash{};
-    hash_append(h, item.ValueOrDie()->ToString());
-    if (config_.salt)
-      hash_append(h, *config_.salt);
-    auto digest = h.finish();
-    auto x = fmt::format("{:x}", digest);
-    cb->add(std::string_view{x});
-  }
-  auto hashes_column = cb->finish();
-  auto result_batch
-    = batch->AddColumn(batch->num_columns(), config_.out, hashes_column);
-  if (!result_batch.ok()) {
-    transformed_.emplace_back(std::move(layout), nullptr);
-    return caf::none;
-  }
-  // Adjust layout.
-  auto adjusted_layout_rt = layout_rt.transform({{
-    {layout_rt.num_fields() - 1},
-    record_type::insert_after({{config_.out, string_type{}}}),
-  }});
-  VAST_ASSERT(adjusted_layout_rt); // adding a field cannot fail.
-  auto adjusted_layout = type{*adjusted_layout_rt};
-  adjusted_layout.assign_metadata(layout);
+  // Apply the transformation.
+  auto transform_fn = [&](struct record_type::field field,
+                          std::shared_ptr<arrow::Array> array) noexcept
+    -> std::vector<
+      std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+    auto hashes_builder
+      = string_type::make_arrow_builder(arrow::default_memory_pool());
+    if (config_.salt) {
+      for (const auto& value : values(field.type, *array)) {
+        const auto digest = hash(value, *config_.salt);
+        const auto append_result
+          = hashes_builder->Append(fmt::format("{:x}", digest));
+        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+      }
+    } else {
+      for (const auto& value : values(field.type, *array)) {
+        const auto digest = hash(value);
+        const auto append_result
+          = hashes_builder->Append(fmt::format("{:x}", digest));
+        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+      }
+    }
+    return {
+      {
+        std::move(field),
+        std::move(array),
+      },
+      {
+        {
+          config_.out,
+          string_type{},
+        },
+        hashes_builder->Finish().ValueOrDie(),
+      },
+    };
+  };
+  auto [adjusted_layout, adjusted_batch] = transform_columns(
+    layout, batch, {{*column_index, std::move(transform_fn)}});
+  VAST_ASSERT(adjusted_layout);
+  VAST_ASSERT(adjusted_batch);
   transformed_.emplace_back(std::move(adjusted_layout),
-                            result_batch.ValueOrDie());
+                            std::move(adjusted_batch));
   return caf::none;
 }
 

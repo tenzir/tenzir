@@ -24,7 +24,6 @@ struct table_slice_encoding_parser : parser_base<table_slice_encoding_parser> {
     using namespace parser_literals;
     // clang-format off
     auto p = "msgpack"_p ->* [] { return table_slice_encoding::msgpack; }
-           | "experimental"_p ->* [] { return table_slice_encoding::experimental; }
            | "arrow"_p ->* [] { return table_slice_encoding::arrow; };
     // clang-format on
     return p(f, l, a);

@@ -95,15 +95,6 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Issue deprecation warnings.
-  for (std::string_view option : {
-         "vast.import.batch-encoding",
-         "vast.spawn.source.batch-encoding",
-         "vast.metrics.self-sink.slice-type",
-       })
-    if (caf::get_or(cfg, option, "arrow") == std::string_view{"msgpack"})
-      VAST_WARN("The 'msgpack' option for the configuration option '{}' is "
-                "deprecated; automatically using the 'arrow' encoding instead",
-                option);
   if (auto meta_index_fp_rate = caf::get_if<double>( //
         &cfg, "vast.meta-index-fp-rate")) {
     if (auto catalog_fp_rate = caf::get_if<double>( //

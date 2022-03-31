@@ -25,7 +25,6 @@ enum class table_slice_encoding : uint8_t {
   arrow,        ///< The table slice is encoded using the Apache Arrow format.
   msgpack,      ///< The table slice is encoded using the MessagePack format
                 ///< (deprecated).
-  experimental, ///< The table slice is encoded using an unstable foramt.
 };
 
 } // namespace vast
@@ -44,8 +43,6 @@ struct formatter<vast::table_slice_encoding> : formatter<std::string_view> {
         return super::format("arrow", ctx);
       case vast::table_slice_encoding::msgpack:
         return super::format("msgpack", ctx);
-      case vast::table_slice_encoding::experimental:
-        return super::format("experimental", ctx);
     }
     vast::die("unreachable");
   }

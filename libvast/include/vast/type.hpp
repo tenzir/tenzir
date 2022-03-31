@@ -959,7 +959,7 @@ public:
                           arrow::MemoryPool* pool
                           = arrow::default_memory_pool());
     [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
-    arrow::Status Append(enumeration index);
+    [[nodiscard]] arrow::Status Append(enumeration index);
 
   private:
     using arrow::StringDictionaryBuilder::Append;

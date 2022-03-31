@@ -140,7 +140,7 @@ vast::type layout(caf::expected<std::vector<vast::transform_batch>> batches) {
 
 vast::table_slice
 as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
-  return {(*batches)[0].batch, (*batches)[0].layout};
+  return vast::table_slice{(*batches)[0].batch};
 }
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
@@ -264,7 +264,7 @@ TEST(anonymize step) {
   REQUIRE_EQUAL(anonymized->size(), 1ull);
   REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).num_fields(),
                 4ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(*anonymized)).field(3).name,
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(*anonymized)).field(1).name,
                 "hashed_uid");
   // TODO: not sure how we can check that the data was correctly hashed.
 }

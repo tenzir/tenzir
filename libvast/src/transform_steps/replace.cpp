@@ -8,6 +8,7 @@
 
 #include "vast/transform_steps/replace.hpp"
 
+#include "vast/arrow_table_slice.hpp"
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
@@ -30,45 +31,50 @@ replace_step::replace_step(replace_step_configuration configuration, data value)
 caf::error
 replace_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   VAST_TRACE("replace step adds batch");
+  // Get the target field if it exists.
   const auto& layout_rt = caf::get<record_type>(layout);
-  auto column_offset = layout_rt.resolve_key(config_.field);
-  if (!column_offset) {
+  auto column_index = layout_rt.resolve_key(config_.field);
+  if (!column_index) {
     transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
   }
-  auto column_index = layout_rt.flat_index(*column_offset);
-  // Compute the hash values.
-  // TODO: Consider making this strongly typed so we don't need to infer the
-  // type at this point.
-  const auto inferred_type = type::infer(value_);
-  auto cb = arrow_table_slice_builder::column_builder::make(
-    inferred_type, arrow::default_memory_pool());
-  for (int i = 0; i < batch->num_rows(); ++i) {
-    cb->add(make_view(value_));
-  }
-  auto values_column = cb->finish();
-  auto adjusted_batch
-    = batch->SetColumn(detail::narrow_cast<int>(column_index),
-                       arrow::field(config_.field, values_column->type()),
-                       values_column);
-  if (!adjusted_batch.ok()) {
-    transformed_.clear();
-    return caf::make_error(ec::unspecified,
-                           fmt::format("failed to replace field in record "
-                                       "batch schema at index {}: {}",
-                                       column_index,
-                                       adjusted_batch.status().ToString()));
-  }
-  // Adjust layout.
-  auto field = layout_rt.field(*column_offset);
-  auto adjusted_layout_rt = layout_rt.transform(
-    {{*column_offset,
-      record_type::assign({{std::string{field.name}, inferred_type}})}});
-  VAST_ASSERT(adjusted_layout_rt); // replacing a field cannot fail.
-  auto adjusted_layout = type{*adjusted_layout_rt};
-  adjusted_layout.assign_metadata(layout);
+  // Apply the transformation.
+  auto transform_fn = [&](struct record_type::field field,
+                          std::shared_ptr<arrow::Array> array) noexcept
+    -> std::vector<
+      std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+    field.type = type::infer(value_);
+    auto builder = field.type.make_arrow_builder(arrow::default_memory_pool());
+    auto f = [&]<concrete_type Type>(const Type& type) {
+      for (int i = 0; i < array->length(); ++i) {
+        if (caf::holds_alternative<caf::none_t>(value_)) {
+          const auto append_status = builder->AppendNull();
+          VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+        } else {
+          VAST_ASSERT(caf::holds_alternative<type_to_data_t<Type>>(value_));
+          const auto append_status
+            = append_builder(type,
+                             caf::get<type_to_arrow_builder_t<Type>>(*builder),
+                             make_view(caf::get<type_to_data_t<Type>>(value_)));
+          VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+        }
+      }
+    };
+    caf::visit(f, field.type);
+    array = builder->Finish().ValueOrDie();
+    return {
+      {
+        std::move(field),
+        std::move(array),
+      },
+    };
+  };
+  auto [adjusted_layout, adjusted_batch] = transform_columns(
+    layout, batch, {{*column_index, std::move(transform_fn)}});
+  VAST_ASSERT(adjusted_layout);
+  VAST_ASSERT(adjusted_batch);
   transformed_.emplace_back(std::move(adjusted_layout),
-                            adjusted_batch.MoveValueUnsafe());
+                            std::move(adjusted_batch));
   return caf::none;
 }
 

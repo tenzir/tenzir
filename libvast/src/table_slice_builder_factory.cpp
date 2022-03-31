@@ -10,17 +10,12 @@
 
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/config.hpp"
-#include "vast/experimental_table_slice_builder.hpp"
 
 namespace vast {
 
 void factory_traits<table_slice_builder>::initialize() {
   using f = factory<table_slice_builder>;
   f::add<arrow_table_slice_builder>(table_slice_encoding::arrow);
-  f::add<experimental_table_slice_builder>(table_slice_encoding::experimental);
-  // The MsgPack table slice is deprecated, so instead we simply use the Arrow
-  // table slice builder instead here.
-  f::add<arrow_table_slice_builder>(table_slice_encoding::msgpack);
 }
 
 } // namespace vast
