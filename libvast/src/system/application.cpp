@@ -92,7 +92,9 @@ auto make_explore_command() {
 
 auto make_export_command() {
   auto export_ = std::make_unique<command>(
-    "export", "exports query results to STDOUT or file",
+    "export",
+    "exports query results to STDOUT or file, expects a subcommand to select "
+    "the format",
     documentation::vast_export,
     opts("?vast.export")
       .add<bool>("continuous,c", "marks a query as continuous")
