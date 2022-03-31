@@ -201,8 +201,10 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     else // If there is no client log file, turn off file logging
       vast_file_verbosity = VAST_LOG_LEVEL_QUIET;
   }
-  auto queue_size = caf::get_or(cfg_file, "vast.log-queue-size",
-                                defaults::logger::queue_size);
+  auto default_queue_size = is_server ? defaults::logger::server_queue_size
+                                      : defaults::logger::client_queue_size;
+  auto queue_size
+    = caf::get_or(cfg_file, "vast.log-queue-size", default_queue_size);
   spdlog::init_thread_pool(queue_size, defaults::logger::logger_threads);
   std::vector<spdlog::sink_ptr> sinks;
   // Add console sink.

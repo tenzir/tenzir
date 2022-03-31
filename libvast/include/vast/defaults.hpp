@@ -160,8 +160,11 @@ constexpr const char* console_verbosity = "info";
 /// Verbosity for writing to file.
 constexpr const char* file_verbosity = "debug";
 
-/// Maximum number of log messages in the logger queue.
-constexpr const size_t queue_size = 1'000'000;
+/// Maximum number of log messages in the logger queue (client).
+constexpr const size_t client_queue_size = 100;
+
+/// Maximum number of log messages in the logger queue (server).
+constexpr const size_t server_queue_size = 1'000'000;
 
 /// Number of logger threads.
 constexpr const size_t logger_threads = 1;
