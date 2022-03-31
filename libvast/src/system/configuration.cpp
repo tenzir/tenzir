@@ -9,6 +9,8 @@
 #include "vast/system/configuration.hpp"
 
 #include "vast/concept/convertible/to.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/add_message_types.hpp"
@@ -57,7 +59,7 @@ struct has_extension_type
 /// 2. A "__" translates into the record separator '.'
 /// @pre `!prefix.empty()`
 std::optional<std::string>
-env_to_config(std::string_view key, std::string_view prefix = "VAST") {
+to_config_key(std::string_view key, std::string_view prefix = "VAST") {
   VAST_ASSERT(!prefix.empty());
   // PREFIX_X is the shortest allowed key.
   if (prefix.size() + 2 > key.size())
@@ -71,6 +73,58 @@ env_to_config(std::string_view key, std::string_view prefix = "VAST") {
     for (auto& c : x)
       c = (c == '_') ? '-' : tolower(c);
   return detail::join(xs, ".");
+}
+
+caf::expected<caf::config_value> to_config_value(std::string_view value) {
+  // Lists of strings can show up as `foo,bar,baz`.
+  auto xs = detail::split(value, ",", "\\");
+  if (xs.size() == 1)
+    return caf::config_value::parse(value); // no list
+  std::vector<caf::config_value> result;
+  for (const auto& x : xs)
+    if (auto cfg_val = to_config_value(x))
+      result.push_back(*std::move(cfg_val));
+    else
+      return cfg_val.error();
+  return caf::config_value{std::move(result)};
+}
+
+caf::expected<caf::config_value>
+to_config_value(const caf::config_value& value, const caf::config_option& opt) {
+  // The config_option (from our commands) includes type information on what
+  // value to accept. Command line values are checked against this.
+  // Unfortunately our YAML config operates purely based on values. This means
+  // we may have previously parsed a value incorrectly, e.g., where an atom was
+  // expected we got a string. This trouble will be gone with CAF > 0.18, but
+  // until then we have to *go back* into a string reprsentation to create
+  // ambiguity (i.e., allow for parsing input as either string or atom), and
+  // then come back to the config_value that matches the typing.
+  auto no_quote_stringify = detail::overload{
+    [](const auto& x) {
+      return caf::deep_to_string(x);
+    },
+    [](const std::string& x) {
+      return x;
+    },
+  };
+  auto str = caf::visit(no_quote_stringify, value);
+  auto result = opt.parse(str);
+  if (!result) {
+    // We now try to parse strings as atom using a regex, since we get
+    // recursive types like lists for free this way. A string-vs-atom type
+    // clash is the only instance we currently cannot distinguish. Everything
+    // else is a true type clash.
+    // (With CAF 0.18, this heuristic will be obsolete.)
+    str = detail::replace_all(std::move(str), "\"", "'");
+    result = opt.parse(str);
+    if (!result)
+      return caf::make_error(ec::type_clash,
+                             fmt::format( //
+                               "failed to parse config option {} as {}: {}",
+                               caf::deep_to_string(opt.full_name()),
+                               caf::deep_to_string(opt.type_name()), str));
+  }
+  return result;
 }
 
 caf::expected<std::vector<std::filesystem::path>>
@@ -167,21 +221,38 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
 }
 
 /// Merges VAST environment variables into a configuration.
-void merge_environment(record& config) {
+caf::error merge_environment(record& config) {
   for (const auto& [key, value] : detail::environment())
     if (!value.empty())
-      if (auto config_key = env_to_config(key)) {
+      if (auto config_key = to_config_key(key)) {
         if (!config_key->starts_with("caf."))
           config_key->insert(0, "vast.");
         // These environment variables have been manually checked already.
         // Inserting them into the config would ignore higher-precedence values
         // from the command line.
-        if (!(*config_key == "vast.config" || *config_key == "vast.plugins"
-              || *config_key == "vast.plugin-dirs"
-              || *config_key == "vast.bare-mode"
-              || *config_key == "vast.config"))
-          config[*config_key] = std::string{value};
+        if (*config_key == "vast.config" || *config_key == "vast.plugins"
+            || *config_key == "vast.plugin-dirs"
+            || *config_key == "vast.bare-mode" || *config_key == "vast.config")
+          continue;
+        // Try first as vast::data, which is richer.
+        if (auto x = to<data>(value)) {
+          config[*config_key] = std::move(*x);
+        } else if (auto config_value = to_config_value(value)) {
+          if (auto x = to<data>(*config_value))
+            config[*config_key] = std::move(*x);
+          else
+            return caf::make_error(
+              ec::parse_error, fmt::format("could not convert environment "
+                                           "variable {}={} to VAST value: {}",
+                                           key, value, x.error()));
+        } else {
+          return caf::make_error(ec::parse_error,
+                                 fmt::format("could not parse environment "
+                                             "variable {} value '{}': {}",
+                                             key, value, config_value.error()));
+        }
       }
+  return caf::none;
 }
 
 caf::expected<caf::settings> to_settings(record config) {
@@ -347,7 +418,8 @@ caf::error configuration::parse(int argc, char** argv) {
   if (!config)
     return config.error();
   *config = flatten(*config);
-  merge_environment(*config);
+  if (auto err = merge_environment(*config))
+    return err;
   // From here on, we go into CAF land with the goal to put the configuration
   // into the members of this actor_system_config instance.
   auto settings = to_settings(std::move(*config));
@@ -373,50 +445,15 @@ caf::error configuration::parse(int argc, char** argv) {
 }
 
 caf::error configuration::embed_config(const caf::settings& settings) {
-  // TODO: Revisit this after we are on CAF 0.18.
-  // Helper function to parse a config_value with the type information
-  // contained in an config_option. Because our YAML config only knows about
-  // strings, but a config_option may require an atom, we have to use a
-  // heuristic to see whether either type works.
-  auto parse_config_value
-    = [](const caf::config_option& opt,
-         const caf::config_value& val) -> caf::expected<caf::config_value> {
-    // Hackish way to get a string representation that doesn't add double
-    // quotes around the value.
-    auto no_quote_stringify = detail::overload{
-      [](const auto& x) {
-        return caf::deep_to_string(x);
-      },
-      [](const std::string& x) {
-        return x;
-      },
-    };
-    auto str = caf::visit(no_quote_stringify, val);
-    auto result = opt.parse(str);
-    if (!result) {
-      // We now try to parse strings as atom using a regex, since we get
-      // recursive types like lists for free this way. A string-vs-atom type
-      // clash is the only instance we currently cannot distinguish. Everything
-      // else is a true type clash.
-      // (With CAF 0.18, this heuristic will be obsolete.)
-      str = detail::replace_all(std::move(str), "\"", "'");
-      result = opt.parse(str);
-      if (!result)
-        return caf::make_error(ec::type_clash, "failed to parse config option",
-                               caf::deep_to_string(opt.full_name()), str,
-                               "expected",
-                               caf::deep_to_string(opt.type_name()));
-    }
-    return result;
-  };
   for (auto& [key, value] : settings) {
-    // This needs to be flattened so dictionaries cannot occur.
+    // The configuration must have been fully flattened because we cannot
+    // mangle dictionaries in here.
     VAST_ASSERT(!caf::holds_alternative<caf::config_value::dictionary>(value));
-    // Now this is incredibly ugly, but custom_options_ (a config_option_set)
-    // is the only place that contains the valid type information that our
-    // config file must abide to.
+    // The member custom_options_ (a config_option_set) is the only place that
+    // contains the valid type information, as defined by the command
+    // hierarchy. The passed in config (file and environment) must abide to it.
     if (const auto* option = custom_options_.qualified_name_lookup(key)) {
-      if (auto x = parse_config_value(*option, value))
+      if (auto x = to_config_value(value, *option))
         put(content, key, std::move(*x));
       else
         return x.error();
