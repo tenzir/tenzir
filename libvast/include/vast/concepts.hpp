@@ -43,7 +43,7 @@ concept container = requires(T& t) {
 /// Contiguous byte buffers
 template <class T>
 concept byte_container = requires(T& t) {
-  container<T>;
+  requires container<T>;
   requires sizeof(decltype(*std::data(t))) == 1;
 };
 
@@ -58,14 +58,14 @@ concept byte_sequence = requires(T& x) {
 /// A byte sequence that has a variable number of bytes.
 template <class T>
 concept variable_byte_sequence = requires(T& x) {
-  byte_sequence<T>;
+  requires byte_sequence<T>;
   requires decltype(as_bytes(x))::extent == std::dynamic_extent;
 };
 
 /// A byte sequence that has a fixed number of bytes.
 template <class T>
 concept fixed_byte_sequence = requires(T& x) {
-  byte_sequence<T>;
+  requires byte_sequence<T>;
   requires decltype(as_bytes(x))::extent > 0;
   requires decltype(as_bytes(x))::extent != std::dynamic_extent;
 };
