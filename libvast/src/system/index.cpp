@@ -908,7 +908,7 @@ void schedule_lookups(index_state& st) {
     // 1. Get the partition with the highest accumulated priority.
     auto next = st.pending_queries.next();
     if (!next) {
-      VAST_INFO("{} did not find a partition to query", *st.self);
+      VAST_DEBUG("{} did not find a partition to query", *st.self);
       return;
     }
     VAST_INFO("{} schedules partition {} for {}", *st.self, next->partition,
