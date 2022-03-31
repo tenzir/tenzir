@@ -897,6 +897,8 @@ index_state::status(status_verbosity v) const {
 }
 
 void schedule_lookups(index_state& st) {
+  if (st.pending_queries.partitions.empty())
+    return;
   auto t = timer::start(st.scheduler_measurement);
   auto num_scheduled = size_t{0};
   auto on_return = caf::detail::make_scope_guard([&] {
