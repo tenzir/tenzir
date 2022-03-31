@@ -6,14 +6,14 @@ namespace {
 
 bool initialized = false;
 
-schema& get_impl() {
-  static schema data;
+module& get_impl() {
+  static module data;
   return data;
 }
 
 } // namespace
 
-bool init(schema s) {
+bool init(module s) {
   if (initialized)
     return false;
   get_impl() = std::move(s);
@@ -21,7 +21,7 @@ bool init(schema s) {
   return true;
 }
 
-const schema* get() {
+const module* get() {
   if (!initialized)
     return nullptr;
   return &get_impl();

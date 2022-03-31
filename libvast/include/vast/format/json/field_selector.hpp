@@ -12,7 +12,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/format/json/selector.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <simdjson.h>
 #include <unordered_map>
@@ -50,8 +50,8 @@ struct field_selector final : selector {
     return it->second;
   }
 
-  inline caf::error schema(const vast::schema& s) override {
-    for (const auto& t : s) {
+  inline caf::error module(const vast::module& m) override {
+    for (const auto& t : m) {
       if (!caf::holds_alternative<record_type>(t))
         continue;
       const auto type_name = t.name();
@@ -68,8 +68,8 @@ struct field_selector final : selector {
     return caf::none;
   }
 
-  inline vast::schema schema() const override {
-    vast::schema result;
+  inline vast::module module() const override {
+    vast::module result;
     for (const auto& [key, value] : types)
       result.add(value);
     return result;

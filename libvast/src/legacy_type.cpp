@@ -15,8 +15,8 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/module.hpp"
 #include "vast/pattern.hpp"
-#include "vast/schema.hpp"
 
 #include <optional>
 #include <tuple>

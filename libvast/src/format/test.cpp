@@ -228,7 +228,7 @@ struct randomizer {
   Generator& gen_;
 };
 
-std::string_view builtin_schema = R"__(
+std::string_view builtin_module = R"__(
   type test.full = record{
     n: list<int>,
     b: bool #default="uniform(0,1)",
@@ -243,9 +243,9 @@ std::string_view builtin_schema = R"__(
   }
 )__";
 
-auto default_schema() {
-  schema result;
-  auto success = parsers::schema(builtin_schema, result);
+auto default_module() {
+  module result;
+  auto success = parsers::module(builtin_module, result);
   VAST_ASSERT(success);
   return result;
 }
@@ -272,12 +272,12 @@ void reader::reset(std::unique_ptr<std::istream>) {
   // with our reader abstraction.
 }
 
-caf::error reader::schema(vast::schema sch) {
-  if (sch.empty())
+caf::error reader::module(vast::module mod) {
+  if (mod.empty())
     return caf::make_error(ec::format_error, "empty schema");
   std::unordered_map<type, blueprint> blueprints;
-  auto subset = vast::schema{};
-  for (const auto& t : sch) {
+  auto subset = vast::module{};
+  for (const auto& t : mod) {
     auto sn = detail::split(t.name(), ".");
     if (sn.size() != 2 || sn[0] != "test")
       continue;
@@ -292,14 +292,14 @@ caf::error reader::schema(vast::schema sch) {
   }
   if (subset.empty())
     return caf::make_error(ec::format_error, "no test type in schema");
-  schema_ = std::move(subset);
+  module_ = std::move(subset);
   blueprints_ = std::move(blueprints);
-  next_ = schema_.begin();
+  next_ = module_.begin();
   return caf::none;
 }
 
-schema reader::schema() const {
-  return schema_;
+module reader::module() const {
+  return module_;
 }
 
 const char* reader::name() const {
@@ -311,10 +311,10 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(max_events), VAST_ARG(max_slice_size),
                    VAST_ARG(num_events_));
   // Sanity checks.
-  if (schema_.empty())
-    if (auto err = schema(default_schema()))
+  if (module_.empty())
+    if (auto err = module(default_module()))
       return err;
-  VAST_ASSERT(next_ != schema_.end());
+  VAST_ASSERT(next_ != module_.end());
   if (num_events_ == 0)
     return caf::make_error(ec::end_of_input, "completed generation of events");
   // Loop until we reach the `max_events` limit or exhaust the configured
@@ -350,9 +350,9 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
                                                "events");
     num_events_ -= rows;
     produced += rows;
-    if (schema_.size() > 1) {
-      if (++next_ == schema_.end())
-        next_ = schema_.begin();
+    if (module_.size() > 1) {
+      if (++next_ == module_.end())
+        next_ = module_.begin();
     }
   }
   finish(f);

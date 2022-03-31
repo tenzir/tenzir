@@ -11,7 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/error.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <optional>
 #include <simdjson.h>
@@ -25,11 +25,11 @@ struct selector {
   [[nodiscard]] virtual std::optional<type>
   operator()(const ::simdjson::dom::object& obj) const = 0;
 
-  /// Sets the schema.
-  [[nodiscard]] virtual caf::error schema(const vast::schema& sch) = 0;
+  /// Sets the module.
+  [[nodiscard]] virtual caf::error module(const vast::module& mod) = 0;
 
-  /// Retrieves the current schema.
-  [[nodiscard]] virtual vast::schema schema() const = 0;
+  /// Retrieves the current module.
+  [[nodiscard]] virtual vast::module module() const = 0;
 };
 
 } // namespace vast::format::json

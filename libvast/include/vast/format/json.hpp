@@ -15,8 +15,8 @@
 #include "vast/format/json/selector.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
+#include "vast/module.hpp"
 #include "vast/policy/omit_nulls.hpp"
-#include "vast/schema.hpp"
 #include "vast/view.hpp"
 
 #include <caf/expected.hpp>
@@ -51,7 +51,7 @@ private:
 };
 
 /// A reader for JSON data. It operates with a *selector* to determine the
-/// mapping of JSON object to the appropriate record type in the schema.
+/// mapping of JSON object to the appropriate record type in the module.
 class reader final : public multi_layout_reader {
 public:
   using super = multi_layout_reader;
@@ -65,9 +65,9 @@ public:
 
   void reset(std::unique_ptr<std::istream> in) override;
 
-  caf::error schema(vast::schema sch) override;
+  caf::error module(vast::module mod) override;
 
-  vast::schema schema() const override;
+  vast::module module() const override;
 
   const char* name() const override;
 

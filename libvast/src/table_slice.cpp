@@ -49,8 +49,7 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     std::is_nothrow_invocable<Visitor>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v1&>,
-    std::is_nothrow_invocable<Visitor,
-                              const fbs::table_slice::arrow::experimental&>,
+    std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v2&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v1&>>) {
   if (!x)
@@ -70,9 +69,9 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     case fbs::table_slice::TableSlice::msgpack_v1:
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_msgpack_v1());
-    case fbs::table_slice::TableSlice::arrow_experimental:
+    case fbs::table_slice::TableSlice::arrow_v2:
       return std::invoke(std::forward<Visitor>(visitor),
-                         *x->table_slice_as_arrow_experimental());
+                         *x->table_slice_as_arrow_v2());
   }
   // GCC-8 fails to recognize that this can never be reached, so we just call a
   // [[noreturn]] function.
@@ -127,9 +126,8 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
   } else if constexpr (std::is_same_v<slice_type,
                                       fbs::table_slice::msgpack::v1>) {
     return std::forward<State>(state).msgpack_v1;
-  } else if constexpr (std::is_same_v<slice_type,
-                                      fbs::table_slice::arrow::experimental>) {
-    return std::forward<State>(state).experimental;
+  } else if constexpr (std::is_same_v<slice_type, fbs::table_slice::arrow::v2>) {
+    return std::forward<State>(state).arrow_v2;
   } else {
     static_assert(detail::always_false_v<slice_type>, "cannot access table "
                                                       "slice state");
@@ -144,7 +142,8 @@ table_slice::table_slice() noexcept = default;
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
-  if (chunk_ && chunk_->unique()) {
+  VAST_ASSERT(!chunk_ || chunk_->unique());
+  if (chunk_) {
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept {
@@ -185,8 +184,8 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, const type& layout) {
-  *this = arrow_table_slice_builder::create(record_batch, layout);
+  const std::shared_ptr<arrow::RecordBatch>& record_batch) {
+  *this = arrow_table_slice_builder::create(record_batch);
 }
 
 table_slice::table_slice(const table_slice& other) noexcept = default;
@@ -401,15 +400,15 @@ std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
       //                 == table_slice_encoding::arrow) { ... }
       constexpr auto encoding
         = std::decay_t<decltype(*state(encoded, slice.state_))>::encoding;
-      if constexpr (encoding == table_slice_encoding::arrow
-                    || encoding == table_slice_encoding::experimental) {
+      if constexpr (encoding == table_slice_encoding::arrow) {
         // If we have a record batch, but it is from an older table slice
         // encoding, we must still rebuild the table slice. Otherwise, creating
         // a new table slice from the returned record batch leads to undefined
         // behavior.
         if (!state(encoded, slice.state_)->is_latest_version) {
-          auto copy = rebuild(slice, encoding);
-          return to_record_batch(copy);
+          const auto& legacy = state(encoded, slice.state_)->record_batch();
+          return convert_record_batch(legacy,
+                                      state(encoded, slice.state_)->layout());
         }
         return state(encoded, slice.state_)->record_batch();
       } else {

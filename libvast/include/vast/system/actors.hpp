@@ -275,7 +275,8 @@ using index_actor = typed_actor_fwd<
   // INTERNAL: The actual query evaluation handler. Does the catalog lookup,
   // sends the response triple to the client, and schedules the first batch of
   // partitions.
-  caf::replies_to<atom::internal, query, query_supervisor_actor>::with< //
+  caf::replies_to<atom::internal, query, query_supervisor_actor,
+                  caf::actor_addr>::with< //
     query_cursor>,
   // Erases the given partition from the INDEX.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
@@ -430,10 +431,10 @@ using analyzer_plugin_actor = typed_actor_fwd<>
 using source_actor = typed_actor_fwd<
   // INTERNAL: Progress.
   caf::reacts_to<atom::internal, atom::run, uint64_t>,
-  // Retrieve the currently used schema of the SOURCE.
-  caf::replies_to<atom::get, atom::schema>::with<schema>,
-  // Update the currently used schema of the SOURCE.
-  caf::reacts_to<atom::put, schema>,
+  // Retrieve the currently used module of the SOURCE.
+  caf::replies_to<atom::get, atom::module>::with<module>,
+  // Update the currently used module of the SOURCE.
+  caf::reacts_to<atom::put, module>,
   // Update the expression used for filtering data in the SOURCE.
   caf::reacts_to<expression>,
   // Set up a new stream sink for the generated data.

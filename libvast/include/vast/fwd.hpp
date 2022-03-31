@@ -86,7 +86,6 @@ namespace vast {
 
 class address;
 class address_type;
-class experimental_table_slice_builder;
 class arrow_table_slice_builder;
 class bitmap;
 class bool_type;
@@ -111,7 +110,7 @@ class plugin_ptr;
 class port;
 class real_type;
 class record_type;
-class schema;
+class module;
 class segment;
 class segment_builder;
 class segment_store;
@@ -272,7 +271,7 @@ namespace arrow {
 
 struct v0;
 struct v1;
-struct experimental;
+struct v2;
 
 } // namespace arrow
 
@@ -388,7 +387,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::query))
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
-  VAST_ADD_TYPE_ID((vast::schema))
+  VAST_ADD_TYPE_ID((vast::module))
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::taxonomies))

@@ -21,7 +21,7 @@
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
@@ -41,7 +41,7 @@ caf::behavior datagram_source(
   caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
   uint16_t udp_listening_port, format::reader_ptr reader,
   size_t table_slice_size, std::optional<size_t> max_events,
-  const type_registry_actor& type_registry, vast::schema local_schema,
+  const type_registry_actor& type_registry, vast::module local_module,
   std::string type_filter, accountant_actor accountant,
   std::vector<transform>&& transforms) {
   self->state.transformer
@@ -64,7 +64,7 @@ caf::behavior datagram_source(
   self->state.name = reader->name();
   self->state.reader = std::move(reader);
   self->state.requested = max_events;
-  self->state.local_schema = std::move(local_schema);
+  self->state.local_module = std::move(local_module);
   self->state.accountant = std::move(accountant);
   self->state.table_slice_size = table_slice_size;
   self->state.done = false;
@@ -152,11 +152,11 @@ caf::behavior datagram_source(
       auto name = std::string{self->state.reader->name()};
       self->delegate(self->state.transformer, sink, name);
     },
-    [self](atom::get, atom::schema) -> caf::result<schema> {
-      return self->state.reader->schema();
+    [self](atom::get, atom::module) -> caf::result<module> {
+      return self->state.reader->module();
     },
-    [self](atom::put, schema& sch) -> caf::result<void> {
-      if (auto err = self->state.reader->schema(std::move(sch)))
+    [self](atom::put, module& mod) -> caf::result<void> {
+      if (auto err = self->state.reader->module(std::move(mod)))
         return err;
       return caf::unit;
     },

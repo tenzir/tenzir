@@ -14,8 +14,8 @@
 #include <vast/format/single_layout_reader.hpp>
 #include <vast/format/writer.hpp>
 #include <vast/logger.hpp>
+#include <vast/module.hpp>
 #include <vast/plugin.hpp>
-#include <vast/schema.hpp>
 #include <vast/type.hpp>
 
 #include <caf/settings.hpp>
@@ -208,12 +208,12 @@ public:
     // reader abstraction.
   }
 
-  caf::error schema(class schema new_schema) override {
-    return replace_if_congruent({&packet_type_}, new_schema);
+  caf::error module(class module new_module) override {
+    return replace_if_congruent({&packet_type_}, new_module);
   }
 
-  class schema schema() const override {
-    class schema result {};
+  class module module() const override {
+    class module result {};
     result.add(packet_type_);
     return result;
   }
@@ -661,7 +661,7 @@ public:
   }
 
 private:
-  vast::schema schema_;
+  vast::module module_;
   size_t flush_interval_ = 0;
   size_t snaplen_ = 65535;
   size_t total_packets_ = 0;

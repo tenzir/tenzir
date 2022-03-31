@@ -21,8 +21,8 @@
 #include "vast/format/reader_factory.hpp"
 #include "vast/format/writer_factory.hpp"
 #include "vast/logger.hpp"
+#include "vast/module.hpp"
 #include "vast/plugin.hpp"
-#include "vast/schema.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
 #include "vast/system/make_transforms.hpp"
@@ -95,15 +95,6 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Issue deprecation warnings.
-  for (std::string_view option : {
-         "vast.import.batch-encoding",
-         "vast.spawn.source.batch-encoding",
-         "vast.metrics.self-sink.slice-type",
-       })
-    if (caf::get_or(cfg, option, "arrow") == std::string_view{"msgpack"})
-      VAST_WARN("The 'msgpack' option for the configuration option '{}' is "
-                "deprecated; automatically using the 'arrow' encoding instead",
-                option);
   if (auto meta_index_fp_rate = caf::get_if<double>( //
         &cfg, "vast.meta-index-fp-rate")) {
     if (auto catalog_fp_rate = caf::get_if<double>( //
@@ -128,10 +119,10 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Set up the event types singleton.
-  if (auto schema = load_schema(cfg)) {
-    event_types::init(*std::move(schema));
+  if (auto module = load_module(cfg)) {
+    event_types::init(*std::move(module));
   } else {
-    VAST_ERROR("failed to read schema dirs: {}", schema.error());
+    VAST_ERROR("failed to read schema dirs: {}", module.error());
     return EXIT_FAILURE;
   }
   // Lastly, initialize the actor system context, and execute the given command.

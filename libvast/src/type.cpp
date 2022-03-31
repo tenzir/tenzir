@@ -18,7 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/type.hpp"
 #include "vast/legacy_type.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <arrow/array.h>
 #include <arrow/type_traits.h>
@@ -1479,7 +1479,7 @@ bool type_check(const type& x, const data& y) noexcept {
 }
 
 caf::error
-replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
+replace_if_congruent(std::initializer_list<type*> xs, const module& with) {
   for (auto* x : xs)
     if (const auto* t = with.find(x->name())) {
       if (!congruent(*x, *t))
@@ -2133,6 +2133,23 @@ void enumeration_type::arrow_type::register_extension() noexcept {
   auto status = arrow::RegisterExtensionType(
     std::make_shared<arrow_type>(enumeration_type{{"stub"}}));
   VAST_ASSERT(status.ok());
+}
+
+arrow::Result<std::shared_ptr<enumeration_type::array_type>>
+enumeration_type::array_type::make(
+  const std::shared_ptr<enumeration_type::arrow_type>& type,
+  const std::shared_ptr<arrow::UInt8Array>& indices) {
+  auto dict_builder
+    = string_type::make_arrow_builder(arrow::default_memory_pool());
+  for (const auto& [canonical, internal] : type->vast_type_.fields()) {
+    const auto append_status = dict_builder->Append(
+      arrow::util::string_view{canonical.data(), canonical.size()});
+    VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+  }
+  ARROW_ASSIGN_OR_RAISE(auto dict, dict_builder->Finish());
+  ARROW_ASSIGN_OR_RAISE(auto storage, arrow::DictionaryArray::FromArrays(
+                                        type->storage_type(), indices, dict));
+  return std::make_shared<enumeration_type::array_type>(type, storage);
 }
 
 enumeration_type::builder_type::builder_type(std::shared_ptr<arrow_type> type,
@@ -3298,8 +3315,10 @@ int sum_type_access<arrow::DataType>::index_from_type(
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
   auto result = table[x.id()];
   VAST_ASSERT(result != unknown_id,
-              "unexpected Arrow type id is not in "
-              "caf::sum_type_access<arrow::DataType>::types");
+              fmt::format("unexpected Arrow type id '{}' is not in "
+                          "caf::sum_type_access<arrow::DataType>::types",
+                          x.id())
+                .c_str());
   if (result == extension_id) {
     for (const auto& [id, index] : extension_table) {
       if (id == static_cast<const arrow::ExtensionType&>(x).extension_name())

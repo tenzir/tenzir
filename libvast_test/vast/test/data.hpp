@@ -15,6 +15,18 @@ extern const char* ssl;
 
 } // namespace zeek
 
+namespace suricata {
+
+extern const char* alert;
+extern const char* dns;
+extern const char* fileinfo;
+extern const char* flow;
+extern const char* http;
+extern const char* netflow;
+extern const char* stats;
+
+} // namespace suricata
+
 namespace syslog {
 
 extern const char* syslog_msgs;
@@ -22,6 +34,13 @@ extern const char* syslog_msgs;
 } // namespace syslog
 
 } // namespace logs
+
+namespace schemas {
+
+extern const char* base;
+extern const char* suricata;
+
+} // namespace schemas
 
 namespace traces {
 

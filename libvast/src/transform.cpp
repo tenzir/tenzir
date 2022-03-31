@@ -8,7 +8,6 @@
 
 #include "vast/transform.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -61,10 +60,8 @@ caf::expected<std::vector<table_slice>> transform::finish() {
   auto finished = finish_batch();
   if (!finished)
     return std::move(finished.error());
-  for (auto& [layout, batch] : *finished) {
-    auto slice = arrow_table_slice_builder::create(batch, layout);
-    result.push_back(std::move(slice));
-  }
+  for (auto& [layout, batch] : *finished)
+    result.emplace_back(batch);
   return result;
 }
 
@@ -231,10 +228,8 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     }
   }
   for (auto& [layout, queue] : batches) {
-    for (auto& [layout, batch] : queue) {
-      auto slice = arrow_table_slice_builder::create(batch, layout);
-      result.emplace_back(slice);
-    }
+    for (auto& [layout, batch] : queue)
+      result.emplace_back(batch);
     queue.clear();
   }
   return result;

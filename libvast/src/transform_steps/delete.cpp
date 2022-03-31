@@ -8,6 +8,7 @@
 
 #include "vast/transform_steps/delete.hpp"
 
+#include "vast/arrow_table_slice.hpp"
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/error.hpp"
@@ -23,59 +24,29 @@ delete_step::delete_step(delete_step_configuration configuration)
   : config_(std::move(configuration)) {
 }
 
-caf::expected<std::pair<vast::type, std::vector<int>>>
-delete_step::adjust_layout(const vast::type& layout) const {
-  auto to_remove = std::set<vast::offset>{};
-  const auto& layout_rt = caf::get<record_type>(layout);
-  for (const auto& key : config_.fields) {
-    auto offsets = layout_rt.resolve_key_suffix(key);
-    for (const auto& offset : offsets) {
-      to_remove.emplace(offset);
-    }
-  }
-  if (to_remove.empty())
-    return caf::no_error;
-  auto transformations = std::vector<record_type::transformation>{};
-  auto flat_index_to_keep = std::vector<int>{};
-  for (auto flat_index = 0; const auto& [field, offset] : layout_rt.leaves()) {
-    if (to_remove.contains(offset))
-      transformations.push_back({offset, record_type::drop()});
-    else
-      flat_index_to_keep.push_back(flat_index);
-    ++flat_index;
-  }
-  auto adjusted_layout_rt = layout_rt.transform(std::move(transformations));
-  if (!adjusted_layout_rt)
-    return caf::make_error(ec::unspecified, "failed to remove a field from "
-                                            "layout");
-  auto adjusted_layout = type{*adjusted_layout_rt};
-  adjusted_layout.assign_metadata(layout);
-  std::sort(flat_index_to_keep.begin(), flat_index_to_keep.end());
-  return std::pair{std::move(adjusted_layout), std::move(flat_index_to_keep)};
-}
-
 caf::error
 delete_step::add(type layout, std::shared_ptr<arrow::RecordBatch> batch) {
   VAST_DEBUG("delete step adds batch");
-  auto layout_result = adjust_layout(layout);
-  if (!layout_result) {
-    if (layout_result.error()) {
-      transformed_.clear();
-      return layout_result.error();
-    }
-    transformed_.emplace_back(std::move(layout), std::move(batch));
-    return caf::none;
+  // Apply the transformation.
+  auto transform_fn
+    = [&](struct record_type::field, std::shared_ptr<arrow::Array>) noexcept
+    -> std::vector<
+      std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+    return {};
+  };
+  auto transformations = std::vector<indexed_transformation>{};
+  for (const auto& field : config_.fields)
+    for (auto&& index :
+         caf::get<record_type>(layout).resolve_key_suffix(field, layout.name()))
+      transformations.push_back({std::move(index), transform_fn});
+  std::sort(transformations.begin(), transformations.end());
+  auto [adjusted_layout, adjusted_batch]
+    = transform_columns(layout, batch, transformations);
+  if (adjusted_layout) {
+    VAST_ASSERT(adjusted_batch);
+    transformed_.emplace_back(std::move(adjusted_layout),
+                              std::move(adjusted_batch));
   }
-  auto& [adjusted_layout, to_keep] = *layout_result;
-  auto result = batch->SelectColumns(to_keep);
-  if (!result.ok()) {
-    transformed_.clear();
-    return caf::make_error(ec::unspecified,
-                           fmt::format("failed to delete columns: {}",
-                                       result.status().ToString()));
-  }
-  transformed_.emplace_back(std::move(adjusted_layout),
-                            result.MoveValueUnsafe());
   return caf::none;
 }
 

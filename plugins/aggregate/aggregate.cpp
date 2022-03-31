@@ -6,15 +6,19 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/time.hpp>
+#include <vast/data.hpp>
 #include <vast/detail/narrow.hpp>
+#include <vast/detail/passthrough.hpp>
 #include <vast/hash/hash_append.hpp>
 #include <vast/plugin.hpp>
 #include <vast/transform_step.hpp>
+#include <vast/view.hpp>
 
 #include <arrow/builder.h>
 #include <arrow/compute/api.h>
@@ -25,6 +29,58 @@
 #include <unordered_map>
 
 namespace vast::plugins::aggregate {
+
+std::shared_ptr<arrow::RecordBatch>
+flatten_batch(const vast::type& layout,
+              const arrow::RecordBatch& batch) noexcept {
+  auto flattened_layout = flatten(layout);
+  auto columns = arrow::ArrayVector{};
+  columns.reserve(caf::get<record_type>(flattened_layout).num_fields());
+  for (auto&& leaf : caf::get<record_type>(layout).leaves()) {
+    auto path = std::vector<int>{};
+    path.reserve(leaf.index.size());
+    for (auto layer : leaf.index)
+      path.push_back(detail::narrow_cast<int>(layer));
+    auto column = arrow::FieldPath{std::move(path)}.Get(batch);
+    VAST_ASSERT(column.ok(), column.status().ToString().c_str());
+    columns.push_back(column.MoveValueUnsafe());
+  }
+  return arrow::RecordBatch::Make(flattened_layout.to_arrow_schema(),
+                                  batch.num_rows(), std::move(columns));
+}
+
+std::shared_ptr<arrow::RecordBatch>
+unflatten_batch(const vast::type& layout,
+                const arrow::RecordBatch& batch) noexcept {
+  auto columns = arrow::ArrayVector{};
+  columns.reserve(caf::get<record_type>(layout).num_fields());
+  const auto& flattened_columns = batch.columns();
+  auto current_flattened_column = flattened_columns.begin();
+  auto f = [&](auto&& f, const type& t) -> std::shared_ptr<arrow::Array> {
+    if (const auto* rt = caf::get_if<record_type>(&t)) {
+      auto arrays = arrow::ArrayVector{};
+      auto fields = arrow::FieldVector{};
+      arrays.reserve(rt->num_fields());
+      fields.reserve(rt->num_fields());
+      for (auto&& field : rt->fields()) {
+        arrays.push_back(f(f, field.type));
+        fields.push_back(field.type.to_arrow_field(field.name));
+      }
+      auto column = arrow::StructArray::Make(arrays, fields);
+      VAST_ASSERT(column.ok(), column.status().ToString().c_str());
+      return column.MoveValueUnsafe();
+    }
+    VAST_ASSERT(current_flattened_column != flattened_columns.end());
+    auto result = *current_flattened_column;
+    ++current_flattened_column;
+    return result;
+  };
+  for (auto&& field : caf::get<record_type>(layout).fields())
+    columns.push_back(f(f, field.type));
+  VAST_ASSERT(current_flattened_column == flattened_columns.end());
+  return arrow::RecordBatch::Make(layout.to_arrow_schema(), batch.num_rows(),
+                                  std::move(columns));
+}
 
 /// The configuration of an aggregate transform step.
 struct configuration {
@@ -83,23 +139,10 @@ struct aggregation {
     all,      ///< Conjoin values within the same group.
   };
 
-  /// The key by which aggregations are grouped. Essentially, this is an
-  /// *arrow::ScalarVector* with custom equality and hash operations.
-  struct group_by_key : arrow::ScalarVector {
-    using arrow::ScalarVector::ScalarVector;
-  };
-
-  /// The equality functor for enabling use of *group_by_key* as a key in
-  /// map data structures.
-  struct group_by_key_equal {
-    bool operator()(const group_by_key& lhs,
-                    const group_by_key& rhs) const noexcept {
-      return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
-                        [](const std::shared_ptr<arrow::Scalar>& x,
-                           const std::shared_ptr<arrow::Scalar>& y) noexcept {
-                          return x->Equals(y);
-                        });
-    }
+  /// The key by which aggregations are grouped. Essentially, this is a
+  /// vector of data views.
+  struct group_by_key : std::vector<data_view> {
+    using vector::vector;
   };
 
   /// The hash functor for enabling use of *group_by_key* as a key in unordered
@@ -107,17 +150,16 @@ struct aggregation {
   struct group_by_key_hash {
     size_t operator()(const group_by_key& x) const noexcept {
       auto hasher = xxh64{};
-      for (const auto& scalar : x)
-        if (scalar)
-          hash_append(hasher, scalar->hash());
+      for (const auto& value : x)
+        hash_append(hasher, value);
       return hasher.finish();
     }
   };
 
   /// Groups accumulators for slices of incoming record batches with a matching
   /// set of configured set of configured group-by columns.
-  using bucket_map = std::unordered_map<group_by_key, arrow::ScalarVector,
-                                        group_by_key_hash, group_by_key_equal>;
+  using bucket_map
+    = std::unordered_map<group_by_key, std::vector<data>, group_by_key_hash>;
 
   /// Creates a new aggregation given a configuration and a layout.
   static caf::expected<aggregation>
@@ -152,8 +194,9 @@ struct aggregation {
                                          layout));
     auto drop_transformations = std::vector<record_type::transformation>{};
     for (int flat_index = 0; const auto& leaf : rt.leaves()) {
-      if (leaf.index
-          != unflattened_actions[result.selected_columns_.size()].first) {
+      if (result.selected_columns_.size() >= unflattened_actions.size()
+          || leaf.index
+               != unflattened_actions[result.selected_columns_.size()].first) {
         drop_transformations.push_back({leaf.index, record_type::drop()});
       } else {
         const auto action
@@ -170,7 +213,10 @@ struct aggregation {
     auto adjusted_rt = rt.transform(std::move(drop_transformations));
     VAST_ASSERT(adjusted_rt);
     VAST_ASSERT(!layout.has_attributes());
+    result.flattened_layout_ = flatten(layout);
     result.adjusted_layout_ = type{layout.name(), *adjusted_rt};
+    result.flattened_adjusted_layout_ = flatten(result.adjusted_layout_);
+    result.adjusted_schema_ = result.adjusted_layout_.to_arrow_schema();
     result.num_group_by_columns_ = std::count(
       result.actions_.begin(), result.actions_.end(), action::group_by);
     result.time_resolution_ = config.time_resolution;
@@ -207,9 +253,8 @@ struct aggregation {
                 == detail::narrow_cast<int>(actions_.size()));
     // Create a builder if we don't have one already.
     if (!builder_) {
-      auto status = arrow::RecordBatchBuilder::Make(
-        batch->schema(), arrow::default_memory_pool(), &builder_);
-      VAST_ASSERT(status.ok(), status.ToString().c_str());
+      builder_ = caf::get<record_type>(flattened_adjusted_layout_)
+                   .make_arrow_builder(arrow::default_memory_pool());
       VAST_ASSERT(builder_);
     }
     // Round time values to a multiple of the configured value.
@@ -256,154 +301,125 @@ struct aggregation {
       } while (bucket == next_bucket);
       VAST_ASSERT(bucket->second.size() == actions_.size());
       for (int column = 0; column < batch->num_columns(); ++column) {
-        auto f =
-          [&]<class Array>([[maybe_unused]] const Array& array) -> caf::error {
-          if constexpr (std::is_same_v<Array, arrow::NullArray>) {
-            die("aggregate transform step cannot operate on null arrays");
-          } else {
-            // TODO: Remove FixedSizeBinaryArray from this list when making the
-            // experimental arrow encoding the default.
-            constexpr auto is_non_primitive_array
-              = detail::is_any_v<Array, arrow::FixedSizeBinaryArray,
-                                 type_to_arrow_array_t<pattern_type>,
-                                 type_to_arrow_array_t<address_type>,
-                                 type_to_arrow_array_t<subnet_type>,
-                                 type_to_arrow_array_t<enumeration_type>,
-                                 type_to_arrow_array_t<list_type>,
-                                 type_to_arrow_array_t<map_type>,
-                                 type_to_arrow_array_t<record_type>>;
-            auto make_non_primitive_error = [&]() {
-              return caf::make_error(ec::invalid_configuration,
-                                     fmt::format("aggregate transform step "
-                                                 "cannot handle non-primitive "
-                                                 "field {}",
-                                                 array.type()->ToString()));
-            };
-            using scalar_type
-              = std::conditional_t<is_non_primitive_array, arrow::Scalar,
-                                   typename arrow::TypeTraits<std::conditional_t<
-                                     is_non_primitive_array, arrow::BooleanType,
-                                     typename Array::TypeClass>>::ScalarType>;
-            auto scalar
-              = std::static_pointer_cast<scalar_type>(bucket->second[column]);
-            for (int row = start; row < next_start; ++row) {
-              if (array.IsNull(row))
-                continue;
-              if (!scalar) {
-                scalar = std::static_pointer_cast<scalar_type>(
-                  array.GetScalar(row).MoveValueUnsafe());
-                continue;
+        auto f = [&]<concrete_type Type>(
+                   [[maybe_unused]] const Type& type,
+                   [[maybe_unused]] const arrow::Array& array) -> caf::error {
+          constexpr auto is_non_primitive_array
+            = detail::is_any_v<Type, string_type, pattern_type, address_type,
+                               subnet_type, enumeration_type, list_type,
+                               map_type, record_type>;
+          auto make_non_primitive_error = [&]() {
+            return caf::make_error(ec::invalid_configuration,
+                                   fmt::format("aggregate transform step "
+                                               "cannot handle non-primitive "
+                                               "field {}",
+                                               array.type()->ToString()));
+          };
+          auto& value = bucket->second[column];
+          for (int row = start; row < next_start; ++row) {
+            if (array.IsNull(row))
+              continue;
+            if (caf::holds_alternative<caf::none_t>(value)) {
+              value = materialize(value_at(type, array, row));
+              continue;
+            }
+            switch (actions_[column]) {
+              case action::group_by: {
+                row = next_start;
+                break;
               }
-              switch (actions_[column]) {
-                case action::group_by: {
-                  row = next_start;
-                  break;
+              case action::sum: {
+                if constexpr (is_non_primitive_array) {
+                  return make_non_primitive_error();
+                } else if constexpr (requires(type_to_data_t<Type> value) {
+                                       {value + value};
+                                     })
+                  value = detail::narrow_cast<type_to_data_t<Type>>(
+                    caf::get<type_to_data_t<Type>>(value)
+                    + materialize(value_at(type, array, row)));
+                else
+                  return caf::make_error(
+                    ec::invalid_configuration,
+                    fmt::format("aggregate transform step cannot "
+                                "calculate 'sum' of field {}",
+                                batch->schema()->field(column)->ToString()));
+                break;
+              }
+              case action::min: {
+                if constexpr (is_non_primitive_array) {
+                  return make_non_primitive_error();
+                } else if constexpr (requires(type_to_data_t<Type> value) {
+                                       {value < value};
+                                     }) {
+                  value = std::min(caf::get<type_to_data_t<Type>>(value),
+                                   materialize(value_at(type, array, row)));
+                } else {
+                  return caf::make_error(
+                    ec::invalid_configuration,
+                    fmt::format("aggregate transform step cannot "
+                                "calculate 'min' of field {}",
+                                batch->schema()->field(column)->ToString()));
                 }
-                case action::sum: {
-                  if constexpr (is_non_primitive_array) {
-                    return make_non_primitive_error();
-                  } else if constexpr (requires(scalar_type lhs,
-                                                scalar_type rhs) {
-                                         {lhs.value + rhs.value};
-                                       })
-                    scalar->value = scalar->value + array.Value(row);
-                  else
-                    return caf::make_error(
-                      ec::invalid_configuration,
-                      fmt::format("aggregate transform step cannot "
-                                  "calculate 'sum' of field {}",
-                                  batch->schema()->field(column)->ToString()));
-                  break;
+                break;
+              }
+              case action::max: {
+                if constexpr (is_non_primitive_array) {
+                  return make_non_primitive_error();
+                } else if constexpr (requires(type_to_data_t<Type> value) {
+                                       {value > value};
+                                     }) {
+                  value = std::max(caf::get<type_to_data_t<Type>>(value),
+                                   materialize(value_at(type, array, row)));
+                } else {
+                  return caf::make_error(
+                    ec::invalid_configuration,
+                    fmt::format("aggregate transform step cannot "
+                                "calculate 'max' of field {}",
+                                batch->schema()->field(column)->ToString()));
                 }
-                case action::min: {
-                  if constexpr (is_non_primitive_array) {
-                    return make_non_primitive_error();
-                  } else if constexpr (std::is_same_v<scalar_type,
-                                                      arrow::StringScalar>) {
-                    if (array.Value(row) < scalar->view())
-                      scalar = std::static_pointer_cast<scalar_type>(
-                        array.GetScalar(row).MoveValueUnsafe());
-                  } else if constexpr (requires(scalar_type lhs,
-                                                scalar_type rhs) {
-                                         {lhs.value < rhs.value};
-                                       }) {
-                    scalar->value = std::min(scalar->value, array.Value(row));
-                  } else {
-                    return caf::make_error(
-                      ec::invalid_configuration,
-                      fmt::format("aggregate transform step cannot "
-                                  "calculate 'min' of field {}",
-                                  batch->schema()->field(column)->ToString()));
-                  }
-                  break;
+                break;
+              }
+              case action::any: {
+                if constexpr (is_non_primitive_array) {
+                  return make_non_primitive_error();
+                } else if constexpr (std::is_same_v<Type, bool_type>) {
+                  value = caf::get<type_to_data_t<Type>>(value)
+                          || materialize(value_at(type, array, row));
+                } else {
+                  return caf::make_error(
+                    ec::invalid_configuration,
+                    fmt::format("aggregate transform step cannot "
+                                "calculate 'any' of field {}",
+                                batch->schema()->field(column)->ToString()));
                 }
-                case action::max: {
-                  if constexpr (is_non_primitive_array) {
-                    return make_non_primitive_error();
-                  } else if constexpr (std::is_same_v<scalar_type,
-                                                      arrow::StringScalar>) {
-                    if (array.Value(row) > scalar->view())
-                      scalar = std::static_pointer_cast<scalar_type>(
-                        array.GetScalar(row).MoveValueUnsafe());
-                  } else if constexpr (requires(scalar_type lhs,
-                                                scalar_type rhs) {
-                                         {lhs.value > rhs.value};
-                                       }) {
-                    scalar->value = std::max(scalar->value, array.Value(row));
-                  } else {
-                    return caf::make_error(
-                      ec::invalid_configuration,
-                      fmt::format("aggregate transform step cannot "
-                                  "calculate 'max' of field {}",
-                                  batch->schema()->field(column)->ToString()));
-                  }
-                  break;
+                break;
+              }
+              case action::all: {
+                if constexpr (is_non_primitive_array) {
+                  return make_non_primitive_error();
+                } else if constexpr (std::is_same_v<Type, bool_type>) {
+                  value = caf::get<type_to_data_t<Type>>(value)
+                          && materialize(value_at(type, array, row));
+                } else {
+                  return caf::make_error(
+                    ec::invalid_configuration,
+                    fmt::format("aggregate transform step cannot "
+                                "calculate 'all' of field {}",
+                                batch->schema()->field(column)->ToString()));
                 }
-                case action::any: {
-                  if constexpr (is_non_primitive_array) {
-                    return make_non_primitive_error();
-                  } else if constexpr (std::is_same_v<Array,
-                                                      arrow::BooleanArray>) {
-                    scalar->value = scalar->value || array.Value(row);
-                  } else {
-                    return caf::make_error(
-                      ec::invalid_configuration,
-                      fmt::format("aggregate transform step cannot "
-                                  "calculate 'any' of field {}",
-                                  batch->schema()->field(column)->ToString()));
-                  }
-                  break;
-                }
-                case action::all: {
-                  if constexpr (is_non_primitive_array) {
-                    return make_non_primitive_error();
-                  } else if constexpr (std::is_same_v<Array,
-                                                      arrow::BooleanArray>) {
-                    scalar->value = scalar->value && array.Value(row);
-                  } else {
-                    return caf::make_error(
-                      ec::invalid_configuration,
-                      fmt::format("aggregate transform step cannot "
-                                  "calculate 'all' of field {}",
-                                  batch->schema()->field(column)->ToString()));
-                  }
-                  break;
-                }
+                break;
               }
             }
-            bucket->second[column] = std::move(scalar);
           }
           return caf::none;
         };
-        auto arr = batch->column(column);
-        // TODO: Remove this workaround to support old fixed size binary arrays.
-        if (arr->type_id() == arrow::Type::FIXED_SIZE_BINARY) {
-          if (auto err
-              = f(static_cast<const arrow::FixedSizeBinaryArray&>(*arr)))
-            return err;
-        } else if (auto err = caf::visit(f, *batch->column(column))) {
+        if (auto err
+            = caf::visit(f,
+                         caf::get<record_type>(flattened_adjusted_layout_)
+                           .field(column)
+                           .type,
+                         detail::passthrough(*batch->column(column))))
           return err;
-        }
       }
     }
     return caf::none;
@@ -414,39 +430,28 @@ struct aggregation {
     VAST_ASSERT(builder_);
     auto cast_requirements
       = std::vector<std::optional<bool>>(builder_->num_fields(), std::nullopt);
-    // Calculate whether a column needs to be casted only once.
-    auto needs_cast = [&](int column, const arrow::Scalar& scalar) {
-      auto& cast_requirement = cast_requirements[column];
-      if (!cast_requirement)
-        cast_requirement
-          = !builder_->GetField(column)->type()->Equals(scalar.type);
-      return *cast_requirement;
-    };
-    builder_->SetInitialCapacity(detail::narrow_cast<int>(buckets_.size()));
+    const auto bucket_size = detail::narrow_cast<int64_t>(buckets_.size());
+    auto resize_status = builder_->Reserve(bucket_size);
+    VAST_ASSERT(resize_status.ok(), resize_status.ToString().c_str());
     for (auto&& bucket : std::exchange(buckets_, {})) {
-      for (int column = 0; auto& scalar : bucket.second) {
-        auto* column_builder = builder_->GetField(column);
-        VAST_ASSERT(column_builder);
-        if (scalar && needs_cast(column, *scalar)) {
-          auto cast_result = scalar->CastTo(column_builder->type());
-          VAST_ASSERT(cast_result.ok(),
-                      cast_result.status().ToString().c_str());
-          scalar = cast_result.MoveValueUnsafe();
-        }
-        if (scalar) {
-          auto append_result = column_builder->AppendScalar(*scalar);
-          VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
-        } else {
-          auto append_result = column_builder->AppendNull();
-          VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
-        }
+      auto row_append_result = builder_->Append();
+      VAST_ASSERT(row_append_result.ok(), row_append_result.ToString().c_str());
+      for (int column = 0; auto& value : bucket.second) {
+        auto* column_builder = builder_->field_builder(column);
+        auto append_result = append_builder(
+          caf::get<record_type>(flattened_adjusted_layout_).field(column).type,
+          *column_builder, make_view(value));
+        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
         column++;
       }
     }
-    auto sc = std::shared_ptr<arrow::UInt64Scalar>{};
-    auto batch = std::shared_ptr<arrow::RecordBatch>{};
-    auto flush_result = builder_->Flush(&batch);
-    VAST_ASSERT(flush_result.ok(), flush_result.ToString().c_str());
+    auto finish_result
+      = std::shared_ptr<arrow::ArrayBuilder>(builder_)->Finish();
+    VAST_ASSERT(finish_result.ok(), finish_result.status().ToString().c_str());
+    const auto& columns_struct = caf::get<type_to_arrow_array_t<record_type>>(
+      *finish_result.ValueUnsafe());
+    auto batch = arrow::RecordBatch::Make(
+      adjusted_schema_, columns_struct.length(), columns_struct.fields());
     return transform_batch{adjusted_layout_, std::move(batch)};
   }
 
@@ -458,29 +463,33 @@ private:
   bucket_map::iterator
   try_emplace_bucket(const std::shared_ptr<arrow::RecordBatch>& batch,
                      int row) {
-    // If our row goes beyond the end of the batch, signal that we do not have
-    // a bucket.
+    // If our row goes beyond the end of the batch, signal that we do not
+    // have a bucket.
     if (row >= batch->num_rows())
       return buckets_.end();
     // Create current bucket key.
     auto key = group_by_key{};
     key.reserve(num_group_by_columns_);
-    for (int column = 0; column < batch->num_columns(); ++column)
-      if (actions_[column] == action::group_by)
-        key.push_back(batch->column(column)->GetScalar(row).MoveValueUnsafe());
+    for (int column = 0; column < batch->num_columns(); ++column) {
+      if (actions_[column] == action::group_by) {
+        key.push_back(
+          value_at(caf::get<record_type>(flattened_layout_).field(column).type,
+                   *batch->column(column), row));
+      }
+    }
     // Create a new bucket.
     auto [iterator, inserted] = buckets_.try_emplace(std::move(key));
     if (inserted)
-      iterator->second.resize(actions_.size(), nullptr);
+      iterator->second.resize(actions_.size(), caf::none);
     return iterator;
   }
 
-  /// The action to take during aggregation for every individual column in the
-  /// incoming record batches.
+  /// The action to take during aggregation for every individual column in
+  /// the incoming record batches.
   std::vector<action> actions_ = {};
 
-  /// The columnns that are selected from the incoming record batches as part
-  /// of the data transformation.
+  /// The columnns that are selected from the incoming record batches as
+  /// part of the data transformation.
   std::vector<int> selected_columns_ = {};
 
   /// The group-by columns from the record batches that hold time values.
@@ -492,24 +501,30 @@ private:
   /// values.
   std::optional<duration> time_resolution_ = {};
 
-  /// The adjusted layout with the dropped columns removed.
+  /// Multiple versions of the adjusted layout with the dropped columns removed
+  /// needed throughout the aggregation.
+  type flattened_layout_ = {};
   type adjusted_layout_ = {};
+  type flattened_adjusted_layout_ = {};
+  std::shared_ptr<arrow::Schema> adjusted_schema_ = {};
 
   /// The buckets holding the intemediate accumulators.
   bucket_map buckets_ = {};
 
-  /// The builder used as part of the aggregation. Stored since it only needs
-  /// to be created once per layout effectively, and we can do so lazily.
-  std::unique_ptr<arrow::RecordBatchBuilder> builder_ = {};
+  /// The builder used as part of the aggregation. Stored since it only
+  /// needs to be created once per layout effectively, and we can do so
+  /// lazily. NOTE: This is not a single record batch builder because that
+  /// does not support extension types. :shrug:
+  std::shared_ptr<type_to_arrow_builder_t<record_type>> builder_ = {};
 
   /// The number of columns to group by.
   size_t num_group_by_columns_ = {};
 };
 
-/// The aggregate transform step, which holds applies an aggregation to every
-/// incoming record batch, which is configured per-type. The aggregation
-/// configuration is resolved eagerly and then executed eagerly and/or lazily
-/// per type.
+/// The aggregate transform step, which holds applies an aggregation to
+/// every incoming record batch, which is configured per-type. The
+/// aggregation configuration is resolved eagerly and then executed eagerly
+/// and/or lazily per type.
 class aggregate_step : public transform_step {
 public:
   /// Create a new aggregate step from an already parsed configuration.
@@ -522,8 +537,9 @@ public:
     return true;
   }
 
-  /// Applies the transformation to an Arrow Record Batch with a corresponding
-  /// VAST layout; this creates a layout-specific aggregation lazily.
+  /// Applies the transformation to an Arrow Record Batch with a
+  /// corresponding VAST layout; this creates a layout-specific aggregation
+  /// lazily.
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
     auto aggregation = aggregations_.find(layout);
@@ -536,6 +552,7 @@ public:
       VAST_ASSERT(ok);
       aggregation = new_aggregation;
     }
+    batch = flatten_batch(layout, *batch);
     return aggregation->second.add(std::move(batch));
   }
 
@@ -543,11 +560,13 @@ public:
   [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
     auto result = std::vector<transform_batch>{};
     result.reserve(aggregations_.size());
-    for (auto&& [_, aggregation] : aggregations_) {
-      auto batch = aggregation.finish();
-      if (!batch)
-        return batch.error();
-      result.push_back(std::move(*batch));
+    for (auto&& [layout, aggregation] : aggregations_) {
+      auto aggregation_result = aggregation.finish();
+      if (!aggregation_result)
+        return aggregation_result.error();
+      aggregation_result->batch = unflatten_batch(aggregation_result->layout,
+                                                  *aggregation_result->batch);
+      result.push_back(std::move(*aggregation_result));
     }
     return result;
   }
@@ -579,8 +598,8 @@ public:
   }
 
   /// Returns the unique name of the plugin, which also equals the transform
-  /// step name that is used to refer to instantiations of the aggregate step
-  /// when configuring transforms.
+  /// step name that is used to refer to instantiations of the aggregate
+  /// step when configuring transforms.
   [[nodiscard]] const char* name() const override {
     return "aggregate";
   };

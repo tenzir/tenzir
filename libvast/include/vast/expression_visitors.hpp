@@ -169,6 +169,7 @@ struct matcher {
   bool operator()(const data_extractor&, const data&);
 
   template <class T>
+    requires(!std::is_same_v<T, data>)
   bool operator()(const data& d, const T& x) {
     return (*this)(x, d);
   }

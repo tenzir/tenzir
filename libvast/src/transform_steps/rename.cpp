@@ -86,7 +86,7 @@ public:
       return type{name_mapping->to, pruned_layout};
     };
     layout = caf::visit(rename_layout, layout);
-    auto schema = make_arrow_schema(layout);
+    auto schema = layout.to_arrow_schema();
     batch
       = arrow::RecordBatch::Make(schema, batch->num_rows(), batch->columns());
     transformed_batches_.emplace_back(std::move(layout), std::move(batch));

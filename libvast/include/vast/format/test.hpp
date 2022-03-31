@@ -14,7 +14,7 @@
 #include "vast/detail/random.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
-#include "vast/schema.hpp"
+#include "vast/module.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/variant.hpp>
@@ -50,7 +50,7 @@ struct blueprint {
   std::vector<distribution> distributions;
 };
 
-/// Produces random events according to a given schema.
+/// Produces random events according to a given module.
 class reader : public multi_layout_reader {
 public:
   using super = multi_layout_reader;
@@ -64,9 +64,9 @@ public:
 
   void reset(std::unique_ptr<std::istream> in) override;
 
-  caf::error schema(vast::schema sch) override;
+  caf::error module(vast::module mod) override;
 
-  vast::schema schema() const override;
+  vast::module module() const override;
 
   const char* name() const override;
 
@@ -75,10 +75,10 @@ protected:
                        consumer& f) override;
 
 private:
-  vast::schema schema_;
+  vast::module module_;
   std::mt19937_64 generator_;
   size_t num_events_;
-  schema::const_iterator next_;
+  module::const_iterator next_;
   std::unordered_map<type, blueprint> blueprints_;
 };
 

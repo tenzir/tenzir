@@ -10,7 +10,9 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/flat_set.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -47,9 +49,16 @@ caf::expected<size_t>
 compute_dbdir_size(std::filesystem::path, const disk_monitor_config&);
 
 struct disk_monitor_state {
+  struct blacklist_entry {
+    vast::uuid id;
+    caf::error error;
+    friend bool operator<(const blacklist_entry&, const blacklist_entry&);
+  };
+
   /// The path to the database directory.
   std::filesystem::path dbdir;
 
+  /// The user-configurable behavior.
   disk_monitor_config config;
 
   /// The number of partitions that are scheduled for deletion and we expect to
@@ -58,6 +67,9 @@ struct disk_monitor_state {
 
   /// Node handle of the INDEX.
   index_actor index;
+
+  /// List of known-bad partitions
+  detail::flat_set<blacklist_entry> blacklist;
 
   [[nodiscard]] bool purging() const;
 

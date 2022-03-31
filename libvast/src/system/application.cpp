@@ -92,7 +92,9 @@ auto make_explore_command() {
 
 auto make_export_command() {
   auto export_ = std::make_unique<command>(
-    "export", "exports query results to STDOUT or file",
+    "export",
+    "exports query results to STDOUT or file, expects a subcommand to select "
+    "the format",
     documentation::vast_export,
     opts("?vast.export")
       .add<bool>("continuous,c", "marks a query as continuous")
@@ -415,24 +417,24 @@ auto make_root_command(std::string_view path) {
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
   // For documentation, we use the complete man-page formatted as Markdown
   const auto binary = detail::objectpath();
-  auto schema_desc
+  auto module_desc
     = "list of directories to look for schema files ([/etc/vast/schema"s;
   if (binary) {
-    const auto relative_schema_dir
+    const auto relative_module_dir
       = binary->parent_path().parent_path() / "share" / "vast" / "schema";
-    schema_desc += ", " + relative_schema_dir.string();
+    module_desc += ", " + relative_module_dir.string();
   }
-  schema_desc += "])";
+  module_desc += "])";
   auto ob
     = opts("?vast")
         .add<std::string>("config", "path to a configuration file")
         .add<bool>("bare-mode",
                    "disable user and system configuration, schema and plugin "
-                   "directories lookup and static and dynamic plugin "
+                   "directoriegs lookup and static and dynamic plugin "
                    "autoloading (this may only be used on the command line)")
         .add<std::string>("verbosity", "output verbosity level on the "
                                        "console")
-        .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())
+        .add<std::vector<std::string>>("schema-dirs", module_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
         .add<std::string>("client-log-file", "client log file (default: "
