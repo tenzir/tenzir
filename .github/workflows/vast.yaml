@@ -819,7 +819,7 @@ jobs:
       - name: Build Lambda Docker Image
         working-directory: cloud/aws
         run: |
-          docker build . -f docker/lambda.Dockerfile -t tenzir/vast-lambda:latest \
+          docker build docker/ -f docker/lambda.Dockerfile -t tenzir/vast-lambda:latest \
             --build-arg VAST_VERSION=latest
       - name: Login to Docker Hub
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}

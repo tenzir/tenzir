@@ -1,10 +1,5 @@
 FROM python:3.10.3-slim
 
-ARG UNAME=host
-ARG DOCKER_ID
-ARG UID
-ARG GID
-
 RUN apt-get update
 
 # Install Terraform
@@ -32,11 +27,16 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     unzip awscliv2.zip && \
     ./aws/install
 
-# Configure the host user in the image
-RUN groupadd -g $GID -o $UNAME && \
-    useradd -m -u $UID -g $GID -o -s /bin/bash $UNAME && \
-    groupmod -g $DOCKER_ID docker && \
-    usermod --append --groups docker $UNAME
+ARG UNAME=hostcaller
+ARG DOCKER_GID
+ARG CALLER_UID
+ARG CALLER_GID
+
+# Configure the host caller user/group and host docker group in the image
+RUN groupadd -g $CALLER_GID -o $UNAME && \
+    useradd -m -u $CALLER_UID -g $CALLER_GID -o -s /bin/bash $UNAME && \
+    groupadd -g $DOCKER_GID -o hostdocker && \
+    usermod --append --groups hostdocker $UNAME
 
 USER $UNAME
 
