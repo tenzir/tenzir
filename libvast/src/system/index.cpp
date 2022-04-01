@@ -252,7 +252,6 @@ size_t pending_queue::num_queries() const {
       return x.partition == cand;
     });
     if (it != partitions.end()) {
-      VAST_INFO("found active partition");
       it->queries.push_back(qid);
       continue;
     }
@@ -261,14 +260,12 @@ size_t pending_queue::num_queries() const {
                         return x.partition == cand;
                       });
     if (it != inactive_partitions.end()) {
-      VAST_INFO("found inactive partition");
       it->queries.push_back(qid);
       partitions.push_back(std::move(*it));
       inactive_partitions.erase(it);
       continue;
     }
-    partitions.emplace_back(cand, std::vector{qid});
-    VAST_INFO("emplacing new {}", partitions.size());
+    partitions.push_back(pending_queue::pq{cand, std::vector{qid}});
   }
   // TODO: Insertion sort should be better.
   std::sort(partitions.begin(), partitions.end());
@@ -803,11 +800,11 @@ void schedule_lookups(index_state& st) {
     // 1. Get the partition with the highest accumulated priority.
     auto next = st.pending_queries.next();
     if (!next) {
-      VAST_DEBUG("{} did not find a partition to query", *st.self);
+      VAST_TRACE("{} did not find a partition to query", *st.self);
       return;
     }
-    VAST_INFO("{} schedules partition {} for {}", *st.self, next->partition,
-              next->queries);
+    VAST_TRACE("{} schedules partition {} for {}", *st.self, next->partition,
+               next->queries);
     // 2. Spin up the partition.
     auto materialize = [&](const uuid& partition_id) -> partition_actor {
       // We need to first check whether the ID is the active partition or one
@@ -879,11 +876,11 @@ void schedule_lookups(index_state& st) {
       st.self->request(partition_actor, caf::infinite, query_state.query)
         .then(
           [handle_completion, pid = next->partition, &st](uint64_t n) {
-            VAST_ERROR("{} received {} results from {}", *st.self, n, pid);
+            VAST_TRACE("{} received {} results from {}", *st.self, n, pid);
             handle_completion();
           },
           [handle_completion, &st](const caf::error& err) {
-            VAST_ERROR("{} failed in partition lookup: {}", *st.self, err);
+            VAST_WARN("{} failed in partition lookup: {}", *st.self, err);
             handle_completion();
           });
     }
