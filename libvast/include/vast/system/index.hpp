@@ -247,17 +247,6 @@ struct index_state {
 
   void flush_to_disk();
 
-  // -- query handling ---------------------------------------------------------
-
-  [[nodiscard]] bool worker_available() const;
-
-  [[nodiscard]] std::optional<query_supervisor_actor> next_worker();
-
-  /// Get the actor handles for up to `num_partitions` PARTITION actors,
-  /// spawning them if needed.
-  [[nodiscard]] std::vector<std::pair<uuid, partition_actor>>
-  collect_query_actors(query_state& lookup, uint32_t num_partitions);
-
   // -- flush handling ---------------------------------------------------------
 
   /// Adds a new flush listener.
@@ -364,10 +353,6 @@ struct index_state {
 
   /// Keeps temporary statistics that are flushed with the metrics.
   index_counters counters;
-
-  /// Caches idle/busy workers.
-  detail::stable_set<query_supervisor_actor> idle_workers = {};
-  detail::stable_set<query_supervisor_actor> busy_workers = {};
 
   /// The CATALOG actor.
   catalog_actor catalog = {};

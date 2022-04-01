@@ -59,12 +59,6 @@ struct mock_index_state {
 system::index_actor::behavior_type
 mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
   return {
-    [=](atom::worker, system::query_supervisor_actor&) {
-      FAIL("no mock implementation available");
-    },
-    [=](atom::worker, atom::wakeup, system::query_supervisor_actor) {
-      FAIL("no mock implementation available");
-    },
     [=](atom::done, uuid) {
       FAIL("no mock implementation available");
     },
@@ -78,10 +72,6 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
       FAIL("no mock implementation available");
     },
     [=](atom::subscribe, atom::flush, system::flush_listener_actor&) {
-      FAIL("no mock implementation available");
-    },
-    [=](atom::internal, vast::query&, system::query_supervisor_actor&,
-        const caf::actor_addr&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
     [=](atom::subscribe, atom::create,
