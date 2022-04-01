@@ -1,5 +1,8 @@
 FROM python:3.10.3-slim
 
+ARG TERRAFORM_VERSION=1.1.6
+ARG TERRAGRUNT_VERSION=0.36.0
+
 RUN apt-get update
 
 # Install Terraform
@@ -7,7 +10,10 @@ RUN apt-get install -y gnupg software-properties-common curl unzip git && \
     curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add - && \
     apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
     apt-get update && \
-    apt-get install terraform=1.1.6
+    apt-get install terraform=$TERRAFORM_VERSION
+
+RUN curl -L https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64 -o /usr/local/bin/terragrunt && \
+    chmod +x /usr/local/bin/terragrunt
 
 # Install Docker
 RUN curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | apt-key add - && \
