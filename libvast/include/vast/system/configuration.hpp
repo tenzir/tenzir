@@ -19,8 +19,9 @@
 namespace vast::system {
 
 /// @returns The config dirs of the application.
+/// @param cfg The actor system config to introspect.
 std::vector<std::filesystem::path>
-config_dirs(const caf::actor_system_config& config);
+config_dirs(const caf::actor_system_config& cfg);
 
 /// @returns The loaded config files of the application.
 /// @note This function is not threadsafe.
@@ -44,6 +45,9 @@ public:
 
   /// The configuration files to load.
   std::vector<std::filesystem::path> config_files = {};
+
+private:
+  caf::error embed_config(const caf::settings& settings);
 };
 
 } // namespace vast::system
