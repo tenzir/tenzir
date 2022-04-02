@@ -53,7 +53,7 @@ struct pcap {
   /// packet will be captured and provided as packet data. A snapshot length
   /// of 65535 should be sufficient, on most if not all networks, to capture all
   /// the data available from the packet.
-  static constexpr size_t snaplen = 65535;
+  static constexpr size_t snaplen = 65'535;
 };
 
 } // namespace import
@@ -72,8 +72,7 @@ struct pcap {
 
 namespace vast::plugins::pcap {
 
-template <class... RecordFields>
-type make_packet_type(RecordFields&&... record_fields) {
+type make_packet_type() {
   // FIXME: once we ship with builtin type aliases, we should reference the
   // port alias type here. Until then, we create the alias manually.
   // See also:
@@ -88,18 +87,16 @@ type make_packet_type(RecordFields&&... record_fields) {
       {"dst", address_type{}},
       {"sport", port_type},
       {"dport", port_type},
-      std::forward<RecordFields>(record_fields)...,
+      {"vlan",
+       record_type{
+         {"outer", count_type{}},
+         {"inner", count_type{}},
+       }},
+      {"community_id", type{string_type{}, {{"index", "hash"}}}},
       {"payload", type{string_type{}, {{"skip"}}}},
     },
   };
 }
-
-const auto pcap_packet_type = make_packet_type();
-const auto pcap_packet_type_community_id
-  = make_packet_type(record_type::field_view{
-    "community_id",
-    type{string_type{}, {{"index", "hash"}}},
-  });
 
 struct pcap_close_wrapper {
   void operator()(struct pcap* handle) const noexcept {
@@ -140,28 +137,68 @@ enum class frame_type : char {
   vxlan = '\x14'
 };
 
-// Strips all data from a frame until the IP layer is reached. The frame type
-// distinguisher exists for future recursive stripping.
-std::span<const std::byte>
-decapsulate(std::span<const std::byte> frame, frame_type type) {
-  switch (type) {
-    default:
-      return {};
-    case frame_type::ethernet: {
-      constexpr size_t ethernet_header_size = 14;
-      if (frame.size() < ethernet_header_size)
-        return {}; // need at least 2 MAC addresses and the 2-byte EtherType.
-      switch (as_ether_type(frame.subspan<12, 2>())) {
-        default:
-          return frame;
-        case ether_type::ieee_802_1aq:
-          return frame.subspan<4>(); // One 32-bit VLAN tag
-        case ether_type::ieee_802_1q_db:
-          return frame.subspan<2 * 4>(); // Two 32-bit VLAN tags
+/// An 802.3 Ethernet frame.
+class frame {
+public:
+  static std::optional<frame>
+  make(std::span<const std::byte> bytes, frame_type type) {
+    switch (type) {
+      default:
+        break;
+      case frame_type::ethernet: {
+        // Need at least 2 MAC addresses and the 2-byte EtherType.
+        constexpr size_t ethernet_header_size = 6 + 6 + 2;
+        if (bytes.size() < ethernet_header_size)
+          return std::nullopt;
+        auto dst = bytes.subspan<0, 6>();
+        auto src = bytes.subspan<6, 6>();
+        auto result = frame{dst, src};
+        auto type = as_ether_type(bytes.subspan<12, 2>());
+        switch (type) {
+          default:
+            result.type = type;
+            result.payload = bytes.subspan<ethernet_header_size>();
+            break;
+          case ether_type::ieee_802_1aq: {
+            // One extra 4-byte 802.1Q header.
+            constexpr size_t min_frame_size = ethernet_header_size + 4;
+            if (bytes.size() < min_frame_size)
+              return std::nullopt;
+            result.outer_tci = bytes[13];
+            result.type = as_ether_type(bytes.subspan<min_frame_size - 2, 2>());
+            result.payload = bytes.subspan<min_frame_size>();
+            break;
+          }
+          case ether_type::ieee_802_1q_db: {
+            // Two extra 4-byte 802.1Q header.
+            constexpr size_t min_frame_size = ethernet_header_size + 4 + 4;
+            if (bytes.size() < min_frame_size)
+              return std::nullopt;
+            result.outer_tci = bytes[13];
+            result.inner_tci = bytes[15];
+            result.type = as_ether_type(bytes.subspan<min_frame_size - 2, 2>());
+            result.payload = bytes.subspan<min_frame_size>();
+            break;
+          }
+        }
+        return result;
       }
     }
+    return std::nullopt;
   }
-}
+
+  std::span<const std::byte, 6> dst;  ///< Destination MAC address
+  std::span<const std::byte, 6> src;  ///< Source MAC address
+  std::optional<std::byte> outer_tci; ///< Outer 802.1Q tag control information
+  std::optional<std::byte> inner_tci; ///< Outer 802.1Q tag control information
+  ether_type type;                    ///< EtherType
+  std::span<const std::byte> payload; ///< Payload
+
+private:
+  frame(std::span<const std::byte, 6> dst, std::span<const std::byte, 6> src)
+    : dst{dst}, src{src} {
+  }
+};
 
 /// A PCAP reader.
 class reader : public format::single_layout_reader {
@@ -190,8 +227,7 @@ public:
     drop_rate_threshold_
       = get_or(options, category + ".drop-rate-threshold", 0.05);
     community_id_ = !get_or(options, category + ".disable-community-id", false);
-    packet_type_
-      = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
+    packet_type_ = make_packet_type();
     last_stats_ = {};
     discard_count_ = 0;
   }
@@ -353,16 +389,15 @@ protected:
       // Parse frame.
       auto raw_frame = std::span<const std::byte>{
         reinterpret_cast<const std::byte*>(data), header->len};
-      auto frame = decapsulate(raw_frame, frame_type::ethernet);
-      if (frame.empty())
+      auto frame = frame::make(raw_frame, frame_type::ethernet);
+      if (!frame)
         return caf::make_error(ec::format_error, "failed to decapsulate frame");
-      constexpr size_t ethernet_header_size = 14;
-      auto layer3 = frame.subspan<ethernet_header_size>();
+      auto layer3 = frame->payload;
       std::span<const std::byte> layer4;
       uint8_t layer4_proto = 0;
       flow conn;
       // Parse layer 3.
-      switch (as_ether_type(frame.subspan<12, 2>())) {
+      switch (frame->type) {
         default: {
           ++discard_count_;
           VAST_DEBUG("{} skips non-IP packet", detail::pretty_type_name(this));
@@ -370,7 +405,7 @@ protected:
         }
         case ether_type::ipv4: {
           constexpr size_t ipv4_header_size = 20;
-          if (header->len < ethernet_header_size + ipv4_header_size)
+          if (frame->payload.size() < ipv4_header_size)
             return caf::make_error(ec::format_error, "IPv4 header too short");
           size_t header_size = (std::to_integer<uint8_t>(layer3[0]) & 0x0f) * 4;
           if (header_size < ipv4_header_size)
@@ -384,7 +419,8 @@ protected:
           break;
         }
         case ether_type::ipv6: {
-          if (header->len < ethernet_header_size + 40)
+          constexpr size_t ipv6_header_size = 40;
+          if (frame->payload.size() < ipv6_header_size)
             return caf::make_error(ec::format_error, "IPv6 header too short");
           conn.src_addr = address::v6(layer3.subspan<8, 16>());
           conn.dst_addr = address::v6(layer3.subspan<24, 16>());
@@ -460,7 +496,14 @@ protected:
             && builder_->add(conn.dst_addr)
             && builder_->add(conn.src_port.number())
             && builder_->add(conn.dst_port.number())
-            && (!community_id_ || builder_->add(std::string_view{cid}))
+            && (frame->outer_tci
+                  ? builder_->add(std::to_integer<count>(*frame->outer_tci))
+                  : builder_->add(caf::none))
+            && (frame->outer_tci
+                  ? builder_->add(std::to_integer<count>(*frame->inner_tci))
+                  : builder_->add(caf::none))
+            && (community_id_ ? builder_->add(std::string_view{cid})
+                              : builder_->add(caf::none))
             && builder_->add(payload))) {
         return caf::make_error(ec::parse_error, "unable to fill row");
       }
@@ -553,7 +596,6 @@ private:
   }
 
   std::unique_ptr<struct pcap, pcap_close_wrapper> pcap_ = nullptr;
-
   std::unordered_map<flow, flow_state> flows_;
   std::string input_;
   std::optional<std::string> interface_;
@@ -606,8 +648,9 @@ public:
         return caf::make_error(ec::format_error, "failed to open pcap dumper");
     }
     auto&& layout = slice.layout();
-    if (!congruent(layout, type{pcap_packet_type})
-        && !congruent(layout, type{pcap_packet_type_community_id}))
+    // TODO: relax this check. We really only need the (1) flow, and (2) PCAP
+    // payload. Everything else is optional.
+    if (!congruent(layout, make_packet_type()))
       return caf::make_error(ec::format_error, "invalid pcap packet type");
     // TODO: Consider iterating in natural order for the slice.
     // TODO: Calculate column offsets and indices only once instead
@@ -713,11 +756,10 @@ network packets from a trace or an interface.
 The `spawn source pcap` command spawns a PCAP source inside the node and is the
 analog to the `import pcap` command.
 
-VAST automatically calculates the [Community
-ID](https://github.com/corelight/community-id-spec) for PCAPs for better
-pivoting support. The extra computation induces an overhead of approximately 15%
-of the ingestion rate. The option `--disable-community-id` disables the
-computation completely.
+VAST computes the [Community ID](https://github.com/corelight/community-id-spec)
+per packet for better pivoting support. Adding the string representation
+to the table slice imposes an overhead of approximately 15% of the ingestion
+rate. The option `--disable-community-id` disables the computation completely.
 
 The PCAP import format has many additional options that offer a user interface
 that should be familiar to users of other tools interacting with PCAPs. To see
