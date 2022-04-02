@@ -120,27 +120,6 @@ private:
   const index_state& state_;
 };
 
-struct query_backlog {
-  struct job {
-    vast::query query;
-    caf::typed_response_promise<query_cursor> rp;
-    caf::actor_addr sender;
-  };
-
-  // Emplace a job.
-  void emplace(vast::query query, caf::typed_response_promise<query_cursor> rp,
-               caf::actor_addr sender);
-
-  /// Cancels jobs associated with the given sender.
-  /// @returns The number of cancelled jobs.
-  uint64_t cancel(caf::actor_addr sender);
-
-  [[nodiscard]] std::optional<job> take_next();
-
-  std::deque<job> normal;
-  std::deque<job> low;
-};
-
 /// The result type of the query evaluation handler.
 enum class query_response : bool {
   /// Signals that query evaluation is incomplete and more results can be
@@ -326,15 +305,7 @@ struct index_state {
   /// The number of partitions initially returned for a query.
   uint32_t taste_partitions = {};
 
-  /// The set of received but unprocessed queries.
-  query_backlog backlog = {};
-
-  /// Maps query IDs to pending queries lookup state.
-  // std::unordered_map<uuid, query_state> pending_queries = {};
-
-  /// Maps candidate partition IDs to the queries .
-  // std::unordered_map<uuid, std::vector<uuid>> pending_partitions = {};
-
+  /// The queue of in-flight queries.
   pending_queue pending_queries = {};
 
   /// Maps exporter actor address to known query ID for monitoring

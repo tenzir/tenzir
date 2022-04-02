@@ -1211,10 +1211,6 @@ index(index_actor::stateful_pointer<index_state> self,
                      *self, query);
         return caf::skip;
       }
-      // `current_sender()` doesn't work after creating the response promise, so
-      // we must do it before.
-      auto client
-        = caf::actor_cast<receiver_actor<atom::done>>(self->current_sender());
       auto rp = self->make_response_promise<query_cursor>();
       std::vector<uuid> candidates;
       for (const auto& [_, active_partition] : self->state.active_partitions)
@@ -1235,6 +1231,7 @@ index(index_actor::stateful_pointer<index_state> self,
                            candidates.end());
           // Allows the client to query further results after initial taste.
           auto query_id = query.id;
+          auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
           if (candidates.empty()) {
             VAST_DEBUG("{} returns without result: no partitions qualify",
                        *self);
