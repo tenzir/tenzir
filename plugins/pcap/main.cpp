@@ -110,6 +110,12 @@ struct pcap_dump_close_wrapper {
   }
 };
 
+auto to_uint16(std::span<const std::byte, 2> bytes) {
+  auto data = bytes.data();
+  auto ptr = reinterpret_cast<const uint16_t*>(std::launder(data));
+  return detail::to_host_order(*ptr);
+}
+
 enum class frame_type : char {
   chap_none = '\x00',
   chap_challenge = '\x01',
@@ -163,7 +169,8 @@ struct frame {
             constexpr size_t min_frame_size = ethernet_header_size + 4;
             if (bytes.size() < min_frame_size)
               return std::nullopt;
-            result.outer_tci = bytes[13];
+            result.outer_vid = to_uint16(bytes.subspan<14, 2>());
+            *result.outer_vid &= 0x0FFF; // lower 12 bits only
             result.type = as_ether_type(bytes.subspan<min_frame_size - 2, 2>());
             result.payload = bytes.subspan<min_frame_size>();
             break;
@@ -173,8 +180,10 @@ struct frame {
             constexpr size_t min_frame_size = ethernet_header_size + 4 + 4;
             if (bytes.size() < min_frame_size)
               return std::nullopt;
-            result.outer_tci = bytes[13];
-            result.inner_tci = bytes[15];
+            result.outer_vid = to_uint16(bytes.subspan<14, 2>());
+            *result.outer_vid &= 0x0FFF; // lower 12 bits only
+            result.inner_vid = to_uint16(bytes.subspan<16, 2>());
+            *result.inner_vid &= 0x0FFF; // lower 12 bits only
             result.type = as_ether_type(bytes.subspan<min_frame_size - 2, 2>());
             result.payload = bytes.subspan<min_frame_size>();
             break;
@@ -192,8 +201,8 @@ struct frame {
 
   std::span<const std::byte, 6> dst;  ///< Destination MAC address
   std::span<const std::byte, 6> src;  ///< Source MAC address
-  std::optional<std::byte> outer_tci; ///< Outer 802.1Q tag control information
-  std::optional<std::byte> inner_tci; ///< Outer 802.1Q tag control information
+  std::optional<uint16_t> outer_vid;  ///< Outer 802.1Q tag control information
+  std::optional<uint16_t> inner_vid;  ///< Outer 802.1Q tag control information
   ether_type type;                    ///< EtherType
   std::span<const std::byte> payload; ///< Payload
 };
@@ -239,12 +248,6 @@ struct packet {
   std::span<const std::byte> payload;
 };
 
-auto to_port(std::span<const std::byte, 2> bytes) {
-  auto data = bytes.data();
-  auto ptr = reinterpret_cast<const uint16_t*>(std::launder(data));
-  return detail::to_host_order(*ptr);
-}
-
 /// A layer 4 segment.
 struct segment {
   static std::optional<segment>
@@ -257,8 +260,8 @@ struct segment {
         constexpr size_t min_tcp_header_size = 20;
         if (bytes.size() < min_tcp_header_size)
           return std::nullopt;
-        result.src = to_port(bytes.subspan<0, 2>());
-        result.dst = to_port(bytes.subspan<2, 2>());
+        result.src = to_uint16(bytes.subspan<0, 2>());
+        result.dst = to_uint16(bytes.subspan<2, 2>());
         result.type = port_type::tcp;
         size_t data_offset = (std::to_integer<uint8_t>(bytes[12]) >> 4) * 4;
         if (bytes.size() < data_offset)
@@ -270,8 +273,8 @@ struct segment {
         constexpr size_t udp_header_size = 8;
         if (bytes.size() < udp_header_size)
           return std::nullopt;
-        result.src = to_port(bytes.subspan<0, 2>());
-        result.dst = to_port(bytes.subspan<2, 2>());
+        result.src = to_uint16(bytes.subspan<0, 2>());
+        result.dst = to_uint16(bytes.subspan<2, 2>());
         result.type = port_type::udp;
         result.payload = bytes.subspan<8>();
         return result;
@@ -539,12 +542,10 @@ protected:
             && builder_->add(conn.dst_addr)
             && builder_->add(conn.src_port.number())
             && builder_->add(conn.dst_port.number())
-            && (frame->outer_tci
-                  ? builder_->add(std::to_integer<count>(*frame->outer_tci))
-                  : builder_->add(caf::none))
-            && (frame->outer_tci
-                  ? builder_->add(std::to_integer<count>(*frame->inner_tci))
-                  : builder_->add(caf::none))
+            && (frame->outer_vid ? builder_->add(count{*frame->outer_vid})
+                                 : builder_->add(caf::none))
+            && (frame->outer_vid ? builder_->add(count{*frame->inner_vid})
+                                 : builder_->add(caf::none))
             && (community_id_ ? builder_->add(std::string_view{cid})
                               : builder_->add(caf::none))
             && builder_->add(payload))) {
@@ -803,6 +804,13 @@ VAST computes the [Community ID](https://github.com/corelight/community-id-spec)
 per packet for better pivoting support. Adding the string representation
 to the table slice imposes an overhead of approximately 15% of the ingestion
 rate. The option `--disable-community-id` disables the computation completely.
+
+While decapsulating packets, VAST extracts
+[802.1Q](https://en.wikipedia.org/wiki/IEEE_802.1Q) VLAN tags into the `vlan`
+record, consisting of an `outer` and `inner` field for the respective tags. The
+value of the VLAN tag corresponds to the 12-bit VLAN identifier (VID). Special
+values include `0` (frame does not carry a VLAN ID) and `0xFFF` (reserved value;
+sometimes wildcard match).
 
 The PCAP import format has many additional options that offer a user interface
 that should be familiar to users of other tools interacting with PCAPs. To see
