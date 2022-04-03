@@ -138,8 +138,7 @@ enum class frame_type : char {
 };
 
 /// An 802.3 Ethernet frame.
-class frame {
-public:
+struct frame {
   static std::optional<frame>
   make(std::span<const std::byte> bytes, frame_type type) {
     switch (type) {
@@ -187,17 +186,116 @@ public:
     return std::nullopt;
   }
 
+  frame(std::span<const std::byte, 6> dst, std::span<const std::byte, 6> src)
+    : dst{dst}, src{src} {
+  }
+
   std::span<const std::byte, 6> dst;  ///< Destination MAC address
   std::span<const std::byte, 6> src;  ///< Source MAC address
   std::optional<std::byte> outer_tci; ///< Outer 802.1Q tag control information
   std::optional<std::byte> inner_tci; ///< Outer 802.1Q tag control information
   ether_type type;                    ///< EtherType
   std::span<const std::byte> payload; ///< Payload
+};
 
-private:
-  frame(std::span<const std::byte, 6> dst, std::span<const std::byte, 6> src)
-    : dst{dst}, src{src} {
+/// An IP packet.
+struct packet {
+  static std::optional<packet>
+  make(std::span<const std::byte> bytes, ether_type type) {
+    packet result;
+    switch (type) {
+      default:
+        break;
+      case ether_type::ipv4: {
+        constexpr size_t ipv4_header_size = 20;
+        if (bytes.size() < ipv4_header_size)
+          return std::nullopt;
+        size_t header_size = (std::to_integer<uint8_t>(bytes[0]) & 0x0f) * 4;
+        if (header_size < ipv4_header_size)
+          return std::nullopt;
+        result.src = address::v4(bytes.subspan<12, 4>());
+        result.dst = address::v4(bytes.subspan<16, 4>());
+        result.type = std::to_integer<uint8_t>(bytes[9]);
+        result.payload = bytes.subspan(header_size);
+        return result;
+      }
+      case ether_type::ipv6: {
+        constexpr size_t ipv6_header_size = 40;
+        if (bytes.size() < ipv6_header_size)
+          return std::nullopt;
+        result.src = address::v6(bytes.subspan<8, 16>());
+        result.dst = address::v6(bytes.subspan<24, 16>());
+        result.type = std::to_integer<uint8_t>(bytes[6]);
+        result.payload = bytes.subspan(40);
+        return result;
+      }
+    }
+    return std::nullopt;
   }
+
+  address src;
+  address dst;
+  uint8_t type;
+  std::span<const std::byte> payload;
+};
+
+auto to_port(std::span<const std::byte, 2> bytes) {
+  auto data = bytes.data();
+  auto ptr = reinterpret_cast<const uint16_t*>(std::launder(data));
+  return detail::to_host_order(*ptr);
+}
+
+/// A layer 4 segment.
+struct segment {
+  static std::optional<segment>
+  make(std::span<const std::byte> bytes, uint8_t type) {
+    segment result;
+    switch (type) {
+      default:
+        break;
+      case IPPROTO_TCP: {
+        constexpr size_t min_tcp_header_size = 20;
+        if (bytes.size() < min_tcp_header_size)
+          return std::nullopt;
+        result.src = to_port(bytes.subspan<0, 2>());
+        result.dst = to_port(bytes.subspan<2, 2>());
+        result.type = port_type::tcp;
+        size_t data_offset = (std::to_integer<uint8_t>(bytes[12]) >> 4) * 4;
+        if (bytes.size() < data_offset)
+          return std::nullopt;
+        result.payload = bytes.subspan(data_offset);
+        return result;
+      }
+      case IPPROTO_UDP: {
+        constexpr size_t udp_header_size = 8;
+        if (bytes.size() < udp_header_size)
+          return std::nullopt;
+        result.src = to_port(bytes.subspan<0, 2>());
+        result.dst = to_port(bytes.subspan<2, 2>());
+        result.type = port_type::udp;
+        result.payload = bytes.subspan<8>();
+        return result;
+      }
+      case IPPROTO_ICMP: {
+        constexpr size_t icmp_header_size = 8;
+        if (bytes.size() < icmp_header_size)
+          return std::nullopt;
+        auto message_type = std::to_integer<uint8_t>(bytes[0]);
+        auto message_code = std::to_integer<uint8_t>(bytes[1]);
+        result.src = message_type;
+        result.dst = message_code;
+        result.type = port_type::icmp;
+        result.payload = bytes.subspan<8>();
+        return result;
+      }
+    }
+    return std::nullopt;
+  }
+
+  uint16_t src;
+  uint16_t dst;
+  port_type type;
+  std::span<const std::byte> payload;
 };
 
 /// A PCAP reader.
@@ -386,89 +484,34 @@ protected:
         return finish(f, caf::make_error(ec::format_error,
                                          "failed to get next packet: ", err));
       }
-      // Parse frame.
       auto raw_frame = std::span<const std::byte>{
         reinterpret_cast<const std::byte*>(data), header->len};
+      // Parse layer 2.
       auto frame = frame::make(raw_frame, frame_type::ethernet);
       if (!frame)
         return caf::make_error(ec::format_error, "failed to decapsulate frame");
-      auto layer3 = frame->payload;
-      std::span<const std::byte> layer4;
-      uint8_t layer4_proto = 0;
-      flow conn;
       // Parse layer 3.
-      switch (frame->type) {
-        default: {
-          ++discard_count_;
-          VAST_DEBUG("{} skips non-IP packet", detail::pretty_type_name(this));
-          continue;
-        }
-        case ether_type::ipv4: {
-          constexpr size_t ipv4_header_size = 20;
-          if (frame->payload.size() < ipv4_header_size)
-            return caf::make_error(ec::format_error, "IPv4 header too short");
-          size_t header_size = (std::to_integer<uint8_t>(layer3[0]) & 0x0f) * 4;
-          if (header_size < ipv4_header_size)
-            return caf::make_error(ec::format_error,
-                                   "IPv4 header too short: ", header_size,
-                                   " bytes");
-          conn.src_addr = address::v4(layer3.subspan<12, 4>());
-          conn.dst_addr = address::v4(layer3.subspan<16, 4>());
-          layer4_proto = std::to_integer<uint8_t>(layer3[9]);
-          layer4 = layer3.subspan(header_size);
-          break;
-        }
-        case ether_type::ipv6: {
-          constexpr size_t ipv6_header_size = 40;
-          if (frame->payload.size() < ipv6_header_size)
-            return caf::make_error(ec::format_error, "IPv6 header too short");
-          conn.src_addr = address::v6(layer3.subspan<8, 16>());
-          conn.dst_addr = address::v6(layer3.subspan<24, 16>());
-          layer4_proto = std::to_integer<uint8_t>(layer3[6]);
-          layer4 = layer3.subspan(40);
-          break;
-        }
+      auto packet = packet::make(frame->payload, frame->type);
+      if (!packet) {
+        ++discard_count_;
+        VAST_DEBUG("skiping non-IP packet");
+        continue;
       }
       // Parse layer 4.
-      auto payload_size = layer4.size();
-      if (layer4_proto == IPPROTO_TCP) {
-        VAST_ASSERT(!layer4.empty());
-        auto orig_p
-          = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data()));
-        auto resp_p
-          = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data() + 2));
-        orig_p = detail::to_host_order(orig_p);
-        resp_p = detail::to_host_order(resp_p);
-        conn.src_port = {orig_p, port_type::tcp};
-        conn.dst_port = {resp_p, port_type::tcp};
-        auto data_offset
-          = *reinterpret_cast<const uint8_t*>(std::launder(layer4.data() + 12))
-            >> 4;
-        payload_size -= data_offset * 4;
-      } else if (layer4_proto == IPPROTO_UDP) {
-        VAST_ASSERT(!layer4.empty());
-        auto orig_p
-          = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data()));
-        auto resp_p
-          = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data() + 2));
-        orig_p = detail::to_host_order(orig_p);
-        resp_p = detail::to_host_order(resp_p);
-        conn.src_port = {orig_p, port_type::udp};
-        conn.dst_port = {resp_p, port_type::udp};
-        payload_size -= 8;
-      } else if (layer4_proto == IPPROTO_ICMP) {
-        VAST_ASSERT(!layer4.empty());
-        auto message_type = std::to_integer<uint8_t>(layer4[0]);
-        auto message_code = std::to_integer<uint8_t>(layer4[1]);
-        conn.src_port = {message_type, port_type::icmp};
-        conn.dst_port = {message_code, port_type::icmp};
-        payload_size -= 8; // TODO: account for variable-size data.
+      auto segment = segment::make(packet->payload, packet->type);
+      if (!segment) {
+        ++discard_count_;
+        VAST_DEBUG("skipping non-(TCP|UDP|ICMP) packet");
+        continue;
       }
+      // Make connection
+      auto conn = make_flow(packet->src, packet->dst, segment->src,
+                            segment->dst, segment->type);
       // Parse packet timestamp
       uint64_t packet_time = header->ts.tv_sec;
       if (last_expire_ == 0)
         last_expire_ = packet_time;
-      if (!update_flow(conn, packet_time, payload_size)) {
+      if (!update_flow(conn, packet_time, segment->payload.size())) {
         ++discard_count_;
         VAST_DEBUG("{} skips cut off packet", detail::pretty_type_name(this));
         continue;
