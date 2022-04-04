@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <fmt/format.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -82,3 +84,142 @@ enum class ether_type : uint16_t {
 ether_type as_ether_type(std::span<const std::byte, 2> octets);
 
 } // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::ether_type> : formatter<string_view> {
+  using super = formatter<string_view>;
+
+  template <class FormatContext>
+  constexpr auto format(const vast::ether_type& x, FormatContext& ctx) const
+    -> decltype(ctx.out()) {
+    switch (x) {
+      case vast::ether_type::ipv4:
+        return super::format("Internet Protocol version 4", ctx);
+      case vast::ether_type::arp:
+        return super::format("Address Resolution Protocol (ARP)", ctx);
+      case vast::ether_type::wol:
+        return super::format("Wake-on-LAN", ctx);
+      case vast::ether_type::avtp:
+        return super::format("Audio Video Transport Protocol (AVTP)", ctx);
+      case vast::ether_type::trill:
+        return super::format("IETF TRILL Protocol", ctx);
+      case vast::ether_type::srp:
+        return super::format("Stream Reservation Protocol", ctx);
+      case vast::ether_type::dec_mop_rc:
+        return super::format("DEC MOP RC", ctx);
+      case vast::ether_type::decnet:
+        return super::format("DECnet Phase IV, DNA Routing", ctx);
+      case vast::ether_type::dec_lat:
+        return super::format("DEC LAT", ctx);
+      case vast::ether_type::rarp:
+        return super::format("Reverse Address Resolution Protocol (RARP)", ctx);
+      case vast::ether_type::apple_talk:
+        return super::format("AppleTalk (Ethertalk)", ctx);
+      case vast::ether_type::aarp:
+        return super::format("AppleTalk Address Resolution Protocol (AARP)",
+                             ctx);
+      case vast::ether_type::ieee_802_1aq:
+        return super::format("VLAN-tagged frame (IEEE 802.1Q) and IEEE 802.1aq",
+                             ctx);
+      case vast::ether_type::slpp:
+        return super::format("Simple Loop Prevention Protocol (SLPP)", ctx);
+      case vast::ether_type::ipx:
+        return super::format("IPX", ctx);
+      case vast::ether_type::qnx:
+        return super::format("QNX Qnet", ctx);
+      case vast::ether_type::ipv6:
+        return super::format("Internet Protocol Version 6 (IPv6)", ctx);
+      case vast::ether_type::flow_control:
+        return super::format("Ethernet flow control", ctx);
+      case vast::ether_type::slow_protocols:
+        return super::format("Ethernet Slow Protocols", ctx);
+      case vast::ether_type::cobra_net:
+        return super::format("CobraNet", ctx);
+      case vast::ether_type::mpls_uni:
+        return super::format("MPLS unicast", ctx);
+      case vast::ether_type::mpls_multi:
+        return super::format("MPLS multicast", ctx);
+      case vast::ether_type::pppoe_discover:
+        return super::format("PPPoE Discovery Stage", ctx);
+      case vast::ether_type::pppoe_session:
+        return super::format("PPPoE Session Stage", ctx);
+      case vast::ether_type::intel:
+        return super::format("Intel Advanced Networking Services", ctx);
+      case vast::ether_type::jumbo_frames:
+        return super::format("Jumbo Frames", ctx);
+      case vast::ether_type::homeplug_1:
+        return super::format("HomePlug 1.0 MME", ctx);
+      case vast::ether_type::ieee_802_1x:
+        return super::format("EAP over LAN (IEEE 802.1X)", ctx);
+      case vast::ether_type::profinet:
+        return super::format("PROFINET Protocol", ctx);
+      case vast::ether_type::hyperscsi:
+        return super::format("HyperSCSI (SCSI over Ethernet)", ctx);
+      case vast::ether_type::ata:
+        return super::format("ATA over Ethernet", ctx);
+      case vast::ether_type::ethercat:
+        return super::format("EtherCAT Protocol", ctx);
+      case vast::ether_type::ieee_802_1ad:
+        return super::format("Provider Bridging (IEEE 802.1ad) & IEEE 802.1aq",
+                             ctx);
+      case vast::ether_type::powerlink:
+        return super::format("Ethernet Powerlink", ctx);
+      case vast::ether_type::goose:
+        return super::format("GOOSE (Generic Object Oriented Substation event)",
+                             ctx);
+      case vast::ether_type::gse:
+        return super::format("Generic Substation Events Management Services",
+                             ctx);
+      case vast::ether_type::sv:
+        return super::format("SV (Sampled Value Transmission)", ctx);
+      case vast::ether_type::lldp:
+        return super::format("Link Layer Discovery Protocol (LLDP)", ctx);
+      case vast::ether_type::sercos_iii:
+        return super::format("SERCOS III", ctx);
+      case vast::ether_type::wsmp:
+        return super::format("WSMP, WAVE Short Message Protocol", ctx);
+      case vast::ether_type::homeplug_av:
+        return super::format("HomePlug AV MME", ctx);
+      case vast::ether_type::mrp:
+        return super::format("Media Redundancy Protocol (IEC62439-2)", ctx);
+      case vast::ether_type::ieee_802_1ae:
+        return super::format("MAC security (IEEE 802.1AE)", ctx);
+      case vast::ether_type::pbb:
+        return super::format("Provider Backbone Bridges (PBB) (IEEE 802.1ah)",
+                             ctx);
+      case vast::ether_type::ptp:
+        return super::format("Precision Time Protocol over Ethernet", ctx);
+      case vast::ether_type::nc_si:
+        return super::format("NC-SI", ctx);
+      case vast::ether_type::prp:
+        return super::format("Parallel Redundancy Protocol (PRP)", ctx);
+      case vast::ether_type::ieee_802_1ag:
+        return super::format("IEEE 802.1ag Connectivity Fault Management (CFM)",
+                             ctx);
+      case vast::ether_type::fcoe:
+        return super::format("Fibre Channel over Ethernet (FCoE)", ctx);
+      case vast::ether_type::fcoe_init:
+        return super::format("FCoE Initialization Protocol", ctx);
+      case vast::ether_type::roce:
+        return super::format("RDMA over Converged Ethernet (RoCE)", ctx);
+      case vast::ether_type::tte:
+        return super::format("TTEthernet Protocol Control Frame (TTE)", ctx);
+      case vast::ether_type::hsr:
+        return super::format("High-availability Seamless Redundancy (HSR)",
+                             ctx);
+      case vast::ether_type::conf_testing:
+        return super::format("Ethernet Configuration Testing Protocol[13]",
+                             ctx);
+      case vast::ether_type::ieee_802_1q_db:
+        return super::format("VLAN (IEEE 802.1Q) frame w/ double tagging", ctx);
+      case vast::ether_type::llt:
+        return super::format("Veritas Technologies Low Latency Transport (LLT)",
+                             ctx);
+    }
+    return super::format("unknown", ctx);
+  }
+};
+
+} // namespace fmt
