@@ -2,7 +2,7 @@
 
 This changelog documents all notable changes to the PCAP plugin for VAST.
 
-## v2.0.0
+## v1.1.0
 
 ### :gift: Features
 
@@ -11,7 +11,7 @@ This changelog documents all notable changes to the PCAP plugin for VAST.
   correspond to the outer and inner VLAN identifier (VID), respectively.
   [#2179](https://github.com/tenzir/vast/pull/2179)
 
-### :zap: Breaking Changes
+### :warning: Changes
 
 - The option `--disable-community-id` no longer removes the field
   `community_id` from the schema. Rather, it simply sets the field values to
