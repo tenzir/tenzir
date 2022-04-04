@@ -46,7 +46,7 @@ struct formatter<vast::frame_type> : formatter<string_view> {
   using super = formatter<string_view>;
 
   template <class FormatContext>
-  constexpr auto format(const vast::frame_type& x, FormatContext& ctx) const
+  constexpr auto format(const vast::frame_type& x, FormatContext& ctx)
     -> decltype(ctx.out()) {
     switch (x) {
       case vast::frame_type::invalid:
