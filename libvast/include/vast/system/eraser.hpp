@@ -48,10 +48,6 @@ public:
   /// instead would fix any query such as `#time < 1 week ago` to the time of
   /// its parsing and not update properly.
   std::string query_ = {};
-
-  /// Keeps track whether we were triggered remotely and need to send a
-  /// confirmation message and suppress the delayed message.
-  caf::typed_response_promise<atom::ok> promise_ = {};
 };
 
 /// Periodically queries `index` and erases all hits from `archive`.

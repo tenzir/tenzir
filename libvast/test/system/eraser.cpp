@@ -39,6 +39,8 @@ using namespace vast;
 
 namespace {
 
+constexpr int CANDIDATES_PER_MOCK_QUERY = 10;
+
 constexpr std::string_view uuid_str = "423b45a1-c217-4f99-ba43-9e3fc3285cd3";
 
 template <class T>
@@ -57,7 +59,7 @@ struct mock_index_state {
 };
 
 system::index_actor::behavior_type
-mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
+mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
   return {
     [=](atom::worker, system::query_supervisor_actor&) {
       FAIL("no mock implementation available");
@@ -91,23 +93,28 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     },
     [=](atom::apply, transform_ptr, std::vector<uuid>,
         system::keep_original_partition) -> partition_info {
-      FAIL("no mock implementation available");
+      return partition_info{
+        .uuid = vast::uuid::nil(),
+        .events = 0ull,
+        .max_import_time = vast::time::min(),
+        .stats = {},
+      };
     },
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },
     [=](atom::resolve, vast::expression) -> system::catalog_result {
-      FAIL("no mock implementation available");
+      std::vector<vast::uuid> result;
+      for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i)
+        result.push_back(vast::uuid::random());
+      return system::catalog_result{system::catalog_result::probabilistic,
+                                    std::move(result)};
     },
     [=](atom::evaluate, vast::query&) -> caf::result<system::query_cursor> {
-      auto query_id = unbox(to<uuid>(uuid_str));
-      self->state.client = caf::actor_cast<caf::actor>(self->current_sender());
-      self->send(self, query_id, 3u);
-      return system::query_cursor{query_id, uint32_t{7}, uint32_t{3}};
+      FAIL("no mock implementation available");
     },
     [=](const uuid&, uint32_t) {
-      auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
-      anon_self->send(self->state.client, atom::done_v);
+      FAIL("no mock implementation available");
     },
     [=](atom::erase, uuid) -> atom::done {
       FAIL("no mock implementation available");
@@ -142,7 +149,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   uuid query_id = unbox(to<uuid>(uuid_str));
   system::index_actor index = sys.spawn(mock_index);
-  caf::actor aut;
+  system::eraser_actor aut;
 };
 
 } // namespace
@@ -152,18 +159,18 @@ FIXTURE_SCOPE(eraser_tests, fixture)
 TEST(eraser on mock INDEX) {
   index = sys.spawn(mock_index);
   spawn_aut();
-  for (int i = 0; i < 2; ++i) {
-    sched.trigger_timeouts();
-    expect((atom::run), from(aut).to(aut));
-    expect((atom::evaluate, vast::query), from(aut).to(index));
-    expect((uuid, uint32_t), from(_).to(index).with(query_id, 3u));
-    expect((system::query_cursor), from(index).to(aut));
-    expect((atom::done), from(_).to(aut));
-    expect((uuid, uint32_t), from(aut).to(index).with(query_id, 3u));
-    expect((atom::done), from(_).to(aut));
-    expect((uuid, uint32_t), from(aut).to(index).with(query_id, 1u));
-    expect((atom::done), from(_).to(aut));
-  }
+  sched.trigger_timeouts();
+  expect((atom::ping), from(aut).to(aut));
+  expect((atom::run), from(aut).to(aut));
+  expect((atom::resolve, vast::expression), from(aut).to(index));
+  expect((system::catalog_result), from(index).to(aut));
+  expect((atom::apply, vast::transform_ptr, std::vector<vast::uuid>,
+          vast::system::keep_original_partition),
+         from(aut).to(index));
+  // The mock index doesn't do any internal messaging but just
+  // returns the result.
+  expect((vast::partition_info), from(index).to(aut));
+  expect((atom::ok), from(aut).to(aut));
 }
 
 FIXTURE_SCOPE_END()
