@@ -58,6 +58,7 @@ struct fixture : fixtures::deterministic_actor_system {
       {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},
       {"lc", list_type{count_type{}}},
       {"lt", list_type{time_type{}}},
+      {"r2", real_type{}},
       {"msa", map_type{string_type{}, address_type{}}},
       {"mcs", map_type{count_type{}, string_type{}}},
     },
@@ -299,8 +300,9 @@ TEST(csv reader - duration) {
         == data{unbox(to<duration>("42s"))});
 }
 
-std::string_view l2_log_reord = R"__(msa, c, r, i, b,  a,  sn, d,  e,  t, lc, lt
-{ foo=1.2.3.4, bar=2001:db8:: },424242,4.2,-1337,T,147.32.84.165,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,[ 5555,0],[ 2019-04-30T11:46:13Z ])__";
+std::string_view l2_log_reord
+  = R"__(msa, c, r, i, b,  a,  sn, d,  e,  t, lc, lt, r2
+{ foo=1.2.3.4, bar=2001:db8:: },424242,4.2,-1337,T,147.32.84.165,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,[ 5555,0],[ 2019-04-30T11:46:13Z ],3)__";
 // FIXME: Parsing maps in csv is broken, see ch12358.
 //   = R"__(msa, c, r, i, b,  a,  sn, d,  e,  t,  lc, lt, mcs
 // { foo=1.2.3.4, bar=2001:db8::
@@ -324,6 +326,7 @@ TEST(csv reader - reordered layout) {
       {"t", time_type{}},
       {"lc", list_type{count_type{}}},
       {"lt", list_type{time_type{}}},
+      {"r2", real_type{}},
       // FIXME: Parsing maps in csv is broken, see ch12358.
       // {"mcs", map_type{count_type{}, string_type{}}}
     },
@@ -345,11 +348,12 @@ TEST(csv reader - reordered layout) {
   CHECK(slices[0].at(0, 10) == data{list{5555u, 0u}});
   CHECK(slices[0].at(0, 11)
         == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
-  auto m = map{};
-  m[1u] = data{"FOO"};
-  m[1024u] = data{"BAR!"};
+  CHECK(slices[0].at(0, 12) == data{real{3.}});
   // FIXME: Parsing maps in csv is broken, see ch12358.
-  // CHECK_EQUAL(materialize(slices[0].at(0, 14)), data{m});
+  // auto m = map{};
+  // m[1u] = data{"FOO"};
+  // m[1024u] = data{"BAR!"};
+  // CHECK_EQUAL(materialize(slices[0].at(0, 13)), data{m});
 }
 
 std::string_view l2_line_endings = "d,d2\r\n42s,5days\n10s,1days\r\n";
