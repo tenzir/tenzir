@@ -32,9 +32,11 @@ select_step::select_step(select_step_configuration configuration)
     // setup() function.
     VAST_ERROR("the select step cannot use the expression: '{}', reason: '{}'",
                configuration.expression, e.error());
-    expression_ = e;
+    expression_ = std::move(e);
     return;
   }
+  if (invert_)
+    *e = vast::negation{std::move(*e)};
   expression_ = normalize_and_validate(*e);
   if (!expression_) {
     VAST_ERROR("the select step cannot validate the expression: '{}', reason: "
