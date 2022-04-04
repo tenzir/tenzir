@@ -54,7 +54,8 @@ query_queue::queries() const {
 [[nodiscard]] caf::error
 query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
   auto qid = query_state.query.id;
-  auto [it, emplace_success] = queries_.emplace(qid, std::move(query_state));
+  auto [query_state_it, emplace_success]
+    = queries_.emplace(qid, std::move(query_state));
   if (!emplace_success)
     return caf::make_error(ec::unspecified, "A query with this ID exists "
                                             "already");
@@ -63,6 +64,7 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
       return x.partition == cand;
     });
     if (it != partitions.end()) {
+      it->priority += query_state_it->second.query.priority;
       it->queries.push_back(qid);
       continue;
     }
@@ -71,12 +73,14 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
                         return x.partition == cand;
                       });
     if (it != inactive_partitions.end()) {
+      it->priority += query_state_it->second.query.priority;
       it->queries.push_back(qid);
       partitions.push_back(std::move(*it));
       inactive_partitions.erase(it);
       continue;
     }
-    partitions.push_back(query_queue::entry{cand, std::vector{qid}});
+    partitions.push_back(query_queue::entry{
+      cand, query_state_it->second.query.priority, std::vector{qid}});
   }
   // TODO: Insertion sort should be better.
   std::sort(partitions.begin(), partitions.end());
@@ -142,8 +146,8 @@ std::optional<query_queue::entry> query_queue::next() {
     return std::nullopt;
   auto result = std::move(partitions.back());
   partitions.pop_back();
-  entry active = {result.partition, {}};
-  entry inactive = {result.partition, {}};
+  entry active = {result.partition, 0ull, {}};
+  entry inactive = {result.partition, 0ull, {}};
   std::partition_copy(
     std::make_move_iterator(result.queries.begin()),
     std::make_move_iterator(result.queries.end()),
@@ -159,8 +163,20 @@ std::optional<query_queue::entry> query_queue::next() {
       return query_state.requested_partitions
              > query_state.scheduled_partitions;
     });
-  if (!inactive.queries.empty())
+  if (!inactive.queries.empty()) {
+    for (auto qid_it = inactive.queries.begin();
+         qid_it != inactive.queries.end();) {
+      auto it = queries_.find(*qid_it);
+      if (it == queries_.end()) {
+        // We must have already warned about this above, no need to repeat.
+        qid_it = inactive.queries.erase(qid_it);
+        continue;
+      }
+      inactive.priority += it->second.query.priority;
+      ++qid_it;
+    }
     inactive_partitions.push_back(std::move(inactive));
+  }
   if (!active.queries.empty()) {
     // TODO: Consider delaying the following loop until the next insert or
     // activate.

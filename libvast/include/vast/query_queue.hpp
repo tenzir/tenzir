@@ -51,10 +51,11 @@ public:
   /// to a list of query IDs.
   struct entry {
     uuid partition;
+    uint64_t priority = 0;
     std::vector<uuid> queries;
 
     friend auto operator<=>(const entry& lhs, const entry& rhs) {
-      return lhs.queries.size() <=> rhs.queries.size();
+      return lhs.priority <=> rhs.priority;
     }
   };
 
