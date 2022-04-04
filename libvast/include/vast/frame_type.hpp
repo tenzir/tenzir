@@ -49,68 +49,67 @@ struct formatter<vast::frame_type> : formatter<std::string_view> {
   auto format(vast::frame_type x, FormatContext& ctx) const {
     std::string_view type = "unknown";
     switch (x) {
-      using enum vast::frame_type;
-      case invalid:
+      case vast::frame_type::invalid:
         type = "invalid";
         break;
-      case ethernet:
+      case vast::frame_type::ethernet:
         type = "ethernet";
         break;
-      case vlan:
+      case vast::frame_type::vlan:
         type = "vlan";
         break;
-      case mpls:
+      case vast::frame_type::mpls:
         type = "mpls";
         break;
-      case pppoe:
+      case vast::frame_type::pppoe:
         type = "pppoe";
         break;
-      case ppp:
+      case vast::frame_type::ppp:
         type = "ppp";
         break;
-      case chap:
+      case vast::frame_type::chap:
         type = "chap";
         break;
-      case ipv4:
+      case vast::frame_type::ipv4:
         type = "ipv4";
         break;
-      case udp:
+      case vast::frame_type::udp:
         type = "udp";
         break;
-      case radius:
+      case vast::frame_type::radius:
         type = "radius";
         break;
-      case radavp:
+      case vast::frame_type::radavp:
         type = "radavp";
         break;
-      case l2tp:
+      case vast::frame_type::l2tp:
         type = "l2tp";
         break;
-      case l2avp:
+      case vast::frame_type::l2avp:
         type = "l2avp";
         break;
-      case ospfv2:
+      case vast::frame_type::ospfv2:
         type = "ospfv2";
         break;
-      case ospf_md5:
+      case vast::frame_type::ospf_md5:
         type = "ospf_md5";
         break;
-      case tcp:
+      case vast::frame_type::tcp:
         type = "tcp";
         break;
-      case ip_md5:
+      case vast::frame_type::ip_md5:
         type = "ip_md5";
         break;
-      case unknown:
+      case vast::frame_type::unknown:
         type = "unknown";
         break;
-      case gre:
+      case vast::frame_type::gre:
         type = "gre";
         break;
-      case gtp:
+      case vast::frame_type::gtp:
         type = "gtp";
         break;
-      case vxlan:
+      case vast::frame_type::vxlan:
         type = "vxlan";
         break;
     }
