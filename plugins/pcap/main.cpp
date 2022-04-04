@@ -143,6 +143,28 @@ enum class frame_type : char {
   vxlan = '\x14'
 };
 
+} // namespace vast::plugins::pcap
+
+namespace fmt {
+
+template <>
+struct formatter<vast::plugins::pcap::frame_type> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(vast::plugins::pcap::frame_type value, FormatContext& ctx) {
+    // TODO(C++23): std::to_underlying instead of static_cast.
+    return format_to(ctx.out(), "{:#0x}", static_cast<char>(value));
+  }
+};
+
+} // namespace fmt
+
+namespace vast::plugins::pcap {
+
 /// An 802.3 Ethernet frame.
 struct frame {
   static std::optional<frame>
@@ -505,7 +527,7 @@ protected:
       auto packet = packet::make(frame->payload, frame->type);
       if (!packet) {
         ++discard_count_;
-        VAST_DEBUG("skipping packet of type {:#0x}", frame->type);
+        VAST_DEBUG("skipping packet of type {}", frame->type);
         continue;
       }
       // Parse layer 4.
