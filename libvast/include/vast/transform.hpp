@@ -34,6 +34,9 @@ public:
   /// Returns true if any of the transform steps is aggregate.
   [[nodiscard]] bool is_aggregate() const;
 
+  /// Tests whether the transform applies to events of the given type.
+  [[nodiscard]] bool applies_to(std::string_view event_name) const;
+
   /// Adds the table to the internal queue of batches to be transformed.
   [[nodiscard]] caf::error add(table_slice&&);
 

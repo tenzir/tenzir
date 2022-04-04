@@ -54,20 +54,8 @@ struct query {
     }
   };
 
-  /// An erase query to delete the events that match the expression.
-  struct erase {
-    friend bool operator==(const erase&, const erase&) {
-      return true;
-    }
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, erase&) {
-      return f(caf::meta::type_name("vast.query.erase"));
-    }
-  };
-
   /// The query command type.
-  using command = caf::variant<erase, count, extract>;
+  using command = caf::variant<count, extract>;
 
   /// The query priority type.
   enum class priority { normal, low };
@@ -102,10 +90,6 @@ struct query {
     return {extract{caf::actor_cast<system::receiver_actor<table_slice>>(sink),
                     p},
             std::move(expr)};
-  }
-
-  static query make_erase(expression expr) {
-    return {erase{}, std::move(expr)};
   }
 
   // -- misc -------------------------------------------------------------------
@@ -155,9 +139,6 @@ struct formatter<vast::query> {
     -> decltype(ctx.out()) {
     auto out = ctx.out();
     auto f = vast::detail::overload{
-      [&](const vast::query::erase&) {
-        out = format_to(out, "erase(");
-      },
       [&](const vast::query::count& cmd) {
         out = format_to(out, "count(");
         switch (cmd.mode) {

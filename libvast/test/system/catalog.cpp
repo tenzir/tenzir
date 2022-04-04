@@ -396,7 +396,8 @@ TEST(catalog messages) {
   // so this selects everything but the first partition.
   auto expr = unbox(to<expression>("content == \"foo\" && :timestamp >= @25"));
   // Sending an expression should return candidate partition ids
-  auto q = query::make_erase(expr);
+  auto q = query::make_count(system::receiver_actor<uint64_t>{},
+                             query::count::estimate, expr);
   auto expr_response
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();

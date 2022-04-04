@@ -35,7 +35,7 @@ record eraser_state::status(status_verbosity) const {
 eraser_actor::behavior_type
 eraser(eraser_actor::stateful_pointer<eraser_state> self,
        caf::timespan interval, std::string query, index_actor index) {
-  VAST_TRACE_SCOPE("eraser: {} {} {} {} {}", VAST_ARG(self->id()),
+  VAST_TRACE_SCOPE("eraser: {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(interval), VAST_ARG(query), VAST_ARG(index));
   // Set member variables.
   self->state.interval_ = interval;
@@ -49,6 +49,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
                   atom::run_v)
         .then(
           [self](atom::ok) {
+            VAST_VERBOSE("{} successfully finishes run", *self);
             self->delayed_send(static_cast<eraser_actor>(self),
                                self->state.interval_, atom::ping_v);
           },
@@ -60,6 +61,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
     },
     [self](atom::run) -> caf::result<atom::ok> {
       auto const& query = self->state.query_;
+      VAST_VERBOSE("{} runs with query {}", *self, query);
       auto expr = to<expression>(query);
       if (!expr)
         return caf::make_error(ec::invalid_query, fmt::format("{} failed to "
@@ -73,12 +75,17 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
         = std::make_shared<vast::transform>("eraser_transform", std::nullopt);
       auto select_config = select_step_configuration{
         .expression = self->state.query_,
+        .invert = true,
       };
       transform->add_step(std::make_unique<select_step>(select_config));
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
-          [=](catalog_result& result) {
+          [self, transform, rp = rp](catalog_result& result) mutable {
+            if (result.partitions.empty()) {
+              rp.deliver(atom::ok_v);
+              return;
+            }
             // TODO: Test if the candidate is a false positive before applying
             // the transform to avoid unnecessary noise.
             self
@@ -93,10 +100,10 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
                   rp.deliver(e);
                 });
           },
-          [=](const caf::error& err) {
-            self->state.promise_.deliver(err);
+          [rp = rp](const caf::error& e) mutable {
+            rp.deliver(e);
           });
-      return self->state.promise_;
+      return rp;
     },
     // -- status_client_actor -------------------------------------------------
     [self](atom::status, status_verbosity v) {
