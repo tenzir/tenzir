@@ -16,6 +16,7 @@
 #include "vast/index_statistics.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
+#include "vast/query_queue.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/catalog.hpp"
@@ -120,70 +121,9 @@ private:
   const index_state& state_;
 };
 
-struct query_state {
-  /// The query expression.
-  vast::query query;
-
-  /// The query client.
-  receiver_actor<atom::done> client = {};
-
-  /// The number of partitions that need to be evaluated for this query.
-  uint32_t candidate_partitions = 0;
-
-  /// The number of partitions that have been reqested by the client.
-  uint32_t requested_partitions = 0;
-
-  /// The number of partitions that the query was sent to.
-  uint32_t scheduled_partitions = 0;
-
-  /// The number of partitions that are processed already.
-  uint32_t completed_partitions = 0;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.query, x.client,
-             x.candidate_partitions, x.requested_partitions,
-             x.scheduled_partitions, x.completed_partitions);
-  }
-};
-
 struct index_counters {
   size_t partition_materializations = 0;
   size_t partition_lookups = 0;
-};
-
-struct pending_queue {
-  struct pq {
-    uuid partition;
-    std::vector<uuid> queries;
-
-    friend auto operator<=>(const pq& lhs, const pq& rhs) {
-      return lhs.queries.size() <=> rhs.queries.size();
-    }
-  };
-
-  /// Inserts a new query into the queue.
-  [[nodiscard]] caf::error
-  insert(query_state&& query_state, std::vector<uuid>&& candidates);
-
-  /// Activates an inactive query.
-  [[nodiscard]] caf::error activate(const uuid& qid, uint32_t num_partitions);
-
-  [[nodiscard]] caf::error remove_query(const uuid& qid);
-
-  [[nodiscard]] size_t num_partitions() const;
-
-  [[nodiscard]] size_t num_queries() const;
-
-  [[nodiscard]] uuid create_query_id() const;
-
-  [[nodiscard]] std::optional<pq> next();
-
-  /// Maps query IDs to pending queries lookup state.
-  std::unordered_map<uuid, query_state> queries = {};
-
-  std::vector<pq> partitions = {};
-  std::vector<pq> inactive_partitions = {};
 };
 
 /// The state of the index actor.
@@ -294,7 +234,7 @@ struct index_state {
   uint32_t taste_partitions = {};
 
   /// The queue of in-flight queries.
-  pending_queue pending_queries = {};
+  query_queue pending_queries = {};
 
   /// Maps exporter actor address to known query ID for monitoring
   /// purposes.
@@ -398,15 +338,3 @@ index(index_actor::stateful_pointer<index_state> self,
       const std::filesystem::path& catalog_dir, index_config);
 
 } // namespace vast::system
-
-namespace fmt {
-
-template <>
-struct formatter<vast::system::query_state> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const vast::system::query_state& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
-  }
-};
-
-} // namespace fmt

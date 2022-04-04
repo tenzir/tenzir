@@ -1,0 +1,127 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#pragma once
+
+#include "vast/fwd.hpp"
+
+#include "vast/query.hpp"
+#include "vast/system/actors.hpp"
+#include "vast/uuid.hpp"
+
+#include <vector>
+
+namespace vast {
+
+struct query_state {
+  /// The query expression.
+  vast::query query;
+
+  /// The query client.
+  system::receiver_actor<atom::done> client = {};
+
+  /// The number of partitions that need to be evaluated for this query.
+  uint32_t candidate_partitions = 0;
+
+  /// The number of partitions that have been reqested by the client.
+  uint32_t requested_partitions = 0;
+
+  /// The number of partitions that the query was sent to.
+  uint32_t scheduled_partitions = 0;
+
+  /// The number of partitions that are processed already.
+  uint32_t completed_partitions = 0;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, query_state& x) {
+    return f(caf::meta::type_name("query_state"), x.query, x.client,
+             x.candidate_partitions, x.requested_partitions,
+             x.scheduled_partitions, x.completed_partitions);
+  }
+};
+
+class query_queue {
+public:
+  /// The entry type for the `partitions` lists. Maps a partition ID
+  /// to a list of query IDs.
+  struct entry {
+    uuid partition;
+    std::vector<uuid> queries;
+
+    friend auto operator<=>(const entry& lhs, const entry& rhs) {
+      return lhs.queries.size() <=> rhs.queries.size();
+    }
+  };
+
+  // -- observers --------------------------------------------------------------
+
+  /// Calculates the number of partitions that need to be loaded to complete all
+  /// queries.
+  [[nodiscard]] size_t num_partitions() const;
+
+  /// Returns the number of currently queued queries.
+  [[nodiscard]] size_t num_queries() const;
+
+  /// Checks whether queries with outstanding work exist.
+  [[nodiscard]] bool has_work() const;
+
+  /// Checks whether the given query can be reached from the queue of
+  /// partitions. Should only be used for assertions.
+  [[nodiscard]] bool reachable(const uuid& qid) const;
+
+  /// Creates an ID for a query and makes sure to avoid collisions with other
+  /// existing query IDs.
+  [[nodiscard]] uuid create_query_id() const;
+
+  /// Retrieves a handle to the contained queries.
+  [[nodiscard]] const std::unordered_map<uuid, query_state>& queries() const;
+
+  /// Retrieves a handle to the contained queries.
+  [[nodiscard]] std::unordered_map<uuid, query_state>& queries();
+
+  // -- modifiers --------------------------------------------------------------
+
+  /// Inserts a new query into the queue.
+  [[nodiscard]] caf::error
+  insert(query_state&& query_state, std::vector<uuid>&& candidates);
+
+  /// Activates an inactive query.
+  [[nodiscard]] caf::error activate(const uuid& qid, uint32_t num_partitions);
+
+  /// Removes a query from the queue entirely.
+  [[nodiscard]] caf::error remove_query(const uuid& qid);
+
+  /// Retrieves the next partition to be scheduled and the related queries and
+  /// increments the scheduled counters for the latter.
+  [[nodiscard]] std::optional<entry> next();
+
+private:
+  /// Maps query IDs to pending queries lookup state.
+  std::unordered_map<uuid, query_state> queries_ = {};
+
+  /// Maps partitions IDs to lists of query IDs.
+  std::vector<entry> partitions = {};
+
+  /// Maps partitions IDs to lists of query IDs, only contains entries where all
+  /// queries are currently inactive.
+  std::vector<entry> inactive_partitions = {};
+};
+
+} // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::query_state> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const vast::query_state& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+} // namespace fmt
