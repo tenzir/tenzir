@@ -55,9 +55,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Terraform Format
-        run: terraform fmt -check -recursive -diff
-
       - name: Create config file
         run: |
           echo "vast_peered_vpc_id = $VAST_PEERED_VPC_ID" >> .env

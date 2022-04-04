@@ -7,14 +7,13 @@ jobs:
     name: Style Check
     runs-on: ubuntu-latest
     steps:
-
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - uses: actions/setup-python@v3
         with:
-          python-version: '3.9'
+          python-version: "3.9"
 
       - name: Clang Format
         run: |
@@ -43,3 +42,7 @@ jobs:
         run: |
           pip install --upgrade yamllint
           git ls-files '*.yaml' '.yml' | xargs yamllint
+
+      - name: Terraform fmt
+        run: |
+          terraform fmt -check -recursive -diff
