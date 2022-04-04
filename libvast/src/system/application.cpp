@@ -432,13 +432,14 @@ auto make_root_command(std::string_view path) {
                    "disable user and system configuration, schema and plugin "
                    "directoriegs lookup and static and dynamic plugin "
                    "autoloading (this may only be used on the command line)")
-        .add<std::string>("verbosity", "output verbosity level on the "
-                                       "console")
+        .add<std::string>("console-verbosity", "output verbosity level on the "
+                                               "console")
         .add<std::vector<std::string>>("schema-dirs", module_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
         .add<std::string>("client-log-file", "client log file (default: "
                                              "disabled)")
+        .add<size_t>("log-queue-size", "the queue size for the logger")
         .add<std::string>("endpoint,e", "node endpoint")
         .add<std::string>("node-id,i", "the unique ID of this node")
         .add<bool>("node,N", "spawn a node instead of connecting to one")

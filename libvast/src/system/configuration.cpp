@@ -9,6 +9,8 @@
 #include "vast/system/configuration.hpp"
 
 #include "vast/concept/convertible/to.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/add_message_types.hpp"
@@ -34,7 +36,9 @@
 #endif
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
+#include <optional>
 #include <unordered_set>
 
 namespace vast::system {
@@ -47,152 +51,144 @@ template <concrete_type T>
 struct has_extension_type
   : std::is_base_of<arrow::ExtensionType, typename T::arrow_type> {};
 
-} // namespace
+/// Translates an environment variable to a config key. All keys follow the
+/// pattern by PREFIX_SUFFIX, where PREFIX is the application-spefic prefix
+/// that gets stripped. Thereafter, SUFFIX adheres to the following
+/// substitution rules:
+/// 1. A '_' translates into '-'
+/// 2. A "__" translates into the record separator '.'
+/// @pre `!prefix.empty()`
+std::optional<std::string>
+to_config_key(std::string_view key, std::string_view prefix = "VAST") {
+  VAST_ASSERT(!prefix.empty());
+  // PREFIX_X is the shortest allowed key.
+  if (prefix.size() + 2 > key.size())
+    return std::nullopt;
+  if (!key.starts_with(prefix) || key[prefix.size()] != '_')
+    return std::nullopt;
+  auto suffix = key.substr(prefix.size() + 1);
+  // From here on, "__" is the record separator and '_' translates into '-'.
+  auto xs = detail::to_strings(detail::split(suffix, "__"));
+  for (auto& x : xs)
+    for (auto& c : x)
+      c = (c == '_') ? '-' : tolower(c);
+  return detail::join(xs, ".");
+}
 
-std::vector<std::filesystem::path>
-config_dirs(const caf::actor_system_config& config) {
-  const auto bare_mode = caf::get_or(config.content, "vast.bare-mode", false);
-  if (bare_mode)
-    return {};
-  auto result = std::vector<std::filesystem::path>{};
-  if (auto xdg_config_home = detail::locked_getenv("XDG_CONFIG_HOME"))
-    result.push_back(std::filesystem::path{*xdg_config_home} / "vast");
-  else if (auto home = detail::locked_getenv("HOME"))
-    result.push_back(std::filesystem::path{*home} / ".config" / "vast");
-  result.push_back(detail::install_configdir());
+caf::expected<caf::config_value> to_config_value(std::string_view value) {
+  // Lists of strings can show up as `foo,bar,baz`.
+  auto xs = detail::split(value, ",", "\\");
+  if (xs.size() == 1)
+    return caf::config_value::parse(value); // no list
+  std::vector<caf::config_value> result;
+  for (const auto& x : xs)
+    if (auto cfg_val = to_config_value(x))
+      result.push_back(*std::move(cfg_val));
+    else
+      return cfg_val.error();
+  return caf::config_value{std::move(result)};
+}
+
+caf::expected<caf::config_value>
+to_config_value(const caf::config_value& value, const caf::config_option& opt) {
+  // The config_option (from our commands) includes type information on what
+  // value to accept. Command line values are checked against this.
+  // Unfortunately our YAML config operates purely based on values. This means
+  // we may have previously parsed a value incorrectly, e.g., where an atom was
+  // expected we got a string. This trouble will be gone with CAF > 0.18, but
+  // until then we have to *go back* into a string reprsentation to create
+  // ambiguity (i.e., allow for parsing input as either string or atom), and
+  // then come back to the config_value that matches the typing.
+  auto no_quote_stringify = detail::overload{
+    [](const auto& x) {
+      return caf::deep_to_string(x);
+    },
+    [](const std::string& x) {
+      return x;
+    },
+  };
+  auto str = caf::visit(no_quote_stringify, value);
+  auto result = opt.parse(str);
+  if (!result) {
+    // We now try to parse strings as atom using a regex, since we get
+    // recursive types like lists for free this way. A string-vs-atom type
+    // clash is the only instance we currently cannot distinguish. Everything
+    // else is a true type clash.
+    // (With CAF 0.18, this heuristic will be obsolete.)
+    str = detail::replace_all(std::move(str), "\"", "'");
+    result = opt.parse(str);
+    if (!result)
+      return caf::make_error(ec::type_clash,
+                             fmt::format( //
+                               "failed to parse config option {} as {}: {}",
+                               caf::deep_to_string(opt.full_name()),
+                               caf::deep_to_string(opt.type_name()), str));
+  }
   return result;
 }
 
-const std::vector<std::filesystem::path>& loaded_config_files() {
-  return loaded_config_files_singleton;
-}
-
-configuration::configuration() {
-  detail::add_message_types(*this);
-  // Load I/O module.
-  load<caf::io::middleman>();
-  // Initialize factories.
-  factory<synopsis>::initialize();
-  factory<table_slice_builder>::initialize();
-  factory<value_index>::initialize();
-  // Register Arrow extension types.
-  auto register_extension_types =
-    []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
-    (static_cast<void>(Ts::arrow_type::register_extension()), ...);
-  };
-  register_extension_types(
-    caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
-}
-
-caf::error configuration::parse(int argc, char** argv) {
-  VAST_ASSERT(argc > 0);
-  VAST_ASSERT(argv != nullptr);
-  command_line.assign(argv + 1, argv + argc);
-  // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
-  // of the replacements may not be a valid option for any command.
-  const auto replacements = std::vector<std::pair<std::string, std::string>>{
-    {"-qqq", "--verbosity=quiet"}, {"-qq", "--verbosity=error"},
-    {"-q", "--verbosity=warning"}, {"-v", "--verbosity=verbose"},
-    {"-vv", "--verbosity=debug"},  {"-vvv", "--verbosity=trace"},
-  };
-  for (auto& option : command_line)
-    for (const auto& [old, new_] : replacements)
-      if (option == old)
-        option = new_;
-  // Detect when running with --bare-mode, and remove the option from the
-  // command line.
-  if (auto it
-      = std::find(command_line.begin(), command_line.end(), "--bare-mode");
-      it != command_line.end()) {
-    caf::put(content, "vast.bare-mode", true);
-    command_line.erase(it);
-  }
-  // Detect when plugins or plugin-dirs are specified on the command line. This
-  // needs to happen before the regular parsing of the command line since
-  // plugins may add additional commands.
-  auto is_not_plugin_opt = [](auto& x) {
-    return !x.starts_with("--plugins=") && !x.starts_with("--plugin-dirs=");
-  };
-  auto plugin_opt = std::stable_partition(
-    command_line.begin(), command_line.end(), is_not_plugin_opt);
-  auto plugin_args = std::vector<std::string>{};
-  std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
-  command_line.erase(plugin_opt, command_line.end());
-  auto plugin_opts
-    = caf::config_option_set{}
-        .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
-        .add<std::vector<std::string>>("?vast", "plugins", "");
-  auto [ec, it] = plugin_opts.parse(content, plugin_args);
-  VAST_ASSERT(ec == caf::pec::success);
-  VAST_ASSERT(it == plugin_args.end());
-  // Support specifying VAST_PLUGIN_DIRS on the environment.
-  {
-    auto cli_plugin_dirs
-      = caf::get_or(content, "vast.plugin-dirs", std::vector<std::string>{});
-    if (auto vast_plugin_directories = detail::locked_getenv( //
-          "VAST_PLUGIN_DIRS")) {
-      const auto env_plugin_dirs = detail::split(*vast_plugin_directories, ":");
-      for (const auto& dir : env_plugin_dirs)
-        cli_plugin_dirs.emplace_back(dir);
-      if (!cli_plugin_dirs.empty())
-        caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
-    }
-  }
-  // Move CAF options to the end of the command line, parse them, and then
-  // remove them.
-  auto is_vast_opt = [](const auto& x) {
-    return !x.starts_with("--caf.");
-  };
-  auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
-                                       is_vast_opt);
-  std::vector<std::string> caf_args;
-  std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
-  command_line.erase(caf_opt, command_line.end());
-  // Instead of the CAF-supplied `config_file_path`, we use our own
-  // `config_files` variable in order to support multiple configuration files.
-  auto add_configs = [&](std::filesystem::path&& dir) -> caf::error {
+caf::expected<std::vector<std::filesystem::path>>
+collect_config_files(std::vector<std::filesystem::path> dirs,
+                     std::vector<std::string> cli_configs) {
+  std::vector<std::filesystem::path> result;
+  // First, go through all config file directories and gather config files
+  // there. We populate the member variable `config_files` instead of
+  // `config_file_path` in the base class so that we can support multiple
+  // configuration files.
+  for (auto&& dir : dirs) {
+    // Support both *.yaml and *.yml extensions.
     auto conf_yaml = dir / "vast.yaml";
     auto conf_yml = dir / "vast.yml";
     std::error_code err{};
     const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
+    if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("failed to check if vast.yaml file "
+                                         "exists in {}: {}",
+                                         dir, err.message()));
     const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
-    if (err) {
-      VAST_WARN("failed to check if vast.yaml file exists in {}: {}", dir,
-                err.message());
-      return caf::none;
-    }
+    if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("failed to check if vast.yml file "
+                                         "exists in {}: {}",
+                                         dir, err.message()));
+    // We cannot decide which one to pick if we have two, so bail out.
     if (exists_conf_yaml && exists_conf_yml)
-      return caf::make_error(
-        ec::invalid_configuration,
-        "detected both 'vast.yaml' and 'vast.yml' files in " + dir.string());
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("detected both 'vast.yaml' and "
+                                         "'vast.yml' files in {}",
+                                         dir));
     if (exists_conf_yaml)
-      config_files.emplace_back(std::move(conf_yaml));
+      result.emplace_back(std::move(conf_yaml));
     else if (exists_conf_yml)
-      config_files.emplace_back(std::move(conf_yml));
-    return caf::none;
-  };
-  for (auto&& config_dir : config_dirs(*this))
-    if (auto err = add_configs(std::move(config_dir)))
-      return err;
-  // If the user provided a config file on the command line, we attempt to
-  // parse it last.
-  for (auto& arg : command_line) {
-    if (arg.starts_with("--config=")) {
-      std::error_code err{};
-      if (auto config = std::filesystem::path{arg.substr(9)};
-          std::filesystem::exists(config, err))
-        config_files.push_back(std::move(config));
-      else if (err)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("cannot find configuration file {}: "
-                                           "{}",
-                                           config, err.message()));
-      else
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("cannot find configuration file {}",
-                                           config));
-    }
+      result.emplace_back(std::move(conf_yml));
   }
+  // Second, consider command line and environment overrides. But only check
+  // the environment if we don't have a config on the command line.
+  if (cli_configs.empty())
+    if (auto file = detail::getenv("VAST_CONFIG"))
+      cli_configs.emplace_back(*file);
+  for (const auto& file : cli_configs) {
+    auto config_file = std::filesystem::path{file};
+    std::error_code err{};
+    if (std::filesystem::exists(config_file, err))
+      result.push_back(std::move(config_file));
+    else if (err)
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}: "
+                                         "{}",
+                                         config_file, err.message()));
+    else
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("cannot find configuration file {}",
+                                         config_file));
+  }
+  return result;
+}
+
+caf::expected<record>
+load_config_files(std::vector<std::filesystem::path> config_files) {
+  loaded_config_files_singleton.clear();
   // Parse and merge all configuration files.
   record merged_config;
   for (const auto& config : config_files) {
@@ -221,94 +217,222 @@ caf::error configuration::parse(int argc, char** argv) {
       loaded_config_files_singleton.push_back(config);
     }
   }
-  // Flatten everything for simplicity.
-  merged_config = flatten(merged_config);
-  // Strip the caf. prefix from all keys.
+  return merged_config;
+}
+
+/// Merges VAST environment variables into a configuration.
+caf::error merge_environment(record& config) {
+  for (const auto& [key, value] : detail::environment())
+    if (!value.empty())
+      if (auto config_key = to_config_key(key)) {
+        if (!config_key->starts_with("caf."))
+          config_key->insert(0, "vast.");
+        // These environment variables have been manually checked already.
+        // Inserting them into the config would ignore higher-precedence values
+        // from the command line.
+        if (*config_key == "vast.config" || *config_key == "vast.plugins"
+            || *config_key == "vast.plugin-dirs"
+            || *config_key == "vast.bare-mode" || *config_key == "vast.config")
+          continue;
+        // Try first as vast::data, which is richer.
+        if (auto x = to<data>(value)) {
+          config[*config_key] = std::move(*x);
+        } else if (auto config_value = to_config_value(value)) {
+          if (auto x = to<data>(*config_value))
+            config[*config_key] = std::move(*x);
+          else
+            return caf::make_error(
+              ec::parse_error, fmt::format("could not convert environment "
+                                           "variable {}={} to VAST value: {}",
+                                           key, value, x.error()));
+        } else {
+          return caf::make_error(ec::parse_error,
+                                 fmt::format("could not parse environment "
+                                             "variable {} value '{}': {}",
+                                             key, value, config_value.error()));
+        }
+      }
+  return caf::none;
+}
+
+caf::expected<caf::settings> to_settings(record config) {
+  // Pre-process our configuration so that it can be properly parsed later.
+  // Strip the "caf." prefix from all keys.
   // TODO: Remove this after switching to CAF 0.18.
-  for (auto& option : merged_config)
+  for (auto& option : config)
     if (auto& key = option.first; std::string_view{key}.starts_with("caf."))
       key.erase(0, 4);
   // Erase all null values because a caf::config_value has no such notion.
-  for (auto i = merged_config.begin(); i != merged_config.end();) {
+  for (auto i = config.begin(); i != config.end();) {
     if (caf::holds_alternative<caf::none_t>(i->second))
-      i = merged_config.erase(i);
+      i = config.erase(i);
     else
       ++i;
   }
-  // Convert to CAF-readable data structure.
-  auto settings = to<caf::settings>(merged_config);
-  if (!settings)
-    return settings.error();
-  // TODO: Revisit this after we are on CAF 0.18.
-  // Helper function to parse a config_value with the type information
-  // contained in an config_option. Because our YAML config only knows about
-  // strings, but a config_option may require an atom, we have to use a
-  // heuristic to see whether either type works.
-  auto parse_config_value
-    = [](const caf::config_option& opt,
-         const caf::config_value& val) -> caf::expected<caf::config_value> {
-    // Hackish way to get a string representation that doesn't add double
-    // quotes around the value.
-    auto no_quote_stringify = detail::overload{
-      [](const auto& x) {
-        return caf::deep_to_string(x);
-      },
-      [](const std::string& x) {
-        return x;
-      },
-    };
-    auto str = caf::visit(no_quote_stringify, val);
-    auto result = opt.parse(str);
-    if (!result) {
-      // We now try to parse strings as atom using a regex, since we get
-      // recursive types like lists for free this way. A string-vs-atom type
-      // clash is the only instance we currently cannot distinguish. Everything
-      // else is a true type clash.
-      // (With CAF 0.18, this heuristic will be obsolete.)
-      str = detail::replace_all(std::move(str), "\"", "'");
-      result = opt.parse(str);
-      if (!result)
-        return caf::make_error(ec::type_clash, "failed to parse config option",
-                               caf::deep_to_string(opt.full_name()), str,
-                               "expected",
-                               caf::deep_to_string(opt.type_name()));
-    }
-    return result;
+  return to<caf::settings>(config);
+}
+
+} // namespace
+
+std::vector<std::filesystem::path>
+config_dirs(const caf::actor_system_config& config) {
+  const auto bare_mode = caf::get_or(config.content, "vast.bare-mode", false);
+  if (bare_mode)
+    return {};
+  auto result = std::vector<std::filesystem::path>{};
+  if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
+    result.push_back(std::filesystem::path{*xdg_config_home} / "vast");
+  else if (auto home = detail::getenv("HOME"))
+    result.push_back(std::filesystem::path{*home} / ".config" / "vast");
+  result.push_back(detail::install_configdir());
+  return result;
+}
+
+const std::vector<std::filesystem::path>& loaded_config_files() {
+  return loaded_config_files_singleton;
+}
+
+configuration::configuration() {
+  detail::add_message_types(*this);
+  // Load I/O module.
+  load<caf::io::middleman>();
+  // Initialize factories.
+  factory<synopsis>::initialize();
+  factory<table_slice_builder>::initialize();
+  factory<value_index>::initialize();
+  // Register Arrow extension types.
+  auto register_extension_types =
+    []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
+    (static_cast<void>(Ts::arrow_type::register_extension()), ...);
   };
-  for (auto& [key, value] : *settings) {
-    // We have flattened the YAML contents above, so dictionaries cannot occur.
-    VAST_ASSERT(!caf::holds_alternative<caf::config_value::dictionary>(value));
-    // Now this is incredibly ugly, but custom_options_ (a config_option_set)
-    // is the only place that contains the valid type information that our
-    // config file must abide to.
-    if (const auto* option = custom_options_.qualified_name_lookup(key)) {
-      if (auto x = parse_config_value(*option, value))
-        put(content, key, std::move(*x));
-      else
-        return x.error();
-    } else {
-      // If the option is not relevant to CAF's custom options, we just store
-      // the value directly in the content.
-      put(content, key, value);
-    }
-  }
-  // If the user specifies a VAST_ENDPOINT, potentially use it. Precedence:
-  // 1. CLI argument
+  register_extension_types(
+    caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
+}
+
+caf::error configuration::parse(int argc, char** argv) {
+  // The main objective of this function is to parse the command line and put
+  // it into the actor_system_config instance (`content`), which components
+  // throughout VAST query to find out the application settings. This process
+  // has several sequencing intricacies because it also loads configuration
+  // files and considers environment variables while parsing the command line.
+  //
+  // A major issue is that we have to use caf::settings and cannot use
+  // vast::record as unified representation, exacerbating the complexity of
+  // this function. (We have plans to switch to a single, unified
+  // representations.)
+  //
+  // When reviewing this function, it's important to keep the parsing
+  // precedence in mind:
+  //
+  // 1. CLI arguments
   // 2. Environment variables
   // 3. Config files
   // 4. Defaults
-  if (auto vast_endpoint_env = detail::locked_getenv("VAST_ENDPOINT"))
-    caf::put(content, "vast.endpoint", *vast_endpoint_env);
-  // Try parsing all --caf.* settings. First, strip caf. prefix for the
-  // CAF parser.
+  VAST_ASSERT(argc > 0);
+  VAST_ASSERT(argv != nullptr);
+  command_line.assign(argv + 1, argv + argc);
+  // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
+  // of the replacements may not be a valid option for any command.
+  const auto replacements = std::vector<std::pair<std::string, std::string>>{
+    {"-qqq", "--console-verbosity=quiet"},
+    {"-qq", "--console-verbosity=error"},
+    {"-q", "--console-verbosity=warning"},
+    {"-v", "--console-verbosity=verbose"},
+    {"-vv", "--console-verbosity=debug"},
+    {"-vvv", "--console-verbosity=trace"},
+  };
+  for (auto& option : command_line)
+    for (const auto& [old, new_] : replacements)
+      if (option == old)
+        option = new_;
+  // Remove CAF options from the command line; we'll parse them at the very
+  // end.
+  auto is_vast_opt = [](const auto& x) {
+    return !x.starts_with("--caf.");
+  };
+  auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
+                                       is_vast_opt);
+  std::vector<std::string> caf_args;
+  std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   for (auto& arg : caf_args)
-    if (arg.starts_with("--caf."))
-      arg.erase(2, 4);
-  // We clear the config_file_path first so it does not use
-  // caf-application.ini as fallback during actor_system_config::parse().
+    arg.erase(2, 4); // Strip --caf. prefix
+  command_line.erase(caf_opt, command_line.end());
+  // Do not use builtin config directories in "bare mode". We're checking this
+  // here and putting directly into the actor_system_config because
+  // the function config_dirs() relies on this already being there.
+  if (auto it
+      = std::find(command_line.begin(), command_line.end(), "--bare-mode");
+      it != command_line.end())
+    caf::put(content, "vast.bare-mode", true);
+  else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE"))
+    if (*vast_bare_mode == "true")
+      caf::put(content, "vast.bare-mode", true);
+  // Detect when plugins or plugin-dirs are specified on the command line.
+  // This needs to happen before the regular parsing of the command line
+  // since plugins may add additional commands.
+  auto is_not_plugin_opt = [](auto& x) {
+    return !x.starts_with("--plugins=") && !x.starts_with("--plugin-dirs=");
+  };
+  auto plugin_opt = std::stable_partition(
+    command_line.begin(), command_line.end(), is_not_plugin_opt);
+  auto plugin_args = std::vector<std::string>{};
+  std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
+  command_line.erase(plugin_opt, command_line.end());
+  auto plugin_opts
+    = caf::config_option_set{}
+        .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
+        .add<std::vector<std::string>>("?vast", "plugins", "");
+  auto [ec, it] = plugin_opts.parse(content, plugin_args);
+  VAST_ASSERT(ec == caf::pec::success);
+  VAST_ASSERT(it == plugin_args.end());
+  // If there are no plugin options on the command line, look at the
+  // corresponding evironment variables VAST_PLUGIN_DIRS and VAST_PLUGINS.
+  if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGIN_DIRS")) {
+    auto cli_plugin_dirs
+      = caf::get_or(content, "vast.plugin-dirs", std::vector<std::string>{});
+    if (cli_plugin_dirs.empty()) {
+      for (auto&& dir : detail::split(*vast_plugin_dirs, ":"))
+        cli_plugin_dirs.emplace_back(std::move(dir));
+      caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
+    }
+  }
+  if (auto vast_plugins = detail::getenv("VAST_PLUGINS")) {
+    auto cli_plugins
+      = caf::get_or(content, "vast.plugins", std::vector<std::string>{});
+    if (cli_plugins.empty()) {
+      for (auto&& plugin : detail::split(*vast_plugins, ","))
+        cli_plugins.emplace_back(std::move(plugin));
+      caf::put(content, "vast.plugins", std::move(cli_plugins));
+    }
+  }
+  // Gather and parse all to-be-considered configuration files.
+  std::vector<std::string> cli_configs;
+  for (auto& arg : command_line)
+    if (arg.starts_with("--config="))
+      cli_configs.push_back(arg.substr(9));
+  if (auto configs = collect_config_files(config_dirs(*this), cli_configs))
+    config_files = std::move(*configs);
+  else
+    return configs.error();
+  auto config = load_config_files(config_files);
+  if (!config)
+    return config.error();
+  *config = flatten(*config);
+  if (auto err = merge_environment(*config))
+    return err;
+  // From here on, we go into CAF land with the goal to put the configuration
+  // into the members of this actor_system_config instance.
+  auto settings = to_settings(std::move(*config));
+  if (!settings)
+    return settings.error();
+  if (auto err = embed_config(*settings))
+    return err;
+  // Now parse all CAF options from the command line. Prior to doing so, we
+  // clear the config_file_path first so it does not use caf-application.ini as
+  // fallback during actor_system_config::parse().
   config_file_path.clear();
   auto result = actor_system_config::parse(std::move(caf_args));
-  // Load OpenSSL module if configured to do so.
+  // Load OpenSSL last because it uses the parsed configuration.
 #if VAST_ENABLE_OPENSSL
   const auto use_encryption
     = !openssl_certificate.empty() || !openssl_key.empty()
@@ -318,6 +442,28 @@ caf::error configuration::parse(int argc, char** argv) {
     load<caf::openssl::manager>();
 #endif // VAST_ENABLE_OPENSSL
   return result;
+}
+
+caf::error configuration::embed_config(const caf::settings& settings) {
+  for (auto& [key, value] : settings) {
+    // The configuration must have been fully flattened because we cannot
+    // mangle dictionaries in here.
+    VAST_ASSERT(!caf::holds_alternative<caf::config_value::dictionary>(value));
+    // The member custom_options_ (a config_option_set) is the only place that
+    // contains the valid type information, as defined by the command
+    // hierarchy. The passed in config (file and environment) must abide to it.
+    if (const auto* option = custom_options_.qualified_name_lookup(key)) {
+      if (auto x = to_config_value(value, *option))
+        put(content, key, std::move(*x));
+      else
+        return x.error();
+    } else {
+      // If the option is not relevant to CAF's custom options, we just store
+      // the value directly in the content.
+      put(content, key, value);
+    }
+  }
+  return caf::none;
 }
 
 } // namespace vast::system

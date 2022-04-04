@@ -43,3 +43,7 @@ jobs:
         run: |
           pip install --upgrade yamllint
           git ls-files '*.yaml' '.yml' | xargs yamllint
+
+      - name: Terraform fmt
+        run: |
+          terraform fmt -check -recursive -diff

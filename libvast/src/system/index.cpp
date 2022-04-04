@@ -472,7 +472,7 @@ caf::error index_state::load_from_disk() {
                 std::exchange(synopses, {}))
       .then(
         [this](atom::ok) {
-          VAST_INFO("{} finished initalizing and is ready to accept queries",
+          VAST_INFO("{} finished initializing and is ready to accept queries",
                     *self);
           this->accept_queries = true;
         },

@@ -5,6 +5,7 @@ on:
       - opened
       - labeled
       - unlabeled
+      - synchronize
 
 jobs:
   check-labels:

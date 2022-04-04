@@ -1,0 +1,10 @@
+{
+  "events": {
+    "total": 10
+  },
+  "layouts": {
+    "pcap.packet": {
+      "count": 10
+    }
+  }
+}
