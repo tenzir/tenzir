@@ -235,7 +235,7 @@ size_t pending_queue::num_queries() const {
 [[nodiscard]] uuid pending_queue::create_query_id() const {
   auto query_id = uuid::random();
   // Ensure the query id is unique.
-  while (queries.find(query_id) != queries.end() || query_id == uuid::nil())
+  while (queries.find(query_id) != queries.end())
     query_id = uuid::random();
   return query_id;
 }
@@ -329,7 +329,7 @@ pending_queue::activate(const uuid& qid, uint32_t num_partitions) {
 std::optional<pending_queue::pq> pending_queue::next() {
   if (partitions.empty())
     return std::nullopt;
-  auto result = partitions.back();
+  auto result = std::move(partitions.back());
   partitions.pop_back();
   pq active = {result.partition, {}};
   pq inactive = {result.partition, {}};
@@ -338,16 +338,29 @@ std::optional<pending_queue::pq> pending_queue::next() {
     std::make_move_iterator(result.queries.end()),
     std::back_inserter(active.queries), std::back_inserter(inactive.queries),
     [&](const auto& qid) {
-      const auto& qs = queries[qid];
-      return qs.requested_partitions > qs.scheduled_partitions;
+      auto it = queries.find(qid);
+      if (it == queries.end()) {
+        VAST_WARN("index tried to access non-existant query {}", qid);
+        // Consider it inactive.
+        return false;
+      }
+      auto& query_state = it->second;
+      return query_state.requested_partitions
+             > query_state.scheduled_partitions;
     });
   if (!inactive.queries.empty())
     inactive_partitions.push_back(std::move(inactive));
   if (!active.queries.empty()) {
     // TODO: Consider delaying the following loop until the next insert or
     // activate.
-    for (const auto& qid : active.queries)
-      queries[qid].scheduled_partitions++;
+    for (const auto& qid : active.queries) {
+      auto it = queries.find(qid);
+      if (it == queries.end()) {
+        VAST_WARN("index tried to access non-existant query {}", qid);
+        continue;
+      }
+      it->second.scheduled_partitions++;
+    }
     return active;
   }
   return next();
@@ -833,10 +846,23 @@ void schedule_lookups(index_state& st) {
     };
     auto partition_actor = materialize(next->partition);
     if (!partition_actor) {
-      // for (auto qid : next.queries) {
-      //   auto& query_state = st.pending_queries[qid];
-      //   query_state.candidate_partitions--;
-      // }
+      // We need to mark failed partitions as completed to avoid clients going
+      // out of sync.
+      for (auto qid : next->queries) {
+        auto it = st.pending_queries.queries.find(qid);
+        if (it == st.pending_queries.queries.end()) {
+          VAST_WARN("{} tried to access non-existant query {}", *st.self, qid);
+          continue;
+        }
+        auto& query_state = it->second;
+        query_state.completed_partitions++;
+        if (query_state.completed_partitions
+            == query_state.requested_partitions)
+          st.self->send(query_state.client, atom::done_v);
+        if (query_state.completed_partitions
+            == query_state.candidate_partitions)
+          st.pending_queries.queries.erase(qid);
+      }
       continue;
     }
     st.counters.partition_materializations++;
@@ -844,19 +870,42 @@ void schedule_lookups(index_state& st) {
     // 3. request all relevant queries in a loop
     auto cnt = std::make_shared<size_t>(next->queries.size());
     for (auto qid : next->queries) {
-      auto& query_state = st.pending_queries.queries[qid];
+      auto it = st.pending_queries.queries.find(qid);
+      if (it == st.pending_queries.queries.end()) {
+        VAST_WARN("{} tried to access non-existant query {}", *st.self, qid);
+        continue;
+      }
+      auto& query_state = it->second;
       auto handle_completion = [cnt, qid, &st] {
-        // TODO: use find
-        auto& query_state = st.pending_queries.queries[qid];
-        query_state.completed_partitions++;
-        if (query_state.completed_partitions
-            == query_state.requested_partitions)
-          st.self->send(query_state.client, atom::done_v);
-        // 4. Remove queries with no more remaining partitions from
-        // pending_queries.
-        if (query_state.completed_partitions
-            == query_state.candidate_partitions)
-          st.pending_queries.queries.erase(qid);
+        auto it = st.pending_queries.queries.find(qid);
+        if (it == st.pending_queries.queries.end()) {
+          VAST_WARN("{} tried to access non-existant query {}", *st.self, qid);
+        } else {
+          auto& query_state = it->second;
+          query_state.completed_partitions++;
+          if (query_state.completed_partitions
+              == query_state.requested_partitions)
+            st.self->send(query_state.client, atom::done_v);
+          // 4. Remove queries with no more remaining partitions from
+          // pending_queries.
+          if (query_state.completed_partitions
+              == query_state.candidate_partitions) {
+#if VAST_ENABLE_ASSERTIONS
+            auto reachable = [](const uuid& qid, const auto& ps) {
+              return std::any_of(ps.begin(), ps.end(), [&](const auto& x) {
+                return std::any_of(x.queries.begin(), x.queries.end(),
+                                   [&](const auto& q) {
+                                     return qid == q;
+                                   });
+              });
+            };
+#endif
+            VAST_ASSERT(!reachable(qid, st.pending_queries.partitions));
+            VAST_ASSERT(
+              !reachable(qid, st.pending_queries.inactive_partitions));
+            st.pending_queries.queries.erase(qid);
+          }
+        }
         // 5. recursively call schedule_lookups in the done handler. ...or
         //    when all done? (6)
         // 6. decrement st.running_partition_lookups when all queries that
