@@ -13,6 +13,7 @@
 #include <vast/format/reader.hpp>
 #include <vast/format/single_layout_reader.hpp>
 #include <vast/format/writer.hpp>
+#include <vast/frame_type.hpp>
 #include <vast/logger.hpp>
 #include <vast/module.hpp>
 #include <vast/plugin.hpp>
@@ -115,55 +116,6 @@ auto to_uint16(std::span<const std::byte, 2> bytes) {
   auto ptr = reinterpret_cast<const uint16_t*>(std::launder(data));
   return detail::to_host_order(*ptr);
 }
-
-enum class frame_type : char {
-  chap_none = '\x00',
-  chap_challenge = '\x01',
-  chap_response = '\x02',
-  chap_both = '\x03',
-  ethernet = '\x01',
-  vlan = '\x02',
-  mpls = '\x03',
-  pppoe = '\x04',
-  ppp = '\x05',
-  chap = '\x06',
-  ipv4 = '\x07',
-  udp = '\x08',
-  radius = '\x09',
-  radavp = '\x0a',
-  l2tp = '\x0b',
-  l2avp = '\x0c',
-  ospfv2 = '\x0d',
-  ospf_md5 = '\x0e',
-  tcp = '\x0f',
-  ip_md5 = '\x10',
-  unknown = '\x11',
-  gre = '\x12',
-  gtp = '\x13',
-  vxlan = '\x14'
-};
-
-} // namespace vast::plugins::pcap
-
-namespace fmt {
-
-template <>
-struct formatter<vast::plugins::pcap::frame_type> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(vast::plugins::pcap::frame_type value, FormatContext& ctx) {
-    // TODO(C++23): std::to_underlying instead of static_cast.
-    return format_to(ctx.out(), "{:#0x}", static_cast<char>(value));
-  }
-};
-
-} // namespace fmt
-
-namespace vast::plugins::pcap {
 
 /// An 802.3 Ethernet frame.
 struct frame {
