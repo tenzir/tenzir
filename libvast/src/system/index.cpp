@@ -850,14 +850,8 @@ void schedule_lookups(index_state& st) {
         auto& query_state = st.pending_queries.queries[qid];
         query_state.completed_partitions++;
         if (query_state.completed_partitions
-            == query_state.requested_partitions) {
+            == query_state.requested_partitions)
           st.self->send(query_state.client, atom::done_v);
-          auto response = query_state.completed_partitions
-                              == query_state.candidate_partitions
-                            ? query_response::complete
-                            : query_response::incomplete;
-          query_state.rp.deliver(response);
-        }
         // 4. Remove queries with no more remaining partitions from
         // pending_queries.
         if (query_state.completed_partitions
@@ -1134,56 +1128,6 @@ index(index_actor::stateful_pointer<index_state> self,
             VAST_WARN("index failed to get list of partitions from catalog: {}",
                       e);
           });
-    },
-    [self](atom::evaluate, vast::query query,
-           uint64_t n) -> caf::result<query_response> {
-      if (n != 0)
-        return caf::make_error(
-          ec::unimplemented, fmt::format("requesting a result count other then "
-                                         "0 (all) is not supported yet"));
-      if (!self->state.accept_queries) {
-        VAST_VERBOSE("{} delays query {} because it is still starting up",
-                     *self, query);
-        return caf::skip;
-      }
-      // `current_sender()` doesn't work after creating the response promise, so
-      // we must do it before.
-      auto rp = self->make_response_promise<query_response>();
-      std::vector<uuid> candidates;
-      for (const auto& [_, active_partition] : self->state.active_partitions)
-        candidates.push_back(active_partition.id);
-      for (const auto& [id, _] : self->state.unpersisted)
-        candidates.push_back(id);
-      self
-        ->request(self->state.catalog, caf::infinite, atom::candidates_v, query)
-        .then([=, candidates = std::move(candidates)](
-                catalog_result& midx_result) mutable {
-          auto& midx_candidates = midx_result.partitions;
-          VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
-                     *self, candidates, midx_candidates);
-          candidates.insert(candidates.end(), midx_candidates.begin(),
-                            midx_candidates.end());
-          std::sort(candidates.begin(), candidates.end());
-          candidates.erase(std::unique(candidates.begin(), candidates.end()),
-                           candidates.end());
-          if (candidates.empty()) {
-            VAST_DEBUG("{} returns without result: no partitions qualify",
-                       *self);
-            rp.deliver(query_response::complete);
-            return;
-          }
-          auto num_candidates = detail::narrow<uint32_t>(candidates.size());
-          auto qs = query_state{.query = query,
-                                .candidate_partitions = num_candidates,
-                                .requested_partitions = num_candidates,
-                                .rp = rp};
-          if (!self->state.pending_queries.insert(std::move(qs),
-                                                  std::move(candidates)))
-            rp.deliver(caf::make_error(ec::unspecified, "A query with this ID "
-                                                        "exists already"));
-          schedule_lookups(self->state);
-        });
-      return rp;
     },
     [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
       // Query handling

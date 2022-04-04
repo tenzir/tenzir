@@ -120,15 +120,6 @@ private:
   const index_state& state_;
 };
 
-/// The result type of the query evaluation handler.
-enum class query_response : bool {
-  /// Signals that query evaluation is incomplete and more results can be
-  /// requested.
-  incomplete,
-  /// Signals that the query is fully evaluated.
-  complete
-};
-
 struct query_state {
   /// The query expression.
   vast::query query;
@@ -147,9 +138,6 @@ struct query_state {
 
   /// The number of partitions that are processed already.
   uint32_t completed_partitions = 0;
-
-  /// A response promise to signal batch completion to the client.
-  caf::typed_response_promise<query_response> rp = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
