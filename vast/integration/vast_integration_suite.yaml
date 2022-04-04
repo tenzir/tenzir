@@ -435,14 +435,14 @@ tests:
     steps:
       - command: -N import suricata
         input: data/suricata/eve.json
-        transformation: sleep 2
+        transformation: sleep 5
       - command: -N import suricata
         input: data/suricata/eve.json
-      - command: -N export json '#import_time < 2 seconds ago'
+      - command: -N export json '#import_time < 5 seconds ago'
         transformation: jq -ec '.'
       - command: -N status
-        transformation: sleep 2
-      - command: -N export json '#import_time < 2 seconds ago'
+        transformation: sleep 5
+      - command: -N export json '#import_time < 5 seconds ago'
         transformation: jq -ec '.'
 
   # Nesting Records in Lists is not currently fully supported, but its presence
