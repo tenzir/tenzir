@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <fmt/core.h>
-
-#include <string>
+#include <fmt/format.h>
 
 namespace vast {
 
@@ -44,76 +42,57 @@ enum class frame_type : char {
 namespace fmt {
 
 template <>
-struct formatter<vast::frame_type> : formatter<std::string_view> {
+struct formatter<vast::frame_type> : formatter<string_view> {
+  using super = formatter<string_view>;
+
   template <class FormatContext>
-  auto format(vast::frame_type x, FormatContext& ctx) const {
-    std::string_view type = "unknown";
+  constexpr auto format(const vast::frame_type& x, FormatContext& ctx) const
+    -> decltype(ctx.out()) {
     switch (x) {
       case vast::frame_type::invalid:
-        type = "invalid";
-        break;
+        return super::format("invalid", ctx);
       case vast::frame_type::ethernet:
-        type = "ethernet";
-        break;
+        return super::format("ethernet", ctx);
       case vast::frame_type::vlan:
-        type = "vlan";
-        break;
+        return super::format("vlan", ctx);
       case vast::frame_type::mpls:
-        type = "mpls";
-        break;
+        return super::format("mpls", ctx);
       case vast::frame_type::pppoe:
-        type = "pppoe";
-        break;
+        return super::format("pppoe", ctx);
       case vast::frame_type::ppp:
-        type = "ppp";
-        break;
+        return super::format("ppp", ctx);
       case vast::frame_type::chap:
-        type = "chap";
-        break;
+        return super::format("chap", ctx);
       case vast::frame_type::ipv4:
-        type = "ipv4";
-        break;
+        return super::format("ipv4", ctx);
       case vast::frame_type::udp:
-        type = "udp";
-        break;
+        return super::format("udp", ctx);
       case vast::frame_type::radius:
-        type = "radius";
-        break;
+        return super::format("radius", ctx);
       case vast::frame_type::radavp:
-        type = "radavp";
-        break;
+        return super::format("radavp", ctx);
       case vast::frame_type::l2tp:
-        type = "l2tp";
-        break;
+        return super::format("l2tp", ctx);
       case vast::frame_type::l2avp:
-        type = "l2avp";
-        break;
+        return super::format("l2avp", ctx);
       case vast::frame_type::ospfv2:
-        type = "ospfv2";
-        break;
+        return super::format("ospfv2", ctx);
       case vast::frame_type::ospf_md5:
-        type = "ospf_md5";
-        break;
+        return super::format("ospf_md5", ctx);
       case vast::frame_type::tcp:
-        type = "tcp";
-        break;
+        return super::format("tcp", ctx);
       case vast::frame_type::ip_md5:
-        type = "ip_md5";
-        break;
+        return super::format("ip_md5", ctx);
       case vast::frame_type::unknown:
-        type = "unknown";
-        break;
+        return super::format("unknown", ctx);
       case vast::frame_type::gre:
-        type = "gre";
-        break;
+        return super::format("gre", ctx);
       case vast::frame_type::gtp:
-        type = "gtp";
-        break;
+        return super::format("gtp", ctx);
       case vast::frame_type::vxlan:
-        type = "vxlan";
-        break;
+        return super::format("vxlan", ctx);
     }
-    return formatter<std::string_view>::format(type, ctx);
+    return super::format("unknown", ctx);
   }
 };
 
