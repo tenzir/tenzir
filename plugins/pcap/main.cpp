@@ -165,26 +165,34 @@ struct frame {
             result.payload = bytes.subspan<ethernet_header_size>();
             break;
           case ether_type::ieee_802_1aq: {
-            // One extra 4-byte 802.1Q header.
-            constexpr size_t min_frame_size = ethernet_header_size + 4;
+            size_t min_frame_size = 6 + 6 + 4 + 2;
             if (bytes.size() < min_frame_size)
               return std::nullopt;
             result.outer_vid = to_uint16(bytes.subspan<14, 2>());
             *result.outer_vid &= 0x0FFF; // lower 12 bits only
-            result.type = as_ether_type(bytes.subspan<min_frame_size - 2, 2>());
-            result.payload = bytes.subspan<min_frame_size>();
+            result.type = as_ether_type(bytes.subspan<16, 2>());
+            result.payload = bytes.subspan(min_frame_size);
+            // Keep going for QinQ frames (TPID = 0x8100).
+            if (result.type == ether_type::ieee_802_1aq) {
+              min_frame_size += 4;
+              if (bytes.size() < min_frame_size)
+                return std::nullopt;
+              result.inner_vid = to_uint16(bytes.subspan<18, 2>());
+              *result.inner_vid &= 0x0FFF; // lower 12 bits only
+              result.type = as_ether_type(bytes.subspan<20, 2>());
+              result.payload = bytes.subspan(min_frame_size);
+            }
             break;
           }
           case ether_type::ieee_802_1q_db: {
-            // Two extra 4-byte 802.1Q header.
-            constexpr size_t min_frame_size = ethernet_header_size + 4 + 4;
+            constexpr size_t min_frame_size = 6 + 6 + 4 + 4 + 2;
             if (bytes.size() < min_frame_size)
               return std::nullopt;
             result.outer_vid = to_uint16(bytes.subspan<14, 2>());
             *result.outer_vid &= 0x0FFF; // lower 12 bits only
-            result.inner_vid = to_uint16(bytes.subspan<16, 2>());
+            result.inner_vid = to_uint16(bytes.subspan<18, 2>());
             *result.inner_vid &= 0x0FFF; // lower 12 bits only
-            result.type = as_ether_type(bytes.subspan<min_frame_size - 2, 2>());
+            result.type = as_ether_type(bytes.subspan<20, 2>());
             result.payload = bytes.subspan<min_frame_size>();
             break;
           }
@@ -219,13 +227,13 @@ struct packet {
         constexpr size_t ipv4_header_size = 20;
         if (bytes.size() < ipv4_header_size)
           return std::nullopt;
-        size_t header_size = (std::to_integer<uint8_t>(bytes[0]) & 0x0f) * 4;
-        if (header_size < ipv4_header_size)
+        size_t header_length = (std::to_integer<uint8_t>(bytes[0]) & 0x0f) * 4;
+        if (bytes.size() < header_length)
           return std::nullopt;
         result.src = address::v4(bytes.subspan<12, 4>());
         result.dst = address::v4(bytes.subspan<16, 4>());
         result.type = std::to_integer<uint8_t>(bytes[9]);
-        result.payload = bytes.subspan(header_size);
+        result.payload = bytes.subspan(header_length);
         return result;
       }
       case ether_type::ipv6: {
@@ -497,14 +505,14 @@ protected:
       auto packet = packet::make(frame->payload, frame->type);
       if (!packet) {
         ++discard_count_;
-        VAST_DEBUG("skiping non-IP packet");
+        VAST_DEBUG("skipping packet of type {:#0x}", frame->type);
         continue;
       }
       // Parse layer 4.
       auto segment = segment::make(packet->payload, packet->type);
       if (!segment) {
         ++discard_count_;
-        VAST_DEBUG("skipping non-(TCP|UDP|ICMP) packet");
+        VAST_DEBUG("skipping segment of type {:#0x}", packet->type);
         continue;
       }
       // Make connection

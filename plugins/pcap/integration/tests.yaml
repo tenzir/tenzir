@@ -17,7 +17,11 @@ tests:
     tags: [node, import, pcap]
     steps:
       - command: -N import pcap
-        input: data/pcap/vlan.pcap.gz
+        input: data/pcap/vlan-single-tagging.pcap
+      - command: -N import pcap
+        input: data/pcap/vlan-double-tagging.pcap
+      - command: -N count 'vlan.outer == 32'
+      - command: -N count 'vlan.inner == 20 && 192.168.1.1'
       - command: -N status --detailed
         transformation: jq '.index.statistics | del(."catalog-bytes")'
 
