@@ -60,6 +60,8 @@ jobs:
           echo "vast_peered_vpc_id = $VAST_PEERED_VPC_ID" >> .env
           echo "vast_cidr = $VAST_CIDR" >> .env
           echo "vast_aws_region = $VAST_AWS_REGION" >> .env
+          echo $AWS_SECRET_ACCESS_KEY | wc
+          echo $AWS_SECRET_ACCESS_KEY | wc
 
       - name: Substitute backend with Terraform Cloud
         run: |
