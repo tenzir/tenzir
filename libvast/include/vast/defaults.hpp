@@ -245,6 +245,11 @@ constexpr std::chrono::milliseconds signal_monitoring_interval
 constexpr std::chrono::milliseconds initial_request_timeout
   = std::chrono::seconds{10};
 
+/// Time after which the query supervisor gives up waiting for
+/// results from a query.
+constexpr std::chrono::milliseconds partition_query_timeout
+  = std::chrono::minutes{10};
+
 /// The period to wait until a shutdown sequence finishes cleanly. After the
 /// elapses, the shutdown procedure escalates into a "hard kill".
 /// @relates shutdown_kill_timeout

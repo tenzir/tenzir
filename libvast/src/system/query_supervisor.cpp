@@ -87,8 +87,8 @@ query_supervisor_actor::behavior_type query_supervisor(
       for (const auto& [id, partition] : qm) {
         auto partition_trace_id = id.as_u64().first;
         ++*open_requests;
-        // TODO: Add a proper configurable timeout.
-        self->request(partition, caf::infinite, query)
+        self
+          ->request(partition, defaults::system::partition_query_timeout, query)
           .then(
             [=](uint64_t) {
               auto delta = std::chrono::steady_clock::now() - start;
