@@ -82,9 +82,6 @@ public:
   /// Retrieves a handle to the contained queries.
   [[nodiscard]] const std::unordered_map<uuid, query_state>& queries() const;
 
-  /// Retrieves a handle to the contained queries.
-  [[nodiscard]] std::unordered_map<uuid, query_state>& queries();
-
   // -- modifiers --------------------------------------------------------------
 
   /// Inserts a new query into the queue.
@@ -100,6 +97,10 @@ public:
   /// Retrieves the next partition to be scheduled and the related queries and
   /// increments the scheduled counters for the latter.
   [[nodiscard]] std::optional<entry> next();
+
+  /// Returns a client handle in case the requested batch has been completed.
+  [[nodiscard]] std::optional<system::receiver_actor<atom::done>>
+  handle_completion(const uuid& qid);
 
 private:
   /// Maps query IDs to pending queries lookup state.

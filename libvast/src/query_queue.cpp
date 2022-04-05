@@ -47,10 +47,6 @@ query_queue::queries() const {
   return queries_;
 }
 
-[[nodiscard]] std::unordered_map<uuid, query_state>& query_queue::queries() {
-  return queries_;
-}
-
 [[nodiscard]] caf::error
 query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
   auto qid = query_state.query.id;
@@ -182,6 +178,27 @@ std::optional<query_queue::entry> query_queue::next() {
     return active;
   }
   return next();
+}
+
+[[nodiscard]] std::optional<system::receiver_actor<atom::done>>
+query_queue::handle_completion(const uuid& qid) {
+  auto it = queries_.find(qid);
+  if (it == queries_.end()) {
+    // Queries get removed from the queue when the client signals no more
+    // interest.
+    VAST_DEBUG("index tried to access non-existant query {}", qid);
+    return std::nullopt;
+  }
+  auto result = std::optional<system::receiver_actor<atom::done>>{};
+  auto& query_state = it->second;
+  query_state.completed_partitions++;
+  if (query_state.completed_partitions == query_state.requested_partitions)
+    result = query_state.client;
+  if (query_state.completed_partitions == query_state.candidate_partitions) {
+    VAST_ASSERT(!reachable(qid));
+    queries_.erase(qid);
+  }
+  return result;
 }
 
 } // namespace vast

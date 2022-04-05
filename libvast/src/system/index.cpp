@@ -707,21 +707,9 @@ void schedule_lookups(index_state& st) {
     if (!partition_actor) {
       // We need to mark failed partitions as completed to avoid clients going
       // out of sync.
-      for (auto qid : next->queries) {
-        auto it = st.pending_queries.queries().find(qid);
-        if (it == st.pending_queries.queries().end()) {
-          VAST_WARN("{} tried to access non-existant query {}", *st.self, qid);
-          continue;
-        }
-        auto& query_state = it->second;
-        query_state.completed_partitions++;
-        if (query_state.completed_partitions
-            == query_state.requested_partitions)
-          st.self->send(query_state.client, atom::done_v);
-        if (query_state.completed_partitions
-            == query_state.candidate_partitions)
-          st.pending_queries.queries().erase(qid);
-      }
+      for (auto qid : next->queries)
+        if (auto client = st.pending_queries.handle_completion(qid))
+          st.self->send(*client, atom::done_v);
       continue;
     }
     st.counters.partition_schedulings++;
@@ -734,30 +722,12 @@ void schedule_lookups(index_state& st) {
         VAST_WARN("{} tried to access non-existant query {}", *st.self, qid);
         continue;
       }
-      auto& query_state = it->second;
       auto handle_completion = [cnt, qid, &st] {
-        auto it = st.pending_queries.queries().find(qid);
-        if (it == st.pending_queries.queries().end()) {
-          // Queries get removed from the queue when the client signals no more
-          // interest.
-          VAST_DEBUG("{} tried to access non-existant query {}", *st.self, qid);
-        } else {
-          auto& query_state = it->second;
-          query_state.completed_partitions++;
-          if (query_state.completed_partitions
-              == query_state.requested_partitions)
-            st.self->send(query_state.client, atom::done_v);
-          // 4. Remove queries with no more remaining partitions from
-          // pending_queries.
-          if (query_state.completed_partitions
-              == query_state.candidate_partitions) {
-            VAST_ASSERT(!st.pending_queries.reachable(qid));
-            st.pending_queries.queries().erase(qid);
-          }
-        }
-        // 5. recursively call schedule_lookups in the done handler. ...or
-        //    when all done? (6)
-        // 6. decrement st.running_partition_lookups when all queries that
+        if (auto client = st.pending_queries.handle_completion(qid))
+          st.self->send(*client, atom::done_v);
+        // 4. recursively call schedule_lookups in the done handler. ...or
+        //    when all done? (5)
+        // 5. decrement st.running_partition_lookups when all queries that
         //    were started are done. Keep track in the closure.
         *cnt -= 1;
         if (*cnt == 0) {
@@ -765,7 +735,7 @@ void schedule_lookups(index_state& st) {
           schedule_lookups(st);
         }
       };
-      st.self->request(partition_actor, caf::infinite, query_state.query)
+      st.self->request(partition_actor, caf::infinite, it->second.query)
         .then(
           [handle_completion, qid, pid = next->partition, &st](uint64_t n) {
             VAST_TRACE("{} received {} results for query {} from partition {}",
