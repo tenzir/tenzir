@@ -540,14 +540,15 @@ void index_state::send_report() {
   auto counters = std::exchange(this->counters, {});
   auto msg = report{
     .data = {
-      {"query.pending.partitions", pending_queries.num_partitions()},
-      {"query.pending.queries", pending_queries.num_queries()},
-      {"query.partition.materializations", counters.partition_materializations},
-      {"query.partition.lookups", counters.partition_lookups},
-      {"query.partition.schedulings", counters.partition_schedulings},
-      {"query.workers.idle",
+      {"scheduler.queries.pending", pending_queries.num_queries()},
+      {"scheduler.partition.pending", pending_queries.num_partitions()},
+      {"scheduler.partition.materializations",
+       counters.partition_materializations},
+      {"scheduler.partition.lookups", counters.partition_lookups},
+      {"scheduler.partition.schedulings", counters.partition_schedulings},
+      {"scheduler.partition.remaining-capacity",
        max_concurrent_partition_lookups - running_partition_lookups},
-      {"query.workers.busy", running_partition_lookups},
+      {"scheduler.partition.current-lookups", running_partition_lookups},
     }};
   self->send(accountant, std::move(msg));
   auto r = performance_report{.data = {{{"scheduler", scheduler_measurement}}}};
