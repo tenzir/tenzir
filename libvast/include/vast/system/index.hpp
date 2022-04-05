@@ -186,6 +186,10 @@ struct index_state {
   void
   add_partition_creation_listener(partition_creation_listener_actor listener);
 
+  // -- query handling ---------------------------------------------------------
+
+  void schedule_lookups();
+
   // -- introspection ----------------------------------------------------------
 
   /// Flushes collected metrics to the accountant.
