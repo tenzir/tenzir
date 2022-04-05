@@ -210,11 +210,10 @@ partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
   if (std::find(state_.persisted_partitions.begin(),
                 state_.persisted_partitions.end(), id)
-      == state_.persisted_partitions.end()) {
-    VAST_WARN("{} can't load unknown partition {}", *state_.self, id);
-    // FIXME: returning a null actor crashes soon after.
-    // return {};
-  }
+      == state_.persisted_partitions.end())
+    VAST_WARN("{} did not find partition {} in it's internal state, but tries "
+              "to load it regardless",
+              *state_.self, id);
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
   state_.counters.partition_materializations++;
@@ -926,8 +925,9 @@ index(index_actor::stateful_pointer<index_state> self,
                  *self, ids_string);
       for (const auto& id : ids) {
         if (auto err = self->state.pending_queries.remove_query(id))
-          VAST_WARN("{} failed to remove {} from the query queue: {}", *self,
-                    id, err);
+          VAST_DEBUG("{} did not remove {} from the query queue. It was "
+                     "presumably already removed upon completion ({})",
+                     *self, id, err);
       }
     }
     self->state.monitored_queries.erase(it);
