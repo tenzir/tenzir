@@ -518,3 +518,33 @@ tests:
       - command: -N --config=@./vast-local-stores.yaml import suricata
         input: data/suricata/eve.json
       - command: -N export json '#type ni ""'
+
+  # A (small) stress test to see how the server handles queries that time out
+  # before they're completed. We don't care about the output for these, we
+  # just want to see if the server fixture shuts down orderly after this.
+  Exporter Timeout:
+    tags: [server, import-export, timeout]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: import -b zeek
+        input: data/zeek/dns.log.gz
+      - command: export --timeout=0ms json
+        expected_result: error
+      - command: export --timeout=0ms json
+        expected_result: error
+      - command: export --timeout=10ms json
+        expected_result: ignore
+      - command: export --timeout=20ms json
+        expected_result: ignore
+      - command: export --timeout=50ms json
+        expected_result: ignore
+      - command: export --timeout=100ms json
+        expected_result: ignore
+      - command: export --timeout=200ms json
+        expected_result: ignore
+      - command: export --timeout=500ms json
+        expected_result: ignore
+      - command: export --timeout=800ms json
+        expected_result: ignore
