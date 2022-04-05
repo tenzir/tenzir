@@ -211,7 +211,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         std::vector<partition_diskstate> good_partitions;
         std::set_difference(partitions.begin(), partitions.end(),
                             blacklist.begin(), blacklist.end(),
-                            good_partitions.end(),
+                            std::back_inserter(good_partitions),
                             diskstate_blacklist_comparator{});
         partitions = std::move(good_partitions);
       }
