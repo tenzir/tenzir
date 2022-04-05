@@ -598,7 +598,7 @@ void index_state::schedule_lookups() {
         VAST_WARN("{} tried to access non-existant query {}", *self, qid);
         continue;
       }
-      auto handle_completion = [cnt, qid, &st] {
+      auto handle_completion = [cnt, qid, this] {
         if (auto client = pending_queries.handle_completion(qid))
           self->send(*client, atom::done_v);
         // 4. recursively call schedule_lookups in the done handler. ...or
@@ -613,13 +613,13 @@ void index_state::schedule_lookups() {
       };
       self->request(partition_actor, caf::infinite, it->second.query)
         .then(
-          [handle_completion, qid, pid = next->partition, &st](uint64_t n) {
+          [this, handle_completion, qid, pid = next->partition](uint64_t n) {
             VAST_TRACE("{} received {} results for query {} from partition {}",
                        *self, n, qid, pid);
             handle_completion();
           },
-          [handle_completion, qid, pid = next->partition,
-           &st](const caf::error& err) {
+          [this, handle_completion, qid,
+           pid = next->partition](const caf::error& err) {
             VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
                       *self, qid, pid, err);
             handle_completion();
