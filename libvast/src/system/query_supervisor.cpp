@@ -150,6 +150,7 @@ query_supervisor_actor::behavior_type query_supervisor(
       }
     },
     [self](atom::shutdown, atom::sink) -> caf::result<void> {
+      self->state.in_progress.clear();
       return self->delegate(self->state.master, atom::worker_v, atom::wakeup_v,
                             self);
     }};
