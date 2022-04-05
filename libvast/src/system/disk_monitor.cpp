@@ -202,12 +202,17 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         return {};
       }
       VAST_DEBUG("{} found {} partitions on disk", *self, partitions.size());
-      std::sort(partitions.begin(), partitions.end(),
-                [](const auto& lhs, const auto& rhs) {
-                  return lhs.mtime < rhs.mtime;
-                });
       auto& blacklist = self->state.blacklist;
       if (!blacklist.empty()) {
+        // Sort partitions so they're usable for `std::set_difference`.
+        std::sort(partitions.begin(), partitions.end(),
+                  [](const auto& lhs, const auto& rhs) {
+                    return lhs.id < rhs.id;
+                  });
+        VAST_ASSERT(std::is_sorted(blacklist.begin(), blacklist.end(),
+                                   [](const auto& lhs, const auto& rhs) {
+                                     return lhs.id < rhs.id;
+                                   }));
         std::vector<partition_diskstate> good_partitions;
         std::set_difference(partitions.begin(), partitions.end(),
                             blacklist.begin(), blacklist.end(),
@@ -215,6 +220,11 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                             diskstate_blacklist_comparator{});
         partitions = std::move(good_partitions);
       }
+      // Sort partitions by their mtime.
+      std::sort(partitions.begin(), partitions.end(),
+                [](const auto& lhs, const auto& rhs) {
+                  return lhs.mtime < rhs.mtime;
+                });
       // Delete up to `step_size` partitions at once.
       auto idx = std::min(partitions.size(), self->state.config.step_size);
       self->state.pending_partitions += idx;
