@@ -127,7 +127,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       rp.deliver(caf::make_error(ec::lookup_error, "partition store shutting "
                                                    "down"));
   });
-  VAST_DEBUG("loading passive store from path {}", path);
+  VAST_DEBUG("{} loads passive store from path {}", *self, path);
   self->request(self->state.fs, caf::infinite, atom::mmap_v, path)
     .then(
       [self](chunk_ptr chunk) {
