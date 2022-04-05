@@ -237,7 +237,11 @@ def run_step(
             timeout=STEP_TIMEOUT - (now() - start_time),
             expected_result=expected_result,
         )
-        if result is Result.ERROR and result != expected_result and expected_result != Result.IGNORE:
+        if (
+            result is Result.ERROR
+            and result != expected_result
+            and expected_result != Result.IGNORE
+        ):
             LOGGER.warning("standard error:")
             for line in open(stderr).readlines()[-100:]:
                 LOGGER.warning(f"    {line}")
@@ -288,7 +292,10 @@ def run_step(
             )
             delta = list(diff)
             if delta:
-                if expected_result != Result.FAILURE and expected_result != Result.IGNORE:
+                if (
+                    expected_result != Result.FAILURE
+                    and expected_result != Result.IGNORE
+                ):
                     LOGGER.warning("baseline comparison failed")
                     sys.stdout.writelines(delta)
                 return Result.FAILURE
@@ -448,7 +455,11 @@ class Tester:
                 step.expected_result,
             )
             summary.count(result, step.expected_result)
-            if not self.args.keep_going and result != step.expected_result and step.expected_result != Result.IGNORE:
+            if (
+                not self.args.keep_going
+                and result != step.expected_result
+                and step.expected_result != Result.IGNORE
+            ):
                 LOGGER.warning("skipping remaining steps after error")
                 break
             step_i += 1
