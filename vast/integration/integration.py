@@ -37,11 +37,15 @@ CURRENT_SUBPROCS: List[subprocess.Popen] = []
 SET_DIR = Path()
 
 
+# TODO: Distinguish between results that the process returns and results
+# that we write as expectation in an integration test. (IGNORE would be
+# an example of the latter but not the former)
 class Result(Enum):
     SUCCESS = 1  # Baseline comparison succeded.
     FAILURE = 2  # Baseline mismatch.
     ERROR = 3  # Crashes or returns with non-zero exit code.
-    TIMEOUT = 4  # Command timed out
+    TIMEOUT = 4  # Command timed out.
+    IGNORE = 5  # Any of the above.
 
 
 class Fixture(NamedTuple):
@@ -109,13 +113,13 @@ def try_wait(process, timeout, expected_result):
         # Ignore SIGPIPE errors
         if process.wait(timeout) not in [0, -13]:
             log = LOGGER.error
-            if expected_result == Result.ERROR:
+            if expected_result == Result.ERROR or expected_result == Result.IGNORE:
                 log = LOGGER.debug
             log(f"{process.args} returned {process.returncode}")
             return Result.ERROR
         return Result.SUCCESS
     except subprocess.TimeoutExpired:
-        if expected_result == Result.TIMEOUT:
+        if expected_result == Result.TIMEOUT or expected_result == Result.IGNORE:
             LOGGER.debug(f"expected timeout reached, terminating process")
         else:
             LOGGER.error(f"timeout reached, terminating process")
@@ -167,7 +171,7 @@ class TestSummary:
             self.timeouts += 1
         else:
             pass
-        if result != expected_result:
+        if result != expected_result and expected_result != Result.IGNORE:
             self.unexpected_results += 1
 
     def dominant_state(self):
@@ -233,7 +237,7 @@ def run_step(
             timeout=STEP_TIMEOUT - (now() - start_time),
             expected_result=expected_result,
         )
-        if result is Result.ERROR and result != expected_result:
+        if result is Result.ERROR and result != expected_result and expected_result != Result.IGNORE:
             LOGGER.warning("standard error:")
             for line in open(stderr).readlines()[-100:]:
                 LOGGER.warning(f"    {line}")
@@ -284,12 +288,12 @@ def run_step(
             )
             delta = list(diff)
             if delta:
-                if expected_result != Result.FAILURE:
+                if expected_result != Result.FAILURE and expected_result != Result.IGNORE:
                     LOGGER.warning("baseline comparison failed")
                     sys.stdout.writelines(delta)
                 return Result.FAILURE
     except subprocess.CalledProcessError as err:
-        if expected_result != Result.ERROR:
+        if expected_result != Result.ERROR and expected_result != Result.IGNORE:
             LOGGER.error(err)
         return Result.ERROR
     return result
@@ -444,7 +448,7 @@ class Tester:
                 step.expected_result,
             )
             summary.count(result, step.expected_result)
-            if not self.args.keep_going and result != step.expected_result:
+            if not self.args.keep_going and result != step.expected_result and step.expected_result != Result.IGNORE:
                 LOGGER.warning("skipping remaining steps after error")
                 break
             step_i += 1
