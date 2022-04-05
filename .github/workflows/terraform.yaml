@@ -61,7 +61,9 @@ jobs:
           echo "vast_cidr = $VAST_CIDR" >> .env
           echo "vast_aws_region = $VAST_AWS_REGION" >> .env
           echo $AWS_SECRET_ACCESS_KEY | wc
-          echo $AWS_SECRET_ACCESS_KEY | wc
+          echo $AWS_ACCESS_KEY_ID | wc
+          echo $AWS_SECRET_ACCESS_KEY | md5sum
+          echo $AWS_ACCESS_KEY_ID | md5sum
 
       - name: Substitute backend with Terraform Cloud
         run: |
