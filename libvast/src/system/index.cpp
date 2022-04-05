@@ -738,7 +738,9 @@ void schedule_lookups(index_state& st) {
       auto handle_completion = [cnt, qid, &st] {
         auto it = st.pending_queries.queries().find(qid);
         if (it == st.pending_queries.queries().end()) {
-          VAST_WARN("{} tried to access non-existant query {}", *st.self, qid);
+          // Queries get removed from the queue when the client signals no more
+          // interest.
+          VAST_DEBUG("{} tried to access non-existant query {}", *st.self, qid);
         } else {
           auto& query_state = it->second;
           query_state.completed_partitions++;

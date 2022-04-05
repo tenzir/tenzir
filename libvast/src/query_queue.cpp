@@ -110,29 +110,22 @@ query_queue::activate(const uuid& qid, uint32_t num_partitions) {
 }
 
 [[nodiscard]] caf::error query_queue::remove_query(const uuid& qid) {
-  // If we are currently working on this query we don't remove it from the
-  // list yet.
   VAST_TRACE("index removes query {}", qid);
-  auto keep = false;
   auto it = queries_.find(qid);
   if (it == queries_.end())
     return caf::make_error(ec::unspecified, "cannot remove unknown query");
-  if (it->second.completed_partitions < it->second.scheduled_partitions)
-    keep = true;
-  else {
-    queries_.erase(it);
-  }
+  queries_.erase(it);
   auto run = [&](auto& queue) {
     auto it = queue.begin();
-    for (; it < queue.end(); ++it) {
+    while (it < queue.end()) {
       auto queries_it = std::find(it->queries.begin(), it->queries.end(), qid);
       if (queries_it == it->queries.end())
         continue;
-      if (!keep) {
-        it->queries.erase(queries_it);
-        if (it->queries.empty())
-          it = queue.erase(it);
-      }
+      it->queries.erase(queries_it);
+      if (it->queries.empty())
+        it = queue.erase(it);
+      else
+        ++it;
     }
   };
   run(partitions);
