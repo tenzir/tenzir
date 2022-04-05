@@ -129,55 +129,56 @@ query_queue::activate(const uuid& qid, uint32_t num_partitions) {
   return caf::none;
 }
 
-// NOLINTNEXTLINE
 std::optional<query_queue::entry> query_queue::next() {
   if (partitions.empty())
     return std::nullopt;
-  auto result = std::move(partitions.back());
-  partitions.pop_back();
-  entry active = {result.partition, 0ull, {}};
-  entry inactive = {result.partition, 0ull, {}};
-  std::partition_copy(
-    std::make_move_iterator(result.queries.begin()),
-    std::make_move_iterator(result.queries.end()),
-    std::back_inserter(active.queries), std::back_inserter(inactive.queries),
-    [&](const auto& qid) {
-      auto it = queries_.find(qid);
-      if (it == queries_.end()) {
-        VAST_WARN("index tried to access non-existant query {}", qid);
-        // Consider it inactive.
-        return false;
+  while (!partitions.empty()) {
+    auto result = std::move(partitions.back());
+    partitions.pop_back();
+    entry active = {result.partition, 0ull, {}};
+    entry inactive = {result.partition, 0ull, {}};
+    std::partition_copy(
+      std::make_move_iterator(result.queries.begin()),
+      std::make_move_iterator(result.queries.end()),
+      std::back_inserter(active.queries), std::back_inserter(inactive.queries),
+      [&](const auto& qid) {
+        auto it = queries_.find(qid);
+        if (it == queries_.end()) {
+          VAST_WARN("index tried to access non-existant query {}", qid);
+          // Consider it inactive.
+          return false;
+        }
+        auto& query_state = it->second;
+        return query_state.requested_partitions
+               > query_state.scheduled_partitions;
+      });
+    if (!inactive.queries.empty()) {
+      for (auto qid_it = inactive.queries.begin();
+           qid_it != inactive.queries.end();) {
+        auto it = queries_.find(*qid_it);
+        if (it == queries_.end()) {
+          // We must have already warned about this above, no need to repeat.
+          qid_it = inactive.queries.erase(qid_it);
+          continue;
+        }
+        inactive.priority += it->second.query.priority;
+        ++qid_it;
       }
-      auto& query_state = it->second;
-      return query_state.requested_partitions
-             > query_state.scheduled_partitions;
-    });
-  if (!inactive.queries.empty()) {
-    for (auto qid_it = inactive.queries.begin();
-         qid_it != inactive.queries.end();) {
-      auto it = queries_.find(*qid_it);
-      if (it == queries_.end()) {
-        // We must have already warned about this above, no need to repeat.
-        qid_it = inactive.queries.erase(qid_it);
-        continue;
-      }
-      inactive.priority += it->second.query.priority;
-      ++qid_it;
+      inactive_partitions.push_back(std::move(inactive));
     }
-    inactive_partitions.push_back(std::move(inactive));
-  }
-  if (!active.queries.empty()) {
-    for (const auto& qid : active.queries) {
-      auto it = queries_.find(qid);
-      if (it == queries_.end()) {
-        VAST_WARN("index tried to access non-existant query {}", qid);
-        continue;
+    if (!active.queries.empty()) {
+      for (const auto& qid : active.queries) {
+        auto it = queries_.find(qid);
+        if (it == queries_.end()) {
+          VAST_WARN("index tried to access non-existant query {}", qid);
+          continue;
+        }
+        it->second.scheduled_partitions++;
       }
-      it->second.scheduled_partitions++;
+      return active;
     }
-    return active;
   }
-  return next();
+  return std::nullopt;
 }
 
 [[nodiscard]] std::optional<system::receiver_actor<atom::done>>
