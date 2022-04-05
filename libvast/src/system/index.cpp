@@ -534,6 +534,102 @@ void index_state::add_partition_creation_listener(
   partition_creation_listeners.push_back(listener);
 }
 
+// -- query handling ---------------------------------------------------------
+
+void index_state::schedule_lookups() {
+  if (!pending_queries.has_work())
+    return;
+  auto t = timer::start(scheduler_measurement);
+  auto num_scheduled = size_t{0};
+  auto on_return = caf::detail::make_scope_guard([&] {
+    t.stop(num_scheduled);
+  });
+  while (running_partition_lookups < max_concurrent_partition_lookups) {
+    // 1. Get the partition with the highest accumulated priority.
+    auto next = pending_queries.next();
+    if (!next) {
+      VAST_TRACE("{} did not find a partition to query", *self);
+      return;
+    }
+    VAST_TRACE("{} schedules partition {} for {}", *self, next->partition,
+               next->queries);
+    // 2. Acquire the actor for the selected partition, potentially materializing
+    //    it from its persisted state.
+    auto acquire = [&](const uuid& partition_id) -> partition_actor {
+      // We need to first check whether the ID is the active partition or one
+      // of our unpersisted ones. Only then can we dispatch to our LRU cache.
+      partition_actor part;
+      for (const auto& [_, active_partition] : active_partitions) {
+        if (active_partition.actor != nullptr
+            && active_partition.id == partition_id) {
+          part = active_partition.actor;
+          break;
+        }
+      }
+      if (!part) {
+        if (auto it = unpersisted.find(partition_id); it != unpersisted.end())
+          part = it->second;
+        else if (auto it = persisted_partitions.find(partition_id);
+                 it != persisted_partitions.end())
+          part = inmem_partitions.get_or_load(partition_id);
+      }
+      if (!part)
+        VAST_ERROR("{} could not load partition {} that was part of a "
+                   "query",
+                   *self, partition_id);
+      return part;
+    };
+    auto partition_actor = acquire(next->partition);
+    if (!partition_actor) {
+      // We need to mark failed partitions as completed to avoid clients going
+      // out of sync.
+      for (auto qid : next->queries)
+        if (auto client = pending_queries.handle_completion(qid))
+          self->send(*client, atom::done_v);
+      continue;
+    }
+    counters.partition_schedulings++;
+    counters.partition_lookups += next->queries.size();
+    // 3. request all relevant queries in a loop
+    auto cnt = std::make_shared<size_t>(next->queries.size());
+    for (auto qid : next->queries) {
+      auto it = pending_queries.queries().find(qid);
+      if (it == pending_queries.queries().end()) {
+        VAST_WARN("{} tried to access non-existant query {}", *self, qid);
+        continue;
+      }
+      auto handle_completion = [cnt, qid, &st] {
+        if (auto client = pending_queries.handle_completion(qid))
+          self->send(*client, atom::done_v);
+        // 4. recursively call schedule_lookups in the done handler. ...or
+        //    when all done? (5)
+        // 5. decrement running_partition_lookups when all queries that
+        //    were started are done. Keep track in the closure.
+        *cnt -= 1;
+        if (*cnt == 0) {
+          --running_partition_lookups;
+          schedule_lookups();
+        }
+      };
+      self->request(partition_actor, caf::infinite, it->second.query)
+        .then(
+          [handle_completion, qid, pid = next->partition, &st](uint64_t n) {
+            VAST_TRACE("{} received {} results for query {} from partition {}",
+                       *self, n, qid, pid);
+            handle_completion();
+          },
+          [handle_completion, qid, pid = next->partition,
+           &st](const caf::error& err) {
+            VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
+                      *self, qid, pid, err);
+            handle_completion();
+          });
+    }
+    running_partition_lookups++;
+    num_scheduled++;
+  }
+}
+
 // -- introspection ----------------------------------------------------------
 
 void index_state::send_report() {
@@ -657,100 +753,6 @@ index_state::status(status_verbosity v) const {
   if (v >= status_verbosity::debug)
     detail::fill_status_map(rs->content, self);
   return rs->promise;
-}
-
-void index_state::schedule_lookups() {
-  if (!pending_queries.has_work())
-    return;
-  auto t = timer::start(scheduler_measurement);
-  auto num_scheduled = size_t{0};
-  auto on_return = caf::detail::make_scope_guard([&] {
-    t.stop(num_scheduled);
-  });
-  while (running_partition_lookups < max_concurrent_partition_lookups) {
-    // 1. Get the partition with the highest accumulated priority.
-    auto next = pending_queries.next();
-    if (!next) {
-      VAST_TRACE("{} did not find a partition to query", *self);
-      return;
-    }
-    VAST_TRACE("{} schedules partition {} for {}", *self, next->partition,
-               next->queries);
-    // 2. Acquire the actor for the selected partition, potentially materializing
-    //    it from its persisted state.
-    auto acquire = [&](const uuid& partition_id) -> partition_actor {
-      // We need to first check whether the ID is the active partition or one
-      // of our unpersisted ones. Only then can we dispatch to our LRU cache.
-      partition_actor part;
-      for (const auto& [_, active_partition] : active_partitions) {
-        if (active_partition.actor != nullptr
-            && active_partition.id == partition_id) {
-          part = active_partition.actor;
-          break;
-        }
-      }
-      if (!part) {
-        if (auto it = unpersisted.find(partition_id); it != unpersisted.end())
-          part = it->second;
-        else if (auto it = persisted_partitions.find(partition_id);
-                 it != persisted_partitions.end())
-          part = inmem_partitions.get_or_load(partition_id);
-      }
-      if (!part)
-        VAST_ERROR("{} could not load partition {} that was part of a "
-                   "query",
-                   *self, partition_id);
-      return part;
-    };
-    auto partition_actor = acquire(next->partition);
-    if (!partition_actor) {
-      // We need to mark failed partitions as completed to avoid clients going
-      // out of sync.
-      for (auto qid : next->queries)
-        if (auto client = pending_queries.handle_completion(qid))
-          self->send(*client, atom::done_v);
-      continue;
-    }
-    counters.partition_schedulings++;
-    counters.partition_lookups += next->queries.size();
-    // 3. request all relevant queries in a loop
-    auto cnt = std::make_shared<size_t>(next->queries.size());
-    for (auto qid : next->queries) {
-      auto it = pending_queries.queries().find(qid);
-      if (it == pending_queries.queries().end()) {
-        VAST_WARN("{} tried to access non-existant query {}", *self, qid);
-        continue;
-      }
-      auto handle_completion = [cnt, qid, &st] {
-        if (auto client = pending_queries.handle_completion(qid))
-          self->send(*client, atom::done_v);
-        // 4. recursively call schedule_lookups in the done handler. ...or
-        //    when all done? (5)
-        // 5. decrement running_partition_lookups when all queries that
-        //    were started are done. Keep track in the closure.
-        *cnt -= 1;
-        if (*cnt == 0) {
-          --running_partition_lookups;
-          schedule_lookups();
-        }
-      };
-      self->request(partition_actor, caf::infinite, it->second.query)
-        .then(
-          [handle_completion, qid, pid = next->partition, &st](uint64_t n) {
-            VAST_TRACE("{} received {} results for query {} from partition {}",
-                       *self, n, qid, pid);
-            handle_completion();
-          },
-          [handle_completion, qid, pid = next->partition,
-           &st](const caf::error& err) {
-            VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
-                      *self, qid, pid, err);
-            handle_completion();
-          });
-    }
-    running_partition_lookups++;
-    num_scheduled++;
-  }
 }
 
 index_actor::behavior_type
