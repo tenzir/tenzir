@@ -77,6 +77,11 @@ int main(int argc, char** argv) {
   // From here on, options from the command line can be used.
   detail::merge_settings(invocation->options, cfg.content,
                          policy::merge_lists::yes);
+  // Tweak CAF parameters in case we're running a client command.
+  bool is_server = invocation->full_name == "start"
+                   || caf::get_or(cfg.content, "vast.node", false);
+  if (!is_server)
+    cfg.set("scheduler.max-threads", 1);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(*invocation, cfg.content);
   if (!log_context)
