@@ -160,25 +160,18 @@ target_compile_definitions(
 
 find_package(Pandoc)
 if (PANDOC_FOUND)
-  set(man_page vast.1)
-  set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")
-  file(
-    WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
-    "execute_process(
-      COMMAND ${CMAKE_BINARY_DIR}/bin/vast --bare-mode manual
-      OUTPUT_FILE ${man_generated}.md)
-    execute_process(
-      COMMAND pandoc -s -f markdown -t man ${man_generated}.md
-      OUTPUT_FILE ${man_generated})")
-  add_custom_target(
-    vast-man ALL
-    DEPENDS vast
-    BYPRODUCTS ${man_generated}
-    COMMAND ${CMAKE_COMMAND} -P make_man_${man_page}.cmake
-    COMMENT "Generating man page ${man_page}"
+  add_custom_command(
+    TARGET vast
+    POST_BUILD
+    COMMAND "$<TARGET_FILE:vast>" --bare-mode manual >
+            "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
+    COMMAND
+      "${PANDOC}" -s -f markdown -t man "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
+               "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
+    COMMENT "Generating vast.1"
     VERBATIM)
-  install(
-    FILES "${man_generated}"
-    DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
-    OPTIONAL)
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
+          DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
 endif ()

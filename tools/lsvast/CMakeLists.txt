@@ -14,17 +14,16 @@ install(TARGETS lsvast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 find_package(Pandoc)
 if (PANDOC_FOUND)
-  add_custom_target(
-    lsvast-man ALL
-    DEPENDS lsvast
-    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
+  add_custom_command(
+    TARGET lsvast
+    POST_BUILD
     COMMAND
-      pandoc -s -f markdown -t man "${CMAKE_CURRENT_SOURCE_DIR}/lsvast.1.md" -o
+      "${PANDOC}" -s -f markdown -t man
+      "${CMAKE_CURRENT_SOURCE_DIR}/lsvast.1.md" -o
       "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
-    COMMENT "Generating man page lsvast.1"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
+    COMMENT "Generating lsvast.1"
     VERBATIM)
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
-    DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
-    OPTIONAL)
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
+          DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
 endif ()
