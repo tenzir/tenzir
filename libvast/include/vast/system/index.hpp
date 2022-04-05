@@ -118,6 +118,8 @@ public:
 
 private:
   filesystem_actor filesystem_;
+
+  // Mutable reference so we can increment the materializations counter.
   index_state& state_;
 };
 
@@ -258,7 +260,7 @@ struct index_state {
   size_t running_partition_lookups = 0;
 
   /// Keeps temporary statistics that are flushed with the metrics.
-  index_counters counters;
+  index_counters counters = {};
 
   /// The CATALOG actor.
   catalog_actor catalog = {};
@@ -279,7 +281,7 @@ struct index_state {
   index_statistics stats = {};
 
   /// Timekeeper for the scheduling algorithm.
-  struct measurement scheduler_measurement;
+  struct measurement scheduler_measurement = {};
 
   /// Handle of the accountant.
   accountant_actor accountant = {};
@@ -328,7 +330,8 @@ struct index_state {
 /// @param max_inmem_partitions The maximum number of passive partitions loaded
 /// into memory.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
-/// @param num_workers The maximum amount of concurrent lookups.
+/// @param max_concurrent_partition_lookups The maximum amount of concurrent
+/// lookups.
 /// @param catalog_dir The directory used by the catalog.
 /// @param index_config The meta-index configuration of the false-positives
 /// rates for the types and fields.
@@ -341,7 +344,7 @@ index(index_actor::stateful_pointer<index_state> self,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      size_t taste_partitions, size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config);
 
 } // namespace vast::system

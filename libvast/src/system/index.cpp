@@ -676,9 +676,9 @@ void schedule_lookups(index_state& st) {
     }
     VAST_TRACE("{} schedules partition {} for {}", *st.self, next->partition,
                next->queries);
-    // 2. Aquire the actor for the selected partition, potentially materializing
+    // 2. Acquire the actor for the selected partition, potentially materializing
     //    it from its persisted state.
-    auto aquire = [&](const uuid& partition_id) -> partition_actor {
+    auto acquire = [&](const uuid& partition_id) -> partition_actor {
       // We need to first check whether the ID is the active partition or one
       // of our unpersisted ones. Only then can we dispatch to our LRU cache.
       partition_actor part;
@@ -703,7 +703,7 @@ void schedule_lookups(index_state& st) {
                    *st.self, partition_id);
       return part;
     };
-    auto partition_actor = aquire(next->partition);
+    auto partition_actor = acquire(next->partition);
     if (!partition_actor) {
       // We need to mark failed partitions as completed to avoid clients going
       // out of sync.
@@ -767,12 +767,15 @@ void schedule_lookups(index_state& st) {
       };
       st.self->request(partition_actor, caf::infinite, query_state.query)
         .then(
-          [handle_completion, pid = next->partition, &st](uint64_t n) {
-            VAST_TRACE("{} received {} results from {}", *st.self, n, pid);
+          [handle_completion, qid, pid = next->partition, &st](uint64_t n) {
+            VAST_TRACE("{} received {} results for query {} from partition {}",
+                       *st.self, n, qid, pid);
             handle_completion();
           },
-          [handle_completion, &st](const caf::error& err) {
-            VAST_WARN("{} failed in partition lookup: {}", *st.self, err);
+          [handle_completion, qid, pid = next->partition,
+           &st](const caf::error& err) {
+            VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
+                      *st.self, qid, pid, err);
             handle_completion();
           });
     }
@@ -788,15 +791,15 @@ index(index_actor::stateful_pointer<index_state> self,
       type_registry_actor type_registry, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      size_t taste_partitions, size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
   VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity),
                    VAST_ARG(active_partition_timeout),
                    VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
-                   VAST_ARG(num_workers), VAST_ARG(catalog_dir),
-                   VAST_ARG(index_config));
+                   VAST_ARG(max_concurrent_partition_lookups),
+                   VAST_ARG(catalog_dir), VAST_ARG(index_config));
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                *self, dir, partition_capacity, max_inmem_partitions);
@@ -815,7 +818,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.global_store = std::move(archive);
   self->state.type_registry = std::move(type_registry);
   self->state.accept_queries = true;
-  self->state.max_concurrent_partition_lookups = num_workers;
+  self->state.max_concurrent_partition_lookups
+    = max_concurrent_partition_lookups;
   if (self->state.partition_local_stores) {
     self->state.store_plugin = plugins::find<store_plugin>(store_backend);
     if (!self->state.store_plugin) {
@@ -952,7 +956,8 @@ index(index_actor::stateful_pointer<index_state> self,
                  *self, ids_string);
       for (const auto& id : ids) {
         if (auto err = self->state.pending_queries.remove_query(id))
-          VAST_DEBUG("{} {}", *self, err);
+          VAST_WARN("{} failed to remove {} from the query queue: {}", *self,
+                    id, err);
       }
     }
     self->state.monitored_queries.erase(it);

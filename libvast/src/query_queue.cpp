@@ -171,8 +171,6 @@ std::optional<query_queue::entry> query_queue::next() {
     inactive_partitions.push_back(std::move(inactive));
   }
   if (!active.queries.empty()) {
-    // TODO: Consider delaying the following loop until the next insert or
-    // activate.
     for (const auto& qid : active.queries) {
       auto it = queries_.find(qid);
       if (it == queries_.end()) {
