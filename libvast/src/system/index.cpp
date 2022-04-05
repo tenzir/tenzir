@@ -217,6 +217,7 @@ partition_actor partition_factory::operator()(const uuid& id) const {
   }
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
+  state_.counters.partition_materializations++;
   return state_.self->spawn(passive_partition, id, state_.accountant,
                             static_cast<store_actor>(state_.global_store),
                             filesystem_, path);
@@ -544,6 +545,7 @@ void index_state::send_report() {
       {"query.pending.queries", pending_queries.num_queries()},
       {"query.partition.materializations", counters.partition_materializations},
       {"query.partition.lookups", counters.partition_lookups},
+      {"query.partition.schedulings", counters.partition_schedulings},
       {"query.workers.idle",
        max_concurrent_partition_lookups - running_partition_lookups},
       {"query.workers.busy", running_partition_lookups},
@@ -674,8 +676,9 @@ void schedule_lookups(index_state& st) {
     }
     VAST_TRACE("{} schedules partition {} for {}", *st.self, next->partition,
                next->queries);
-    // 2. Spin up the partition.
-    auto materialize = [&](const uuid& partition_id) -> partition_actor {
+    // 2. Aquire the actor for the selected partition, potentially materializing
+    //    it from its persisted state.
+    auto aquire = [&](const uuid& partition_id) -> partition_actor {
       // We need to first check whether the ID is the active partition or one
       // of our unpersisted ones. Only then can we dispatch to our LRU cache.
       partition_actor part;
@@ -700,7 +703,7 @@ void schedule_lookups(index_state& st) {
                    *st.self, partition_id);
       return part;
     };
-    auto partition_actor = materialize(next->partition);
+    auto partition_actor = aquire(next->partition);
     if (!partition_actor) {
       // We need to mark failed partitions as completed to avoid clients going
       // out of sync.
@@ -721,7 +724,7 @@ void schedule_lookups(index_state& st) {
       }
       continue;
     }
-    st.counters.partition_materializations++;
+    st.counters.partition_schedulings++;
     st.counters.partition_lookups += next->queries.size();
     // 3. request all relevant queries in a loop
     auto cnt = std::make_shared<size_t>(next->queries.size());

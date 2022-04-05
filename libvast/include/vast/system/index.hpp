@@ -118,12 +118,19 @@ public:
 
 private:
   filesystem_actor filesystem_;
-  const index_state& state_;
+  index_state& state_;
 };
 
+/// Event counters for metrics.
 struct index_counters {
+  /// How many passive partitions were loaded from disk.
   size_t partition_materializations = 0;
+
+  /// How many queries were sent to partitions.
   size_t partition_lookups = 0;
+
+  /// How many partitions were scheduled for queries.
+  size_t partition_schedulings = 0;
 };
 
 /// The state of the index actor.
