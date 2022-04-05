@@ -130,8 +130,6 @@ query_queue::activate(const uuid& qid, uint32_t num_partitions) {
 }
 
 std::optional<query_queue::entry> query_queue::next() {
-  if (partitions.empty())
-    return std::nullopt;
   while (!partitions.empty()) {
     auto result = std::move(partitions.back());
     partitions.pop_back();

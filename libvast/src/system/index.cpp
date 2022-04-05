@@ -216,10 +216,14 @@ partition_actor partition_factory::operator()(const uuid& id) const {
               *state_.self, id);
   const auto path = state_.partition_path(id);
   VAST_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
-  state_.counters.partition_materializations++;
+  materializations_++;
   return state_.self->spawn(passive_partition, id, state_.accountant,
                             static_cast<store_actor>(state_.global_store),
                             filesystem_, path);
+}
+
+size_t partition_factory::materializations() const {
+  return materializations_;
 }
 
 // -- index_state --------------------------------------------------------------
@@ -632,14 +636,43 @@ void index_state::schedule_lookups() {
 
 // -- introspection ----------------------------------------------------------
 
+namespace {
+
+struct query_counters {
+  size_t num_custom_prio = 0;
+  size_t num_low_prio = 0;
+  size_t num_normal_prio = 0;
+};
+
+auto get_query_counters(const query_queue& pending_queries) {
+  auto result = query_counters{};
+  for (const auto& [_, q] : pending_queries.queries()) {
+    if (q.query.priority == query::priority::low)
+      result.num_low_prio++;
+    else if (q.query.priority == query::priority::normal)
+      result.num_normal_prio++;
+    else
+      result.num_custom_prio++;
+  }
+  return result;
+}
+
+} // namespace
+
 void index_state::send_report() {
+  auto materializations = inmem_partitions.factory().materializations()
+                          - this->counters.previous_materializations;
   auto counters = std::exchange(this->counters, {});
+  this->counters.previous_materializations
+    = inmem_partitions.factory().materializations();
+  auto query_counters = get_query_counters(pending_queries);
   auto msg = report{
     .data = {
-      {"scheduler.queries.pending", pending_queries.num_queries()},
+      {"scheduler.backlog.custom", query_counters.num_custom_prio},
+      {"scheduler.backlog.low", query_counters.num_low_prio},
+      {"scheduler.backlog.normal", query_counters.num_normal_prio},
       {"scheduler.partition.pending", pending_queries.num_partitions()},
-      {"scheduler.partition.materializations",
-       counters.partition_materializations},
+      {"scheduler.partition.materializations", materializations},
       {"scheduler.partition.lookups", counters.partition_lookups},
       {"scheduler.partition.schedulings", counters.partition_schedulings},
       {"scheduler.partition.remaining-capacity",
@@ -679,6 +712,12 @@ index_state::status(status_verbosity v) const {
     }
     stats_object["layouts"] = std::move(layout_object);
     rs->content["catalog-bytes"] = catalog_bytes;
+    auto backlog_status = record{};
+    auto query_counters = get_query_counters(pending_queries);
+    backlog_status["num-custom-priority"] = query_counters.num_custom_prio;
+    backlog_status["num-low-priority"] = query_counters.num_low_prio;
+    backlog_status["num-normal-priority"] = query_counters.num_normal_prio;
+    rs->content["backlog"] = std::move(backlog_status);
     auto worker_status = record{};
     worker_status["count"] = max_concurrent_partition_lookups;
     worker_status["idle"]

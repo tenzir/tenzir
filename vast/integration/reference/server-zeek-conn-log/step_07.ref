@@ -8,6 +8,9 @@
 {"path":["importer","ids","available"],"type":"number"}
 {"path":["importer","ids","block","end"],"type":"number"}
 {"path":["importer","ids","block","next"],"type":"number"}
+{"path":["index","backlog","num-custom-priority"],"type":"number"}
+{"path":["index","backlog","num-low-priority"],"type":"number"}
+{"path":["index","backlog","num-normal-priority"],"type":"number"}
 {"path":["index","catalog","memory-usage"],"type":"number"}
 {"path":["index","catalog","num-partitions"],"type":"number"}
 {"path":["index","catalog-bytes"],"type":"number"}

@@ -116,17 +116,23 @@ public:
 
   partition_actor operator()(const uuid& id) const;
 
+  [[nodiscard]] size_t materializations() const;
+
 private:
   filesystem_actor filesystem_;
+  const index_state& state_;
 
-  // Mutable reference so we can increment the materializations counter.
-  index_state& state_;
+  /// A counter for the amount passive partitions were loaded from disk.
+  mutable size_t materializations_ = 0;
 };
 
 /// Event counters for metrics.
 struct index_counters {
-  /// How many passive partitions were loaded from disk.
-  size_t partition_materializations = 0;
+  /// Stores how many passive partitions were loaded from disk until the last
+  /// time the delta was written to the metrics. This variable stores the
+  /// absolute number since the index was started and is only used to calulate
+  /// the delta for the next round.
+  size_t previous_materializations = 0;
 
   /// How many queries were sent to partitions.
   size_t partition_lookups = 0;
