@@ -1118,8 +1118,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->delegate(self->state.catalog, atom::candidates_v, lookup_id,
                             std::move(expr));
     },
-    [self](atom::internal, vast::query, query_supervisor_actor,
-           const caf::actor_addr&) -> caf::result<query_cursor> {
+    [](atom::internal, vast::query, query_supervisor_actor,
+       const caf::actor_addr&) -> caf::result<query_cursor> {
       return ec::unimplemented;
     },
     [self](const uuid& query_id, uint32_t num_partitions) {
@@ -1371,10 +1371,10 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     // -- query_supervisor_master_actor ----------------------------------------
-    [self](atom::worker, query_supervisor_actor) {
+    [](atom::worker, query_supervisor_actor) {
       // nop
     },
-    [self](atom::worker, atom::wakeup, query_supervisor_actor) {
+    [](atom::worker, atom::wakeup, query_supervisor_actor) {
       // nop
     },
     // -- status_client_actor --------------------------------------------------
