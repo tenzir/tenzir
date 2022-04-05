@@ -90,6 +90,9 @@ private:
   friend partition_synopsis* ::caf::default_intrusive_cow_ptr_unshare<
     partition_synopsis>(partition_synopsis*& ptr);
   partition_synopsis* copy() const;
+
+  // Cached memory usage.
+  size_t memusage_ = 0ull;
 };
 
 /// Some quantitative information about a partition.

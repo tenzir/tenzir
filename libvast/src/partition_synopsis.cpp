@@ -17,6 +17,7 @@
 namespace vast {
 
 void partition_synopsis::shrink() {
+  memusage_ = 0; // Invalidate cached size.
   for (auto& [field, synopsis] : field_synopses_) {
     if (!synopsis)
       continue;
@@ -66,6 +67,7 @@ double get_type_fprate(const index_config& config, const type& type) {
 void partition_synopsis::add(const table_slice& slice,
                              size_t partition_capacity,
                              const index_config& fp_rates) {
+  memusage_ = 0; // Invalidate cached size.
   auto make_synopsis
     = [](const type& t, const caf::settings& synopsis_options) -> synopsis_ptr {
     if (t.attribute("skip"))
@@ -137,10 +139,13 @@ void partition_synopsis::add(const table_slice& slice,
 }
 
 size_t partition_synopsis::memusage() const {
-  size_t result = 0;
-  for (const auto& [field, synopsis] : field_synopses_)
-    result += synopsis ? synopsis->memusage() : 0ull;
-  return result;
+  if (!memusage_) {
+    for (const auto& [field, synopsis] : field_synopses_)
+      memusage_ += synopsis ? synopsis->memusage() : 0ull;
+    for (const auto& [type, synopsis] : type_synopses_)
+      memusage_ += synopsis ? synopsis->memusage() : 0ull;
+  }
+  return memusage_;
 }
 
 partition_synopsis* partition_synopsis::copy() const {
@@ -149,6 +154,7 @@ partition_synopsis* partition_synopsis::copy() const {
   result->events = events;
   result->min_import_time = min_import_time;
   result->max_import_time = max_import_time;
+  result->memusage_ = memusage_;
   result->type_synopses_.reserve(type_synopses_.size());
   result->field_synopses_.reserve(field_synopses_.size());
   for (const auto& [type, synopsis] : type_synopses_) {
