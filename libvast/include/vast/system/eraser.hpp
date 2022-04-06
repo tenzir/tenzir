@@ -44,9 +44,9 @@ public:
   caf::timespan interval_ = {};
 
   /// The query expression that selects events scheduled for deletion. Note
-  /// that we get the query as string on purpose. Taking an ::expression here
-  /// instead would fix any query such as `#time < 1 week ago` to the time of
-  /// its parsing and not update properly.
+  /// that we get the query as string on purpose. Taking an expression here
+  /// instead would fix any query such as `:timestamp < 1 week ago` to the time
+  /// of its parsing and not update properly.
   std::string query_ = {};
 };
 
@@ -54,11 +54,10 @@ public:
 /// @param interval The time between two query executions.
 /// @param query The periodic query that selects events scheduled for deletion.
 ///              Note that we get the query as string on purpose. Taking an
-///              ::expression here instead would fix any query such as
-///              `#time < 1 week ago` to the time of its parsing and not update
-///              properly.
-/// @param index A handle to the INDEX under investigation.
-/// @param transforms The transform config of the node.
+///              expression here instead would fix any query such as
+///              `:timestamp < 1 week ago` to the time of its parsing and not
+///              update properly.
+/// @param index A handle to the INDEX.
 eraser_actor::behavior_type
 eraser(eraser_actor::stateful_pointer<eraser_state> self,
        caf::timespan interval, std::string query, index_actor index);
