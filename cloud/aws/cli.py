@@ -109,7 +109,7 @@ def deploy_step(c, step, auto_approve=False):
 def deploy(c, auto_approve=False):
     """One liner build and deploy of the stack to AWS"""
     c.run(
-        f"terragrunt run-all apply {auto_app_fmt(auto_approve)} ",
+        f"terragrunt run-all apply {auto_app_fmt(auto_approve)}",
         env=tf_env(c),
         pty=True,
     )
