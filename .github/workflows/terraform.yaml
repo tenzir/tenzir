@@ -69,19 +69,20 @@ jobs:
       - name: Substitute backend with Terraform Cloud
         run: |
           cat<<EOF > terragrunt.hcl
-          remote_state {
-            backend = "remote"
-            generate = {
-              path      = "backend.generated.tf"
-              if_exists = "overwrite"
-            }
-            config = {
+          generate "backend" {
+            path = "backend.generated.tf"
+            if_exists = "overwrite"
+            contents = <<EOC
+          terraform {
+            cloud {
               organization = "$TF_ORGANIZATION"
               token        = "$TF_API_TOKEN"
               workspaces = {
                 name = "$TF_WORKSPACE_PREFIX-\${path_relative_to_include()}"
               }
             }
+          }
+          EOC
           }
           locals {
             versions_file = "\${path_relative_from_include()}/versions.hcl"
