@@ -75,13 +75,13 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
         = std::make_shared<vast::transform>("eraser_transform", std::nullopt);
       auto select_config = select_step_configuration{
         .expression = self->state.query_,
-        .invert = true,
       };
-      transform->add_step(std::make_unique<select_step>(select_config));
+      transform->add_step(std::make_unique<select_step>(
+        select_config, select_step::mode::filter));
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
-          [self, transform, rp = rp](catalog_result& result) mutable {
+          [self, transform, rp](catalog_result& result) mutable {
             if (result.partitions.empty()) {
               rp.deliver(atom::ok_v);
               return;
@@ -93,14 +93,14 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
                         transform, result.partitions,
                         keep_original_partition::no)
               .then(
-                [rp = rp](const partition_info&) mutable {
+                [rp](const partition_info&) mutable {
                   rp.deliver(atom::ok_v);
                 },
-                [rp = rp](const caf::error& e) mutable {
+                [rp](const caf::error& e) mutable {
                   rp.deliver(e);
                 });
           },
-          [rp = rp](const caf::error& e) mutable {
+          [rp](const caf::error& e) mutable {
             rp.deliver(e);
           });
       return rp;

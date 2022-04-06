@@ -24,7 +24,8 @@
 
 namespace vast {
 
-select_step::select_step(select_step_configuration configuration)
+select_step::select_step(select_step_configuration configuration,
+                         enum mode mode)
   : expression_(caf::no_error) {
   auto e = to<vast::expression>(configuration.expression);
   if (!e) {
@@ -35,7 +36,7 @@ select_step::select_step(select_step_configuration configuration)
     expression_ = std::move(e);
     return;
   }
-  if (invert_)
+  if (mode == mode::filter)
     *e = vast::negation{std::move(*e)};
   expression_ = normalize_and_validate(*e);
   if (!expression_) {
