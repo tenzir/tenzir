@@ -77,7 +77,7 @@ jobs:
             cloud {
               organization = "$TF_ORGANIZATION"
               token        = "$TF_API_TOKEN"
-              workspaces = {
+              workspaces {
                 name = "$TF_WORKSPACE_PREFIX-\${path_relative_to_include()}"
               }
             }
