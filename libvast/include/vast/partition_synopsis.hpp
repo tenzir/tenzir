@@ -92,7 +92,7 @@ private:
   partition_synopsis* copy() const;
 
   // Cached memory usage.
-  size_t memusage_ = 0ull;
+  mutable std::atomic<size_t> memusage_ = 0ull;
 };
 
 /// Some quantitative information about a partition.

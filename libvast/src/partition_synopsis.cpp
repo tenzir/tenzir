@@ -139,13 +139,15 @@ void partition_synopsis::add(const table_slice& slice,
 }
 
 size_t partition_synopsis::memusage() const {
-  if (!memusage_) {
+  size_t result = memusage_;
+  if (result == size_t{0}) {
     for (const auto& [field, synopsis] : field_synopses_)
-      memusage_ += synopsis ? synopsis->memusage() : 0ull;
+      result += synopsis ? synopsis->memusage() : 0ull;
     for (const auto& [type, synopsis] : type_synopses_)
-      memusage_ += synopsis ? synopsis->memusage() : 0ull;
+      result += synopsis ? synopsis->memusage() : 0ull;
+    memusage_ = result;
   }
-  return memusage_;
+  return result;
 }
 
 partition_synopsis* partition_synopsis::copy() const {
@@ -154,7 +156,7 @@ partition_synopsis* partition_synopsis::copy() const {
   result->events = events;
   result->min_import_time = min_import_time;
   result->max_import_time = max_import_time;
-  result->memusage_ = memusage_;
+  result->memusage_ = memusage_.load();
   result->type_synopses_.reserve(type_synopses_.size());
   result->field_synopses_.reserve(field_synopses_.size());
   for (const auto& [type, synopsis] : type_synopses_) {
