@@ -622,12 +622,13 @@ void legacy_index_state::add_partition_creation_listener(
 
 void legacy_index_state::send_report() {
   VAST_ASSERT(workers == idle_workers.size() + busy_workers.size());
-  auto msg = report{.data = {
-                      {"query.backlog.normal", backlog.normal.size()},
-                      {"query.backlog.low", backlog.low.size()},
-                      {"query.workers.idle", idle_workers.size()},
-                      {"query.workers.busy", busy_workers.size()},
-                    }};
+  auto msg
+    = report{.data = {
+               {"scheduler.backlog.low", backlog.low.size()},
+               {"scheduler.backlog.normal", backlog.normal.size()},
+               {"scheduler.partition.remaining-capacity", idle_workers.size()},
+               {"scheduler.partition.current-lookups", busy_workers.size()},
+             }};
   self->send(accountant, msg);
 }
 
