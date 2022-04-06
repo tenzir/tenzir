@@ -80,10 +80,10 @@ int main(int argc, char** argv) {
   // Tweak CAF parameters in case we're running a client command.
   bool is_server = invocation->full_name == "start"
                    || caf::get_or(cfg.content, "vast.node", false);
-  const char* max_threads_key = CAF_VERSION < 1800
-                                  ? "scheduler.max-threads"
-                                  : "caf.scheduler.max-threads";
-  if (!is_server && !holds_alternative<int>(cfg, max_threads_key))
+  std::string_view max_threads_key = CAF_VERSION < 1800
+                                       ? "scheduler.max-threads"
+                                       : "caf.scheduler.max-threads";
+  if (!is_server && !caf::holds_alternative<int>(cfg, max_threads_key))
     cfg.set(max_threads_key, 1);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(*invocation, cfg.content);
