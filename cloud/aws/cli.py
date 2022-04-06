@@ -98,6 +98,11 @@ def docker_login(c):
 @task
 def deploy_step(c, step, auto_approve=False):
     """Deploy only one step of the stack"""
+    # Terragrunt is supposed to handle auto-init but it sometimes fails to detect module changes
+    c.run(
+        f"terragrunt init --terragrunt-working-dir step-{step}",
+        env=tf_env(c),
+    )
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir step-{step}",
         env=tf_env(c),
