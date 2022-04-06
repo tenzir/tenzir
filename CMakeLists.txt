@@ -685,6 +685,7 @@ add_subdirectory(libvast_test)
 add_subdirectory(tools)
 add_subdirectory(doc)
 add_subdirectory(vast)
+add_subdirectory(pyvast2)
 
 # -- cmake export/config installations -----------------------------------------
 
