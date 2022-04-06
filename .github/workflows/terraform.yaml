@@ -88,6 +88,7 @@ jobs:
           }
           generate = local.versions.generate
           EOF
+
       - name: Deploy
         id: deploy
         continue-on-error: true
