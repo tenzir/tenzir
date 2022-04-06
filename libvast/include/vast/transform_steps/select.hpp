@@ -18,20 +18,16 @@ struct select_step_configuration {
   // The expression in the config file.
   std::string expression;
 
-  // Whether to select or to filter.
-  bool invert = false;
-
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
   friend auto inspect(Inspector& f, select_step_configuration& x) {
-    return f(x.expression, x.invert);
+    return f(x.expression);
   }
 
   /// Enable parsing from a record via convertible.
   static inline const record_type& layout() noexcept {
     static auto result = record_type{
       {"expression", string_type{}},
-      {"invert", bool_type{}},
     };
     return result;
   }
@@ -40,7 +36,13 @@ struct select_step_configuration {
 // Selects matching rows from the input
 class select_step : public transform_step {
 public:
-  explicit select_step(select_step_configuration configuration);
+  enum class mode {
+    select,
+    filter,
+  };
+
+  explicit select_step(select_step_configuration configuration, mode
+                                                                = mode::select);
 
   /// Applies the transformation to a record batch with a corresponding vast
   /// layout.
