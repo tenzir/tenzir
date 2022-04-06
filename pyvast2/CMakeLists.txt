@@ -3,7 +3,7 @@ project(pyvast LANGUAGES CXX)
 
 find_package(pybind11 REQUIRED)
 
-set(pyvast_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/example.cpp")
+set(pyvast_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/node.cpp")
 pybind11_add_module(pyvast ${pyvast_sources})
 target_link_libraries(pyvast PRIVATE vast::internal)
 target_link_libraries(pyvast PUBLIC vast::libvast)
