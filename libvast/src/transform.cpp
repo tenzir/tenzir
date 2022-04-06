@@ -22,12 +22,8 @@
 
 namespace vast {
 
-transform::transform(std::string name,
-                     std::optional<std::vector<std::string>>&& event_types)
-  : name_(std::move(name)), event_types_(std::move(event_types)) {
-  if (event_types_ && event_types_->empty())
-    VAST_WARN("transform without 'event_types' will not apply to any event, "
-              "did you mean to pass 'nullopt' instead?");
+transform::transform(std::string name, std::vector<std::string>&& schema_names)
+  : name_(std::move(name)), schema_names_(std::move(schema_names)) {
 }
 
 void transform::add_step(std::unique_ptr<transform_step> step) {
@@ -38,8 +34,8 @@ const std::string& transform::name() const {
   return name_;
 }
 
-const std::optional<std::vector<std::string>>& transform::event_types() const {
-  return event_types_;
+const std::vector<std::string>& transform::schema_names() const {
+  return schema_names_;
 }
 
 bool transform::is_aggregate() const {
@@ -49,11 +45,8 @@ bool transform::is_aggregate() const {
 }
 
 bool transform::applies_to(std::string_view event_name) const {
-  if (!event_types_)
-    return true;
-  auto first
-    = std::find(event_types_->begin(), event_types_->end(), event_name);
-  return first != event_types_->end();
+  return std::find(schema_names_.begin(), schema_names_.end(), event_name)
+         != schema_names_.end();
 }
 
 caf::error transform::add(table_slice&& x) {
@@ -92,10 +85,10 @@ caf::error transform::process_queue(const std::unique_ptr<transform_step>& step,
   for (size_t i = 0; i < size; ++i) {
     auto [layout, batch] = std::move(to_transform_.front());
     to_transform_.pop_front();
-    if (check_layout && event_types_
-        && std::find(event_types_->begin(), event_types_->end(),
+    if (check_layout
+        && std::find(schema_names_.begin(), schema_names_.end(),
                      std::string{layout.name()})
-             == event_types_->end()) {
+             == schema_names_.end()) {
       // The transform does not change slices of unconfigured event types.
       VAST_TRACE("{} transform skips a '{}' layout slice with {} event(s)",
                  this->name(), std::string{layout.name()}, batch->num_rows());
@@ -146,9 +139,9 @@ caf::expected<std::vector<transform_batch>> transform::finish_batch() {
 transformation_engine::transformation_engine(std::vector<transform>&& transforms)
   : transforms_(std::move(transforms)) {
   for (size_t i = 0; i < transforms_.size(); ++i) {
-    auto const& event_types = transforms_[i].event_types();
-    if (event_types)
-      for (const auto& type : *event_types)
+    auto const& schema_names = transforms_[i].schema_names();
+    if (!schema_names.empty())
+      for (const auto& type : schema_names)
         layout_mapping_[type].push_back(i);
     else
       general_transforms_.push_back(i);

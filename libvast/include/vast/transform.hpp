@@ -18,8 +18,7 @@ namespace vast {
 
 class transform {
 public:
-  transform(std::string name,
-            std::optional<std::vector<std::string>>&& event_types);
+  transform(std::string name, std::vector<std::string>&& schema_names);
 
   ~transform() = default;
 
@@ -47,8 +46,9 @@ public:
   [[nodiscard]] const std::string& name() const;
 
 private:
-  [[nodiscard]] const std::optional<std::vector<std::string>>&
-  event_types() const;
+  // Returns the list of schemas that the transform should apply to.
+  // An empty vector means that the transform should apply to everything.
+  [[nodiscard]] const std::vector<std::string>& schema_names() const;
 
   /// Add the batch to the internal queue of batches to be transformed.
   [[nodiscard]] caf::error
@@ -74,7 +74,7 @@ private:
   std::vector<std::unique_ptr<transform_step>> steps_;
 
   /// Triggers for this transform
-  std::optional<std::vector<std::string>> event_types_;
+  std::vector<std::string> schema_names_;
 
   /// The slices being transformed.
   std::deque<transform_batch> to_transform_;
