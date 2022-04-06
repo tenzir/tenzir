@@ -41,4 +41,6 @@ make_transform(const std::string& name,
                const std::vector<std::string>& event_types,
                const caf::settings& transforms);
 
+caf::expected<transform> parse_pipe(std::string_view pipe);
+
 } // namespace vast::system

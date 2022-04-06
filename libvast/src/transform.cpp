@@ -167,7 +167,7 @@ caf::error transformation_engine::validate(
 
 /// Apply relevant transformations to the table slice.
 caf::error transformation_engine::add(table_slice&& x) {
-  VAST_TRACE("transformation engine adds a slice");
+  VAST_ERROR("transformation engine adds a slice");
   auto layout = x.layout();
   to_transform_[layout].emplace_back(std::move(x));
   return caf::none;
@@ -201,7 +201,7 @@ transformation_engine::process_queue(transform& transform,
 
 /// Apply relevant transformations to the table slice.
 caf::expected<std::vector<table_slice>> transformation_engine::finish() {
-  VAST_TRACE("transformation engine retrieves results");
+  VAST_ERROR("transformation engine retrieves results");
   auto to_transform = std::exchange(to_transform_, {});
   std::unordered_map<vast::type, std::deque<transform_batch>> batches{};
   std::vector<table_slice> result{};
@@ -223,7 +223,8 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
       bq.emplace_back(layout, b);
     }
     queue.clear();
-    auto indices = matching->second;
+    auto indices = matching == layout_mapping_.end() ? std::vector<size_t>{}
+                                                     : matching->second;
     // If we have transforms that always apply, make some effort
     // to apply them in the same order as they appear in the
     // configuration. While we do not officially guarantee this

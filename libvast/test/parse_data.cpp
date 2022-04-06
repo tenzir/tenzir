@@ -10,6 +10,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
+#include "vast/concept/parseable/vast/pipe.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
@@ -23,6 +24,13 @@ data to_data(std::string_view str) {
   data x;
   if (!parsers::data(str, x))
     FAIL("failed to parse data from " << str);
+  return x;
+}
+
+data to_pipe(std::string_view str) {
+  data x;
+  if (!parsers::pipe(str, x))
+    FAIL("failed to parse pipe from " << str);
   return x;
 }
 
@@ -73,4 +81,9 @@ TEST(data) {
               record::make_unsafe(record::vector_type{{"", caf::none}}));
   CHECK_EQUAL(to_data("<_, /foo/>"), record::make_unsafe(record::vector_type{
                                        {"", caf::none}, {"", pattern{"foo"}}}));
+}
+
+TEST(pipe parser) {
+  CHECK_EQUAL(to_pipe(R"__(delete(fields: [ "a", "b", "c" ])__"),
+              (record{{"delete", record{{"fields", list{"a", "b", "c"}}}}}));
 }

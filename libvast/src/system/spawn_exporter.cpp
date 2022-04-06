@@ -40,6 +40,13 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     = make_transforms(transforms_location::server_export, args.inv.options);
   if (!transforms)
     return transforms.error();
+  if (auto pipe = caf::get_if<std::string>( //
+        &args.inv.options, "vast.export.pipe")) {
+    if (auto transform = parse_pipe(*pipe))
+      transforms->push_back(std::move(*transform));
+    else
+      return transform.error();
+  }
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))

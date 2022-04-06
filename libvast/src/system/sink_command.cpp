@@ -47,8 +47,9 @@ caf::message
 sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
-  auto guard = caf::detail::make_scope_guard(
-    [&] { self->send_exit(snk, caf::exit_reason::user_shutdown); });
+  auto guard = caf::detail::make_scope_guard([&] {
+    self->send_exit(snk, caf::exit_reason::user_shutdown);
+  });
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(inv, "vast.export.read", must_provide_query::no);
   if (!query)
@@ -194,7 +195,9 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
           self->send_exit(snk, caf::exit_reason::user_shutdown);
         }
       })
-    .until([&] { return stop; });
+    .until([&] {
+      return stop;
+    });
   if (err)
     return caf::make_message(std::move(err));
   return caf::none;

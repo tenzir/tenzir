@@ -8,7 +8,11 @@
 
 #include "vast/system/make_transforms.hpp"
 
+#include "vast/aliases.hpp"
+#include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -67,6 +71,32 @@ caf::error parse_transform_steps(transform& transform,
 }
 
 } // namespace
+
+caf::expected<data> to_data(std::string_view str) {
+  data x;
+  if (!parsers::data(str, x))
+    return ec::parse_error;
+  return x;
+}
+
+caf::expected<transform> parse_pipe(std::string_view pipe) {
+  if (auto d = to_data(pipe)) {
+    if (auto* r = caf::get_if<record>(&*d)) {
+      if (auto s = to<caf::settings>(*r)) {
+        auto result = transform{"temporary", {}};
+        if (auto e = parse_transform_steps(result, {caf::config_value{*s}}))
+          return e;
+        return result;
+      } else {
+        return s.error();
+      }
+    } else {
+      return ec::invalid_configuration;
+    }
+  } else {
+    return d.error();
+  }
+}
 
 caf::expected<std::vector<transform>>
 make_transforms(transforms_location loc, const caf::settings& opts) {

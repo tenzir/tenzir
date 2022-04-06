@@ -108,7 +108,8 @@ auto make_export_command() {
       .add<size_t>("max-events,n", "maximum number of results")
       .add<std::string>("read,r", "path for reading the query")
       .add<std::string>("write,w", "path to write events to")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));
+      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
+      .add<std::string>("pipe", "tbd"));
   export_->add_subcommand("zeek", "exports query results in Zeek format",
                           documentation::vast_export_zeek,
                           opts("?vast.export.zeek")
