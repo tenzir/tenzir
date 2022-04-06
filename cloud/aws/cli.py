@@ -1,4 +1,5 @@
 from invoke import task, Context, Exit, Program, Collection
+import integration
 import boto3
 import botocore.client
 import dynaconf
@@ -215,10 +216,13 @@ def describe_vast_server(c):
 def start_vast_server(c):
     """Start a VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
     try:
-        get_vast_server(c)
+        task_id = get_vast_server(c)
+        raise Exit(f"Server already running: {task_id}", 1)
     except Exit as e:
         if e.code == EXIT_CODE_VAST_SERVER_NOT_RUNNING:
             run_vast_task(c)
+        else:
+            raise e
 
 
 @task
@@ -317,13 +321,22 @@ def destroy(c, auto_approve=False):
     )
 
 
+def unhandled_exception(type, value, traceback):
+    """Override for `sys.excepthook` without stack trace"""
+    print(f"{type.__name__}: {str(value)}")
+
+
 ## Bootstrap
 
 if __name__ == "__main__":
-    collection = Collection.from_module(sys.modules[__name__])
+    sys.excepthook = unhandled_exception
+    namespace = Collection.from_module(sys.modules[__name__])
+    integ = Collection.from_module(integration)
+    integ.configure({"run": {"env": {"VASTCLOUD_NOTTY": "1"}}})
+    namespace.add_collection(integ)
     program = Program(
         binary="./vast-cloud",
-        namespace=collection,
+        namespace=namespace,
         version="0.1.0",
     )
     program.run()
