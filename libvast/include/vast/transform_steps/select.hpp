@@ -55,9 +55,6 @@ public:
 private:
   caf::expected<vast::expression> expression_;
 
-  /// Whether to select or to filter.
-  bool invert_ = false;
-
   /// The slices being transformed.
   std::vector<transform_batch> transformed_;
 };
