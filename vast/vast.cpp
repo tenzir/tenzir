@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
                                        ? "scheduler.max-threads"
                                        : "caf.scheduler.max-threads";
   if (!is_server && !caf::holds_alternative<int>(cfg, max_threads_key))
-    cfg.set(max_threads_key, 1);
+    cfg.set(max_threads_key, 2);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(*invocation, cfg.content);
   if (!log_context)
