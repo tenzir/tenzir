@@ -8,3 +8,6 @@ partitions respectively. The keys `query.workers.idle`, and `query.workers.busy`
 were renamed to `scheduler.partition.remaining-capacity`, and
 `scheduler.partition.current-lookups`. Finally, the key
 `scheduler.partition.pending` counts the number of currently pending partitions.
+It is still possible to opt-out of the new scheduling algorithm with the option
+`--use-legacy-query-scheduler`, but that is immediately deprecated and will not
+be included in the next minor release.

@@ -61,7 +61,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
       return err;
     VAST_VERBOSE("using customized indexing configuration {}", index_config);
   }
-  if (opt("vast.use-legacy-index", false)) {
+  if (opt("vast.use-legacy-query-scheduler", false)) {
     auto handle = self->spawn(
       legacy_index, accountant, filesystem, archive, catalog, type_registry,
       indexdir,
