@@ -38,7 +38,7 @@ make_transforms(transforms_location location, const caf::settings& settings);
 /// name.
 caf::expected<transform_ptr>
 make_transform(const std::string& name,
-               const std::optional<std::vector<std::string>>& event_types,
+               const std::vector<std::string>& event_types,
                const caf::settings& transforms);
 
 } // namespace vast::system

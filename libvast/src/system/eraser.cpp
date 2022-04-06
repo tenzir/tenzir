@@ -71,8 +71,8 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
         return caf::make_error(
           ec::invalid_query,
           fmt::format("{} failed to normalize and validate {}", *self, query));
-      auto transform
-        = std::make_shared<vast::transform>("eraser_transform", std::nullopt);
+      auto transform = std::make_shared<vast::transform>(
+        "eraser_transform", std::vector<std::string>{});
       auto select_config = select_step_configuration{
         .expression = self->state.query_,
       };
