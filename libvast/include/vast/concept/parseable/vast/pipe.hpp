@@ -45,41 +45,26 @@ private:
     auto kvp = x >> "->" >> x;
     auto trailing_comma = ~(',' >> ws);
     auto named_field = ws >> parsers::identifier >> ":" >> x;
-    // clang-format off
-    auto unnamed_field = x ->* [](data value) {
-      return std::make_pair(std::string{}, std::move(value));
-    };
-    // A record can either be ordered with unnamed fields or unordered
-    // with named fields. Allowing a mixture of both would mean we'd
-    // have to deal with ambiguous inputs.
-    auto record_parser =
-        '<' >> ~as<record>(named_field % ',') >> trailing_comma >> '>'
-        // Creating a record with repeated field names technically violates
-        // the consistency of the underlying stable_map. We live with that
-        // until record is refactored into a proper type (FIXME).
-      | ('<' >> (unnamed_field % ',') >> trailing_comma >> '>')
-        ->* [](record::vector_type&& xs) {
-          return record::make_unsafe(std::move(xs));
-        };
-    // parsers::name >> ( >> p >> )
-    p = parsers::time
-      | parsers::duration
-      | parsers::net
-      | parsers::addr
-      | parsers::real
-      | parsers::count
-      | parsers::integer
-      | parsers::tf
-      | parsers::qqstr
-      | parsers::pattern
-      | '[' >> ~(x % ',') >> trailing_comma >> ']'
-      | '{' >> ~as<map>(kvp % ',') >> trailing_comma >> '}'
-      | record_parser
-      | as<caf::none_t>("nil"_p)
-      | as<caf::none_t>(parsers::ch<'_'>)
-      ;
+    auto record_parser
+      = '<' >> ~as<record>(named_field % ',') >> trailing_comma >> '>';
+    p = parsers::time | parsers::duration | parsers::net | parsers::addr
+        | parsers::real | parsers::count | parsers::integer | parsers::tf
+        | parsers::qqstr | parsers::pattern
+        | '[' >> ~(x % ',') >> trailing_comma >> ']'
+        | '{' >> ~as<map>(kvp % ',') >> trailing_comma >> '}' | record_parser
+        | as<caf::none_t>("nil"_p) | as<caf::none_t>(parsers::ch<'_'>);
     // clang-format on
-    return p;
+    auto op_parser
+      = ws >> (parsers::identifier >> ws >> '('
+               >> ~as<record>(named_field % ',') >> trailing_comma >> ')' >> ws)
+                  ->*[p](std::tuple<std::string, record> t) -> data {
+      return record{
+        {std::get<0>(t), std::get<1>(t)},
+      };
+    };
+    auto pipe_parser = ~as<list>(op_parser % '|');
+
+    return pipe_parser;
   }
 };
 

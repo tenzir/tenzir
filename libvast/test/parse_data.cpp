@@ -84,6 +84,14 @@ TEST(data) {
 }
 
 TEST(pipe parser) {
-  CHECK_EQUAL(to_pipe(R"__(delete(fields: [ "a", "b", "c" ])__"),
-              (record{{"delete", record{{"fields", list{"a", "b", "c"}}}}}));
+  CHECK_EQUAL(
+    to_pipe(R"__(delete(fields: [ "a", "b", "c" ]))__"),
+    (list{record{{"delete", record{{"fields", list{"a", "b", "c"}}}}}}));
+  CHECK_EQUAL(
+    to_pipe(
+      R"__(delete(fields: [ "a", "b", "c" ]) | project(fields: ["f1", "f2", "f3"]))__"),
+    (list{
+      record{{"delete", record{{"fields", list{"a", "b", "c"}}}}},
+      record{{"project", record{{"fields", list{"f1", "f2", "f3"}}}}},
+    }));
 }

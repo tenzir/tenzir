@@ -12,7 +12,7 @@
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
+#include "vast/concept/parseable/vast/pipe.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -72,29 +72,33 @@ caf::error parse_transform_steps(transform& transform,
 
 } // namespace
 
-caf::expected<data> to_data(std::string_view str) {
+caf::expected<list> to_pipe(std::string_view str) {
   data x;
-  if (!parsers::data(str, x))
+  if (!parsers::pipe(str, x))
     return ec::parse_error;
-  return x;
+  return caf::get<list>(x);
 }
 
 caf::expected<transform> parse_pipe(std::string_view pipe) {
-  if (auto d = to_data(pipe)) {
-    if (auto* r = caf::get_if<record>(&*d)) {
-      if (auto s = to<caf::settings>(*r)) {
-        auto result = transform{"temporary", {}};
-        if (auto e = parse_transform_steps(result, {caf::config_value{*s}}))
-          return e;
-        return result;
+  if (auto l = to_pipe(pipe)) {
+    caf::config_value::list transform_step_config{};
+    for (const auto& d : *l) {
+      if (const auto* r = caf::get_if<record>(&d)) {
+        if (auto s = to<caf::settings>(*r)) {
+          transform_step_config.emplace_back(std::move(*s));
+        } else {
+          return s.error();
+        }
       } else {
-        return s.error();
+        return ec::invalid_configuration;
       }
-    } else {
-      return ec::invalid_configuration;
     }
+    auto result = transform{"temporary", {}};
+    if (auto e = parse_transform_steps(result, transform_step_config))
+      return e;
+    return result;
   } else {
-    return d.error();
+    return l.error();
   }
 }
 
