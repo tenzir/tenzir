@@ -221,7 +221,8 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
       bq.emplace_back(layout, b);
     }
     queue.clear();
-    auto indices = matching->second;
+    auto indices = matching == layout_mapping_.end() ? std::vector<size_t>{}
+                                                     : matching->second;
     // If we have transforms that always apply, make some effort
     // to apply them in the same order as they appear in the
     // configuration. While we do not officially guarantee this
