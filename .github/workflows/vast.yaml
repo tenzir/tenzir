@@ -239,7 +239,7 @@ jobs:
       # into.
       - name: Fetch ccache Cache
         if: github.event_name == 'pull_request'
-        uses: pat-s/always-upload-cache@v2
+        uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
@@ -251,7 +251,7 @@ jobs:
       # pushed to.
       - name: Fetch ccache Cache (Push)
         if: github.event_name == 'push'
-        uses: pat-s/always-upload-cache@v2
+        uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
@@ -261,7 +261,7 @@ jobs:
       # For 'release' events we want to take the latest master build.
       - name: Fetch ccache Cache (Release)
         if: github.event_name == 'release'
-        uses: pat-s/always-upload-cache@v2
+        uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
@@ -499,7 +499,7 @@ jobs:
       # into.
       - name: Fetch ccache Cache
         if: github.event_name == 'pull_request'
-        uses: pat-s/always-upload-cache@v2
+        uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
@@ -511,7 +511,7 @@ jobs:
       # pushed to.
       - name: Fetch ccache Cache (Push)
         if: github.event_name == 'push'
-        uses: pat-s/always-upload-cache@v2
+        uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
@@ -521,7 +521,7 @@ jobs:
       # For 'release' events we want to take the latest master build.
       - name: Fetch ccache Cache (Release)
         if: github.event_name == 'release'
-        uses: pat-s/always-upload-cache@v2
+        uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
