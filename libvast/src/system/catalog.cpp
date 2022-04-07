@@ -286,7 +286,8 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
             result_type result;
             for (const auto& [part_id, part_syn] : synopses) {
               VAST_ASSERT(part_syn->min_import_time
-                          <= part_syn->max_import_time);
+                            <= part_syn->max_import_time,
+                          "encountered empty or moved-from partition synopsis");
               auto ts = time_synopsis{
                 part_syn->min_import_time,
                 part_syn->max_import_time,

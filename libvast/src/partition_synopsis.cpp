@@ -20,7 +20,7 @@ partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
   offset = std::exchange(that.offset, {});
   events = std::exchange(that.events, {});
   min_import_time = std::exchange(that.min_import_time, time::max());
-  min_import_time = std::exchange(that.max_import_time, time::min());
+  max_import_time = std::exchange(that.max_import_time, time::min());
   type_synopses_ = std::exchange(that.type_synopses_, {});
   field_synopses_ = std::exchange(that.field_synopses_, {});
   memusage_.store(that.memusage_.exchange(0));
@@ -32,7 +32,7 @@ partition_synopsis::operator=(partition_synopsis&& that) noexcept {
     offset = std::exchange(that.offset, {});
     events = std::exchange(that.events, {});
     min_import_time = std::exchange(that.min_import_time, time::max());
-    min_import_time = std::exchange(that.max_import_time, time::min());
+    max_import_time = std::exchange(that.max_import_time, time::min());
     type_synopses_ = std::exchange(that.type_synopses_, {});
     field_synopses_ = std::exchange(that.field_synopses_, {});
     memusage_.store(that.memusage_.exchange(0));
@@ -183,6 +183,7 @@ partition_synopsis* partition_synopsis::copy() const {
   result->memusage_ = memusage_.load();
   result->type_synopses_.reserve(type_synopses_.size());
   result->field_synopses_.reserve(field_synopses_.size());
+  result->memusage_ = memusage_.load();
   for (const auto& [type, synopsis] : type_synopses_) {
     if (synopsis)
       result->type_synopses_[type] = synopsis->clone();
