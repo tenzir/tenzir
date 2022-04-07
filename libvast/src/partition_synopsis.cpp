@@ -16,6 +16,30 @@
 
 namespace vast {
 
+partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
+  offset = std::exchange(that.offset, {});
+  events = std::exchange(that.events, {});
+  min_import_time = std::exchange(that.min_import_time, time::max());
+  min_import_time = std::exchange(that.max_import_time, time::min());
+  type_synopses_ = std::exchange(that.type_synopses_, {});
+  field_synopses_ = std::exchange(that.field_synopses_, {});
+  memusage_.store(that.memusage_.exchange(0));
+}
+
+partition_synopsis&
+partition_synopsis::operator=(partition_synopsis&& that) noexcept {
+  if (this != &that) {
+    offset = std::exchange(that.offset, {});
+    events = std::exchange(that.events, {});
+    min_import_time = std::exchange(that.min_import_time, time::max());
+    min_import_time = std::exchange(that.max_import_time, time::min());
+    type_synopses_ = std::exchange(that.type_synopses_, {});
+    field_synopses_ = std::exchange(that.field_synopses_, {});
+    memusage_.store(that.memusage_.exchange(0));
+  }
+  return *this;
+}
+
 void partition_synopsis::shrink() {
   memusage_ = 0; // Invalidate cached size.
   for (auto& [field, synopsis] : field_synopses_) {

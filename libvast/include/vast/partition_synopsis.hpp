@@ -32,10 +32,10 @@ struct partition_synopsis final : public caf::ref_counted {
   partition_synopsis() = default;
   ~partition_synopsis() override = default;
   partition_synopsis(const partition_synopsis&) = delete;
-  partition_synopsis(partition_synopsis&&) = default;
+  partition_synopsis(partition_synopsis&& that) noexcept;
 
   partition_synopsis& operator=(const partition_synopsis&) = delete;
-  partition_synopsis& operator=(partition_synopsis&&) = default;
+  partition_synopsis& operator=(partition_synopsis&& that) noexcept;
 
   /// Add data to the synopsis.
   // TODO: It would make sense to pass an index_config to partition synopsis
