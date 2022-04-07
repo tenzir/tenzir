@@ -17,7 +17,6 @@
 #include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/make_transforms.hpp"
-#include "vast/transform_steps/select.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -73,11 +72,13 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
           fmt::format("{} failed to normalize and validate {}", *self, query));
       auto transform = std::make_shared<vast::transform>(
         "eraser_transform", std::vector<std::string>{});
-      auto select_config = select_step_configuration{
-        .expression = self->state.query_,
-      };
-      transform->add_step(std::make_unique<select_step>(
-        select_config, select_step::mode::filter));
+      const auto* filter_plugin = plugins::find<transform_plugin>("filter");
+      VAST_ASSERT(filter_plugin);
+      auto filter_step = filter_plugin->make_transform_step(
+        {{"expression", self->state.query_}});
+      if (!filter_step)
+        return filter_step.error();
+      transform->add_step(std::move(*filter_step));
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
