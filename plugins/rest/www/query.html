@@ -1,0 +1,28 @@
+
+<html>
+<head><title>VAST Export Interface</title></head>
+<!-- 
+// TODO: 'Load more' button
+function loadData(){
+	let template = document.getElementById('template');
+	dataset.forEach(function(item){
+	// create a new element with the contents of the template
+	let div = document.createElement('div');
+	div.className = 'item';
+	div.innerHTML = template.innerHTML.replace('{{title}}', item.title);
+	
+	document.getElementById('items').appendChild(div);
+	});
+} -->
+
+<body>
+
+<form action=/api/v1/export>
+<label for="query">Enter VAST Query:</label><br>
+<input type="text" id="query" name="query">
+<input type="submit">
+</form>
+
+</body>
+
+</html>
