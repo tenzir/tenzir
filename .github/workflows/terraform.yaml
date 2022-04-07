@@ -55,35 +55,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create config file
+      - name: Secret hashes
         run: |
-          echo "vast_peered_vpc_id = $VAST_PEERED_VPC_ID" >> .env
-          echo "vast_cidr = $VAST_CIDR" >> .env
-          echo "vast_aws_region = $VAST_AWS_REGION" >> .env
+          echo -n $VAST_PEERED_VPC_ID | md5sum
+          echo -n $VAST_CIDR | md5sum
+          echo -n $VAST_AWS_REGION | md5sum
+          echo -n $TF_ORGANIZATION | md5sum
+          echo -n $TF_WORKSPACE_PREFIX | md5sum
+          echo -n $TF_API_TOKEN | md5sum
+          echo -n $AWS_ACCESS_KEY_ID | md5sum
+          echo -n $AWS_SECRET_ACCESS_KEY | md5sum
 
       - name: Substitute backend with Terraform Cloud
         run: |
-          cat<<EOF > step-1/backend.tf
+          cat<<EOF > terragrunt.hcl
+          generate "backend" {
+            path = "backend.generated.tf"
+            if_exists = "overwrite"
+            contents = <<EOC
           terraform {
             cloud {
               organization = "$TF_ORGANIZATION"
               token        = "$TF_API_TOKEN"
               workspaces {
-                name = "$TF_WORKSPACE_PREFIX-step-1"
+                name = "$TF_WORKSPACE_PREFIX-\${path_relative_to_include()}"
               }
             }
           }
-          EOF
-          cat<<EOF > step-2/backend.tf
-          terraform {
-            cloud {
-              organization = "$TF_ORGANIZATION"
-              token        = "$TF_API_TOKEN"
-              workspaces {
-                name = "$TF_WORKSPACE_PREFIX-step-2"
-              }
-            }
+          EOC
           }
+          locals {
+            versions_file = "\${path_relative_from_include()}/versions.hcl"
+            versions = read_terragrunt_config(local.versions_file)
+          }
+          generate = local.versions.generate
           EOF
 
       - name: Deploy

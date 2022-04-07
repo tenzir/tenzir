@@ -9,10 +9,18 @@
 # are propagated to the image at build time. This enables the image to be runned
 # using the host user, but a rebuild is required when changing the calling user.
 
-DOCKER_SOCKET=/var/run/docker.sock
+# Allow running vast-cloud from another directory
+ABSOLUTE_DIRNAME=$(dirname $(readlink -f  $0))
+# Take the provided credentials file location into account
+AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
+# Allow binding from host to run vast-cloud within vast-cloud
+export HOST_DIRNAME="${HOST_DIRNAME:=$ABSOLUTE_DIRNAME}"
+export HOST_CREDENTIALS_FILE="${HOST_CREDENTIALS_FILE:=$AWS_SHARED_CREDENTIALS_FILE}"
+export HOST_DOCKER_SOCKET="${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
+
 export CALLER_UID=$(id -u)
 export CALLER_GID=$(id -g)
-export DOCKER_GID=$(stat -c '%g' ${DOCKER_SOCKET})
+export DOCKER_GID=$(stat -c '%g' ${HOST_DOCKER_SOCKET})
 
 build () {
   echo "(CALLER_UID=$CALLER_UID,CALLER_GID=$CALLER_GID,DOCKER_GID=$DOCKER_GID)"
@@ -32,12 +40,13 @@ docker image inspect tenzir/vast-cloud-cli > /dev/null \
 
 # Run image with both AWS credentials file and env credentials if available
 docker run -i $([[ -z $VASTCLOUD_NOTTY ]] && echo "-t") \
-    --mount type=bind,source=${DOCKER_SOCKET},target=/var/run/docker.sock \
-    --mount type=bind,source=$PWD/../..,target=/vast \
-    $([[ -f "$HOME/.aws/credentials" ]] && echo "--mount type=bind,source=$HOME/.aws/credentials,target=/.aws/credentials,readonly") \
+    --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
+    --mount type=bind,source=$HOST_DIRNAME/../..,target=/vast \
+    $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "--mount type=bind,source=$HOST_CREDENTIALS_FILE,target=/.aws/credentials,readonly") \
     -e AWS_PROFILE \
     -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
     --env-file <(env | grep VAST_) \
+    --env-file <(env | grep HOST_) \
     tenzir/vast-cloud-cli "$@"
