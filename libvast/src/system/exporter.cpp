@@ -378,7 +378,6 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
           self->send(
             self->state.accountant, "exporter.hits.runtime", runtime,
             metrics_metadata{{"query", fmt::to_string(self->state.query.id)}});
-        shutdown(self);
       }
       return {};
     },

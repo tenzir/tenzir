@@ -47,8 +47,10 @@ caf::message
 sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
-  auto guard = caf::detail::make_scope_guard(
-    [&] { self->send_exit(snk, caf::exit_reason::user_shutdown); });
+  auto guard = caf::detail::make_scope_guard([&] {
+    self->send<caf::message_priority::normal>(
+      snk, caf::exit_msg{self->address(), caf::exit_reason::user_shutdown});
+  });
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(inv, "vast.export.read", must_provide_query::no);
   if (!query)
@@ -128,7 +130,6 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
       [&](atom::shutdown, const duration& timeout) {
         VAST_INFO("{} shuts down after {} timeout", inv.full_name,
                   to_string(timeout));
-        self->send_exit(exporter, caf::exit_reason::user_shutdown);
         self->send_exit(snk, caf::exit_reason::user_shutdown);
         waiting_for_final_report = true;
         err = caf::make_error(ec::timeout,
@@ -139,21 +140,22 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         stop = true;
         if (msg.source == node) {
           VAST_DEBUG("{} received DOWN from node", inv.full_name);
-          self->send_exit(snk, caf::exit_reason::user_shutdown);
+          self->send_exit(snk, msg.reason);
         } else if (msg.source == exporter) {
           VAST_DEBUG("{} received DOWN from exporter", inv.full_name);
-          self->send_exit(snk, caf::exit_reason::user_shutdown);
+          self->send_exit(snk, msg.reason);
         } else if (msg.source == snk) {
           VAST_DEBUG("{} received DOWN from sink", inv.full_name);
-          self->send_exit(exporter, caf::exit_reason::user_shutdown);
           stop = false;
           waiting_for_final_report = true;
+          if (msg.reason && msg.reason != caf::exit_reason::normal
+              && msg.reason != caf::exit_reason::user_shutdown) {
+            VAST_WARN("{} received error message: {}", inv.full_name,
+                      caf::deep_to_string(msg));
+            err = std::move(msg.reason);
+          }
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
-        }
-        if (msg.reason && msg.reason != caf::exit_reason::user_shutdown) {
-          VAST_WARN("{} received error message: {}", inv.full_name, msg.reason);
-          err = std::move(msg.reason);
         }
       },
       [&]([[maybe_unused]] const performance_report& report) {
@@ -191,10 +193,11 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         VAST_DEBUG("{} got {}", inv.full_name, ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           self->send_exit(exporter, caf::exit_reason::user_shutdown);
-          self->send_exit(snk, caf::exit_reason::user_shutdown);
         }
       })
-    .until([&] { return stop; });
+    .until([&] {
+      return stop;
+    });
   if (err)
     return caf::make_message(std::move(err));
   return caf::none;
