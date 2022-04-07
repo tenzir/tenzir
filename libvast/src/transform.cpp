@@ -45,8 +45,9 @@ bool transform::is_aggregate() const {
 }
 
 bool transform::applies_to(std::string_view event_name) const {
-  return std::find(schema_names_.begin(), schema_names_.end(), event_name)
-         != schema_names_.end();
+  return schema_names_.empty()
+         || std::find(schema_names_.begin(), schema_names_.end(), event_name)
+              != schema_names_.end();
 }
 
 caf::error transform::add(table_slice&& x) {
@@ -85,10 +86,7 @@ caf::error transform::process_queue(const std::unique_ptr<transform_step>& step,
   for (size_t i = 0; i < size; ++i) {
     auto [layout, batch] = std::move(to_transform_.front());
     to_transform_.pop_front();
-    if (check_layout
-        && std::find(schema_names_.begin(), schema_names_.end(),
-                     std::string{layout.name()})
-             == schema_names_.end()) {
+    if (check_layout && !applies_to(layout.name())) {
       // The transform does not change slices of unconfigured event types.
       VAST_TRACE("{} transform skips a '{}' layout slice with {} event(s)",
                  this->name(), std::string{layout.name()}, batch->num_rows());
@@ -167,7 +165,7 @@ caf::error transformation_engine::validate(
 
 /// Apply relevant transformations to the table slice.
 caf::error transformation_engine::add(table_slice&& x) {
-  VAST_ERROR("transformation engine adds a slice");
+  VAST_DEBUG("transformation engine adds a slice");
   auto layout = x.layout();
   to_transform_[layout].emplace_back(std::move(x));
   return caf::none;
@@ -201,7 +199,7 @@ transformation_engine::process_queue(transform& transform,
 
 /// Apply relevant transformations to the table slice.
 caf::expected<std::vector<table_slice>> transformation_engine::finish() {
-  VAST_ERROR("transformation engine retrieves results");
+  VAST_DEBUG("transformation engine retrieves results");
   auto to_transform = std::exchange(to_transform_, {});
   std::unordered_map<vast::type, std::deque<transform_batch>> batches{};
   std::vector<table_slice> result{};

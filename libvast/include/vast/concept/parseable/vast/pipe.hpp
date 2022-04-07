@@ -54,9 +54,12 @@ private:
         | '{' >> ~as<map>(kvp % ',') >> trailing_comma >> '}' | record_parser
         | as<caf::none_t>("nil"_p) | as<caf::none_t>(parsers::ch<'_'>);
     // clang-format on
+    auto parameter_char = (parsers::alnum | parsers::ch<'-'>);
+    auto parameter = ws >> +parameter_char >> ":" >> x;
     auto op_parser
-      = ws >> (parsers::identifier >> ws >> '('
-               >> ~as<record>(named_field % ',') >> trailing_comma >> ')' >> ws)
+      = ws >> (parsers::identifier >> ws >> ~as<record>(
+                 '(' >> (parameter % ',') >> trailing_comma >> ')')
+               >> ws)
                   ->*[p](std::tuple<std::string, record> t) -> data {
       return record{
         {std::get<0>(t), std::get<1>(t)},

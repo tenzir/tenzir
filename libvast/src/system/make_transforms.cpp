@@ -93,7 +93,7 @@ caf::expected<transform> parse_pipe(std::string_view pipe) {
         return ec::invalid_configuration;
       }
     }
-    auto result = transform{"temporary", {}};
+    auto result = transform{"vast.export.pipe", {}};
     if (auto e = parse_transform_steps(result, transform_step_config))
       return e;
     return result;

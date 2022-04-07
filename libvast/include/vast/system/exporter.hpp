@@ -85,6 +85,6 @@ struct exporter_state {
 /// @param transforms The applied transforms.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<transform>&& transforms);
+         query_options options, std::vector<transform>&& transforms, uint64_t max_events);
 
 } // namespace vast::system

@@ -29,6 +29,7 @@
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/actor_system_config.hpp>
 #include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -193,7 +194,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<transform>&& transforms) {
+         query_options options, std::vector<transform>&& transforms, uint64_t max_events_c) {
   self->state.options = options;
   auto perserve_ids = has_preserve_ids_option(self->state.options)
                         ? query::extract::preserve_ids
@@ -204,9 +205,14 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                                  ? query::priority::low
                                  : query::priority::normal;
   self->state.transformer = transformation_engine{std::move(transforms)};
-  if (auto err = self->state.transformer.validate(
-        transformation_engine::allow_aggregate_transforms::no)) {
-    VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
+  const auto allow_aggregate_transforms
+    = max_events_c > 0
+        ? transformation_engine::allow_aggregate_transforms::no
+        : transformation_engine::allow_aggregate_transforms::yes;
+  if (auto err = self->state.transformer.validate(allow_aggregate_transforms)) {
+    VAST_ERROR("transformer is not allowed to use aggregate transform when "
+               "specifying vast.export.max-events: {}",
+               err);
     self->quit();
     return exporter_actor::behavior_type::make_empty_behavior();
   }

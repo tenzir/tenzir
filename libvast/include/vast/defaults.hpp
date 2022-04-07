@@ -99,7 +99,7 @@ namespace export_ {
 constexpr std::string_view read = "-";
 
 /// Maximum number of results.
-constexpr size_t max_events = 0;
+constexpr uint64_t max_events = 0;
 
 /// Path for writing query results or `-` for writing to STDOUT.
 constexpr std::string_view write = "-";

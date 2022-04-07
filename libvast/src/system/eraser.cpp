@@ -73,11 +73,14 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
           fmt::format("{} failed to normalize and validate {}", *self, query));
       auto transform = std::make_shared<vast::transform>(
         "eraser_transform", std::vector<std::string>{});
-      auto select_config = select_step_configuration{
-        .expression = self->state.query_,
-      };
-      transform->add_step(std::make_unique<select_step>(
-        select_config, select_step::mode::filter));
+      const auto* select_plugin = plugins::find<transform_plugin>("select");
+      VAST_ASSERT(select_plugin);
+      auto select_step = select_plugin->make_transform_step({
+        {"expression", self->state.query_},
+      });
+      if (!select_step)
+        return select_step.error();
+      transform->add_step(std::move(*select_step));
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
