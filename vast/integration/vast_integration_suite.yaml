@@ -57,6 +57,7 @@ fixtures:
                      '-i', 'node',
                      '--aging-frequency=2000min',
                      '--aging-query=:addr == 192.168.1.104',
+                     '--active-partition-timeout=5s',
                      'start'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file=self.config_file)
@@ -462,7 +463,11 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
+      - command: version
+        transformation: sleep 10
       - command: send eraser run
+      - command: version
+        transformation: sleep 2
       - command: export ascii 'resp_h == 192.168.1.104'
   Spawn source:
     tags: [import, spawn-source, zeek]

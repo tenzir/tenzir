@@ -70,6 +70,11 @@ struct passive_store_state {
     = std::tuple<vast::query, caf::typed_response_promise<uint64_t>>;
   std::vector<request> deferred_requests = {};
 
+  /// Holds erase requests that did arrive while the segment data
+  /// was still being loaded from disk.
+  using erasure = std::tuple<vast::ids, caf::typed_response_promise<uint64_t>>;
+  std::vector<erasure> deferred_erasures = {};
+
   /// Actor handle of the accountant.
   accountant_actor accountant = {};
 

@@ -33,10 +33,16 @@ struct select_step_configuration {
   }
 };
 
-// Selects mathcing rows from the input
+// Selects matching rows from the input
 class select_step : public transform_step {
 public:
-  explicit select_step(select_step_configuration configuration);
+  enum class mode {
+    select,
+    filter,
+  };
+
+  explicit select_step(select_step_configuration configuration, mode
+                                                                = mode::select);
 
   /// Applies the transformation to a record batch with a corresponding vast
   /// layout.

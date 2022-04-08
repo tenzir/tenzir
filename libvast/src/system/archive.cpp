@@ -101,9 +101,6 @@ archive_state::file_request(vast::query query) {
                  [&](query::extract& extract) {
                    self->monitor(extract.sink);
                  },
-                 [](query::erase&) {
-                   die("erase requests don't get filed");
-                 },
                },
                query.cmd);
     auto xs = query.ids;
@@ -156,11 +153,6 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                                            [&](const query::extract& extract) {
                                              return extract.sink == msg.source;
                                            },
-                                           [](const query::erase&) {
-                                             // erase request don't have sinks
-                                             // to monitor
-                                             return false;
-                                           },
                                          },
                                          request.query.cmd);
                      });
@@ -172,14 +164,6 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       const auto& xs = query.ids;
       VAST_DEBUG("{} got a request with the query {} and {} hints [{},  {})",
                  *self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
-      if (caf::holds_alternative<query::erase>(query.cmd)) {
-        // We erase eagerly.
-        auto num_erased = self->state.store->erase(xs);
-        if (!num_erased)
-          VAST_ERROR("{} failed to erase events: {}", *self,
-                     render(num_erased.error()));
-        return num_erased;
-      }
       return self->state.file_request(std::move(query));
     },
     [self](atom::internal, atom::resume) {
@@ -241,9 +225,6 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                            self->send(extract.sink, *final_slice);
                          }
                        }
-                     },
-                     [&](query::erase) {
-                       die("logic error detected");
                      },
                    },
                    request.query.cmd);

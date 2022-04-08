@@ -24,7 +24,8 @@
 
 namespace vast {
 
-select_step::select_step(select_step_configuration configuration)
+select_step::select_step(select_step_configuration configuration,
+                         enum mode mode)
   : expression_(caf::no_error) {
   auto e = to<vast::expression>(configuration.expression);
   if (!e) {
@@ -32,9 +33,11 @@ select_step::select_step(select_step_configuration configuration)
     // setup() function.
     VAST_ERROR("the select step cannot use the expression: '{}', reason: '{}'",
                configuration.expression, e.error());
-    expression_ = e;
+    expression_ = std::move(e);
     return;
   }
+  if (mode == mode::filter)
+    *e = vast::negation{std::move(*e)};
   expression_ = normalize_and_validate(*e);
   if (!expression_) {
     VAST_ERROR("the select step cannot validate the expression: '{}', reason: "

@@ -1,0 +1,4 @@
+VAST v1.0 deprecated the experimental aging feature. Given popular demand we've
+decided to un-deprecate it and to actually implement it on top of the same
+building blocks the compaction mechanism uses, which means that it is now fully
+working and no longer considered experimental.

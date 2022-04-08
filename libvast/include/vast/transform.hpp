@@ -18,7 +18,7 @@ namespace vast {
 
 class transform {
 public:
-  transform(std::string name, std::vector<std::string>&& event_types);
+  transform(std::string name, std::vector<std::string>&& schema_names);
 
   ~transform() = default;
 
@@ -33,6 +33,9 @@ public:
   /// Returns true if any of the transform steps is aggregate.
   [[nodiscard]] bool is_aggregate() const;
 
+  /// Tests whether the transform applies to events of the given type.
+  [[nodiscard]] bool applies_to(std::string_view event_name) const;
+
   /// Adds the table to the internal queue of batches to be transformed.
   [[nodiscard]] caf::error add(table_slice&&);
 
@@ -40,11 +43,13 @@ public:
   /// @note The offsets of the slices may not be preserved.
   [[nodiscard]] caf::expected<std::vector<table_slice>> finish();
 
-  [[nodiscard]] const std::vector<std::string>& event_types() const;
-
   [[nodiscard]] const std::string& name() const;
 
 private:
+  // Returns the list of schemas that the transform should apply to.
+  // An empty vector means that the transform should apply to everything.
+  [[nodiscard]] const std::vector<std::string>& schema_names() const;
+
   /// Add the batch to the internal queue of batches to be transformed.
   [[nodiscard]] caf::error
   add_batch(vast::type layout, std::shared_ptr<arrow::RecordBatch> batch);
@@ -69,7 +74,7 @@ private:
   std::vector<std::unique_ptr<transform_step>> steps_;
 
   /// Triggers for this transform
-  std::vector<std::string> event_types_;
+  std::vector<std::string> schema_names_;
 
   /// The slices being transformed.
   std::deque<transform_batch> to_transform_;
@@ -115,6 +120,9 @@ private:
 
   /// Mapping from event type to applicable transforms.
   std::unordered_map<std::string, std::vector<size_t>> layout_mapping_;
+
+  /// The transforms that will be applied to *all* types.
+  std::vector<size_t> general_transforms_;
 
   /// The slices being transformed.
   std::unordered_map<vast::type, std::deque<table_slice>> to_transform_;
