@@ -422,7 +422,8 @@ caf:
     # Measurement resolution in milliseconds (only if profiling is enabled).
     profiling-resolution: 100ms
 
-    # Forces a fixed number of threads if set.
+    # Forces a fixed number of threads if set. Defaults to the number of
+    # available CPU cores if starting a VAST node, or *2* for client commands.
     #max-threads: <number of cores>
 
     # Maximum number of messages actors can consume in one run.
