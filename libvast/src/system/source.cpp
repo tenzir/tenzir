@@ -178,6 +178,12 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
       // for reasoning.
       auto dummy = self->spawn(dummy_transformer_sink);
+      dummy->attach_functor([=](const caf::error& reason) {
+        if (!reason || reason == caf::exit_reason::user_shutdown)
+          VAST_INFO("dummy transformer shut down");
+        else
+          VAST_WARN("dummy transformer shut down with error: {}", reason);
+      });
       self
         ->request(self->state.transformer, caf::infinite,
                   static_cast<stream_sink_actor<table_slice>>(dummy))

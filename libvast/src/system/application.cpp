@@ -455,6 +455,8 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("aging-frequency", "interval between two aging "
                                              "cycles")
         .add<std::string>("aging-query", "query for aging out obsolete data")
+        .add<bool>("use-legacy-query-scheduler", "use the old query scheduling "
+                                                 "algorithm")
         .add<std::string>("shutdown-grace-period",
                           "time to wait until component shutdown "
                           "finishes cleanly before inducing a hard kill")

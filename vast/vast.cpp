@@ -116,6 +116,9 @@ int main(int argc, char** argv) {
               "instead");
     caf::put(cfg.content, "vast.catalog-fp-rate", *meta_index_fp_rate);
   }
+  if (caf::holds_alternative<bool>(cfg, "vast.use-legacy-query-scheduler"))
+    VAST_WARN("The 'vast.use-legacy-query-scheduler' option is deprecated; "
+              "it will be removed with the next minor release of VAST.");
   // Eagerly verify the export transform configuration, to avoid hidden
   // configuration errors that pop up the first time a user tries to run
   // `vast export`.

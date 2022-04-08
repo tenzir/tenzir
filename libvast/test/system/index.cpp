@@ -90,7 +90,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   receive_result(const uuid& query_id, uint32_t hits, uint32_t scheduled) {
     size_t result = 0;
     uint32_t collected = 0;
-    auto fetch = [&](size_t chunk) {
+    auto fetch = [&](size_t batch) {
       auto done = false;
       while (!done)
         self->receive(
@@ -111,15 +111,16 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
               FAIL("ran out of messages");
             });
       if (!self->mailbox().empty())
-        FAIL("mailbox not empty after receiving all 'done' messages");
-      collected += chunk;
+        FAIL("mailbox not empty after receiving the 'done' for a batch: "
+             << to_string(*self->mailbox().peek()));
+      collected += batch;
     };
     fetch(scheduled);
     while (collected < hits) {
-      auto chunk = std::min(hits - collected, taste_count);
-      self->send(index, query_id, chunk);
+      auto batch = std::min(hits - collected, taste_count);
+      self->send(index, query_id, batch);
       run();
-      fetch(chunk);
+      fetch(batch);
     }
     return result;
   }

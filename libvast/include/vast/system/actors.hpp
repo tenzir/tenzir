@@ -371,7 +371,7 @@ using partition_transformer_actor = typed_actor_fwd<
   caf::reacts_to<atom::internal, atom::resume, atom::done, vast::id>>
   // query::extract API
   ::extend_with<receiver_actor<table_slice>>
-  // query_supervisor API
+  // Receive a completion signal for the input stream.
   ::extend_with<receiver_actor<atom::done>>::unwrap;
 
 /// The interface of an ACTIVE PARTITION actor.

@@ -69,9 +69,6 @@ struct query {
   /// The query command type.
   using command = caf::variant<erase, count, extract>;
 
-  /// The query priority type.
-  enum class priority { normal, low };
-
   // -- constructor & destructor -----------------------------------------------
 
   query() = default;
@@ -135,8 +132,14 @@ struct query {
   /// The event ids to restrict the query evaluation to, if set.
   vast::ids ids = {};
 
+  struct priority {
+    constexpr static uint8_t high = 80;
+    constexpr static uint8_t normal = 30;
+    constexpr static uint8_t low = 10;
+  };
+
   /// The query priority.
-  priority priority = priority::normal;
+  uint8_t priority = priority::normal;
 };
 
 } // namespace vast
@@ -183,9 +186,7 @@ struct formatter<vast::query> {
     };
     caf::visit(f, value.cmd);
     return format_to(out, "{} (priority::{}), [{}])", value.expr,
-                     value.priority == vast::query::priority::normal ? "normal"
-                                                                     : "low",
-                     value.ids);
+                     value.priority, value.ids);
   }
 };
 

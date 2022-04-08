@@ -16,11 +16,11 @@
 #include "vast/index_statistics.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
-#include "vast/query_queue.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/importer.hpp"
+#include "vast/system/index.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/uuid.hpp"
 
@@ -38,111 +38,70 @@
 
 namespace vast::system {
 
-/// The transformer replaces the old partition with the new one or keeps it
-/// depending on the value of keep_original_partition.
-enum class keep_original_partition : bool {
-  yes = true,
-  no = false,
-};
-
-// New partition creation listeners will be sent the initial state of the
-// whole database if they set this to 'yes'.
-enum class send_initial_dbstate : bool {
-  yes = true,
-  no = false,
-};
-
-/// Helper class used to route table slice columns to the correct indexer
-/// in the CAF stream stage.
-struct i_partition_selector {
-  bool operator()(const type& filter, const table_slice& slice) const;
-};
-
-/// Extract a partition synopsis from the partition at `partition_path`
-/// and write it to `partition_synopsis_path`.
-//  TODO: Move into separate header.
-caf::error
-extract_partition_synopsis(const std::filesystem::path& partition_path,
-                           const std::filesystem::path& partition_synopsis_path);
-
 /// Flatbuffer integration. Note that this is only one-way, restoring
 /// the index state needs additional runtime information.
 // TODO: Pull out the persisted part of the state into a separate struct
 // that can be packed and unpacked.
 caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
-
-/// The state of the active partition.
-struct active_partition_info {
-  /// The partition actor.
-  active_partition_actor actor = {};
-
-  /// The slot ID that identifies the partition in the stream.
-  caf::stream_slot stream_slot = {};
-
-  /// The store actor that holds the segments for this partition.
-  // NOTE: Logically this should belong inside the active partition, but the way
-  // the CAF streaming api works makes it really annoying to have the partition
-  // stream both whole table_slices to the store and table_slice_columns to
-  // the indexers. So barring a major refactoring, we just have the partition
-  // do the streaming.
-  store_builder_actor store = {};
-
-  // The slot ID that identifies the store in the stream.
-  caf::stream_slot store_slot = {};
-
-  /// The remaining free capacity of the partition.
-  size_t capacity = {};
-
-  /// The UUID of the partition.
-  uuid id = {};
-
-  /// The spawn timestamp of the partition.
-  std::chrono::steady_clock::time_point spawn_time = {};
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, active_partition_info& x) {
-    return f(caf::meta::type_name("active_partition_info"), x.actor,
-             x.stream_slot, x.capacity, x.id, x.spawn_time);
-  }
-};
+pack(flatbuffers::FlatBufferBuilder& builder, const legacy_index_state& state);
 
 /// Loads partitions from disk by UUID.
-class partition_factory {
+class legacy_partition_factory {
 public:
-  explicit partition_factory(index_state& state);
+  explicit legacy_partition_factory(legacy_index_state& state);
 
   filesystem_actor& filesystem(); // getter/setter
 
   partition_actor operator()(const uuid& id) const;
 
-  [[nodiscard]] size_t materializations() const;
-
 private:
   filesystem_actor filesystem_;
-  const index_state& state_;
-
-  /// A counter for the amount passive partitions were loaded from disk.
-  mutable size_t materializations_ = 0;
+  const legacy_index_state& state_;
 };
 
-/// Event counters for metrics.
-struct index_counters {
-  /// Stores how many passive partitions were loaded from disk until the last
-  /// time the delta was written to the metrics. This variable stores the
-  /// absolute number since the index was started and is only used to calulate
-  /// the delta for the next round.
-  size_t previous_materializations = 0;
+struct query_backlog {
+  struct job {
+    vast::query query;
+    caf::typed_response_promise<query_cursor> rp;
+    caf::actor_addr sender;
+  };
 
-  /// How many queries were sent to partitions.
-  size_t partition_lookups = 0;
+  // Emplace a job.
+  void emplace(vast::query query, caf::typed_response_promise<query_cursor> rp,
+               caf::actor_addr sender);
 
-  /// How many partitions were scheduled for queries.
-  size_t partition_schedulings = 0;
+  /// Cancels jobs associated with the given sender.
+  /// @returns The number of cancelled jobs.
+  uint64_t cancel(caf::actor_addr sender);
+
+  [[nodiscard]] std::optional<job> take_next();
+
+  std::deque<job> normal;
+  std::deque<job> low;
+};
+
+struct legacy_query_state {
+  /// The UUID of the query.
+  vast::uuid id;
+
+  /// The query expression.
+  vast::query query;
+
+  /// Unscheduled partitions.
+  std::vector<uuid> partitions;
+
+  /// The assigned query worker.
+  query_supervisor_actor worker;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, legacy_query_state& x) {
+    return f(caf::meta::type_name("legacy_query_state"), x.id, x.query,
+             caf::meta::omittable_if_empty(), x.partitions, x.worker);
+  }
 };
 
 /// The state of the index actor.
-struct index_state {
+struct legacy_index_state {
   // -- type aliases -----------------------------------------------------------
 
   using index_stream_stage_ptr = caf::stream_stage_ptr<
@@ -151,7 +110,7 @@ struct index_state {
 
   // -- constructor ------------------------------------------------------------
 
-  explicit index_state(index_actor::pointer self);
+  explicit legacy_index_state(index_actor::pointer self);
 
   // -- persistence ------------------------------------------------------------
 
@@ -168,6 +127,17 @@ struct index_state {
   caf::error load_from_disk();
 
   void flush_to_disk();
+
+  // -- query handling ---------------------------------------------------------
+
+  [[nodiscard]] bool worker_available() const;
+
+  [[nodiscard]] std::optional<query_supervisor_actor> next_worker();
+
+  /// Get the actor handles for up to `num_partitions` PARTITION actors,
+  /// spawning them if needed.
+  [[nodiscard]] std::vector<std::pair<uuid, partition_actor>>
+  collect_query_actors(legacy_query_state& lookup, uint32_t num_partitions);
 
   // -- flush handling ---------------------------------------------------------
 
@@ -191,10 +161,6 @@ struct index_state {
   /// Adds a new partition creation listener.
   void
   add_partition_creation_listener(partition_creation_listener_actor listener);
-
-  // -- query handling ---------------------------------------------------------
-
-  void schedule_lookups();
 
   // -- introspection ----------------------------------------------------------
 
@@ -225,9 +191,10 @@ struct index_state {
   std::unordered_map<uuid, partition_actor> unpersisted = {};
 
   /// The set of passive (read-only) partitions currently loaded into memory.
-  /// Uses the `partition_factory` to load new partitions as needed, and evicts
-  /// old entries when the size exceeds `max_inmem_partitions`.
-  detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
+  /// Uses the `legacy_partition_factory` to load new partitions as needed, and
+  /// evicts old entries when the size exceeds `max_inmem_partitions`.
+  detail::lru_cache<uuid, partition_actor, legacy_partition_factory>
+    inmem_partitions;
 
   /// The set of partitions that exist on disk.
   std::unordered_set<uuid> persisted_partitions = {};
@@ -250,27 +217,25 @@ struct index_state {
   size_t max_inmem_partitions = {};
 
   /// The number of partitions initially returned for a query.
-  uint32_t taste_partitions = {};
+  size_t taste_partitions = {};
 
-  /// The queue of in-flight queries.
-  query_queue pending_queries = {};
+  /// The set of received but unprocessed queries.
+  query_backlog backlog = {};
+
+  /// Maps query IDs to pending lookup state.
+  std::unordered_map<uuid, legacy_query_state> pending = {};
 
   /// Maps exporter actor address to known query ID for monitoring
   /// purposes.
   std::unordered_map<caf::actor_addr, std::unordered_set<uuid>> monitored_queries
     = {};
 
-  /// The maximum number of partitions to serve queries at the same time.
-  /// Assigned from the `max-queries` config option.
-  /// TODO: Rename that option appropriately and deprecate the old name.
-  size_t max_concurrent_partition_lookups = 0;
+  /// The number of query supervisors.
+  size_t workers = 0;
 
-  /// A counter to track the number of partitions that are currently serving
-  /// lookups.
-  size_t running_partition_lookups = 0;
-
-  /// Keeps temporary statistics that are flushed with the metrics.
-  index_counters counters = {};
+  /// Caches idle/busy workers.
+  detail::stable_set<query_supervisor_actor> idle_workers = {};
+  detail::stable_set<query_supervisor_actor> busy_workers = {};
 
   /// The CATALOG actor.
   catalog_actor catalog = {};
@@ -289,9 +254,6 @@ struct index_state {
 
   /// Statistics about processed data.
   index_statistics stats = {};
-
-  /// Timekeeper for the scheduling algorithm.
-  struct measurement scheduler_measurement = {};
 
   /// Handle of the accountant.
   accountant_actor accountant = {};
@@ -340,21 +302,34 @@ struct index_state {
 /// @param max_inmem_partitions The maximum number of passive partitions loaded
 /// into memory.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
-/// @param max_concurrent_partition_lookups The maximum amount of concurrent
-/// lookups.
+/// @param num_workers The maximum amount of concurrent lookups.
 /// @param catalog_dir The directory used by the catalog.
 /// @param index_config The meta-index configuration of the false-positives
 /// rates for the types and fields.
 /// @pre `partition_capacity > 0
 //  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
-index(index_actor::stateful_pointer<index_state> self,
-      accountant_actor accountant, filesystem_actor filesystem,
-      archive_actor archive, catalog_actor catalog,
-      type_registry_actor type_registry, const std::filesystem::path& dir,
-      std::string store_backend, size_t partition_capacity,
-      duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t max_concurrent_partition_lookups,
-      const std::filesystem::path& catalog_dir, index_config);
+legacy_index(index_actor::stateful_pointer<legacy_index_state> self,
+             accountant_actor accountant, filesystem_actor filesystem,
+             archive_actor archive, catalog_actor catalog,
+             type_registry_actor type_registry,
+             const std::filesystem::path& dir, std::string store_backend,
+             size_t partition_capacity, duration active_partition_timeout,
+             size_t max_inmem_partitions, size_t taste_partitions,
+             size_t num_workers, const std::filesystem::path& catalog_dir,
+             index_config);
 
 } // namespace vast::system
+
+namespace fmt {
+
+template <>
+struct formatter<vast::system::legacy_query_state> : formatter<std::string> {
+  template <class FormatContext>
+  auto
+  format(const vast::system::legacy_query_state& value, FormatContext& ctx) {
+    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+  }
+};
+
+} // namespace fmt
