@@ -75,7 +75,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       const auto* filter_plugin = plugins::find<transform_plugin>("filter");
       VAST_ASSERT(filter_plugin);
       auto filter_step = filter_plugin->make_transform_step(
-        {{"expression", self->state.query_}});
+        {{"expression", fmt::to_string(expr)}});
       if (!filter_step)
         return filter_step.error();
       transform->add_step(std::move(*filter_step));
@@ -83,6 +83,8 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
           [self, transform, rp](catalog_result& result) mutable {
+            VAST_DEBUG("{} resolved query {} to {} partitions", *self,
+                       self->state.query_, result.partitions.size());
             if (result.partitions.empty()) {
               rp.deliver(atom::ok_v);
               return;
@@ -94,14 +96,19 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
                         transform, result.partitions,
                         keep_original_partition::no)
               .then(
-                [rp](const partition_info&) mutable {
+                [self, rp](const partition_info&) mutable {
+                  VAST_DEBUG("{} applied filter transform with query {}", *self,
+                             self->state.query_);
                   rp.deliver(atom::ok_v);
                 },
-                [rp](const caf::error& e) mutable {
+                [self, rp](const caf::error& e) mutable {
+                  VAST_WARN("{} failed to apply filter query {}: {}", *self,
+                            self->state.query_, e);
                   rp.deliver(e);
                 });
           },
           [rp](const caf::error& e) mutable {
+            VAST_ASSERT(false, caf::deep_to_string(e).c_str());
             rp.deliver(e);
           });
       return rp;
