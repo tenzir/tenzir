@@ -49,6 +49,12 @@ query_queue::queries() const {
 
 [[nodiscard]] caf::error
 query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
+  if (candidates.empty())
+    return caf::make_error(ec::unspecified, "can't add a query with 0 "
+                                            "candidates");
+  if (query_state.candidate_partitions != candidates.size())
+    return caf::make_error(ec::unspecified, "the candidate set size must match "
+                                            "the query state");
   auto qid = query_state.query.id;
   auto [query_state_it, emplace_success]
     = queries_.emplace(qid, std::move(query_state));

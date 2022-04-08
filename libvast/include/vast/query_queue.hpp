@@ -126,4 +126,13 @@ struct formatter<vast::query_state> : formatter<std::string> {
   }
 };
 
+template <>
+struct formatter<vast::query_queue::entry> : formatter<std::string> {
+  template <class FormatContext>
+  auto format(const vast::query_queue::entry& value, FormatContext& ctx) {
+    return format_to(ctx.out(), "(partition: {}; priority: {}; queries: {})",
+                     value.partition, value.priority, value.queries);
+  }
+};
+
 } // namespace fmt
