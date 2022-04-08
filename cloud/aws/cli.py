@@ -40,16 +40,6 @@ def terraform_output(c: Context, step, key) -> str:
     return c.run(f"terraform -chdir={step} output --raw {key}", hide="out").stdout
 
 
-def VAST_LAMBDA_IMAGE(c: Context) -> str:
-    """If VAST_LAMBDA_IMAGE not defined, use the one tagged as "current" """
-    if "VAST_LAMBDA_IMAGE" in conf:
-        return conf.VAST_LAMBDA_IMAGE
-    repo_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
-    tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
-    current = next((tag["Value"] for tag in tags if tag["Key"] == "current"))
-    return current
-
-
 def VAST_VERSION(c: Context):
     """If VAST_VERSION not defined, use latest release"""
     if "VAST_VERSION" in conf:
@@ -60,31 +50,33 @@ def VAST_VERSION(c: Context):
     return version
 
 
-def step_1_variables() -> dict:
-    return {
-        "TF_VAR_region_name": AWS_REGION,
-    }
-
-
-def step_2_variables(c: Context) -> dict:
+def tf_env(c: Context) -> dict:
     return {
         "TF_VAR_vast_version": VAST_VERSION(c),
         "TF_VAR_vast_server_storage_type": conf.VAST_SERVER_STORAGE_TYPE,
         "TF_VAR_peered_vpc_id": conf.VAST_PEERED_VPC_ID,
         "TF_VAR_vast_cidr": conf.VAST_CIDR,
         "TF_VAR_region_name": AWS_REGION,
-        "TF_VAR_vast_lambda_image": VAST_LAMBDA_IMAGE(c),
     }
 
 
 def auto_app_fmt(val: bool) -> str:
     if val:
-        return "-auto-approve"
+        return "--terragrunt-non-interactive"
     else:
         return ""
 
 
 ## Tasks
+
+
+@task
+def fmt(c, fix=False):
+    """Fix Terraform and Terragrunt formatting"""
+    tf_fix = "" if fix else "--check"
+    c.run(f"terraform fmt -recursive -diff {tf_fix}")
+    tg_fix = "" if fix else "--terragrunt-check"
+    c.run(f"terragrunt hclfmt {tg_fix}")
 
 
 @task
@@ -104,19 +96,48 @@ def docker_login(c):
 
 
 @task
-def deploy_step_1(c, auto_approve=False):
-    """Deploy only step 1 of the stack"""
-    env = step_1_variables()
-    c.run('terraform -chdir="step-1" init', env=env)
+def deploy_step(c, step, auto_approve=False):
+    """Deploy only one step of the stack"""
+    # Terragrunt is supposed to handle auto-init but it sometimes fails to detect module changes
     c.run(
-        f'terraform -chdir="step-1" apply  {auto_app_fmt(auto_approve)}',
-        env=env,
+        f"terragrunt init --terragrunt-working-dir step-{step}",
+        env=tf_env(c),
+    )
+    c.run(
+        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir step-{step}",
+        env=tf_env(c),
         pty=True,
     )
 
 
 @task
-def lambda_image(c):
+def deploy(c, auto_approve=False):
+    """One liner build and deploy of the stack to AWS"""
+    c.run(
+        f"terragrunt run-all apply {auto_app_fmt(auto_approve)}",
+        env=tf_env(c),
+        pty=True,
+    )
+
+
+@task(autoprint=True)
+def current_lambda_image(c, repo_arn):
+    """Get the current Lambda image URI. In case of failure, returns the error message."""
+    if "VAST_LAMBDA_IMAGE" in conf:
+        return conf.VAST_LAMBDA_IMAGE
+    try:
+        tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
+    except Exception as e:
+        return str(e)
+    current = next(
+        (tag["Value"] for tag in tags if tag["Key"] == "current"),
+        "current-image-not-defined",
+    )
+    return current
+
+
+@task()
+def deploy_lambda_image(c):
     """Build and push the lambda image, fails if step 1 is not deployed"""
     image_url = terraform_output(c, "step-1", "vast_lambda_repository_url")
     image_tag = int(time.time())
@@ -128,49 +149,6 @@ def lambda_image(c):
     aws("ecr").tag_resource(
         resourceArn=image_arn,
         tags=[{"Key": "current", "Value": f"{image_url}:{image_tag}"}],
-    )
-
-
-@task
-def deploy_step_2(c, auto_approve=False):
-    """Deploy only step 2 of the stack. Step 1 should be deployed first"""
-    env = step_2_variables(c)
-    c.run('terraform -chdir="step-2" init', env=env)
-    c.run(
-        f'terraform -chdir="step-2" apply {auto_app_fmt(auto_approve)}',
-        env=env,
-        pty=True,
-    )
-
-
-@task
-def deploy(c, auto_approve=False):
-    """One liner build and deploy of the stack to AWS"""
-    deploy_step_1(c, auto_approve)
-    docker_login(c)
-    lambda_image(c)
-    deploy_step_2(c, auto_approve)
-
-
-@task
-def destroy_step_1(c, auto_approve=False):
-    """Destroy resources of the step 1 only. Step 2 should be destroyed first"""
-    env = step_1_variables()
-    c.run(
-        f'terraform -chdir="step-1" destroy {auto_app_fmt(auto_approve)}',
-        env=env,
-        pty=True,
-    )
-
-
-@task
-def destroy_step_2(c, auto_approve=False):
-    """Destroy resources of the step 2 only"""
-    env = step_2_variables(c)
-    c.run(
-        f'terraform -chdir="step-2" destroy {auto_app_fmt(auto_approve)}',
-        env=env,
-        pty=True,
     )
 
 
@@ -315,6 +293,16 @@ def execute_command(c, cmd="/bin/bash"):
 
 
 @task
+def destroy_step(c, step, auto_approve=False):
+    """Destroy resources of the step 1 only. Step 2 should be destroyed first"""
+    c.run(
+        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir step-{step}",
+        env=tf_env(c),
+        pty=True,
+    )
+
+
+@task
 def destroy(c, auto_approve=False):
     """Tear down the entire terraform stack"""
     try:
@@ -322,12 +310,11 @@ def destroy(c, auto_approve=False):
     except Exception as e:
         print(str(e))
         print("Failed to stop tasks. Continuing destruction...")
-    try:
-        destroy_step_2(c, auto_approve)
-    except Exception as e:
-        print(str(e))
-        print("Failed to destroy step 2. Continuing destruction...")
-    destroy_step_1(c, auto_approve)
+    c.run(
+        f"terragrunt run-all destroy {auto_app_fmt(auto_approve)}",
+        env=tf_env(c),
+        pty=True,
+    )
 
 
 ## Bootstrap

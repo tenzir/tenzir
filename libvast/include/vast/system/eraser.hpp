@@ -51,8 +51,8 @@ private:
 
   /// The query expression that selects events scheduled for deletion. Note
   /// that we get the query as string on purpose. Taking an ::expression here
-  /// instead would fix any query such as `#time < 1 week ago` to the time of
-  /// its parsing and not update properly.
+  /// instead would fix any query such as `:timestamp < 1 week ago` to the time
+  /// of its parsing and not update properly.
   std::string query_;
 
   /// Collects hits until all deltas arrived.
@@ -67,9 +67,9 @@ private:
 /// @param interval The time between two query executions.
 /// @param query The periodic query that selects events scheduled for deletion.
 ///              Note that we get the query as string on purpose. Taking an
-///              ::expression here instead would fix any query such as `#time <
-///              1 week ago` to the time of its parsing and not update
-///              properly.
+///              ::expression here instead would fix any query such as
+///              `:timestamp < 1 week ago` to the time of its parsing and not
+///              update properly.
 /// @param index A handle to the INDEX under investigation.
 caf::behavior
 eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
