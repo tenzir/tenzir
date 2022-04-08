@@ -14,10 +14,7 @@ on:
   release:
     types: published
 env:
-  # 10G cache total w/ 2 runs per branch and a target size of 325M per branch
-  # allows for master + 14 PRs to be cached at the same time with a little room
-  # for error.
-  CCACHE_MAXSIZE: "325M"
+  CCACHE_MAXSIZE: "5G"
 
 jobs:
   cancel-previous-runs:
@@ -149,7 +146,7 @@ jobs:
       CXX: ${{ matrix.build.cxx }}
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 0
+      CCACHE_COMPRESSLEVEL: 6
       CCACHE_DIR: "${{ github.workspace }}/.ccache"
       CCACHE_HASH_DIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
@@ -223,50 +220,12 @@ jobs:
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-          # Export slug variables for the cache action.
-          slug_ref() {
-            echo "$1" |
-              tr "[:upper:]" "[:lower:]" |
-              sed -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
-              cut -c1-63
-          }
-          echo "CACHE_REF_SLUG=$(slug_ref "$GITHUB_REF")" >> $GITHUB_ENV
-          echo "CACHE_HEAD_REF_SLUG=$(slug_ref "$GITHUB_HEAD_REF")" >> $GITHUB_ENV
-          echo "CACHE_BASE_REF_SLUG=$(slug_ref "$GITHUB_BASE_REF")" >> $GITHUB_ENV
 
-      # For 'pull_request' events we want to take the latest build on the PR
-      # branch, or if that fails the latest build from the branch we're merging
-      # into.
       - name: Fetch ccache Cache
-        if: github.event_name == 'pull_request'
         uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
-          restore-keys: |
-            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_BASE_REF_SLUG }}
-            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
-
-      # For 'push' events we want to take the latest build on the branch we
-      # pushed to.
-      - name: Fetch ccache Cache (Push)
-        if: github.event_name == 'push'
-        uses: pat-s/always-upload-cache@v3.0.1
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
-          restore-keys: |
-            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
-
-      # For 'release' events we want to take the latest master build.
-      - name: Fetch ccache Cache (Release)
-        if: github.event_name == 'release'
-        uses: pat-s/always-upload-cache@v3.0.1
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
-          restore-keys: |
-            ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
         run: |
@@ -414,7 +373,7 @@ jobs:
       CXX: ${{ matrix.build.cxx }}
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 0
+      CCACHE_COMPRESSLEVEL: 6
       CCACHE_DIR: "${{ github.workspace }}/.ccache"
       CCACHE_HASH_DIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
@@ -474,16 +433,6 @@ jobs:
           PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-          # Export slug variables for the cache action.
-          slug_ref() {
-            echo "$1" |
-              tr "[:upper:]" "[:lower:]" |
-              sed -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
-              cut -c1-63
-          }
-          echo "CACHE_REF_SLUG=$(slug_ref "$GITHUB_REF")" >> $GITHUB_ENV
-          echo "CACHE_HEAD_REF_SLUG=$(slug_ref "$GITHUB_HEAD_REF")" >> $GITHUB_ENV
-          echo "CACHE_BASE_REF_SLUG=$(slug_ref "$GITHUB_BASE_REF")" >> $GITHUB_ENV
 
       - name: Setup Homebrew Clang
         if: matrix.build.compiler == 'Clang'
@@ -494,39 +443,11 @@ jobs:
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
 
-      # For 'pull_request' events we want to take the latest build on the PR
-      # branch, or if that fails the latest build from the branch we're merging
-      # into.
       - name: Fetch ccache Cache
-        if: github.event_name == 'pull_request'
         uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
-          restore-keys: |
-            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_BASE_REF_SLUG }}
-            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
-
-      # For 'push' events we want to take the latest build on the branch we
-      # pushed to.
-      - name: Fetch ccache Cache (Push)
-        if: github.event_name == 'push'
-        uses: pat-s/always-upload-cache@v3.0.1
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
-          restore-keys: |
-            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
-
-      # For 'release' events we want to take the latest master build.
-      - name: Fetch ccache Cache (Release)
-        if: github.event_name == 'release'
-        uses: pat-s/always-upload-cache@v3.0.1
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
-          restore-keys: |
-            ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
         run: |
