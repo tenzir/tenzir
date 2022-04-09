@@ -97,6 +97,14 @@ stdenv.mkDerivation rec {
        "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
     ++ extraCmakeFlags;
 
+  # The executable is run to generate the man page as part of the build phase.
+  # libvast.{dyld,so} is put into the libvast subdir if relocatable installation
+  # is off, which is the case here.
+  preBuild = lib.optionalString (!isStatic) ''
+    export LD_LIBRARY_PATH="$PWD/libvast''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
+    export DYLD_LIBRARY_PATH="$PWD/libvast''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH"
+  '';
+
   hardeningDisable = lib.optional isStatic "pic";
 
   doCheck = false;
