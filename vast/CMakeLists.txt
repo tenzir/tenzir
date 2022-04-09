@@ -130,7 +130,7 @@ cmake_dependent_option(
   VAST_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF
   "NOT VAST_ENABLE_STATIC_EXECUTABLE" ON)
 add_feature_info("VAST_ENABLE_STATIC_PLUGINS" VAST_ENABLE_STATIC_PLUGINS
-                 "Force plugins to be linked statically.")
+                 "force plugins to be linked statically.")
 if (VAST_PLUGINS)
   list(SORT VAST_PLUGINS)
   foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
@@ -153,13 +153,10 @@ target_compile_definitions(
 
 # -- man page ------------------------------------------------------------------
 
-# TODO: Hide behind a feature flag that is enabled by default and require
-# Pandoc to be available.
 # TODO: Keep a copy of the man page in the repository such that we know the last
 # edit date. If pandoc+git is available, rebuild the man page.
 
-find_package(Pandoc)
-if (PANDOC_FOUND)
+if (VAST_ENABLE_MANPAGES)
   add_custom_command(
     TARGET vast
     POST_BUILD
