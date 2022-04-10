@@ -6,6 +6,97 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
+## [v2.0.0-rc1]
+
+### :zap: Breaking Changes
+
+- We removed the experimental `vast get` command. It relied on an internal unique event ID that was never exposed to the user except for debug messages. This removal is a preparatory step towards a simplification of some of the internal workings of VAST.
+  [#2121](https://github.com/tenzir/vast/pull/2121)
+
+- The `meta-index` is now called the `catalog`. This affects multiple metrics and entries in the output of `vast status`, and the configuration option `vast.meta-index-fp-rate`, which is now called `vast.catalog-fp-rate`.
+  [#2128](https://github.com/tenzir/vast/pull/2128)
+
+- The command line option `--verbosity` has the new name `--console-verbosity`. This synchronizes the CLI interface with the configuration file that solely understands the option `vast.console-verbosity`.
+  [#2178](https://github.com/tenzir/vast/pull/2178)
+
+### :warning: Changes
+
+- Terraform scripts to deploy VAST on AWS Lambda and Fargate.
+  [#2108](https://github.com/tenzir/vast/pull/2108)
+
+- We revised the query scheduling logic to exploit synergies when multiple queries run at the same time. In that vein, we updated the related metrics with more accurate names to reflect the new mechanism. The new keys `scheduler.partition.materializations`, `scheduler.partition.schedulings`, and `scheduler.partition.lookups`  issue periodic counts of partitions loaded from disk and scheduled for lookup, and the overall number of queries issued to partitions respectively. The keys `query.workers.idle`, and `query.workers.busy` were renamed to `scheduler.partition.remaining-capacity`, and `scheduler.partition.current-lookups`. Finally, the key `scheduler.partition.pending` counts the number of currently pending partitions. It is still possible to opt-out of the new scheduling algorithm with the option `--use-legacy-query-scheduler`, but that is immediately deprecated and will not be included in the next minor release.
+  [#2117](https://github.com/tenzir/vast/pull/2117)
+
+- VAST now requires Apache Arrow at a minimum version of 7.0.0.
+  [#2122](https://github.com/tenzir/vast/pull/2122)
+
+- VAST's internal data model now preserves the nesting of the stored data completely when using the `arrow` encoding, and maps the pattern, address, subnet, and enumeration types onto Arrow extension types rather than using the underlying representation directly. This change enables the use of the `export arrow` command without needing information about VAST' type system.
+  [#2159](https://github.com/tenzir/vast/pull/2159)
+
+- Transform steps that add or modify columns now add or modify the columns in-place rather than at the end, preserving the nesting structure of the original data.
+  [#2159](https://github.com/tenzir/vast/pull/2159)
+
+- The deprecated `msgpack` encoding no longer exists. Data imported using the `msgpack` encoding can still be accessed, but new data will now always use the `arrow` encoding.
+  [#2159](https://github.com/tenzir/vast/pull/2159)
+
+- Client commands such as `vast export` or `vast status` now create less threads at runtime, lessening the risk of hitting system resource limits.
+  [#2193](https://github.com/tenzir/vast/pull/2193)
+
+### :gift: Features
+
+- Added a new `vast.index` section to the configuration that can be used to tweak the false-positive rate of first-stage lookups for individual fields, allowing users to optimize the time/space trade-off for expensive queries.
+  [#2065](https://github.com/tenzir/vast/pull/2065)
+
+- VAST now creates one active partition per layout, rather than having a single active partition for all layouts.
+  [#2096](https://github.com/tenzir/vast/pull/2096)
+
+- The new option `vast.active-partition-timeout` controls the time after which an active partition is flushed to disk, allowing for the `vast.max-partition-size` option to be overruled. The active partition timeout defaults to 1 hour.
+  [#2096](https://github.com/tenzir/vast/pull/2096)
+
+- The output of `vast status` now displays the total number of events stored in the DB under the key `index.statistics.events.total`.
+  [#2133](https://github.com/tenzir/vast/pull/2133)
+
+- The disk monitor now has new status entries `blacklist` and `blacklist-size`, which contain information about partitions that could not be erased due to errors.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
+- VAST has now complete support for passing environment variables as alternate path to configuration files. Environment variables have *lower* precedence than CLI arguments and *higher* precedence than config files. Variable names of the form `VAST_FOO__BAR_BAZ` map to `vast.foo.bar-baz`, i.e., `__` is a record separator and `_` translates to `-`. This does not apply to the prefix `VAST_`, which is considered the application identifier. Only variables with non-empty values are considered.
+  [#2162](https://github.com/tenzir/vast/pull/2162)
+
+- VAST v1.0 deprecated the experimental aging feature. Given popular demand we've decided to un-deprecate it and to actually implement it on top of the same building blocks the compaction mechanism uses, which means that it is now fully working and no longer considered experimental.
+  [#2186](https://github.com/tenzir/vast/pull/2186)
+
+### :beetle: Bug Fixes
+
+- The `explore` command now properly terminates after the requested number of results are delivered.
+  [#2120](https://github.com/tenzir/vast/pull/2120)
+
+- The `count --estimate` command no longer loads store files from disk, resulting in a significant performance improvement. It now only loads the relevant index files.
+  [#2146](https://github.com/tenzir/vast/pull/2146)
+
+- The `import zeek` command now correctly marks the event timestamp using the `timestamp` type alias for all inferred schemas.
+  [#2155](https://github.com/tenzir/vast/pull/2155)
+
+- The disk monitor now correctly continues deleting until below the low water mark after a partition failed to delete.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
+- We fixed a rarely occurring race condition caused query workers to become stuck after delivering all results until the corresponding client process terminated.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
+- Queries that timed out or were externally terminated while in the query backlog and with more than five unhandled candidate partitions no longer permanently get stuck.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
+- Fixed a race condition that would cause queries to become stuck when an importer would time out during the meta index lookup.
+  [#2167](https://github.com/tenzir/vast/pull/2167)
+
+- We optimized the queue size of the logger for commands other than `vast start`. Thanks to this other commands now show a significant reduction in memory usage and startup time.
+  [#2176](https://github.com/tenzir/vast/pull/2176)
+
+- The CSV parser no longer fails when encountering integers but expecting floating point values.
+  [#2184](https://github.com/tenzir/vast/pull/2184)
+
+- The `vast(1)` man-page is no longer empty for VAST distributions with static binaries.
+  [#2190](https://github.com/tenzir/vast/pull/2190)
+
 ## [v1.1.0]
 
 ### :warning: Changes
@@ -1565,6 +1656,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
+[v2.0.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc1
 [v1.1.0]: https://github.com/tenzir/vast/releases/tag/v1.1.0
 [v1.0.0]: https://github.com/tenzir/vast/releases/tag/v1.0.0
 [2021.12.16]: https://github.com/tenzir/vast/releases/tag/2021.12.16
