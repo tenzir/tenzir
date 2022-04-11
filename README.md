@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./doc/assets/vast.svg" width="75%" alt="VAST">
+  <img src="./docs/static/img/logo.svg" width="75%" alt="VAST">
 </p>
 
 <h1 align="center">
