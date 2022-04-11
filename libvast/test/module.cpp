@@ -14,6 +14,7 @@
 #include "vast/concept/convertible/data.hpp"
 #include "vast/data.hpp"
 #include "vast/legacy_type.hpp"
+#include "vast/module.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
 
@@ -718,4 +719,20 @@ TEST(YAML Type - Parsing record algebra) {
   };
   CHECK_EQUAL(unbox(implanted_record_algebra),
               expected_implanted_record_algebra);
+}
+
+TEST(multiple members) {
+  auto x = module_ng{};
+  auto table = symbol_table{};
+  auto r = record{
+    {"module", string{"foo"}},
+    {"description", string{"blab"}},
+    {"references", list{{string{"http://foo.com"}},
+                        {string{"https://www.google.com/search?q=foo"}}}},
+    {"types",
+     record{{"id", record{{"type", string{"string"}},
+                          {"description", string{"A random unique ID with..."}},
+                          {"attributes", record{{"index", string{"has"
+                                                                 "h"}}}}}}}}};
+  REQUIRE_SUCCESS(convert(r, x, table));
 }

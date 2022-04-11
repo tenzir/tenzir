@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string/char.hpp"
@@ -16,6 +18,7 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/stable_set.hpp"
+#include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
 
 #include <caf/expected.hpp>
@@ -26,7 +29,37 @@
 
 namespace vast {
 
-class data;
+struct module_ng {
+  std::string name = {};
+  std::string description = {};
+  std::vector<std::string> references = {};
+
+  std::vector<type> types = {};
+  concepts_map concepts = {};
+  models_map models = {};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, module_ng& x) {
+    return f(x.name, x.description, x.references, x.types, x.concepts,
+             x.models);
+  }
+
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"module", string_type{}},
+      {"description", string_type{}},
+      {"references", list_type{string_type{}}},
+      {"types", list_type{record_type{}}},
+      {"concepts", concepts_data_layout},
+      {"models", models_data_layout},
+    };
+    return result;
+  };
+};
+
+using symbol_table_ng = std::map<std::string, type>;
+
+caf::error convert(const record& in, type& out, const symbol_table_ng& table);
 
 /// A sequence of types.
 class module : detail::equality_comparable<module> {
