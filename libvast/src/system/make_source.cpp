@@ -110,6 +110,11 @@ make_source(caf::actor_system& sys, const std::string& format,
   auto reader = format::reader::make(format, inv.options);
   if (!reader)
     return reader.error();
+  if (!*reader)
+    return caf::make_error(ec::logic_error, fmt::format("the {} reader is not "
+                                                        "registered with the "
+                                                        "reader factory",
+                                                        format));
   if (slice_size == std::numeric_limits<decltype(slice_size)>::max())
     VAST_VERBOSE("{} produces {} table slices", (*reader)->name(), encoding);
   else

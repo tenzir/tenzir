@@ -18,6 +18,7 @@
 #include "vast/format/json/zeek_selector.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/format/syslog.hpp"
+#include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -57,6 +58,7 @@ void factory_traits<format::reader>::initialize() {
   fac::add("suricata",
            make_reader<format::json::reader, json::suricata_selector>);
   fac::add("syslog", make_reader<syslog::reader>);
+  fac::add("test", make_reader<test::reader>);
   fac::add("zeek", make_reader<zeek::reader>);
   fac::add("zeek-json", make_reader<json::reader, json::zeek_selector>);
   for (const auto& plugin : plugins::get()) {
