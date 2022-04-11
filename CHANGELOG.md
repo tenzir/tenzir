@@ -65,6 +65,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST v1.0 deprecated the experimental aging feature. Given popular demand we've decided to un-deprecate it and to actually implement it on top of the same building blocks the compaction mechanism uses, which means that it is now fully working and no longer considered experimental.
   [#2186](https://github.com/tenzir/vast/pull/2186)
 
+- The new `filter` transform step is the inverse of the `select` transform step, removing rows matching a configurable expression rather than keeping them.
+  [#2186](https://github.com/tenzir/vast/pull/2186)
+
 ### :beetle: Bug Fixes
 
 - The `explore` command now properly terminates after the requested number of results are delivered.
