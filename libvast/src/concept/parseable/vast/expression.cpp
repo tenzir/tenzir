@@ -261,7 +261,7 @@ static auto make_expression_parser() {
     = (group >> *(ws >> and_or >> ws >> ref(group)) >> ws) ->* to_expr
     ;
   // clang-format on
-  return expr >> parsers::eoi;
+  return expr;
 }
 
 } // namespace
