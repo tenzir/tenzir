@@ -55,7 +55,29 @@ struct module_ng {
     };
     return result;
   };
+
+  // MAYBE:  static caf::error merge(const module& other);
 };
+
+caf::expected<module_ng>
+load_module_ng(const std::filesystem::path& module_file);
+
+struct module_gin {
+  std::map<std::string, module_ng> modules;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, module_gin& x) {
+    return f(x.modules);
+  }
+
+private:
+  caf::error
+  load_recursive(const detail::stable_set<std::filesystem::path>& module_dirs,
+                 size_t max_recursion = defaults::max_recursion);
+};
+
+static caf::expected<module_gin>
+load_module_gin(const caf::actor_system_config& cfg);
 
 using symbol_table_ng = std::map<std::string, type>;
 
