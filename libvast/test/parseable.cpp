@@ -804,6 +804,41 @@ TEST(si int) {
   CHECK_EQUAL(to_int("-10Ei"), -as_int(10_Ei));
 }
 
+TEST(bytesize) {
+  const auto parse = [](std::string_view str) {
+    if (auto result = count{}; parsers::bytesize(str, result))
+      return result;
+    FAIL("failed to parse bytesize: " << str);
+  };
+  using namespace si_literals;
+  CHECK_EQUAL(parse("42"), 42u);
+  CHECK_EQUAL(parse("1k"), 1_k);
+  CHECK_EQUAL(parse("2M"), 2_M);
+  CHECK_EQUAL(parse("3G"), 3_G);
+  CHECK_EQUAL(parse("4T"), 4_T);
+  CHECK_EQUAL(parse("5E"), 5_E);
+  CHECK_EQUAL(parse("6Ki"), 6_Ki);
+  CHECK_EQUAL(parse("7Mi"), 7_Mi);
+  CHECK_EQUAL(parse("8Gi"), 8_Gi);
+  CHECK_EQUAL(parse("9Ti"), 9_Ti);
+  CHECK_EQUAL(parse("10Ei"), 10_Ei);
+  CHECK_EQUAL(parse("1 Mi"), 1_Mi);
+  CHECK_EQUAL(parse("1  Mi"), 1_Mi);
+  CHECK_EQUAL(parse("42B"), 42u);
+  CHECK_EQUAL(parse("1kB"), 1_k);
+  CHECK_EQUAL(parse("2MB"), 2_M);
+  CHECK_EQUAL(parse("3GB"), 3_G);
+  CHECK_EQUAL(parse("4TB"), 4_T);
+  CHECK_EQUAL(parse("5EB"), 5_E);
+  CHECK_EQUAL(parse("6KiB"), 6_Ki);
+  CHECK_EQUAL(parse("7MiB"), 7_Mi);
+  CHECK_EQUAL(parse("8GiB"), 8_Gi);
+  CHECK_EQUAL(parse("9TiB"), 9_Ti);
+  CHECK_EQUAL(parse("10EiB"), 10_Ei);
+  CHECK_EQUAL(parse("1 MiB"), 1_Mi);
+  CHECK_EQUAL(parse("1  MiB"), 1_Mi);
+}
+
 // -- API ---------------------------------------------------------------------
 
 TEST(stream) {
