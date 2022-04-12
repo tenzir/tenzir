@@ -79,15 +79,6 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `import zeek` command now correctly marks the event timestamp using the `timestamp` type alias for all inferred schemas.
   [#2155](https://github.com/tenzir/vast/pull/2155)
 
-- The disk monitor now correctly continues deleting until below the low water mark after a partition failed to delete.
-  [#2160](https://github.com/tenzir/vast/pull/2160)
-
-- We fixed a rarely occurring race condition caused query workers to become stuck after delivering all results until the corresponding client process terminated.
-  [#2160](https://github.com/tenzir/vast/pull/2160)
-
-- Queries that timed out or were externally terminated while in the query backlog and with more than five unhandled candidate partitions no longer permanently get stuck.
-  [#2160](https://github.com/tenzir/vast/pull/2160)
-
 - Some queries could get stuck when an importer would time out during the meta index lookup. This race condition no longer exists.
   [#2167](https://github.com/tenzir/vast/pull/2167)
 
@@ -99,6 +90,26 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The `vast(1)` man-page is no longer empty for VAST distributions with static binaries.
   [#2190](https://github.com/tenzir/vast/pull/2190)
+
+## [v1.1.2]
+
+### :beetle: Bug Fixes
+
+- Terminating or timing out exports during the catalog lookup no longer causes query workers to become stuck indefinitely.
+  [#2165](https://github.com/tenzir/vast/pull/2165)
+
+## [v1.1.1]
+
+### :beetle: Bug Fixes
+
+- The disk monitor now correctly continues deleting until below the low water mark after a partition failed to delete.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
+- We fixed a rarely occurring race condition caused query workers to become stuck after delivering all results until the corresponding client process terminated.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
+
+- Queries that timed out or were externally terminated while in the query backlog and with more than five unhandled candidate partitions no longer permanently get stuck.
+  [#2160](https://github.com/tenzir/vast/pull/2160)
 
 ## [v1.1.0]
 
@@ -1660,6 +1671,8 @@ This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
 [v2.0.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc1
+[v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
+[v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
 [v1.1.0]: https://github.com/tenzir/vast/releases/tag/v1.1.0
 [v1.0.0]: https://github.com/tenzir/vast/releases/tag/v1.0.0
 [2021.12.16]: https://github.com/tenzir/vast/releases/tag/2021.12.16
