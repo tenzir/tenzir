@@ -29,11 +29,23 @@
 
 namespace vast {
 
+/// The resolved Module parsed from multiple module files in different module
+/// directories.
 struct module_ng {
-  std::string name = {};
-  std::string description = {};
-  std::vector<std::string> references = {};
+  /// The path to the module files.
+  std::vector<std::string> filenames = {};
 
+  /// The map of the module names to the type names within the module and the
+  /// parsed configuration from the YAML configuration file.
+  std::map<std::string, std::map<std::string, record>> dir;
+
+  /// The name of the module
+  std::string name = {};
+
+  /// The description of the module
+  std::string description = {};
+
+  std::vector<std::string> references = {};
   std::vector<type> types = {};
   concepts_map concepts = {};
   models_map models = {};
@@ -62,6 +74,7 @@ struct module_ng {
 caf::expected<module_ng>
 load_module_ng(const std::filesystem::path& module_file);
 
+/// The global identifier namespace of modules.
 struct module_gin {
   std::map<std::string, module_ng> modules;
 
