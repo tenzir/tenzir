@@ -563,38 +563,38 @@ function (VASTRegisterPlugin)
     endif ()
   endforeach ()
 
-  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
-    # Install the bundled schema files to <datadir>/vast.
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/module")
+    # Install the bundled module files to <datadir>/vast.
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/module"
             DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}")
     if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-      # Copy schemas from bundled plugins to the build directory so they can be
+      # Copy modules from bundled plugins to the build directory so they can be
       # used from a VAST in a build directory (instead if just an installed VAST).
       file(
         GLOB_RECURSE
-        plugin_schema_files
+        plugin_module_files
         CONFIGURE_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.schema"
-        "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yml"
-        "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.yaml")
-      list(SORT plugin_schema_files)
-      foreach (plugin_schema_file IN LISTS plugin_schema_files)
-        string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}/schema/" ""
-                             relative_plugin_schema_file ${plugin_schema_file})
-        string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
-        set(plugin_schema_dir
-            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}/schema"
+        "${CMAKE_CURRENT_SOURCE_DIR}/module/*.schema"
+        "${CMAKE_CURRENT_SOURCE_DIR}/module/*.yml"
+        "${CMAKE_CURRENT_SOURCE_DIR}/module/*.yaml")
+      list(SORT plugin_module_files)
+      foreach (plugin_module_file IN LISTS plugin_module_files)
+        string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}/module/" ""
+                             relative_plugin_module_file ${plugin_module_file})
+        string(MD5 plugin_module_file_hash "${plugin_module_file}")
+        set(plugin_module_dir
+            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}/module"
         )
         add_custom_target(
-          vast-schema-${plugin_schema_file_hash}
-          BYPRODUCTS "${plugin_schema_dir}/${relative_plugin_schema_file}"
-          COMMAND "${CMAKE_COMMAND}" -E copy "${plugin_schema_file}"
-                  "${plugin_schema_dir}/${relative_plugin_schema_file}"
+          vast-module-${plugin_module_file_hash}
+          BYPRODUCTS "${plugin_module_dir}/${relative_plugin_module_file}"
+          COMMAND "${CMAKE_COMMAND}" -E copy "${plugin_module_file}"
+                  "${plugin_module_dir}/${relative_plugin_module_file}"
           COMMENT
-            "Copying schema file ${relative_plugin_schema_file} for plugin ${PLUGIN_TARGET}"
+            "Copying module file ${relative_plugin_module_file} for plugin ${PLUGIN_TARGET}"
         )
         add_dependencies(${PLUGIN_TARGET}
-                         vast-schema-${plugin_schema_file_hash})
+                         vast-module-${plugin_module_file_hash})
       endforeach ()
     endif ()
   endif ()
@@ -664,7 +664,7 @@ function (VASTRegisterPlugin)
         python -m pip install --upgrade pip
         python -m pip install -r \"$base_dir/requirements.txt\"
         $<$<TARGET_EXISTS:${PLUGIN_TARGET}-shared>:export VAST_PLUGIN_DIRS=\"$<TARGET_FILE_DIR:${PLUGIN_TARGET}-shared>\">
-        export VAST_SCHEMA_DIRS=\"${CMAKE_CURRENT_SOURCE_DIR}/schema\"
+        export VAST_MODULE_DIRS=\"${CMAKE_CURRENT_SOURCE_DIR}/module\"
         python \"$base_dir/integration.py\" \
           --app \"$app\" \
           --set \"${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml\" \
