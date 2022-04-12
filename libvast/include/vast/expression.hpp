@@ -238,10 +238,12 @@ public:
 
   /// Constructs an expression.
   /// @param x The node to construct an expression from.
+  /// @pre x must not be an empty connective.
   template <class T>
     requires(detail::contains_type_v<types, std::decay_t<T>>)
   expression(T&& x) : node_(std::forward<T>(x)) {
-    // nop
+    if constexpr (detail::is_any_v<std::decay_t<T>, conjunction, disjunction>)
+      VAST_ASSERT(!caf::get<std::decay_t<T>>(node_).empty());
   }
 
   /// @cond PRIVATE
