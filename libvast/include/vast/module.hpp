@@ -68,7 +68,8 @@ struct module_ng {
     return result;
   };
 
-  // MAYBE:  static caf::error merge(const module& other);
+  // MAYBE:static caf::error merge(const module& other);
+  // MAYBE static module combine(const module& other);
 };
 
 caf::expected<module_ng>
