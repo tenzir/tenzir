@@ -121,8 +121,10 @@ query_queue::activate(const uuid& qid, uint32_t num_partitions) {
     auto it = queue.begin();
     while (it < queue.end()) {
       auto queries_it = std::find(it->queries.begin(), it->queries.end(), qid);
-      if (queries_it == it->queries.end())
+      if (queries_it == it->queries.end()) {
+        ++it;
         continue;
+      }
       it->queries.erase(queries_it);
       if (it->queries.empty())
         it = queue.erase(it);
