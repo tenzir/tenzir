@@ -56,8 +56,8 @@ const char* syslog_msgs
 
 namespace schemas {
 
-const char* base = VAST_TEST_PATH "artifacts/schemas/base.schema";
-const char* suricata = VAST_TEST_PATH "artifacts/schemas/suricata.schema";
+const char* base = VAST_TEST_PATH "artifacts/modules/base.schema";
+const char* suricata = VAST_TEST_PATH "artifacts/modules/suricata.schema";
 
 } // namespace schemas
 

@@ -545,9 +545,9 @@ target_sources(
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 
-# TODO: Should we move the bundled schemas to libvast?
-if (TARGET vast-schema)
-  add_dependencies(libvast vast-schema)
+# TODO: Should we move the bundled modules to libvast?
+if (TARGET vast-module)
+  add_dependencies(libvast vast-module)
 endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.

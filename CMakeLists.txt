@@ -635,22 +635,22 @@ else ()
   message(WARNING "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
 
-# -- schemas -------------------------------------------------------------------
+# -- modules -------------------------------------------------------------------
 
-option(VAST_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with VAST" ON)
-add_feature_info("VAST_ENABLE_BUNDLED_SCHEMAS" VAST_ENABLE_BUNDLED_SCHEMAS
-                 "install bundled schemas with VAST.")
+option(VAST_ENABLE_BUNDLED_MODULES "Install bundled modules with VAST" ON)
+add_feature_info("VAST_ENABLE_BUNDLED_MODULES" VAST_ENABLE_BUNDLED_MODULES
+                 "install bundled modules with VAST.")
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   add_custom_target(
-    vast-schema
+    vast-module
     COMMAND
-      ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/vast/schema/"
-    COMMENT "Copying schema directory")
+      ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/module"
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/vast/module/"
+    COMMENT "Copying module directory")
 endif ()
 
-if (VAST_ENABLE_BUNDLED_SCHEMAS)
-  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+if (VAST_ENABLE_BUNDLED_MODULES)
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/module"
           DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
 endif ()
 
