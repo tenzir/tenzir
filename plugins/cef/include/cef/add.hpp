@@ -19,6 +19,13 @@
 
 namespace vast::plugins::cef {
 
+// Parses the CEF extension field as a sequence of key-value pairs for further
+// downstream processing.
+// @param extension The string value of the extension field.
+// @returns A vector of key-value pairs with properly unescaped values.
+caf::expected<std::vector<std::pair<std::string_view, std::string>>>
+parse_extension(std::string_view extension);
+
 /// Parses a line of ASCII as CEF event.
 /// @param line The CEF event.
 /// @param builder The table slice builder.
