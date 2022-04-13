@@ -1256,7 +1256,18 @@ index(index_actor::stateful_pointer<index_state> self,
                                "partition transforms are not supported for the "
                                "global archive");
       if (old_partition_ids.empty())
-        return caf::make_error(ec::invalid_argument, "no ids given");
+        return caf::make_error(ec::invalid_argument, "no partitions given");
+      std::erase_if(old_partition_ids, [&](uuid old_partition_id) {
+        if (self->state.persisted_partitions.contains(old_partition_id)) {
+          return false;
+        }
+        VAST_WARN("{} skips unknown partition {} for transform {}", *self,
+                  old_partition_id, transform->name());
+        return true;
+      });
+      if (old_partition_ids.empty())
+        return caf::make_error(ec::invalid_argument, "no known partitions "
+                                                     "given");
       auto new_partition_id = vast::uuid::random();
       auto store_id = std::string{self->state.store_plugin->name()};
       partition_transformer_actor sink = self->spawn(
