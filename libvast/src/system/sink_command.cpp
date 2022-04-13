@@ -47,8 +47,13 @@ caf::message
 sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
-  auto guard = caf::detail::make_scope_guard(
-    [&] { self->send_exit(snk, caf::exit_reason::user_shutdown); });
+  exporter_actor exporter = {};
+  auto guard = caf::detail::make_scope_guard([&] {
+    // Try to shut down the sink and the exporter, if they're still alive.
+    self->send_exit(snk, caf::exit_reason::user_shutdown);
+    self->send_exit(exporter, caf::exit_reason::user_shutdown);
+  });
+  self->monitor(snk);
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(inv, "vast.export.read", must_provide_query::no);
   if (!query)
@@ -88,7 +93,23 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
   if (!maybe_exporter)
     return caf::make_message(std::move(maybe_exporter.error()));
-  auto exporter = caf::actor_cast<exporter_actor>(std::move(*maybe_exporter));
+  exporter = caf::actor_cast<exporter_actor>(std::move(*maybe_exporter));
+  // Link ourselves to the exporter until we know that the exporter monitors us
+  // to avoid a dead window on ungraceful exits where we leave dangling exporter
+  // actors in the node.
+  self->link_to(exporter);
+  caf::error err = caf::none;
+  self->request(exporter, caf::infinite, atom::sink_v, snk)
+    .receive(
+      [&]() {
+        self->monitor(exporter);
+        self->unlink_from(exporter);
+      },
+      [&](caf::error& error) {
+        err = std::move(error);
+      });
+  if (err)
+    return caf::make_message(std::move(err));
   // Register the accountant at the sink.
   auto components = get_node_components<accountant_actor>(self, node);
   if (!components)
@@ -103,11 +124,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   self->send(exporter, atom::statistics_v, self);
   self->send(snk, atom::statistics_v, self);
   // Start the exporter.
-  self->send(exporter, atom::sink_v, snk);
   self->send(exporter, atom::run_v);
-  self->monitor(snk);
-  self->monitor(exporter);
-  guard.disable();
   // Set the configured timeout, if any.
   if (auto timeout_str = caf::get_if<std::string>(&inv.options, //
                                                   "vast.export.timeout")) {
@@ -118,7 +135,6 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
                  inv.full_name, *timeout_str, timeout.error());
   }
   // Start the receive-loop.
-  caf::error err = caf::none;
   auto waiting_for_final_report = false;
   auto stop = false;
   self
@@ -138,12 +154,19 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         if (msg.source == node) {
           VAST_DEBUG("{} received DOWN from node", inv.full_name);
           self->send_exit(snk, caf::exit_reason::user_shutdown);
+          self->send_exit(exporter, caf::exit_reason::user_shutdown);
+          exporter = nullptr;
+          snk = nullptr;
         } else if (msg.source == exporter) {
           VAST_DEBUG("{} received DOWN from exporter", inv.full_name);
           self->send_exit(snk, caf::exit_reason::user_shutdown);
+          exporter = nullptr;
+          snk = nullptr;
         } else if (msg.source == snk) {
           VAST_DEBUG("{} received DOWN from sink", inv.full_name);
           self->send_exit(exporter, caf::exit_reason::user_shutdown);
+          exporter = nullptr;
+          snk = nullptr;
           stop = false;
           waiting_for_final_report = true;
         } else {
@@ -192,7 +215,9 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
           self->send_exit(snk, caf::exit_reason::user_shutdown);
         }
       })
-    .until([&] { return stop; });
+    .until([&] {
+      return stop;
+    });
   if (err)
     return caf::make_message(std::move(err));
   return caf::none;
