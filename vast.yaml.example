@@ -63,9 +63,9 @@ vast:
   # For a list of valid log levels, see file-verbosity.
   console-verbosity: info
 
-  # List of directories to look for schema files in ascending order of
+  # List of directories to look for module files in ascending order of
   # priority.
-  schema-dirs: []
+  module-dirs: []
 
   # Additional directories to load plugins specified using `vast.plugins`
   # from.
@@ -335,11 +335,8 @@ vast:
     # Treat the read option as a UNIX domain socket to connect to.
     uds: false
 
-    # Path to an alternate schema.
-    #schema-file: <none>
-
-    # An alternate schema as a string.
-    #schema: <none>
+    # Path to an alternate module.
+    #module-file: <none>
 
     # The `vast import json` command imports JSONL data.
     json:

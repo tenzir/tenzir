@@ -7,7 +7,7 @@ line corresponds to one event.
 Because CSV has no notion of typing, it is necessary to select a layout via
 `--type` whose field names correspond to the CSV header field names. Such a
 layout must either be defined in a schema file known to VAST, or be defined in a
-schema passed using `--schema` or `--schema-file`.
+schema passed using `--module-file`.
 
 E.g., to import Threat Intelligence data into VAST, the known type
 `intel.indicator` can be used:

@@ -258,7 +258,7 @@ tests:
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
     steps:
-      - command: -N import -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom json
+      - command: -N import -m @./misc/schema/zeek-conn.schema -t zeek.conn.custom json
         input: data/json/conn.log.json.gz
       - command: -N export ascii 'duration > 6s'
       - command: -N export ascii ':timestamp >= 2011-08-15T03:48'
@@ -352,7 +352,7 @@ tests:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
     steps:
-      - command: -N import --batch-encoding=arrow --schema-file="@./misc/schema/all-types.schema" --type=all_types json
+      - command: -N import --batch-encoding=arrow --module-file="@./misc/schema/all-types.schema" --type=all_types json
         input: data/json/all-types.json
       - command: -N export arrow '#type == "all_types"'
         transformation: python @./misc/scripts/print-arrow.py
@@ -452,7 +452,7 @@ tests:
     tags: [import, json]
     steps:
       - guard: version | jq -e '."Apache Arrow"'
-      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: count, }>, d: count, }" --type=custom --batch-encoding=arrow json'
+      - command: '-N import --module-file="@./misc/schema/custom.schema" --type=custom --batch-encoding=arrow json'
         input: data/json/record-in-list.json
       - command: -N export ascii '#type == "custom"'
 

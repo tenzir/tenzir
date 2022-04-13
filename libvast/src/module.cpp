@@ -109,19 +109,10 @@ caf::expected<module> get_module(const caf::settings& options) {
   const auto* module_reg_ptr = event_types::get();
   auto module = module_reg_ptr ? *module_reg_ptr : vast::module{};
   // Update with an alternate module, if requested.
-  auto sc = caf::get_if<std::string>(&options, "vast.import.schema");
-  auto mf = caf::get_if<std::string>(&options, "vast.import.schema-file");
-  if (sc && mf)
-    caf::make_error(ec::invalid_configuration,
-                    "had both schema and schema-file "
-                    "provided");
-  if (!sc && !mf)
+  auto mf = caf::get_if<std::string>(&options, "vast.import.module-file");
+  if (!mf)
     return module;
-  caf::expected<vast::module> update = caf::no_error;
-  if (sc)
-    update = to<vast::module>(*sc);
-  else
-    update = load_module(*mf);
+  auto update = load_module(*mf);
   if (!update)
     return update.error();
   return module::combine(module, *update);
@@ -135,24 +126,24 @@ get_module_dirs(const caf::actor_system_config& cfg) {
     for (auto&& path : detail::split(*vast_module_directories, ":"))
       result.insert({path});
   const auto datadir = detail::install_datadir();
-  result.insert(datadir / "schema");
+  result.insert(datadir / "module");
   for (const auto& plugin : plugins::get()) {
-    auto dir = datadir / "plugin" / plugin->name() / "schema";
+    auto dir = datadir / "plugin" / plugin->name() / "module";
     auto err = std::error_code{};
     if (std::filesystem::exists(dir, err))
       result.insert(std::move(dir));
   }
   if (!bare_mode) {
-    result.insert(detail::install_configdir() / "schema");
+    result.insert(detail::install_configdir() / "module");
     if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
       result.insert(std::filesystem::path{*xdg_config_home} / "vast"
-                    / "schema");
+                    / "module");
     else if (auto home = detail::getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".config" / "vast"
-                    / "schema");
+                    / "module");
   }
   if (auto dirs = caf::get_if<std::vector<std::string>>( //
-        &cfg, "vast.schema-dirs"))
+        &cfg, "vast.module-dirs"))
     result.insert(dirs->begin(), dirs->end());
   return result;
 }
@@ -188,7 +179,7 @@ load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
   vast::module types;
   symbol_map global_symbols;
   for (const auto& dir : module_dirs) {
-    VAST_VERBOSE("loading schemas from {}", dir);
+    VAST_VERBOSE("loading modules from {}", dir);
     std::error_code err{};
     if (!std::filesystem::exists(dir, err)) {
       VAST_DEBUG("{} skips non-existing directory: {}", __func__, dir);
@@ -201,12 +192,12 @@ load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
       = detail::filter_dir(dir, std::move(filter), max_recursion);
     if (!module_files)
       return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to filter schema dir at {}: "
+                             fmt::format("failed to filter module dir at {}: "
                                          "{}",
                                          dir, module_files.error()));
     symbol_map local_symbols;
     for (const auto& f : *module_files) {
-      VAST_DEBUG("loading schema {}", f);
+      VAST_DEBUG("loading module {}", f);
       if (auto err = load_symbols(f, local_symbols))
         return err;
     }

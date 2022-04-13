@@ -1,0 +1,1 @@
+type custom = record { a: list<record { b: string, c: count, }>, d: count, }
