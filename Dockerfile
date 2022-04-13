@@ -53,7 +53,7 @@ COPY examples ./examples
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
 COPY plugins ./plugins
-COPY schema ./schema
+COPY module ./module
 COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast

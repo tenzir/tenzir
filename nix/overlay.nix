@@ -88,7 +88,7 @@ in
       (inputs.nix-filter.lib.inDirectory ../vast)
       (inputs.nix-filter.lib.inDirectory ../tools)
       (inputs.nix-filter.lib.inDirectory ../plugins)
-      (inputs.nix-filter.lib.inDirectory ../schema)
+      (inputs.nix-filter.lib.inDirectory ../module)
       (inputs.nix-filter.lib.inDirectory ../doc)
       (inputs.nix-filter.lib.inDirectory ../cmake)
       (inputs.nix-filter.lib.inDirectory ../changelog)
