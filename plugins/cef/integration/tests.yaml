@@ -1,0 +1,22 @@
+config-file: vast.yaml
+
+fixtures:
+  ServerTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=self.config_file)
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
+tests:
+  CEF:
+    tags: [server, import-export, cef]
+    fixture: ServerTester
+    steps:
+      - command: import -b cef
+        input: data/cef/cef.log
+      - command: export json 'version >= 0 && vendor == "ArcSight"'
