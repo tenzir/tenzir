@@ -1,41 +1,34 @@
-# Website
+# VAST Docs
 
-This website is built using [Docusaurus 2](https://docusaurus.io/), a modern static website generator.
-
-### Installation
-
-```
-$ yarn
-```
-
-### Local Development
-
-```
-$ yarn start
-```
-
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
+This directory the [official VAST documentation][site], along with the
+[Docusaurus](https://docusaurus.io/) scaffold for local building, viewing, and
+deploying.
 
 ### Build
 
+Use [yarn](https://yarnpkg.com/) to build and view the site locally:
+
 ```
-$ yarn build
+yarn
+yarn start
 ```
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
+The `start` command starts a local development server and opens up a browser
+window. Most changes are reflected live without having to restart the server.
+
 
 ### Deployment
 
-Using SSH:
+To package up a local for deployment, use the `build` command:
 
 ```
-$ USE_SSH=true yarn deploy
+yarn build
 ```
 
-Not using SSH:
+The resulting `build` directory can be served using any static hosting service.
 
-```
-$ GIT_USER=<Your GitHub username> yarn deploy
-```
+We use a [github actions workflow][workflow] to deploy this site with every push
+to master.
 
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+[site]: https://docs.tenzir.com/vast
+[workflow]: https://github.com/tenzir/vast/blob/master/.github/workflows/docs.yaml
