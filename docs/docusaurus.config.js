@@ -44,7 +44,7 @@ const config = {
         items: [
           {
             type: 'doc',
-            docId: 'intro',
+            docId: 'start/README',
             position: 'left',
             label: 'Docs',
           },
@@ -62,7 +62,7 @@ const config = {
             items: [
               {
                 label: 'Get Started',
-                to: '/docs/get-started',
+                to: '/docs/start',
               },
               {
                 label: 'Setup VAST',
@@ -73,8 +73,8 @@ const config = {
                 to: '/docs/use',
               },
               {
-                label: 'Learn VAST',
-                to: '/docs/learn',
+                label: 'Understand VAST',
+                to: '/docs/understand',
               },
               {
                 label: 'Develop VAST',
