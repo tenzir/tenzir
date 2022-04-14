@@ -8,11 +8,11 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 const config = {
   title: 'VAST',
   tagline: 'The network telemetry engine for data-driven security investigations.',
-  url: 'https://your-docusaurus-test-site.com',
+  url: 'https://tenzir.github.io/vast',
   baseUrl: '/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'error',
-  favicon: 'img/favicon.ico',
+  //favicon: 'img/favicon.ico',
   organizationName: 'tenzir', // Usually your GitHub org/user name.
   projectName: 'vast', // Usually your repo name.
 
@@ -62,8 +62,24 @@ const config = {
             title: 'Docs',
             items: [
               {
-                label: 'Tutorial',
-                to: '/docs/intro',
+                label: 'Get Started',
+                to: '/docs/get-started',
+              },
+              {
+                label: 'Setup VAST',
+                to: '/docs/setup',
+              },
+              {
+                label: 'Use VAST',
+                to: '/docs/use',
+              },
+              {
+                label: 'Learn VAST',
+                to: '/docs/learn',
+              },
+              {
+                label: 'Develop VAST',
+                to: '/docs/develop',
               },
             ],
           },
@@ -71,25 +87,37 @@ const config = {
             title: 'Community',
             items: [
               {
-                label: 'LinkedIn',
-                href: 'https://www.linkedin.com/company/tenzir',
-              },
-              {
                 label: 'Slack',
                 href: 'http://slack.tenzir.com',
+              },
+              {
+                label: 'GitHub',
+                href: 'https://github.com/tenzir/vast',
               },
               {
                 label: 'Twitter',
                 href: 'https://twitter.com/tenzir_company',
               },
+              {
+                label: 'LinkedIn',
+                href: 'https://www.linkedin.com/company/tenzir',
+              },
             ],
           },
           {
-            title: 'More',
+            title: 'Tenzir',
             items: [
               {
-                label: 'GitHub',
-                href: 'https://github.com/tenzir/vast',
+                label: 'Blog',
+                href: 'https://tenzir.com/blog',
+              },
+              {
+                label: 'Request Demo',
+                href: 'https://tenzir.com/request-demo',
+              },
+              {
+                label: 'Contact Us',
+                href: 'https://tenzir.com/contact-us',
               },
             ],
           },
