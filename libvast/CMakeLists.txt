@@ -316,44 +316,34 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
           DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 endif ()
 
-# -- libvast -------------------------------------------------------------------
-
-# Manually listed "native" plugins. These special plugins are essentially part
-# of the libvast library, but always loaded when linking against the
-# libvast_native_plugins library.
-set(libvast_native_plugin_sources
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/system/local_segment_store.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/count.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/delete.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/filter.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/hash.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/identity.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/project.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/rename.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/replace.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/select.cpp")
 
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/*.hpp")
-list(REMOVE_ITEM libvast_sources ${libvast_native_plugin_sources})
 list(SORT libvast_sources)
+
+# The "native" plugins. These special plugins are essentially part of the
+# libvast library, but always loaded when linking against the
+# libvast_native_plugins library.
+unset(libvast_native_plugin_sources)
+foreach (source IN LISTS libvast_sources)
+  file(STRINGS "${source}" lines)
+  foreach (line IN LISTS lines)
+    if ("${line}" MATCHES "^ *VAST_REGISTER_PLUGIN *\\(.+\\) *$")
+      list(APPEND libvast_native_plugin_sources "${source}")
+      break()
+    endif ()
+  endforeach ()
+endforeach ()
+set_property(
+  SOURCE ${libvast_native_plugin_sources}
+  APPEND
+  PROPERTY COMPILE_DEFINITIONS VAST_ENABLE_NATIVE_PLUGINS)
 
 add_library(libvast ${libvast_sources})
 VASTTargetEnableTooling(libvast)
 add_library(vast::libvast ALIAS libvast)
-
-add_library(libvast_native_plugins STATIC ${libvast_native_plugin_sources})
-VASTTargetEnableTooling(libvast_native_plugins)
-target_compile_definitions(libvast_native_plugins
-                           PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
-set_target_properties(libvast_native_plugins PROPERTIES OUTPUT_NAME
-                                                        vast_native_plugins)
-add_library(vast::libvast_native_plugins ALIAS libvast_native_plugins)
-
 target_link_libraries(libvast PRIVATE libvast_internal)
-target_link_libraries(libvast_native_plugins PRIVATE libvast libvast_internal)
-
 set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
                                          ON)
 
@@ -552,7 +542,7 @@ endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
-  TARGETS libvast libvast_native_plugins
+  TARGETS libvast
   EXPORT VASTTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
