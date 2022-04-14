@@ -9,10 +9,14 @@ on:
   push:
     branches:
       - master
+      - v*
   pull_request:
-    types: [opened, synchronize]
+    types:
+      - opened
+      - synchronize
   release:
-    types: published
+    types:
+      - created
 env:
   CCACHE_MAXSIZE: "5G"
 

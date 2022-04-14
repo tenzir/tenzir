@@ -1,11 +1,9 @@
 name: "Jupyter Notebook"
 on:
-  push:
+  pull_request:
     paths:
       - 'examples/jupyter'
       - '.github/workflows/jupyter.yaml'
-  release:
-    types: published
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
