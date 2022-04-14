@@ -242,7 +242,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     self->quit(std::move(err));
     return type_registry_actor::behavior_type::make_empty_behavior();
   }
-  // Load loaded schema types from the singleton.
+  // Load loaded types in modules from the singleton.
   // TODO: Move to the load handler and re-parse the files.
   if (const auto* module = vast::event_types::get())
     self->state.configuration_module = *module;

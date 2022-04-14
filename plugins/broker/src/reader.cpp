@@ -111,7 +111,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
 caf::error reader::module([[maybe_unused]] class module module) {
   // The VAST types are automatically generated and cannot be changed.
   return caf::make_error(ec::no_error,
-                         "schema cannot be changed as it is generated "
+                         "module cannot be changed as it is generated "
                          "dynamically");
 }
 

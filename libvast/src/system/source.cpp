@@ -70,11 +70,11 @@ void source_state::initialize(const type_registry_actor& type_registry,
           // Third, try to set the new module.
           if (auto err = reader->module(std::move(merged_module));
               err && err != caf::no_error)
-            VAST_ERROR("{} source failed to set schema: {}", reader->name(),
+            VAST_ERROR("{} source failed to set module: {}", reader->name(),
                        err);
         },
         [this](const caf::error& err) {
-          VAST_ERROR("{} source failed to receive schema: {}", reader->name(),
+          VAST_ERROR("{} source failed to receive module: {}", reader->name(),
                      err);
         });
   } else {
@@ -85,7 +85,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
               reader->name());
     if (auto err = reader->module(std::move(local_module));
         err && err != caf::no_error)
-      VAST_ERROR("{} source failed to set schema: {}", reader->name(), err);
+      VAST_ERROR("{} source failed to set module: {}", reader->name(), err);
   }
 }
 
@@ -303,7 +303,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       return self->state.reader->module();
     },
     [self](atom::put, class module module) -> caf::result<void> {
-      VAST_DEBUG("{} received schema {}", *self, module);
+      VAST_DEBUG("{} received module {}", *self, module);
       if (auto err = self->state.reader->module(std::move(module));
           err && err != caf::no_error)
         return err;

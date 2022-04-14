@@ -436,7 +436,7 @@ auto make_root_command(std::string_view path) {
                                                "console")
         .add<std::string>("console-format", "format string for logging to the "
                                             "console")
-        .add<std::vector<std::string>>("schema-dirs", module_desc.c_str())
+        .add<std::vector<std::string>>("module-dirs", module_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
         .add<std::string>("client-log-file", "client log file (default: "

@@ -274,7 +274,7 @@ void reader::reset(std::unique_ptr<std::istream>) {
 
 caf::error reader::module(vast::module mod) {
   if (mod.empty())
-    return caf::make_error(ec::format_error, "empty schema");
+    return caf::make_error(ec::format_error, "empty module");
   std::unordered_map<type, blueprint> blueprints;
   auto subset = vast::module{};
   for (const auto& t : mod) {
@@ -291,7 +291,7 @@ caf::error reader::module(vast::module mod) {
                              "failed to create table slize builder", t);
   }
   if (subset.empty())
-    return caf::make_error(ec::format_error, "no test type in schema");
+    return caf::make_error(ec::format_error, "no test type in module");
   module_ = std::move(subset);
   blueprints_ = std::move(blueprints);
   next_ = module_.begin();

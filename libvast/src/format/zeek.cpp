@@ -425,7 +425,7 @@ caf::error reader::parse_header() {
     if (!r)
       return caf::make_error(ec::format_error,
                              "the zeek reader expects records for "
-                             "the top level types in the schema");
+                             "the top level types in the module");
     auto transformations = std::vector<record_type::transformation>{};
     for (const auto& [layout_field, layout_index] : layout.leaves()) {
       const auto key = layout.key(layout_index);

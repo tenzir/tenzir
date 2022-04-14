@@ -71,13 +71,13 @@ public:
   inline caf::error module(const vast::module& mod) override {
     if (mod.empty())
       return caf::make_error(ec::invalid_configuration,
-                             "no schema provided or type "
+                             "no module provided or type "
                              "too restricted");
     for (const auto& entry : mod) {
       if (!caf::holds_alternative<record_type>(entry))
         continue;
       if (entry.name().empty()) {
-        VAST_WARN("unexpectedly unnamed layout in schema: {}", entry);
+        VAST_WARN("unexpectedly unnamed layout in module: {}", entry);
         continue;
       }
       std::vector<std::string> cache_entry;

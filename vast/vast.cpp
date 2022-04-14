@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
   if (auto module = load_module(cfg)) {
     event_types::init(*std::move(module));
   } else {
-    VAST_ERROR("failed to read schema dirs: {}", module.error());
+    VAST_ERROR("failed to read module dirs: {}", module.error());
     return EXIT_FAILURE;
   }
   // Lastly, initialize the actor system context, and execute the given command.
