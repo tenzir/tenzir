@@ -7,7 +7,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'VAST',
-  tagline: 'The network telemetry engine for data-driven security investigations.',
+  tagline: 'Actionable insights at your fingertips.',
   url: 'https://tenzir.github.io/vast',
   baseUrl: '/',
   onBrokenLinks: 'throw',
@@ -39,7 +39,7 @@ const config = {
         title: 'VAST',
         logo: {
           alt: 'Visibility Across Space and Time',
-          src: 'img/logo.svg',
+          src: 'img/vast-logo.svg',
         },
         items: [
           {
