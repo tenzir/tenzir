@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [v2.0.0-rc1][v2.0.0-rc1]
+## [v2.0.0-rc2][v2.0.0-rc2]
 
 ### :zap: Breaking Changes
 
@@ -18,6 +18,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The command line option `--verbosity` has the new name `--console-verbosity`. This synchronizes the CLI interface with the configuration file that solely understands the option `vast.console-verbosity`.
   [#2178](https://github.com/tenzir/vast/pull/2178)
+
+- Multiple transform steps now have new names: `select` is now called `where`, `delete` is now called `drop`, `project` is now called `put`, and `aggregate` is now called `summarize`. This breaking change is in preparation for an upcoming feature that improves the capability of VAST's query language.
+  [#2228](https://github.com/tenzir/vast/pull/2228)
+
+- The `layout-names` option of the `rename` transform step was renamed `schemas`. The step now additonally supports renaming `fields`.
+  [#2228](https://github.com/tenzir/vast/pull/2228)
 
 ### :warning: Changes
 
@@ -65,8 +71,8 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST v1.0 deprecated the experimental aging feature. Given popular demand we've decided to un-deprecate it, and to actually implement it on top of the same building blocks the compaction mechanism uses. This means that it is now fully working and no longer considered experimental.
   [#2186](https://github.com/tenzir/vast/pull/2186)
 
-- The new `filter` transform step is the inverse of the `select` transform step, removing rows matching a configurable expression rather than keeping them.
-  [#2186](https://github.com/tenzir/vast/pull/2186)
+- The `replace` transform step now allows for setting values of complex types, e.g., lists or records.
+  [#2228](https://github.com/tenzir/vast/pull/2228)
 
 ### :beetle: Bug Fixes
 
@@ -90,6 +96,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The `vast(1)` man-page is no longer empty for VAST distributions with static binaries.
   [#2190](https://github.com/tenzir/vast/pull/2190)
+
+- VAST servers no longer accept queries after initiating shutdown. This fixes a potential infinite hang if new queries were coming in faster than VAST was able to process them.
+  [#2215](https://github.com/tenzir/vast/pull/2215)
+
+- VAST no longer sometimes crashes when aging or compaction erase whole partitions.
+  [#2227](https://github.com/tenzir/vast/pull/2227)
 
 ## [v1.1.2][v1.1.2]
 
@@ -1669,7 +1681,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[v2.0.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc1
+[v2.0.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc2
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
 [v1.1.0]: https://github.com/tenzir/vast/releases/tag/v1.1.0
