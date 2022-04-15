@@ -7,7 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "cef/add.hpp"
+#include "cef/parse.hpp"
 
+#include <vast/concept/convertible/to.hpp>
 #include <vast/data.hpp>
 #include <vast/detail/assert.hpp>
 #include <vast/detail/line_range.hpp>
@@ -116,7 +118,10 @@ protected:
                    detail::pretty_type_name(this), lines_->line_number());
         continue;
       }
-      if (auto err = add(line, *builder_)) {
+      auto msg = to<message>(std::string_view{line});
+      if (!msg)
+        return msg.error();
+      if (auto err = add(*msg, *builder_)) {
         VAST_WARN("{} failed to parse line {}: {} ({})",
                   detail::pretty_type_name(this), lines_->line_number(), line,
                   err);
