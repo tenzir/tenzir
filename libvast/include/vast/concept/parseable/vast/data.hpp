@@ -41,6 +41,13 @@ private:
     using namespace parser_literals;
     rule<Iterator, data> p;
     auto ws = ignore(*parsers::space);
+    // clang-format off
+    auto number_parser
+      = (parsers::count >> &!'.'_p)
+      | (parsers::integer >> &!'.'_p)
+      | parsers::real
+      ;
+    // clang-format on
     auto x = ws >> ref(p) >> ws;
     auto kvp = x >> "->" >> x;
     auto trailing_comma = ~(',' >> ws);
@@ -65,9 +72,7 @@ private:
       | parsers::duration
       | parsers::net
       | parsers::addr
-      | parsers::real
-      | parsers::count
-      | parsers::integer
+      | number_parser
       | parsers::tf
       | parsers::qqstr
       | parsers::pattern
