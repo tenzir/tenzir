@@ -149,20 +149,21 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
                               fmt::format("{} shut down after {} timeout",
                                           inv.full_name, to_string(timeout)));
       },
-      [&](caf::down_msg& msg) {
+      [&, node_addr = node->address(), snk_addr = snk->address(),
+       exporter_addr = exporter->address()](caf::down_msg& msg) {
         stop = true;
-        if (msg.source == node) {
+        if (msg.source == node_addr) {
           VAST_DEBUG("{} received DOWN from node", inv.full_name);
           self->send_exit(snk, caf::exit_reason::user_shutdown);
           self->send_exit(exporter, caf::exit_reason::user_shutdown);
           exporter = nullptr;
           snk = nullptr;
-        } else if (msg.source == exporter) {
+        } else if (msg.source == exporter_addr) {
           VAST_DEBUG("{} received DOWN from exporter", inv.full_name);
           self->send_exit(snk, caf::exit_reason::user_shutdown);
           exporter = nullptr;
           snk = nullptr;
-        } else if (msg.source == snk) {
+        } else if (msg.source == snk_addr) {
           VAST_DEBUG("{} received DOWN from sink", inv.full_name);
           self->send_exit(exporter, caf::exit_reason::user_shutdown);
           exporter = nullptr;
@@ -170,7 +171,8 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
           stop = false;
           waiting_for_final_report = true;
         } else {
-          VAST_ASSERT(!"received DOWN from inexplicable actor");
+          VAST_WARN("{} received DOWN from inexplicable actor: {}",
+                    inv.full_name, msg.reason);
         }
         if (msg.reason && msg.reason != caf::exit_reason::user_shutdown) {
           VAST_WARN("{} received error message: {}", inv.full_name, msg.reason);
