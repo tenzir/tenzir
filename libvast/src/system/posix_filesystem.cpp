@@ -9,7 +9,6 @@
 #include "vast/system/posix_filesystem.hpp"
 
 #include "vast/chunk.hpp"
-#include "vast/detail/assert.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/system/status.hpp"
@@ -30,7 +29,9 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
   return {
     [self](atom::write, const std::filesystem::path& filename,
            const chunk_ptr& chk) -> caf::result<atom::ok> {
-      VAST_ASSERT(chk != nullptr);
+      if (chk == nullptr)
+        return caf::make_error(ec::logic_error, "tried to write a nullptr to "
+                                                "disk");
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
       if (auto err = io::save(path, as_bytes(chk))) {

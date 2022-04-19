@@ -123,17 +123,22 @@ void partition_transformer_state::fulfill(
       .synopsis = nullptr,
     });
     self->quit();
+    return;
   }
   if (!stream_data.partition_chunk) {
     promise.deliver(stream_data.partition_chunk.error());
     self->quit();
     return;
   }
-  if (!stream_data.partition_chunk) {
+  if (!stream_data.synopsis_chunk) {
     promise.deliver(stream_data.synopsis_chunk.error());
     self->quit();
     return;
   }
+  // When we get here we know that there was at least one event and
+  // no error during packing, so these chunks can not be null.
+  VAST_ASSERT(*stream_data.partition_chunk != nullptr);
+  VAST_ASSERT(*stream_data.synopsis_chunk != nullptr);
   // The catalog data can always be regenerated on restart, so we don't need
   // strict error handling for it.
   self
