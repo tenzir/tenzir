@@ -18,7 +18,6 @@
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/project.hpp"
 #include "vast/transform_steps/replace.hpp"
-#include "vast/transform_steps/select.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -104,7 +103,7 @@ struct transforms_fixture {
   /// Creates a table slice with ten rows(type, record_batch), a second having
   /// only the row with index==2 and a third having only the rows with index>5.
   static std::tuple<vast::table_slice, vast::table_slice, vast::table_slice>
-  make_select_testdata(vast::table_slice_encoding encoding
+  make_where_testdata(vast::table_slice_encoding encoding
                        = vast::defaults::import::table_slice_type) {
     auto builder = vast::factory<vast::table_slice_builder>::make(
       encoding, testdata_layout);
@@ -229,27 +228,38 @@ TEST(replace step) {
   CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
 }
 
-TEST(select step) {
+TEST(where step) {
   auto [slice, single_row_slice, multi_row_slice]
-    = make_select_testdata(vast::defaults::import::table_slice_type);
-  vast::select_step select_step({"index==+2"});
-  auto add_failed = select_step.add(slice.layout(), to_record_batch(slice));
+    = make_where_testdata(vast::defaults::import::table_slice_type);
+  auto where_plugin = vast::plugins::find<vast::transform_plugin>("where");
+  REQUIRE(where_plugin);
+  auto where_step = unbox(where_plugin->make_transform_step(
+      {{"expression", "index == +2"}}
+      ));
+  REQUIRE(where_step);
+  auto add_failed = where_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto selected = select_step.finish();
+  auto selected = where_step->finish();
   REQUIRE_NOERROR(selected);
   REQUIRE_EQUAL(selected->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected), single_row_slice);
-  vast::select_step select_step2({"index>+5"});
-  auto add2_failed = select_step2.add(slice.layout(), to_record_batch(slice));
+  auto where_step2 = unbox(where_plugin->make_transform_step(
+      {{"expression", "index > +5"}}
+      ));
+  REQUIRE(where_step2);
+  auto add2_failed = where_step2->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add2_failed);
-  auto selected2 = select_step2.finish();
+  auto selected2 = where_step2->finish();
   REQUIRE_NOERROR(selected2);
   REQUIRE_EQUAL(selected2->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected2), multi_row_slice);
-  vast::select_step select_step3({"index>+9"});
-  auto add3_failed = select_step3.add(slice.layout(), to_record_batch(slice));
+  auto where_step3 = unbox(where_plugin->make_transform_step(
+      {{"expression", "index > +9"}}
+      ));
+  REQUIRE(where_step3);
+  auto add3_failed = where_step3->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add3_failed);
-  auto selected3 = select_step3.finish();
+  auto selected3 = where_step3->finish();
   REQUIRE_NOERROR(selected3);
   REQUIRE_EQUAL(selected3->size(), 0ull);
 }

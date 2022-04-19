@@ -378,7 +378,7 @@ TEST(select transform with an empty result set) {
   auto identity_step_config
     = vast::record{{"expression", "#type == \"does_not_exist\""}};
   auto identity_step
-    = vast::make_transform_step("select", identity_step_config);
+    = vast::make_transform_step("where", identity_step_config);
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
   auto rp2 = self->request(index, caf::infinite, vast::atom::apply_v, transform,

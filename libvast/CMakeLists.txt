@@ -325,13 +325,12 @@ set(libvast_native_plugin_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/src/system/local_segment_store.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/count.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/delete.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/hash.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/identity.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/project.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/rename.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/replace.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/select.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/where.cpp")
 
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
