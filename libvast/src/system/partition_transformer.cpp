@@ -129,7 +129,7 @@ void partition_transformer_state::fulfill(
     self->quit();
     return;
   }
-  if (!stream_data.partition_chunk) {
+  if (!stream_data.synopsis_chunk) {
     promise.deliver(stream_data.synopsis_chunk.error());
     self->quit();
     return;
