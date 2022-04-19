@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -39,24 +40,28 @@ struct configuration {
     }
   };
 
-  std::vector<name_mapping> layout_names = {};
+  std::vector<name_mapping> schemas = {};
+  std::vector<name_mapping> fields = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.layout_names);
+    return f(x.schemas, x.fields);
   }
 
   static inline const record_type& layout() noexcept {
-    // layout-names:
+    // schemas:
+    //   - from: zeek.conn
+    //     to: zeek.aggregated_conn
+    //   - from: suricata.flow
+    //     to: suricata.aggregated_flow
+    // fields:
     //   - from: zeek.conn
     //     to: zeek.aggregated_conn
     //   - from: suricata.flow
     //     to: suricata.aggregated_flow
     static auto result = record_type{
-      {
-        "layout-names",
-        list_type{name_mapping::layout()},
-      },
+      {"schemas", list_type{name_mapping::layout()}},
+      {"fields", list_type{name_mapping::layout()}},
     };
     return result;
   }
@@ -72,26 +77,52 @@ public:
   /// VAST layout.
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    auto name_mapping
-      = std::find_if(config_.layout_names.begin(), config_.layout_names.end(),
-                     [&](const auto& name_mapping) noexcept {
-                       return name_mapping.from == layout.name();
-                     });
-    if (name_mapping == config_.layout_names.end()) {
-      transformed_batches_.emplace_back(std::move(layout), std::move(batch));
-      return caf::none;
+    // Step 1: Adjust field names.
+    if (!config_.fields.empty()) {
+      auto field_transformations = std::vector<indexed_transformation>{};
+      for (const auto& field : config_.fields) {
+        for (const auto& index :
+             caf::get<record_type>(layout).resolve_key_suffix(field.from,
+                                                              layout.name())) {
+          auto transformation
+            = [&](struct record_type::field old_field,
+                  std::shared_ptr<arrow::Array> array) noexcept
+            -> std::vector<std::pair<struct record_type::field,
+                                     std::shared_ptr<arrow::Array>>> {
+            return {
+              {{field.to, old_field.type}, array},
+            };
+          };
+          field_transformations.push_back({index, std::move(transformation)});
+        }
+      }
+      std::sort(field_transformations.begin(), field_transformations.end());
+      std::tie(layout, batch)
+        = transform_columns(layout, batch, field_transformations);
     }
-    auto rename_layout = [&](const concrete_type auto& pruned_layout) {
-      VAST_ASSERT(!layout.has_attributes());
-      return type{name_mapping->to, pruned_layout};
-    };
-    layout = caf::visit(rename_layout, layout);
-    auto schema = layout.to_arrow_schema();
-    batch
-      = arrow::RecordBatch::Make(schema, batch->num_rows(), batch->columns());
+    // Step 2: Adjust schema names.
+    if (!config_.schemas.empty()) {
+      const auto schema
+        = std::find_if(config_.schemas.begin(), config_.schemas.end(),
+                       [&](const auto& name_mapping) noexcept {
+                         return name_mapping.from == layout.name();
+                       });
+      if (schema == config_.schemas.end()) {
+        transformed_batches_.emplace_back(std::move(layout), std::move(batch));
+        return caf::none;
+      }
+      auto rename_layout = [&](const concrete_type auto& pruned_layout) {
+        VAST_ASSERT(!layout.has_attributes());
+        return type{schema->to, pruned_layout};
+      };
+      layout = caf::visit(rename_layout, layout);
+      batch = arrow::RecordBatch::Make(layout.to_arrow_schema(),
+                                       batch->num_rows(), batch->columns());
+    }
+    // Finally, store the result for later retrieval.
     transformed_batches_.emplace_back(std::move(layout), std::move(batch));
     return caf::none;
-  }
+  } // namespace vast::plugins::rename
 
   /// Retrieves the result of the transformation.
   [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
