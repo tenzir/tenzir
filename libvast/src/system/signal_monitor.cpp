@@ -69,7 +69,8 @@ void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
         if (signals[i]) {
           VAST_DEBUG("{} caught signal {}", class_name, strsignal(i));
           signals[i] = false;
-          caf::anon_send(receiver, atom::signal_v, i);
+          caf::anon_send<caf::message_priority::high>(receiver, atom::signal_v,
+                                                      i);
         }
       }
     }

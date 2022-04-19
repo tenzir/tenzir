@@ -1006,6 +1006,12 @@ legacy_index(index_actor::stateful_pointer<legacy_index_state> self,
         VAST_WARN("{} ignores an anonymous query", *self);
         return caf::sec::invalid_argument;
       }
+      // Abort if the index is already shutting down.
+      if (!self->state.stage->running()) {
+        VAST_WARN("{} ignores query {} because it is shutting down", *self,
+                  query);
+        return ec::remote_node_down;
+      }
       // Allows the client to query further results after initial taste.
       VAST_ASSERT(query.id == uuid::nil());
       query.id = self->state.create_query_id();

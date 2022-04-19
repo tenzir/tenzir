@@ -641,7 +641,7 @@ jobs:
           PACKAGE_NAME="$(echo "vast-${{ needs.determine-version.outputs.build-version }}-$(uname -s)-release-gcc" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
       - name: Download VAST
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Install VAST

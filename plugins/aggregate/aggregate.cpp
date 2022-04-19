@@ -213,10 +213,10 @@ struct aggregation {
     auto adjusted_rt = rt.transform(std::move(drop_transformations));
     VAST_ASSERT(adjusted_rt);
     VAST_ASSERT(!layout.has_attributes());
-    result.flattened_layout_ = flatten(layout);
     result.adjusted_layout_ = type{layout.name(), *adjusted_rt};
     result.flattened_adjusted_layout_ = flatten(result.adjusted_layout_);
-    result.adjusted_schema_ = result.adjusted_layout_.to_arrow_schema();
+    result.flattened_adjusted_schema_
+      = result.flattened_adjusted_layout_.to_arrow_schema();
     result.num_group_by_columns_ = std::count(
       result.actions_.begin(), result.actions_.end(), action::group_by);
     result.time_resolution_ = config.time_resolution;
@@ -450,8 +450,9 @@ struct aggregation {
     VAST_ASSERT(finish_result.ok(), finish_result.status().ToString().c_str());
     const auto& columns_struct = caf::get<type_to_arrow_array_t<record_type>>(
       *finish_result.ValueUnsafe());
-    auto batch = arrow::RecordBatch::Make(
-      adjusted_schema_, columns_struct.length(), columns_struct.fields());
+    auto batch = arrow::RecordBatch::Make(flattened_adjusted_schema_,
+                                          columns_struct.length(),
+                                          columns_struct.fields());
     return transform_batch{adjusted_layout_, std::move(batch)};
   }
 
@@ -472,9 +473,9 @@ private:
     key.reserve(num_group_by_columns_);
     for (int column = 0; column < batch->num_columns(); ++column) {
       if (actions_[column] == action::group_by) {
-        key.push_back(
-          value_at(caf::get<record_type>(flattened_layout_).field(column).type,
-                   *batch->column(column), row));
+        key.push_back(value_at(
+          caf::get<record_type>(flattened_adjusted_layout_).field(column).type,
+          *batch->column(column), row));
       }
     }
     // Create a new bucket.
@@ -503,10 +504,9 @@ private:
 
   /// Multiple versions of the adjusted layout with the dropped columns removed
   /// needed throughout the aggregation.
-  type flattened_layout_ = {};
   type adjusted_layout_ = {};
   type flattened_adjusted_layout_ = {};
-  std::shared_ptr<arrow::Schema> adjusted_schema_ = {};
+  std::shared_ptr<arrow::Schema> flattened_adjusted_schema_ = {};
 
   /// The buckets holding the intemediate accumulators.
   bucket_map buckets_ = {};

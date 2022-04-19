@@ -19,6 +19,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/type.hpp"
+#include "vast/view.hpp"
 
 #include <caf/error.hpp>
 
@@ -160,6 +161,26 @@ template <class Type, class T>
   requires(!std::integral<T> || std::same_as<bool, T>)
 caf::error convert(const T& src, T& dst, const Type&) {
   dst = src;
+  return caf::none;
+}
+
+template <class From>
+  requires(!std::same_as<From, std::string>)
+caf::error convert(const From& src, std::string& dst, const string_type&) {
+  // This convertible overload is essentially only used when we have YAML keys
+  // that contain a scalar value (= signed integer), but want to parse a string.
+  // In those cases, we generally want to prefer unsigned integers over signed
+  // integers if possible to avoid the unary plus prefix from being printed, as
+  // downstream parsers of the resulting string often cannot handle the unary
+  // plus correctly.
+  if constexpr (std::is_same_v<From, integer>) {
+    if (src.value >= 0)
+      return convert(detail::narrow_cast<count>(src.value), dst, string_type{});
+  }
+  // In order to get consistent formatting as strings we create a data view
+  // here. While not as cheap as printing directly, it's at least a bit cheaper
+  // than going through a data and creating a copy of the entire data.
+  dst = fmt::to_string(data_view{make_view(src)});
   return caf::none;
 }
 
