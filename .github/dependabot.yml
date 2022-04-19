@@ -9,7 +9,11 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    labels:
+      - maintenance
   - package-ecosystem: "npm"
     directory: "/docs"
     schedule:
       interval: "weekly"
+    labels:
+      - maintenance
