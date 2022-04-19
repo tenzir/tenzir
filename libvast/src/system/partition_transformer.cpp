@@ -123,6 +123,7 @@ void partition_transformer_state::fulfill(
       .synopsis = nullptr,
     });
     self->quit();
+    return;
   }
   if (!stream_data.partition_chunk) {
     promise.deliver(stream_data.partition_chunk.error());
@@ -134,18 +135,20 @@ void partition_transformer_state::fulfill(
     self->quit();
     return;
   }
+  // When we get here we know that there was at least one event and
+  // no error during packing, so these chunks can not be null.
+  VAST_ASSERT(*stream_data.partition_chunk != nullptr);
+  VAST_ASSERT(*stream_data.synopsis_chunk != nullptr);
   // The catalog data can always be regenerated on restart, so we don't need
   // strict error handling for it.
-  if (*stream_data.synopsis_chunk) {
-    self
-      ->request(fs, caf::infinite, atom::write_v, path_data.synopsis_path,
-                *stream_data.synopsis_chunk)
-      .then([](atom::ok) { /* nop */ },
-            [path = path_data.synopsis_path](const caf::error& e) {
-              VAST_WARN("could not write transformed synopsis to {}: {}", path,
-                        e);
-            });
-  }
+  self
+    ->request(fs, caf::infinite, atom::write_v, path_data.synopsis_path,
+              *stream_data.synopsis_chunk)
+    .then([](atom::ok) { /* nop */ },
+          [path = path_data.synopsis_path](const caf::error& e) {
+            VAST_WARN("could not write transformed synopsis to {}: {}", path,
+                      e);
+          });
   self
     ->request(fs, caf::infinite, atom::write_v, path_data.partition_path,
               *stream_data.partition_chunk)
