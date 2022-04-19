@@ -44,7 +44,7 @@ const config = {
         items: [
           {
             type: 'doc',
-            docId: 'start/README',
+            docId: 'get-started/README',
             position: 'left',
             label: 'Docs',
           },
@@ -62,23 +62,23 @@ const config = {
             items: [
               {
                 label: 'Get Started',
-                to: '/docs/start',
+                to: '/docs/get-started',
               },
               {
                 label: 'Setup VAST',
-                to: '/docs/setup',
+                to: '/docs/setup-vast',
               },
               {
                 label: 'Use VAST',
-                to: '/docs/use',
+                to: '/docs/use-vast',
               },
               {
                 label: 'Understand VAST',
-                to: '/docs/understand',
+                to: '/docs/understand-vast',
               },
               {
                 label: 'Develop VAST',
-                to: '/docs/develop',
+                to: '/docs/develop-vast',
               },
             ],
           },
@@ -117,6 +117,10 @@ const config = {
               {
                 label: 'Contact Us',
                 href: 'https://tenzir.com/contact-us',
+              },
+              {
+                label: 'Website',
+                href: 'https://tenzir.com/blog',
               },
             ],
           },
