@@ -25,8 +25,7 @@
 #include <arrow/config.h>
 #include <arrow/table.h>
 #include <arrow/table_builder.h>
-
-#include <unordered_map>
+#include <tsl/robin_map.h>
 
 namespace vast::plugins::aggregate {
 
@@ -140,8 +139,12 @@ struct aggregation {
   };
 
   /// The key by which aggregations are grouped. Essentially, this is a
-  /// vector of data views.
-  struct group_by_key : std::vector<data_view> {
+  /// vector of data.
+  struct group_by_key : std::vector<data> {
+    using vector::vector;
+  };
+
+  struct group_by_key_view : std::vector<data_view> {
     using vector::vector;
   };
 
@@ -151,15 +154,52 @@ struct aggregation {
     size_t operator()(const group_by_key& x) const noexcept {
       auto hasher = xxh64{};
       for (const auto& value : x)
+        hash_append(hasher, make_view(value));
+      return hasher.finish();
+    }
+
+    size_t operator()(const group_by_key_view& x) const noexcept {
+      auto hasher = xxh64{};
+      for (const auto& value : x)
         hash_append(hasher, value);
       return hasher.finish();
     }
   };
 
+  struct group_by_key_equal {
+    using is_transparent = void;
+
+    bool operator()(const group_by_key_view& x,
+                    const group_by_key& y) const noexcept {
+      return std::equal(x.begin(), x.end(), y.begin(), y.end(),
+                        [](const auto& lhs, const auto& rhs) {
+                          return lhs == make_view(rhs);
+                        });
+    }
+
+    bool operator()(const group_by_key& x,
+                    const group_by_key_view& y) const noexcept {
+      return std::equal(x.begin(), x.end(), y.begin(), y.end(),
+                        [](const auto& lhs, const auto& rhs) {
+                          return make_view(lhs) == rhs;
+                        });
+    }
+
+    bool
+    operator()(const group_by_key& x, const group_by_key& y) const noexcept {
+      return x == y;
+    }
+
+    bool operator()(const group_by_key_view& x,
+                    const group_by_key_view& y) const noexcept {
+      return x == y;
+    }
+  };
+
   /// Groups accumulators for slices of incoming record batches with a matching
   /// set of configured set of configured group-by columns.
-  using bucket_map
-    = std::unordered_map<group_by_key, std::vector<data>, group_by_key_hash>;
+  using bucket_map = tsl::robin_map<group_by_key, std::vector<data>,
+                                    group_by_key_hash, group_by_key_equal>;
 
   /// Creates a new aggregation given a configuration and a layout.
   static caf::expected<aggregation>
@@ -292,14 +332,17 @@ struct aggregation {
     VAST_ASSERT(batch->num_rows() >= 1);
     int start = 0;
     int next_start = 0;
-    auto next_bucket = try_emplace_bucket(batch, start);
+    auto [bucket, next_bucket]
+      = try_emplace_bucket(buckets_.end(), batch, start);
     for (auto bucket = next_bucket; next_bucket != buckets_.end();
          bucket = next_bucket) {
       start = next_start;
       do {
-        next_bucket = try_emplace_bucket(batch, ++next_start);
+        std::tie(bucket, next_bucket)
+          = try_emplace_bucket(bucket, batch, ++next_start);
       } while (bucket == next_bucket);
-      VAST_ASSERT(bucket->second.size() == actions_.size());
+      VAST_ASSERT(bucket != buckets_.end());
+      VAST_ASSERT(bucket.value().size() == actions_.size());
       for (int column = 0; column < batch->num_columns(); ++column) {
         auto f = [&]<concrete_type Type>(
                    [[maybe_unused]] const Type& type,
@@ -315,7 +358,7 @@ struct aggregation {
                                                "field {}",
                                                array.type()->ToString()));
           };
-          auto& value = bucket->second[column];
+          auto& value = bucket.value()[column];
           for (int row = start; row < next_start; ++row) {
             if (array.IsNull(row))
               continue;
@@ -461,28 +504,48 @@ private:
   aggregation() = default;
 
   /// Finds or creates the bucket for a given row in a record batch.
-  bucket_map::iterator
-  try_emplace_bucket(const std::shared_ptr<arrow::RecordBatch>& batch,
+  /// The returned pair contains both the newly inserted bucket and the
+  std::pair<bucket_map::iterator, bucket_map::iterator>
+  try_emplace_bucket(bucket_map::iterator previous_bucket,
+                     const std::shared_ptr<arrow::RecordBatch>& batch,
                      int row) {
     // If our row goes beyond the end of the batch, signal that we do not
     // have a bucket.
     if (row >= batch->num_rows())
-      return buckets_.end();
+      return {previous_bucket, buckets_.end()};
     // Create current bucket key.
-    auto key = group_by_key{};
-    key.reserve(num_group_by_columns_);
+    auto key_view = group_by_key_view{};
+    key_view.reserve(num_group_by_columns_);
     for (int column = 0; column < batch->num_columns(); ++column) {
       if (actions_[column] == action::group_by) {
-        key.push_back(value_at(
+        key_view.push_back(value_at(
           caf::get<record_type>(flattened_adjusted_layout_).field(column).type,
           *batch->column(column), row));
       }
     }
+    // Try to find an existing bucket.
+    if (auto iterator = buckets_.find(key_view); iterator != buckets_.end())
+      return {previous_bucket, iterator};
     // Create a new bucket.
-    auto [iterator, inserted] = buckets_.try_emplace(std::move(key));
-    if (inserted)
-      iterator->second.resize(actions_.size(), caf::none);
-    return iterator;
+    auto key = group_by_key{};
+    key.reserve(key_view.size());
+    for (const auto& x : key_view)
+      key.push_back(materialize(x));
+    auto value = bucket_map::mapped_type{};
+    value.resize(actions_.size(), caf::none);
+    if (previous_bucket == buckets_.end()) {
+      auto [iterator, inserted]
+        = buckets_.insert({std::move(key), std::move(value)});
+      VAST_ASSERT(inserted);
+      return {buckets_.end(), iterator};
+    }
+    // Copy the previous bucket's key, then find it again to work around
+    // iterator invalidation on insert for the bucket map.
+    const auto previous_key = previous_bucket.key();
+    auto [iterator, inserted]
+      = buckets_.insert({std::move(key), std::move(value)});
+    VAST_ASSERT(inserted);
+    return {buckets_.find(previous_key), iterator};
   }
 
   /// The action to take during aggregation for every individual column in
