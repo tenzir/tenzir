@@ -136,14 +136,16 @@ void partition_transformer_state::fulfill(
   }
   // The catalog data can always be regenerated on restart, so we don't need
   // strict error handling for it.
-  self
-    ->request(fs, caf::infinite, atom::write_v, path_data.synopsis_path,
-              *stream_data.synopsis_chunk)
-    .then([](atom::ok) { /* nop */ },
-          [path = path_data.synopsis_path](const caf::error& e) {
-            VAST_WARN("could not write transformed synopsis to {}: {}", path,
-                      e);
-          });
+  if (*stream_data.synopsis_chunk) {
+    self
+      ->request(fs, caf::infinite, atom::write_v, path_data.synopsis_path,
+                *stream_data.synopsis_chunk)
+      .then([](atom::ok) { /* nop */ },
+            [path = path_data.synopsis_path](const caf::error& e) {
+              VAST_WARN("could not write transformed synopsis to {}: {}", path,
+                        e);
+            });
+  }
   self
     ->request(fs, caf::infinite, atom::write_v, path_data.partition_path,
               *stream_data.partition_chunk)
