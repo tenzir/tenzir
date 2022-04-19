@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-# NOTE: This script is also embedded in doc/cli/vast-export-arrow.md.
+# NOTE: This script is also embedded in docs/cli/vast-export-arrow.md.
 # When updating this file, please also update the embedded snippet.
 
 # Example usage:

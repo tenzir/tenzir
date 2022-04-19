@@ -661,7 +661,7 @@ endif ()
 file(
   GLOB doc_files CONFIGURE_DEPENDS
   RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-  "doc/cli/*.md")
+  "docs/cli/*.md")
 list(SORT doc_files)
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/BANNER" doc_header NEWLINE_CONSUME)
 set(doc_header "${doc_header}\n#pragma once\n")
@@ -683,7 +683,6 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/include/vast/documentation.hpp
 add_subdirectory(libvast)
 add_subdirectory(libvast_test)
 add_subdirectory(tools)
-add_subdirectory(doc)
 add_subdirectory(vast)
 
 # -- cmake export/config installations -----------------------------------------

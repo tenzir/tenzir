@@ -1,9 +1,12 @@
 <p align="center">
-  <img src="./doc/assets/vast.svg" width="75%" alt="VAST">
+
+<img src="./docs/static/img/vast-white.svg#gh-dark-mode-only" width="75%" alt="VAST">
+<img src="./docs/static/img/vast-black.svg#gh-light-mode-only" width="75%" alt="VAST">
+
 </p>
 
 <h1 align="center">
-  VAST &mdash; Visibility Across Space and Time
+  Visibility Across Space and Time
 </h1>
 <h4 align="center">
 

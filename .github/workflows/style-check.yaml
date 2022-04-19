@@ -20,7 +20,7 @@ jobs:
         run: |
           brew install clang-format
           PATH="$(brew --prefix clang-format)/bin:${PATH}"
-          git diff -U0 --no-color $(git merge-base origin/master HEAD) |
+          git diff -U0 --no-color $(git merge-base origin/master HEAD) -- ':(exclude)*.js' |
             scripts/clang-format-diff.py -p1
 
       - name: CMake Format
@@ -35,7 +35,7 @@ jobs:
           pip install --upgrade black
           # Note: black fails when it doesn't have to do anything.
           git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
-            grep -v '\(\.json\|\.ipynb\|\.hpp\.in\|\.ref\|\.example\|\.txt\|\.lock\)$' |
+            grep -v '\(\.json\|\.ipynb\|\.hpp\.in\|\.ref\|\.example\|\.txt\|\.lock\|\.js\)$' |
             2>/dev/null xargs black || true
           git diff --exit-code
 
