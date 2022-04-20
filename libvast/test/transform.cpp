@@ -13,7 +13,6 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
-#include "vast/transform_steps/count.hpp"
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/project.hpp"
 #include "vast/transform_steps/replace.hpp"
@@ -146,14 +145,13 @@ FIXTURE_SCOPE(transform_tests, transforms_fixture)
 TEST(count step) {
   auto slice1 = make_transforms_testdata();
   auto slice2 = make_transforms_testdata();
-  vast::count_step count{};
-  auto slice1_err = count.add(slice1.layout(), to_record_batch(slice1));
+  auto count = unbox(vast::make_transform_step("count", {}));
+  auto slice1_err = count->add(slice1.layout(), to_record_batch(slice1));
   REQUIRE_SUCCESS(slice1_err);
-  auto slice2_err = count.add(slice2.layout(), to_record_batch(slice2));
+  auto slice2_err = count->add(slice2.layout(), to_record_batch(slice2));
   REQUIRE_SUCCESS(slice2_err);
-  auto counted = count.finish();
-  REQUIRE_NOERROR(counted);
-  REQUIRE_EQUAL(counted->size(), 1ull);
+  auto counted = unbox(count->finish());
+  REQUIRE_EQUAL(counted.size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>(as_table_slice(counted).layout()).num_fields(),
     1ull);
@@ -397,7 +395,7 @@ TEST(transformation engine - multiple matching transforms) {
 TEST(transformation engine - aggregate validation transforms) {
   std::vector<vast::transform> transforms;
   transforms.emplace_back("t", std::vector<std::string>{"testdata"});
-  transforms.at(0).add_step(std::make_unique<vast::count_step>());
+  transforms.at(0).add_step(unbox(vast::make_transform_step("count", {})));
   vast::transformation_engine engine(std::move(transforms));
   auto validation1 = engine.validate(
     vast::transformation_engine::allow_aggregate_transforms::yes);
