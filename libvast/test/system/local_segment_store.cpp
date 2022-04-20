@@ -8,14 +8,13 @@
 
 #define SUITE local_segment_store
 
-#include "vast/system/local_segment_store.hpp"
-
 #include "vast/chunk.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query.hpp"
+#include "vast/segment_store.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/memory_filesystem.hpp"
@@ -69,8 +68,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 TEST(different uuids produce different paths) {
   auto uuid1 = vast::uuid::random();
   auto uuid2 = vast::uuid::random();
-  auto path1 = vast::system::store_path_for_partition(uuid1);
-  auto path2 = vast::system::store_path_for_partition(uuid2);
+  auto path1 = vast::store_path_for_partition(uuid1);
+  auto path2 = vast::store_path_for_partition(uuid2);
   CHECK_NOT_EQUAL(path1, path2);
 }
 

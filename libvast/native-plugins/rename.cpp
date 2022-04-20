@@ -20,8 +20,6 @@
 
 namespace vast::plugins::rename {
 
-namespace {
-
 /// The configuration of the rename transform step.
 struct configuration {
   struct name_mapping {
@@ -170,8 +168,6 @@ public:
     return std::make_unique<rename_step>(std::move(*config));
   }
 };
-
-} // namespace
 
 } // namespace vast::plugins::rename
 

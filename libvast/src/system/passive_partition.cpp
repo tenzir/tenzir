@@ -33,7 +33,6 @@
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
-#include "vast/system/local_segment_store.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/status.hpp"

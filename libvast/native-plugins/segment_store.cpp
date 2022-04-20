@@ -6,24 +6,24 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/local_segment_store.hpp"
-
-#include "vast/atoms.hpp"
-#include "vast/detail/overload.hpp"
-#include "vast/detail/zip_iterator.hpp"
-#include "vast/fbs/partition.hpp"
-#include "vast/fbs/utils.hpp"
-#include "vast/ids.hpp"
-#include "vast/logger.hpp"
-#include "vast/plugin.hpp"
-#include "vast/query.hpp"
-#include "vast/segment_store.hpp"
-#include "vast/system/node_control.hpp"
-#include "vast/system/report.hpp"
-#include "vast/system/status.hpp"
-#include "vast/table_slice.hpp"
+#include <vast/atoms.hpp>
+#include <vast/detail/overload.hpp>
+#include <vast/detail/zip_iterator.hpp>
+#include <vast/fbs/partition.hpp>
+#include <vast/fbs/utils.hpp>
+#include <vast/ids.hpp>
+#include <vast/logger.hpp>
+#include <vast/plugin.hpp>
+#include <vast/query.hpp>
+#include <vast/segment_store.hpp>
+#include <vast/system/actors.hpp>
+#include <vast/system/node_control.hpp>
+#include <vast/system/report.hpp>
+#include <vast/system/status.hpp>
+#include <vast/table_slice.hpp>
 
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 #include <flatbuffers/flatbuffers.h>
 #include <fmt/format.h>
 
@@ -31,9 +31,85 @@
 #include <span>
 #include <vector>
 
-namespace vast::system {
+namespace vast::plugins::segment_store {
 
 namespace {
+
+/// The STORE BUILDER actor interface.
+using local_store_actor
+  = system::typed_actor_fwd<caf::reacts_to<atom::internal, atom::persist>>::
+    extend_with<system::store_builder_actor>::unwrap;
+
+struct active_store_state {
+  /// Defaulted constructor to make this a non-aggregate.
+  active_store_state() = default;
+
+  /// A pointer to the hosting actor.
+  //  We intentionally store a strong pointer here: The store lifetime is
+  //  ref-counted, it should exit after all currently active queries for this
+  //  store have finished, its partition has dropped out of the cache, and it
+  //  received all data from the incoming stream. This pointer serves to keep
+  //  the ref-count alive for the last part, and is reset after the data has
+  //  been written to disk.
+  local_store_actor self = {};
+
+  /// Actor handle of the accountant.
+  system::accountant_actor accountant = {};
+
+  /// Actor handle of the filesystem.
+  system::filesystem_actor fs = {};
+
+  /// The path to where the store will be written.
+  std::filesystem::path path = {};
+
+  /// The builder preparing the store.
+  //  TODO: Store a vector<table_slice> here and implement
+  //  store/lookup/.. on that.
+  std::unique_ptr<vast::segment_builder> builder = {};
+
+  /// The serialized segment.
+  std::optional<vast::segment> segment = {};
+
+  /// Number of events in this store.
+  size_t events = {};
+
+  /// The name for this type of CAF actor.
+  static constexpr const char* name = "active-local-store";
+};
+
+struct passive_store_state {
+  /// Defaulted constructor to make this a non-aggregate.
+  passive_store_state() = default;
+
+  /// Holds requests that did arrive while the segment data
+  /// was still being loaded from disk.
+  using request
+    = std::tuple<vast::query, caf::typed_response_promise<uint64_t>>;
+  std::vector<request> deferred_requests = {};
+
+  /// Holds erase requests that did arrive while the segment data
+  /// was still being loaded from disk.
+  using erasure = std::tuple<vast::ids, caf::typed_response_promise<uint64_t>>;
+  std::vector<erasure> deferred_erasures = {};
+
+  /// Actor handle of the accountant.
+  system::accountant_actor accountant = {};
+
+  /// The actor handle of the filesystem actor.
+  system::filesystem_actor fs = {};
+
+  /// The path where the segment is stored.
+  std::filesystem::path path = {};
+
+  /// The segment corresponding to this local store.
+  caf::optional<vast::segment> segment = {};
+
+  /// The name for this type of CAF actor.
+  static constexpr const char* name = "passive-local-store";
+
+private:
+  caf::result<atom::done> erase(const vast::ids&);
+};
 
 // Handler for `vast::query` that is shared between active and passive stores.
 // Returns a the number of events that match the query.
@@ -104,17 +180,10 @@ store_path_from_header(std::span<const std::byte> header) {
   return std::filesystem::path{sv};
 }
 
-} // namespace
-
-std::filesystem::path store_path_for_partition(const uuid& partition_id) {
-  auto store_filename = fmt::format("{}.store", partition_id);
-  return std::filesystem::path{"archive"} / store_filename;
-}
-
-store_actor::behavior_type
-passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
-                    accountant_actor accountant, filesystem_actor fs,
-                    const std::filesystem::path& path) {
+system::store_actor::behavior_type passive_local_store(
+  system::store_actor::stateful_pointer<passive_store_state> self,
+  system::accountant_actor accountant, system::filesystem_actor fs,
+  const std::filesystem::path& path) {
   self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
   self->state.path = path;
@@ -144,12 +213,12 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
              std::exchange(self->state.deferred_requests, {})) {
           VAST_TRACE("{} delegates {} (pending: {})", *self, query,
                      rp.pending());
-          rp.delegate(static_cast<store_actor>(self), std::move(query));
+          rp.delegate(static_cast<system::store_actor>(self), std::move(query));
         }
         for (auto&& [ids, rp] :
              std::exchange(self->state.deferred_erasures, {})) {
           VAST_TRACE("{} delegates erase (pending: {})", *self, rp.pending());
-          rp.delegate(static_cast<store_actor>(self), atom::erase_v,
+          rp.delegate(static_cast<system::store_actor>(self), atom::erase_v,
                       std::move(ids));
         }
       },
@@ -181,10 +250,10 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       auto id_str = fmt::to_string(query.id);
       self->send(
         self->state.accountant, "segment-store.lookup.runtime", runtime,
-        metrics_metadata{{"query", id_str}, {"store-type", "passive"}});
+        system::metrics_metadata{{"query", id_str}, {"store-type", "passive"}});
       self->send(self->state.accountant, "segment-store.lookup.hits", *num_hits,
-                 metrics_metadata{{"query", id_str},
-                                  {"store-type", "passive"}});
+                 system::metrics_metadata{{"query", id_str},
+                                          {"store-type", "passive"}});
       return *num_hits;
     },
     [self](atom::erase, ids xs) -> caf::result<uint64_t> {
@@ -257,7 +326,8 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
 
 local_store_actor::behavior_type
 active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
-                   accountant_actor accountant, filesystem_actor fs,
+                   system::accountant_actor accountant,
+                   system::filesystem_actor fs,
                    const std::filesystem::path& path) {
   VAST_DEBUG("spawning active local store");
   self->state.self = self;
@@ -290,11 +360,12 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
         return num_hits.error();
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
-      self->send(self->state.accountant, "segment_store.lookup.runtime",
-                 runtime,
-                 metrics_metadata{{"query", id_str}, {"store_type", "active"}});
+      self->send(
+        self->state.accountant, "segment_store.lookup.runtime", runtime,
+        system::metrics_metadata{{"query", id_str}, {"store_type", "active"}});
       self->send(self->state.accountant, "segment_store.lookup.hits", *num_hits,
-                 metrics_metadata{{"query", id_str}, {"store_type", "active"}});
+                 system::metrics_metadata{{"query", id_str},
+                                          {"store_type", "active"}});
       return *num_hits;
     },
     [self](const atom::erase&, const ids& ids) -> caf::result<uint64_t> {
@@ -332,7 +403,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
         .inbound_slot();
     },
     // Conform to the protocol of the STATUS CLIENT actor.
-    [self](atom::status, status_verbosity) -> record {
+    [self](atom::status, system::status_verbosity) -> record {
       auto result = record{};
       auto store = record{};
       store["events"] = count{self->state.events};
@@ -361,7 +432,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   return result;
 }
 
-class local_store_plugin final : public virtual store_plugin {
+class plugin final : public virtual store_plugin {
 public:
   using store_plugin::builder_and_header;
 
@@ -376,19 +447,20 @@ public:
 
   // store plugin API
   [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(accountant_actor accountant, filesystem_actor fs,
+  make_store_builder(system::accountant_actor accountant,
+                     system::filesystem_actor fs,
                      const vast::uuid& id) const override {
     auto path = store_path_for_partition(id);
     std::string path_str = path.string();
     auto header = chunk::make(std::move(path_str));
     auto builder
       = fs->home_system().spawn(active_local_store, accountant, fs, path);
-    return builder_and_header{static_cast<store_builder_actor&&>(builder),
-                              std::move(header)};
+    return builder_and_header{
+      static_cast<system::store_builder_actor&&>(builder), std::move(header)};
   }
 
   [[nodiscard]] caf::expected<system::store_actor>
-  make_store(accountant_actor accountant, filesystem_actor fs,
+  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
              std::span<const std::byte> header) const override {
     auto path = store_path_from_header(header);
     return fs->home_system().spawn<caf::lazy_init>(passive_local_store,
@@ -396,6 +468,8 @@ public:
   }
 };
 
-VAST_REGISTER_PLUGIN(vast::system::local_store_plugin)
+} // namespace
 
-} // namespace vast::system
+} // namespace vast::plugins::segment_store
+
+VAST_REGISTER_PLUGIN(vast::plugins::segment_store::plugin)

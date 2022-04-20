@@ -318,25 +318,28 @@ endif ()
 
 # -- libvast -------------------------------------------------------------------
 
-# Manually listed "native" plugins. These special plugins are essentially part
-# of the libvast library, but always loaded when linking against the
+# The "native" plugins. These special plugins are essentially part of the
+# libvast library, but always loaded when linking against the
 # libvast_native_plugins library.
-set(libvast_native_plugin_sources
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/system/local_segment_store.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/count.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/drop.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/hash.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/identity.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/put.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/rename.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/replace.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/where.cpp")
+file(GLOB_RECURSE libvast_native_plugin_sources CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/native-plugins/*.cpp")
+foreach (source IN LISTS libvast_native_plugin_sources)
+  set(has_register FALSE)
+  file(STRINGS "${source}" lines)
+  foreach (line IN LISTS lines)
+    if ("${line}" MATCHES "^ *VAST_REGISTER_PLUGIN *\\(.+\\) *$")
+      set(has_register TRUE)
+      break()
+    endif ()
+  endforeach ()
+  if (NOT "${has_register}")
+    message(FATAL_ERROR "native plugin ${source} does not register as a plugin")
+  endif ()
+endforeach ()
 
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/*.hpp")
-list(REMOVE_ITEM libvast_sources ${libvast_native_plugin_sources})
-list(SORT libvast_sources)
 
 add_library(libvast ${libvast_sources})
 VASTTargetEnableTooling(libvast)

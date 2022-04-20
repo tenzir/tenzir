@@ -130,6 +130,6 @@ public:
 
 } // namespace
 
-} // namespace vast
+} // namespace vast::plugins::where
 
 VAST_REGISTER_PLUGIN(vast::plugins::where::plugin)
