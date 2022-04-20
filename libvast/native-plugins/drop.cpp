@@ -65,7 +65,11 @@ public:
       for (auto&& index : caf::get<record_type>(layout).resolve_key_suffix(
              field, layout.name()))
         transformations.push_back({std::move(index), transform_fn});
-    std::sort(transformations.begin(), transformations.end());
+    // transform_columns requires the transformations to be sorted, and that may
+    // not necessarily be true if we have multiple fields configured, so we sort
+    // again in that case.
+    if (config_.fields.size() > 1)
+      std::sort(transformations.begin(), transformations.end());
     auto [adjusted_layout, adjusted_batch]
       = transform_columns(layout, batch, transformations);
     if (adjusted_layout) {
