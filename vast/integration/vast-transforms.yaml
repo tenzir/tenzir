@@ -6,11 +6,11 @@ vast:
       disable-timestamp-tags: true
   transforms:
     remove_flow:
-      - delete:
+      - drop:
           fields:
             - flow_id
     remove_action:
-      - delete:
+      - drop:
           fields:
             - alert.action
     replace_rrname:
@@ -18,14 +18,14 @@ vast:
           field: dns.rrname
           value: "foobar.net"
     select_row:
-      - select:
-          expression: "dest_port>53"
+      - where:
+          expression: "dest_port > 53"
     hash_uid:
       - hash:
           field: fileinfo.filename
           out: filename_hash
     project_fields:
-      - project:
+      - put:
           fields:
             - ip
             - alert.category

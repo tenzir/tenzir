@@ -149,4 +149,6 @@ private:
   segment_builder builder_;
 };
 
+std::filesystem::path store_path_for_partition(const uuid& id);
+
 } // namespace vast

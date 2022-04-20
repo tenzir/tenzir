@@ -13,12 +13,6 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
-#include "vast/transform_steps/count.hpp"
-#include "vast/transform_steps/delete.hpp"
-#include "vast/transform_steps/hash.hpp"
-#include "vast/transform_steps/project.hpp"
-#include "vast/transform_steps/replace.hpp"
-#include "vast/transform_steps/select.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -104,8 +98,8 @@ struct transforms_fixture {
   /// Creates a table slice with ten rows(type, record_batch), a second having
   /// only the row with index==2 and a third having only the rows with index>5.
   static std::tuple<vast::table_slice, vast::table_slice, vast::table_slice>
-  make_select_testdata(vast::table_slice_encoding encoding
-                       = vast::defaults::import::table_slice_type) {
+  make_where_testdata(vast::table_slice_encoding encoding
+                      = vast::defaults::import::table_slice_type) {
     auto builder = vast::factory<vast::table_slice_builder>::make(
       encoding, testdata_layout);
     REQUIRE(builder);
@@ -148,14 +142,13 @@ FIXTURE_SCOPE(transform_tests, transforms_fixture)
 TEST(count step) {
   auto slice1 = make_transforms_testdata();
   auto slice2 = make_transforms_testdata();
-  vast::count_step count{};
-  auto slice1_err = count.add(slice1.layout(), to_record_batch(slice1));
+  auto count = unbox(vast::make_transform_step("count", {}));
+  auto slice1_err = count->add(slice1.layout(), to_record_batch(slice1));
   REQUIRE_SUCCESS(slice1_err);
-  auto slice2_err = count.add(slice2.layout(), to_record_batch(slice2));
+  auto slice2_err = count->add(slice2.layout(), to_record_batch(slice2));
   REQUIRE_SUCCESS(slice2_err);
-  auto counted = count.finish();
-  REQUIRE_NOERROR(counted);
-  REQUIRE_EQUAL(counted->size(), 1ull);
+  auto counted = unbox(count->finish());
+  REQUIRE_EQUAL(counted.size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>(as_table_slice(counted).layout()).num_fields(),
     1ull);
@@ -166,59 +159,54 @@ TEST(count step) {
               vast::data_view{vast::count{20}});
 }
 
-TEST(delete_ step) {
+TEST(drop_step) {
   auto [slice, expected_slice] = make_proj_and_del_testdata();
-  auto dsc
-    = vast::delete_step_configuration{std::vector<std::string>{"desc", "note"}};
-  vast::delete_step delete_step(dsc);
-  auto add_failed = delete_step.add(slice.layout(), to_record_batch(slice));
+  const auto* drop_plugin = vast::plugins::find<vast::transform_plugin>("drop");
+  REQUIRE(drop_plugin);
+  auto drop_step = unbox(
+    drop_plugin->make_transform_step({{"fields", vast::list{"desc", "note"}}}));
+  auto add_failed = drop_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto deleted = delete_step.finish();
-  REQUIRE_NOERROR(deleted);
-  REQUIRE_EQUAL(deleted->size(), 1ull);
+  auto deleted = unbox(drop_step->finish());
+  REQUIRE_EQUAL(deleted.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(deleted), expected_slice);
-  auto dsc2 = vast::delete_step_configuration{std::vector<std::string>{"xxx"}};
-  vast::delete_step invalid_delete_step(dsc2);
+  auto invalid_drop_step
+    = unbox(drop_plugin->make_transform_step({{"fields", vast::list{"xxx"}}}));
   auto invalid_add_failed
-    = invalid_delete_step.add(slice.layout(), to_record_batch(slice));
+    = invalid_drop_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
-  auto not_deleted = invalid_delete_step.finish();
-  REQUIRE_NOERROR(not_deleted);
-  REQUIRE_EQUAL(not_deleted->size(), 1ull);
-  REQUIRE_EQUAL(as_table_slice(not_deleted), slice);
+  auto not_dropped = unbox(invalid_drop_step->finish());
+  REQUIRE_EQUAL(not_dropped.size(), 1ull);
+  REQUIRE_EQUAL(as_table_slice(not_dropped), slice);
 }
 
 TEST(project step) {
-  auto psc = vast::project_step_configuration{
-    std::vector<std::string>{"index", "uid"}};
-  vast::project_step project_step(psc);
-  auto psc2 = vast::project_step_configuration{std::vector<std::string>{"xxx"}};
-  vast::project_step invalid_project_step(psc2);
+  auto project_step = unbox(
+    vast::make_transform_step("put", {{"fields", vast::list{"index", "uid"}}}));
+  auto invalid_project_step
+    = unbox(vast::make_transform_step("put", {{"fields", vast::list{"xxx"}}}));
   // Arrow test:
   auto [slice, expected_slice] = make_proj_and_del_testdata();
-  auto add_failed = project_step.add(slice.layout(), to_record_batch(slice));
+  auto add_failed = project_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto projected = project_step.finish();
-  REQUIRE_NOERROR(projected);
-  REQUIRE_EQUAL(projected->size(), 1ull);
+  auto projected = unbox(project_step->finish());
+  REQUIRE_EQUAL(projected.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(projected), expected_slice);
   auto invalid_add_failed
-    = invalid_project_step.add(slice.layout(), to_record_batch(slice));
+    = invalid_project_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
-  auto not_projected = invalid_project_step.finish();
-  REQUIRE_NOERROR(not_projected);
-  CHECK(not_projected->empty());
+  auto not_projected = unbox(invalid_project_step->finish());
+  CHECK(not_projected.empty());
 }
 
 TEST(replace step) {
   auto slice = make_transforms_testdata();
-  auto rsc = vast::replace_step_configuration{"uid", "xxx"};
-  vast::replace_step replace_step(rsc, vast::data{"xxx"});
-  auto add_failed = replace_step.add(slice.layout(), to_record_batch(slice));
+  auto replace_step = unbox(
+    vast::make_transform_step("replace", {{"field", "uid"}, {"value", "xxx"}}));
+  auto add_failed = replace_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto replaced = replace_step.finish();
-  REQUIRE_NOERROR(replaced);
-  REQUIRE_EQUAL(replaced->size(), 1ull);
+  auto replaced = unbox(replace_step->finish());
+  REQUIRE_EQUAL(replaced.size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
     3ull);
@@ -229,53 +217,60 @@ TEST(replace step) {
   CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
 }
 
-TEST(select step) {
+TEST(where step) {
   auto [slice, single_row_slice, multi_row_slice]
-    = make_select_testdata(vast::defaults::import::table_slice_type);
-  vast::select_step select_step({"index==+2"});
-  auto add_failed = select_step.add(slice.layout(), to_record_batch(slice));
+    = make_where_testdata(vast::defaults::import::table_slice_type);
+  auto where_plugin = vast::plugins::find<vast::transform_plugin>("where");
+  REQUIRE(where_plugin);
+  auto where_step
+    = unbox(where_plugin->make_transform_step({{"expression", "index == +2"}}));
+  REQUIRE(where_step);
+  auto add_failed = where_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto selected = select_step.finish();
+  auto selected = where_step->finish();
   REQUIRE_NOERROR(selected);
   REQUIRE_EQUAL(selected->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected), single_row_slice);
-  vast::select_step select_step2({"index>+5"});
-  auto add2_failed = select_step2.add(slice.layout(), to_record_batch(slice));
+  auto where_step2
+    = unbox(where_plugin->make_transform_step({{"expression", "index > +5"}}));
+  REQUIRE(where_step2);
+  auto add2_failed = where_step2->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add2_failed);
-  auto selected2 = select_step2.finish();
+  auto selected2 = where_step2->finish();
   REQUIRE_NOERROR(selected2);
   REQUIRE_EQUAL(selected2->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected2), multi_row_slice);
-  vast::select_step select_step3({"index>+9"});
-  auto add3_failed = select_step3.add(slice.layout(), to_record_batch(slice));
+  auto where_step3
+    = unbox(where_plugin->make_transform_step({{"expression", "index > +9"}}));
+  REQUIRE(where_step3);
+  auto add3_failed = where_step3->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add3_failed);
-  auto selected3 = select_step3.finish();
+  auto selected3 = where_step3->finish();
   REQUIRE_NOERROR(selected3);
   REQUIRE_EQUAL(selected3->size(), 0ull);
 }
 
 TEST(anonymize step) {
   auto slice = make_transforms_testdata();
-  vast::hash_step hash_step({"uid", "hashed_uid", std::nullopt});
-  auto add_failed = hash_step.add(slice.layout(), to_record_batch(slice));
+  auto hash_step = unbox(vast::make_transform_step(
+    "hash", {{"field", "uid"}, {"out", "hashed_uid"}}));
+  auto add_failed = hash_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto anonymized = hash_step.finish();
-  REQUIRE_NOERROR(anonymized);
-  REQUIRE_EQUAL(anonymized->size(), 1ull);
+  auto anonymized = unbox(hash_step->finish());
+  REQUIRE_EQUAL(anonymized.size(), 1ull);
   REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).num_fields(),
                 4ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(*anonymized)).field(1).name,
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).field(1).name,
                 "hashed_uid");
   // TODO: not sure how we can check that the data was correctly hashed.
 }
 
 TEST(transform with multiple steps) {
   vast::transform transform("test_transform", {{"testdata"}});
-  auto rsc = vast::replace_step_configuration{"uid", "xxx"};
-  transform.add_step(
-    std::make_unique<vast::replace_step>(rsc, vast::data{"xxx"}));
-  auto dsc = vast::delete_step_configuration{std::vector<std::string>{"index"}};
-  transform.add_step(std::make_unique<vast::delete_step>(dsc));
+  transform.add_step(unbox(vast::make_transform_step(
+    "replace", {{"field", "uid"}, {"value", "xxx"}})));
+  transform.add_step(unbox(
+    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   auto slice = make_transforms_testdata();
   auto add_failed = transform.add(std::move(slice));
   REQUIRE(!add_failed);
@@ -319,15 +314,15 @@ TEST(transform with multiple steps) {
 TEST(transform rename layout) {
   vast::transform transform("test_transform", {{"testdata"}});
   auto rename_settings = vast::record{
-    {"layout-names", vast::list{vast::record{
-                       {"from", std::string{"testdata"}},
-                       {"to", std::string{"testdata_renamed"}},
-                     }}},
+    {"schemas", vast::list{vast::record{
+                  {"from", std::string{"testdata"}},
+                  {"to", std::string{"testdata_renamed"}},
+                }}},
   };
   transform.add_step(
     unbox(rename_plugin->make_transform_step(rename_settings)));
-  auto dsc = vast::delete_step_configuration{std::vector<std::string>{"index"}};
-  transform.add_step(std::make_unique<vast::delete_step>(dsc));
+  transform.add_step(unbox(
+    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   auto slice = make_transforms_testdata();
   REQUIRE_SUCCESS(transform.add(std::move(slice)));
   auto transformed = transform.finish();
@@ -343,11 +338,10 @@ TEST(transformation engine - single matching transform) {
   transforms.emplace_back("t2", std::vector<std::string>{"foo"});
   auto& transform1 = transforms.at(0);
   auto& transform2 = transforms.at(1);
-  auto dsc = vast::delete_step_configuration{std::vector<std::string>{"uid"}};
-  transform1.add_step(std::make_unique<vast::delete_step>(dsc));
-  auto dsc2
-    = vast::delete_step_configuration{std::vector<std::string>{"index"}};
-  transform2.add_step(std::make_unique<vast::delete_step>(dsc2));
+  transform1.add_step(
+    unbox(vast::make_transform_step("drop", {{"fields", vast::list{"uid"}}})));
+  transform2.add_step(unbox(
+    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   vast::transformation_engine engine(std::move(transforms));
   auto slice = make_transforms_testdata();
   auto add_failed = engine.add(std::move(slice));
@@ -371,11 +365,10 @@ TEST(transformation engine - multiple matching transforms) {
   transforms.emplace_back("t2", std::vector<std::string>{"testdata"});
   auto& transform1 = transforms.at(0);
   auto& transform2 = transforms.at(1);
-  auto dsc = vast::delete_step_configuration{std::vector<std::string>{"uid"}};
-  transform1.add_step(std::make_unique<vast::delete_step>(dsc));
-  auto dsc2
-    = vast::delete_step_configuration{std::vector<std::string>{"index"}};
-  transform2.add_step(std::make_unique<vast::delete_step>(dsc2));
+  transform1.add_step(
+    unbox(vast::make_transform_step("drop", {{"fields", vast::list{"uid"}}})));
+  transform2.add_step(unbox(
+    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   vast::transformation_engine engine(std::move(transforms));
   auto slice
     = make_transforms_testdata(vast::defaults::import::table_slice_type);
@@ -394,7 +387,7 @@ TEST(transformation engine - multiple matching transforms) {
 TEST(transformation engine - aggregate validation transforms) {
   std::vector<vast::transform> transforms;
   transforms.emplace_back("t", std::vector<std::string>{"testdata"});
-  transforms.at(0).add_step(std::make_unique<vast::count_step>());
+  transforms.at(0).add_step(unbox(vast::make_transform_step("count", {})));
   vast::transformation_engine engine(std::move(transforms));
   auto validation1 = engine.validate(
     vast::transformation_engine::allow_aggregate_transforms::yes);

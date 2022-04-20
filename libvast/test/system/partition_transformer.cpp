@@ -158,7 +158,7 @@ TEST(delete transform / persist before done) {
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto delete_step_config = vast::record{{"fields", vast::list{"uid"}}};
-  auto delete_step = vast::make_transform_step("delete", delete_step_config);
+  auto delete_step = vast::make_transform_step("drop", delete_step_config);
   REQUIRE_NOERROR(delete_step);
   transform->add_step(std::move(*delete_step));
   auto transformer
@@ -377,8 +377,7 @@ TEST(select transform with an empty result set) {
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto identity_step_config
     = vast::record{{"expression", "#type == \"does_not_exist\""}};
-  auto identity_step
-    = vast::make_transform_step("select", identity_step_config);
+  auto identity_step = vast::make_transform_step("where", identity_step_config);
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
   auto rp2 = self->request(index, caf::infinite, vast::atom::apply_v, transform,

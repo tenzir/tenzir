@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.18...3.23 FATAL_ERROR)
 
 project(
-  aggregate
-  VERSION 1.0.0
-  DESCRIPTION "Aggregation transform plugin for VAST"
+  summarize
+  VERSION 2.0.0
+  DESCRIPTION "Summarize transform plugin for VAST"
   LANGUAGES CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the
@@ -14,6 +14,6 @@ include(CTest)
 
 find_package(VAST REQUIRED)
 VASTRegisterPlugin(
-  TARGET aggregate
-  ENTRYPOINT aggregate.cpp
-  TEST_SOURCES tests/aggregate.cpp)
+  TARGET summarize
+  ENTRYPOINT summarize.cpp
+  TEST_SOURCES tests/summarize.cpp)

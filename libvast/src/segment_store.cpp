@@ -481,4 +481,9 @@ uint64_t segment_store::drop(segment_builder& x) {
   return erased_events;
 }
 
+std::filesystem::path store_path_for_partition(const uuid& id) {
+  auto store_filename = fmt::format("{}.store", id);
+  return std::filesystem::path{"archive"} / store_filename;
+}
+
 } // namespace vast

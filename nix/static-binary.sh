@@ -29,10 +29,10 @@ USE_HEAD="off"
 cmakeFlags=""
 # Enable the bundled plugins by default.
 plugins=(
-  "${toplevel}/plugins/aggregate"
   "${toplevel}/plugins/broker"
   "${toplevel}/plugins/pcap"
   "${toplevel}/plugins/sigma"
+  "${toplevel}/plugins/summarize"
 )
 
 while [ $# -ne 0 ]; do

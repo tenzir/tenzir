@@ -70,15 +70,15 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
         return caf::make_error(
           ec::invalid_query,
           fmt::format("{} failed to normalize and validate {}", *self, query));
+      const auto* where_plugin = plugins::find<transform_plugin>("where");
+      VAST_ASSERT(where_plugin);
+      auto where_step = where_plugin->make_transform_step(
+        {{"expression", fmt::to_string(expression{negation{*expr}})}});
+      if (!where_step)
+        return where_step.error();
       auto transform = std::make_shared<vast::transform>(
         "eraser_transform", std::vector<std::string>{});
-      const auto* filter_plugin = plugins::find<transform_plugin>("filter");
-      VAST_ASSERT(filter_plugin);
-      auto filter_step = filter_plugin->make_transform_step(
-        {{"expression", fmt::to_string(expr)}});
-      if (!filter_step)
-        return filter_step.error();
-      transform->add_step(std::move(*filter_step));
+      transform->add_step(std::move(*where_step));
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
