@@ -187,7 +187,7 @@ active_partition_actor::behavior_type active_partition(
   VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
                    VAST_ARG(id));
   self->state.self = self;
-  self->state.name = "partition-" + to_string(id);
+  self->state.name = fmt::format("partition-{}", id);
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.streaming_initiated = false;
