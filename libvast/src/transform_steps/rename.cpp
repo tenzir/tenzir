@@ -20,6 +20,8 @@
 
 namespace vast::plugins::rename {
 
+namespace {
+
 /// The configuration of the rename transform step.
 struct configuration {
   struct name_mapping {
@@ -55,10 +57,8 @@ struct configuration {
     //   - from: suricata.flow
     //     to: suricata.aggregated_flow
     // fields:
-    //   - from: zeek.conn
-    //     to: zeek.aggregated_conn
-    //   - from: suricata.flow
-    //     to: suricata.aggregated_flow
+    //   - from: resp_h
+    //     to: response_h
     static auto result = record_type{
       {"schemas", list_type{name_mapping::layout()}},
       {"fields", list_type{name_mapping::layout()}},
@@ -171,7 +171,8 @@ public:
   }
 };
 
+} // namespace
+
 } // namespace vast::plugins::rename
 
-// Finally, register our plugin.
 VAST_REGISTER_PLUGIN(vast::plugins::rename::plugin)
