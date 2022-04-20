@@ -73,7 +73,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       const auto* where_plugin = plugins::find<transform_plugin>("where");
       VAST_ASSERT(where_plugin);
       auto where_step = where_plugin->make_transform_step(
-        {{"expression", fmt::format("!({})", *expr)}});
+        {{"expression", fmt::to_string(expression{negation{*expr}})}});
       if (!where_step)
         return where_step.error();
       auto transform = std::make_shared<vast::transform>(
