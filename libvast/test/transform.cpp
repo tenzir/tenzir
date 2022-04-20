@@ -13,7 +13,6 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
-#include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/project.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -257,15 +256,15 @@ TEST(where step) {
 
 TEST(anonymize step) {
   auto slice = make_transforms_testdata();
-  vast::hash_step hash_step({"uid", "hashed_uid", std::nullopt});
-  auto add_failed = hash_step.add(slice.layout(), to_record_batch(slice));
+  auto hash_step = unbox(vast::make_transform_step(
+    "hash", {{"field", "uid"}, {"out", "hashed_uid"}}));
+  auto add_failed = hash_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto anonymized = hash_step.finish();
-  REQUIRE_NOERROR(anonymized);
-  REQUIRE_EQUAL(anonymized->size(), 1ull);
+  auto anonymized = unbox(hash_step->finish());
+  REQUIRE_EQUAL(anonymized.size(), 1ull);
   REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).num_fields(),
                 4ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(*anonymized)).field(1).name,
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).field(1).name,
                 "hashed_uid");
   // TODO: not sure how we can check that the data was correctly hashed.
 }
