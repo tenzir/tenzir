@@ -327,7 +327,7 @@ set(libvast_native_plugin_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/drop.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/hash.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/identity.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/project.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/put.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/rename.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/replace.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/where.cpp")

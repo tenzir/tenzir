@@ -13,7 +13,6 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
-#include "vast/transform_steps/project.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -182,25 +181,22 @@ TEST(drop_step) {
 }
 
 TEST(project step) {
-  auto psc = vast::project_step_configuration{
-    std::vector<std::string>{"index", "uid"}};
-  vast::project_step project_step(psc);
-  auto psc2 = vast::project_step_configuration{std::vector<std::string>{"xxx"}};
-  vast::project_step invalid_project_step(psc2);
+  auto project_step = unbox(
+    vast::make_transform_step("put", {{"fields", vast::list{"index", "uid"}}}));
+  auto invalid_project_step
+    = unbox(vast::make_transform_step("put", {{"fields", vast::list{"xxx"}}}));
   // Arrow test:
   auto [slice, expected_slice] = make_proj_and_del_testdata();
-  auto add_failed = project_step.add(slice.layout(), to_record_batch(slice));
+  auto add_failed = project_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto projected = project_step.finish();
-  REQUIRE_NOERROR(projected);
-  REQUIRE_EQUAL(projected->size(), 1ull);
+  auto projected = unbox(project_step->finish());
+  REQUIRE_EQUAL(projected.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(projected), expected_slice);
   auto invalid_add_failed
-    = invalid_project_step.add(slice.layout(), to_record_batch(slice));
+    = invalid_project_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
-  auto not_projected = invalid_project_step.finish();
-  REQUIRE_NOERROR(not_projected);
-  CHECK(not_projected->empty());
+  auto not_projected = unbox(invalid_project_step->finish());
+  CHECK(not_projected.empty());
 }
 
 TEST(replace step) {
