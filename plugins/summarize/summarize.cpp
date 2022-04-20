@@ -27,7 +27,7 @@
 #include <arrow/table_builder.h>
 #include <tsl/robin_map.h>
 
-namespace vast::plugins::aggregate {
+namespace vast::plugins::summarize {
 
 std::shared_ptr<arrow::RecordBatch>
 flatten_batch(const vast::type& layout,
@@ -81,7 +81,7 @@ unflatten_batch(const vast::type& layout,
                                   std::move(columns));
 }
 
-/// The configuration of an aggregate transform step.
+/// The configuration of an summarize transform step.
 struct configuration {
   /// Duration window for grouping time values.
   std::optional<duration> time_resolution = {};
@@ -125,10 +125,10 @@ struct configuration {
   }
 };
 
-/// The layout-specific state for an aggregation.
-struct aggregation {
+/// The layout-specific state for an summary.
+struct summary {
   /// The action to take for a given column. Columns without an action are
-  /// dropped as part of the aggregation.
+  /// dropped as part of the summary.
   enum class action {
     group_by, ///< Group identical values.
     sum,      ///< Accumulate values within the same group.
@@ -138,7 +138,7 @@ struct aggregation {
     all,      ///< Conjoin values within the same group.
   };
 
-  /// The key by which aggregations are grouped. Essentially, this is a
+  /// The key by which summaries are grouped. Essentially, this is a
   /// vector of data.
   struct group_by_key : std::vector<data> {
     using vector::vector;
@@ -201,10 +201,10 @@ struct aggregation {
   using bucket_map = tsl::robin_map<group_by_key, std::vector<data>,
                                     group_by_key_hash, group_by_key_equal>;
 
-  /// Creates a new aggregation given a configuration and a layout.
-  static caf::expected<aggregation>
+  /// Creates a new summary given a configuration and a layout.
+  static caf::expected<summary>
   make(const configuration& config, const type& layout) {
-    auto result = aggregation{};
+    auto result = summary{};
     VAST_ASSERT(caf::holds_alternative<record_type>(layout));
     const auto& rt = caf::get<record_type>(layout);
     auto unflattened_actions = std::vector<std::pair<offset, action>>{};
@@ -229,7 +229,7 @@ struct aggregation {
         != unflattened_actions.end();
     if (has_duplicates)
       return caf::make_error(ec::invalid_configuration,
-                             fmt::format("aggregation detected ambiguous "
+                             fmt::format("summary detected ambiguous "
                                          "action configuration for layout {}",
                                          layout));
     auto drop_transformations = std::vector<record_type::transformation>{};
@@ -263,21 +263,21 @@ struct aggregation {
     return result;
   }
 
-  /// Aggregations are expensive to copy because they hold a lot of state, so we
+  /// Summaries are expensive to copy because they hold a lot of state, so we
   /// make them non-copyable. Not because they cannot be copied theoretically,
   /// but because doing so would most certainly be a design issue within the code.
-  aggregation(const aggregation&) = delete;
-  aggregation& operator=(const aggregation&) = delete;
+  summary(const summary&) = delete;
+  summary& operator=(const summary&) = delete;
 
-  /// Destruction and move-operations can simply be defaulted for an aggregation.
-  ~aggregation() noexcept = default;
-  aggregation(aggregation&&) noexcept = default;
-  aggregation& operator=(aggregation&&) noexcept = default;
+  /// Destruction and move-operations can simply be defaulted for an summary.
+  ~summary() noexcept = default;
+  summary(summary&&) noexcept = default;
+  summary& operator=(summary&&) noexcept = default;
 
-  /// Adds a record batch to the aggregation. Unless disabled, this performs an
-  /// eager aggregation already.
+  /// Adds a record batch to the summary. Unless disabled, this performs an
+  /// eager summary already.
   caf::error add(std::shared_ptr<arrow::RecordBatch> batch) {
-    // First, adjust the record batch: We only want to aggregate a subset of
+    // First, adjust the record batch: We only want to summarize a subset of
     // rows, and the remaining rows can just be dropped eagerly. It is important
     // that we do this first to avoid unnecessary overhead first, and also
     // because all the indices calculated from the configuration in the
@@ -286,7 +286,7 @@ struct aggregation {
     if (!select_columns_result.ok())
       return caf::make_error(
         ec::unspecified,
-        fmt::format("aggregate transform failed to select columns: {}",
+        fmt::format("summarize transform failed to select columns: {}",
                     select_columns_result.status().ToString()));
     batch = select_columns_result.MoveValueUnsafe();
     VAST_ASSERT(batch->num_columns()
@@ -311,7 +311,7 @@ struct aggregation {
         if (!round_temporal_result.ok())
           return caf::make_error(
             ec::unspecified,
-            fmt::format("aggregate transform failed to round time column {} "
+            fmt::format("summarize transform failed to round time column {} "
                         "to multiple of {}: {}",
                         batch->column_name(column), *time_resolution_,
                         round_temporal_result.status().ToString()));
@@ -321,7 +321,7 @@ struct aggregation {
         if (!set_column_result.ok())
           return caf::make_error(
             ec::unspecified,
-            fmt::format("aggregate transform failed to replace column: {}",
+            fmt::format("summarize transform failed to replace column: {}",
                         set_column_result.status().ToString()));
         batch = set_column_result.MoveValueUnsafe();
       }
@@ -353,7 +353,7 @@ struct aggregation {
                                map_type, record_type>;
           auto make_non_primitive_error = [&]() {
             return caf::make_error(ec::invalid_configuration,
-                                   fmt::format("aggregate transform step "
+                                   fmt::format("summarize transform step "
                                                "cannot handle non-primitive "
                                                "field {}",
                                                array.type()->ToString()));
@@ -383,7 +383,7 @@ struct aggregation {
                 else
                   return caf::make_error(
                     ec::invalid_configuration,
-                    fmt::format("aggregate transform step cannot "
+                    fmt::format("summarize transform step cannot "
                                 "calculate 'sum' of field {}",
                                 batch->schema()->field(column)->ToString()));
                 break;
@@ -399,7 +399,7 @@ struct aggregation {
                 } else {
                   return caf::make_error(
                     ec::invalid_configuration,
-                    fmt::format("aggregate transform step cannot "
+                    fmt::format("summarize transform step cannot "
                                 "calculate 'min' of field {}",
                                 batch->schema()->field(column)->ToString()));
                 }
@@ -416,7 +416,7 @@ struct aggregation {
                 } else {
                   return caf::make_error(
                     ec::invalid_configuration,
-                    fmt::format("aggregate transform step cannot "
+                    fmt::format("summarize transform step cannot "
                                 "calculate 'max' of field {}",
                                 batch->schema()->field(column)->ToString()));
                 }
@@ -431,7 +431,7 @@ struct aggregation {
                 } else {
                   return caf::make_error(
                     ec::invalid_configuration,
-                    fmt::format("aggregate transform step cannot "
+                    fmt::format("summarize transform step cannot "
                                 "calculate 'any' of field {}",
                                 batch->schema()->field(column)->ToString()));
                 }
@@ -446,7 +446,7 @@ struct aggregation {
                 } else {
                   return caf::make_error(
                     ec::invalid_configuration,
-                    fmt::format("aggregate transform step cannot "
+                    fmt::format("summarize transform step cannot "
                                 "calculate 'all' of field {}",
                                 batch->schema()->field(column)->ToString()));
                 }
@@ -468,7 +468,7 @@ struct aggregation {
     return caf::none;
   }
 
-  /// Returns the aggregated batches.
+  /// Returns the summarized batches.
   caf::expected<transform_batch> finish() {
     VAST_ASSERT(builder_);
     auto cast_requirements
@@ -501,7 +501,7 @@ struct aggregation {
 
 private:
   /// Default-constructor for internal use in `make(...)`.
-  aggregation() = default;
+  summary() = default;
 
   /// Finds or creates the bucket for a given row in a record batch.
   /// The returned pair contains both the newly inserted bucket and the
@@ -548,7 +548,7 @@ private:
     return {buckets_.find(previous_key), iterator};
   }
 
-  /// The action to take during aggregation for every individual column in
+  /// The action to take during summary for every individual column in
   /// the incoming record batches.
   std::vector<action> actions_ = {};
 
@@ -566,7 +566,7 @@ private:
   std::optional<duration> time_resolution_ = {};
 
   /// Multiple versions of the adjusted layout with the dropped columns removed
-  /// needed throughout the aggregation.
+  /// needed throughout the summary.
   type adjusted_layout_ = {};
   type flattened_adjusted_layout_ = {};
   std::shared_ptr<arrow::Schema> flattened_adjusted_schema_ = {};
@@ -574,7 +574,7 @@ private:
   /// The buckets holding the intemediate accumulators.
   bucket_map buckets_ = {};
 
-  /// The builder used as part of the aggregation. Stored since it only
+  /// The builder used as part of the summary. Stored since it only
   /// needs to be created once per layout effectively, and we can do so
   /// lazily. NOTE: This is not a single record batch builder because that
   /// does not support extension types. :shrug:
@@ -584,14 +584,14 @@ private:
   size_t num_group_by_columns_ = {};
 };
 
-/// The aggregate transform step, which holds applies an aggregation to
+/// The summarize transform step, which holds applies an summary to
 /// every incoming record batch, which is configured per-type. The
-/// aggregation configuration is resolved eagerly and then executed eagerly
+/// summary configuration is resolved eagerly and then executed eagerly
 /// and/or lazily per type.
-class aggregate_step : public transform_step {
+class summarize_step : public transform_step {
 public:
-  /// Create a new aggregate step from an already parsed configuration.
-  explicit aggregate_step(configuration config) : config_{std::move(config)} {
+  /// Create a new summarize step from an already parsed configuration.
+  explicit summarize_step(configuration config) : config_{std::move(config)} {
     // nop
   }
 
@@ -601,35 +601,35 @@ public:
   }
 
   /// Applies the transformation to an Arrow Record Batch with a
-  /// corresponding VAST layout; this creates a layout-specific aggregation
+  /// corresponding VAST layout; this creates a layout-specific summary
   /// lazily.
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    auto aggregation = aggregations_.find(layout);
-    if (aggregation == aggregations_.end()) {
-      auto make_aggregation_result = aggregation::make(config_, layout);
-      if (!make_aggregation_result)
-        return make_aggregation_result.error();
-      auto [new_aggregation, ok] = aggregations_.try_emplace(
-        layout, std::move(*make_aggregation_result));
+    auto summary = summaries_.find(layout);
+    if (summary == summaries_.end()) {
+      auto make_summary_result = summary::make(config_, layout);
+      if (!make_summary_result)
+        return make_summary_result.error();
+      auto [new_summary, ok]
+        = summaries_.try_emplace(layout, std::move(*make_summary_result));
       VAST_ASSERT(ok);
-      aggregation = new_aggregation;
+      summary = new_summary;
     }
     batch = flatten_batch(layout, *batch);
-    return aggregation->second.add(std::move(batch));
+    return summary->second.add(std::move(batch));
   }
 
   /// Retrieves the result of the transformation.
   [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
     auto result = std::vector<transform_batch>{};
-    result.reserve(aggregations_.size());
-    for (auto&& [layout, aggregation] : aggregations_) {
-      auto aggregation_result = aggregation.finish();
-      if (!aggregation_result)
-        return aggregation_result.error();
-      aggregation_result->batch = unflatten_batch(aggregation_result->layout,
-                                                  *aggregation_result->batch);
-      result.push_back(std::move(*aggregation_result));
+    result.reserve(summaries_.size());
+    for (auto&& [layout, summary] : summaries_) {
+      auto summary_result = summary.finish();
+      if (!summary_result)
+        return summary_result.error();
+      summary_result->batch
+        = unflatten_batch(summary_result->layout, *summary_result->batch);
+      result.push_back(std::move(*summary_result));
     }
     return result;
   }
@@ -638,14 +638,14 @@ private:
   /// The underlying configuration of the transformation.
   configuration config_ = {};
 
-  /// A mapping of layout to the configured aggregation.
-  std::unordered_map<type, aggregation> aggregations_ = {};
+  /// A mapping of layout to the configured summary.
+  std::unordered_map<type, summary> summaries_ = {};
 };
 
-/// The plugin entrypoint for the aggregate transform plugin.
+/// The plugin entrypoint for the summarize transform plugin.
 class plugin final : public transform_plugin {
 public:
-  /// Initializes the aggregate plugin. This plugin has no general
+  /// Initializes the summarize plugin. This plugin has no general
   /// configuration, and is configured per instantiation as part of the
   /// transforms definition. We only check whether there's no unexpected
   /// configuration here.
@@ -657,14 +657,14 @@ public:
         return caf::none;
     return caf::make_error(ec::invalid_configuration, //
                            "expected empty configuration under "
-                           "vast.plugins.aggregate");
+                           "vast.plugins.summarize");
   }
 
   /// Returns the unique name of the plugin, which also equals the transform
-  /// step name that is used to refer to instantiations of the aggregate
+  /// step name that is used to refer to instantiations of the summarize
   /// step when configuring transforms.
   [[nodiscard]] const char* name() const override {
-    return "aggregate";
+    return "summarize";
   };
 
   /// This is called once for every time this transform step appears in a
@@ -675,11 +675,11 @@ public:
     auto config = to<configuration>(options);
     if (!config)
       return config.error();
-    return std::make_unique<aggregate_step>(std::move(*config));
+    return std::make_unique<summarize_step>(std::move(*config));
   }
 };
 
-} // namespace vast::plugins::aggregate
+} // namespace vast::plugins::summarize
 
 // Finally, register our plugin.
-VAST_REGISTER_PLUGIN(vast::plugins::aggregate::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::summarize::plugin)

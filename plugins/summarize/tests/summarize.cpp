@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE aggregate
+#define SUITE summarize
 
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast.hpp>
@@ -68,18 +68,18 @@ table_slice make_testdata(table_slice_encoding encoding
 
 struct fixture : fixtures::events {
   fixture() {
-    aggregate_plugin = plugins::find<transform_plugin>("aggregate");
-    REQUIRE(aggregate_plugin);
+    summarize_plugin = plugins::find<transform_plugin>("summarize");
+    REQUIRE(summarize_plugin);
   }
 
-  const transform_plugin* aggregate_plugin = nullptr;
+  const transform_plugin* summarize_plugin = nullptr;
 };
 
 } // namespace
 
-FIXTURE_SCOPE(aggregate_tests, fixture)
+FIXTURE_SCOPE(summarize_tests, fixture)
 
-TEST(aggregate Zeek conn log) {
+TEST(summarize Zeek conn log) {
   auto opts = record{
     {"group-by", list{"ts"}},
     {"time-resolution", duration{std::chrono::days(1)}},
@@ -87,14 +87,14 @@ TEST(aggregate Zeek conn log) {
     {"min", list{"orig_ip_bytes"}},
     {"max", list{"resp_ip_bytes"}},
   };
-  auto aggregate_step = unbox(aggregate_plugin->make_transform_step(opts));
+  auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
   for (const auto& slice : zeek_conn_log_full)
-    CHECK_EQUAL(aggregate_step->add(slice.layout(), to_record_batch(slice)),
+    CHECK_EQUAL(summarize_step->add(slice.layout(), to_record_batch(slice)),
                 caf::none);
-  const auto result = unbox(aggregate_step->finish());
+  const auto result = unbox(summarize_step->finish());
   REQUIRE_EQUAL(result.size(), 1u);
-  const auto aggregated_slice = table_slice{result[0].batch};
+  const auto summarized_slice = table_slice{result[0].batch};
   // NOTE: I calculated this data ahead of time using jq, so it can safely be
   // used for comparison here. As an example, here's how to calculate the
   // grouped sums of the duration values using jq:
@@ -112,15 +112,15 @@ TEST(aggregate Zeek conn log) {
     {"2009-11-19", "115588575895806ns", "0", "621229", "286586076"},
     {"2009-11-18", "65216054323993ns", "48", "519", "98531"},
   };
-  REQUIRE_EQUAL(aggregated_slice.rows(), expected_data.size());
-  REQUIRE_EQUAL(aggregated_slice.columns(), expected_data[0].size());
-  for (size_t row = 0; row < aggregated_slice.rows(); ++row)
-    for (size_t column = 0; column < aggregated_slice.columns(); ++column)
-      CHECK_EQUAL(materialize(aggregated_slice.at(row, column)), //
+  REQUIRE_EQUAL(summarized_slice.rows(), expected_data.size());
+  REQUIRE_EQUAL(summarized_slice.columns(), expected_data[0].size());
+  for (size_t row = 0; row < summarized_slice.rows(); ++row)
+    for (size_t column = 0; column < summarized_slice.columns(); ++column)
+      CHECK_EQUAL(materialize(summarized_slice.at(row, column)), //
                   unbox(to<data>(expected_data[row][column])));
 }
 
-TEST(aggregate test) {
+TEST(summarize test) {
   auto opts = record{
     {"time-resolution", duration{std::chrono::minutes(1)}},
     {"group-by", list{"time", "ip", "port"}},
@@ -130,24 +130,24 @@ TEST(aggregate test) {
     {"any", list{"any_true", "any_false"}},
     {"all", list{"all_true", "all_false"}},
   };
-  auto aggregate_step = unbox(aggregate_plugin->make_transform_step(opts));
+  auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
   REQUIRE_SUCCESS(
-    aggregate_step->add(agg_test_layout, to_record_batch(make_testdata())));
-  const auto result = unbox(aggregate_step->finish());
+    summarize_step->add(agg_test_layout, to_record_batch(make_testdata())));
+  const auto result = unbox(summarize_step->finish());
   REQUIRE_EQUAL(result.size(), 1u);
-  const auto aggregated_slice = table_slice{result[0].batch};
-  CHECK_EQUAL(aggregated_slice.at(0, 0),
+  const auto summarized_slice = table_slice{result[0].batch};
+  CHECK_EQUAL(summarized_slice.at(0, 0),
               data_view{vast::time{std::chrono::seconds(1258329600)}});
-  CHECK_EQUAL(aggregated_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
-  CHECK_EQUAL(aggregated_slice.at(0, 2), data_view{count{443}});
-  CHECK_EQUAL(aggregated_slice.at(0, 3), data_view{real{45.045}});
-  CHECK_EQUAL(materialize(aggregated_slice.at(0, 4)), caf::none);
-  CHECK_EQUAL(aggregated_slice.at(0, 5), data_view{integer{0}});
-  CHECK_EQUAL(aggregated_slice.at(0, 6), data_view{integer{9}});
-  CHECK_EQUAL(aggregated_slice.at(0, 7), data_view{true});
-  CHECK_EQUAL(aggregated_slice.at(0, 8), data_view{true});
-  CHECK_EQUAL(aggregated_slice.at(0, 9), data_view{false});
-  CHECK_EQUAL(aggregated_slice.at(0, 10), data_view{false});
+  CHECK_EQUAL(summarized_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
+  CHECK_EQUAL(summarized_slice.at(0, 2), data_view{count{443}});
+  CHECK_EQUAL(summarized_slice.at(0, 3), data_view{real{45.045}});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
+  CHECK_EQUAL(summarized_slice.at(0, 5), data_view{integer{0}});
+  CHECK_EQUAL(summarized_slice.at(0, 6), data_view{integer{9}});
+  CHECK_EQUAL(summarized_slice.at(0, 7), data_view{true});
+  CHECK_EQUAL(summarized_slice.at(0, 8), data_view{true});
+  CHECK_EQUAL(summarized_slice.at(0, 9), data_view{false});
+  CHECK_EQUAL(summarized_slice.at(0, 10), data_view{false});
 }
 
 FIXTURE_SCOPE_END()

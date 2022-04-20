@@ -562,9 +562,9 @@ jobs:
             target: example-transform
             path: examples/plugins/transform
             dependencies:
-          - name: Aggregate
-            target: aggregate
-            path: plugins/aggregate
+          - name: Summarize
+            target: summarize
+            path: plugins/summarize
           - name: Broker
             target: broker
             path: plugins/broker

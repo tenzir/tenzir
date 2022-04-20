@@ -1,17 +1,17 @@
-# Aggregate Plugin for VAST
+# Summarize Plugin for VAST
 
-The `aggregate` plugin for VAST adds a generic aggregation transformation step
+The `summarize` plugin for VAST adds a generic aggregation transformation step
 that allows for flexible configuration. This is best used in conjunction with
-the [`compaction` plugin][docs-compaction]. The aggreagtion operates on the
-scope of the transformation, which for import and export is the size of a single
-batch (configurable as `vast.import.batch-size`), and for compaction is the size
-of a partition (configurable as `vast.max-partition-size`).
+the [`compaction` plugin][docs-compaction], and operates on the scope of the
+transformation, which for import and export is the size of a single batch
+(configurable as `vast.import.batch-size`), and for compaction is the size of a
+partition (configurable as `vast.max-partition-size`).
 
 [docs-compaction]: https://docs.tenzir.com/vast/features/compaction
 
 ## Configuration Options
 
-The `aggregate` transform step has multiple configuration options. Configuration
+The `summarize` transform step has multiple configuration options. Configuration
 options that refer to fields support suffix matching, using the same syntax and
 underlying mechanism that users already know from queries.
 
@@ -34,7 +34,7 @@ the `group-by` columns are dropped from the output.
 
 ## Usage Example
 
-The below files configure VAST with the aggregate and compaction plugins to
+The below files configure VAST with the summarize and compaction plugins to
 compact `suricata.flow` events after seven days by aggregating them into
 `suricata.aggregated_flow` events. The grouping takes into account the timestamp
 rounded to a full minute, the source address, the destination address and port,
@@ -44,12 +44,12 @@ and the protocol.
 # ${HOME}/.config/vast/vast.yaml
 vast:
   plugins:
-    - aggregate
+    - summarize
     - compaction
 
   transforms:
     suricata-flow-aggregate:
-      - aggregate:
+      - summarize:
           group-by:
             - suricata.flow.timestamp
             - suricata.flow.src_ip
