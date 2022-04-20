@@ -56,10 +56,8 @@ vast export <format>
   //   export everything
  ```
 
-
 Some export formats have format-specific options. For example, the `pcap` export
 format has a `--flush-interval` option that determines after how many packets
 the output is flushed to disk. A list of format-specific options can be
 retrieved using the `vast export <format> help`, and individual documentation is
 available using `vast export <format> documentation`.
-

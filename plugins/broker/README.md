@@ -27,7 +27,7 @@ default settings:
 
 - The script variable `Broker::default_listen_address` is set to `127.0.0.1`.
   Zeek populates this variable with the value from the environment variable
-  `ZEEK_DEFAULT_LISTEN_ADDRESS`, which defaults to `127.0.0.1`. 
+  `ZEEK_DEFAULT_LISTEN_ADDRESS`, which defaults to `127.0.0.1`.
 - The script variable `Broker::default_port` is set to `9999/tcp`.
 - The script variable `Log::enable_remote_logging` is set to `T`.
 

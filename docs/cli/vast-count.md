@@ -1,5 +1,5 @@
 The `count` command counts the number of events that a given query
-expression yields. 
+expression yields.
 
 ```bash
 vast count [options] [<expr>]
