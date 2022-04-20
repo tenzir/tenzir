@@ -6,33 +6,33 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/arrow_table_slice_builder.hpp"
-#include "vast/concept/convertible/data.hpp"
-#include "vast/concept/convertible/to.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/error.hpp"
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
-#include "vast/plugin.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/transform.hpp"
+#include <vast/arrow_table_slice_builder.hpp>
+#include <vast/concept/convertible/data.hpp>
+#include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/error.hpp>
+#include <vast/expression.hpp>
+#include <vast/logger.hpp>
+#include <vast/plugin.hpp>
+#include <vast/table_slice_builder_factory.hpp>
+#include <vast/transform.hpp>
 
 #include <arrow/type.h>
 #include <caf/expected.hpp>
 
-namespace vast {
+namespace vast::plugins::where {
 
 namespace {
 
 /// The configuration of the *where* transform step.
-struct where_step_configuration {
+struct configuration {
   // The expression in the config file.
   std::string expression;
 
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
-  friend auto inspect(Inspector& f, where_step_configuration& x) {
+  friend auto inspect(Inspector& f, configuration& x) {
     return f(x.expression);
   }
 
@@ -91,7 +91,7 @@ private:
   std::vector<transform_batch> transformed_ = {};
 };
 
-class where_step_plugin final : public virtual transform_plugin {
+class plugin final : public virtual transform_plugin {
 public:
   [[nodiscard]] caf::error initialize(data) override {
     return {};
@@ -103,7 +103,7 @@ public:
 
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const record& options) const override {
-    auto config = to<where_step_configuration>(options);
+    auto config = to<configuration>(options);
     if (!config)
       return caf::make_error(ec::invalid_configuration,
                              fmt::format("where transform step failed to parse "
@@ -132,4 +132,4 @@ public:
 
 } // namespace vast
 
-VAST_REGISTER_PLUGIN(vast::where_step_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::where::plugin)

@@ -6,15 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/error.hpp"
-#include "vast/logger.hpp"
-#include "vast/plugin.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/transform.hpp"
+#include <vast/error.hpp>
+#include <vast/logger.hpp>
+#include <vast/plugin.hpp>
+#include <vast/table_slice_builder_factory.hpp>
+#include <vast/transform.hpp>
 
 #include <arrow/type.h>
 
-namespace vast {
+namespace vast::plugins::identity {
 
 namespace {
 
@@ -40,7 +40,7 @@ private:
   std::vector<transform_batch> transformed_ = {};
 };
 
-class identity_step_plugin final : public virtual transform_plugin {
+class plugin final : public virtual transform_plugin {
 public:
   // plugin API
   caf::error initialize(data) override {
@@ -60,6 +60,6 @@ public:
 
 } // namespace
 
-} // namespace vast
+} // namespace vast::plugins::identity
 
-VAST_REGISTER_PLUGIN(vast::identity_step_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::identity::plugin)

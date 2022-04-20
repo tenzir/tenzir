@@ -6,33 +6,33 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/arrow_table_slice.hpp"
-#include "vast/arrow_table_slice_builder.hpp"
-#include "vast/concept/convertible/data.hpp"
-#include "vast/concept/convertible/to.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
-#include "vast/detail/narrow.hpp"
-#include "vast/error.hpp"
-#include "vast/plugin.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/transform.hpp"
-#include "vast/type.hpp"
+#include <vast/arrow_table_slice.hpp>
+#include <vast/arrow_table_slice_builder.hpp>
+#include <vast/concept/convertible/data.hpp>
+#include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/vast/data.hpp>
+#include <vast/detail/narrow.hpp>
+#include <vast/error.hpp>
+#include <vast/plugin.hpp>
+#include <vast/table_slice_builder_factory.hpp>
+#include <vast/transform.hpp>
+#include <vast/type.hpp>
 
 #include <arrow/array.h>
 #include <fmt/format.h>
 
-namespace vast {
+namespace vast::plugins::replace {
 
 namespace {
 
-/// The configuration of a project transform step.
-struct replace_step_configuration {
+/// The configuration of a replace transform step.
+struct configuration {
   std::string field;
   std::string value;
 
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
-  friend auto inspect(Inspector& f, replace_step_configuration& x) {
+  friend auto inspect(Inspector& f, configuration& x) {
     return f(x.field, x.value);
   }
 
@@ -48,7 +48,7 @@ struct replace_step_configuration {
 
 class replace_step : public transform_step {
 public:
-  explicit replace_step(replace_step_configuration config, data value) noexcept
+  explicit replace_step(configuration config, data value) noexcept
     : value_{std::move(value)}, config_{std::move(config)} {
     // nop
   }
@@ -111,16 +111,16 @@ public:
   }
 
 private:
-  vast::data value_;
+  data value_ = {};
 
   /// The slices being transformed.
-  std::vector<transform_batch> transformed_;
+  std::vector<transform_batch> transformed_ = {};
 
   /// The underlying configuration of the transformation.
-  replace_step_configuration config_;
+  configuration config_ = {};
 };
 
-class replace_step_plugin final : public virtual transform_plugin {
+class plugin final : public virtual transform_plugin {
 public:
   // Plugin API
   caf::error initialize(data) override {
@@ -142,7 +142,7 @@ public:
       return caf::make_error(ec::invalid_configuration,
                              "key 'value' is missing in configuration for "
                              "replace step");
-    auto config = to<replace_step_configuration>(options);
+    auto config = to<configuration>(options);
     if (!config)
       return config.error();
     auto data = from_yaml(config->value);
@@ -157,6 +157,6 @@ public:
 
 } // namespace
 
-} // namespace vast
+} // namespace vast::plugins::replace
 
-VAST_REGISTER_PLUGIN(vast::replace_step_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::replace::plugin)

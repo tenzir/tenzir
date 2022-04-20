@@ -6,14 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/arrow_table_slice_builder.hpp"
-#include "vast/defaults.hpp"
-#include "vast/error.hpp"
-#include "vast/logger.hpp"
-#include "vast/plugin.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/transform.hpp"
-#include "vast/type.hpp"
+#include <vast/arrow_table_slice_builder.hpp>
+#include <vast/defaults.hpp>
+#include <vast/error.hpp>
+#include <vast/logger.hpp>
+#include <vast/plugin.hpp>
+#include <vast/table_slice_builder_factory.hpp>
+#include <vast/transform.hpp>
+#include <vast/type.hpp>
 
 #include <arrow/type.h>
 #include <caf/error.hpp>
@@ -21,7 +21,7 @@
 
 #include <string_view>
 
-namespace vast {
+namespace vast::plugins::count {
 
 namespace {
 
@@ -70,7 +70,7 @@ private:
   };
 };
 
-class count_step_plugin final : public virtual transform_plugin {
+class plugin final : public virtual transform_plugin {
 public:
   // plugin API
   caf::error initialize(data) override {
@@ -90,6 +90,6 @@ public:
 
 } // namespace
 
-} // namespace vast
+} // namespace vast::plugins::count
 
-VAST_REGISTER_PLUGIN(vast::count_step_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::count::plugin)

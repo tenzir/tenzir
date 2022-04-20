@@ -6,36 +6,36 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/arrow_table_slice.hpp"
-#include "vast/arrow_table_slice_builder.hpp"
-#include "vast/concept/convertible/data.hpp"
-#include "vast/concept/convertible/to.hpp"
-#include "vast/detail/narrow.hpp"
-#include "vast/error.hpp"
-#include "vast/hash/default_hash.hpp"
-#include "vast/hash/hash_append.hpp"
-#include "vast/optional.hpp"
-#include "vast/plugin.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/transform.hpp"
+#include <vast/arrow_table_slice.hpp>
+#include <vast/arrow_table_slice_builder.hpp>
+#include <vast/concept/convertible/data.hpp>
+#include <vast/concept/convertible/to.hpp>
+#include <vast/detail/narrow.hpp>
+#include <vast/error.hpp>
+#include <vast/hash/default_hash.hpp>
+#include <vast/hash/hash_append.hpp>
+#include <vast/optional.hpp>
+#include <vast/plugin.hpp>
+#include <vast/table_slice_builder_factory.hpp>
+#include <vast/transform.hpp>
 
 #include <arrow/array/builder_binary.h>
 #include <arrow/scalar.h>
 #include <fmt/format.h>
 
-namespace vast {
+namespace vast::plugins::hash {
 
 namespace {
 
 /// The configuration of the hash transform step.
-struct hash_step_configuration {
+struct configuration {
   std::string field;
   std::string out;
   std::optional<std::string> salt;
 
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
-  friend auto inspect(Inspector& f, hash_step_configuration& x) {
+  friend auto inspect(Inspector& f, configuration& x) {
     return f(x.field, x.out, x.salt);
   }
 
@@ -52,7 +52,7 @@ struct hash_step_configuration {
 
 class hash_step : public transform_step {
 public:
-  explicit hash_step(hash_step_configuration configuration);
+  explicit hash_step(configuration configuration);
 
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
@@ -73,14 +73,14 @@ public:
         = string_type::make_arrow_builder(arrow::default_memory_pool());
       if (config_.salt) {
         for (const auto& value : values(field.type, *array)) {
-          const auto digest = hash(value, *config_.salt);
+          const auto digest = vast::hash(value, *config_.salt);
           const auto append_result
             = hashes_builder->Append(fmt::format("{:x}", digest));
           VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
         }
       } else {
         for (const auto& value : values(field.type, *array)) {
-          const auto digest = hash(value);
+          const auto digest = vast::hash(value);
           const auto append_result
             = hashes_builder->Append(fmt::format("{:x}", digest));
           VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
@@ -119,14 +119,14 @@ private:
   std::vector<transform_batch> transformed_;
 
   /// The underlying configuration of the transformation.
-  hash_step_configuration config_ = {};
+  configuration config_ = {};
 };
 
-hash_step::hash_step(hash_step_configuration configuration)
+hash_step::hash_step(configuration configuration)
   : config_(std::move(configuration)) {
 }
 
-class hash_step_plugin final : public virtual transform_plugin {
+class plugin final : public virtual transform_plugin {
 public:
   // plugin API
   caf::error initialize(data) override {
@@ -148,7 +148,7 @@ public:
       return caf::make_error(ec::invalid_configuration, "key 'out' is missing "
                                                         "in configuration for "
                                                         "hash step");
-    auto config = to<hash_step_configuration>(options);
+    auto config = to<configuration>(options);
     if (!config)
       return config.error();
     return std::make_unique<hash_step>(std::move(*config));
@@ -157,6 +157,6 @@ public:
 
 } // namespace
 
-} // namespace vast
+} // namespace vast::plugins::hash
 
-VAST_REGISTER_PLUGIN(vast::hash_step_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::hash::plugin)
