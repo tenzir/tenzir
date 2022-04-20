@@ -15,7 +15,6 @@
 #include "vast/test/test.hpp"
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/project.hpp"
-#include "vast/transform_steps/replace.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -207,13 +206,12 @@ TEST(project step) {
 
 TEST(replace step) {
   auto slice = make_transforms_testdata();
-  auto rsc = vast::replace_step_configuration{"uid", "xxx"};
-  vast::replace_step replace_step(rsc, vast::data{"xxx"});
-  auto add_failed = replace_step.add(slice.layout(), to_record_batch(slice));
+  auto replace_step = unbox(
+    vast::make_transform_step("replace", {{"field", "uid"}, {"value", "xxx"}}));
+  auto add_failed = replace_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto replaced = replace_step.finish();
-  REQUIRE_NOERROR(replaced);
-  REQUIRE_EQUAL(replaced->size(), 1ull);
+  auto replaced = unbox(replace_step->finish());
+  REQUIRE_EQUAL(replaced.size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
     3ull);
@@ -274,9 +272,8 @@ TEST(anonymize step) {
 
 TEST(transform with multiple steps) {
   vast::transform transform("test_transform", {{"testdata"}});
-  auto rsc = vast::replace_step_configuration{"uid", "xxx"};
-  transform.add_step(
-    std::make_unique<vast::replace_step>(rsc, vast::data{"xxx"}));
+  transform.add_step(unbox(vast::make_transform_step(
+    "replace", {{"field", "uid"}, {"value", "xxx"}})));
   transform.add_step(unbox(
     vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   auto slice = make_transforms_testdata();
