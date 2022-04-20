@@ -14,7 +14,6 @@
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
 #include "vast/transform_steps/count.hpp"
-#include "vast/transform_steps/delete.hpp"
 #include "vast/transform_steps/hash.hpp"
 #include "vast/transform_steps/project.hpp"
 #include "vast/transform_steps/replace.hpp"
@@ -104,7 +103,7 @@ struct transforms_fixture {
   /// only the row with index==2 and a third having only the rows with index>5.
   static std::tuple<vast::table_slice, vast::table_slice, vast::table_slice>
   make_where_testdata(vast::table_slice_encoding encoding
-                       = vast::defaults::import::table_slice_type) {
+                      = vast::defaults::import::table_slice_type) {
     auto builder = vast::factory<vast::table_slice_builder>::make(
       encoding, testdata_layout);
     REQUIRE(builder);
@@ -165,26 +164,25 @@ TEST(count step) {
               vast::data_view{vast::count{20}});
 }
 
-TEST(delete_ step) {
+TEST(drop_step) {
   auto [slice, expected_slice] = make_proj_and_del_testdata();
-  auto dsc
-    = vast::delete_step_configuration{std::vector<std::string>{"desc", "note"}};
-  vast::delete_step delete_step(dsc);
-  auto add_failed = delete_step.add(slice.layout(), to_record_batch(slice));
+  const auto* drop_plugin = vast::plugins::find<vast::transform_plugin>("drop");
+  REQUIRE(drop_plugin);
+  auto drop_step = unbox(
+    drop_plugin->make_transform_step({{"fields", vast::list{"desc", "note"}}}));
+  auto add_failed = drop_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto deleted = delete_step.finish();
-  REQUIRE_NOERROR(deleted);
-  REQUIRE_EQUAL(deleted->size(), 1ull);
+  auto deleted = unbox(drop_step->finish());
+  REQUIRE_EQUAL(deleted.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(deleted), expected_slice);
-  auto dsc2 = vast::delete_step_configuration{std::vector<std::string>{"xxx"}};
-  vast::delete_step invalid_delete_step(dsc2);
+  auto invalid_drop_step
+    = unbox(drop_plugin->make_transform_step({{"fields", vast::list{"xxx"}}}));
   auto invalid_add_failed
-    = invalid_delete_step.add(slice.layout(), to_record_batch(slice));
+    = invalid_drop_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
-  auto not_deleted = invalid_delete_step.finish();
-  REQUIRE_NOERROR(not_deleted);
-  REQUIRE_EQUAL(not_deleted->size(), 1ull);
-  REQUIRE_EQUAL(as_table_slice(not_deleted), slice);
+  auto not_dropped = unbox(invalid_drop_step->finish());
+  REQUIRE_EQUAL(not_dropped.size(), 1ull);
+  REQUIRE_EQUAL(as_table_slice(not_dropped), slice);
 }
 
 TEST(project step) {
@@ -233,9 +231,8 @@ TEST(where step) {
     = make_where_testdata(vast::defaults::import::table_slice_type);
   auto where_plugin = vast::plugins::find<vast::transform_plugin>("where");
   REQUIRE(where_plugin);
-  auto where_step = unbox(where_plugin->make_transform_step(
-      {{"expression", "index == +2"}}
-      ));
+  auto where_step
+    = unbox(where_plugin->make_transform_step({{"expression", "index == +2"}}));
   REQUIRE(where_step);
   auto add_failed = where_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
@@ -243,9 +240,8 @@ TEST(where step) {
   REQUIRE_NOERROR(selected);
   REQUIRE_EQUAL(selected->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected), single_row_slice);
-  auto where_step2 = unbox(where_plugin->make_transform_step(
-      {{"expression", "index > +5"}}
-      ));
+  auto where_step2
+    = unbox(where_plugin->make_transform_step({{"expression", "index > +5"}}));
   REQUIRE(where_step2);
   auto add2_failed = where_step2->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add2_failed);
@@ -253,9 +249,8 @@ TEST(where step) {
   REQUIRE_NOERROR(selected2);
   REQUIRE_EQUAL(selected2->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected2), multi_row_slice);
-  auto where_step3 = unbox(where_plugin->make_transform_step(
-      {{"expression", "index > +9"}}
-      ));
+  auto where_step3
+    = unbox(where_plugin->make_transform_step({{"expression", "index > +9"}}));
   REQUIRE(where_step3);
   auto add3_failed = where_step3->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add3_failed);
@@ -284,8 +279,8 @@ TEST(transform with multiple steps) {
   auto rsc = vast::replace_step_configuration{"uid", "xxx"};
   transform.add_step(
     std::make_unique<vast::replace_step>(rsc, vast::data{"xxx"}));
-  auto dsc = vast::delete_step_configuration{std::vector<std::string>{"index"}};
-  transform.add_step(std::make_unique<vast::delete_step>(dsc));
+  transform.add_step(unbox(
+    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   auto slice = make_transforms_testdata();
   auto add_failed = transform.add(std::move(slice));
   REQUIRE(!add_failed);
@@ -336,8 +331,8 @@ TEST(transform rename layout) {
   };
   transform.add_step(
     unbox(rename_plugin->make_transform_step(rename_settings)));
-  auto dsc = vast::delete_step_configuration{std::vector<std::string>{"index"}};
-  transform.add_step(std::make_unique<vast::delete_step>(dsc));
+  transform.add_step(unbox(
+    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   auto slice = make_transforms_testdata();
   REQUIRE_SUCCESS(transform.add(std::move(slice)));
   auto transformed = transform.finish();
@@ -353,11 +348,10 @@ TEST(transformation engine - single matching transform) {
   transforms.emplace_back("t2", std::vector<std::string>{"foo"});
   auto& transform1 = transforms.at(0);
   auto& transform2 = transforms.at(1);
-  auto dsc = vast::delete_step_configuration{std::vector<std::string>{"uid"}};
-  transform1.add_step(std::make_unique<vast::delete_step>(dsc));
-  auto dsc2
-    = vast::delete_step_configuration{std::vector<std::string>{"index"}};
-  transform2.add_step(std::make_unique<vast::delete_step>(dsc2));
+  transform1.add_step(
+    unbox(vast::make_transform_step("drop", {{"fields", vast::list{"uid"}}})));
+  transform2.add_step(unbox(
+    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   vast::transformation_engine engine(std::move(transforms));
   auto slice = make_transforms_testdata();
   auto add_failed = engine.add(std::move(slice));
@@ -381,11 +375,10 @@ TEST(transformation engine - multiple matching transforms) {
   transforms.emplace_back("t2", std::vector<std::string>{"testdata"});
   auto& transform1 = transforms.at(0);
   auto& transform2 = transforms.at(1);
-  auto dsc = vast::delete_step_configuration{std::vector<std::string>{"uid"}};
-  transform1.add_step(std::make_unique<vast::delete_step>(dsc));
-  auto dsc2
-    = vast::delete_step_configuration{std::vector<std::string>{"index"}};
-  transform2.add_step(std::make_unique<vast::delete_step>(dsc2));
+  transform1.add_step(
+    unbox(vast::make_transform_step("drop", {{"fields", vast::list{"uid"}}})));
+  transform2.add_step(unbox(
+    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   vast::transformation_engine engine(std::move(transforms));
   auto slice
     = make_transforms_testdata(vast::defaults::import::table_slice_type);

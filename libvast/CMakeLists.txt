@@ -324,7 +324,7 @@ endif ()
 set(libvast_native_plugin_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/src/system/local_segment_store.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/count.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/delete.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/drop.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/hash.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/identity.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transform_steps/project.cpp"

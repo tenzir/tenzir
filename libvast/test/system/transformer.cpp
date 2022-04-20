@@ -30,7 +30,7 @@ const std::string transform_config = R"_(
 vast:
   transforms:
     delete_uid:
-      - delete:
+      - drop:
           fields:
             - uid
     replace_uid:
@@ -48,7 +48,8 @@ vast:
         location: client
         events: [vast.test]
 )_";
-}
+
+} // namespace
 
 vast::system::stream_sink_actor<vast::table_slice>::behavior_type
 dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
