@@ -1,12 +1,17 @@
 name: "PyVAST Python Egg"
 on:
   push:
+    branches:
+      - master
+      - v*
+  pull_request:
     paths:
       - 'pyvast/**'
       - '.github/workflows/pyvast.yml'
       - '.github/workflows/style.yml'
   release:
-    types: published
+    types:
+      - created
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
