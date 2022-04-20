@@ -74,7 +74,7 @@ vast:
           field: event_type
           value: aggregated_flow
       - rename:
-          layout-names:
+          schemas:
             - from: suricata.flow
               to: suricata.aggregated_flow
 ```

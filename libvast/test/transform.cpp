@@ -314,10 +314,10 @@ TEST(transform with multiple steps) {
 TEST(transform rename layout) {
   vast::transform transform("test_transform", {{"testdata"}});
   auto rename_settings = vast::record{
-    {"layout-names", vast::list{vast::record{
-                       {"from", std::string{"testdata"}},
-                       {"to", std::string{"testdata_renamed"}},
-                     }}},
+    {"schemas", vast::list{vast::record{
+                  {"from", std::string{"testdata"}},
+                  {"to", std::string{"testdata_renamed"}},
+                }}},
   };
   transform.add_step(
     unbox(rename_plugin->make_transform_step(rename_settings)));
