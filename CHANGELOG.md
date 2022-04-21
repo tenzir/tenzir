@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [v2.0.0-rc1]
+## [v2.0.0-rc1][v2.0.0-rc1]
 
 ### :zap: Breaking Changes
 
@@ -91,14 +91,14 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `vast(1)` man-page is no longer empty for VAST distributions with static binaries.
   [#2190](https://github.com/tenzir/vast/pull/2190)
 
-## [v1.1.2]
+## [v1.1.2][v1.1.2]
 
 ### :beetle: Bug Fixes
 
 - Terminating or timing out exports during the catalog lookup no longer causes query workers to become stuck indefinitely.
   [#2165](https://github.com/tenzir/vast/pull/2165)
 
-## [v1.1.1]
+## [v1.1.1][v1.1.1]
 
 ### :beetle: Bug Fixes
 
@@ -111,7 +111,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Queries that timed out or were externally terminated while in the query backlog and with more than five unhandled candidate partitions no longer permanently get stuck.
   [#2160](https://github.com/tenzir/vast/pull/2160)
 
-## [v1.1.0]
+## [v1.1.0][v1.1.0]
 
 ### :warning: Changes
 
@@ -159,7 +159,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - We fixed a bug that potentially resulted in the wrong subset of partitions to be considered during query evaluation.
   [#2103](https://github.com/tenzir/vast/pull/2103)
 
-## [v1.0.0]
+## [v1.0.0][v1.0.0]
 
 ### :warning: Changes
 
@@ -197,7 +197,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Starting VAST no longer fails if creating the database directory requires creating intermediate directories.
   [#2046](https://github.com/tenzir/vast/pull/2046)
 
-## [2021.12.16]
+## [2021.12.16][2021.12.16]
 
 ### :warning: Changes
 
@@ -221,7 +221,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The field-based default selector of the JSON import now correctly matches types with nested record types.
   [#1988](https://github.com/tenzir/vast/pull/1988)
 
-## [2021.11.18]
+## [2021.11.18][2021.11.18]
 
 ### :warning: Changes
 
@@ -272,7 +272,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Static plugins are no longer always loaded, but rather need to be explicitly enabled as documented. To restore the behavior from before this bug fix, set `vast.plugins: [bundled]` in your configuration file.
   [#1959](https://github.com/tenzir/vast/pull/1959)
 
-## [2021.09.30]
+## [2021.09.30][2021.09.30]
 
 ### :warning: Changes
 
@@ -322,7 +322,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The disk monitor no longer fails to delete segments of particularly busy partitions with the `segment-store` store backend.
   [#1892](https://github.com/tenzir/vast/pull/1892)
 
-## [2021.08.26]
+## [2021.08.26][2021.08.26]
 
 ### :warning: Changes
 
@@ -379,7 +379,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The memory counts in the output of `vast status` now represent bytes consistently, as opposed to a mix of bytes and kilobytes.
   [#1862](https://github.com/tenzir/vast/pull/1862)
 
-## [2021.07.29]
+## [2021.07.29][2021.07.29]
 
 ### :warning: Changes
 
@@ -402,7 +402,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1762](https://github.com/tenzir/vast/pull/1762)
   [#1802](https://github.com/tenzir/vast/pull/1802)
 
-- VAST now supports import filter expressions. They act as the dual to export query expressions:  `vast import suricata '#type == "suricata.alert"' < eve.json` will import only `suricata.alert` events, discarding all other events.
+- VAST now supports import filter expressions. They act as the dual to export query expressions: `vast import suricata '#type == "suricata.alert"' < eve.json` will import only `suricata.alert` events, discarding all other events.
   [#1742](https://github.com/tenzir/vast/pull/1742)
 
 - VAST now comes with a [`tenzir/vast-dev`](https://hub.docker.com/r/tenzir/vast-dev) Docker image in addition to the regular [`tenzir/vast`](https://hub.docker.com/r/tenzir/vast). The `vast-dev` image targets development contexts, e.g., when building additional plugins. The image contains all build-time dependencies of VAST and runs as `root` rather than the `vast` user.
@@ -471,7 +471,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1804](https://github.com/tenzir/vast/pull/1804)
   [#1809](https://github.com/tenzir/vast/pull/1809)
 
-## [2021.06.24]
+## [2021.06.24][2021.06.24]
 
 ### :zap: Breaking Changes
 
@@ -533,7 +533,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Import processes no longer hang on receiving SIGINT or SIGKILL. Instead, they shut down properly after flushing yet to be processed data.
   [#1718](https://github.com/tenzir/vast/pull/1718)
 
-## [2021.05.27]
+## [2021.05.27][2021.05.27]
 
 ### :zap: Breaking Changes
 
@@ -595,7 +595,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST no longer erroneously warns about a version mismatch between client and server when their plugin load order differs.
   [#1679](https://github.com/tenzir/vast/pull/1679)
 
-## [2021.04.29]
+## [2021.04.29][2021.04.29]
 
 ### :zap: Breaking Changes
 
@@ -718,7 +718,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Spaces before SI prefixes in command line arguments and configuration options are now generally ignored, e.g., it is now possible to set the disk monitor budgets to `2 GiB` rather than `2GiB`.
   [#1590](https://github.com/tenzir/vast/pull/1590)
 
-## [2021.03.25]
+## [2021.03.25][2021.03.25]
 
 ### :zap: Breaking Changes
 
@@ -793,7 +793,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Enabling the disk budget feature no longer prevents the server process from exiting after it was stopped.
   [#1495](https://github.com/tenzir/vast/pull/1495)
 
-## [2021.02.24]
+## [2021.02.24][2021.02.24]
 
 ### :zap: Breaking Changes
 
@@ -872,7 +872,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - A bug in the new simdjson based JSON reader introduced in [#1356](https://github.com/tenzir/vast/pull/1356) could trigger an assertion in the `vast import` process if an input field could not be converted to the field type in the target layout. This is no longer the case.
   [#1386](https://github.com/tenzir/vast/pull/1386)
 
-## [2021.01.28]
+## [2021.01.28][2021.01.28]
 
 ### :zap: Breaking Changes
 
@@ -952,7 +952,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - A potential race condition that could lead to a hanging export if a partition was persisted just as it was scanned no longer exists.
   [#1295](https://github.com/tenzir/vast/pull/1295)
 
-## [2020.12.16]
+## [2020.12.16][2020.12.16]
 
 ### :zap: Breaking Changes
 
@@ -1084,7 +1084,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Concepts that reference other concepts are now loaded correctly from their definition.
   [#1236](https://github.com/tenzir/vast/pull/1236)
 
-## [2020.10.29]
+## [2020.10.29][2020.10.29]
 
 ### :warning: Changes
 
@@ -1139,7 +1139,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `lsvast` tool failed to print FlatBuffers schemas correctly. The output now renders correctly.
   [#1123](https://github.com/tenzir/vast/pull/1123)
 
-## [2020.09.30]
+## [2020.09.30][2020.09.30]
 
 ### :zap: Breaking Changes
 
@@ -1199,7 +1199,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Stalled sources that were unable to generate new events no longer stop import processes from shutting down under rare circumstances.
   [#1058](https://github.com/tenzir/vast/pull/1058)
 
-## [2020.08.28]
+## [2020.08.28][2020.08.28]
 
 ### :zap: Breaking Changes
 
@@ -1263,7 +1263,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - A bug in the expression parser prevented the correct parsing of fields starting with either 'F' or 'T'.
   [#999](https://github.com/tenzir/vast/pull/999)
 
-## [2020.07.28]
+## [2020.07.28][2020.07.28]
 
 ### :zap: Breaking Changes
 
@@ -1292,7 +1292,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The PCAP reader now correctly shows the amount of generated events.
   [#954](https://github.com/tenzir/vast/pull/954)
 
-## [2020.06.25]
+## [2020.06.25][2020.06.25]
 
 ### :warning: Changes
 
@@ -1345,7 +1345,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now correctly checks for control characters in inputs.
   [#910](https://github.com/tenzir/vast/pull/910)
 
-## [2020.05.28]
+## [2020.05.28][2020.05.28]
 
 ### :warning: Changes
 
@@ -1389,7 +1389,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Fixed a bug where setting the `logger.file-verbosity` in the config file would not have an effect.
   [#866](https://github.com/tenzir/vast/pull/866)
 
-## [2020.04.29]
+## [2020.04.29][2020.04.29]
 
 ### :warning: Changes
 
@@ -1404,7 +1404,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### :gift: Features
 
-- Packet drop and discard statistics are now reported to the accountant for PCAP import, and are available using the keys `pcap-reader.recv`, `pcap-reader.drop`, `pcap-reader.ifdrop`, `pcap-reader.discard`, and `pcap-reader.discard-rate ` in the `vast.statistics` event. If the number of dropped packets exceeds a configurable threshold, VAST additionally warns about packet drops on the command line.
+- Packet drop and discard statistics are now reported to the accountant for PCAP import, and are available using the keys `pcap-reader.recv`, `pcap-reader.drop`, `pcap-reader.ifdrop`, `pcap-reader.discard`, and `pcap-reader.discard-rate` in the `vast.statistics` event. If the number of dropped packets exceeds a configurable threshold, VAST additionally warns about packet drops on the command line.
   [#827](https://github.com/tenzir/vast/pull/827)
   [#844](https://github.com/tenzir/vast/pull/844)
 
@@ -1431,7 +1431,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `stop` command always returned immediately, regardless of whether it succeeded. It now blocks until the remote node shut down properly or returns an error exit code upon failure.
   [#849](https://github.com/tenzir/vast/pull/849)
 
-## [2020.03.26]
+## [2020.03.26][2020.03.26]
 
 ### :warning: Changes
 
@@ -1473,7 +1473,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - An under-the-hood change to our parser-combinator framework makes sure that we do not discard possibly invalid input data up the the end of input. This uncovered a bug in our MRT/bgpdump integrations, which have thus been disabled (for now), and will be fixed at a later point in time.
   [#808](https://github.com/tenzir/vast/pull/808)
 
-## [2020.02.27]
+## [2020.02.27][2020.02.27]
 
 ### :warning: Changes
 
@@ -1502,7 +1502,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Continuously importing events from a Zeek process with a low rate of emitted events resulted in a long delay until the data would be included in the result set of queries. This is because the import process would buffer up to 10,000 events before sending them to the server as a batch. The algorithm has been tuned to flush its buffers if no data is available for more than 500 milliseconds.
   [#750](https://github.com/tenzir/vast/pull/750)
 
-## [2020.01.31]
+## [2020.01.31][2020.01.31]
 
 ### :warning: Changes
 
@@ -1664,11 +1664,10 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Evaluation of predicates with negations return incorrect results. For example, the expression `:addr !in 10.0.0.0/8` created a disjunction of all fields to which `:addr` resolved, without properly applying De-Morgan. The same bug also existed for key extractors. De-Morgan is now applied properly for the operations `!in` and `!~`.
 
-## [0.1] - 2019.02.28
+## [0.1][0.1] - 2019.02.28
 [0.1]: https://github.com/tenzir/vast/releases/tag/0.1
 
 This is the first official release.
-
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
 [v2.0.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc1
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2

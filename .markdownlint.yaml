@@ -1,0 +1,8 @@
+default: false
+
+# Tags
+html: false
+indentation: false
+links: false
+spelling: true
+whitespace: true

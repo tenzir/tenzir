@@ -114,8 +114,9 @@ jobs:
         run: |
           alias is_unchanged="git diff --exit-code $(git merge-base 'origin/${{ github.event.pull_request.base.ref }}' HEAD) --"
           if is_unchanged cmake/VASTVersionFallback.cmake; then
-            # CHANGELOG.md must not be modified in non-release PRs
-            is_unchanged CHANGELOG.md
+            # CHANGELOG.md must not be modified in non-release PRs, unless the
+            # template also changed.
+            is_unchanged CHANGELOG.md || ! is_unchanged cmake/VASTChangelog.cmake.in
           else
             # CHANGELOG.md must be modified in release PRs
             ! is_unchanged CHANGELOG.md

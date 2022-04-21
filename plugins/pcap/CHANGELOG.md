@@ -18,7 +18,6 @@ This changelog documents all notable changes to the PCAP plugin for VAST.
   null.
   [#2179](https://github.com/tenzir/vast/pull/2179)
 
-
 ## v1.0.0
 
 This is the first official release.

@@ -82,7 +82,6 @@ Caveats:
   InsufficientRolePermissions_ while deploying the stack. You can usually solve
   this by running `./vast-cloud deploy` again a few minutes later.
 
-
 #### Start a VAST server (Fargate)
 
 To deploy a VAST server as Fargate task, run:
@@ -99,7 +98,7 @@ You can replace the running task by a new one with:
 ./vast-cloud restart-vast-server
 ```
 
-**Notes**: 
+**Notes**:
 - if you use `ATTACHED` for the storage type, restarting the server task will
   empty the database.
 - multiple invocations of `./vast-cloud run-vast-task` create multiple Fargate
@@ -132,7 +131,6 @@ To run a VAST client from Lambda, use the `run-lambda` target:
 
 The Lambda image also contains extra tooling, such as the AWS CLI, which is
 useful to run batch imports or exports to other AWS services.
-
 
 #### Shutdown
 

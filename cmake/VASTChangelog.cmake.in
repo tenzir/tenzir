@@ -43,7 +43,7 @@ foreach (release IN LISTS releases)
   if (release STREQUAL "unreleased")
     string(APPEND changelog "## Unreleased\n\n")
   else ()
-    string(APPEND changelog "## [${release}]\n\n")
+    string(APPEND changelog "## [${release}][${release}]\n\n")
     string(APPEND changelog_links
       "[${release}]: @PROJECT_HOMEPAGE_URL@/releases/tag/${release}\n")
   endif ()

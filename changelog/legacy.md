@@ -97,8 +97,7 @@
 
 - Evaluation of predicates with negations return incorrect results. For example, the expression `:addr !in 10.0.0.0/8` created a disjunction of all fields to which `:addr` resolved, without properly applying De-Morgan. The same bug also existed for key extractors. De-Morgan is now applied properly for the operations `!in` and `!~`.
 
-## [0.1] - 2019.02.28
+## [0.1][0.1] - 2019.02.28
 [0.1]: https://github.com/tenzir/vast/releases/tag/0.1
 
 This is the first official release.
-
