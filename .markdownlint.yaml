@@ -3,6 +3,6 @@ default: false
 # Tags
 html: false
 indentation: false
-links: true
+links: false
 spelling: true
 whitespace: true
