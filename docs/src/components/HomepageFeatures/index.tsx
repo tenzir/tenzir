@@ -10,13 +10,13 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'High-Speed Telemetry Engine',
+    title: 'Telemetry Data Engine',
     Svg: require('@site/static/img/engine.svg').default,
     description: (
       <>
-        VAST is fast: when your SIEM keels over or makes your costs explode,
-        VAST ingests, stores, compacts, and rotates your high-volume telemetry
-        at ease.
+        Your SIEM keels over and costs explode? Deploy VAST close to the data
+        source to transform, store, anonymize, query, and age your high-volume
+        telemetry at the edge.
       </>
     ),
   },
@@ -25,9 +25,9 @@ const FeatureList: FeatureItem[] = [
     Svg: require('@site/static/img/security-content.svg').default,
     description: (
       <>
-        Easy-button detection: operationalize tactical security content
-        automatically by synchronizing it with your threat intelligence
-        platform, both live and retrospectively.
+        Easy-button detection: operationalize your security content by
+        synchronizing it with your threat intelligence platform, unifying live
+        and retro detection with one system.
       </>
     ),
   },
@@ -36,10 +36,10 @@ const FeatureList: FeatureItem[] = [
     Svg: require('@site/static/img/explore.svg').default,
     description: (
       <>
-        Pivot through contextualized events to what matters. Need richer
-        analysis? Bring your own data science toolkit: VAST offers
-        high-bandwidth data access via <a href="https://arrow.apache.org">Apache
-        Arrow</a> and Parquet.
+        Pivot to what matters and contextualize the gaps. Need richer analysis?
+        Bring your own data science tooling: VAST offers high-bandwidth
+        data access via <a href="https://arrow.apache.org">Apache Arrow</a> and
+        Parquet.
       </>
     ),
   },
