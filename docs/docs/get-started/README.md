@@ -14,7 +14,7 @@ The documentation has the following key sections:
 
 1. [Setup VAST](/docs/setup-vast) describes how you can download, install, and
    configure VAST in a variety of environments.
-   👉 *Start here if you want deploy VAST.*
+   👉 *Start here if you want to deploy VAST.*
 2. [Use VAST](/docs/use-vast) explains how to work with VAST, e.g., ingesting
    data, running queries, matching threat intelligence, or integrating it with
    other security tools.
@@ -49,17 +49,18 @@ metrics services that we deem out of scope.
 VAST *complements* a [SIEM][siem] nicely with the following use cases:
 
 - **Offloading**: route the high-volume telemetry to VAST that would otherwise
-  overload your SIEM or be cost-prohibitive or to ingest. By keeping the bulk of
+  overload your SIEM or be cost-prohibitive to ingest. By keeping the bulk of
   the data in VAST, you remove bottlenecks and can selectively forward the
   activity that matters to your SIEM.
 
 - **Compliance**: VAST has fine-grained retention span configuration to meet
-  GDPR and other regulatory requirements. When storage capacity needs careful
-  management, VAST's *compaction* feature allows for weighted ageing of your
-  data, so that you can specify relative importance of event types. Powerful
-  *transforms* allow you to anonymize, pseudonomyize, or encrypt specific
-  fields—either to sanitize PII data on import, or ad-hoc on export when data
-  leaves VAST.
+  [GDPR](https://en.wikipedia.org/wiki/General_Data_Protection_Regulation) and
+  other regulatory requirements. When storage capacity needs careful management,
+  VAST's *compaction* feature allows for weighted ageing of your data, so that
+  you can specify relative importance of event types. Powerful *transforms*
+  allow you to anonymize, pseudonymize, or encrypt specific fields—either to
+  sanitize [PII data](https://en.wikipedia.org/wiki/Personal_data) on import, or
+  ad-hoc on export when data leaves VAST.
 
 - **Data Science**: The majority of SIEMs provide an API-only, low-bandwidth
   access path to your security data. VAST is an [Arrow][arrow]-native engine
@@ -76,10 +77,12 @@ deep in the network, or at the edge.
 
 ### VAST vs. Data Warehouses
 
-Data warehouses, OLAP engines, and time series databases seem like an appealing
-choice for immutable structured data. They offer sufficient ingest bandwidth,
-perform well on group-by and aggregation queries, come frequently with advanced
-operations like joins, and often scale out well.
+Data warehouses,
+[OLAP](https://en.wikipedia.org/wiki/Online_analytical_processing) engines, and
+time series databases seem like an appealing choice for immutable structured
+data. They offer sufficient ingest bandwidth, perform well on group-by and
+aggregation queries, come frequently with advanced operations like joins, and
+often scale out well.
 
 However, as a cornerstone for security operations, they fall short in supporting
 the following relevant use cases where VAST has the edge:
@@ -89,11 +92,12 @@ the following relevant use cases where VAST has the edge:
   purpose-built for security data, integrations for key data sources and data
   carriers exist out of the box.
 
-- **Rich Typing**: modeling security event data with a COTS database often
+- **Rich Typing**: modeling security event data with a
+  [COTS](https://en.wikipedia.org/wiki/Commercial_off-the-shelf) database often
   reduces the values to strings or integers, as opposed to retaining
   domain-specific semantics, such as IP addresses or port numbers. VAST offers a
   rich type system that can retain such semantics, supporting both
-  schema-on-read (taxonomies) and schema-on-write (transforms).
+  *schema-on-read* (taxonomies) and *schema-on-write* (transforms).
 
 - **Fast Search**: typical query patterns are (1) automatically triggered point
   queries for tactical threat intelligence, arriving at a high rate and often in
@@ -103,4 +107,4 @@ the following relevant use cases where VAST has the edge:
 Bottom line: data warehouses may be well-suited for raw data processing, but
 a data backbone for security operations has a lot more domain-specific
 demands. The required heavy lifting to bridge this gap is cost and time
-prohibitive for any SOC. This is why we built VAST.
+prohibitive for any security operations center. This is why we built VAST.
