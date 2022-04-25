@@ -1,12 +1,38 @@
 # Linux
 
-The `vast` executable acts as both client and server. Typically, a VAST server
-runs as persistent system service.
+Use our [pre-built packages](#download) below or [build VAST from
+source](/docs/setup-vast/build-from-source) to install VAST on any Linux
+distribution. To deploy VAST as system service, you can use our [systemd
+configuration](#systemd).
+
+To package VAST...
+
+## Download
+
+We offer pre-built packages containing a statically linked VAST binary, for the
+[latest release](https://github.com/tenzir/vast/releases/latest) and the current
+development version:
+
+<div align="center" class="padding-bottom--md">
+  <a class="button button--md button--primary margin--sm" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Release</a>
+  <a class="button button--md button--info margin--md" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Development</a>
+</div>
+
+You can also get static builds for a specific git commit. This involves
+navigating a bit through the github CI:
+
+1. Browse to the [VAST static workflow][vast-workflow]
+2. Click on the latest run, e.g., `Merge pull request...`
+3. Scroll to the end of the page
+4. Click on the artifact filename, e.g.,
+   `vast-v1.0.0-101-g6e7a4ef1a4-linux-static.tar.gz`
+
+[vast-workflow]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST%22
 
 ## systemd
 
-VAST ships with a [systemd unit
-file](https://github.com/tenzir/vast/tree/master/systemd/) for running VAST as
+VAST has native [systemd
+support](https://github.com/tenzir/vast/tree/master/systemd/) for running as
 system service. The service is sandboxed and runs with limited privileges.
 
 ### Prepare the host system
@@ -39,7 +65,7 @@ of the `[Service]` section in the unit file. Depending on your installation path
 you might need to change the location of the `vast` binary and configuration
 file.
 
-```ini
+```config
 ExecStart=/path/to/vast --config=/path/to/vast.yaml start
 ```
 
@@ -65,42 +91,26 @@ To have the service start up automatically on system boot, `enable` it via
 systemctl enable vast
 systemctl start vast
 ```
-## Docker
 
-:::tip Docker Hub
-We provide pre-built Docker images at [dockerhub.com/tenzir][dockerhub].
+## Distribution Support
+
+:::tip Community contributions wanted!
+We are striving to bring VAST into the package managers of all major Linux
+distributions. Unfortunately we can do so only at a best-effort basis, but
+we much appreciate community contributions.
 :::
 
-[dockerhub]: https://hub.docker.com/repository/docker/tenzir/vast
+### Debian
 
-Our Docker image contains a dynamic of VAST build with plugins as shared
-libraries. The system user `vast` runs the VAST executable with limited
-privileges. Database contents go into the volume exposed at `/var/lib/vast`.
-
-### Start the container
-
-Start VAST in a container and detach it to the background.
+You can install [an older version of VAST](https://salsa.debian.org/debian/vast)
+via APT:
 
 ```bash
-mkdir -p /var/lib/vast
-docker run -dt --name=vast --rm -p 42000:42000 -v /var/lib/vast:/var/lib/vast tenzir/vast:latest start
+apt install vast
 ```
 
-### Build an image
+The installation scripts configure VAST as [systemd
+service][debian-vast-systemd-service] and store the database in
+`/var/lib/vast/db`. Adapt `/etc/vast/vast.yaml` as you see fit.
 
-Build the `tenzir/vast` image as follows:
-
-```bash
-docker build -t tenzir/vast:<TAG>
-```
-
-In addition to the `tenzir/vast` image, the development image `tenzir/vast-dev`
-contains all build-time dependencies of VAST. It runs with a `root` user to
-allow for building custom images that build additional VAST plugins. VAST in the
-Docker images is configured to load all installed plugins by default.
-
-You can build the development image as follows:
-
-```bash
-docker build -t tenzir/vast-dev:<TAG> --target development
-```
+[debian-vast-systemd-service]: https://salsa.debian.org/debian/vast/-/blob/master/debian/service
