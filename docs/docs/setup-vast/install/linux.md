@@ -5,8 +5,6 @@ source](/docs/setup-vast/build) to install VAST on any Linux distribution. To
 deploy VAST as system service, you can use our [systemd
 configuration](#systemd).
 
-To package VAST...
-
 ## Download
 
 We offer pre-built packages containing a statically linked VAST binary, for the
