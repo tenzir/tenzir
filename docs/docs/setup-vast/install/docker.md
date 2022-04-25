@@ -20,6 +20,15 @@ docker run -dt --name=vast --rm -p 42000:42000 -v /var/lib/vast:/var/lib/vast \
   tenzir/vast:latest start
 ```
 
+The `docker` arguments have the following meaning:
+
+- `-d` for detaching, i.e., running in background
+- `-t` for terminal output
+- `--name` to name the image
+- `--rm` to clear older volumes
+- `-p` to expose the port to the outer world
+- `-v` to mount the database directory
+
 ## Build the main image
 
 Build the `tenzir/vast` image as follows:
