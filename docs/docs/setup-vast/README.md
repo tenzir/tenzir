@@ -1,5 +1,5 @@
 # Setup VAST
 
 :::note
-Coming soon!
+Content coming soon!
 :::

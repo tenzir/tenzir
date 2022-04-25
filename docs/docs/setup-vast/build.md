@@ -8,9 +8,20 @@ Like many C++ projects, VAST uses [CMake](https://cmake.org) to manage the build
 process. Aside from a modern C++20 compiler, you need to ensure availability of
 the dependencies in the table below.
 
-For deterministic builds, we provide a [Nix](#nix) expressions.
+We provide [Nix](#nix) expressions for deterministic builds.
 
 ## Dependencies
+
+:::tip SPDX SBOM
+Every [release](https://github.com/tenzir/vast/releases) of VAST includes an
+[SBOM](https://en.wikipedia.org/wiki/Software_bill_of_materials) in
+[SPDX](https://spdx.dev) format that includes a comprehensive listing of all
+dependencies and versions.
+
+👉 [Download the **latest SBOM** here][latest-sbom].
+:::
+
+[latest-sbom]: https://github.com/tenzir/vast/releases/latest/download/VAST.spdx
 
 |Required|Dependency|Version|Description|
 |:-:|:-:|:-:|-|
