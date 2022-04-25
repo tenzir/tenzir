@@ -16,7 +16,7 @@ export CXXFLAGS="-isystem $(brew --prefix llvm)/include/c++/v1 ${CXXFLAGS}"
 ```
 
  ## launchd
- 
+
  Installing VAST via CMake on macOS configures a [launchd
  agent](https://www.launchd.info) to
  `~/Library/LaunchAgents/com.tenzir.vast.plist`. To run VAST automatically at

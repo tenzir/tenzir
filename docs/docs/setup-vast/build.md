@@ -70,7 +70,7 @@ Building VAST involves the following steps:
 ## Test
 
 After you have built the executable, run the unit and integration tests to
-verify that your build works as expected: 
+verify that your build works as expected:
 
 1. Run component-level unit tests:
   ```bash
