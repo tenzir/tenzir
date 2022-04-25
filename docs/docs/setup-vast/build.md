@@ -1,4 +1,8 @@
-# Build from Source
+---
+sidebar_position: 0
+---
+
+# Build
 
 Like many C++ projects, VAST uses [CMake](https://cmake.org) to manage the build
 process. Aside from a modern C++20 compiler, you need to ensure availability of

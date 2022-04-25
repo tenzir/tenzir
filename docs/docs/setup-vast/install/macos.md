@@ -1,8 +1,8 @@
 # macOS
 
-On macOS, you must [build VAST from source](/docs/setup-vast/build-from-source).
-Note that building requires C++20 support from the compiler, so the native
-AppleClang compiler can not be used.
+On macOS, you must [build VAST from source](/docs/setup-vast/build). Note that
+building requires C++20 support from the compiler, so the native AppleClang
+compiler can not be used.
 
 We generally recommend the following settings:
 
