@@ -104,5 +104,5 @@ endforeach ()
 file(READ "${changelog_directory}/legacy.md" changelog_legacy)
 file(WRITE "@CMAKE_CURRENT_BINARY_DIR@/CHANGELOG.md"
   "${changelog}"
-  "${changelog_legacy}"
+  "${changelog_legacy}\n"
   "${changelog_links}")

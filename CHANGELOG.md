@@ -1680,6 +1680,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 [0.1]: https://github.com/tenzir/vast/releases/tag/0.1
 
 This is the first official release.
+
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
 [v2.0.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc2
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
