@@ -367,44 +367,37 @@ caf::error configuration::parse(int argc, char** argv) {
   else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE"))
     if (*vast_bare_mode == "true")
       caf::put(content, "vast.bare-mode", true);
-  // Detect when plugins or plugin-dirs are specified on the command line.
-  // This needs to happen before the regular parsing of the command line
-  // since plugins may add additional commands.
+  // Detect when plugins, plugin-dirs, or schema-dirs are specified on the
+  // command line. This needs to happen before the regular parsing of the
+  // command line since plugins may add additional commands and schemas.
   auto is_not_plugin_opt = [](auto& x) {
-    return !x.starts_with("--plugins=") && !x.starts_with("--plugin-dirs=");
+    return !x.starts_with("--plugins=") && !x.starts_with("--plugin-dirs=")
+           && !x.starts_with("--schema-dirs=");
   };
   auto plugin_opt = std::stable_partition(
     command_line.begin(), command_line.end(), is_not_plugin_opt);
   auto plugin_args = std::vector<std::string>{};
+  // Because these options need to be parsed early we also need to handle their
+  // environment equivalents early. We do so by going through the
+  // caf::config_option_set parser such that they use the same syntax as
+  // command-line options. We also get escaping for free this way.
+  if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGINS"))
+    plugin_args.push_back(fmt::format("--plugins={}", *vast_plugin_dirs));
+  if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGIN_DIRS"))
+    plugin_args.push_back(fmt::format("--plugin-dirs={}", *vast_plugin_dirs));
+  if (auto vast_schema_dirs = detail::getenv("VAST_SCHEMA_DIRS"))
+    plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
+  // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());
   auto plugin_opts
     = caf::config_option_set{}
+        .add<std::vector<std::string>>("?vast", "schema-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugins", "");
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   VAST_ASSERT(ec == caf::pec::success);
   VAST_ASSERT(it == plugin_args.end());
-  // If there are no plugin options on the command line, look at the
-  // corresponding evironment variables VAST_PLUGIN_DIRS and VAST_PLUGINS.
-  if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGIN_DIRS")) {
-    auto cli_plugin_dirs
-      = caf::get_or(content, "vast.plugin-dirs", std::vector<std::string>{});
-    if (cli_plugin_dirs.empty()) {
-      for (auto&& dir : detail::split(*vast_plugin_dirs, ":"))
-        cli_plugin_dirs.emplace_back(std::move(dir));
-      caf::put(content, "vast.plugin-dirs", std::move(cli_plugin_dirs));
-    }
-  }
-  if (auto vast_plugins = detail::getenv("VAST_PLUGINS")) {
-    auto cli_plugins
-      = caf::get_or(content, "vast.plugins", std::vector<std::string>{});
-    if (cli_plugins.empty()) {
-      for (auto&& plugin : detail::split(*vast_plugins, ","))
-        cli_plugins.emplace_back(std::move(plugin));
-      caf::put(content, "vast.plugins", std::move(cli_plugins));
-    }
-  }
   // Gather and parse all to-be-considered configuration files.
   std::vector<std::string> cli_configs;
   for (auto& arg : command_line)

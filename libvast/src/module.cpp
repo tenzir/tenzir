@@ -131,9 +131,6 @@ detail::stable_set<std::filesystem::path>
 get_module_dirs(const caf::actor_system_config& cfg) {
   const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
   detail::stable_set<std::filesystem::path> result;
-  if (auto vast_module_directories = detail::getenv("VAST_SCHEMA_DIRS"))
-    for (auto&& path : detail::split(*vast_module_directories, ":"))
-      result.insert({path});
   const auto datadir = detail::install_datadir();
   result.insert(datadir / "schema");
   for (const auto& plugin : plugins::get()) {
