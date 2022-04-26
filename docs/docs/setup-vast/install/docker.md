@@ -1,23 +1,43 @@
 # Docker
 
-:::tip Docker Hub
-We provide pre-built Docker images at [dockerhub.com/tenzir][dockerhub].
-:::
-
-[dockerhub]: https://hub.docker.com/repository/docker/tenzir/vast
-
 Our Docker image contains a dynamic of VAST build with plugins as shared
 libraries. The system user `vast` runs the VAST executable with limited
 privileges. Database contents go into the volume exposed at `/var/lib/vast`.
 
-## Start the container
+Make sure you have the appropriate Docker runtime setup, e.g., [Docker
+Desktop](https://www.docker.com/products/docker-desktop/) or [Docker
+Engine](https://docs.docker.com/engine/).
 
-Start VAST in a container and detach it to the background.
+:::tip CPU & RAM
+Make sure Docker has enough multiple CPU cores and several GBs of RAM.
+:::
+## Pull the image
+
+Retrieving a dockerized version of VAST only requires pulling a pre-built image
+from our [container registry at DockerHub][dockerhub]:
 
 ```bash
-mkdir -p /var/lib/vast
-docker run -dt --name=vast --rm -p 42000:42000 -v /var/lib/vast:/var/lib/vast \
-  tenzir/vast:latest start
+docker pull tenzir/vast
+```
+
+Thereafter, you're ready to start a VAST node in a container.
+
+[dockerhub]: https://hub.docker.com/repository/docker/tenzir/vast
+
+## Start the container
+
+When running VAST in a container, you need to wire two resources for a practical
+deployment:
+
+1. **Network**: VAST exposes a listening socket to accept client commands.
+2. **Disk**: VAST stores its database content on mounted volume.
+
+We recommend starting the VAST server detached in the background:
+
+```bash
+mkdir -p /path/to/db
+docker run -dt --name=vast --rm -p 42000:42000 -v /path/to/db:/var/lib/vast \
+  tenzir/vast start
 ```
 
 The `docker` arguments have the following meaning:
@@ -27,25 +47,53 @@ The `docker` arguments have the following meaning:
 - `--name` to name the image
 - `--rm` to clear older volumes
 - `-p` to expose the port to the outer world
-- `-v` to mount the database directory
+- `-v from:to` to mount the local path `from` into the container at `to`
 
-## Build the main image
+Now you are ready to interact with a running VAST node.
 
-Build the `tenzir/vast` image as follows:
+## Configure a VAST container
+
+Configuration in the Docker ecosystem typically entails setting environment
+variables. VAST supports this paradigm with a one-to-one [mapping from
+configuration file entries to environment
+variables](/docs/setup-vast/configure/environment-variables).
+
+When starting the container, `docker run` accepts variables either one by one
+via `-e KEY=VALUE` or via `--env-file FILE`. You can also pass down an existing
+environment variable by specifying just `-e KEY` without an assignment. Here is
+an example:
 
 ```bash
-docker build -t tenzir/vast:<TAG>
+docker run -e VAST_ENDPOINT -e VAST_IMPORT__BATCH_SIZE=42 --env-file .env \
+  tenzir/vast start
 ```
 
-## Build the development image
+## Build your own VAST image
 
-In addition to the `tenzir/vast` image, the development image `tenzir/vast-dev`
-contains all build-time dependencies of VAST. It runs with a `root` user to
-allow for building custom images that build additional VAST plugins. VAST in the
-Docker images is configured to load all installed plugins by default.
+You can always build your own Docker image in case our prebuilt images don't fit
+your use case.
 
-You can build the development image as follows:
+Our official [Dockerfile](https://github.com/tenzir/vast/blob/master/Dockerfile)
+offers two starting points: a *development* and *production* layer.
+
+### Build the production image
+
+The production image is optimized for size and security. This is the official
+`tenzir/vast` image. Build it as follows:
 
 ```bash
-docker build -t tenzir/vast-dev:<TAG> --target development
+docker build -t tenzir/vast
+```
+
+### Build the development image
+
+The development image `tenzir/vast-dev` contains all build-time dependencies of
+VAST. It runs with a `root` user to allow for building custom images that build
+additional VAST plugins. By default, VAST loads all installed plugins in our
+images.
+
+Build the development image by specifying it as `--target`:
+
+```bash
+docker build -t tenzir/vast-dev --target development
 ```
