@@ -328,6 +328,9 @@ TEST(full partition roundtrip) {
   auto x_equals_one = vast::expression{
     vast::predicate{vast::field_extractor{"x"},
                     vast::relational_operator::equal, vast::data{1u}}};
+  auto foo_equals_one = vast::expression{
+    vast::predicate{vast::field_extractor{"foo"},
+                    vast::relational_operator::equal, vast::data{1u}}};
   auto type_equals_y = vast::expression{
     vast::predicate{vast::meta_extractor{vast::meta_extractor::type},
                     vast::relational_operator::equal, vast::data{"y"}}};
@@ -338,6 +341,8 @@ TEST(full partition roundtrip) {
   test_expression(x_equals_zero, 1);
   // For the query `x == 1`, we expect zero results.
   test_expression(x_equals_one, 0);
+  // For the query `foo == 1`, we expect zero results.
+  test_expression(foo_equals_one, 0);
   // For the query `#type == "x"`, we expect one result.
   test_expression(type_equals_y, 1);
   // For the query `#type == "foo"`, we expect no results.
