@@ -615,7 +615,9 @@ void index_state::schedule_lookups() {
           schedule_lookups();
         }
       };
-      self->request(partition_actor, caf::infinite, it->second.query)
+      self
+        ->request(partition_actor, defaults::system::scheduler_timeout,
+                  it->second.query)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
             VAST_TRACE("{} received {} results for query {} from partition {}",
