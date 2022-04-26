@@ -67,9 +67,8 @@ file.
 ExecStart=/path/to/vast --config=/path/to/vast.yaml start
 ```
 
-In case you plan to run a PCAP source directly inside the VAST server process
-via `vast spawn source pcap`, you need to make sure that the VAST process gets
-the required privileges to listen on the network interfaces.
+In case your VAST deployment needs elevated privileges, e.g., to capture
+packets, you can provide them as follows:
 
 ```ini
 CapabilityBoundingSet=CAP_NET_RAW
