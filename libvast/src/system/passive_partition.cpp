@@ -322,10 +322,12 @@ partition_actor::behavior_type passive_partition(
       });
   return {
     [self](vast::query query) -> caf::result<uint64_t> {
-      VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query));
-      if (!self->state.partition_chunk)
+      VAST_DEBUG("{} received query {}", *self, query);
+      if (!self->state.partition_chunk) {
+        VAST_DEBUG("{} waits for its state", *self);
         return std::get<1>(self->state.deferred_evaluations.emplace_back(
           std::move(query), self->make_response_promise<uint64_t>()));
+      }
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       VAST_ASSERT(self->state.deferred_evaluations.empty());
@@ -356,6 +358,7 @@ partition_actor::behavior_type passive_partition(
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, rp, start, query = std::move(query)](const ids& hits) mutable {
+            VAST_DEBUG("{} received results from the evaluator", *self);
             duration runtime = std::chrono::steady_clock::now() - start;
             auto id_str = fmt::to_string(query.id);
             self->send(self->state.accountant, "partition.lookup.runtime",
