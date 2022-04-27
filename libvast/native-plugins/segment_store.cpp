@@ -187,7 +187,7 @@ system::store_actor::behavior_type passive_local_store(
   self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
   self->state.path = path;
-  self->state.name = fmt::format("passive-store");
+  self->state.name = "passive-store";
   self->set_exit_handler([self](const caf::exit_msg&) {
     for (auto&& [expr, rp] : std::exchange(self->state.deferred_requests, {}))
       rp.deliver(caf::make_error(ec::lookup_error, "partition store shutting "
