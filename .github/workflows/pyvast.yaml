@@ -11,7 +11,7 @@ on:
       - '.github/workflows/style.yml'
   release:
     types:
-      - created
+      - published
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
