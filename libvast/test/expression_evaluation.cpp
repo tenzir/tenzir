@@ -95,7 +95,7 @@ TEST(evaluation - field extractor - service + orig_h) {
   REQUIRE_EQUAL(rank(ids), 2u);
 }
 
-TEST(evaluation - field extractor - nonexistant field) {
+TEST(evaluation - field extractor - nonexistent field) {
   auto expr = make_conn_expr("devnull != nil");
   auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK(all<0>(ids));

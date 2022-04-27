@@ -597,7 +597,10 @@ void index_state::schedule_lookups() {
     for (auto qid : next->queries) {
       auto it = pending_queries.queries().find(qid);
       if (it == pending_queries.queries().end()) {
-        VAST_WARN("{} tried to access non-existant query {}", *self, qid);
+        VAST_WARN("{} tried to access non-existent query {}", *self, qid);
+        *cnt -= 1;
+        if (*cnt == 0)
+          --running_partition_lookups;
         continue;
       }
       auto handle_completion = [cnt, qid, this] {
