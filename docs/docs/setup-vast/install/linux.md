@@ -1,31 +1,10 @@
 # Linux
 
-Use our [pre-built packages](#download) below or [build from
-source](/docs/setup-vast/build) to install VAST on any Linux distribution. To
-deploy VAST as system service, you can use our [systemd
+Use our [pre-built build packages](/docs/setup-vast/download#packages) or [build
+from source](/docs/setup-vast/build) to install VAST on any Linux distribution.
+
+To deploy VAST as system service, you can use our [systemd
 configuration](#systemd).
-
-## Download
-
-We offer pre-built packages containing a statically linked VAST binary, for the
-[latest release](https://github.com/tenzir/vast/releases/latest) and the current
-development version:
-
-<div align="center" class="padding-bottom--md">
-  <a class="button button--md button--primary margin--sm" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Release</a>
-  <a class="button button--md button--info margin--md" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Development</a>
-</div>
-
-You can also get static builds for a specific git commit. This involves
-navigating a bit through the github CI:
-
-1. Browse to the [VAST static workflow][vast-workflow]
-2. Click on the latest run, e.g., `Merge pull request...`
-3. Scroll to the end of the page
-4. Click on the artifact filename, e.g.,
-   `vast-v1.0.0-101-g6e7a4ef1a4-linux-static.tar.gz`
-
-[vast-workflow]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST%22
 
 ## systemd
 
@@ -96,18 +75,3 @@ We are striving to bring VAST into the package managers of all major Linux
 distributions. Unfortunately we can do so only at a best-effort basis, but
 we much appreciate community contributions.
 :::
-
-### Debian
-
-You can install [an older version of VAST](https://salsa.debian.org/debian/vast)
-via APT:
-
-```bash
-apt install vast
-```
-
-The installation scripts configure VAST as [systemd
-service][debian-vast-systemd-service] and store the database in
-`/var/lib/vast/db`. Adapt `/etc/vast/vast.yaml` as you see fit.
-
-[debian-vast-systemd-service]: https://salsa.debian.org/debian/vast/-/blob/master/debian/service
