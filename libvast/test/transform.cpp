@@ -220,6 +220,9 @@ TEST(replace step) {
 TEST(where step) {
   auto [slice, single_row_slice, multi_row_slice]
     = make_where_testdata(vast::defaults::import::table_slice_type);
+  CHECK_EQUAL(slice.rows(), 10ull);
+  CHECK_EQUAL(single_row_slice.rows(), 1ull);
+  CHECK_EQUAL(multi_row_slice.rows(), 4ull);
   auto where_plugin = vast::plugins::find<vast::transform_plugin>("where");
   REQUIRE(where_plugin);
   auto where_step
@@ -247,7 +250,22 @@ TEST(where step) {
   REQUIRE(!add3_failed);
   auto selected3 = where_step3->finish();
   REQUIRE_NOERROR(selected3);
-  REQUIRE_EQUAL(selected3->size(), 0ull);
+  CHECK_EQUAL(selected3->size(), 0ull);
+  auto where_step4 = unbox(where_plugin->make_transform_step(
+    {{"expression", "#type == \"testdata\""}}));
+  auto add4_failed = where_step4->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!add4_failed);
+  auto selected4 = where_step4->finish();
+  REQUIRE_NOERROR(selected4);
+  REQUIRE_EQUAL(selected4->size(), 1ull);
+  CHECK_EQUAL(as_table_slice(selected4), slice);
+  auto where_step5 = unbox(where_plugin->make_transform_step(
+    {{"expression", "#type != \"testdata\""}}));
+  auto add5_failed = where_step5->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!add5_failed);
+  auto selected5 = where_step5->finish();
+  REQUIRE_NOERROR(selected5);
+  CHECK_EQUAL(selected5->size(), 0ull);
 }
 
 TEST(anonymize step) {
