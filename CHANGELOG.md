@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
 
-## [v2.0.0-rc2][v2.0.0-rc2]
+## [v2.0.0-rc3][v2.0.0-rc3]
 
 ### :zap: Breaking Changes
 
@@ -47,6 +47,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Client commands such as `vast export` or `vast status` now create less threads at runtime, reducing the risk of hitting system resource limits.
   [#2193](https://github.com/tenzir/vast/pull/2193)
+
+- The `index` section in the status output no longer contains the `catalog` and `catalog-bytes` keys. The information is already present in the top-level `catalog` section.
+  [#2233](https://github.com/tenzir/vast/pull/2233)
 
 ### :gift: Features
 
@@ -102,6 +105,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST no longer sometimes crashes when aging or compaction erase whole partitions.
   [#2227](https://github.com/tenzir/vast/pull/2227)
+
+- Environment variables for options that specify lists now consistently use comma-separators and respect escaping with backslashes.
+  [#2236](https://github.com/tenzir/vast/pull/2236)
 
 ## [v1.1.2][v1.1.2]
 
@@ -1682,7 +1688,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 This is the first official release.
 
 [unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
-[v2.0.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc2
+[v2.0.0-rc3]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc3
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
 [v1.1.0]: https://github.com/tenzir/vast/releases/tag/v1.1.0
