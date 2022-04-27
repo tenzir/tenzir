@@ -55,7 +55,7 @@ TEST(read) {
         CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
       },
       [&](const caf::error& err) { FAIL(err); });
-  MESSAGE("attempt reading non-existant file");
+  MESSAGE("attempt reading non-existent file");
   self
     ->request(filesystem, caf::infinite, atom::read_v,
               std::filesystem::path{"bar"})

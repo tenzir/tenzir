@@ -235,7 +235,7 @@ deregister_component(node_actor::stateful_pointer<node_state> self,
   auto component = self->state.registry.remove(label);
   if (!component) {
     auto msg // separate variable for clang-format only
-      = fmt::format("{} failed to deregister non-existant component: {}", *self,
+      = fmt::format("{} failed to deregister non-existent component: {}", *self,
                     label);
     return caf::make_error(ec::unspecified, std::move(msg));
   }
