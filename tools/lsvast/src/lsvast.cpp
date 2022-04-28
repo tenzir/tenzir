@@ -103,7 +103,7 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
       }
     }
   }
-  const auto segments_dir = vast_db / "archive" / "segments";
+  const auto segments_dir = vast_db / "archive";
   fmt::print("{}{}/\n", indent, segments_dir.string());
   auto segment_options = options;
   // Only print a segment overview, not the whole contents
