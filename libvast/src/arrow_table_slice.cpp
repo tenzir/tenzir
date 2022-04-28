@@ -1252,8 +1252,10 @@ upgrade_array_to_v2(const std::shared_ptr<arrow::Array>& arr, const type& t) {
       return arr;
     },
     [&](const duration_type&) -> std::shared_ptr<arrow::Array> {
-      // duration is backed by physical int64 array, but logical type differs
-      return arr;
+      // Duration is backed by physical Int64 array, but logical type differs.
+      auto result = arr->View(duration_type::to_arrow_type());
+      VAST_ASSERT(result.ok(), result.status().ToString().c_str());
+      return result.MoveValueUnsafe();
     },
     [&](const record_type& rt) -> std::shared_ptr<arrow::Array> {
       // this case handles VAST type `list<record>`
