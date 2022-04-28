@@ -1056,7 +1056,8 @@ TEST(convert_legacy_table_slice_all_types) {
   auto legacy_slice
     = table_slice{chunk::make(std::move(bytes)), table_slice::verify::yes};
   const auto& rb = to_record_batch(legacy_slice);
-  check_column(legacy_slice, 4, duration_type{},
+  auto slice = arrow_table_slice_builder::create(rb);
+  check_column(slice, 4, duration_type{},
                list{duration{13323100000}, caf::none, caf::none, caf::none});
 }
 
