@@ -10,7 +10,26 @@ The [quick start guide](/docs/get-started/quick-start-guide) shows you how to
 get up and running and gives a quick tour of the key use cases.
 :::
 
-The documentation has the following key sections:
+The documentation walks through the following phases of the user journey:
+
+```mermaid
+flowchart LR
+  classDef action fill:#00a4f1,stroke:none,color:#eee
+  %% Actions
+  setup(Setup):::action
+  use(Use):::action
+  learn(Learn):::action
+  develop(Develop):::action
+  %% Edges
+  setup --> use --> learn --> develop
+  %% Links
+  click setup "/vast/docs/setup-vast/" "Setup VAST"
+  click use "/vast/docs/use-vast/" "Use VAST"
+  click learn "/vast/docs/learn-vast/" "Learn VAST"
+  click develop "/vast/docs/develop-vast/" "Develop VAST"
+```
+
+In detail:
 
 1. [Setup VAST](/docs/setup-vast) describes how you can download, install, and
    configure VAST in a variety of environments.
