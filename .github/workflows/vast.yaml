@@ -110,7 +110,7 @@ jobs:
       - name: Generate CHANGELOG.md
         run: |
           cmake --build build --target changelog
-      - name: Upload CHNAGELOG.md
+      - name: Upload CHANGELOG.md
         uses: actions/upload-artifact@v3
         with:
           name: CHANGELOG.md
