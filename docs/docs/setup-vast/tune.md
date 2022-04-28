@@ -3,49 +3,37 @@ sidebar_position: 5
 ---
 # Tune
 
+This section describes tuning knobs that have a notable effect on system
+performance.
+
 ## Batching: Table Slices
 
-VAST processes events in batches. Because the event data has the shape of a
-table, we call the batches *table slices*. The following options control their
-parameters.
+VAST processes events in batches. Because the structured data has the shape of a
+table, we call these batches *table slices*. The following options control their
+shape and behavior.
 
-### Encoding
-
-The option `vast.import.batch-encoding` selects the encoding of table slices.
-Available values are:
-
-- `msgpack` (row-based)
-- `arrow` (column-based)
-
-The default encoding for table slices is `arrow`, which is designed for fast
-columnar access and enables direct export as [Apache
-Arrow](https://arrow.apache.org) without re-encoding.
-
-[MessagePack](https://msgpack.org) is space-efficient binary serialization
-format. We recommend using it especially for binary data, like PCAP or
-NetFlow/IPFIX with varying layouts, and if exporting to Arrow is not required.
-MessagePack uses less disk space than Arrow, but the exact space savings depend
-on the type of data that is encoded.
+:::note Implementation Note
+Table slices are implemented as *Record Batches* in Apache Arrow.
+:::
 
 ### Size
 
 Most components in VAST operate on table slices, which makes the table slice
 size a fundamental tuning knob on the spectrum of throughput and latency. Small
 table slices allow for shorter processing times, resulting in more scheduler
-context switches and a more balanced workload. However, the increased pressure
-on the scheduler comes at the cost of throughput. A large table slice size
-allows actors to spend more time processing a block of data, but makes them
-yield less frequently to the scheduler. As a result, other actors scheduled on
-the same thread may have to wait a little longer.
+context switches and a more balanced workload. But the increased pressure on the
+scheduler comes at the cost of throughput. Conversely, a large table slice size
+creates more work for each actor invocation and makes them yield less frequently
+to the scheduler. As a result, other actors scheduled on the same thread may
+have to wait a little longer.
 
 The option `vast.import.batch-size` sets an upper bound for the number of events
 per table slice.
 
 The option merely controls number of events per table slice, but not
 necessarily the number of events until a component forwards a batch to the next
-stage in a stream. The [CAF streaming
-framework](https://actor-framework.readthedocs.io/en/latest/Streaming.html) uses
-a credit-based flow-control mechanism to determine buffering of tables slices.
+stage in a stream. The CAF streaming framework uses a credit-based flow-control
+mechanism to determine buffering of tables slices.
 
 :::tip
 Setting `vast.import.batch-size` to 0 causes the table slice size to be
@@ -63,24 +51,19 @@ ship immediately.
 ## Memory usage and caching
 
 The amount of memory that a VAST server process is allowed to use can currently
-not be configured directly as a config file option. Instead of such a direct
-tuning knob, the memory usage can be influenced through the configuration of
-the caching, catalog and disk monitor features.
+not be configured directly as a configuration file option. Instead of such a
+direct tuning knob, the memory usage can be influenced through the configuration
+of the caching, catalog and disk monitor features.
 
 ### Caching
 
-As illustrated on the [architecture.md] page VAST splits its indexes and raw
-storage into separate top-level components called INDEX and ARCHIVE. These
-components bucket their data into `partitions` and `segments` respectively, and
-each maintains an LRU cache to improve query responsiveness.
+VAST groups table slices with the same schema in a *partition*. When building a
+partition, the parameter `max-partition-size` sets an upper bound on the number
+of records in a partition, across all table slices.
 
-The segment cache can be controlled with the `segments` key which together with
-the `max-segment-size` will determine the memory requirements for the segment
+A LRU cache of partitions accelerates queries to recently used partitions. The
+parameter `max-resident-partitions` controls the number of partitions in the LRU
 cache.
-
-The partition cache works analogous, but the size of a partition is controlled
-as number of events instead of bytes. The latter depends on the data that is
-ingested and should be measured for a particular deployment.
 
 ### Catalog
 
@@ -145,7 +128,7 @@ has a false-positive rate of 10%.
 ### Approximate memory requirements
 
 A rough formula for estimating the memory requirements takes the configuration,
-the input data rate, and the amount of unique id address and string values in
+the input data rate, and the amount of unique IP address and string values in
 the input data stream into account.
 
 ```
