@@ -43,7 +43,7 @@ you might need to change the location of the `vast` binary and configuration
 file.
 
 ```config
-ExecStart=/path/to/vast --config=/path/to/vast.yaml start
+ExecStart=/path/to/vast start
 ```
 
 In case your VAST deployment needs elevated privileges, e.g., to capture
