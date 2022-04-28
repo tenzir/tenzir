@@ -1057,6 +1057,11 @@ index(index_actor::stateful_pointer<index_state> self,
                   query);
         return ec::remote_node_down;
       }
+      // Abort if the client has already been terminated.
+      if (sender->get()->getf(caf::abstract_actor::is_shutting_down_flag)) {
+        VAST_WARN("{} ignores query by a terminated actor", *self);
+        return caf::sec::invalid_argument;
+      }
       // Allows the client to query further results after initial taste.
       VAST_ASSERT(query.id == uuid::nil());
       query.id = self->state.pending_queries.create_query_id();
