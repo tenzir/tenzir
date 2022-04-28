@@ -33,9 +33,9 @@ flowchart LR
   deploy --> configure
   configure --> instance
   %% Links
-  click download "/vast/docs/setup-vast/download" "Download VAST"
-  click build "/vast/docs/setup-vast/build" "Build VAST"
-  click install "/vast/docs/setup-vast/install" "Install VAST"
-  click deploy "/vast/docs/setup-vast/deploy" "Deploy VAST"
-  click configure "/vast/docs/setup-vast/configure" "Configure VAST"
+  click download "/vast/docs/setup-vast/download/" "Download VAST"
+  click build "/vast/docs/setup-vast/build/" "Build VAST"
+  click install "/vast/docs/setup-vast/install/" "Install VAST"
+  click deploy "/vast/docs/setup-vast/deploy/" "Deploy VAST"
+  click configure "/vast/docs/setup-vast/configure/" "Configure VAST"
 ```

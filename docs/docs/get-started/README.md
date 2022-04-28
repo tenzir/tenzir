@@ -23,10 +23,10 @@ flowchart LR
   %% Edges
   setup --> use --> learn --> develop
   %% Links
-  click setup "/vast/docs/setup-vast" "Setup VAST"
-  click use "/vast/docs/use-vast" "Use VAST"
-  click learn "/vast/docs/learn-vast" "Learn VAST"
-  click develop "/vast/docs/develop-vast" "Develop VAST"
+  click setup "/vast/docs/setup-vast/" "Setup VAST"
+  click use "/vast/docs/use-vast/" "Use VAST"
+  click learn "/vast/docs/learn-vast/" "Learn VAST"
+  click develop "/vast/docs/develop-vast/" "Develop VAST"
 ```
 
 In detail:
