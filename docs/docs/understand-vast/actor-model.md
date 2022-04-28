@@ -64,7 +64,7 @@ distribution model. We can either bundle up all actors in a single process
   Kubernetes), multi-node data-center clusters
 
 You can think of two ends of the spectrum as follows:
- 
+
 <div align="center">
 <img src={require("@site/static/img/actor-model-distribution.png").default} width="500" />
 </div>

@@ -105,7 +105,6 @@ matching target configuration exists.
 
 #### Example
 
-
 ```yaml
 vast:
   index:
