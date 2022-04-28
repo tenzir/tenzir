@@ -3,7 +3,7 @@
 This changelog documents all notable changes to the summarize plugin for VAST.
 ## 2.0.0
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - The `aggregate` plugin is now called `summarize`.
 

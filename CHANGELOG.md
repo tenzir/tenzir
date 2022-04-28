@@ -4,11 +4,11 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 # Changelog
 
-This changelog documents all notable changes to VAST and is updated on every release. Changes made since the last release are in the [changelog/unreleased directory][unreleased].
+This changelog documents all notable changes to VAST and is updated on every release.
 
 ## [v2.0.0-rc3][v2.0.0-rc3]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - We removed the experimental `vast get` command. It relied on an internal unique event ID that was only exposed to the user in debug messages. This removal is a preparatory step towards a simplification of some of the internal workings of VAST.
   [#2121](https://github.com/tenzir/vast/pull/2121)
@@ -25,7 +25,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `layout-names` option of the `rename` transform step was renamed `schemas`. The step now additonally supports renaming `fields`.
   [#2228](https://github.com/tenzir/vast/pull/2228)
 
-### :warning: Changes
+### Changes
 
 - VAST ships experimental Terraform scripts to deploy on AWS Lambda and Fargate.
   [#2108](https://github.com/tenzir/vast/pull/2108)
@@ -51,7 +51,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `index` section in the status output no longer contains the `catalog` and `catalog-bytes` keys. The information is already present in the top-level `catalog` section.
   [#2233](https://github.com/tenzir/vast/pull/2233)
 
-### :gift: Features
+### Features
 
 - The new `vast.index` section in the configuration supports adjusting the false-positive rate of first-stage lookups for individual fields, allowing users to optimize the time/space trade-off for expensive queries.
   [#2065](https://github.com/tenzir/vast/pull/2065)
@@ -77,7 +77,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `replace` transform step now allows for setting values of complex types, e.g., lists or records.
   [#2228](https://github.com/tenzir/vast/pull/2228)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The `explore` command now properly terminates after the requested number of results are delivered.
   [#2120](https://github.com/tenzir/vast/pull/2120)
@@ -111,14 +111,14 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [v1.1.2][v1.1.2]
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - Terminating or timing out exports during the catalog lookup no longer causes query workers to become stuck indefinitely.
   [#2165](https://github.com/tenzir/vast/pull/2165)
 
 ## [v1.1.1][v1.1.1]
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The disk monitor now correctly continues deleting until below the low water mark after a partition failed to delete.
   [#2160](https://github.com/tenzir/vast/pull/2160)
@@ -131,7 +131,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [v1.1.0][v1.1.0]
 
-### :warning: Changes
+### Changes
 
 - VAST no longer attempts to intepret query expressions as Sigma rules automatically. Instead, this functionality moved to a dedicated `sigma` query language plugin that must explicitly be enabled at build time.
   [#2074](https://github.com/tenzir/vast/pull/2074)
@@ -148,7 +148,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - We fixed an issue where partition transforms that erase complete partitions trigger an internal assertion failure.
   [#2123](https://github.com/tenzir/vast/pull/2123)
 
-### :gift: Features
+### Features
 
 - The built-in `select` and `project` transform steps now correctly handle dropping all rows and columns respectively, effectively deleting the input data.
   [#2064](https://github.com/tenzir/vast/pull/2064)
@@ -163,7 +163,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://docs.tenzir.com/vast/features/compaction), e.g., for rolling up events into a more space-efficient representation after a certain amount of time.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - A performance bug in the first stage of query evaluation caused VAST to return too many candidate partitions when querying for a field suffix. For example, a query for the `ts` field commonly used in Zeek logs also included partitions for `netflow.pkts` from `suricata.netflow` events. This bug no longer exists, resulting in a considerable speedup of affected queries.
   [#2086](https://github.com/tenzir/vast/pull/2086)
@@ -179,7 +179,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [v1.0.0][v1.0.0]
 
-### :warning: Changes
+### Changes
 
 - Building VAST now requires Arrow >= 6.0.
   [#2033](https://github.com/tenzir/vast/pull/2033)
@@ -190,7 +190,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Plugins now have a separate version. The build scaffolding installs README.md and CHANGELOG.md files in the plugin source tree root automatically.
   [#2035](https://github.com/tenzir/vast/pull/2035)
 
-### :gift: Features
+### Features
 
 - VAST has a new transform step: `project`, which keeps the fields with configured key suffixes and removes the rest from the input. At the same time, the `delete` transform step can remove not only one but multiple fields from the input based on the configured key suffixes.
   [#2000](https://github.com/tenzir/vast/pull/2000)
@@ -204,7 +204,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `#import_time` meta extractor allows for querying events based on the time they arrived at the VAST server process. It may only be used for comparisons with [time value literals](https://docs.tenzir.com/vast/query-language/values/#time), e.g., `vast export json '#import_time > 1 hour ago'` exports all events that were imported within the last hour as NDJSON.
   [#2019](https://github.com/tenzir/vast/pull/2019)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The index now emits the metrics `query.backlog.{low,normal}` and `query.workers.{idle,busy}` reliably.
   [#2032](https://github.com/tenzir/vast/pull/2032)
@@ -217,12 +217,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.12.16][2021.12.16]
 
-### :warning: Changes
+### Changes
 
 - VAST's internal type system has a new on-disk data representation. While we still support reading older databases, reverting to an older version of VAST will not be possible after this change. Alongside this change, we've implemented numerous fixes and streamlined handling of field name lookups, which now more consistently handles the dot-separator. E.g., the query `#field == "ip"` still matches the field `source.ip`, but no longer the field `source_ip`. The change is also performance-relevant in the long-term: For data persisted from previous versions of VAST we convert to the new type system on the fly, and for newly ingested data we now have near zero-cost deserialization for types, which should result in an overall speedup once the old data is rotated out by the disk monitor.
   [#1888](https://github.com/tenzir/vast/pull/1888)
 
-### :gift: Features
+### Features
 
 - All metrics events now contain the version of VAST. Additionally, VAST now emits startup and shutdown metrics at the start and stop of the VAST server.
   [#1973](https://github.com/tenzir/vast/pull/1973)
@@ -234,14 +234,14 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1987](https://github.com/tenzir/vast/pull/1987)
   [#1992](https://github.com/tenzir/vast/pull/1992)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The field-based default selector of the JSON import now correctly matches types with nested record types.
   [#1988](https://github.com/tenzir/vast/pull/1988)
 
 ## [2021.11.18][2021.11.18]
 
-### :warning: Changes
+### Changes
 
 - The `max-queries` configuration option now works at a coarser granularity. It used to limit the number of queries that could simultaneously retrieve data, but it now sets the number of queries that can be processed at the same time.
   [#1896](https://github.com/tenzir/vast/pull/1896)
@@ -255,7 +255,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - A recently added features allows for exporting everything when no query is provided. We've restricted this to prefer reading a query from stdin if available. Additionally, conflicting ways to read the query now trigger errors.
   [#1917](https://github.com/tenzir/vast/pull/1917)
 
-### :gift: Features
+### Features
 
 - A new 'apply' handler in the index gives plugin authors the ability to apply transforms over entire partitions. Previously, transforms were limited to streams of table slice during import or export.
   [#1887](https://github.com/tenzir/vast/pull/1887)
@@ -267,7 +267,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The keys `query.backlog.normal` and `query.backlog.low` have been added to the metrics output. The values indicate the number of quries that are currently in the backlog.
   [#1942](https://github.com/tenzir/vast/pull/1942)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The timeout duration to delete partitions has been increased to one minute, reducing the frequency of warnings for hitting this timeout significantly.
   [#1897](https://github.com/tenzir/vast/pull/1897)
@@ -292,7 +292,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.09.30][2021.09.30]
 
-### :warning: Changes
+### Changes
 
 - The default store backend now is `segment-store` in order to enable the use of partition transforms in the future. To continue using the (now deprecated) legacy store backend, set `vast.store-backend` to archive.
   [#1876](https://github.com/tenzir/vast/pull/1876)
@@ -300,7 +300,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Example configuration files are now installed to the datarootdir as opposed to the sysconfdir in order to avoid overriding previously installed configuration files.
   [#1880](https://github.com/tenzir/vast/pull/1880)
 
-### :gift: Features
+### Features
 
 - If present in the plugin source directory, the build scaffolding now automatically installs `<plugin>.yaml.example` files, commenting out every line so the file has no effect. This serves as documentation for operators that can modify the installed file in-place.
   [#1860](https://github.com/tenzir/vast/pull/1860)
@@ -320,7 +320,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The output of `vast status --detailed` now contains information about queries   that are currently processed in the index.
   [#1881](https://github.com/tenzir/vast/pull/1881)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The status command no longer occasionally contains garbage keys when the VAST server is under high load.
   [#1872](https://github.com/tenzir/vast/pull/1872)
@@ -342,7 +342,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.08.26][2021.08.26]
 
-### :warning: Changes
+### Changes
 
 - VAST no longer strips link-layer framing when ingesting PCAPs. The stored payload is the raw PCAP packet. Similarly, `vast export pcap` now includes a Ethernet link-layer framing, per libpcap's `DLT_EN10MB` link type.
   [#1797](https://github.com/tenzir/vast/pull/1797)
@@ -356,7 +356,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now ships with an updated schema type for the `suricata.dhcp` event, covering all fields of the extended output.
   [#1854](https://github.com/tenzir/vast/pull/1854)
 
-### :gift: Features
+### Features
 
 - The `segment-store` store backend works correctly with `vast get` and `vast explore`.
   [#1805](https://github.com/tenzir/vast/pull/1805)
@@ -365,7 +365,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1819](https://github.com/tenzir/vast/pull/1819)
   [#1833](https://github.com/tenzir/vast/pull/1833)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - Previously missing fields of suricata event types are now part of the concept definitions of `net.src.ip`, `net.src.port`, `net.dst.ip`, `net.dst.port`, `net.app`, `net.proto`, `net.community_id`, `net.vlan`, and `net.packets`.
   [#1798](https://github.com/tenzir/vast/pull/1798)
@@ -399,7 +399,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.07.29][2021.07.29]
 
-### :warning: Changes
+### Changes
 
 - VAST no longer officially supports Debian Buster with GCC-8. In CI, VAST now runs on Debian Bullseye with GCC-10. The provided Docker images now use `debian:bullseye-slim` as base image. Users that require Debian Buster support should use the provided static builds instead.
   [#1765](https://github.com/tenzir/vast/pull/1765)
@@ -413,7 +413,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The following new build options exist: `VAST_ENABLE_AUTO_VECTORIZATION` enables/disables all auto-vectorization flags, and `VAST_ENABLE_SSE_INSTRUCTIONS` enables `-msse`; similar options exist for SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AVX, and AVX2.
   [#1778](https://github.com/tenzir/vast/pull/1778)
 
-### :gift: Features
+### Features
 
 - VAST has new a `store_plugin` type for custom store backends that hold the raw data of a partition. The new setting `vast.store-backend` controls the selection of the store implementation, which has a default value is `segment-store`. This is still an opt-in feature: unless the configuration value is set, VAST defaults to the old implementation.
   [#1720](https://github.com/tenzir/vast/pull/1720)
@@ -447,7 +447,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The static binary now bundles the Broker plugin.
   [#1789](https://github.com/tenzir/vast/pull/1789)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - Configuring VAST to use CAF's built-in OpenSSL module via the `caf.openssl.*` options now works again as expected.
   [#1740](https://github.com/tenzir/vast/pull/1740)
@@ -491,7 +491,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.06.24][2021.06.24]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - Apache Arrow is now a required dependency. The previously deprecated build  option `-DVAST_ENABLE_ARROW=OFF` no longer exists.
   [#1683](https://github.com/tenzir/vast/pull/1683)
@@ -499,7 +499,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST no longer loads static plugins by default. Generally, VAST now treats static plugins and bundled dynamic plugins equally, allowing users to enable or disable static plugins as needed for their deployments.
   [#1703](https://github.com/tenzir/vast/pull/1703)
 
-### :warning: Changes
+### Changes
 
 - The VAST community chat moved from Gitter to Slack. [Join us](http://slack.tenzir.com) in the `#vast` channel for vibrant discussions.
   [#1696](https://github.com/tenzir/vast/pull/1696)
@@ -511,7 +511,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1721](https://github.com/tenzir/vast/pull/1721)
   [#1734](https://github.com/tenzir/vast/pull/1734)
 
-### :gift: Features
+### Features
 
 - The new option `vast.start.commands` allows for specifying an ordered list of VAST commands that run after successful startup. The effect is the same as first starting a node, and then using another VAST client to issue commands.  This is useful for commands that have side effects that cannot be expressed through the config file, e.g., starting a source inside the VAST server that listens on a socket or reads packets from a network interface.
   [#1699](https://github.com/tenzir/vast/pull/1699)
@@ -528,7 +528,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Plugins load their respective configuration from `<configdir>/vast/plugin/<plugin-name>.yaml` in addition to the regular configuration file at `<configdir>/vast/vast.yaml`. The new plugin-specific file does not require putting configuration under the key `plugins.<plugin-name>`. This allows for deploying plugins without needing to touch the `<configdir>/vast/vast.yaml` configuration file.
   [#1724](https://github.com/tenzir/vast/pull/1724)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - VAST no longer crashes when querying for string fields with non-string values. Instead, an error message warns the user about an invalid query.
   [#1685](https://github.com/tenzir/vast/pull/1685)
@@ -553,7 +553,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.05.27][2021.05.27]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - Schemas are no longer implicitly shared between sources, i.e., an `import` process importing data with a custom schema will no longer affect other sources started at a later point in time. Schemas known to the VAST server process are still available to all `import` processes. We do not expect this change to have a real-world impact, but it could break setups where some sources have been installed on hosts without their own schema files, the VAST server did not have up-to-date schema files, and other sources were (ab)used to provide the latest type information.
   [#1656](https://github.com/tenzir/vast/pull/1656)
@@ -561,12 +561,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `configure` script was removed. This was a custom script that mimicked the functionality of an autotools-based `configure` script by writing directly to the cmake cache. Instead, users now must use the `cmake` and/or `ccmake` binaries directly to configure VAST.
   [#1657](https://github.com/tenzir/vast/pull/1657)
 
-### :warning: Changes
+### Changes
 
 - Building VAST without Apache Arrow via `-DVAST_ENABLE_ARROW=OFF` is now deprecated, and support for the option will be removed in a future release. As the Arrow ecosystem and libraries matured, we feel confident in making it a required dependency and plan to build upon it more in the future.
   [#1682](https://github.com/tenzir/vast/pull/1682)
 
-### :gift: Features
+### Features
 
 - The new *transforms* feature allows VAST to apply transformations to incoming and outgoing data. A transform consists of a sequence of steps that execute sequentially, e.g., to remove, overwrite, hash, encrypt data. A new plugin type makes it easy to write custom transforms.
   [#1517](https://github.com/tenzir/vast/pull/1517)
@@ -587,7 +587,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The new setting `vast.disk-monitor-step-size` enables the disk monitor to remove *N* partitions at once before re-checking if the new size of the database directory is now small enough. This is useful when checking the size of a directory is an expensive operation itself, e.g., on compressed filesystems.
   [#1655](https://github.com/tenzir/vast/pull/1655)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - VAST now correctly refuses to run when loaded plugins fail their initialization, i.e., are in a state that cannot be reasoned about.
   [#1618](https://github.com/tenzir/vast/pull/1618)
@@ -615,7 +615,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.04.29][2021.04.29]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - The previously deprecated ([#1409](https://github.com/tenzir/vast/pull/1409)) option `vast.no-default-schema` no longer exists.
   [#1507](https://github.com/tenzir/vast/pull/1507)
@@ -632,7 +632,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - To avoid confusion between the PCAP plugin and libpcap, which both have a library file named `libpcap.so`, we now generally prefix the plugin library output names with `vast-plugin-`. E.g., The PCAP plugin library file is now named `libvast-plugin-pcap.so`. Plugins specified with a full path in the configuration under `vast.plugins` must be adapted accordingly.
   [#1593](https://github.com/tenzir/vast/pull/1593)
 
-### :warning: Changes
+### Changes
 
 - The metrics for Suricata Eve JSON and Zeek Streaming JSON imports are now under the categories `suricata-reader` and `zeek-reader` respectively so they can be distinguished from the regular JSON import, which is still under `json-reader`.
   [#1498](https://github.com/tenzir/vast/pull/1498)
@@ -663,7 +663,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The VAST community chat moved from Element to Gitter. Join us at [gitter.im/tenzir/vast](https://gitter.im/tenzir/vast) or via Matrix at `#tenzir_vast:gitter.im`.
   [#1591](https://github.com/tenzir/vast/pull/1591)
 
-### :gift: Features
+### Features
 
 - The disk monitor gained a new `vast.start.disk-budget-check-binary` option that can be used to specify an external binary to determine the size of the database directory. This can be useful in cases where `stat()` does not give the correct answer, e.g. on compressed filesystems.
   [#1453](https://github.com/tenzir/vast/pull/1453)
@@ -683,7 +683,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - *Reader Plugins* and *Writer Plugins* are a new family of plugins that add import/export formats. The previously optional PCAP format moved into a dedicated plugin. Configure with `--with-pcap-plugin` and add `pcap` to `vast.plugins` to enable the PCAP plugin.
   [#1549](https://github.com/tenzir/vast/pull/1549)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - VAST no longer erroneously tries to load explicitly specified plugins dynamically that are linked statically.
   [#1528](https://github.com/tenzir/vast/pull/1528)
@@ -738,7 +738,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.03.25][2021.03.25]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - The previously deprecated `#timestamp` extractor has been removed from the query language entirely. Use `:timestamp` instead.
   [#1399](https://github.com/tenzir/vast/pull/1399)
@@ -747,7 +747,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1445](https://github.com/tenzir/vast/pull/1445)
   [#1452](https://github.com/tenzir/vast/pull/1452)
 
-### :warning: Changes
+### Changes
 
 - The default size of table slices (event batches) that is created from `vast import` processes has been changed from 1,000 to 1,024.
   [#1396](https://github.com/tenzir/vast/pull/1396)
@@ -768,7 +768,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The type extractor in the expression language now works with type aliases. For example, given the type definition for port from the base schema `type port = count`, a search for `:count` will also consider fields of type `port`.
   [#1446](https://github.com/tenzir/vast/pull/1446)
 
-### :gift: Features
+### Features
 
 - The schema language now supports 4 operations on record types: `+` combines the fields of 2 records into a new record. `<+` and `+>` are variations of `+` that give precedence to the left and right operand respectively. `-` creates a record with the field specified as its right operand removed.
   [#1407](https://github.com/tenzir/vast/pull/1407)
@@ -778,7 +778,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now supports nested records in Arrow table slices and in the JSON import, e.g., data of type `list<record<name: string, age: count>`. While nested record fields are not yet queryable, ingesting such data will no longer cause VAST to crash. MessagePack table slices don't support records in lists yet.
   [#1429](https://github.com/tenzir/vast/pull/1429)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - Some non-null pointers were incorrectly rendered as `*nullptr` in log messages.
   [#1430](https://github.com/tenzir/vast/pull/1430)
@@ -813,7 +813,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.02.24][2021.02.24]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - VAST switched to [spdlog >= 1.5.0](https://github.com/gabime/spdlog) for logging. For users, this means: The `vast.console-format` and `vast.file-format` now must be specified using the spdlog pattern syntax as described [here](https://github.com/gabime/spdlog/wiki/3.-Custom-formatting#pattern-flags). All settings under `caf.logger.*` are now ignored by VAST, and only the `vast.*` counterparts are used for logger configuration.
   [#1223](https://github.com/tenzir/vast/pull/1223)
@@ -837,7 +837,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The special meaning of the `#timestamp` attribute has been removed from the schema language. Timestamps can from now on be marked as such by using the `timestamp` type instead. Queries of the form `#timestamp <op> value` remain operational but are deprecated in favor of `:timestamp`. Note that this change also affects `:time` queries, which aren't supersets of `#timestamp` queries any longer.
   [#1388](https://github.com/tenzir/vast/pull/1388)
 
-### :warning: Changes
+### Changes
 
 - Schema parsing now uses a 2-pass loading phase so that type aliases can reference other types that are later defined in the same directory. Additionally, type definitions from already parsed schema dirs can be referenced from schema types that are parsed later. Types can also be redefined in later directories, but a type can not be defined twice in the same directory.
   [#1331](https://github.com/tenzir/vast/pull/1331)
@@ -856,12 +856,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The output of `vast help` and `vast documentation` now goes to *stdout* instead of to stderr. Erroneous invocations of `vast` also print the helptext, but in this case the output still goes to stderr to avoid interference with downstream tooling.
   [#1385](https://github.com/tenzir/vast/pull/1385)
 
-### :dna: Experimental Features
+### Experimental Features
 
 - [Sigma](https://github.com/Neo23x0/sigma) rules are now a valid format to represent query expression. VAST parses the `detection` attribute of a rule and translates it into a native query expression. To run a query using a Sigma rule, pass it on standard input, e.g., `vast export json < rule.yaml`.
   [#1379](https://github.com/tenzir/vast/pull/1379)
 
-### :gift: Features
+### Features
 
 - VAST rotates server logs by default. The new config options `vast.disable-log-rotation` and `vast.log-rotation-threshold` can be used to control this behaviour.
   [#1223](https://github.com/tenzir/vast/pull/1223)
@@ -882,7 +882,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The type extractor in the expression language now works with user defined types. For example the type `port` is defined as `type port = count` in the base schema. This type can now be queried with an expression like `:port == 80`.
   [#1382](https://github.com/tenzir/vast/pull/1382)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - An ordering issue introduced in [#1295](https://github.com/tenzir/vast/pull/1295) that could lead to a segfault with long-running queries was reverted.
   [#1381](https://github.com/tenzir/vast/pull/1381)
@@ -892,7 +892,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2021.01.28][2021.01.28]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto the existing verbosity levels. The existing short syntax, e.g., `-v debug`, no longer works.
   [#1244](https://github.com/tenzir/vast/pull/1244)
@@ -900,7 +900,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The GitHub CI changed to Debian Buster and produces Debian artifacts instead of Ubuntu artifacts. Similarly, the Docker images we provide on [Docker Hub](https://hub.docker.com/r/tenzir/vast) use Debian Buster as base image. To build Docker images locally, users must set `DOCKER_BUILDKIT=1` in the build environment.
   [#1294](https://github.com/tenzir/vast/pull/1294)
 
-### :warning: Changes
+### Changes
 
 - VAST preserves nested JSON objects in events instead of formatting them in a flattened form when exporting data with `vast export json`. The old behavior can be enabled with `vast export json --flatten`.
   [#1257](https://github.com/tenzir/vast/pull/1257)
@@ -912,7 +912,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The option `vast.schema-paths` is renamed to `vast.schema-dirs`. The old option is deprecated and will be removed in a future release.
   [#1287](https://github.com/tenzir/vast/pull/1287)
 
-### :dna: Experimental Features
+### Experimental Features
 
 - VAST features a new plugin framework to support efficient customization points at various places of the data processing pipeline. There exist several base classes that define an interface, e.g., for adding new commands or spawning a new actor that processes the incoming stream of data. The directory `examples/plugins/example` contains an example plugin.
   [#1208](https://github.com/tenzir/vast/pull/1208)
@@ -933,7 +933,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1315](https://github.com/tenzir/vast/pull/1315)
   [@ngrodzitski](https://github.com/ngrodzitski)
 
-### :gift: Features
+### Features
 
 - The new `import zeek-json` command allows for importing line-delimited Zeek JSON logs as produced by the [json-streaming-logs](https://github.com/corelight/json-streaming-logs) package. Unlike stock Zeek JSON logs, where one file contains exactly one log type, the streaming format contains different log event types in a single stream and uses an additional `_path` field to disambiguate the log type. For stock Zeek JSON logs, use the existing `import json` with the `-t` flag to specify the log type.
   [#1259](https://github.com/tenzir/vast/pull/1259)
@@ -947,7 +947,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST installations bundle a LICENSE.3rdparty file alongside the regular LICENSE file that lists all embedded code that is under a separate license.
   [#1306](https://github.com/tenzir/vast/pull/1306)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - Invalid Arrow table slices read from disk no longer trigger a segmentation fault. Instead, the invalid on-disk state is ignored.
   [#1247](https://github.com/tenzir/vast/pull/1247)
@@ -972,7 +972,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2020.12.16][2020.12.16]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - The `splunk-to-vast` script has a new name: `taxonomize`. The script now also generates taxonomy declarations for Azure Sentinel.
   [#1134](https://github.com/tenzir/vast/pull/1134)
@@ -995,7 +995,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `port` type is no longer a first-class type. The new way to represent transport-layer ports relies on `count` instead. In the schema, VAST ships with a new alias `type port = count` to keep existing schema definitions in tact. However, this is a breaking change because the on-disk format and Arrow data representation changed. Queries with `:port` type extractors no longer work. Similarly, the syntax `53/udp` no longer exists; use `count` syntax `53` instead. Since most `port` occurrences do not carry a known transport-layer type, and the type information exists typically in a separate field, removing `port` as native type streamlines the data model.
   [#1187](https://github.com/tenzir/vast/pull/1187)
 
-### :warning: Changes
+### Changes
 
 - VAST no longer requires you to manually remove a stale PID file from a no-longer running `vast` process. Instead, VAST prints a warning and overwrites the old PID file.
   [#1128](https://github.com/tenzir/vast/pull/1128)
@@ -1025,7 +1025,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `zeek` export format now strips off the prefix `zeek.` to ensure full compatibility with regular Zeek output. For all non-Zeek types, the prefix remains intact.
   [#1205](https://github.com/tenzir/vast/pull/1205)
 
-### :dna: Experimental Features
+### Experimental Features
 
 - VAST now ships with its own taxonomy and basic concept definitions for Suricata, Zeek, and Sysmon.
   [#1135](https://github.com/tenzir/vast/pull/1135)
@@ -1038,7 +1038,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The expression language gained support for the `#field` meta extractor. It is the complement for `#type` and uses suffix matching for field names at the layout level.
   [#1228](https://github.com/tenzir/vast/pull/1228)
 
-### :gift: Features
+### Features
 
 - The new option `vast.client-log-file` enables client-side logging. By default, VAST only writes log files for the server process.
   [#1132](https://github.com/tenzir/vast/pull/1132)
@@ -1064,7 +1064,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Low-selectivity queries of string (in)equality queries now run up to 30x faster, thanks to more intelligent selection of relevant index partitions.
   [#1214](https://github.com/tenzir/vast/pull/1214)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - `vast import` no longer stalls when it doesn't receive any data for more than 10 seconds.
   [#1136](https://github.com/tenzir/vast/pull/1136)
@@ -1104,7 +1104,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2020.10.29][2020.10.29]
 
-### :warning: Changes
+### Changes
 
 - The new option `import.read-timeout` allows for setting an input timeout for low volume sources. Reaching the timeout causes the current batch to be forwarded immediately. This behavior was previously controlled by `import.batch-timeout`, which now only controls the maximum buffer time before the source forwards batches to the server.
   [#1096](https://github.com/tenzir/vast/pull/1096)
@@ -1118,7 +1118,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The default database directory moved to `/var/lib/vast` for Linux deployments.
   [#1116](https://github.com/tenzir/vast/pull/1116)
 
-### :dna: Experimental Features
+### Experimental Features
 
 - The query language now comes with support for concepts, the first part of taxonomies. Concepts is a mechanism to unify the various naming schemes of different data formats into a single, coherent nomenclature.
   [#1102](https://github.com/tenzir/vast/pull/1102)
@@ -1126,7 +1126,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - A new *disk monitor* component can now monitor the database size and delete data that exceeds a specified threshold. Once VAST reaches the maximum amount of disk space, the disk monitor deletes the oldest data. The command-line options `--disk-quota-high`, `--disk-quota-low`, and `--disk-quota-check-interval` control the rotation behavior.
   [#1103](https://github.com/tenzir/vast/pull/1103)
 
-### :gift: Features
+### Features
 
 - When running VAST under systemd supervision, it is now possible to use the `Type=notify` directive in the unit file to let VAST notify the service manager when it becomes ready.
   [#1091](https://github.com/tenzir/vast/pull/1091)
@@ -1140,7 +1140,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The expression language now accepts records without field names. For example,`id == <192.168.0.1, 41824, 143.51.53.13, 25, "tcp">` is now valid syntax and instantiates a record with 5 fields. Note: expressions with records currently do not execute.
   [#1129](https://github.com/tenzir/vast/pull/1129)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The lookup for schema directories now happens in a fixed order.
   [#1086](https://github.com/tenzir/vast/pull/1086)
@@ -1159,7 +1159,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2020.09.30][2020.09.30]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - Data exported in the Apache Arrow format now contains the name of the payload record type in the metadata section of the schema.
   [#1072](https://github.com/tenzir/vast/pull/1072)
@@ -1167,7 +1167,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The persistent storage format of the index now uses FlatBuffers.
   [#863](https://github.com/tenzir/vast/pull/863)
 
-### :warning: Changes
+### Changes
 
 - The JSON export format now renders `duration` and `port` fields using strings as opposed to numbers. This avoids a possible loss of information and enables users to re-use the output in follow-up queries directly.
   [#1034](https://github.com/tenzir/vast/pull/1034)
@@ -1193,12 +1193,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - We refactored the index architecture to improve stability and responsiveness. This includes fixes for several shutdown issues.
   [#863](https://github.com/tenzir/vast/pull/863)
 
-### :dna: Experimental Features
+### Experimental Features
 
 - The `vast get` command has been added. It retrieves events from the database directly by their ids.
   [#938](https://github.com/tenzir/vast/pull/938)
 
-### :gift: Features
+### Features
 
 - VAST now supports the XDG base directory specification: The `vast.conf` is now found at `${XDG_CONFIG_HOME:-${HOME}/.config}/vast/vast.conf`, and schema files at `${XDG_DATA_HOME:-${HOME}/.local/share}/vast/schema/`. The user-specific configuration file takes precedence over the global configuration file in `<sysconfdir>/vast/vast.conf`.
   [#1036](https://github.com/tenzir/vast/pull/1036)
@@ -1212,19 +1212,19 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The output of the `status` command was restructured with a strong focus on usability. The new flags `--detailed` and `--debug` add additional content to the output.
   [#995](https://github.com/tenzir/vast/pull/995)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - Stalled sources that were unable to generate new events no longer stop import processes from shutting down under rare circumstances.
   [#1058](https://github.com/tenzir/vast/pull/1058)
 
 ## [2020.08.28][2020.08.28]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - We now bundle a patched version of CAF, with a changed ABI. This means that if you're linking against the bundled CAF library, you also need to distribute that library so that VAST can use it at runtime. The versions are API compatible so linking against a system version of CAF is still possible and supported.
   [#1020](https://github.com/tenzir/vast/pull/1020)
 
-### :warning: Changes
+### Changes
 
 - The `set` type has been removed. Experience with the data model showed that there is no strong use case to separate sets from vectors in the core. While this may be useful in programming languages, VAST deals with immutable data where set constraints have been enforced upstream. This change requires updating existing schemas by changing `set<T>` to `vector<T>`. In the query language, the new symbol for the empty `map` changed from `{-}` to `{}`, as it now unambiguously identifies `map` instances.
   [#1010](https://github.com/tenzir/vast/pull/1010)
@@ -1235,7 +1235,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The expression field parser now allows the '-' character.
   [#999](https://github.com/tenzir/vast/pull/999)
 
-### :gift: Features
+### Features
 
 - VAST now writes a PID lock file on startup to prevent multiple server processes from accessing the same persistent state. The `pid.lock` file resides in the `vast.db` directory.
   [#1001](https://github.com/tenzir/vast/pull/1001)
@@ -1246,7 +1246,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now prints the location of the configuration file that is used.
   [#1009](https://github.com/tenzir/vast/pull/1009)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The shutdown process of the server process could potentially hang forever. VAST now uses a 2-step procedure that first attempts to terminate all components cleanly. If that fails, it will attempt a hard kill afterwards, and if that fails after another timeout, the process will call `abort(3)`.
   [#1005](https://github.com/tenzir/vast/pull/1005)
@@ -1283,12 +1283,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2020.07.28][2020.07.28]
 
-### :zap: Breaking Changes
+### Breaking Changes
 
 - [FlatBuffers](https://google.github.io/flatbuffers/) is now a required  dependency for VAST. The archive and the segment store use FlatBuffers to store  and version their on-disk persistent state.
   [#972](https://github.com/tenzir/vast/pull/972)
 
-### :warning: Changes
+### Changes
 
 - The suricata schema file contains new type definitions for the stats, krb5, smb, and ssh events.
   [#954](https://github.com/tenzir/vast/pull/954)
@@ -1297,7 +1297,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now recognizes `/etc/vast/schema` as an additional default directory for schema files.
   [#980](https://github.com/tenzir/vast/pull/980)
 
-### :gift: Features
+### Features
 
 - Starting with this release, installing VAST on any Linux becomes significantly easier: A static binary will be provided with each release on the GitHub releases page.
   [#966](https://github.com/tenzir/vast/pull/966)
@@ -1305,14 +1305,14 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - We open-sourced our [MessagePack](http://msgpack.org)-based table slice implementation, which provides a compact row-oriented encoding of data. This encoding works well for binary formats (e.g., PCAP) and access patterns that involve materializing entire rows. The MessagePack table slice is the new default when Apache Arrow is unavailable. To enable parsing into MessagePack, you can pass `--table-slice-type=msgpack` to the `import` command, or set the configuration option `import.table-slice-type` to `'msgpack'`.
   [#975](https://github.com/tenzir/vast/pull/975)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The PCAP reader now correctly shows the amount of generated events.
   [#954](https://github.com/tenzir/vast/pull/954)
 
 ## [2020.06.25][2020.06.25]
 
-### :warning: Changes
+### Changes
 
 - The options `system.table-slice-type` and `system.table-slice-size` have been removed, as they duplicated `import.table-slice-type` and `import.table-slice-size` respectively.
   [#908](https://github.com/tenzir/vast/pull/908)
@@ -1324,12 +1324,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `default` table slice type has been renamed to `caf`. It has not been the default when built with Apache Arrow support for a while now, and the new name more accurately reflects what it is doing.
   [#948](https://github.com/tenzir/vast/pull/948)
 
-### :dna: Experimental Features
+### Experimental Features
 
 - VAST now supports aging out existing data. This feature currently only concerns data in the archive. The options `system.aging-frequency` and `system.aging-query` configure a query that runs on a regular schedule to determine which events to delete. It is also possible to trigger an aging cycle manually.
   [#929](https://github.com/tenzir/vast/pull/929)
 
-### :gift: Features
+### Features
 
 - VAST now has options to limit the amount of results produced by an invocation of `vast explore`.
   [#882](https://github.com/tenzir/vast/pull/882)
@@ -1349,7 +1349,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The meta index now uses Bloom filters for equality queries involving IP addresses. This especially accelerates queries where the user wants to know whether a certain IP address exists in the entire database.
   [#931](https://github.com/tenzir/vast/pull/931)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - A use after free bug would sometimes crash the node while it was shutting down.
   [#896](https://github.com/tenzir/vast/pull/896)
@@ -1365,7 +1365,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2020.05.28][2020.05.28]
 
-### :warning: Changes
+### Changes
 
 - The command line flag for disabling the accountant has been renamed to `--disable-metrics` to more accurately reflect its intended purpose. The internal `vast.statistics` event has been renamed to `vast.metrics`.
   [#870](https://github.com/tenzir/vast/pull/870)
@@ -1373,13 +1373,13 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Spreading a query over multiple command line arguments in commands like explore/export/pivot/etc. has been deprecated.
   [#878](https://github.com/tenzir/vast/pull/878)
 
-### :dna: Experimental Features
+### Experimental Features
 
 - Added a new `explore` command to VAST that can be used to show data records within a certain time from the results of a query.
   [#873](https://github.com/tenzir/vast/pull/873)
   [#877](https://github.com/tenzir/vast/pull/877)
 
-### :gift: Features
+### Features
 
 - All input parsers now support mixed `\n` and `\r\n` line endings.
   [#865](https://github.com/tenzir/vast/pull/865)
@@ -1396,7 +1396,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now ships with a schema suitable for Sysmon import.
   [#886](https://github.com/tenzir/vast/pull/886)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - The parser for Zeek tsv data used to ignore attributes that were defined for the Zeek-specific types in the schema files. It has been modified to respect and prefer the specified attributes for the fields that are present in the input data.
   [#847](https://github.com/tenzir/vast/pull/847)
@@ -1409,7 +1409,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2020.04.29][2020.04.29]
 
-### :warning: Changes
+### Changes
 
 - The index specific options `max-partition-size`, `max-resident-partitions`, `max-taste-partitions`, and `max-queries` can now be specified on the command line when starting a node.
   [#728](https://github.com/tenzir/vast/pull/728)
@@ -1420,7 +1420,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The option `--skip-candidate-checks` / `-s` for the `count` command was renamed to `--estimate` / `-e`.
   [#843](https://github.com/tenzir/vast/pull/843)
 
-### :gift: Features
+### Features
 
 - Packet drop and discard statistics are now reported to the accountant for PCAP import, and are available using the keys `pcap-reader.recv`, `pcap-reader.drop`, `pcap-reader.ifdrop`, `pcap-reader.discard`, and `pcap-reader.discard-rate` in the `vast.statistics` event. If the number of dropped packets exceeds a configurable threshold, VAST additionally warns about packet drops on the command line.
   [#827](https://github.com/tenzir/vast/pull/827)
@@ -1429,7 +1429,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Bash autocompletion for `vast` is now available via the autocomplete script located at `scripts/vast-completions.bash` in the VAST source tree.
   [#833](https://github.com/tenzir/vast/pull/833)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - Archive lookups are now interruptible. This change fixes an issue that caused consecutive exports to slow down the node, which improves the overall performance for larger databases considerably.
   [#825](https://github.com/tenzir/vast/pull/825)
@@ -1451,7 +1451,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2020.03.26][2020.03.26]
 
-### :warning: Changes
+### Changes
 
 - The VERBOSE log level has been added between INFO and DEBUG. This level is enabled at build time for all build types, making it possible to get more detailed logging output from release builds.
   [#787](https://github.com/tenzir/vast/pull/787)
@@ -1468,7 +1468,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The config option `system.log-directory` was deprecated and replaced by the new  option `system.log-file`. All logs will now be written to a single file.
   [#806](https://github.com/tenzir/vast/pull/806)
 
-### :gift: Features
+### Features
 
 - The new `vast import syslog` command allows importing Syslog messages as defined in [RFC5424](https://tools.ietf.org/html/rfc5424).
   [#770](https://github.com/tenzir/vast/pull/770)
@@ -1493,7 +1493,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ## [2020.02.27][2020.02.27]
 
-### :warning: Changes
+### Changes
 
 - The build system will from now on try use the CAF library from the system, if one is provided. If it is not found, the CAF submodule will be used as a fallback.
   [#740](https://github.com/tenzir/vast/pull/740)
@@ -1510,19 +1510,19 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Hash indices have been disabled again due to a performance regression.
   [#765](https://github.com/tenzir/vast/pull/765)
 
-### :gift: Features
+### Features
 
 - For users of the [Nix](https://nixos.org/nix/) package manager, expressions have been added to generate reproducible development environments with `nix-shell`.
   [#740](https://github.com/tenzir/vast/pull/740)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - Continuously importing events from a Zeek process with a low rate of emitted events resulted in a long delay until the data would be included in the result set of queries. This is because the import process would buffer up to 10,000 events before sending them to the server as a batch. The algorithm has been tuned to flush its buffers if no data is available for more than 500 milliseconds.
   [#750](https://github.com/tenzir/vast/pull/750)
 
 ## [2020.01.31][2020.01.31]
 
-### :warning: Changes
+### Changes
 
 - The `import pcap` command no longer takes interface names via `--read,-r`, but instead from a separate option named `--interface,-i`. This change has been made for consistency with other tools.
   [#641](https://github.com/tenzir/vast/pull/641)
@@ -1539,7 +1539,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST is switching to a calendar-based versioning scheme starting with this release.
   [#739](https://github.com/tenzir/vast/pull/739)
 
-### :gift: Features
+### Features
 
 - When a record field has the `#index=hash` attribute, VAST will choose an optimized index implementation. This new index type only supports (in)equality queries and is therefore intended to be used with opaque types, such as unique identifiers or random strings.
   [#632](https://github.com/tenzir/vast/pull/632)
@@ -1560,7 +1560,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - On FreeBSD, a VAST installation now includes an rc.d script that simpliefies spinning up a VAST node. CMake installs the script at `PREFIX/etc/rc.d/vast`.
   [#693](https://github.com/tenzir/vast/pull/693)
 
-### :beetle: Bug Fixes
+### Bug Fixes
 
 - In some cases it was possible that a source would connect to a node before it was fully initialized, resulting in a hanging `vast import` process.
   [#647](https://github.com/tenzir/vast/pull/647)
@@ -1586,7 +1586,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 ## [0.2] - 2019.10.30
 [0.2]: https://github.com/tenzir/vast/releases/tag/0.2
 
-### ⚠️ Changes
+### Changes
 
 - The query language has been extended to support expression of the form `X == /pattern/`, where `X` is a compatible LHS extractor. Previously, patterns only supports the match operator `~`. The two operators have the same semantics when one operand is a pattern.
 
@@ -1610,7 +1610,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - To make the export option to limit the number of events to be exported more idiomatic, it has been renamed from `--events,e` to `--max-events,n`. Now `vast export -n 42` generates at most 42 events.
 
-### 🎁 Features
+### Features
 
 - The default schema for Suricata has been updated to support the new `suricata.smtp` event type in Suricata 5.
 
@@ -1652,7 +1652,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The new `--disable-accounting` option shuts off periodic gathering of system telemetry in the accountant actor. This also disables output in the `accounting.log`.
 
-### 🐞 Bug Fixes
+### Bug Fixes
 
 - The user environments `LDFLAGS` were erroneously passed to `ar`. Instead, the user environments `ARFLAGS` are now used.
 
@@ -1687,7 +1687,6 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[unreleased]: https://github.com/tenzir/vast/commits/master/changelog/unreleased
 [v2.0.0-rc3]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc3
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1

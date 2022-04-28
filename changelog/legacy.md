@@ -1,7 +1,7 @@
 ## [0.2] - 2019.10.30
 [0.2]: https://github.com/tenzir/vast/releases/tag/0.2
 
-### ⚠️ Changes
+### Changes
 
 - The query language has been extended to support expression of the form `X == /pattern/`, where `X` is a compatible LHS extractor. Previously, patterns only supports the match operator `~`. The two operators have the same semantics when one operand is a pattern.
 
@@ -25,7 +25,7 @@
 
 - To make the export option to limit the number of events to be exported more idiomatic, it has been renamed from `--events,e` to `--max-events,n`. Now `vast export -n 42` generates at most 42 events.
 
-### 🎁 Features
+### Features
 
 - The default schema for Suricata has been updated to support the new `suricata.smtp` event type in Suricata 5.
 
@@ -67,7 +67,7 @@
 
 - The new `--disable-accounting` option shuts off periodic gathering of system telemetry in the accountant actor. This also disables output in the `accounting.log`.
 
-### 🐞 Bug Fixes
+### Bug Fixes
 
 - The user environments `LDFLAGS` were erroneously passed to `ar`. Instead, the user environments `ARFLAGS` are now used.
 

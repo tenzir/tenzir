@@ -7,11 +7,11 @@ set(categories
   "features"
   "bug-fixes")
 set(titles
-  ":zap: Breaking Changes"
-  ":warning: Changes"
-  ":dna: Experimental Features"
-  ":gift: Features"
-  ":beetle: Bug Fixes")
+  "Breaking Changes"
+  "Changes"
+  "Experimental Features"
+  "Features"
+  "Bug Fixes")
 
 set(changelog "")
 set(changelog_links "")
@@ -24,10 +24,7 @@ string(APPEND changelog
   "-->\n\n"
   "# Changelog\n\n"
   "This changelog documents all notable changes to @PROJECT_NAME@ and is "
-  "updated on every release. Changes made since the last release are in the "
-  "[changelog/unreleased directory][unreleased].\n\n")
-string(APPEND changelog_links
-  "[unreleased]: @PROJECT_HOMEPAGE_URL@/commits/master/changelog/unreleased\n")
+  "updated on every release.\n\n")
 
 file(GLOB releases LIST_DIRECTORIES ON
   RELATIVE "${changelog_directory}/" "${changelog_directory}/*")
