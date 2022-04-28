@@ -8,9 +8,9 @@ You can obtain various artifacts of VAST along the CD pipeline.
 
 ## Source Code
 
-Get the source code by cloning our git repository or downloading an archive.
+Get the source code by cloning our Git repository or downloading an archive.
 
-### git
+### Git
 
 Use `git` to clone our repository hosted on GitHub:
 
@@ -44,8 +44,8 @@ We offer pre-built versions of VAST containing a statically linked binary, for t
   <a class="button button--md button--primary" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Static Build (Release)</a>
 </div>
 
-For development versions or a specific git commit, you need to navigate through
-the github CI to find the build artifact:
+For development versions or a specific Git commit, you need to navigate through
+the GitHub CI to find the build artifact:
 
 1. Browse to the [VAST static workflow][vast-workflow]
 2. Click on the latest run, e.g., `Merge pull request...`
@@ -62,7 +62,7 @@ version.
 ### Docker
 
 You can download pre-built Docker images from
-[DockerHub](https://hub.docker.com/repository/docker/tenzir/vast).
+[Docker Hub](https://hub.docker.com/repository/docker/tenzir/vast).
 
 Read our [Docker instructions](/docs/setup-vast/deploy/docker) for more details
 on using Docker.
