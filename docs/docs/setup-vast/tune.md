@@ -161,5 +161,6 @@ Server log files rotate automatically after 10 MiB. The option
 option `vast.log-rotation-threshold` sets the size limit when a log file should
 be rotated.
 
-VAST processes log messages in a dedicated thread, which buffers up to 1M
-messages by default. The option `vast.log-queue-size` controls this setting.
+VAST processes log messages in a dedicated thread, which by default buffers up
+to 1M messages for servers, and 100 for clients. The option
+`vast.log-queue-size` controls this setting.
