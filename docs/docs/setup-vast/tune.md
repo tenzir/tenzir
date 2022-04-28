@@ -124,60 +124,6 @@ applies to a single field, `suricata.http.http.url`, and has false-positive rate
 of 0.5%. The second rule creates one sketch for all fields of type `addr` that
 has a false-positive rate of 10%.
 
-### Approximate memory requirements
-
-A rough formula for estimating the memory requirements takes the configuration,
-the input data rate, and the amount of unique IP address and string values in
-the input data stream into account.
-
-```
-memory_est = (segments + 1) * max-segment-size + avg-partition-mem-size *
-(max-resident-partitions + 1) + sketch-factor * max-num-partitions
-```
-
-where:
-
-```
-max-num-partitions = disk-budget-high / avg-partition-disk-size
-```
-
-The `sketch-factor` depends on the rate of unique string or address values in
-the input data stream and the `catalog-fp-rate` option. This has been measured
-to 2.0% at a false positive rate of `0.001`.
-
-The `avg-partition-disk-size` is in turn a function of the input data
-distribution and `max-partition-size` config option. It has been measured at
-about 163 MiB for a typical suricata eve.log.
-
-Finally, the `avg-partition-mem-size` can be conservatively calculated as twice
-the size of the `avg-partition-disk-size`. Multiplied to the value of
-`max-resident-partitions + 1` from the configuration file we get the maximum
-occupancy of the partitions.
-
-#### Example
-
-Putting in the measured example values and a `disk-budget-high` setting of
-2000 GiB we can calculate the estimated memory consumption to
-
-```
-11 * 1 Gib + 11 * 0.326 Gib + 0.02 * 2000 Gib
-11 Gib + 3.6 Gib + 40 Gib
-54.6 Gib
-```
-
-As you can see, depending on the disk budget and the entropy in the data the
-sketches that make up the catalog can quickly become the largest contributor to
-the memory requirement. Increasing the `max-partition-size` from the default 1
-Mib to 8 Mib reduces the sketch factor to `0.016` for our sample data, if we
-reduce the `max-resident-partitions` to `2` for a fair comparison, we get the
-the following new composition:
-
-```
-11 * 1 Gib + 3 * 2.608 Gib + 0.016 * 2000 Gib
-11 Gib + 7.2 Gib + 32 Gib
-50.2 Gib
-```
-
 ## Shutdown
 
 The `stop` command gracefully brings down a VAST server that has been started
