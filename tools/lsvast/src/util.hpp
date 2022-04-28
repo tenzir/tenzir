@@ -12,6 +12,7 @@
 #include <vast/uuid.hpp>
 
 #include <flatbuffers/flatbuffers.h>
+#include <fmt/ostream.h> // Allow fmt to use the existing operator<<
 
 #include <iomanip>
 #include <ostream>
