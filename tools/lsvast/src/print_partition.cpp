@@ -109,7 +109,7 @@ void print_partition_legacy(
     }
   }
   // Print catalog contents.
-  std::cout << indent << "Meta Index\n";
+  std::cout << indent << "Catalog\n";
   if (auto partition_synopsis = partition->partition_synopsis()) {
     indented_scope _(indent);
     for (auto column_synopsis : *partition_synopsis->synopses()) {
