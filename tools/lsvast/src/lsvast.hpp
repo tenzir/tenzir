@@ -39,10 +39,16 @@ struct partition_options {
   std::vector<std::string> expand_indexes = {};
 };
 
+// Options specific to printing segments.
+struct segment_options {
+  bool print_contents = true;
+};
+
 // Global options.
 struct options {
   formatting_options format = {};
   partition_options partition = {};
+  segment_options segment = {};
 };
 
 struct indentation;

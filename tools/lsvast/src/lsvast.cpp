@@ -15,6 +15,7 @@
 #include <vast/fbs/segment.hpp>
 #include <vast/io/read.hpp>
 #include <vast/logger.hpp>
+#include <vast/system/configuration.hpp>
 
 #include <caf/expected.hpp>
 
@@ -104,6 +105,9 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
   }
   const auto segments_dir = vast_db / "archive" / "segments";
   std::cout << indent << segments_dir.string() << "/\n";
+  auto segment_options = options;
+  // Only print a segment overview, not the whole contents
+  segment_options.segment.print_contents = false;
   {
     indented_scope _(indent);
     std::error_code err{};
@@ -115,7 +119,7 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
       for (const auto& entry : dir) {
         const auto stem = entry.path().stem();
         std::cout << indent << stem << " - ";
-        print_segment(entry.path(), indent, options);
+        print_segment(entry.path(), indent, segment_options);
       }
     }
   }
@@ -126,6 +130,8 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
 using namespace lsvast;
 
 int main(int argc, char** argv) {
+  // Initialize factories.
+  [[maybe_unused]] auto config = vast::system::configuration{};
   std::string raw_path;
   struct options options;
   auto& format = options.format;

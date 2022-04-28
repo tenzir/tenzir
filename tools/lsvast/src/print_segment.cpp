@@ -10,6 +10,7 @@
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/uuid.hpp>
 #include <vast/fbs/segment.hpp>
+#include <vast/format/json.hpp>
 #include <vast/table_slice.hpp>
 #include <vast/uuid.hpp>
 
@@ -20,10 +21,42 @@
 
 namespace lsvast {
 
+template <typename SegmentFlatbuffer>
+static void print_segment_contents(const SegmentFlatbuffer* segment,
+                                   indentation&, const options&) {
+  if (!segment || !segment->slices()) {
+    fmt::print("(null segment)\n");
+    return;
+  }
+  auto settings = caf::settings{};
+  auto writer = vast::format::json::writer{
+    std::make_unique<std::stringstream>(), settings};
+  for (const auto* slice_wrapper : *segment->slices()) {
+    if (!slice_wrapper || !slice_wrapper->data()) {
+      fmt::print("(null contents)\n");
+      return;
+    }
+    const auto* slice_data = slice_wrapper->data();
+    // Use an empty deleter to create a non-owning chunk.
+    auto chunk = vast::chunk::make(slice_data->data(), slice_data->size(),
+                                   []() noexcept { /* nop */ });
+    auto slice
+      = vast::table_slice{std::move(chunk), vast::table_slice::verify::no};
+    writer.write(slice);
+  }
+  writer.flush();
+  auto& out = static_cast<std::stringstream&>(writer.out());
+  fmt::print("{}\n", out.str());
+}
+
 void print_segment_v0(const vast::fbs::segment::v0* segment,
                       indentation& indent, const options& options) {
   indented_scope _(indent);
-  vast::uuid id;
+  if (options.segment.print_contents) {
+    print_segment_contents(segment, indent, options);
+    return;
+  }
+  vast::uuid id = {};
   if (segment->uuid())
     if (auto error = unpack(*segment->uuid(), id))
       fmt::print(stderr, "{}{}", indent, to_string(error));
@@ -45,7 +78,7 @@ void print_segment_v0(const vast::fbs::segment::v0* segment,
       auto slice
         = vast::table_slice(std::move(chunk), vast::table_slice::verify::no);
       const auto& layout = slice.layout();
-      fmt::print("{}{}: {} rows", indent, layout.name() , slice.rows());
+      fmt::print("{}{}: {} rows", indent, layout.name(), slice.rows());
       if (options.format.print_bytesizes) {
         auto size = flat_slice->data()->size();
         fmt::print(" ({})", print_bytesize(size, options.format));
@@ -54,7 +87,8 @@ void print_segment_v0(const vast::fbs::segment::v0* segment,
       fmt::print("\n");
     }
     if (options.format.print_bytesizes)
-      fmt::print("{}total: {}\n", indent, print_bytesize(total_size, options.format));
+      fmt::print("{}total: {}\n", indent,
+                 print_bytesize(total_size, options.format));
   }
 }
 
