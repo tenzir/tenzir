@@ -50,6 +50,11 @@ const config = {
             label: 'Docs',
           },
           {
+            to: '/changelog',
+            label: 'Changelog',
+            position: 'left',
+          },
+          {
             href: 'https://github.com/tenzir/vast',
             label: 'GitHub',
             position: 'right',

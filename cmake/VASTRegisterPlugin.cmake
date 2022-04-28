@@ -663,8 +663,8 @@ function (VASTRegisterPlugin)
         . \"$env_dir/bin/activate\"
         python -m pip install --upgrade pip
         python -m pip install -r \"$base_dir/requirements.txt\"
-        $<$<TARGET_EXISTS:${PLUGIN_TARGET}-shared>:export VAST_PLUGIN_DIRS=\"$<TARGET_FILE_DIR:${PLUGIN_TARGET}-shared>\">
-        export VAST_SCHEMA_DIRS=\"${CMAKE_CURRENT_SOURCE_DIR}/schema\"
+        $<$<TARGET_EXISTS:${PLUGIN_TARGET}-shared>:export VAST_PLUGIN_DIRS=\"\$(echo \"$<TARGET_FILE_DIR:${PLUGIN_TARGET}-shared>\" | sed -e \"s/,/\\\\\\\\,/g\")\">
+        export VAST_SCHEMA_DIRS=\"\$(echo \"${CMAKE_CURRENT_SOURCE_DIR}/schema\" | sed -e \"s/,/\\\\\\\\,/g\")\"
         python \"$base_dir/integration.py\" \
           --app \"$app\" \
           --set \"${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml\" \

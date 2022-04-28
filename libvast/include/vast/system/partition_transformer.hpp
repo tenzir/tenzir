@@ -27,6 +27,8 @@ namespace vast::system {
 /// stream, a transform is applied and no queries need to be answered
 /// while the partition is constructed.
 struct partition_transformer_state {
+  static constexpr const char* name = "partition-transformer";
+
   struct stream_data {
     caf::expected<chunk_ptr> partition_chunk = caf::no_error;
     caf::expected<chunk_ptr> synopsis_chunk = caf::no_error;

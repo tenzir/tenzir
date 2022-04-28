@@ -329,7 +329,6 @@ caf::error index_state::load_from_disk() {
       }
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
-      catalog_bytes += ps->memusage();
       persisted_partitions.insert(partition_uuid);
       synopses->emplace(partition_uuid, std::move(ps));
     }
@@ -504,7 +503,6 @@ void index_state::decomission_active_partition(const type& layout) {
                    id);
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
-        catalog_bytes += ps->memusage();
         // TODO: We should skip this continuation if we're currently shutting
         // down.
         self->request(catalog, caf::infinite, atom::merge_v, id, ps)
@@ -599,7 +597,10 @@ void index_state::schedule_lookups() {
     for (auto qid : next->queries) {
       auto it = pending_queries.queries().find(qid);
       if (it == pending_queries.queries().end()) {
-        VAST_WARN("{} tried to access non-existant query {}", *self, qid);
+        VAST_WARN("{} tried to access non-existent query {}", *self, qid);
+        *cnt -= 1;
+        if (*cnt == 0)
+          --running_partition_lookups;
         continue;
       }
       auto handle_completion = [cnt, qid, this] {
@@ -615,7 +616,9 @@ void index_state::schedule_lookups() {
           schedule_lookups();
         }
       };
-      self->request(partition_actor, caf::infinite, it->second.query)
+      self
+        ->request(partition_actor, defaults::system::scheduler_timeout,
+                  it->second.query)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
             VAST_TRACE("{} received {} results for query {} from partition {}",
@@ -711,7 +714,6 @@ index_state::status(status_verbosity v) const {
       layout_object[name] = xs;
     }
     stats_object["layouts"] = std::move(layout_object);
-    rs->content["catalog-bytes"] = catalog_bytes;
     auto backlog_status = record{};
     auto query_counters = get_query_counters(pending_queries);
     backlog_status["num-custom-priority"] = query_counters.num_custom_prio;
@@ -736,7 +738,6 @@ index_state::status(status_verbosity v) const {
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
     const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
-    collect_status(rs, timeout, v, catalog, rs->content, "catalog");
     auto partitions = record{};
     auto partition_status
       = [&](const uuid& id, const partition_actor& pa, list& xs) {
@@ -852,7 +853,6 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
-  self->state.catalog_bytes = 0;
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
     VAST_ERROR("{} failed to load index state from disk: {}", *self,

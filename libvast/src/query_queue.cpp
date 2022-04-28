@@ -150,7 +150,7 @@ std::optional<query_queue::entry> query_queue::next() {
       [&](const auto& qid) {
         auto it = queries_.find(qid);
         if (it == queries_.end()) {
-          VAST_WARN("index tried to access non-existant query {}", qid);
+          VAST_WARN("index tried to access non-existent query {}", qid);
           // Consider it inactive.
           return false;
         }
@@ -176,7 +176,7 @@ std::optional<query_queue::entry> query_queue::next() {
       for (const auto& qid : active.queries) {
         auto it = queries_.find(qid);
         if (it == queries_.end()) {
-          VAST_WARN("index tried to access non-existant query {}", qid);
+          VAST_WARN("index tried to access non-existent query {}", qid);
           continue;
         }
         it->second.scheduled_partitions++;
@@ -193,7 +193,7 @@ query_queue::handle_completion(const uuid& qid) {
   if (it == queries_.end()) {
     // Queries get removed from the queue when the client signals no more
     // interest.
-    VAST_DEBUG("index tried to access non-existant query {}", qid);
+    VAST_DEBUG("index tried to access non-existent query {}", qid);
     return std::nullopt;
   }
   auto result = std::optional<system::receiver_actor<atom::done>>{};

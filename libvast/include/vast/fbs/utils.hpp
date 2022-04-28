@@ -100,7 +100,7 @@ const Flatbuffer* as_flatbuffer(std::span<const std::byte, Extent> xs) {
   return flatbuffers::GetRoot<Flatbuffer>(data);
 }
 
-/// Wraps an object into a flatbuffer. This function requires existance of an
+/// Wraps an object into a flatbuffer. This function requires existence of an
 /// overload `pack(flatbuffers::FlatBufferBuilder&, const T&)` that can be
 /// found via ADL. While *packing* incrementally adds objects to a builder,
 /// whereas *wrapping* produces the final buffer for use in subsequent
@@ -123,7 +123,7 @@ wrap(T const& x, const char* file_identifier = nullptr) {
   return release(builder);
 }
 
-/// Unwraps a flatbuffer into an object. This function requires existance of an
+/// Unwraps a flatbuffer into an object. This function requires existence of an
 /// overload `unpack(const T&, const U&` where `T` is a generated flatbuffer
 /// type and `U` the VAST type.
 /// @param xs The byte buffer that contains the flatbuffer.

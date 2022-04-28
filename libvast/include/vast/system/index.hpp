@@ -278,9 +278,6 @@ struct index_state {
   /// The TYPE REGISTRY actor. (required for spawning partition transformers)
   type_registry_actor type_registry;
 
-  /// A running count of the size of the catalog.
-  size_t catalog_bytes = {};
-
   /// The directory for persistent state.
   std::filesystem::path dir = {};
 

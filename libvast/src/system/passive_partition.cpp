@@ -348,8 +348,10 @@ partition_actor::behavior_type passive_partition(
       }
       auto start = std::chrono::steady_clock::now();
       auto triples = detail::evaluate(self->state, query.expr);
-      if (triples.empty())
-        return uint64_t{0};
+      if (triples.empty()) {
+        rp.deliver(uint64_t{0});
+        return rp;
+      }
       auto eval = self->spawn(evaluator, query.expr, triples);
       self->request(eval, caf::infinite, atom::run_v)
         .then(
