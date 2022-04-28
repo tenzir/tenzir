@@ -59,7 +59,9 @@ of the caching, catalog and disk monitor features.
 
 VAST groups table slices with the same schema in a *partition*. When building a
 partition, the parameter `max-partition-size` sets an upper bound on the number
-of records in a partition, across all table slices.
+of records in a partition, across all table slices. The parameter
+`active-partition-timeout` provides a time-based upper bound: once reached, VAST
+considers the partition as complete, regardless of the number of records.
 
 A LRU cache of partitions accelerates queries to recently used partitions. The
 parameter `max-resident-partitions` controls the number of partitions in the LRU
