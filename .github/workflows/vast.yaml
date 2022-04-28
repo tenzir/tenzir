@@ -54,7 +54,7 @@ jobs:
 
   changelog:
     needs: cancel-previous-runs
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     name: Changelog
     runs-on: ubuntu-20.04
     container: debian:bullseye-slim
@@ -110,7 +110,13 @@ jobs:
       - name: Generate CHANGELOG.md
         run: |
           cmake --build build --target changelog
+      - name: Upload CHANGELOG.md
+        uses: actions/upload-artifact@v3
+        with:
+          name: CHANGELOG.md
+          path: build/CHANGELOG.md
       - name: Check CHANGELOG.md
+        if: github.event_name == 'pull_request'
         run: |
           alias is_unchanged="git diff --exit-code $(git merge-base 'origin/${{ github.event.pull_request.base.ref }}' HEAD) --"
           if is_unchanged cmake/VASTVersionFallback.cmake; then
@@ -124,6 +130,41 @@ jobs:
             cmake --build build --target update-changelog
             git diff-index --exit-code HEAD -- CHANGELOG.md
           fi
+
+  docs:
+    needs: changelog
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Delete existing CHANGELOG.md
+        run:
+          rm CHANGELOG.md
+      - name: Download new CHANGELOG.md
+        uses: actions/download-artifact@v3
+        with:
+          name: CHANGELOG.md
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+          cache-dependency-path: docs/yarn.lock
+          cache: yarn
+      - name: Install dependencies
+        working-directory: docs
+        run: yarn install --frozen-lockfile
+      - name: Test build website
+        working-directory: docs
+        run: yarn build
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs/build
+          user_name: tenzir-bot
+          user_email: engineering@tenzir.com
 
   build-debian:
     needs:

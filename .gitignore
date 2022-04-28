@@ -44,3 +44,4 @@ __pycache__/
 /docs/npm-debug.log*
 /docs/yarn-debug.log*
 /docs/yarn-error.log*
+/docs/src/pages/changelog.md
