@@ -1050,6 +1050,18 @@ TEST(read_legacy_table_slice) {
   check_column(legacy_slice, 14, pattern_type{}, f3_pattern); // f11_2_2
 }
 
+TEST(convert_legacy_table_slice_all_types) {
+  auto bytes = unbox(vast::io::read(VAST_TEST_PATH "artifacts/table_slices/"
+                                                   "arrow-v1_all-types.bytes"));
+  auto legacy_slice
+    = table_slice{chunk::make(std::move(bytes)), table_slice::verify::yes};
+  fmt::print(stderr, "tp;was here {}, {}, {}\n", legacy_slice.columns(),
+             legacy_slice.rows(), bytes.size());
+  const auto& rb = to_record_batch(legacy_slice);
+  check_column(legacy_slice, 4, duration_type{},
+               list{duration{13323100000}, caf::none, caf::none, caf::none});
+}
+
 namespace {
 
 struct fixture : public fixtures::table_slices {

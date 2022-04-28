@@ -1251,6 +1251,10 @@ upgrade_array_to_v2(const std::shared_ptr<arrow::Array>& arr, const type& t) {
       VAST_ASSERT(arr->type()->Equals(t.to_arrow_type()));
       return arr;
     },
+    [&](const duration_type&) -> std::shared_ptr<arrow::Array> {
+      // duration is backed by physical int64 array, but logical type differs
+      return arr;
+    },
     [&](const record_type& rt) -> std::shared_ptr<arrow::Array> {
       // this case handles VAST type `list<record>`
       const auto& sa = static_pointer_cast<arrow::StructArray>(arr);
