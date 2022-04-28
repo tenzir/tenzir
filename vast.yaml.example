@@ -113,15 +113,9 @@ vast:
   # The false positive rate for lossy structures in the catalog.
   catalog-fp-rate: 0.01
 
-  # The store backend to use. Can be either 'archive', 'segment-store', or
-  # the name of a user-provided store plugin.
+  # The store backend to use. Can be 'segment-store', or the name of a
+  # user-provided store plugin.
   store-backend: segment-store
-
-  # The maximum number of segments cached by the archive.
-  segments: 10
-
-  # The maximum size per segment, in MiB.
-  max-segment-size: 1024
 
   # Interval between two aging cycles.
   aging-frequency: 24h
@@ -138,7 +132,6 @@ vast:
     self-sink:
       enable: true
       slice-size: 128
-      slice-type: arrow
     # Configures if and where metrics should be written to a file.
     file-sink:
       enable: false
@@ -316,9 +309,6 @@ vast:
     # batch-size to be unbounded, leaving control of batching to the
     # vast.import.read-timeout option only.
     batch-size: 1024
-
-    # Encoding type of table slices.
-    batch-encoding: arrow
 
     # Block until the importer forwarded all data.
     blocking: false
