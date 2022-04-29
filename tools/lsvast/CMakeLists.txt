@@ -12,8 +12,7 @@ VASTTargetEnableTooling(lsvast)
 target_link_libraries(lsvast PRIVATE vast::libvast vast::internal)
 install(TARGETS lsvast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
-find_package(Pandoc)
-if (PANDOC_FOUND)
+if (VAST_ENABLE_MANPAGES)
   add_custom_command(
     TARGET lsvast
     POST_BUILD

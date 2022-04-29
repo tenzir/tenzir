@@ -678,6 +678,15 @@ set(doc_header "${doc_header}\n} // namespace vast::documentation")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/include/vast/documentation.hpp
      ${doc_header})
 
+# -- manpages ------------------------------------------------------------------
+
+option(VAST_ENABLE_MANPAGES "Generate manpages for binaries" ON)
+add_feature_info("VAST_ENABLE_MANPAGES" VAST_ENABLE_MANPAGES
+                 "generate manpages for binaries.")
+if (VAST_ENABLE_MANPAGES)
+  find_package(Pandoc REQUIRED)
+endif ()
+
 # -- add subdirectories --------------------------------------------------------
 
 add_subdirectory(libvast)
