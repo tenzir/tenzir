@@ -8,6 +8,7 @@
 
 #include "vast/io/read.hpp"
 
+#include "vast/as_bytes.hpp"
 #include "vast/error.hpp"
 #include "vast/file.hpp"
 #include "vast/logger.hpp"
@@ -42,7 +43,7 @@ read(const std::filesystem::path& filename) {
                                        "{}: {}",
                                        filename, err.message()));
   std::vector<std::byte> buffer(size);
-  if (auto err = read(filename, std::span<std::byte>{buffer}))
+  if (auto err = read(filename, as_writeable_bytes(buffer)))
     return err;
   return buffer;
 }

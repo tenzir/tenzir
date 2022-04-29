@@ -85,7 +85,7 @@ TEST(write) {
       [&](const caf::error& err) { FAIL(err); });
   MESSAGE("verify file contents");
   auto bytes = unbox(io::read(filename));
-  CHECK_EQUAL(std::span<const std::byte>{bytes}, as_bytes(chk));
+  CHECK_EQUAL(as_bytes(bytes), as_bytes(chk));
 }
 
 TEST(mmap) {
