@@ -15,6 +15,7 @@
 #include <vast/fbs/segment.hpp>
 #include <vast/io/read.hpp>
 #include <vast/logger.hpp>
+#include <vast/system/configuration.hpp>
 
 #include <caf/expected.hpp>
 
@@ -69,7 +70,7 @@ caf::expected<Kind> classify(const std::filesystem::path& path) {
 
 void print_unknown(const std::filesystem::path& path, indentation& indent,
                    const options&) {
-  std::cout << indent << "(unknown " << path.string() << ")\n";
+  fmt::print("{}(unknown {})\n", indent, path.string());
 }
 
 void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
@@ -78,16 +79,16 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
   // of the vast.db directory itself, so we can still read
   // older versions.
   auto index_dir = vast_db / "index";
-  std::cout << indent << index_dir.string() << "/\n";
+  fmt::print("{}{}/\n", indent, index_dir.string());
   {
     indented_scope _(indent);
-    std::cout << indent << "index.bin - ";
+    fmt::print("{}index.bin - ", indent);
     print_index(index_dir / "index.bin", indent, options);
     std::error_code err{};
     auto dir = std::filesystem::directory_iterator{index_dir, err};
     if (err) {
-      std::cerr << "Failed to find vast db index directory: " + err.message()
-                << std::endl;
+      fmt::print(stderr, "Failed to find vast db index directory: {}\n",
+                 err.message());
     } else {
       for (const auto& entry : dir) {
         const auto stem = entry.path().stem();
@@ -97,25 +98,28 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
         // TODO: Print partition synopses.
         if (extension == ".mdx")
           continue;
-        std::cout << indent << stem << " - ";
+        fmt::print("{}{} - ", indent, stem);
         print_partition(entry.path(), indent, options);
       }
     }
   }
-  const auto segments_dir = vast_db / "archive" / "segments";
-  std::cout << indent << segments_dir.string() << "/\n";
+  const auto segments_dir = vast_db / "archive";
+  fmt::print("{}{}/\n", indent, segments_dir.string());
+  auto segment_options = options;
+  // Only print a segment overview, not the whole contents
+  segment_options.segment.print_contents = false;
   {
     indented_scope _(indent);
     std::error_code err{};
     auto dir = std::filesystem::directory_iterator{segments_dir, err};
     if (err) {
-      std::cerr << "Failed to find vast db segments directory: " + err.message()
-                << std::endl;
+      fmt::print(stderr, "Failed to find vast db segments directory: {}\n",
+                 err.message());
     } else {
       for (const auto& entry : dir) {
         const auto stem = entry.path().stem();
-        std::cout << indent << stem << " - ";
-        print_segment(entry.path(), indent, options);
+        fmt::print("{}{} - ", indent, stem);
+        print_segment(entry.path(), indent, segment_options);
       }
     }
   }
@@ -126,6 +130,8 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
 using namespace lsvast;
 
 int main(int argc, char** argv) {
+  // Initialize factories.
+  [[maybe_unused]] auto config = vast::system::configuration{};
   std::string raw_path;
   struct options options;
   auto& format = options.format;
@@ -142,7 +148,7 @@ int main(int argc, char** argv) {
       format.verbosity = output_verbosity::verbose;
     } else if (arg == "--expand-index") {
       if (i + 1 >= argc) {
-        std::cerr << "Missing argument for --expand-index\n";
+        fmt::print(stderr, "Missing argument for --expand-index\n");
         return 1;
       }
       options.partition.expand_indexes.emplace_back(argv[++i]);
@@ -151,11 +157,11 @@ int main(int argc, char** argv) {
     }
   }
   if (raw_path.empty()) {
-    std::cerr << "Usage: ./lsvast <path/to/vast.db> [options]\n"
-              << "Options:\n"
-              << "  --verbose\n"
-              << "  --print-bytesizes\n"
-              << "  --human-readable\n";
+    fmt::print("Usage: ./lsvast <path/to/vast.db> [options]\n"
+               "Options:\n"
+               "  --verbose\n"
+               "  --print-bytesizes\n"
+               "  --human-readable\n");
     return 1;
   }
   if (raw_path.back() == '/')
@@ -163,12 +169,12 @@ int main(int argc, char** argv) {
   const auto path = std::filesystem::path{raw_path};
   const auto kind = classify(path);
   if (!kind) {
-    std::cerr << "Filesystem error with error code: " << kind.error().code()
-              << std::endl;
+    fmt::print(stderr, "Filesystem error with error code: {}\n",
+               kind.error().code());
     return 1;
   }
   if (kind == Kind::Unknown) {
-    std::cerr << "Could not determine type of " << argv[1] << std::endl;
+    fmt::print(stderr, "Could not determine type of {}\n", argv[1]);
     return 1;
   }
   auto log_context
