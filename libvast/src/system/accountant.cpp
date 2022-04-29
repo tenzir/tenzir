@@ -205,7 +205,7 @@ struct accountant_state_impl {
                           real x, const metrics_metadata& metadata, time ts,
                           detail::uds_datagram_sender& dest) {
     auto buf = to_json_line(actor_id, ts, key, x, metadata);
-    dest.send(buf);
+    dest.send(std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()});
   }
 
   void record(const caf::actor_id actor_id, const std::string& key, real x,

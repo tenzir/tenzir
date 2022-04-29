@@ -47,8 +47,12 @@ struct fixture {
 template <class T>
 void check_value(object o, T x) {
   visit(detail::overload{
-          [](auto) { FAIL("invalid type dispatch"); },
-          [=](T y) { CHECK_EQUAL(y, x); },
+          [](auto) {
+            FAIL("invalid type dispatch");
+          },
+          [=](T y) {
+            CHECK_EQUAL(y, x);
+          },
         },
         o);
 }
@@ -80,7 +84,7 @@ TEST(invalid format) {
   using vast::msgpack::format;
   auto never_used = static_cast<format>(0xc1);
   buf.push_back(std::byte{never_used});
-  check_value(object{buf}, never_used);
+  check_value(object{as_bytes(buf)}, never_used);
 }
 
 TEST(boolean) {
@@ -186,7 +190,7 @@ TEST(fixarray) {
   CHECK_EQUAL(proxy.add<float32>(4.2f), 5u);
   CHECK_EQUAL(proxy.add<fixstr>("foo"), 4u);
   CHECK_EQUAL(builder.add(std::move(proxy)), 11u);
-  auto o = object{buf};
+  auto o = object{as_bytes(buf)};
   REQUIRE(is_fixarray(o.format()));
   auto view = vast::test::unbox(get<array_view>(o));
   CHECK_EQUAL(view.size(), 3u);
@@ -206,7 +210,7 @@ TEST(array16) {
   for (auto x : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
     CHECK_EQUAL(proxy.add<int32>(x), 5u);
   CHECK_EQUAL(builder.add(std::move(proxy)), 53u);
-  auto o = object{buf};
+  auto o = object{as_bytes(buf)};
   REQUIRE_EQUAL(o.format(), array16);
   auto view = vast::test::unbox(get<array_view>(o));
   auto xs = view.data();
@@ -283,8 +287,7 @@ TEST(ext8 via proxy) {
   CHECK_EQUAL(result, size);
   auto inner = as_bytes(std::span{buf.data() + header_size<ext8>(),
                                   buf.size() - header_size<ext8>()});
-  auto view
-    = vast::test::unbox(get<ext_view>(object{std::span<const std::byte>{buf}}));
+  auto view = vast::test::unbox(get<ext_view>(object{as_bytes(buf)}));
   auto expected = ext_view{ext8, 42, inner};
   CHECK_EQUAL(view, expected);
   MESSAGE("verify inner data");
@@ -329,7 +332,7 @@ TEST(overlay) {
   CHECK_EQUAL(builder.add<nil>(), 1u);
   CHECK_EQUAL(builder.add<int32>(42), 5u);
   CHECK_EQUAL(builder.add<false_>(), 1u);
-  auto xs = overlay{buf};
+  auto xs = overlay{as_bytes(buf)};
   check_value(xs.get(), std::string_view{"foo"});
   CHECK_EQUAL(xs.next(), 8u);
   CHECK_EQUAL(xs.get().format(), nil);
@@ -341,39 +344,39 @@ TEST(overlay) {
 
 TEST(put int8) {
   CHECK_EQUAL(put(builder, int8_t{-31}), 1u);
-  CHECK(is_negative_fixint(object{buf}.format()));
+  CHECK(is_negative_fixint(object{as_bytes(buf)}.format()));
   builder.reset();
   CHECK_EQUAL(put(builder, int8_t{0}), 1u);
-  CHECK(is_positive_fixint(object{buf}.format()));
+  CHECK(is_positive_fixint(object{as_bytes(buf)}.format()));
   builder.reset();
   CHECK_EQUAL(put(builder, int8_t{31}), 1u);
-  CHECK(is_positive_fixint(object{buf}.format()));
+  CHECK(is_positive_fixint(object{as_bytes(buf)}.format()));
   builder.reset();
   CHECK_EQUAL(put(builder, int8_t{42}), 2u);
-  CHECK_EQUAL(object{buf}.format(), int8);
+  CHECK_EQUAL(object{as_bytes(buf)}.format(), int8);
   builder.reset();
   CHECK_EQUAL(put(builder, int8_t{127}), 2u);
-  CHECK_EQUAL(object{buf}.format(), int8);
+  CHECK_EQUAL(object{as_bytes(buf)}.format(), int8);
 }
 
 TEST(put uint8) {
   CHECK_EQUAL(put(builder, uint8_t{0}), 1u);
-  CHECK(is_positive_fixint(object{buf}.format()));
+  CHECK(is_positive_fixint(object{as_bytes(buf)}.format()));
   builder.reset();
   CHECK_EQUAL(put(builder, uint8_t{31}), 1u);
-  CHECK(is_positive_fixint(object{buf}.format()));
+  CHECK(is_positive_fixint(object{as_bytes(buf)}.format()));
   builder.reset();
   CHECK_EQUAL(put(builder, uint8_t{42}), 2u);
-  CHECK_EQUAL(object{buf}.format(), uint8);
+  CHECK_EQUAL(object{as_bytes(buf)}.format(), uint8);
   builder.reset();
   CHECK_EQUAL(put(builder, uint8_t{255}), 2u);
-  CHECK_EQUAL(object{buf}.format(), uint8);
+  CHECK_EQUAL(object{as_bytes(buf)}.format(), uint8);
 }
 
 TEST(put vector) {
   auto xs = std::vector<int>{1, 2, 3, 4};
   CHECK_EQUAL(put(builder, xs), 1u + 4);
-  auto o = object{buf};
+  auto o = object{as_bytes(buf)};
   REQUIRE(is_fixarray(o.format()));
   auto v = vast::test::unbox(get<array_view>(o));
   CHECK_EQUAL(v.size(), 4u);
@@ -388,7 +391,7 @@ TEST(put vector) {
 TEST(put map) {
   auto xs = std::map<int, bool>{{1, true}, {2, false}, {3, false}};
   CHECK_EQUAL(put(builder, xs), 1u + 3 * 2);
-  auto o = object{buf};
+  auto o = object{as_bytes(buf)};
   REQUIRE(is_fixmap(o.format()));
   auto v = vast::test::unbox(get<array_view>(o));
   CHECK_EQUAL(v.size(), 3u * 2);
@@ -408,7 +411,7 @@ TEST(put map) {
 
 TEST(put variadic) {
   CHECK_EQUAL(put(builder, true, false, true), 3u);
-  auto xs = overlay{buf};
+  auto xs = overlay{as_bytes(buf)};
   CHECK_EQUAL(xs.get().format(), true_);
   xs.next();
   CHECK_EQUAL(xs.get().format(), false_);
