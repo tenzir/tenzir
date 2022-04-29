@@ -120,7 +120,7 @@ type suricata.dhcp = suricata.component.common + record {
     },
     // In requests:
     client_id: string #index=hash,
-    hostname: string #ioc,
+    hostname: string,
     requested_ip: addr,
     params: list<string>,
     // In replies:
@@ -224,7 +224,7 @@ type suricata.ftp_data = suricata.component.common + record{
 
 type suricata.http = suricata.component.common + record {
   http: record {
-    hostname: string #ioc,
+    hostname: string,
     url: string,
     http_port: port,
     http_user_agent: string,
@@ -254,7 +254,7 @@ type suricata.fileinfo = suricata.component.common + record {
     tx_id: count #index=hash
   },
   http: record {
-    hostname: string #ioc,
+    hostname: string,
     url: string,
     http_port: port,
     http_user_agent: string,
