@@ -64,8 +64,9 @@ const fbs::Type* resolve_transparent_prime(const fbs::Type* root,
   return root;
 }
 
-detail::generator<record_type::leaf_view>
+std::vector<record_type::leaf_view>
 leaves_prime(const record_type& rt) noexcept {
+  std::vector<record_type::leaf_view> result = {};
   auto index = offset{0};
   auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
     rt.table().type_as_record_type()};
@@ -118,7 +119,7 @@ leaves_prime(const record_type& rt) noexcept {
           },
           index,
         };
-        co_yield std::move(leaf);
+        result.push_back(std::move(leaf));
         ++index.back();
         break;
       }
@@ -132,7 +133,7 @@ leaves_prime(const record_type& rt) noexcept {
         break;
     }
   }
-  co_return;
+  return result;
 }
 
 record_type flatten_prime(const record_type& type) noexcept {
