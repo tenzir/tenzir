@@ -30,6 +30,9 @@
 #include <arrow/table_builder.h>
 #include <tsl/robin_map.h>
 
+#undef VAST_ENABLE_ASSERTIONS
+#define VAST_ENABLE_ASSERTIONS 1
+
 namespace vast {
 
 const fbs::Type* resolve_transparent_prime(const fbs::Type* root,
@@ -137,6 +140,7 @@ leaves_prime(const record_type& rt) noexcept {
 }
 
 record_type flatten_prime(const record_type& type) noexcept {
+  VAST_DEBUG("flattening {}", type);
   auto fields = std::vector<struct record_type::field>{};
   for (const auto& [field, offset] : leaves_prime(type))
     fields.push_back({
@@ -147,6 +151,8 @@ record_type flatten_prime(const record_type& type) noexcept {
 }
 
 type flatten_prime(const type& t) noexcept {
+  VAST_DEBUG("flattening {}", t);
+  VAST_ASSERT(t);
   if (const auto* rt = caf::get_if<record_type>(&t)) {
     auto result = type{flatten_prime(*rt)};
     result.assign_metadata(t);
