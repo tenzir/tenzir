@@ -71,9 +71,13 @@ leaves_prime(const record_type& rt) noexcept {
     rt.table().type_as_record_type()};
   while (!index.empty()) {
     const auto* record = history.back();
-    VAST_ASSERT(record);
+    if (!record) {
+      die("no record at the end of the history");
+    }
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    if (!fields) {
+      die("no fields in the record");
+    }
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer. We must also reset the target key at this point.
     if (index.back() >= fields->size()) {
@@ -84,10 +88,14 @@ leaves_prime(const record_type& rt) noexcept {
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
-    VAST_ASSERT(field);
+    if (!field) {
+      die("no field at the last index");
+    }
     const auto* field_type
       = resolve_transparent_prime(field->type_nested_root());
-    VAST_ASSERT(field_type);
+    if (!field_type) {
+      die("failed to resolve field type");
+    }
     switch (field_type->type_type()) {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
