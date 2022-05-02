@@ -37,7 +37,8 @@ void print_hash_index_(const vast::hash_index<N>& idx, indentation& indent,
     for (size_t i = 0; i < bound; ++i) {
       std::cout << indent << idx.digests().at(i) << "\n";
     }
-    std::cout << indent << "... (use -v to display remaining entries)\n";
+    if (bound < idx.digests().size())
+      std::cout << indent << "... (use -v to display remaining entries)\n";
   } else {
     for (const auto& digest : idx.digests()) {
       std::cout << indent << digest << "\n";
