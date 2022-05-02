@@ -45,7 +45,6 @@ namespace vast {
 /// sometimes prefer the forbidden conversion to a complex type's private base
 /// type `type` over the implicit `type` constructor from complex types.
 struct stateful_type_base {
-protected:
   /// The underlying representation of the type.
   chunk_ptr table_ = {}; // NOLINT
 };

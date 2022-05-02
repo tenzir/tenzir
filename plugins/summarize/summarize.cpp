@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/fbs/type.hpp"
+
 #include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
@@ -18,6 +20,7 @@
 #include <vast/hash/hash_append.hpp>
 #include <vast/plugin.hpp>
 #include <vast/transform_step.hpp>
+#include <vast/type.hpp>
 #include <vast/view.hpp>
 
 #include <arrow/builder.h>
@@ -27,12 +30,130 @@
 #include <arrow/table_builder.h>
 #include <tsl/robin_map.h>
 
+namespace vast {
+
+const fbs::Type* resolve_transparent_prime(const fbs::Type* root,
+                                           enum type::transparent transparent
+                                           = type::transparent::yes) {
+  VAST_ASSERT(root);
+  while (transparent == type::transparent::yes) {
+    switch (root->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
+        transparent = type::transparent::no;
+        break;
+      case fbs::type::Type::enriched_type:
+        root = root->type_as_enriched_type()->type_nested_root();
+        VAST_ASSERT(root);
+        break;
+    }
+  }
+  return root;
+}
+
+detail::generator<record_type::leaf_view>
+leaves_prime(const record_type& rt) noexcept {
+  auto index = offset{0};
+  auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
+    rt.table().type_as_record_type()};
+  while (!index.empty()) {
+    const auto* record = history.back();
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // This is our exit condition: If we arrived at the end of a record, we need
+    // to step out one layer. We must also reset the target key at this point.
+    if (index.back() >= fields->size()) {
+      history.pop_back();
+      index.pop_back();
+      if (!index.empty())
+        ++index.back();
+      continue;
+    }
+    const auto* field = record->fields()->Get(index.back());
+    VAST_ASSERT(field);
+    const auto* field_type
+      = resolve_transparent_prime(field->type_nested_root());
+    VAST_ASSERT(field_type);
+    switch (field_type->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
+        auto leaf = record_type::leaf_view{
+          {
+            field->name()->string_view(),
+            type{rt.table_->slice(as_bytes(*field->type()))},
+          },
+          index,
+        };
+        co_yield std::move(leaf);
+        ++index.back();
+        break;
+      }
+      case fbs::type::Type::record_type: {
+        history.emplace_back(field_type->type_as_record_type());
+        index.push_back(0);
+        break;
+      }
+      case fbs::type::Type::enriched_type:
+        __builtin_unreachable();
+        break;
+    }
+  }
+  co_return;
+}
+
+record_type flatten_prime(const record_type& type) noexcept {
+  auto fields = std::vector<struct record_type::field>{};
+  for (const auto& [field, offset] : leaves_prime(type))
+    fields.push_back({
+      type.key(offset),
+      field.type,
+    });
+  return record_type{fields};
+}
+
+type flatten_prime(const type& t) noexcept {
+  if (const auto* rt = caf::get_if<record_type>(&t)) {
+    auto result = type{flatten_prime(*rt)};
+    result.assign_metadata(t);
+    return result;
+  }
+  return t;
+}
+
+} // namespace vast
+
 namespace vast::plugins::summarize {
 
 std::shared_ptr<arrow::RecordBatch>
 flatten_batch(const vast::type& layout,
               const arrow::RecordBatch& batch) noexcept {
-  auto flattened_layout = flatten(layout);
+  auto flattened_layout = flatten_prime(layout);
   auto columns = arrow::ArrayVector{};
   columns.reserve(caf::get<record_type>(flattened_layout).num_fields());
   for (auto&& leaf : caf::get<record_type>(layout).leaves()) {
@@ -254,7 +375,7 @@ struct summary {
     VAST_ASSERT(adjusted_rt);
     VAST_ASSERT(!layout.has_attributes());
     result.adjusted_layout_ = type{layout.name(), *adjusted_rt};
-    result.flattened_adjusted_layout_ = flatten(result.adjusted_layout_);
+    result.flattened_adjusted_layout_ = flatten_prime(result.adjusted_layout_);
     result.flattened_adjusted_schema_
       = result.flattened_adjusted_layout_.to_arrow_schema();
     result.num_group_by_columns_ = std::count(
