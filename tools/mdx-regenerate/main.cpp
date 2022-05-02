@@ -6,11 +6,19 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/concept/parseable/vast/uuid.hpp"
+
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/uuid.hpp>
+#include <vast/detail/filter_dir.hpp>
 #include <vast/detail/logger_formatters.hpp>
+#include <vast/fbs/utils.hpp>
+#include <vast/index_statistics.hpp>
 #include <vast/io/read.hpp>
+#include <vast/io/write.hpp>
+#include <vast/partition_synopsis.hpp>
 #include <vast/synopsis_factory.hpp>
+#include <vast/system/configuration.hpp>
 #include <vast/system/index.hpp>
 #include <vast/uuid.hpp>
 #include <vast/value_index_factory.hpp>
@@ -19,14 +27,8 @@
 
 #include <filesystem>
 
-int main(int argc, char* argv[]) {
-  vast::factory<vast::synopsis>::initialize();
+int regenerate_mdx(const std::filesystem::path& dbdir) {
   std::error_code err{};
-  if (argc < 2) {
-    fmt::print(stderr, "Usage: {} /path/to/vast.db\n", argv[0]);
-    return 1;
-  }
-  auto dbdir = std::filesystem::path{argv[1]};
   auto index_dir = dbdir / "index";
   if (!std::filesystem::exists(index_dir, err)) {
     fmt::print(stderr, "No such file or directory: {}\n", index_dir);
@@ -80,4 +82,153 @@ int main(int argc, char* argv[]) {
     }
     fmt::print(stderr, "successfully wrote {}\n", synopsis_path);
   }
+}
+
+int regenerate_index(const std::filesystem::path& dbdir) {
+  std::error_code err{};
+  auto index_dir = dbdir / "index";
+  if (!std::filesystem::exists(index_dir, err)) {
+    fmt::print(stderr, "No such file or directory: {}\n", index_dir);
+    return 1;
+  }
+  // Get the old index for comparison if it exists.
+  auto index_file = index_dir / "index.bin";
+  [[maybe_unused]] auto const* previous_index
+    = static_cast<vast::fbs::Index*>(nullptr);
+  if (std::filesystem::exists(index_file, err)) {
+    auto buffer = vast::io::read(index_file);
+    if (buffer)
+      index = vast::fbs::GetIndex(buffer->data());
+  }
+  // Collect data of the new `index.bin`.
+  auto files = vast::detail::filter_dir(
+    index_dir, [](const std::filesystem::path& file) -> bool {
+      vast::uuid id = {};
+      return vast::parsers::uuid(file.filename().string(), id);
+    });
+  if (!files) {
+    fmt::print(stderr, "Error traversing directory: {}", files.error());
+    return 1;
+  }
+  auto index_statistics = vast::index_statistics{};
+  auto uuids = std::vector<vast::uuid>{};
+  for (auto& file : *files) {
+    auto chunk = vast::chunk::mmap(file);
+    if (!chunk) {
+      fmt::print(stderr, "Error mapping file {}: {}", file, chunk.error());
+      return 1;
+    }
+    auto const* partition = vast::fbs::GetPartition(chunk->get()->data());
+    if (partition->partition_type()
+        != vast::fbs::partition::Partition::legacy) {
+      fmt::print(stderr, "found unsupported version for partition {}\n", file);
+      return 1;
+    }
+    auto const* partition_legacy = partition->partition_as_legacy();
+    VAST_ASSERT(partition_legacy);
+    auto const* uuid_fb = partition_legacy->uuid();
+    vast::uuid uuid = {};
+    if (auto error = unpack(*uuid_fb, uuid)) {
+      fmt::print(stderr, "Could not unpack uuid in {}: {}", file, error);
+      return 1;
+    }
+    uuids.push_back(uuid);
+    for (const auto* partition_stats : *partition_legacy->type_ids()) {
+      const auto* name = partition_stats->name();
+      vast::ids ids;
+      if (auto error
+          = vast::fbs::deserialize_bytes(partition_stats->ids(), ids)) {
+        fmt::print(stderr, "could not deserialize ids for partition {}: {}\n",
+                   uuid, error);
+        return 1;
+      }
+      index_statistics.layouts[name->str()].count += rank(ids);
+    }
+  }
+  // Build the new `index.bin`.
+  flatbuffers::FlatBufferBuilder builder;
+  std::vector<flatbuffers::Offset<vast::fbs::LegacyUUID>> partition_offsets;
+  for (const auto& uuid : uuids) {
+    if (auto uuid_fb = pack(builder, uuid))
+      partition_offsets.push_back(*uuid_fb);
+    else {
+      fmt::print(stderr, "failed to pack uuid {}: {}\n", uuid, uuid_fb.error());
+      return 1;
+    }
+  }
+  auto partitions = builder.CreateVector(partition_offsets);
+  std::vector<flatbuffers::Offset<vast::fbs::layout_statistics::v0>>
+    stats_offsets;
+  for (const auto& [name, layout_stats] : index_statistics.layouts) {
+    auto name_fb = builder.CreateString(name);
+    vast::fbs::layout_statistics::v0Builder stats_builder(builder);
+    stats_builder.add_name(name_fb);
+    stats_builder.add_count(layout_stats.count);
+    auto offset = stats_builder.Finish();
+    stats_offsets.push_back(offset);
+  }
+  auto stats = builder.CreateVector(stats_offsets);
+  vast::fbs::index::v0Builder v0_builder(builder);
+  v0_builder.add_partitions(partitions);
+  v0_builder.add_stats(stats);
+  auto index_v0 = v0_builder.Finish();
+  vast::fbs::IndexBuilder index_builder(builder);
+  index_builder.add_index_type(vast::fbs::index::Index::v0);
+  index_builder.add_index(index_v0.Union());
+  auto index = index_builder.Finish();
+  vast::fbs::FinishIndexBuffer(builder, index);
+  auto chunk = vast::fbs::release(builder);
+  // TODO: Compare `previous_index` and `index` and output the diff.
+  // Write updated index to disk.
+  if (auto error = vast::io::write(index_file, as_bytes(chunk))) {
+    fmt::print(stderr, "Failed to write {}: {}\n", index_file, error);
+    return 1;
+  }
+  return 0;
+}
+
+int main(int argc, char* argv[]) {
+  const auto* usage = R"_(
+Usage: vast-regenerate --mdx /path/to/vast.db
+       vast-regenerate --index /path/to/vast.db
+
+In '--mdx' mode, the 'index/*.mdx' files are regenerated from existing
+partitions. In '--index' mode, the 'index.bin' file is regenerated
+from the partitions found on disk.
+)_";
+  // Initialize factories.
+  [[maybe_unused]] auto config = vast::system::configuration{};
+  std::error_code err{};
+  if (argc != 3) {
+    fmt::print(stderr, "{}", usage);
+    return 1;
+  }
+  // auto dbdir = std::filesystem::path{argv[1]};
+  auto path = std::filesystem::path{};
+  bool mdx = false;
+  bool index = false;
+  for (int i = 1; i < argc; ++i) {
+    auto arg = std::string_view{argv[i]};
+    if (arg == "-h" || arg == "--help") {
+      fmt::print("{}", usage);
+      return 0;
+    } else if (arg == "--mdx") {
+      mdx = true;
+    } else if (arg == "--index") {
+      index = true;
+    } else {
+      path = arg;
+    }
+  }
+  if (!mdx && !index) {
+    fmt::print(stderr, "At least one mode option must be given, try --help.");
+    return 1;
+  }
+  if (mdx && index) {
+    fmt::print(stderr, "Only one mode option may be given.");
+  }
+  if (mdx)
+    return regenerate_mdx(path);
+  if (index)
+    return regenerate_index(path);
 }
