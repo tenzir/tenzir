@@ -261,12 +261,10 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
       name_clash_specifier_cnt++;
       // right is the new record type
       merge_conflict_handling = record_type::merge_conflict::prefer_left;
-      VAST_TRACE(fmt::format("Prefer left: {}", merge_conflict_handling));
     }
     if (is_extend_found) {
       name_clash_specifier_cnt++;
       merge_conflict_handling = record_type::merge_conflict::prefer_right;
-      VAST_TRACE(fmt::format("Prefer right: {}", merge_conflict_handling));
     }
     if (name_clash_specifier_cnt >= 2)
       return caf::make_error(ec::parse_error,
