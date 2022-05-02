@@ -349,7 +349,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
                  variable_declaration.first);
 }
 
-TEST(parsing string with attributs and parsing a known type) {
+TEST(YAML Type - parsing string with attributs and parsing a known type) {
   std::vector<type> known_types;
   auto string_type_with_attrs = record::value_type{
     "string_field",
@@ -374,7 +374,7 @@ TEST(parsing string with attributs and parsing a known type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(parsing bool type) {
+TEST(YAML Type - parsing bool type) {
   std::vector<type> known_types;
   auto bool_type_wo_attrs = record::value_type{
     "bool_field",
@@ -385,7 +385,7 @@ TEST(parsing bool type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing integer type) {
+TEST(YAML Type - Parsing integer type) {
   std::vector<type> known_types;
   auto integer_type_wo_attrs = record::value_type{
     "int_field",
@@ -396,7 +396,7 @@ TEST(Parsing integer type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing count_type) {
+TEST(YAML Type - Parsing count_type) {
   std::vector<type> known_types;
   auto count_type_wo_attrs = record::value_type{
     "count_field",
@@ -407,7 +407,7 @@ TEST(Parsing count_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing real_type) {
+TEST(YAML Type - Parsing real_type) {
   std::vector<type> known_types;
   auto real_type_wo_attrs = record::value_type{
     "real_field",
@@ -418,7 +418,7 @@ TEST(Parsing real_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing duration_type) {
+TEST(YAML Type - Parsing duration_type) {
   std::vector<type> known_types;
   auto duration_type_wo_attrs = record::value_type{
     "duration_field",
@@ -429,7 +429,7 @@ TEST(Parsing duration_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing time_type) {
+TEST(YAML Type - Parsing time_type) {
   std::vector<type> known_types;
   auto time_type_wo_attrs = record::value_type{
     "time_field",
@@ -440,7 +440,7 @@ TEST(Parsing time_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing string_type without attributes) {
+TEST(YAML Type - Parsing string_type without attributes) {
   std::vector<type> known_types;
   auto string_type_wo_attrs = record::value_type{
     "string_field",
@@ -451,7 +451,7 @@ TEST(Parsing string_type without attributes) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing pattern_type) {
+TEST(YAML Type - Parsing pattern_type) {
   std::vector<type> known_types;
   auto pattern_type_wo_attrs = record::value_type{
     "pattern_field",
@@ -462,7 +462,7 @@ TEST(Parsing pattern_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing address_type) {
+TEST(YAML Type - Parsing address_type) {
   std::vector<type> known_types;
   auto address_type_wo_attrs = record::value_type{
     "address_field",
@@ -473,7 +473,7 @@ TEST(Parsing address_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing subnet_type) {
+TEST(YAML Type - Parsing subnet_type) {
   std::vector<type> known_types;
   auto subnet_type_wo_attrs = record::value_type{
     "subnet_field",
@@ -484,7 +484,7 @@ TEST(Parsing subnet_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing enumeration_type) {
+TEST(YAML Type - Parsing enumeration_type) {
   std::vector<type> known_types;
   auto enum_type_wo_attrs = record::value_type{
     "enum_field",
@@ -496,7 +496,7 @@ TEST(Parsing enumeration_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing list_type) {
+TEST(YAML Type - Parsing list_type) {
   std::vector<type> known_types;
   auto list_type_wo_attrs = record::value_type{
     "list_field",
@@ -507,7 +507,7 @@ TEST(Parsing list_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing map_type) {
+TEST(YAML Type - Parsing map_type) {
   std::vector<type> known_types;
   auto map_type_wo_attrs = record::value_type{
     "map_field",
@@ -523,7 +523,7 @@ TEST(Parsing map_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing record_type) {
+TEST(YAML Type - Parsing record_type) {
   std::vector<type> known_types;
   auto record_type_wo_attrs = record::value_type{
     "record_field",
@@ -546,7 +546,7 @@ TEST(Parsing record_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing inline record_type) {
+TEST(YAML Type - Parsing inline record_type) {
   std::vector<type> known_types;
   auto inline_record_type = record::value_type{
     "record_field",
@@ -567,7 +567,7 @@ TEST(Parsing inline record_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing inline record_type with attributes) {
+TEST(YAML Type - Parsing inline record_type with attributes) {
   std::vector<type> known_types;
   auto inline_record_type_with_attr = record::value_type{
     "record_field",
@@ -600,7 +600,7 @@ TEST(Parsing inline record_type with attributes) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(Parsing record algebra) {
+TEST(YAML Type - Parsing record algebra) {
   std::vector<type> known_types;
   // Creating a base record for later Record Algebra tests.
   auto base_record_type_from_yaml = record::value_type{
@@ -687,24 +687,4 @@ TEST(Parsing record algebra) {
   };
   CHECK_EQUAL(unbox(implanted_record_algebra),
               expected_implanted_record_algebra);
-}
-
-TEST(multiple members) {
-  // auto x = module_ng{};
-  // type y = type{};
-  // auto table = symbol_table_ng{};
-  //  auto r = record{
-  //    {"module", std::string{"foo"}},
-  //    {"description", std::string{"blab"}},
-  //    {"references", list{{std::string{"http://foo.com"}},
-  //                        {std::string{"https://www.google.com/search?q=foo"}}}},
-  //    {"types",
-  //     record{
-  //       {"id", record{{"type", std::string{"string"}},
-  //                     {"description", std::string{"A random unique ID
-  //                     with..."}},
-  //                     {"attributes", record{{"index", std::string{"has"
-  //  //  REQUIRE_SUCCESS(convert(r, y, table)); // FIXME: x instead of y
-  //                                                                 "h"}}}}}}}}};
-  // Parsing string_type with attributes
 }
