@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
-  for (auto& file : cfg.config_files)
+  for (const auto& file : system::loaded_config_files())
     VAST_INFO("loaded configuration file: {}", file);
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : *loaded_plugin_paths)
