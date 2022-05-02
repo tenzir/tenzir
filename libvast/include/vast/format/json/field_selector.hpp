@@ -32,13 +32,8 @@ struct field_selector final : selector {
     auto el = j.at_key(field_name_);
     if (el.error() != ::simdjson::error_code::SUCCESS)
       return {};
-    auto event_type = el.value().get_string();
-    if (event_type.error() != ::simdjson::error_code::SUCCESS) {
-      VAST_WARN("{} got a {} field with a non-string value",
-                detail::pretty_type_name(this), field_name_);
-      return {};
-    }
-    auto field = std::string{event_type.value()};
+    auto field = el.is_string() ? std::string{el.value().get_string().value()}
+                                : simdjson::to_string(el.value());
     auto it = types.find(field);
     if (it == types.end()) {
       // Keep a list of failed keys to avoid spamming the user with warnings.
