@@ -20,6 +20,7 @@
 #include "vast/detail/installdirs.hpp"
 #include "vast/detail/load_contents.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/stable_set.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/logger.hpp"
@@ -188,6 +189,22 @@ collect_config_files(std::vector<std::filesystem::path> dirs,
 
 caf::expected<record>
 load_config_files(std::vector<std::filesystem::path> config_files) {
+  // If a config file is specified multiple times, keep only the latest mention
+  // of it. We do this the naive O(n^2) way because there usually aren't many
+  // config files and this is never called in a hot loop, and we need this to be
+  // order-preserving with removing the _earlier_ instances of duplicates.
+  {
+    auto unique_config_files = detail::stable_set<std::filesystem::path>{};
+    std::for_each(std::make_move_iterator(config_files.rbegin()),
+                  std::make_move_iterator(config_files.rend()),
+                  [&](std::filesystem::path&& config_file) noexcept {
+                    unique_config_files.insert(std::move(config_file));
+                  });
+    config_files.clear();
+    std::copy(std::make_move_iterator(unique_config_files.rbegin()),
+              std::make_move_iterator(unique_config_files.rend()),
+              std::back_inserter(config_files));
+  }
   loaded_config_files_singleton.clear();
   // Parse and merge all configuration files.
   record merged_config;
