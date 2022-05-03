@@ -1234,6 +1234,9 @@ public:
 
     offset index;      ///< The index of the field to transform.
     function_type fun; /// The transformation function to apply.
+
+    friend std::strong_ordering
+    operator<=>(const transformation& lhs, const transformation& rhs) noexcept;
   };
 
   /// The behavior of the merge function in case of conflicts.
