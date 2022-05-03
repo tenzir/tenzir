@@ -202,6 +202,8 @@ struct summary {
                                     group_by_key_hash, group_by_key_equal>;
 
   /// Creates a new summary given a configuration and a layout.
+  /// @note Returns `caf::no_error` in case the layout and the configuration do
+  /// not match.
   static caf::expected<summary>
   make(const configuration& config, const type& layout) {
     auto result = summary{};
@@ -251,7 +253,10 @@ struct summary {
       ++flat_index;
     }
     auto adjusted_rt = rt.transform(std::move(drop_transformations));
-    VAST_ASSERT(adjusted_rt);
+    // If the schema cannot be adjusted the summary does not apply to the given
+    // layout. This is not an error.
+    if (!adjusted_rt)
+      return caf::no_error;
     VAST_ASSERT(!layout.has_attributes());
     result.adjusted_layout_ = type{layout.name(), *adjusted_rt};
     result.flattened_adjusted_layout_ = flatten(result.adjusted_layout_);
@@ -605,11 +610,21 @@ public:
   /// lazily.
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+    if (ignored_layouts_.contains(layout)) {
+      ignored_batches_.emplace_back(std::move(layout), std::move(batch));
+      return caf::none;
+    }
     auto summary = summaries_.find(layout);
     if (summary == summaries_.end()) {
       auto make_summary_result = summary::make(config_, layout);
-      if (!make_summary_result)
-        return make_summary_result.error();
+      if (!make_summary_result) {
+        if (make_summary_result.error() != caf::no_error)
+          return make_summary_result.error();
+        VAST_ASSERT(!ignored_layouts_.contains(layout));
+        ignored_layouts_.insert(layout);
+        ignored_batches_.emplace_back(std::move(layout), std::move(batch));
+        return caf::none;
+      }
       auto [new_summary, ok]
         = summaries_.try_emplace(layout, std::move(*make_summary_result));
       VAST_ASSERT(ok);
@@ -621,8 +636,8 @@ public:
 
   /// Retrieves the result of the transformation.
   [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
-    auto result = std::vector<transform_batch>{};
-    result.reserve(summaries_.size());
+    auto result = std::exchange(ignored_batches_, {});
+    result.reserve(result.size() + summaries_.size());
     for (auto&& [layout, summary] : summaries_) {
       auto summary_result = summary.finish();
       if (!summary_result)
@@ -640,6 +655,10 @@ private:
 
   /// A mapping of layout to the configured summary.
   std::unordered_map<type, summary> summaries_ = {};
+
+  /// A list of layouts that we ignore.
+  std::unordered_set<type> ignored_layouts_ = {};
+  std::vector<transform_batch> ignored_batches_ = {};
 };
 
 /// The plugin entrypoint for the summarize transform plugin.

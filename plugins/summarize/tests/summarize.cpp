@@ -14,6 +14,7 @@
 #include <vast/table_slice_builder_factory.hpp>
 #include <vast/test/fixtures/events.hpp>
 #include <vast/test/test.hpp>
+#include <vast/transform.hpp>
 #include <vast/transform_step.hpp>
 
 #include <caf/settings.hpp>
@@ -70,9 +71,12 @@ struct fixture : fixtures::events {
   fixture() {
     summarize_plugin = plugins::find<transform_plugin>("summarize");
     REQUIRE(summarize_plugin);
+    rename_plugin = plugins::find<transform_plugin>("rename");
+    REQUIRE(rename_plugin);
   }
 
   const transform_plugin* summarize_plugin = nullptr;
+  const transform_plugin* rename_plugin = nullptr;
 };
 
 } // namespace
@@ -148,6 +152,74 @@ TEST(summarize test) {
   CHECK_EQUAL(summarized_slice.at(0, 8), data_view{true});
   CHECK_EQUAL(summarized_slice.at(0, 9), data_view{false});
   CHECK_EQUAL(summarized_slice.at(0, 10), data_view{false});
+}
+
+TEST(summarize test fully qualified field names) {
+  auto opts = record{
+    {"time-resolution", duration{std::chrono::minutes(1)}},
+    {"group-by",
+     list{"aggtestdata.time", "aggtestdata.ip", "aggtestdata.port"}},
+    {"sum", list{"aggtestdata.sum", "aggtestdata.sum_null"}},
+    {"min", list{"aggtestdata.min"}},
+    {"max", list{"aggtestdata.max"}},
+    {"any", list{"aggtestdata.any_true", "aggtestdata.any_false"}},
+    {"all", list{"aggtestdata.all_true", "aggtestdata.all_false"}},
+  };
+  auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
+  const auto test_batch = to_record_batch(make_testdata());
+  REQUIRE_SUCCESS(summarize_step->add(agg_test_layout, test_batch));
+  const auto result = unbox(summarize_step->finish());
+  REQUIRE_EQUAL(result.size(), 1u);
+  const auto summarized_slice = table_slice{result[0].batch};
+  CHECK_EQUAL(summarized_slice.at(0, 0),
+              data_view{vast::time{std::chrono::seconds(1258329600)}});
+  CHECK_EQUAL(summarized_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
+  CHECK_EQUAL(summarized_slice.at(0, 2), data_view{count{443}});
+  CHECK_EQUAL(summarized_slice.at(0, 3), data_view{real{45.045}});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
+  CHECK_EQUAL(summarized_slice.at(0, 5), data_view{integer{0}});
+  CHECK_EQUAL(summarized_slice.at(0, 6), data_view{integer{9}});
+  CHECK_EQUAL(summarized_slice.at(0, 7), data_view{true});
+  CHECK_EQUAL(summarized_slice.at(0, 8), data_view{true});
+  CHECK_EQUAL(summarized_slice.at(0, 9), data_view{false});
+  CHECK_EQUAL(summarized_slice.at(0, 10), data_view{false});
+}
+
+TEST(summarize test wrong config) {
+  const auto rename_opts = record{
+    {"schemas", list{record{
+                  {"from", "aggtestdata"},
+                  {"to", "aggregated_aggtestdata"},
+                }}},
+  };
+  const auto summarize_opts = record{
+    {"time-resolution", duration{std::chrono::minutes(1)}},
+    {"group-by",
+     list{"aggtestdata.time", "aggtestdata.ip", "aggtestdata.port"}},
+    {"sum", list{"aggtestdata.sum", "aggtestdata.sum_null"}},
+    {"min", list{"aggtestdata.min"}},
+    {"max", list{"aggtestdata.max"}},
+    {"any", list{"aggtestdata.any_true", "aggtestdata.any_false"}},
+    {"all", list{"aggtestdata.all_true", "aggtestdata.all_false"}},
+  };
+  auto rename_step = unbox(rename_plugin->make_transform_step(rename_opts));
+  auto summarize_step
+    = unbox(summarize_plugin->make_transform_step(summarize_opts));
+  auto test_transform = transform{"test", {}};
+  test_transform.add_step(std::move(rename_step));
+  test_transform.add_step(std::move(summarize_step));
+  REQUIRE_SUCCESS(test_transform.add(make_testdata()));
+  const auto result = unbox(test_transform.finish());
+  REQUIRE_EQUAL(result.size(), 1u);
+  // Following the renaming the output data should not be touched by the
+  // summarize step, so we expect the underlying data to be unchanged, although
+  // the layout will be renamed.
+  const auto expected_data = make_testdata();
+  CHECK(to_record_batch(result[0])->ToStructArray().ValueOrDie()->Equals(
+    to_record_batch(expected_data)->ToStructArray().ValueOrDie()));
+  CHECK_EQUAL(result[0].layout().name(), "aggregated_aggtestdata");
+  CHECK_EQUAL(caf::get<record_type>(result[0].layout()),
+              caf::get<record_type>(expected_data.layout()));
 }
 
 FIXTURE_SCOPE_END()
