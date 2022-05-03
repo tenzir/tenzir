@@ -1046,18 +1046,20 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
                             std::move(nested_index), current, sentinel);
-        auto nested_layout = type{record_type{nested_layer.fields}};
-        nested_layout.assign_metadata(layer.fields[index.back()].type);
-        result.fields.emplace_back(layer.fields[index.back()].name,
-                                   nested_layout);
-        auto nested_arrow_fields = arrow::FieldVector{};
-        nested_arrow_fields.reserve(nested_layer.fields.size());
-        for (const auto& nested_field : nested_layer.fields)
-          nested_arrow_fields.push_back(
-            nested_field.type.to_arrow_field(nested_field.name));
-        result.arrays.push_back(
-          arrow::StructArray::Make(nested_layer.arrays, nested_arrow_fields)
-            .ValueOrDie());
+        if (!nested_layer.fields.empty()) {
+          auto nested_layout = type{record_type{nested_layer.fields}};
+          nested_layout.assign_metadata(layer.fields[index.back()].type);
+          result.fields.emplace_back(layer.fields[index.back()].name,
+                                     nested_layout);
+          auto nested_arrow_fields = arrow::FieldVector{};
+          nested_arrow_fields.reserve(nested_layer.fields.size());
+          for (const auto& nested_field : nested_layer.fields)
+            nested_arrow_fields.push_back(
+              nested_field.type.to_arrow_field(nested_field.name));
+          result.arrays.push_back(
+            arrow::StructArray::Make(nested_layer.arrays, nested_arrow_fields)
+              .ValueOrDie());
+        }
       } else {
         result.fields.push_back(std::move(layer.fields[index.back()]));
         result.arrays.push_back(std::move(layer.arrays[index.back()]));
