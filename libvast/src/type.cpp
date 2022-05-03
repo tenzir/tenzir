@@ -2977,6 +2977,12 @@ size_t record_type::flat_index(const offset& index) const noexcept {
   }
 }
 
+std::strong_ordering
+operator<=>(const record_type::transformation& lhs,
+            const record_type::transformation& rhs) noexcept {
+  return lhs.index <=> rhs.index;
+}
+
 record_type::transformation::function_type record_type::drop() noexcept {
   return [](const field_view&) noexcept -> std::vector<struct field> {
     return {};
@@ -3013,112 +3019,112 @@ record_type::insert_after(std::vector<struct field> fields) noexcept {
 
 std::optional<record_type> record_type::transform(
   std::vector<transformation> transformations) const noexcept {
-  // This function recursively calls do_transform while iterating over all the
-  // leaves of the record type backwards.
-  //
-  // Given this record type:
-  //
-  //   type x = record {
-  //     a: record {
-  //       b: integer,
-  //       c: integer,
-  //     },
-  //     d: record {
-  //       e: record {
-  //         f: integer,
-  //       },
-  //     },
-  //   }
-  //
-  // A transformation of `d.e` will cause `f` and `a` to be untouched and
-  // simply copied to the new record type, while all the other fields need to
-  // be re-created. This is essentially an optimization over the naive approach
-  // that recursively converts the record type into a list of record fields,
-  // and then modifies that. As an additional benefit this function allows for
-  // applying multiple transformations at the same time.
-  //
-  // This algorithm works by walking over the transformations in reverse order
-  // (by offset), and unwrapping the record type into fields for all fields
-  // whose offset is a prefix of the transformations target offset.
-  // Transformations are applied when unwrapping if the target offset matches
-  // the field offset exactly. After having walked over a record type, the
-  // fields are joined back together at the end of the recursive lambda call.
-  const auto do_transform
-    = [](const auto& do_transform, const record_type& self, offset index,
-         auto& current, const auto end) noexcept -> std::optional<record_type> {
-    if (current == end)
-      return self;
-    auto new_fields = std::vector<struct field>{};
-    new_fields.reserve(self.num_fields());
-    index.emplace_back(self.num_fields());
-    while (index.back() > 0 && current != end) {
-      const auto& old_field = self.field(--index.back());
-      // Compare the offsets of the next target with our current offset.
-      const auto [index_mismatch, current_index_mismatch]
-        = std::mismatch(index.begin(), index.end(), current->index.begin(),
-                        current->index.end());
-      if (index_mismatch == index.end()
-          && current_index_mismatch == current->index.end()) {
-        // The offset matches exactly, so we apply the transformation.
-        do {
-          auto replacements = std::invoke(std::move(current->fun), old_field);
-          std::move(replacements.rbegin(), replacements.rend(),
-                    std::back_inserter(new_fields));
-          ++current;
-        } while (current != end && current->index == index);
-      } else if (index_mismatch == index.end()) {
-        // The index is a prefix of the target offset for the next
-        // transformation, so we recurse one level deeper.
-        VAST_ASSERT(caf::holds_alternative<record_type>(old_field.type));
-        if (auto sub_result
-            = do_transform(do_transform, caf::get<record_type>(old_field.type),
-                           index, current, end))
-          new_fields.push_back({
-            std::string{old_field.name},
-            std::move(*sub_result),
-          });
-        // Check for invalid arguments on the way in.
-        VAST_ASSERT(current == end || index != current->index,
-                    "cannot apply transformations to both a nested record type "
-                    "and its children at the same time.");
+  VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
+              "transformations must be sorted by index");
+  VAST_ASSERT(transformations.end()
+                == std::adjacent_find(
+                  transformations.begin(), transformations.end(),
+                  [](const auto& lhs, const auto& rhs) noexcept {
+                    const auto [lhs_mismatch, rhs_mismatch]
+                      = std::mismatch(lhs.index.begin(), lhs.index.end(),
+                                      rhs.index.begin(), rhs.index.end());
+                    return lhs_mismatch == lhs.index.end();
+                  }),
+              "transformation indices must not be a subset of the following "
+              "transformation's index");
+  // The current unpacked layer of the transformation, i.e., the pieces required
+  // to re-assemble the current layer of both the record type and the record
+  // batch.
+  struct unpacked_layer : std::vector<struct record_type::field> {
+    using vector::vector;
+  };
+  const auto impl
+    = [](const auto& impl, unpacked_layer layer, offset index, auto& current,
+         const auto sentinel) noexcept -> unpacked_layer {
+    VAST_ASSERT(!index.empty());
+    auto result = unpacked_layer{};
+    // Iterate over the current layer. For every entry in the current layer, we
+    // need to do one of three things:
+    // 1. Apply the transformation if the index matches the transformation
+    //    index.
+    // 2. Recurse to the next layer if the index is a prefix of the
+    //    transformation index.
+    // 3. Leave the elements untouched.
+    for (; index.back() < layer.size(); ++index.back()) {
+      const auto [is_prefix_match, is_exact_match]
+        = [&]() noexcept -> std::pair<bool, bool> {
+        if (current == sentinel)
+          return {false, false};
+        const auto [index_mismatch, current_index_mismatch]
+          = std::mismatch(index.begin(), index.end(), current->index.begin(),
+                          current->index.end());
+        const auto is_prefix_match = index_mismatch == index.end();
+        const auto is_exact_match
+          = is_prefix_match && current_index_mismatch == current->index.end();
+        return {is_prefix_match, is_exact_match};
+      }();
+      if (is_exact_match) {
+        VAST_ASSERT(current != sentinel);
+        auto new_fields
+          = std::invoke(std::move(current->fun), record_type::field_view{
+                                                   layer[index.back()].name,
+                                                   layer[index.back()].type,
+                                                 });
+        fmt::print(stderr,
+                   "is_exact_match at index [{}]: replacing {} with [{}]\n",
+                   fmt::join(index, ", "), layer[index.back()],
+                   fmt::join(new_fields, ", "));
+        for (auto&& field : std::move(new_fields))
+          result.push_back(std::move(field));
+        ++current;
+      } else if (is_prefix_match) {
+        auto nested_layer = unpacked_layer{};
+        nested_layer.reserve(
+          caf::get<record_type>(layer[index.back()].type).num_fields());
+        for (auto&& [name, type] :
+             caf::get<record_type>(layer[index.back()].type).fields())
+          nested_layer.push_back({std::string{name}, type});
+        auto nested_index = index;
+        nested_index.push_back(0);
+        nested_layer = impl(impl, std::move(nested_layer),
+                            std::move(nested_index), current, sentinel);
+        if (!nested_layer.empty()) {
+          auto nested_layout = type{record_type{nested_layer}};
+          nested_layout.assign_metadata(layer[index.back()].type);
+          result.emplace_back(layer[index.back()].name, nested_layout);
+          fmt::print(
+            stderr, "is_prefix_match at index [{}]: created nested record {}\n",
+            fmt::join(index, ", "), nested_layout);
+        } else {
+          fmt::print(stderr,
+                     "is_prefix_match at index [{}]: dropped because nested "
+                     "layer is empty\n",
+                     fmt::join(index, ", "));
+        }
       } else {
-        // Check for invalid arguments on the way out.
-        VAST_ASSERT(current_index_mismatch != current->index.end(),
-                    "cannot apply transformations to both a nested record type "
-                    "and its children at the same time.");
-        // We don't have a match and we also don't have a transformation, so
-        // we just leave the field untouched.
-        new_fields.push_back({
-          std::string{old_field.name},
-          old_field.type,
-        });
+        fmt::print(stderr,
+                   "no match at index [{}]: leaving field {} unchanged\n",
+                   fmt::join(index, ", "), layer[index.back()]);
+        result.push_back(std::move(layer[index.back()]));
       }
     }
-    // In case fbs::type::Type::we exited the loop earlier, we still have to add
-    // all the remaining fields back to the modified record (untouched).
-    while (index.back() > 0) {
-      const auto& old_field = self.field(--index.back());
-      new_fields.push_back({
-        std::string{old_field.name},
-        old_field.type,
-      });
-    }
-    if (new_fields.empty())
-      return std::nullopt;
-    type result{};
-    construct_record_type(result, new_fields.rbegin(), new_fields.rend());
-    return caf::get<record_type>(result);
+    return result;
   };
-  // Verify that transformations are sorted in order.
-  VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end(),
-                             [](const auto& lhs, const auto& rhs) noexcept {
-                               return lhs.index <= rhs.index;
-                             }));
-  auto current = transformations.rbegin();
-  auto result
-    = do_transform(do_transform, *this, {}, current, transformations.rend());
-  VAST_ASSERT(current == transformations.rend(), "index out of bounds");
-  return result;
+  if (transformations.empty())
+    return *this;
+  auto current = transformations.begin();
+  const auto sentinel = transformations.end();
+  auto layer = unpacked_layer{};
+  layer.reserve(num_fields());
+  for (auto&& [name, type] : fields())
+    layer.push_back({std::string{name}, type});
+  // Run the possibly recursive implementation.
+  layer = impl(impl, std::move(layer), {0}, current, sentinel);
+  VAST_ASSERT(current == sentinel, "index out of bounds");
+  // Re-assemble the record type after the transformation.
+  if (layer.empty())
+    return {};
+  return record_type{layer};
 }
 
 caf::expected<record_type>
