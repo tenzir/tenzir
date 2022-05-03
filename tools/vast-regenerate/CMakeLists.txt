@@ -1,5 +1,5 @@
-option(VAST_ENABLE_VAST_REGENERATE "Build the vast-regenerate debugging utility"
-       OFF)
+option(VAST_ENABLE_VAST_REGENERATE
+       "Build the vast-regenerate debugging utility" OFF)
 add_feature_info("VAST_ENABLE_VAST_REGENERATE" VAST_ENABLE_VAST_REGENERATE
                  "build the vast-regenerate utility.")
 

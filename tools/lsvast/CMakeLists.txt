@@ -6,9 +6,10 @@ if (NOT VAST_ENABLE_LSVAST)
   return()
 endif ()
 
-add_executable(lsvast src/lsvast.cpp src/print_index.cpp
-                      src/print_partition.cpp src/print_segment.cpp
-                      src/print_partition_synopsis.cpp src/print_synopsis.cpp)
+add_executable(
+  lsvast
+  src/lsvast.cpp src/print_index.cpp src/print_partition.cpp
+  src/print_segment.cpp src/print_partition_synopsis.cpp src/print_synopsis.cpp)
 VASTTargetEnableTooling(lsvast)
 target_link_libraries(lsvast PRIVATE vast::libvast vast::internal)
 install(TARGETS lsvast DESTINATION "${CMAKE_INSTALL_BINDIR}")
