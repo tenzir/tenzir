@@ -71,65 +71,9 @@ partition_synopsis_ptr& catalog_state::at(const uuid& partition) {
   return synopses.at(partition);
 }
 
-// A custom expression visitor that optimizes a given expression specifically
-// for the catalog lookup. Currently this does only a single optimization:
-// It deduplicates string lookups for the type level string synopsis.
-struct pruner {
-  expression operator()(caf::none_t) const {
-    return expression{};
-  }
-  expression operator()(const conjunction& c) const {
-    return conjunction{run(c)};
-  }
-  expression operator()(const disjunction& d) const {
-    return disjunction{run(d)};
-  }
-  expression operator()(const negation& n) const {
-    return negation{caf::visit(*this, n.expr())};
-  }
-  expression operator()(const predicate& p) const {
-    return p;
-  }
-
-  [[nodiscard]] std::vector<expression>
-  run(const std::vector<expression>& connective) const {
-    std::vector<expression> result;
-    detail::stable_set<std::string> memo;
-    for (const auto& operand : connective) {
-      const std::string* str = nullptr;
-      if (const auto* pred = caf::get_if<predicate>(&operand)) {
-        if (!caf::holds_alternative<meta_extractor>(pred->lhs)) {
-          if (const auto* d = caf::get_if<data>(&pred->rhs)) {
-            if ((str = caf::get_if<std::string>(d))) {
-              if (memo.find(*str) != memo.end())
-                continue;
-              memo.insert(*str);
-              result.emplace_back(*pred);
-            }
-          }
-        }
-      }
-      if (!str)
-        result.push_back(caf::visit(*this, operand));
-    }
-    return result;
-  }
-};
-
-// Runs the `pruner` and `hoister` until the input is unchanged.
-expression prune_all(expression e) {
-  expression result = caf::visit(pruner{}, e);
-  while (result != e) {
-    std::swap(result, e);
-    result = hoist(caf::visit(pruner{}, e));
-  }
-  return result;
-}
-
 catalog_result catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
-  auto pruned = prune_all(expr);
-  auto result = lookup_impl(pruned);
+  auto result = lookup_impl(expr);
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
   VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",
