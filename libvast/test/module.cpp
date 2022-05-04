@@ -6,9 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <compare>
 #define SUITE module
-
-#include "vast/module.hpp"
 
 #include "vast/aliases.hpp"
 #include "vast/concept/convertible/data.hpp"
@@ -381,6 +380,41 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
                  variable_declaration.first);
 }
 
+struct module_ng2 {
+  std::vector<type> types;
+  friend std::strong_ordering
+  operator<=>(const module_ng2& first,
+              const module_ng2& second) noexcept = default;
+};
+
+caf::expected<module_ng2> to_module(const data& declaration) {
+  const auto* decl_ptr = caf::get_if<record>(&declaration);
+  if (decl_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "parses a module with an invalid "
+                                            "format");
+  const auto& decl = *decl_ptr;
+  // types
+  auto found_types = decl.find("types");
+  if (found_types == decl.end())
+    return caf::make_error(ec::parse_error, "parses a module with no types");
+  const auto* types_ptr = caf::get_if<record>(&found_types->second);
+  if (types_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "parses a module with invalid "
+                                            "types");
+  const auto& types = *types_ptr;
+  if (types.empty())
+    return caf::make_error(ec::parse_error, "parses a module with empty "
+                                            "types");
+  std::vector<type> known_types;
+  for (const auto& current_type : types) {
+    const auto& parsed_type = to_type(known_types, current_type);
+    if (!parsed_type)
+      return parsed_type.error();
+    known_types.push_back(*parsed_type);
+  }
+  return module_ng2{.types = known_types};
+}
+
 TEST(YAML Type - parsing string with attributs and parsing a known type) {
   std::vector<type> known_types;
   auto string_type_with_attrs = record::value_type{
@@ -739,4 +773,25 @@ TEST(multiple members) {
   //  //  REQUIRE_SUCCESS(convert(r, y, table)); // FIXME: x instead of y
   //                                                                 "h"}}}}}}}}};
   // Parsing string_type with attributes
+}
+
+TEST(YAML Module) {
+  auto declaration = record{{
+    "types",
+    record{
+      {
+        "count_field",
+        record{{"type", "count"}},
+      },
+      {
+        "string_field",
+        record{{"type", "string"}},
+      },
+    },
+  }};
+  auto result = unbox(to_module(declaration));
+  auto expected_result
+    = module_ng2{.types = {type{"count_field", count_type{}},
+                           type{"string_field", string_type{}}}};
+  CHECK_EQUAL(result, expected_result);
 }
