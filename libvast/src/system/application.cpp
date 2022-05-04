@@ -128,7 +128,8 @@ auto make_export_command() {
       .add<bool>("flatten", "flatten nested objects into "
                             "the top-level")
       .add<bool>("numeric-durations", "render durations as numbers as opposed "
-                                      "to human-readable strings")
+                                      "to human-readable strings with up to "
+                                      "two decimal places")
       .add<bool>("omit-nulls", "omit null fields in JSON objects"));
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
