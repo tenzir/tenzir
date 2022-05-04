@@ -69,6 +69,9 @@ public:
   /// catalog (in bytes).
   [[nodiscard]] size_t memusage() const;
 
+  /// Update the list of fields that should not be touched by the pruner.
+  void update_unprunable_fields(const partition_synopsis& ps);
+
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.
@@ -86,6 +89,9 @@ public:
   /// Maps ids to the corresponding partitions.
   //  TODO: Maybe this should be moved into it a standalone actor.
   detail::range_map<id, uuid> offset_map = {};
+
+  /// The set of fields that should not be touched by the pruner.
+  detail::heterogenous_string_hashset unprunable_fields;
 };
 
 /// The result of a catalog query.

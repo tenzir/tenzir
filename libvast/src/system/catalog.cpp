@@ -34,6 +34,12 @@
 
 namespace vast::system {
 
+void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
+  for (auto const& [field, synopsis] : ps.field_synopses_)
+    if (synopsis != nullptr && field.type() == string_type{})
+      unprunable_fields.insert(std::string{field.name()});
+}
+
 size_t catalog_state::memusage() const {
   size_t result = 0;
   for (const auto& [id, partition_synopsis] : synopses)
@@ -48,6 +54,7 @@ void catalog_state::erase(const uuid& partition) {
 
 void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
   offset_map.inject(ps->offset, ps->offset + ps->events, partition);
+  update_unprunable_fields(*ps);
   synopses.emplace(partition, std::move(ps));
 }
 
@@ -65,6 +72,8 @@ void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
               return lhs.first < rhs.first;
             });
   synopses = decltype(synopses)::make_unsafe(std::move(flat_data));
+  for (auto const& [_, synopsis] : synopses)
+    update_unprunable_fields(*synopsis);
 }
 
 partition_synopsis_ptr& catalog_state::at(const uuid& partition) {
@@ -94,41 +103,56 @@ struct pruner {
   [[nodiscard]] std::vector<expression>
   run(const std::vector<expression>& connective) const {
     std::vector<expression> result;
-    detail::stable_set<std::string> memo;
+    std::vector<const predicate*> memo;
     for (const auto& operand : connective) {
-      const std::string* str = nullptr;
+      bool optimized = false;
       if (const auto* pred = caf::get_if<predicate>(&operand)) {
         if (!caf::holds_alternative<meta_extractor>(pred->lhs)) {
           if (const auto* d = caf::get_if<data>(&pred->rhs)) {
-            if ((str = caf::get_if<std::string>(d))) {
-              if (memo.find(*str) != memo.end())
+            if (auto const* str = caf::get_if<std::string>(d)) {
+              if (unprunable_fields_.contains(*str))
                 continue;
-              memo.insert(*str);
-              result.emplace_back(*pred);
+              optimized = true;
+              if (std::find_if(memo.begin(), memo.end(),
+                               [&](auto const* p) {
+                                 return p->op == pred->op
+                                        && p->rhs == pred->rhs;
+                               })
+                  != memo.end())
+                continue;
+              memo.push_back(pred);
+              auto modified_pred = *pred;
+              modified_pred.lhs
+                = vast::type_extractor{vast::type{vast::string_type{}}};
+              result.emplace_back(std::move(modified_pred));
             }
           }
         }
       }
-      if (!str)
+      if (!optimized)
         result.push_back(caf::visit(*this, operand));
     }
     return result;
   }
+
+  detail::heterogenous_string_hashset const& unprunable_fields_;
 };
 
 // Runs the `pruner` and `hoister` until the input is unchanged.
-expression prune_all(expression e) {
-  expression result = caf::visit(pruner{}, e);
+expression
+prune_all(expression e, const detail::heterogenous_string_hashset& hs) {
+  expression result = caf::visit(pruner{hs}, e);
   while (result != e) {
     std::swap(result, e);
-    result = hoist(caf::visit(pruner{}, e));
+    result = hoist(caf::visit(pruner{hs}, e));
   }
   return result;
 }
 
 catalog_result catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
-  auto pruned = prune_all(expr);
+  auto pruned = prune_all(expr, unprunable_fields);
+  VAST_DEBUG("catalog pruned expression '{}' to '{}'", expr, pruned);
   auto result = lookup_impl(pruned);
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
@@ -153,7 +177,7 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
   // rely on `flat_map` already traversing them in the correct order, so
   // no separate sorting step is required.
   using result_type = std::vector<uuid>;
-  result_type memoized_partitions;
+  result_type memoized_partitions = {};
   auto all_partitions = [&] {
     if (!memoized_partitions.empty() || synopses.empty())
       return memoized_partitions;
