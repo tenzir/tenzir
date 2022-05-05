@@ -65,14 +65,13 @@ type get_known_type(const std::vector<type>& known_types,
 }
 
 std::vector<std::string> reserved_names
-  = {"bool",   "integer", "count",   "real",   "duration", "time",
-     "string", "pattern", "address", "subnet", "type",     "attributes",
-     "enum",   "list",    "map",     "record", "base",     "implant",
-     "extend", "fields",  "key",     "value"};
+  = {"bool",    "integer", "count",  "real", "duration", "time", "string",
+     "pattern", "address", "subnet", "enum", "list",     "map",  "record"};
 
 caf::expected<type> to_type(const std::vector<type>& known_types,
                             const data& declaration, std::string_view name) {
   const auto* known_type_name_ptr = caf::get_if<std::string>(&declaration);
+  // Prevent using reserved names as types names
   if (std::any_of(reserved_names.begin(), reserved_names.end(),
                   [&](const auto& reserved_name) {
                     return name == reserved_name;
