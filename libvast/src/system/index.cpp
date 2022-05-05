@@ -576,9 +576,8 @@ void index_state::schedule_lookups() {
           part = inmem_partitions.get_or_load(partition_id);
       }
       if (!part)
-        VAST_ERROR("{} could not load partition {} that was part of a "
-                   "query",
-                   *self, partition_id);
+        VAST_VERBOSE("{} failed to load partition {} that was part of a query",
+                     *self, partition_id);
       return part;
     };
     auto partition_actor = acquire(next->partition);
