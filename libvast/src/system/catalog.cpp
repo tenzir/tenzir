@@ -38,6 +38,17 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   for (auto const& [field, synopsis] : ps.field_synopses_)
     if (synopsis != nullptr && field.type() == string_type{})
       unprunable_fields.insert(std::string{field.name()});
+  // TODO/BUG: We also need to prevent pruning for enum types,
+  // which also use string literals for lookup. We must be even
+  // more strict here than with string fields, because incorrectly
+  // pruning string fields will only cause false positives, but
+  // incorrectly pruning enum fields can actually cause false negatives.
+  //
+  // else if (field.type() == enumeration_type{}) {
+  //   auto full_name = field.name();
+  //   for (auto suffix : detail::all_suffixes(full_name, "."))
+  //     unprunable_fields.insert(suffix);
+  // }
 }
 
 size_t catalog_state::memusage() const {
@@ -103,28 +114,31 @@ struct pruner {
   [[nodiscard]] std::vector<expression>
   run(const std::vector<expression>& connective) const {
     std::vector<expression> result;
-    std::vector<const predicate*> memo;
     for (const auto& operand : connective) {
       bool optimized = false;
       if (const auto* pred = caf::get_if<predicate>(&operand)) {
-        if (!caf::holds_alternative<meta_extractor>(pred->lhs)) {
+        if (caf::holds_alternative<field_extractor>(pred->lhs)) {
           if (const auto* d = caf::get_if<data>(&pred->rhs)) {
             if (auto const* str = caf::get_if<std::string>(d)) {
               if (unprunable_fields_.contains(*str))
                 continue;
-              optimized = true;
-              if (std::find_if(memo.begin(), memo.end(),
-                               [&](auto const* p) {
-                                 return p->op == pred->op
-                                        && p->rhs == pred->rhs;
-                               })
-                  != memo.end())
+              // Replace the concrete field name by `:string` if this is
+              // the second time we lookup this value.
+              if (auto it = std::find_if(result.begin(), result.end(),
+                                         [&](const expression& expr) {
+                                           const auto* p
+                                             = caf::get_if<predicate>(&expr);
+                                           if (!p)
+                                             return false;
+                                           return p->op == pred->op
+                                                  && p->rhs == pred->rhs;
+                                         });
+                  it != result.end()) {
+                optimized = true;
+                auto& p = caf::get<predicate>(*it);
+                p.lhs = vast::type_extractor{vast::type{vast::string_type{}}};
                 continue;
-              memo.push_back(pred);
-              auto modified_pred = *pred;
-              modified_pred.lhs
-                = vast::type_extractor{vast::type{vast::string_type{}}};
-              result.emplace_back(std::move(modified_pred));
+              }
             }
           }
         }
@@ -152,7 +166,6 @@ prune_all(expression e, const detail::heterogenous_string_hashset& hs) {
 catalog_result catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
   auto pruned = prune_all(expr, unprunable_fields);
-  VAST_DEBUG("catalog pruned expression '{}' to '{}'", expr, pruned);
   auto result = lookup_impl(pruned);
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
