@@ -94,6 +94,12 @@ public:
     });
   }
 
+  /// Construct a chunk from an Arrow buffer, and bind the lifetime of the chunk
+  /// to the buffer.
+  /// @param buffer The Arrow buffer.
+  /// @returns A chunk pointer or `nullptr` on failure.
+  static chunk_ptr make(std::shared_ptr<arrow::Buffer> buffer) noexcept;
+
   /// Avoid the common mistake of binding ownership to a span.
   template <class Byte, size_t Extent>
   static auto make(std::span<Byte, Extent>&&) = delete;
