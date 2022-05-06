@@ -94,6 +94,15 @@ partition_synopsis_ptr& catalog_state::at(const uuid& partition) {
 // A custom expression visitor that optimizes a given expression specifically
 // for the catalog lookup. Currently this does only a single optimization:
 // It deduplicates string lookups for the type level string synopsis.
+// This is relevant when looking up using concepts, to rewrites queries like
+//
+//      (suricata.dns.dns.rrname == "u8wm3g4pw100420ydpzc"
+//       || suricata.http.http.hostname == "u8wm3g4pw100420ydpzc"
+//       || suricata.fileinfo.http.hostname == "u8wm3g4pw100420ydpzc")
+//
+// to
+//
+//     ':string == "u8wm3g4pw100420ydpzc"'
 struct pruner {
   expression operator()(caf::none_t) const {
     return expression{};
@@ -117,7 +126,9 @@ struct pruner {
     for (const auto& operand : connective) {
       bool optimized = false;
       if (const auto* pred = caf::get_if<predicate>(&operand)) {
-        if (caf::holds_alternative<field_extractor>(pred->lhs)) {
+        if (caf::holds_alternative<field_extractor>(pred->lhs)
+            || (caf::holds_alternative<type_extractor>(pred->lhs)
+                && caf::get<type_extractor>(pred->lhs).type == string_type{})) {
           if (const auto* d = caf::get_if<data>(&pred->rhs)) {
             if (auto const* str = caf::get_if<std::string>(d)) {
               if (unprunable_fields_.contains(*str))
