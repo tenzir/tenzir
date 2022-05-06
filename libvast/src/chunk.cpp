@@ -56,6 +56,16 @@ chunk_ptr chunk::make(view_type view, deleter_type&& deleter) noexcept {
   return chunk_ptr{new chunk{view, std::move(deleter)}, false};
 }
 
+chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer) noexcept {
+  if (!buffer)
+    return nullptr;
+  const auto* data = buffer->data();
+  const auto size = buffer->size();
+  return make(data, size, [buffer = std::move(buffer)]() noexcept {
+    static_cast<void>(buffer);
+  });
+}
+
 chunk_ptr chunk::make_empty() noexcept {
   return chunk_ptr{new chunk{view_type{}, deleter_type{}}, false};
 }
