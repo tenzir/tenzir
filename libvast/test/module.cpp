@@ -79,14 +79,8 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
     return caf::make_error(
       ec::parse_error,
       fmt::format("parses a new type with a reserved name: {}", name));
-  // Prevent using '.' and ':' in the name of types
-  if (std::any_of(name.begin(), name.end(), [](unsigned char c) {
-        return c == '.' || c == ':';
-      }))
-    return caf::make_error(ec::parse_error,
-                           fmt::format("parses a new type with invalid "
-                                       "character in the name: {}",
-                                       name));
+  // Type names can contain any character that the YAML parser can handle - no
+  // need to check for allowed characters.
   if (known_type_name_ptr != nullptr) {
     const auto& known_type_name = *known_type_name_ptr;
     // Check built-in types first
