@@ -589,7 +589,7 @@ void index_state::schedule_lookups() {
           self->send(*client, atom::done_v);
       continue;
     }
-    counters.partition_schedulings++;
+    counters.partition_scheduled++;
     counters.partition_lookups += next->queries.size();
     // 3. request all relevant queries in a loop
     auto cnt = std::make_shared<size_t>(next->queries.size());
@@ -676,7 +676,7 @@ void index_state::send_report() {
       {"scheduler.partition.pending", pending_queries.num_partitions()},
       {"scheduler.partition.materializations", materializations},
       {"scheduler.partition.lookups", counters.partition_lookups},
-      {"scheduler.partition.schedulings", counters.partition_schedulings},
+      {"scheduler.partition.scheduled", counters.partition_scheduled},
       {"scheduler.partition.remaining-capacity",
        max_concurrent_partition_lookups - running_partition_lookups},
       {"scheduler.partition.current-lookups", running_partition_lookups},

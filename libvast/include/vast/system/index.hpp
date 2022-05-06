@@ -138,7 +138,7 @@ struct index_counters {
   size_t partition_lookups = 0;
 
   /// How many partitions were scheduled for queries.
-  size_t partition_schedulings = 0;
+  size_t partition_scheduled = 0;
 };
 
 /// The state of the index actor.
