@@ -64,8 +64,15 @@ table_slice create_table_slice(const arrow::RecordBatch& record_batch,
   VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
 #endif // VAST_ENABLE_ASSERTIONS
   auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto opts = arrow::ipc::IpcWriteOptions::Defaults();
+  opts.codec
+    = arrow::util::Codec::Create(
+        arrow::Compression::ZSTD,
+        arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie())
+        .ValueOrDie();
   auto stream_writer
-    = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch.schema())
+    = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch.schema(), opts)
         .ValueOrDie();
   auto status = stream_writer->WriteRecordBatch(record_batch);
   if (!status.ok())
