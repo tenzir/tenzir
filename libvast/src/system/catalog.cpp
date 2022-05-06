@@ -19,6 +19,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/prune.hpp"
 #include "vast/query.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
@@ -91,92 +92,9 @@ partition_synopsis_ptr& catalog_state::at(const uuid& partition) {
   return synopses.at(partition);
 }
 
-// A custom expression visitor that optimizes a given expression specifically
-// for the catalog lookup. Currently this does only a single optimization:
-// It deduplicates string lookups for the type level string synopsis.
-// This is relevant when looking up using concepts, to rewrites queries like
-//
-//      (suricata.dns.dns.rrname == "u8wm3g4pw100420ydpzc"
-//       || suricata.http.http.hostname == "u8wm3g4pw100420ydpzc"
-//       || suricata.fileinfo.http.hostname == "u8wm3g4pw100420ydpzc")
-//
-// to
-//
-//     ':string == "u8wm3g4pw100420ydpzc"'
-struct pruner {
-  expression operator()(caf::none_t) const {
-    return expression{};
-  }
-  expression operator()(const conjunction& c) const {
-    return conjunction{run(c)};
-  }
-  expression operator()(const disjunction& d) const {
-    return disjunction{run(d)};
-  }
-  expression operator()(const negation& n) const {
-    return negation{caf::visit(*this, n.expr())};
-  }
-  expression operator()(const predicate& p) const {
-    return p;
-  }
-
-  [[nodiscard]] std::vector<expression>
-  run(const std::vector<expression>& connective) const {
-    std::vector<expression> result;
-    for (const auto& operand : connective) {
-      bool optimized = false;
-      if (const auto* pred = caf::get_if<predicate>(&operand)) {
-        if (caf::holds_alternative<field_extractor>(pred->lhs)
-            || (caf::holds_alternative<type_extractor>(pred->lhs)
-                && caf::get<type_extractor>(pred->lhs).type == string_type{})) {
-          if (const auto* d = caf::get_if<data>(&pred->rhs)) {
-            if (auto const* str = caf::get_if<std::string>(d)) {
-              if (unprunable_fields_.contains(*str))
-                continue;
-              // Replace the concrete field name by `:string` if this is
-              // the second time we lookup this value.
-              if (auto it = std::find_if(result.begin(), result.end(),
-                                         [&](const expression& expr) {
-                                           const auto* p
-                                             = caf::get_if<predicate>(&expr);
-                                           if (!p)
-                                             return false;
-                                           return p->op == pred->op
-                                                  && p->rhs == pred->rhs;
-                                         });
-                  it != result.end()) {
-                optimized = true;
-                auto& p = caf::get<predicate>(*it);
-                p.lhs = vast::type_extractor{vast::type{vast::string_type{}}};
-                continue;
-              }
-            }
-          }
-        }
-      }
-      if (!optimized)
-        result.push_back(caf::visit(*this, operand));
-    }
-    return result;
-  }
-
-  detail::heterogenous_string_hashset const& unprunable_fields_;
-};
-
-// Runs the `pruner` and `hoister` until the input is unchanged.
-expression
-prune_all(expression e, const detail::heterogenous_string_hashset& hs) {
-  expression result = caf::visit(pruner{hs}, e);
-  while (result != e) {
-    std::swap(result, e);
-    result = hoist(caf::visit(pruner{hs}, e));
-  }
-  return result;
-}
-
 catalog_result catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
-  auto pruned = prune_all(expr, unprunable_fields);
+  auto pruned = prune(expr, unprunable_fields);
   auto result = lookup_impl(pruned);
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
