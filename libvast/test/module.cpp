@@ -6,7 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <compare>
+#include <algorithm>
+#include <iterator>
+#include <set>
 #define SUITE module
 
 #include "vast/aliases.hpp"
@@ -22,6 +24,7 @@
 #include <caf/test/dsl.hpp>
 #include <fmt/format.h>
 
+#include <compare>
 #include <optional>
 #include <string_view>
 
@@ -382,9 +385,9 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
 
 struct module_ng2 {
   std::vector<type> types;
-  friend std::strong_ordering
-  operator<=>(const module_ng2& first,
-              const module_ng2& second) noexcept = default;
+  // FIXME: The order of types should not matter?
+  friend bool operator==(const module_ng2& first,
+                         const module_ng2& second) noexcept = default;
 };
 
 caf::expected<module_ng2> to_module(const data& declaration) {
@@ -413,6 +416,195 @@ caf::expected<module_ng2> to_module(const data& declaration) {
     known_types.push_back(*parsed_type);
   }
   return module_ng2{.types = known_types};
+}
+
+//////////////////////////////////////////////////////////////////
+
+caf::expected<type> to_type2(const data& declaration, std::string_view name) {
+  // Prevent using reserved names as types names
+  if (std::any_of(reserved_names.begin(), reserved_names.end(),
+                  [&](const auto& reserved_name) {
+                    return name == reserved_name;
+                  }))
+    return caf::make_error(
+      ec::parse_error,
+      fmt::format("parses a new type with a reserved name: {}", name));
+  const auto* decl_ptr = caf::get_if<record>(&declaration);
+  if (decl_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "parses type alias with invalid "
+                                            "format");
+  const auto& decl = *decl_ptr;
+  // Get the optional attributes
+  auto attributes = std::vector<type::attribute_view>{};
+  auto found_attributes = decl.find("attributes");
+  if (found_attributes != decl.end()) {
+    const auto* attribute_list = caf::get_if<list>(&found_attributes->second);
+    if (attribute_list == nullptr)
+      return caf::make_error(ec::parse_error, "parses an attribute list with "
+                                              "an invalid format");
+    for (const auto& attribute : *attribute_list) {
+      const auto* attribute_string_ptr = caf::get_if<std::string>(&attribute);
+      if (attribute_string_ptr != nullptr)
+        attributes.push_back({*attribute_string_ptr});
+      else {
+        const auto* attribute_record_ptr = caf::get_if<record>(&attribute);
+        if (attribute_record_ptr == nullptr)
+          return caf::make_error(ec::parse_error, "parses an attribute with an "
+                                                  "invalid format");
+        const auto& attribute_record = *attribute_record_ptr;
+        if (attribute_record.size() != 1)
+          return caf::make_error(ec::parse_error, "parses an attribute not "
+                                                  "having one and only one "
+                                                  "field");
+        const auto& attribute_key = attribute_record.begin()->first;
+        const auto* attribute_value_ptr
+          = caf::get_if<std::string>(&attribute_record.begin()->second);
+        if (attribute_value_ptr == nullptr)
+          return caf::make_error(ec::parse_error, "parses an attribute with a "
+                                                  "non-string value");
+        const auto& attribute_value = *attribute_value_ptr;
+        attributes.push_back({attribute_key, attribute_value});
+      }
+    }
+  }
+  auto found_type = decl.find("type");
+  auto is_type_found = found_type != decl.end();
+  // Type alias
+  if (is_type_found) {
+    const auto* aliased_type_name_ptr
+      = caf::get_if<std::string>(&found_type->second);
+    // Type names can contain any character that the YAML parser can handle - no
+    // need to check for allowed characters.
+    if (aliased_type_name_ptr != nullptr) {
+      const auto& aliased_type_name = *aliased_type_name_ptr;
+      VAST_TRACE(fmt::format("Trying to create type with name: {}, "
+                             "aliased_type: {}",
+                             name, aliased_type_name));
+      // Check built-in types first
+      if (aliased_type_name == "bool")
+        return type{name, bool_type{}};
+      if (aliased_type_name == "integer")
+        return type{name, integer_type{}};
+      if (aliased_type_name == "count")
+        return type{name, count_type{}};
+      if (aliased_type_name == "real")
+        return type{name, real_type{}};
+      if (aliased_type_name == "duration")
+        return type{name, duration_type{}};
+      if (aliased_type_name == "time")
+        return type{name, time_type{}};
+      if (aliased_type_name == "string")
+        return type{name, string_type{}};
+      if (aliased_type_name == "pattern")
+        return type{name, pattern_type{}};
+      if (aliased_type_name == "address")
+        return type{name, address_type{}};
+      if (aliased_type_name == "subnet")
+        return type{name, subnet_type{}};
+      // Create placeholder type alias
+      VAST_TRACE(fmt::format("Creating placeholder type with name: {}, "
+                             "aliased_type: {}",
+                             name, aliased_type_name));
+      return type{name, type{aliased_type_name, type{}}, std::move(attributes)};
+    }
+  }
+  // FIXME: record and other types from previous version
+  return caf::make_error(ec::parse_error, "unimplemented");
+}
+
+caf::expected<type> to_type2(const record::value_type& variable_declaration) {
+  return to_type2(variable_declaration.second, variable_declaration.first);
+}
+
+std::variant<std::string_view, type>
+try_resolve(const type& to_resolve, const std::vector<type>& resolved_types) {
+  std::string_view last_name;
+  for (const auto& name : to_resolve.names())
+    last_name = name;
+  auto type_found = std::find_if(resolved_types.begin(), resolved_types.end(),
+                                 [&](const auto& resolved_type) {
+                                   return last_name == resolved_type.name();
+                                 });
+  // FIXME: no duplicates should be allowed into resolved_types, check somewhere!
+  if (type_found == resolved_types.end())
+    return last_name; // Could not resolve
+  auto result = type{to_resolve.name(), *type_found};
+  //  result.assign_metadata(
+  //  to_resolve); // FIXME: Write a test case to see it in action
+  return result;
+}
+
+caf::expected<module_ng2> to_module2(const data& declaration) {
+  const auto* decl_ptr = caf::get_if<record>(&declaration);
+  if (decl_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "parses a module with an invalid "
+                                            "format");
+  const auto& decl = *decl_ptr;
+  // types
+  auto found_types = decl.find("types");
+  if (found_types == decl.end())
+    return caf::make_error(ec::parse_error, "parses a module with no types");
+  const auto* types_ptr = caf::get_if<record>(&found_types->second);
+  if (types_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "parses a module with invalid "
+                                            "types");
+  const auto& types = *types_ptr;
+  if (types.empty()) // FIXME: Maybe we allow empty types in module?
+    return caf::make_error(ec::parse_error, "parses a module with empty "
+                                            "types");
+  std::vector<type> parsed_types;
+  // Resolve aliases to built-in types or create placeholder types
+  for (const auto& current_type : types) {
+    const auto& parsed_type = to_type2(current_type);
+    if (!parsed_type)
+      return parsed_type.error();
+    parsed_types.push_back(*parsed_type);
+  }
+  std::vector<type> resolved_types;
+  std::vector<std::string_view> resolving_types;
+  // Move parsed items that are already resolved to resolved types.
+  auto removed_items = std::remove_if(parsed_types.begin(), parsed_types.end(),
+                                      [](const auto& current_type) {
+                                        return static_cast<bool>(current_type);
+                                      });
+  resolved_types.insert(resolved_types.end(),
+                        std::make_move_iterator(removed_items),
+                        std::make_move_iterator(parsed_types.end()));
+  parsed_types.erase(removed_items, parsed_types.end());
+  // From this point on parsed types contain only types that need to be resolved.
+  // FIXME: Make the changed meaning of parsed_type clearer: rename or extract!
+  // Attempt to resolve type
+  while (!parsed_types.empty()) {
+    // FIXME: In case of an invalid schema parsed_types may never get empty!
+    if (resolving_types.empty()) {
+      const auto& to_resolve = parsed_types.front();
+      resolving_types.push_back(to_resolve.name());
+    }
+    const auto type_name_to_resolve = resolving_types.back();
+    const auto& type_to_resolve
+      = std::find_if(parsed_types.begin(), parsed_types.end(),
+                     [&](const auto& type_to_resolved) {
+                       return type_name_to_resolve == type_to_resolved.name();
+                     });
+    if (type_to_resolve == parsed_types.end())
+      return caf::make_error(ec::parse_error, "parses an unresolvable type");
+    VAST_TRACE(fmt::format("Try to resolve: {}", type_name_to_resolve));
+    if (auto resolve_result = try_resolve(*type_to_resolve, resolved_types);
+        std::holds_alternative<std::string_view>(resolve_result)) {
+      resolving_types.push_back(std::get<std::string_view>(resolve_result));
+      VAST_TRACE(fmt::format("Resolution failed becaue of type: {}",
+                             type_name_to_resolve));
+    } else {
+      auto resolved_type = std::get<type>(resolve_result);
+      VAST_TRACE(fmt::format("Resolution succeeded. Type: {}", resolved_type));
+      std::erase_if(parsed_types, [&](const auto& current_type) {
+        return current_type.name() == resolved_type.name();
+      });
+      resolved_types.push_back(resolved_type);
+      resolving_types.pop_back();
+    }
+  }
+  return module_ng2{.types = resolved_types};
 }
 
 TEST(YAML Type - parsing string with attributs and parsing a known type) {
@@ -793,5 +985,26 @@ TEST(YAML Module) {
   auto expected_result
     = module_ng2{.types = {type{"count_field", count_type{}},
                            type{"string_field", string_type{}}}};
+  CHECK_EQUAL(result, expected_result);
+}
+
+TEST(YAML Module - order independent parsing) {
+  auto declaration = record{{
+    "types",
+    record{
+      {
+        "type1",
+        record{{"type", "type2"}},
+      },
+      {
+        "type2",
+        record{{"type", "string"}},
+      },
+    },
+  }};
+  auto result = unbox(to_module2(declaration));
+  auto expected_result
+    = module_ng2{.types = {type{"type2", string_type{}},
+                           type{"type1", type{"type2", string_type{}}}}};
   CHECK_EQUAL(result, expected_result);
 }
