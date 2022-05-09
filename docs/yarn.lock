@@ -1315,6 +1315,17 @@
     "@types/react-router-dom" "*"
     react-helmet-async "*"
 
+"@docusaurus/module-type-aliases@2.0.0-beta.20":
+  version "2.0.0-beta.20"
+  resolved "https://registry.yarnpkg.com/@docusaurus/module-type-aliases/-/module-type-aliases-2.0.0-beta.20.tgz#669605a64b04226c391e0284c44743e137eb2595"
+  integrity sha512-lUIXLwQEOyYwcb3iCNibPUL6O9ijvYF5xQwehGeVraTEBts/Ch8ZwELFk+XbaGHKh52PiVxuWL2CP4Gdjy5QKw==
+  dependencies:
+    "@docusaurus/types" "2.0.0-beta.20"
+    "@types/react" "*"
+    "@types/react-router-config" "*"
+    "@types/react-router-dom" "*"
+    react-helmet-async "*"
+
 "@docusaurus/plugin-content-blog@2.0.0-beta.19":
   version "2.0.0-beta.19"
   resolved "https://registry.yarnpkg.com/@docusaurus/plugin-content-blog/-/plugin-content-blog-2.0.0-beta.19.tgz#401065b456a4b12049c12adee0bdf36366e2df40"
@@ -1513,6 +1524,19 @@
   version "2.0.0-beta.19"
   resolved "https://registry.yarnpkg.com/@docusaurus/types/-/types-2.0.0-beta.19.tgz#c2f0a29f6d54b11f3a336e03446b3991019f6b1f"
   integrity sha512-aaKyQahhB18cDa4yl0WPOWr9GYcH+6rujGWce2SbMIzlKLhokAXRNO2gUFmqFNafIFyb6B+WpZVBpA0+O2aGPw==
+  dependencies:
+    commander "^5.1.0"
+    history "^4.9.0"
+    joi "^17.6.0"
+    react-helmet-async "^1.3.0"
+    utility-types "^3.10.0"
+    webpack "^5.72.0"
+    webpack-merge "^5.8.0"
+
+"@docusaurus/types@2.0.0-beta.20":
+  version "2.0.0-beta.20"
+  resolved "https://registry.yarnpkg.com/@docusaurus/types/-/types-2.0.0-beta.20.tgz#069d40cc225141d5c9a85605a1c61a460814bf5d"
+  integrity sha512-d4ZIpcrzGsUUcZJL3iz8/iSaewobPPiYfn2Lmmv7GTT5ZPtPkOAtR5mE6+LAf/KpjjgqrC7mpwDKADnOL/ic4Q==
   dependencies:
     commander "^5.1.0"
     history "^4.9.0"
