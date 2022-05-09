@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.0.0-rc3][v2.0.0-rc3]
+## [v2.0.0-rc4][v2.0.0-rc4]
 
 ### Breaking Changes
 
@@ -77,6 +77,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `replace` transform step now allows for setting values of complex types, e.g., lists or records.
   [#2228](https://github.com/tenzir/vast/pull/2228)
 
+- The `lsvast` tool now prints the whole store contents when given a store file as an argument.
+  [#2247](https://github.com/tenzir/vast/pull/2247)
+
 ### Bug Fixes
 
 - The `explore` command now properly terminates after the requested number of results are delivered.
@@ -108,6 +111,15 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Environment variables for options that specify lists now consistently use comma-separators and respect escaping with backslashes.
   [#2236](https://github.com/tenzir/vast/pull/2236)
+
+- The JSON import no longer rejects non-string selector fields. Instead, it always uses the textual JSON representation as a selector. E.g., the JSON object `{id:1,...}` imported via `vast import json --selector=id:mymodule` now matches the schema named `mymodule.1` rather than erroring because the `id` field is not a string.
+  [#2255](https://github.com/tenzir/vast/pull/2255)
+
+- Transform steps removing all nested fields from a record leaving only empty nested records no longer cause VAST to crash.
+  [#2258](https://github.com/tenzir/vast/pull/2258)
+
+- The query optimizer incorrectly transformed queries with conjunctions or disjunctions with several operands testing against the same string value, leading to missing result. This was rarely an issue in practice before the introduction of homogenous partitions with the v2.0 release.
+  [#2264](https://github.com/tenzir/vast/pull/2264)
 
 ## [v1.1.2][v1.1.2]
 
@@ -1687,7 +1699,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.0.0-rc3]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc3
+[v2.0.0-rc4]: https://github.com/tenzir/vast/releases/tag/v2.0.0-rc4
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
 [v1.1.0]: https://github.com/tenzir/vast/releases/tag/v1.1.0
