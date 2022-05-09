@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/framed.hpp"
+#include "vast/detail/heterogeneous_string_hash.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/transformer.hpp"
@@ -96,8 +97,9 @@ struct importer_state {
 
   std::unordered_map<caf::inbound_path*, std::string> inbound_descriptions;
 
-  measurement measurement_;
-  stopwatch::time_point last_report;
+  measurement measurement_ = {};
+  stopwatch::time_point last_report = {};
+  detail::heterogeneous_string_hashmap<uint64_t> schema_counters = {};
 
   /// The index actor.
   index_actor index;
