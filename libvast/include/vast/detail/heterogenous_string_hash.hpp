@@ -8,6 +8,7 @@
 #pragma once
 
 #include <tsl/robin_map.h>
+#include <tsl/robin_set.h>
 
 #include <string>
 #include <string_view>
@@ -54,6 +55,11 @@ struct heterogenous_string_hash {
 template <typename Value>
 using heterogenous_string_hashmap
   = tsl::robin_map<std::string, Value, heterogenous_string_hash,
+                   vast::detail::heterogenous_string_equal>;
+
+/// A set of `std::string`s allowing for heterogenous lookups.
+using heterogenous_string_hashset
+  = tsl::robin_set<std::string, heterogenous_string_hash,
                    vast::detail::heterogenous_string_equal>;
 
 } // namespace vast::detail

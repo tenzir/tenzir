@@ -19,6 +19,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/prune.hpp"
 #include "vast/query.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
@@ -34,6 +35,23 @@
 
 namespace vast::system {
 
+void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
+  for (auto const& [field, synopsis] : ps.field_synopses_)
+    if (synopsis != nullptr && field.type() == string_type{})
+      unprunable_fields.insert(std::string{field.name()});
+  // TODO/BUG: We also need to prevent pruning for enum types,
+  // which also use string literals for lookup. We must be even
+  // more strict here than with string fields, because incorrectly
+  // pruning string fields will only cause false positives, but
+  // incorrectly pruning enum fields can actually cause false negatives.
+  //
+  // else if (field.type() == enumeration_type{}) {
+  //   auto full_name = field.name();
+  //   for (auto suffix : detail::all_suffixes(full_name, "."))
+  //     unprunable_fields.insert(suffix);
+  // }
+}
+
 size_t catalog_state::memusage() const {
   size_t result = 0;
   for (const auto& [id, partition_synopsis] : synopses)
@@ -48,6 +66,7 @@ void catalog_state::erase(const uuid& partition) {
 
 void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
   offset_map.inject(ps->offset, ps->offset + ps->events, partition);
+  update_unprunable_fields(*ps);
   synopses.emplace(partition, std::move(ps));
 }
 
@@ -65,70 +84,17 @@ void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
               return lhs.first < rhs.first;
             });
   synopses = decltype(synopses)::make_unsafe(std::move(flat_data));
+  for (auto const& [_, synopsis] : synopses)
+    update_unprunable_fields(*synopsis);
 }
 
 partition_synopsis_ptr& catalog_state::at(const uuid& partition) {
   return synopses.at(partition);
 }
 
-// A custom expression visitor that optimizes a given expression specifically
-// for the catalog lookup. Currently this does only a single optimization:
-// It deduplicates string lookups for the type level string synopsis.
-struct pruner {
-  expression operator()(caf::none_t) const {
-    return expression{};
-  }
-  expression operator()(const conjunction& c) const {
-    return conjunction{run(c)};
-  }
-  expression operator()(const disjunction& d) const {
-    return disjunction{run(d)};
-  }
-  expression operator()(const negation& n) const {
-    return negation{caf::visit(*this, n.expr())};
-  }
-  expression operator()(const predicate& p) const {
-    return p;
-  }
-
-  [[nodiscard]] std::vector<expression>
-  run(const std::vector<expression>& connective) const {
-    std::vector<expression> result;
-    detail::stable_set<std::string> memo;
-    for (const auto& operand : connective) {
-      const std::string* str = nullptr;
-      if (const auto* pred = caf::get_if<predicate>(&operand)) {
-        if (!caf::holds_alternative<meta_extractor>(pred->lhs)) {
-          if (const auto* d = caf::get_if<data>(&pred->rhs)) {
-            if ((str = caf::get_if<std::string>(d))) {
-              if (memo.find(*str) != memo.end())
-                continue;
-              memo.insert(*str);
-              result.emplace_back(*pred);
-            }
-          }
-        }
-      }
-      if (!str)
-        result.push_back(caf::visit(*this, operand));
-    }
-    return result;
-  }
-};
-
-// Runs the `pruner` and `hoister` until the input is unchanged.
-expression prune_all(expression e) {
-  expression result = caf::visit(pruner{}, e);
-  while (result != e) {
-    std::swap(result, e);
-    result = hoist(caf::visit(pruner{}, e));
-  }
-  return result;
-}
-
 catalog_result catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
-  auto pruned = prune_all(expr);
+  auto pruned = prune(expr, unprunable_fields);
   auto result = lookup_impl(pruned);
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
@@ -153,7 +119,7 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
   // rely on `flat_map` already traversing them in the correct order, so
   // no separate sorting step is required.
   using result_type = std::vector<uuid>;
-  result_type memoized_partitions;
+  result_type memoized_partitions = {};
   auto all_partitions = [&] {
     if (!memoized_partitions.empty() || synopses.empty())
       return memoized_partitions;
