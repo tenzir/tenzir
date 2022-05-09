@@ -19,32 +19,15 @@ flowchart TB
   classDef action fill:#00a4f1,stroke:none,color:#eee
   classDef future fill:#bdcfdb,stroke:none,color:#222
   %% Actions
-  subgraph manage [Manage Data]
+  subgraph manage [ ]
     direction TB
-    import(Import):::action
-    export(Export):::future
+    ingest(Ingest):::action
+    query(Query):::future
     transform(Transform):::future
+    introspect(Introspect):::future
   end
-  subgraph contextualize [Contextualize Events]
-    direction TB
-    pivot(Pivot):::future
-    explore(Explore):::future
-    enrich(Enrich):::future
-  end
-  subgraph detect [Detect Threats]
-    direction TB
-    match(Match<br/>Threat Intel):::future
-    sigma(Execute<br/>Sigma Rules):::future
-  end
-  %% Edges
-  manage <--> contextualize <--> detect
-  %% Links
-  click import "/vast/docs/use-vast/manage-data/import" "Import Data"
-  %%click export "/vast/docs/use-vast/manage-data/export" "Export Data"
-  %%click transform "/vast/docs/use-vast/manage-data/transform" "Transform Data"
-  %%click pivot "/vast/docs/use-vast/contextualize-events/pivot" "Pivot"
-  %%click explore "/vast/docs/use-vast/contextualize-events/explore" "Explore"
-  %%click enrich "/vast/docs/use-vast/contextualize-events/enrich" "Enrich"
-  %%click match "/vast/docs/use-vast/detect-threats/match-threat-intel" "Match Threat Intel"
-  %%click sigma "/vast/docs/use-vast/detect-threats/execute-sigma-rules" "Execute Sigma Rules"
+  click ingest "/vast/docs/use-vast/ingest" "Ingest Data"
+  %%click query "/vast/docs/use-vast/query" "Query Data"
+  %%click transform "/vast/docs/use-vast/transform" "Transform Data"
+  %%click introspect "/vast/docs/use-vast/introspect" "Introspect Data"
 ```
