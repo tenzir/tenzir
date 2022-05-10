@@ -11,6 +11,7 @@
 #include "vast/type.hpp"
 
 #include "vast/data.hpp"
+#include "vast/detail/collect.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
@@ -400,6 +401,94 @@ TEST(record_type name resolving) {
     to_vector(
       caf::get<record_type>(zeek_conn_flat).resolve_key_suffix("resp_p")),
     (std::vector<offset>{{5}}));
+}
+
+TEST(extractor resolution) {
+  // Convenience macro for checking the results.
+  const auto check = [](const type& t, std::string_view extractor,
+                        const std::vector<offset>& expected_values) {
+    MESSAGE("checking extractor " << extractor);
+    CHECK_EQUAL(detail::collect(t.resolve(extractor)), expected_values);
+  };
+  {
+    const auto t = type{
+      "vast.foo",
+      record_type{
+        // 0
+        {"i", integer_type{}},
+        // 1
+        {"r",
+         record_type{
+           // 1, 0
+           {"p", type{"port", count_type{}}},
+           // 1, 1
+           {"a", address_type{}},
+           // 1, 2
+           {"not_i", count_type{}},
+         }},
+        // 2
+        {"b", type{bool_type{}, {{"key"}}}},
+        // 3
+        {"r2",
+         type{
+           "bar",
+           record_type{
+             // 3, 0
+             {"s", type{subnet_type{}, {{"key", "value"}}}},
+             // 3, 1
+             {"r",
+              record_type{
+                // 3, 1, 0
+                {"a", address_type{}},
+                // 3, 1, 1
+                {"r", string_type{}},
+              }},
+           },
+         }},
+        // 4
+        {"vast.foo.r2.r.r", string_type{}},
+      },
+    };
+    MESSAGE("empty extractor yields no results");
+    check(t, "", {});
+    MESSAGE("just a type name suffix yields no results");
+    check(t, "vast.foo", {});
+    check(t, "foo", {});
+    MESSAGE("field extractors yield the specified leaf");
+    check(t, "i", {{0}});
+    check(t, "r", {{3, 1, 1}, {4}});
+    check(t, "r.p", {{1, 0}});
+    check(t, "r.a", {{1, 1}, {3, 1, 0}});
+    check(t, "r.r", {{3, 1, 1}, {4}});
+    check(t, "r.not_i", {{1, 2}});
+    check(t, "b", {{2}});
+    check(t, "r2", {});
+    check(t, "r2.s", {{3, 0}});
+    check(t, "r2.r", {});
+    check(t, "r2.r.a", {{3, 1, 0}});
+    check(t, "r2.r.r", {{3, 1, 1}, {4}});
+    check(t, "vast.foo.r2.r.r", {{3, 1, 1}, {4}});
+    MESSAGE("qualified field extractors yield the specified leaf");
+    check(t, "vast.foo.i", {{0}});
+    check(t, "vast.foo.r", {});
+    check(t, "vast.foo.r.p", {{1, 0}});
+    check(t, "vast.foo.r.a", {{1, 1}});
+    check(t, "vast.foo.r.r", {});
+    check(t, "vast.foo.r.not_i", {{1, 2}});
+    check(t, "vast.foo.b", {{2}});
+    check(t, "vast.foo.r2", {});
+    check(t, "vast.foo.r2.s", {{3, 0}});
+    check(t, "vast.foo.r2.r", {});
+    check(t, "vast.foo.r2.r.a", {{3, 1, 0}});
+    check(t, "vast.foo.vast.foo.r2.r.r", {{4}});
+    MESSAGE("qualified field extractors can also start at a non-root node");
+    check(t, "bar.s", {{3, 0}});
+    check(t, "bar.r", {});
+    check(t, "bar.r.a", {{3, 1, 0}});
+    MESSAGE("types in qualified field extractors can only occur at the start");
+    check(t, "vast.foo.r2.bar.r.a", {});
+    check(t, "r2.bar.r.a", {});
+  }
 }
 
 TEST(record_type flat index computation) {

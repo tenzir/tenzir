@@ -346,6 +346,30 @@ public:
   /// Returns all aliases of this type, excluding this type itself.
   [[nodiscard]] detail::generator<type> aliases() const noexcept;
 
+  /// Resolves an extractor on this type into an ordered, duplicate-free list of
+  /// offsets.
+  ///
+  /// An extractor is a textual representation of a path to a list of nested
+  /// type leafs. While the developer works with multi-dimenstional indices
+  /// called offsets, the user cannot and should not know these internals, and
+  /// would much rather describe the fields of interest in a concise way.
+  ///
+  /// For example, given a `zeek.conn` schema, the extractor `zeek.conn.conn.id`
+  /// uniquely describes the field `id` nested in the record `conn` inside the
+  /// `zeek.conn` schema. Similarly, the extractor `:port` describes all leaf
+  /// fields whose type is named `port`.
+  ///
+  /// @param extractor The extractor to resolve.
+  /// @returns An ordered, duplicate-free list of offsets described by the
+  /// extractor.
+  [[nodiscard]] detail::generator<offset>
+  resolve(std::string_view extractor) const noexcept;
+
+  /// Resolves a list of extractors on this type into an ordered, duplicate-free
+  /// list of offsets. See the single-extractor overload for more documentation.
+  [[nodiscard]] detail::generator<offset>
+  resolve(std::vector<std::string_view> extractor) const noexcept;
+
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
 

@@ -1147,6 +1147,211 @@ detail::generator<type> type::aliases() const noexcept {
   __builtin_unreachable();
 }
 
+detail::generator<offset>
+type::resolve(std::string_view extractor) const noexcept {
+  return resolve(std::vector{extractor});
+}
+
+detail::generator<offset>
+type::resolve(std::vector<std::string_view> extractors) const noexcept {
+  // Helper functions for prefix- and suffix-matching up to the dot-delimiter.
+  // TODO: Re-add support for wildcards and quoting.
+  const auto try_strip = [](auto what_begin, auto what_end, auto prefix_begin,
+                            auto prefix_end) -> std::string_view::size_type {
+    VAST_ASSERT(prefix_begin != prefix_end);
+    const auto [what_mismatch, prefix_mismatch]
+      = std::mismatch(what_begin, what_end, prefix_begin, prefix_end);
+    if (prefix_mismatch == prefix_end) {
+      if (what_mismatch == what_end)
+        return 0;
+      if (*what_mismatch == '.')
+        return what_mismatch - what_begin;
+    }
+    return std::string_view::npos;
+  };
+  const auto try_strip_prefix
+    = [&try_strip](std::string_view what,
+                   std::string_view prefix) -> std::optional<std::string_view> {
+    const auto index
+      = try_strip(what.begin(), what.end(), prefix.begin(), prefix.end());
+    if (index == std::string_view::npos)
+      return std::nullopt;
+    if (index == 0)
+      return std::string_view{};
+    return what.substr(index + 1);
+  };
+  const auto try_strip_suffix
+    = [&try_strip](std::string_view what,
+                   std::string_view suffix) -> std::optional<std::string_view> {
+    const auto index
+      = try_strip(what.rbegin(), what.rend(), suffix.rbegin(), suffix.rend());
+    if (index == std::string_view::npos)
+      return std::nullopt;
+    if (index == 0)
+      return std::string_view{};
+    return what.substr(0, index - 1);
+  };
+  // We assert in various places of the below code that the extractor or partial
+  // extractors are not empty, which is why we're returning early if that's the
+  // case. This is also always correct since both field and type names must not
+  // be empty.
+  {
+    std::sort(extractors.begin(), extractors.end());
+    const auto is_empty = [](std::string_view extractor) noexcept {
+      return extractor.empty();
+    };
+    const auto removed_if_empty
+      = std::remove_if(extractors.begin(), extractors.end(), is_empty);
+    const auto removed_if_duplicate
+      = std::unique(extractors.begin(), removed_if_empty);
+    extractors.erase(removed_if_duplicate, extractors.end());
+    if (extractors.empty())
+      co_return;
+  }
+  // This algorithm works by advancing the node to every nested FlatBuffers
+  // table's pointer. We start at the type we're resolving on first, and then
+  // iteratively look at the current node and decide what to do next. Every loop
+  // at the iteration only looks at one node at a time.
+  const auto* node = &table(transparent::no);
+  // A helper variable indicating that the current node is a match and should be
+  // returned if it turns out to be a leaf.
+  bool node_matches = false;
+  // The backtracking context required to be able to step out again. Whenever we
+  // encounter a record type node we add a layer of context, and whenever we go
+  // past the end of a record type's list of fields we return to the previous
+  // context. The cursor is maintained separately so we can yield it easily in
+  // case of a matched leaf.
+  struct context {
+    const fbs::Type* root = {};
+    std::vector<std::string_view> current_extractors = {};
+  };
+  auto contexts = std::vector<context>{};
+  auto next_extractors = extractors;
+  auto cursor = offset{};
+  // Helper functions for modifying the node and context with clear naems.
+  const auto advance = [&]() noexcept {
+    node_matches = false;
+    node = contexts.empty() ? nullptr : contexts.back().root;
+    cursor.back() += 1;
+    next_extractors = extractors;
+  };
+  const auto step_in = [&]() noexcept {
+    node_matches = false;
+    cursor.push_back(0);
+    contexts.push_back({
+      .root = node,
+      .current_extractors = std::exchange(next_extractors, extractors),
+    });
+  };
+  const auto step_out_and_advance = [&]() noexcept {
+    cursor.pop_back();
+    contexts.pop_back();
+    advance();
+  };
+  while (node) {
+    switch (node->type_type()) {
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::integer_type:
+      case fbs::type::Type::count_type:
+      case fbs::type::Type::real_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::pattern_type:
+      case fbs::type::Type::address_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
+        // Yield the current node if it matched.
+        if (node_matches)
+          co_yield cursor;
+        // Since we're at a leaf we need to move horizontally to the next node.
+        advance();
+        break;
+      }
+      case fbs::type::Type::record_type: {
+        // Detect whether we just recursed a level deeper. This happens whenever
+        // the root of the current context does not match the current node.
+        if (contexts.empty() || node != contexts.back().root)
+          step_in();
+        const auto& record_type = *node->type_as_record_type();
+        const auto* fields = record_type.fields();
+        VAST_ASSERT(fields);
+        // Detect whether we're past the end of the current level and need to
+        // step back to the last context.
+        if (cursor.back() >= fields->size()) {
+          step_out_and_advance();
+          break;
+        }
+        // At this point we can be certain we're looking at the field we wanted
+        // to look at, so we compare its name against all remaining extractors
+        // to try to create a match.
+        const auto* field = fields->Get(cursor.back());
+        VAST_ASSERT(field);
+        node = field->type_nested_root();
+        const auto* name = field->name();
+        VAST_ASSERT(name);
+        // For every extractor, try to strip the name as a prefix. If we have a
+        // full match we mark this node to be yielded if it turns out to be a
+        // leaf node. If we have a partial match, we add the remaining extractor
+        // to the list of extractors for the next iteration.
+        auto& context = contexts.back();
+        for (const auto extractor : context.current_extractors) {
+          if (const auto remaining_extractor
+              = try_strip_prefix(extractor, name->string_view())) {
+            if (remaining_extractor->empty())
+              node_matches = true;
+            else
+              next_extractors.push_back(*remaining_extractor);
+          }
+        }
+        // Try suffix matching the field name itself against the initial
+        // extractors if we are in the first layer exactly. This is required
+        // because for some very old partitons we used to flatten the available
+        // qualified record fields into a single record type for convenience,
+        // and we cannot distinguish easily whether we have a partition using
+        // that old combined layout format or the new format where we just store
+        // the type itself.
+        // TODO: This should probably be opt-in with some flag.
+        if (!node_matches && cursor.size() == 1) {
+          for (const auto extractor : extractors) {
+            if (const auto remaining_extractor
+                = try_strip_suffix(name->string_view(), extractor)) {
+              node_matches = true;
+              break;
+            }
+          }
+        }
+        break;
+      }
+      case fbs::type::Type::enriched_type: {
+        const auto& enriched_type = *node->type_as_enriched_type();
+        if (const auto* name = enriched_type.name()) {
+          // Check whether the extractor is a suffix of the type's name, and if
+          // it is, yield the cursor and exit.
+          // TODO: Do we want to be able to specify just the latter part of a
+          // type's name, omitting the module?
+          for (const auto& extractor : extractors) {
+            if (auto remaining_extractor
+                = try_strip_prefix(extractor, name->string_view())) {
+              if (!remaining_extractor->empty()) {
+                VAST_ASSERT(!next_extractors.empty());
+                if (next_extractors.back() != *remaining_extractor)
+                  next_extractors.push_back(*remaining_extractor);
+              }
+            }
+          }
+        }
+        // Move on to the nested type *without* adding another context layer.
+        node = enriched_type.type_nested_root();
+        break;
+      }
+    }
+  }
+}
+
 bool is_container(const type& type) noexcept {
   const auto& root = type.table(type::transparent::yes);
   switch (root.type_type()) {
