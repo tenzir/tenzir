@@ -39,9 +39,9 @@ VAST enables this naturally.
 [lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf
 :::
 
-To onboard a new data source, you first need to [setup a VAST server
-node](/docs/setup-vast). The subsequent discussion explains how to setup a
-client that sends data to an existing server, as illustrated below.
+Onboarding a new data source involves configuring a client that sends data to a
+VAST server, as illustrated below. This assumes that you [set up a VAST
+node](/docs/setup-vast) listening at `localhost:42000`.
 
 ![Ingest process](/img/ingest.png)
 
@@ -92,9 +92,24 @@ first-class support IP addresses but they are strings in JSON. To get the most
 out of your data and retain domain semantics, [define a schema for your JSON
 objects](#provide-a-schema-for-unknown-types).
 
-:::caution Example Missing
-Coming soon!
-:::
+Consider the this example JSON file `data.json`:
+
+```json
+{"ts":"2011-08-15T03:36:16.748830Z","uid":"CKmcUPexVMCAAkl6h","id.orig_h":"210.87.254.81","id.orig_p":3,"id.resp_h":"147.32.84.165","id.resp_p":1,"proto":"icmp","conn_state":"OTH","missed_bytes":0,"orig_pkts":1,"orig_ip_bytes":56,"resp_pkts":0,"resp_ip_bytes":0,"tunnel_parents":[]}
+{"ts":"2011-08-15T03:37:11.992151Z","uid":"CTluup1eVngpaS6e2i","id.orig_h":"147.32.84.165","id.orig_p":3923,"id.resp_h":"218.108.143.87","id.resp_p":22,"proto":"tcp","duration":3.006088,"orig_bytes":0,"resp_bytes":0,"conn_state":"S0","missed_bytes":0,"history":"S","orig_pkts":4,"orig_ip_bytes":192,"resp_pkts":0,"resp_ip_bytes":0,"tunnel_parents":[]}
+{"ts":"2011-08-15T03:37:12.593013Z","uid":"C4KKBn3pbBOEm8XWOk","id.orig_h":"147.32.84.165","id.orig_p":3924,"id.resp_h":"218.108.189.111","id.resp_p":22,"proto":"tcp","duration":3.005948,"orig_bytes":0,"resp_bytes":0,"conn_state":"S0","missed_bytes":0,"history":"S","orig_pkts":4,"orig_ip_bytes":192,"resp_pkts":0,"resp_ip_bytes":0,"tunnel_parents":[]}
+```
+
+Import this file by specifying the schema `zeek.conn` that ships with VAST:
+
+```bash
+vast import --type=zeek.conn json < data.json
+```
+
+Passing a schema type via `--type` is necessary because the NDJSON objects are
+just a collection of fields. VAST cannot know how to name the corresponding
+table without an external hint. See the section on [mapping input records to
+schemas](#map-input-records-to-schemas) for details.
 
 ### CSV
 
@@ -104,12 +119,32 @@ form. The first line in a CSV file must contain a header that describes the
 field names. The remaining lines contain concrete values. Except for the header,
 one line corresponds to one event.
 
-Because CSV has no notion of typing, it is necessary to select a layout via
-`--type` whose field names correspond to the CSV header field names. Such a
-layout must be defined in a known module.
+Analogous to [ingesting JSON](#JSON), it is necessary to select a layout via
+`--type` whose field names correspond to the CSV header field names.
 
-:::caution Example Missing
-Coming soon!
+Let's take a subset of the above JSON in an example CSV file `data.csv`:
+
+```csv
+ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,proto,conn_state
+2011-08-15T03:36:16.748830Z,CKmcUPexVMCAAkl6h,210.87.254.81,3,147.32.84.165,1,icmp,OTH
+2011-08-15T03:37:11.992151Z,CTluup1eVngpaS6e2i,147.32.84.165,3923,218.108.143.87,22,tcp,S0
+2011-08-15T03:37:12.593013Z,C4KKBn3pbBOEm8XWOk,147.32.84.165,3924,218.108.189.111,22,tcp,S0
+```
+
+Analogous to the JSON import, you can ingest the CSV data as follows.
+
+```bash
+vast import --type=zeek.conn csv < data.csv
+```
+
+See the section on [mapping input records to
+schemas](#map-input-records-to-schemas) for a detailed explanation of the
+`--type` option.
+
+:::warning Potentially bad example
+We need to discuss whether we want to keep this example, because subsequent
+invocation of the JSON and CSV import yield a warning on import that the type
+registry `detected an incompatible layout change for zeek.conn`.
 :::
 
 ### Zeek
@@ -187,21 +222,217 @@ vast import suricata < path/to/eve.log
 
 ### NetFlow
 
-:::caution Text Missing
-Coming soon!
+:::info Pro feature
+This feature is available as commercial plugin that runs on top open-source
+VAST. Please [contact us](mailto:sales@tenzir.com) if you'd like to try it out.
 :::
+
+[NetFlow](https://en.wikipedia.org/wiki/NetFlow) is suite of protocols for
+computing and relaying flow-level statistics. An *exporter*, such as a router or
+switch, aggregates packets into flow records and sends them to a *collector*.
+
+:::note Supported Versions
+VAST has native support for NetFlow **v5**, **v9**, and **IPFIX**. We have [a
+blog post][netflow-blog-post] about how we implement *Flexible NetFlow*. For
+IPFIX we support Private Enterprise Numbers 3054 (IXIA IxFlow) and 29305
+(Bidirectional Flow Export) are supported. Please contact us if you require
+support for additional Private Enterprise Numbers.
+[netflow-blog-post]: https://tenzir.com/blog/flexible-netflow-for-flexible-security-analytics/
+:::
+
+VAST can either act as collector or parse binary NetFlow data on standard input.
+The NetFlow version is automatically identified at runtime, and mixing multiple
+versions (e.g., from multiple export devices) is possible.
+
+To spin up a VAST client as NetFlow a collector, use the `vast import netflow`
+command:
+
+```bash
+vast import -l :2055/tcp netflow
+```
+
+A commonly used NetFlow collector is `nfcapd`, which writes NetFlow
+messages into framed files. To replay from `nfcapd` you can use `nfreplay`:
+
+```bash
+vast import -l :9995/udp netflow
+nfreplay < path/to/capture.nfcapd # Exports all records to 127.0.0.1:9995
+```
+
+Because VAST behaves like any other UNIX tool, it can also import NetFlow
+messages from files or standard input directly:
+
+```bash
+# From file
+vast import -r path/to/netflow.bin netflow
+
+# Pipe multiple files at once
+cat path/to/*.bin | vast import netflow
+```
 
 ### PCAP
 
-:::caution Text Missing
-Coming soon!
-:::
+[PCAP](http://www.tcpdump.org) is the de-facto standard format for network
+packet captures. VAST supports reading and writing PCAP traces via `libpcap`. On
+the ingest path, VAST can either read packets from a trace file or in *live
+mode* from a network interface.
+
+While decapsulating packets, VAST extracts
+[802.1Q](https://en.wikipedia.org/wiki/IEEE_802.1Q) VLAN tags into the nested
+`vlan` record, consisting of an `outer` and `inner` field for the respective
+12-bit VLAN ID of the tags.
+
+In addition, VAST computes the [Community
+ID](https://github.com/corelight/community-id-spec) per packet to support
+pivoting from other log data. The packet record contains a field `community_id`
+that represents the string representation of the Community ID, e.g.,
+`1:wCb3OG7yAFWelaUydu0D+125CLM=`. If you prefer to not have the Community ID in
+your data, add the option `--disable-community-id` to the `pcap` command.
+
+To ingest a PCAP file `input.trace`, pass it to the `pcap` command on standard
+input:
+
+```bash
+vast import pcap < input.trace
+```
+
+You can also acquire packets by listening on an interface:
+
+```bash
+vast import pcap -i eth0
+```
+#### Real-World Traffic Replay
+
+When reading PCAP data from a trace, VAST processes packets directly one after
+another. This differs from live packet capturing where there exists natural
+inter-packet arrival times, according to the network traffic pattern. To emulate
+"real-world" trace replay, VAST supports a *pseudo-realtime* mode, which works
+by introducing inter-packet delays according to the difference between subsquent
+packet timestamps.
+
+The option `--pseudo-realtime`/`-p` takes a positive integer *c* to delay
+packets by a factor of *1/c*. For example, if the first packet arrives at time
+*t0* and the next packet at time *t1*, then VAST would sleep for time
+*(t1 - t0)/c* before releasing the second packet. Intuitively, the larger *c*
+gets, the faster the replay takes place.
+
+For example, to replay packets as if they arrived in realtime, use `-p 1`. To
+replay packets twice as fast as they arrived on the NIC, use `-p 2`.
+
+#### Flow Management
+
+The PCAP plugin has a few tuning knows for controlling storage of connection
+data. Naive approaches, such as sampling or using a "snapshot" (`tcpdump -s`)
+make transport-level analysis impractical due to an incomplete byte stream.
+Inspired by the [Time Machine][tm], the PCAP plugin supports recording only the
+first *N* bytes of a connection (the *cutoff*) and skipping the bulk of the flow
+data. This allows for recording most connections in their entirety while
+achieving a massive space reduction by forgoing the heavy tail of the traffic
+distribution.
+
+[tm]: http://www.icir.org/vern/papers/time-machine-sigcomm08.pdf
+
+To record only the first 1,024 bytes every connection, pass `-c 1024` as option.
+Not that the cut-off is *bi-directional*, i.e., it applies to both the
+originator and responder TCP streams and a flow gets evicted only after both
+sides have reached their cutoff value.
+
+In addition to cutoff configuration, the PCAP plugin has a few other tuning
+parameters. VAST keeps a flow table with per-connection state. The
+`--max-flows`/`-m` option specifies an upper bound on the flow table size in
+number of connections. After a certain amount of inactivity of a flow,
+the corresponding state expires. The option `--max-flow-age`/`-a` controls this
+timeout value. Finally, the frequency of when the flow table expires entries
+can be controlled via `--flow-expiry`/`-e`.
 
 ### Argus
 
-:::caution Text Missing
-Coming soon!
-:::
+[Argus](https://qosient.com/argus/index.shtml) is an open-source flow monitor
+that computes a variety of connection statistics. The UNIX tool `argus`
+processes either PCAP or NetFlow data and generates binary output. The companion
+utility `ra` transforms this binary output into a textual form that VAST can
+parse.
+
+Ingesting Argus data involves the following steps:
+
+1. Read PCAP or NetFlow data with `argus`
+2. Convert the binary Argus data into CSV with `ra`
+3. Pipe the `ra` output to `vast`
+
+#### Read network data
+
+To read a PCAP file, simply pass a file via `-r`:
+
+```bash
+argus -r trace
+```
+
+To read from standard input, use `-r -`. Similarly, to write to standard
+output, use `-w -`.
+
+#### Convert argus to CSV
+
+Converting `argus` output to CSV requires the following flags:
+
+- `-c ,` to enable CSV mode
+- `-L0` to print a header with field names once
+- `-n` suppress port nubmer to service conversions
+
+The first column contains the timestamp, but unfortunately the default format
+doesn't contain dates. Changing the timestamp format requires passing a
+custom configuration file via `-F ra.conf` with the following contents:
+
+```
+RA_TIME_FORMAT="%y-%m-%d+%T.%f"
+```
+
+Finally, the `-s +a,b,c,...` flag includes list of field names that should be
+appended after the default fields. Consult the manpage of `ra` under the `-s`
+section for valid field names.
+
+Put together, the following example generates valid CSV output for a PCAP file
+called `trace.pcap`:
+
+```
+argus -r trace.pcap -w - |
+  ra -F ra.conf -L0 -c , -n -s +spkts,dpkts,load,pcr
+```
+
+This generates the following output:
+
+```
+StartTime,Flgs,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,TotPkts,TotBytes,State,SrcPkts,DstPkts,Load,PCRatio
+09-11-18+09:00:03.914398, e        ,udp,192.168.1.1,626,   ->,224.0.0.1,626,1,75,INT,1,0,0.000000,-0.000000
+09-11-18+09:00:20.093410, e        ,lldp,00:22:2d:81:db:10,0,   ->,01:80:c2:00:00:0e,0,1,118,INT,1,0,0.000000,-0.000000
+09-11-18+09:00:21.486288, e        ,arp,192.168.1.102,,  who,192.168.1.1,,2,106,CON,1,1,0.000000,-0.000000
+09-11-18+09:00:21.486539, e        ,udp,192.168.1.102,68,  <->,192.168.1.1,67,2,689,CON,1,1,0.000000,-0.000000
+09-11-18+09:00:33.914396, e        ,udp,192.168.1.1,626,   ->,224.0.0.1,626,1,75,REQ,1,0,0.000000,-0.000000
+09-11-18+09:00:50.208499, e        ,lldp,00:22:2d:81:db:10,0,   ->,01:80:c2:00:00:0e,0,1,118,REQ,1,0,0.000000,-0.000000
+09-11-18+09:01:03.914408, e        ,udp,192.168.1.1,626,   ->,224.0.0.1,626,1,75,REQ,1,0,0.000000,-0.000000
+09-11-18+09:01:20.323835, e        ,lldp,00:22:2d:81:db:10,0,   ->,01:80:c2:00:00:0e,0,1,118,REQ,1,0,0.000000,-0.000000
+09-11-18+09:01:33.914414, e        ,udp,192.168.1.1,626,   ->,224.0.0.1,626,1,75,REQ,1,0,0.000000,-0.000000
+```
+
+#### Ingest argus CSV
+
+Since VAST has [native CSV support](#CSV), ingesting Argus CSV output only
+requires an adequate schema. VAST already ships with an argus schema containing a
+type `argus.record` that covers all fields from the `ra` man page.
+
+The following command imports a file `argus.csv`:
+
+```bash
+vast import -t argus.record csv < argus.csv
+```
+
+Alternatively, this command pipeline processes a PCAP trace without
+intermediate file and ships sends the data directory to VAST:
+
+```
+argus -r trace.pcap -w - |
+  ra -F ra.conf -L0 -c , -n -s +spkts,dpkts,load,pcr |
+  vast import -t argus.record csv
+```
 
 ## Discard events at parse time
 
