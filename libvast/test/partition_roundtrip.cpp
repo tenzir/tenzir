@@ -128,6 +128,7 @@ TEST(empty partition roundtrip) {
   vast::factory<vast::table_slice_builder>::initialize();
   // Create partition state.
   vast::system::active_partition_state state;
+  state.use_sketches = false;
   state.data.id = vast::uuid::random();
   state.data.store_id = "legacy_archive";
   state.data.store_header = vast::chunk::make_empty();
@@ -136,6 +137,7 @@ TEST(empty partition roundtrip) {
   state.data.synopsis = caf::make_copy_on_write<vast::partition_synopsis>();
   state.data.synopsis.unshared().offset = state.data.offset;
   state.data.synopsis.unshared().events = state.data.events;
+  state.data.synopsis.unshared().use_sketches = false;
   auto& ids = state.data.type_ids["x"];
   ids.append_bits(false, 3);
   ids.append_bits(true, 3);
@@ -237,13 +239,6 @@ TEST(full partition roundtrip) {
     directory); // `directory` is provided by the unit test fixture
   auto partition_uuid = vast::uuid::random();
   auto store_id = std::string{"legacy_archive"};
-  auto partition
-    = sys.spawn(vast::system::active_partition, partition_uuid,
-                vast::system::accountant_actor{}, fs, caf::settings{},
-                vast::index_config{}, vast::system::store_actor{}, store_id,
-                vast::chunk::make_empty());
-  run();
-  REQUIRE(partition);
   // Add data to the partition.
   auto layout = vast::type{
     "y",
@@ -251,6 +246,13 @@ TEST(full partition roundtrip) {
       {"x", vast::count_type{}},
     },
   };
+  auto partition
+    = sys.spawn(vast::system::active_partition, partition_uuid, layout,
+                vast::system::accountant_actor{}, fs, caf::settings{},
+                vast::index_config{}, vast::system::store_actor{}, store_id,
+                vast::chunk::make_empty());
+  run();
+  REQUIRE(partition);
   auto builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, layout);
   CHECK(builder->add(0u));

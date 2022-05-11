@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/address.hpp"
+#include "vast/arrow_table_slice.hpp"
 #include "vast/detail/generator.hpp"
 #include "vast/detail/hash_scalar.hpp"
 #include "vast/detail/passthrough.hpp"
@@ -26,15 +27,6 @@
 
 namespace vast::detail {
 
-// FIXME: wait for the implementation of to land in master.
-template <concrete_type Type>
-view<type_to_data_t<Type>>
-value_at(const Type& t, const type_to_arrow_array_storage_t<Type>&,
-         int64_t) noexcept {
-  static auto x = t.construct(); // ¯\_(ツ)_/¯
-  return view<type_to_data_t<Type>>{x};
-}
-
 template <incremental_hash HashAlgorithm = default_hash>
 struct array_hasher {
 public:
@@ -44,19 +36,8 @@ public:
   generator<uint64_t> operator()(const Type& t, const arrow::Array& xs) const {
     if (xs.null_count() > 0)
       co_yield nil_hash_digest;
-    // Work around value_at.
-    const auto& array = [&]() -> decltype(auto) {
-      if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value)
-        return *caf::get<type_to_arrow_array_t<Type>>(xs).storage();
-      else
-        return caf::get<type_to_arrow_array_t<Type>>(xs);
-    }();
-    for (auto i = 0; i < xs.length(); ++i) {
-      if (!xs.IsNull(i)) {
-        auto x = value_at(t, array, i);
-        co_yield hash_scalar<Type>(x);
-      }
-    }
+    for (auto value_view : values(vast::type{t}, xs))
+      co_yield hash_scalar<Type>(value_view);
   }
 
   generator<uint64_t>
@@ -78,6 +59,13 @@ public:
   operator()(const enumeration_type&, const arrow::Array& xs) const {
     const auto& ys = caf::get<enumeration_type::array_type>(xs);
     return (*this)(string_type{}, *ys.storage()->dictionary());
+  }
+
+  // Subnets are stored in an arrow::StructArray
+  generator<uint64_t>
+  operator()(const subnet_type&, const arrow::Array&) const {
+    // const auto& ys = caf::get<subnet_type::array_type>(xs);
+    co_yield 0ull; // FIXME
   }
 
   generator<uint64_t>

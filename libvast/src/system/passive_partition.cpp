@@ -173,15 +173,24 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
 
 caf::error
 unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
-  if (!x.partition_synopsis())
+  if (!x.partition_synopsis() && !x.partition_synopsis_legacy())
     return caf::make_error(ec::format_error, "missing partition synopsis");
   if (!x.type_ids())
     return caf::make_error(ec::format_error, "missing type_ids");
-  // The id_range was only added in VAST 2021.08.26, so we fill it
-  // from the data in the partition if it does not exist.
-  if (!x.partition_synopsis()->id_range())
-    return unpack(*x.partition_synopsis(), ps, x.offset(), x.events());
-  return unpack(*x.partition_synopsis(), ps);
+
+  if (x.partition_synopsis_legacy()) {
+    // The id_range was only added in VAST 2021.08.26, so we fill it
+    // from the data in the partition if it does not exist. If the partition
+    // is that old, we know it must still have legacy synopsis, since sketches
+    // didn't exist at the time.
+    if (!x.partition_synopsis_legacy()->id_range())
+      return unpack(*x.partition_synopsis_legacy(), ps, x.offset(), x.events());
+
+    return unpack(*x.partition_synopsis_legacy(), ps);
+  } else {
+    VAST_ASSERT_CHEAP(x.partition_synopsis());
+    return unpack(*x.partition_synopsis(), ps);
+  }
 }
 
 partition_actor::behavior_type passive_partition(

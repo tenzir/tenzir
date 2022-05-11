@@ -46,15 +46,17 @@ table LegacyPartition {
   /// A map storing the mapping from type name -> ids
   type_ids: [detail.LegacyTypeIDs];
 
-  /// Various synopsis structures for partition-wide synopses of certain
-  /// columns. (eg. global min and max timestamp)
-  partition_synopsis: partition_synopsis.LegacyPartitionSynopsis;
+  /// Replaced by the `partition_synopsis` field below for newer partitions.
+  partition_synopsis_legacy: partition_synopsis.LegacyPartitionSynopsis;
 
   /// The contained value indexes.
   indexes: [value_index.LegacyQualifiedValueIndex];
 
   /// A store identifier and header information.
   store: detail.StoreHeader;
+
+  /// Partition-wide sketches of certain columns. (eg. global min and max timestamp)
+  partition_synopsis: partition_synopsis.PartitionSynopsisV1;
 }
 
 union Partition {

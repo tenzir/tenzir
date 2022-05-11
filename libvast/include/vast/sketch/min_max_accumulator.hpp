@@ -8,58 +8,111 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
+#include "vast/error.hpp"
 #include "vast/fbs/sketch.hpp"
+#include "vast/flatbuffer.hpp"
+#include "vast/sketch/sketch.hpp"
+#include "vast/type.hpp"
 
+#include <arrow/array.h>
 #include <arrow/array/util.h>
-#include <arrow/compute/api.h>
 #include <arrow/record_batch.h>
 #include <arrow/table.h>
 #include <caf/error.hpp>
 #include <flatbuffers/flatbuffers.h>
+#include <fmt/format.h>
 
 #include <memory>
 #include <type_traits>
 
 namespace vast::sketch {
 
+template <typename T>
+struct accumulator_traits;
+
+template <>
+struct accumulator_traits<vast::bool_type> {
+  using accumulator_type = uint64_t;
+  using flatbuffer_type = fbs::sketch::MinMaxU64;
+  static fbs::sketch::Sketch flatbuffer_union_variant() {
+    return fbs::sketch::Sketch::min_max_u64;
+  }
+};
+
+template <>
+struct accumulator_traits<vast::integer_type> {
+  using accumulator_type = int64_t;
+  using flatbuffer_type = fbs::sketch::MinMaxI64;
+  static fbs::sketch::Sketch flatbuffer_union_variant() {
+    return fbs::sketch::Sketch::min_max_i64;
+  }
+};
+
+template <>
+struct accumulator_traits<vast::count_type> {
+  using accumulator_type = uint64_t;
+  using flatbuffer_type = fbs::sketch::MinMaxU64;
+  static fbs::sketch::Sketch flatbuffer_union_variant() {
+    return fbs::sketch::Sketch::min_max_u64;
+  }
+};
+
+template <>
+struct accumulator_traits<vast::real_type> {
+  using accumulator_type = double;
+  using flatbuffer_type = fbs::sketch::MinMaxF64;
+  static fbs::sketch::Sketch flatbuffer_union_variant() {
+    return fbs::sketch::Sketch::min_max_f64;
+  }
+};
+
+template <>
+struct accumulator_traits<vast::duration_type> {
+  using accumulator_type = int64_t;
+  using flatbuffer_type = fbs::sketch::MinMaxI64;
+  static fbs::sketch::Sketch flatbuffer_union_variant() {
+    return fbs::sketch::Sketch::min_max_i64;
+  }
+};
+
+template <>
+struct accumulator_traits<vast::time_type> {
+  using accumulator_type = int64_t;
+  using flatbuffer_type = fbs::sketch::MinMaxI64;
+  static fbs::sketch::Sketch flatbuffer_union_variant() {
+    return fbs::sketch::Sketch::min_max_i64;
+  }
+};
+
+template <typename T>
+// requires: T is a vast::type
 class min_max_accumulator {
 public:
+  using arrow_array_type = vast::type_to_arrow_array_t<T>;
+  using traits = accumulator_traits<T>;
+  using accumulator_type = typename traits::accumulator_type;
+  using flatbuffer_type = typename traits::flatbuffer_type;
+
   caf::error accumulate(const std::shared_ptr<arrow::Array>& xs) {
-    auto result = arrow::Result<arrow::Datum>{};
-    if (!min_) {
-      VAST_ASSERT(!max_);
-      result = arrow::compute::MinMax(xs);
-    } else {
-      // Concatenate with existing min and max for convenient calling of Arrow
-      // API. If we had a function that operates on scalars (arrow::Min(Scalar,
-      // Scalar)), this would not be needed.
-      auto ys = arrow::ChunkedArray::Make(
-        {xs, arrow::MakeArrayFromScalar(*min_, 1).MoveValueUnsafe(),
-         arrow::MakeArrayFromScalar(*max_, 1).MoveValueUnsafe()});
-      result = arrow::compute::MinMax(ys.MoveValueUnsafe());
+    auto specific_array = std::static_pointer_cast<arrow_array_type>(xs);
+    for (auto const& x : *specific_array) {
+      if (!x)
+        continue;
+      min_ = std::min<accumulator_type>(min_, *x);
+      max_ = std::max<accumulator_type>(max_, *x);
     }
-    if (!result.ok())
-      return caf::make_error(ec::unimplemented,
-                             fmt::format("MinMax kernel failed to execute: {}",
-                                         result.status().ToString()));
-    auto min_max = result.MoveValueUnsafe().scalar_as<arrow::StructScalar>();
-    min_ = min_max.value[0];
-    max_ = min_max.value[1];
     return caf::none;
   }
 
-  caf::expected<sketch> finish() const {
+  [[nodiscard]] caf::expected<vast::sketch::sketch> finish() const {
     constexpr auto flatbuffer_size = 42; // FIXME: compute size manually
     flatbuffers::FlatBufferBuilder builder{flatbuffer_size};
-    // FIXME: convert min/max to data.
-    // auto min_offset =
-    // auto max_offset =
-    // auto min_max_offset
-    //  = fbs::sketch::CreateMinMax(builder, min_offset, max_offset);
-    // auto sketch_offset = fbs::CreateSketch(
-    //  builder, fbs::sketch::Sketch::min_max, min_max_offset.Union());
-    // builder.Finish(sketch_offset);
-    // FIXME
+    auto type = traits::flatbuffer_union_variant();
+    auto minmax_offset = builder.CreateStruct(flatbuffer_type{min_, max_});
+    auto union_offset = minmax_offset.Union();
+    auto sketch_offset = fbs::CreateSketch(builder, type, union_offset);
+    builder.Finish(sketch_offset);
     // VAST_ASSERT(builder.GetSize() == flatbuffer_size);
     auto fb = flatbuffer<fbs::Sketch>::make(builder.Release());
     if (!fb)
@@ -68,8 +121,8 @@ public:
   }
 
 private:
-  std::shared_ptr<arrow::Scalar> min_ = {};
-  std::shared_ptr<arrow::Scalar> max_ = {};
+  accumulator_type min_ = {};
+  accumulator_type max_ = {};
 };
 
 } // namespace vast::sketch

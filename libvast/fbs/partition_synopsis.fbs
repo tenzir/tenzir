@@ -1,12 +1,12 @@
+include "sketch.fbs";
 include "synopsis.fbs";
 include "type.fbs";
 
 namespace vast.fbs.partition_synopsis;
 
 table LegacyPartitionSynopsis {
-  /// Synopses for individual fields.
-  // TODO: Split this into separate vectors for field synopses
-  // and type synopses.
+  /// Synopses for individual fields and for types. The type
+  /// synopses are marked by having an empty field name.
   synopses: [synopsis.LegacySynopsis];
 
   /// The id range of this partition.
@@ -25,8 +25,36 @@ table LegacyPartitionSynopsis {
   schema: [ubyte] (nested_flatbuffer: "vast.fbs.Type");
 }
 
+table FieldSketch {
+  field: type.detail.RecordField (required);
+  sketch: [ubyte] (required, nested_flatbuffer: "vast.fbs.Sketch");
+}
+
+table TypeSketch {
+  type: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
+  sketch: [ubyte] (required, nested_flatbuffer: "vast.fbs.Sketch");
+}
+
+table PartitionSynopsisV1 {
+  layout_name: string;  
+
+  /// Sketches for individual fields.
+  field_sketches: [FieldSketch];
+
+  /// Type-level sketches.
+  type_sketches: [TypeSketch];
+
+  /// The id range of this partition.
+  id_range: vast.fbs.uinterval;
+
+  /// The import time range of this partition.
+  import_time_range: vast.fbs.interval;
+}
+
 union PartitionSynopsis {
   legacy: partition_synopsis.LegacyPartitionSynopsis,
+  // The 'legacy' partition synopsis used to be v0.
+  v1: partition_synopsis.PartitionSynopsisV1,
 }
 
 namespace vast.fbs;

@@ -429,15 +429,29 @@ partition_transformer_actor::behavior_type partition_transformer(
         for (auto& [layout, partition_data] :
              self->state.data) { // Pack partition synopsis
           flatbuffers::FlatBufferBuilder builder;
-          auto synopsis = pack(builder, *partition_data.synopsis);
-          if (!synopsis) {
-            stream_data.synopsis_chunks = synopsis.error();
-            return;
+          auto type = vast::fbs::partition_synopsis::PartitionSynopsis{};
+          auto offset = flatbuffers::Offset<void>{};
+          // VAST_INFO("synopsis using sketches? {}", p)
+          if (partition_data.synopsis->use_sketches) {
+            auto synopsis = pack(builder, *partition_data.synopsis);
+            if (!synopsis) {
+              stream_data.synopsis_chunks = synopsis.error();
+              return;
+            }
+            type = fbs::partition_synopsis::PartitionSynopsis::v1;
+            offset = synopsis->Union();
+          } else {
+            auto synopsis = pack_legacy(builder, *partition_data.synopsis);
+            if (!synopsis) {
+              stream_data.synopsis_chunks = synopsis.error();
+              return;
+            }
+            type = fbs::partition_synopsis::PartitionSynopsis::legacy;
+            offset = synopsis->Union();
           }
           fbs::PartitionSynopsisBuilder ps_builder(builder);
-          ps_builder.add_partition_synopsis_type(
-            fbs::partition_synopsis::PartitionSynopsis::legacy);
-          ps_builder.add_partition_synopsis(synopsis->Union());
+          ps_builder.add_partition_synopsis_type(type);
+          ps_builder.add_partition_synopsis(offset);
           auto ps_offset = ps_builder.Finish();
           fbs::FinishPartitionSynopsisBuffer(builder, ps_offset);
           stream_data.synopsis_chunks->emplace_back(

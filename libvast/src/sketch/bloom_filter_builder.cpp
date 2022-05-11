@@ -32,6 +32,7 @@ bloom_filter_builder::build(const std::unordered_set<uint64_t>& digests) {
   bloom_filter_config config;
   config.n = digests.size();
   config.p = p_;
+  VAST_INFO("using config n={}, p={}", config.n, config.p);
   auto params = evaluate(config);
   if (!params)
     return caf::make_error(ec::invalid_argument, //

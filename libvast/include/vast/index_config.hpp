@@ -38,6 +38,8 @@ struct index_config {
     }
   };
 
+  bool use_sketches = defaults::index::use_sketches;
+
   std::vector<rule> rules = {};
   double default_fp_rate = defaults::system::fp_rate;
 

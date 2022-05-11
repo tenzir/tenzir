@@ -112,7 +112,8 @@ TEST(simple query pruning) {
 
 TEST(query pruning with index config) {
   auto config1 = vast::index_config{
-    {{{"zeek.conn.history"}, 0.0001}},
+    .use_sketches = true,
+    .rules = {{{"zeek.conn.history"}, 0.0001}},
   };
   auto id = vast::uuid::random();
   auto accountant = vast::system::accountant_actor{};
@@ -121,8 +122,9 @@ TEST(query pruning with index config) {
   auto store_header = vast::chunk::make_empty();
   auto fs = self->spawn(memory_filesystem);
   auto index_opts = caf::settings{};
+  auto layout = zeek_conn_log[0].layout();
   auto partition
-    = self->spawn(vast::system::active_partition, id, accountant, fs,
+    = self->spawn(vast::system::active_partition, id, layout, accountant, fs,
                   index_opts, config1, store, store_id, store_header);
   vast::detail::spawn_container_source(sys, zeek_conn_log, partition);
   run();

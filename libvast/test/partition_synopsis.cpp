@@ -28,6 +28,7 @@ TEST(custom index_config) {
   // Setup.
   using namespace std::string_literals;
   auto ps = vast::partition_synopsis{};
+  ps.use_sketches = false;
   auto capacity = vast::defaults::system::max_partition_size;
   auto synopsis_opts = vast::index_config{
     .rules = {

@@ -13,6 +13,7 @@
 #include "vast/chunk.hpp"
 #include "vast/fbs/sketch.hpp"
 #include "vast/flatbuffer.hpp"
+#include "vast/view.hpp"
 
 #include <cstddef>
 
@@ -24,17 +25,24 @@ public:
   /// Constructs a partition sketch from a flatbuffer.
   explicit sketch(flatbuffer<fbs::Sketch> fb) noexcept;
 
-  /// Checks whether the sketch fulfils a given predicate.
+  /// Checks whether the sketch fulfills a given predicate.
   /// @param pred The predicate to check.
   /// @returns A boolean that indicates whether *x* is in the sketch, or
   /// std::nullopt if the query cannot be answered.
-  std::optional<bool>
+  [[nodiscard]] std::optional<bool>
   lookup(relational_operator op, const data& x) const noexcept;
 
   friend size_t mem_usage(const sketch& x);
 
+  friend flatbuffers::Offset<flatbuffers::Vector<uint8_t>>
+  pack_nested(flatbuffers::FlatBufferBuilder& builder, const sketch&);
+
 private:
   flatbuffer<fbs::Sketch> flatbuffer_;
 };
+
+// TODO - figure out why the friend declaration above is not enough
+// flatbuffers::Offset<flatbuffers::Vector<uint8_t>>
+// pack_nested(flatbuffers::FlatBufferBuilder& builder, const sketch&);
 
 } // namespace vast::sketch

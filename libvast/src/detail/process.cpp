@@ -127,7 +127,7 @@ caf::expected<std::filesystem::path> objectpath_dynamic(const void* addr) {
     return caf::make_error(ec::unspecified, "failed to execute dladdr()");
   if (!info.dli_fname)
     return caf::make_error(ec::unspecified, "addr not in an mmapped region");
-  // FIXME: On Linux, if addr is inside the main executable,
+  // TODO: On Linux, if addr is inside the main executable,
   // dli_fname seems to be the same argv[0] instead of the full path.
   // We should detect and return an error in that case.
   return info.dli_fname;

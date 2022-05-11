@@ -15,6 +15,7 @@
 #include "vast/hash/hash.hpp"
 #include "vast/operator.hpp"
 #include "vast/sketch/bloom_filter_view.hpp"
+#include "vast/time_synopsis.hpp"
 #include "vast/view.hpp"
 
 namespace vast::sketch {
@@ -95,10 +96,27 @@ sketch::lookup(relational_operator op, const data& x) const noexcept {
     case fbs::sketch::Sketch::NONE: {
       die("sketch type must not be NONE");
     }
-    case fbs::sketch::Sketch::min_max: {
-      auto min_max = flatbuffer_->sketch_as_min_max();
-      // FIXME: implement the function such that it tests whether x falls into
-      // the closed interval [min, max].
+    // FIXME: Expose the logic of the old time synopsis so that we can
+    // call it directly with any data type here.
+    case fbs::sketch::Sketch::min_max_u64: {
+      auto const* time = flatbuffer_->sketch_as_min_max_u64();
+      auto syn = vast::time_synopsis{vast::time{} + duration{time->min()},
+                                     vast::time{} + duration{time->max()}};
+      return syn.lookup(op, make_view(x));
+    }
+    case fbs::sketch::Sketch::min_max_f64: {
+      auto const* time = flatbuffer_->sketch_as_min_max_f64();
+      auto syn = vast::time_synopsis{
+        vast::time{} + duration{static_cast<int64_t>(time->min())},
+        vast::time{} + duration{static_cast<int64_t>(time->max())}};
+      return syn.lookup(op, make_view(x));
+    }
+
+    case fbs::sketch::Sketch::min_max_i64: {
+      auto const* time = flatbuffer_->sketch_as_min_max_i64();
+      auto syn = vast::time_synopsis{vast::time{} + duration{time->min()},
+                                     vast::time{} + duration{time->max()}};
+      return syn.lookup(op, make_view(x));
     }
     case fbs::sketch::Sketch::bloom_filter: {
       // TODO: also consider `X in [a,b,c]`.
@@ -118,6 +136,13 @@ sketch::lookup(relational_operator op, const data& x) const noexcept {
 
 size_t mem_usage(const sketch& x) {
   return x.flatbuffer_.chunk()->size();
+}
+
+flatbuffers::Offset<flatbuffers::Vector<uint8_t>>
+pack_nested(flatbuffers::FlatBufferBuilder& builder, const sketch& sketch) {
+  auto sketch_bytes = as_bytes(sketch.flatbuffer_.chunk());
+  return builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(sketch_bytes.data()), sketch_bytes.size());
 }
 
 } // namespace vast::sketch

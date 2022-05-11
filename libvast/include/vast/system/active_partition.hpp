@@ -14,6 +14,7 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
 #include "vast/index_config.hpp"
+#include "vast/partition_sketch_builder.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/query.hpp"
@@ -107,7 +108,20 @@ struct active_partition_state {
   active_partition_actor::pointer self = nullptr;
 
   /// The data that will end up on disk in the partition flatbuffer.
-  serialization_data data;
+  serialization_data data = {};
+
+  /// Whether this partition should use sketches or legacy synopses
+  /// for its probabilistic summary data structures.
+  bool use_sketches = {};
+
+  /// The sketch builder.
+  // TODO: Add a default constructor to the sketch builder
+  // so we can store it in the state directly.
+  caf::expected<partition_sketch_builder> sketch_builder = caf::no_error;
+
+  /// We (ab)use a separate partition synopsis as builder when configured
+  /// to use legacy synopsis.
+  partition_synopsis_ptr legacy_synopsis_builder = nullptr;
 
   /// The streaming stage.
   partition_stream_stage_ptr stage = {};
@@ -174,6 +188,8 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 /// Spawns a partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
+/// @param partition_layout The layout of this partition. Must be a named
+/// record_type.
 /// @param accountant The actor handle of the accountant.
 /// @param filesystem The actor handle of the filesystem.
 /// @param index_opts Settings that are forwarded when creating indexers.
@@ -187,8 +203,9 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 // TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  uuid id, accountant_actor accountant, filesystem_actor filesystem,
-  caf::settings index_opts, const index_config& synopsis_opts,
-  store_actor store, std::string store_id, chunk_ptr store_header);
+  uuid id, type partition_layout, accountant_actor accountant,
+  filesystem_actor filesystem, caf::settings index_opts,
+  const index_config& synopsis_opts, store_actor store, std::string store_id,
+  chunk_ptr store_header);
 
 } // namespace vast::system

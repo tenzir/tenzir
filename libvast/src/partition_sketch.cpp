@@ -13,18 +13,18 @@
 
 namespace vast {
 
-partition_sketch::partition_sketch(chunk_ptr flatbuffer) noexcept
-  : flatbuffer_{std::move(flatbuffer)} {
-  VAST_ASSERT(flatbuffer_);
-}
+// partition_sketch::partition_sketch(chunk_ptr flatbuffer) noexcept
+//   : flatbuffer_{std::move(flatbuffer)} {
+//   VAST_ASSERT(flatbuffer_);
+// }
 
-double partition_sketch::lookup(const predicate&) {
-  // TODO: implement
-  return 0.0;
-}
+// double partition_sketch::lookup(const predicate&) {
+//   // TODO: implement
+//   return 0.0;
+// }
 
-size_t mem_usage(const partition_sketch& x) noexcept {
-  return x.flatbuffer_->size();
-}
+// size_t mem_usage(const partition_sketch& x) noexcept {
+//   return x.flatbuffer_->size();
+// }
 
 } // namespace vast

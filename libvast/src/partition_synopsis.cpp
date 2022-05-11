@@ -12,19 +12,24 @@
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/index_config.hpp"
+#include "vast/partition_sketch_builder.hpp"
+#include "vast/sketch/sketch.hpp"
 #include "vast/synopsis_factory.hpp"
 
 namespace vast {
 
-partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
-  offset = std::exchange(that.offset, {});
-  events = std::exchange(that.events, {});
+partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept
+  : use_sketches(that.use_sketches) {
+  offset = std::exchange(that.offset, {}), events
+                                           = std::exchange(that.events, {});
   min_import_time = std::exchange(that.min_import_time, time::max());
   max_import_time = std::exchange(that.max_import_time, time::min());
   version = std::exchange(that.version, version::partition_version);
   schema = std::exchange(that.schema, {});
   type_synopses_ = std::exchange(that.type_synopses_, {});
   field_synopses_ = std::exchange(that.field_synopses_, {});
+  type_sketches_ = std::exchange(that.type_sketches_, {});
+  field_sketches_ = std::exchange(that.field_sketches_, {});
   memusage_.store(that.memusage_.exchange(0));
 }
 
@@ -33,18 +38,25 @@ partition_synopsis::operator=(partition_synopsis&& that) noexcept {
   if (this != &that) {
     offset = std::exchange(that.offset, {});
     events = std::exchange(that.events, {});
+    use_sketches = that.use_sketches;
     min_import_time = std::exchange(that.min_import_time, time::max());
     max_import_time = std::exchange(that.max_import_time, time::min());
     version = std::exchange(that.version, version::partition_version);
     schema = std::exchange(that.schema, {});
     type_synopses_ = std::exchange(that.type_synopses_, {});
     field_synopses_ = std::exchange(that.field_synopses_, {});
+    type_sketches_ = std::exchange(that.type_sketches_, {});
+    field_sketches_ = std::exchange(that.field_sketches_, {});
     memusage_.store(that.memusage_.exchange(0));
   }
   return *this;
 }
 
 void partition_synopsis::shrink() {
+  // Note that we don't need to shrink sketches here,
+  // because they are constructed differently and only
+  // get entered into the synopsis with their shrinked
+  // size.
   memusage_ = 0; // Invalidate cached size.
   for (auto& [field, synopsis] : field_synopses_) {
     if (!synopsis)
@@ -94,16 +106,29 @@ void partition_synopsis::add(const table_slice& slice,
                              size_t partition_capacity,
                              const index_config& fp_rates) {
   memusage_ = 0; // Invalidate cached size.
+  const auto& layout = slice.layout();
+  if (!schema)
+    schema = layout;
+  VAST_ASSERT(schema == layout);
+  // Update generic partition synopsis information.
+  min_import_time = std::min(min_import_time, slice.import_time());
+  max_import_time = std::max(max_import_time, slice.import_time());
+  events += slice.rows();
+  // Synopses are created live by the partition synopsis, but
+  // sketches are built externally by the partition_sketch_builder
+  // and only inserted into a partition synopsis after the fact.
+  if (use_sketches) {
+    VAST_ASSERT(type_synopses_.empty() && field_synopses_.empty(),
+                "cannot change between synopses and sketches on the fly");
+    return;
+  }
+  // Update field and/or type synopses if necessary.
   auto make_synopsis
     = [](const type& t, const caf::settings& synopsis_options) -> synopsis_ptr {
     if (t.attribute("skip"))
       return nullptr;
     return factory<synopsis>::make(t, synopsis_options);
   };
-  const auto& layout = slice.layout();
-  if (!schema)
-    schema = layout;
-  VAST_ASSERT(schema == layout);
   auto each = caf::get<record_type>(layout).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
@@ -174,6 +199,10 @@ size_t partition_synopsis::memusage() const {
       result += synopsis ? synopsis->memusage() : 0ull;
     for (const auto& [type, synopsis] : type_synopses_)
       result += synopsis ? synopsis->memusage() : 0ull;
+    for (const auto& [field, sketch] : field_sketches_)
+      result += sketch ? mem_usage(*sketch) : 0ull;
+    for (const auto& [type, sketch] : type_sketches_)
+      result += mem_usage(sketch);
     memusage_ = result;
   }
   return result;
@@ -188,27 +217,42 @@ partition_synopsis* partition_synopsis::copy() const {
   result->version = version;
   result->schema = schema;
   result->memusage_ = memusage_.load();
+  result->use_sketches = use_sketches;
   result->type_synopses_.reserve(type_synopses_.size());
   result->field_synopses_.reserve(field_synopses_.size());
-  result->memusage_ = memusage_.load();
-  for (const auto& [type, synopsis] : type_synopses_) {
+  result->type_sketches_.reserve(type_sketches_.size());
+  result->field_sketches_.reserve(field_sketches_.size());
+  for (auto const& [type, synopsis] : type_synopses_) {
     if (synopsis)
       result->type_synopses_[type] = synopsis->clone();
     else
       result->type_synopses_[type] = nullptr;
   }
-  for (const auto& [field, synopsis] : field_synopses_) {
+  for (auto const& [field, synopsis] : field_synopses_) {
     if (synopsis)
       result->field_synopses_[field] = synopsis->clone();
     else
       result->field_synopses_[field] = nullptr;
+  }
+  for (auto const& [type, sketch] : type_sketches_) {
+    result->type_sketches_.insert(std::make_pair(type, sketch));
+  }
+  for (auto const& [field, sketch] : field_sketches_) {
+    if (sketch)
+      result->field_sketches_[field] = sketch;
+    else
+      result->field_sketches_[field] = std::nullopt;
   }
   return result.release();
 }
 
 caf::expected<
   flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>
-pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
+pack_legacy(flatbuffers::FlatBufferBuilder& builder,
+            const partition_synopsis& x) {
+  if (x.use_sketches)
+    return caf::make_error(ec::logic_error, "cannot create legacy synopsis "
+                                            "from sketches");
   std::vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>> synopses;
   for (const auto& [fqf, synopsis] : x.field_synopses_) {
     auto maybe_synopsis = pack(builder, synopsis, fqf);
@@ -240,6 +284,57 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   return ps_builder.Finish();
 }
 
+// FIXME: Move to type.hpp
+flatbuffers::Offset<flatbuffers::Vector<uint8_t>>
+pack_nested(flatbuffers::FlatBufferBuilder& builder, const type& type) {
+  auto type_bytes = as_bytes(type);
+  return builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(type_bytes.data()), type_bytes.size());
+}
+
+caf::expected<flatbuffers::Offset<fbs::partition_synopsis::PartitionSynopsisV1>>
+pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
+  if (!x.use_sketches)
+    return caf::make_error(ec::logic_error, "cannot create sketches from "
+                                            "legacy synopses");
+  std::vector<flatbuffers::Offset<fbs::partition_synopsis::FieldSketch>>
+    field_sketches;
+  std::vector<flatbuffers::Offset<fbs::partition_synopsis::TypeSketch>>
+    type_sketches;
+  for (auto const& [field, sketch] : x.field_sketches_) {
+    if (!sketch)
+      continue; // FIXME - is this correct or should we leave the field as null?
+    auto name
+      = builder.CreateString(field.name()); // FIXME - field.field_name() ?
+    auto type_offset = pack_nested(builder, field.type());
+    auto field_offset
+      = fbs::type::detail::CreateRecordField(builder, name, type_offset);
+    auto sketch_offset = pack_nested(builder, *sketch);
+    auto field_sketch_offset = fbs::partition_synopsis::CreateFieldSketch(
+      builder, field_offset, sketch_offset);
+    field_sketches.push_back(field_sketch_offset);
+  }
+  for (auto const& [type, sketch] : x.type_sketches_) {
+    auto type_offset = pack_nested(builder, type);
+    auto sketch_offset = pack_nested(builder, sketch);
+    auto type_sketch_offset = fbs::partition_synopsis::CreateTypeSketch(
+      builder, type_offset, sketch_offset);
+    type_sketches.push_back(type_sketch_offset);
+  }
+  auto field_sketches_vector = builder.CreateVector(field_sketches);
+  auto type_sketches_vector = builder.CreateVector(type_sketches);
+  fbs::partition_synopsis::PartitionSynopsisV1Builder ps_builder(builder);
+  vast::fbs::uinterval id_range{x.offset, x.offset + x.events};
+  ps_builder.add_id_range(&id_range);
+  ps_builder.add_field_sketches(field_sketches_vector);
+  ps_builder.add_type_sketches(type_sketches_vector);
+  vast::fbs::interval import_time_range{
+    x.min_import_time.time_since_epoch().count(),
+    x.max_import_time.time_since_epoch().count()};
+  ps_builder.add_import_time_range(&import_time_range);
+  return ps_builder.Finish();
+}
+
 namespace {
 
 // Not publicly exposed because it doesn't fully initialize `ps`.
@@ -247,6 +342,7 @@ caf::error unpack_(
   const flatbuffers::Vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>&
     synopses,
   partition_synopsis& ps) {
+  ps.use_sketches = false;
   for (const auto* synopsis : synopses) {
     if (!synopsis)
       return caf::make_error(ec::format_error, "synopsis is null");
@@ -267,6 +363,62 @@ caf::error unpack_(
 }
 
 } // namespace
+
+caf::error unpack(const fbs::partition_synopsis::PartitionSynopsisV1& x,
+                  partition_synopsis& ps) {
+  if (!x.id_range())
+    return caf::make_error(ec::format_error, "missing id range");
+  if (!x.import_time_range())
+    return caf::make_error(ec::format_error, "missing import time range");
+  if (!x.field_sketches())
+    return caf::make_error(ec::format_error, "missing field sketches");
+  if (!x.type_sketches())
+    return caf::make_error(ec::format_error, "missing type sketches");
+  ps.use_sketches = true;
+  ps.offset = x.id_range()->begin();
+  ps.events = x.id_range()->end() - x.id_range()->begin();
+  ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
+  ps.max_import_time = time{} + duration{x.import_time_range()->end()};
+  for (auto fs : *x.field_sketches()) {
+    if (!fs)
+      return caf::make_error(ec::format_error, "missing id range");
+    auto const* field = fs->field();
+    auto field_name = field->name();
+    auto type_bytes = field->type();
+    if (!type_bytes)
+      return caf::make_error(ec::format_error, "missing type");
+    auto type_chunk
+      = chunk::copy(as_bytes(type_bytes->data(), type_bytes->size()));
+    auto type = vast::type{std::move(type_chunk)};
+    auto const* sketch_bytes = fs->sketch();
+    auto chunk
+      = chunk::copy(as_bytes(sketch_bytes->data(), sketch_bytes->size()));
+    auto fb = flatbuffer<fbs::Sketch>::make(std::move(chunk));
+    if (!fb)
+      return caf::make_error(ec::format_error, "invalid sketch");
+    auto sketch = sketch::sketch{*fb};
+    auto const* layout_name = x.layout_name();
+    auto qf = vast::qualified_record_field{
+      layout_name->string_view(), field_name->string_view(), std::move(type)};
+    ps.field_sketches_.insert(std::make_pair(std::move(qf), std::move(sketch)));
+  }
+  for (auto ts : *x.type_sketches()) {
+    auto const* type_bytes = ts->type();
+    auto type_chunk
+      = chunk::copy(as_bytes(type_bytes->data(), type_bytes->size()));
+    auto type = vast::type{std::move(type_chunk)};
+    auto const* sketch_bytes = ts->sketch();
+    auto sketch_chunk
+      = chunk::copy(as_bytes(sketch_bytes->data(), sketch_bytes->size()));
+    auto fb = flatbuffer<fbs::Sketch>::make(std::move(sketch_chunk));
+    if (!fb)
+      return caf::make_error(ec::format_error, "invalid sketch");
+    auto sketch = sketch::sketch{*fb};
+    ps.type_sketches_.insert(
+      std::make_pair(std::move(type), std::move(sketch)));
+  }
+  return caf::error{};
+}
 
 caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
                   partition_synopsis& ps) {

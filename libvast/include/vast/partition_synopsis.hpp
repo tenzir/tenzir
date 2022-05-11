@@ -8,11 +8,13 @@
 
 #pragma once
 
+#include "vast/detail/flat_map.hpp"
 #include "vast/detail/friend_attribute.hpp"
 #include "vast/fbs/partition_synopsis.hpp"
 #include "vast/index_config.hpp"
 #include "vast/index_statistics.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/sketch/sketch.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
@@ -33,6 +35,11 @@ struct partition_synopsis final : public caf::ref_counted {
   ~partition_synopsis() override = default;
   partition_synopsis(const partition_synopsis&) = delete;
   partition_synopsis(partition_synopsis&& that) noexcept;
+
+  // TODO: Split this into an `active_partition_synopsis` for which
+  // table slices can be added and which can be shrinked, and a
+  // `passive_partition_synopsis` which is just the mmapped flatbuffer.
+  partition_synopsis(const index_config&) = delete; // FIXME
 
   partition_synopsis& operator=(const partition_synopsis&) = delete;
   partition_synopsis& operator=(partition_synopsis&& that) noexcept;
@@ -71,16 +78,41 @@ struct partition_synopsis final : public caf::ref_counted {
   /// a version >= 1, because they are guaranteed to be homogenous.
   type schema = {};
 
+  /// Whether this partition synopsis holds its data as sketch
+  /// or as synopsis.
+  //  Only one of these may be nonempty at the same time, and
+  //  the "synopses" way will probably be removed in the future.
+  //  TODO: We still use `false` as default for unit tests that
+  //  construct a `partition_synopsis` directly and don't know
+  //  about sketches yet.
+  bool use_sketches = false;
+
   /// Synopsis data structures for types.
   std::unordered_map<type, synopsis_ptr> type_synopses_;
 
   /// Synopsis data structures for individual columns.
   std::unordered_map<qualified_record_field, synopsis_ptr> field_synopses_;
 
+  /// Sketch data structures for types.
+  /// TODO: Measure if flat_map or unordered_map or something else
+  /// makes more sense for storage.
+  //  FIXME: `type_synopses_` has some users checking for null pointers;
+  //  double-check whether that's a mistake or if we need `optional` as key.
+  detail::flat_map<type, sketch::sketch> type_sketches_;
+
+  /// Sketch data structures for individual columns.
+  detail::flat_map<qualified_record_field, std::optional<sketch::sketch>>
+    field_sketches_;
+
   // -- flatbuffer -------------------------------------------------------------
 
   FRIEND_ATTRIBUTE_NODISCARD friend caf::expected<
     flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>
+  pack_legacy(flatbuffers::FlatBufferBuilder& builder,
+              const partition_synopsis&);
+
+  FRIEND_ATTRIBUTE_NODISCARD friend caf::expected<
+    flatbuffers::Offset<fbs::partition_synopsis::PartitionSynopsisV1>>
   pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
 
   FRIEND_ATTRIBUTE_NODISCARD friend caf::error
@@ -90,6 +122,10 @@ struct partition_synopsis final : public caf::ref_counted {
   FRIEND_ATTRIBUTE_NODISCARD friend caf::error
   unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
          partition_synopsis& ps, uint64_t offset, uint64_t events);
+
+  FRIEND_ATTRIBUTE_NODISCARD friend caf::error
+  unpack(const fbs::partition_synopsis::PartitionSynopsisV1& x,
+         partition_synopsis& ps);
 
 private:
   // Returns a raw pointer to a deep copy of this partition synopsis.

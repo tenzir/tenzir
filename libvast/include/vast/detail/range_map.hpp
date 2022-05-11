@@ -11,6 +11,8 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 
+#include <fmt/format.h>
+
 #include <map>
 #include <tuple>
 
@@ -97,7 +99,7 @@ public:
   /// @param v The value r associated with *[l,r]*.
   /// @returns `true` on success.
   bool inject(Point l, Point r, Value v) {
-    VAST_ASSERT(l < r);
+    VAST_ASSERT(l < r, fmt::format("{} {}", l, r).c_str());
     if (map_.empty())
       return emplace(l, r, std::move(v));
     auto i = map_.lower_bound(l);

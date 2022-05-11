@@ -156,9 +156,22 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   }
   auto type_ids = builder.CreateVector(tids);
   // Serialize synopses.
-  auto maybe_ps = pack(builder, *x.synopsis);
-  if (!maybe_ps)
-    return maybe_ps.error();
+  bool write_sketches = x.synopsis->use_sketches;
+  auto maybe_ps_legacy = caf::expected<
+    flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>{
+    caf::no_error};
+  auto maybe_ps = caf::expected<
+    flatbuffers::Offset<fbs::partition_synopsis::PartitionSynopsisV1>>{
+    caf::no_error};
+  if (write_sketches) {
+    maybe_ps = pack(builder, *x.synopsis);
+    if (!maybe_ps)
+      return maybe_ps.error();
+  } else {
+    maybe_ps_legacy = pack_legacy(builder, *x.synopsis);
+    if (!maybe_ps_legacy)
+      return maybe_ps_legacy.error();
+  }
   flatbuffers::Offset<fbs::partition::detail::StoreHeader> store_header = {};
   auto store_name = builder.CreateString(x.store_id);
   auto store_data = builder.CreateVector(
@@ -173,7 +186,10 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   legacy_builder.add_offset(x.offset);
   legacy_builder.add_events(x.events);
   legacy_builder.add_indexes(indexes);
-  legacy_builder.add_partition_synopsis(*maybe_ps);
+  if (write_sketches)
+    legacy_builder.add_partition_synopsis(*maybe_ps);
+  else
+    legacy_builder.add_partition_synopsis_legacy(*maybe_ps_legacy);
   legacy_builder.add_combined_layout(*combined_layout_offset);
   legacy_builder.add_type_ids(type_ids);
   legacy_builder.add_store(store_header);
@@ -188,9 +204,10 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  uuid id, accountant_actor accountant, filesystem_actor filesystem,
-  caf::settings index_opts, const index_config& synopsis_opts,
-  store_actor store, std::string store_id, chunk_ptr header) {
+  uuid id, type partition_layout, accountant_actor accountant,
+  filesystem_actor filesystem, caf::settings index_opts,
+  const index_config& synopsis_opts, store_actor store, std::string store_id,
+  chunk_ptr header) {
   VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
                    VAST_ARG(id));
   self->state.self = self;
@@ -207,7 +224,17 @@ active_partition_actor::behavior_type active_partition(
   self->state.partition_capacity
     = get_or(index_opts, "cardinality", defaults::system::max_partition_size);
   self->state.store = std::move(store);
+  self->state.use_sketches = synopsis_opts.use_sketches;
   self->state.synopsis_index_config = synopsis_opts;
+  if (self->state.use_sketches) {
+    VAST_INFO("making sketch builder");
+    self->state.sketch_builder
+      = partition_sketch_builder::make(partition_layout, synopsis_opts);
+    // FIXME: error handling
+    VAST_ASSERT(self->state.sketch_builder);
+  } else
+    self->state.legacy_synopsis_builder
+      = caf::make_copy_on_write<partition_synopsis>();
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
@@ -222,9 +249,9 @@ active_partition_actor::behavior_type active_partition(
       // Adjust the import time range iff necessary.
       auto& mutable_synopsis = self->state.data.synopsis.unshared();
       mutable_synopsis.min_import_time
-        = std::min(self->state.data.synopsis->min_import_time, x.import_time());
+        = std::min(mutable_synopsis.min_import_time, x.import_time());
       mutable_synopsis.max_import_time
-        = std::max(self->state.data.synopsis->max_import_time, x.import_time());
+        = std::max(mutable_synopsis.max_import_time, x.import_time());
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
@@ -240,8 +267,11 @@ active_partition_actor::behavior_type active_partition(
       ids.append_bits(true, last - first);
       self->state.data.offset = std::min(x.offset(), self->state.data.offset);
       self->state.data.events += x.rows();
-      self->state.data.synopsis.unshared().add(
-        x, self->state.partition_capacity, self->state.synopsis_index_config);
+      if (self->state.use_sketches)
+        self->state.sketch_builder->add(x);
+      else
+        self->state.legacy_synopsis_builder.unshared().add(
+          x, self->state.partition_capacity, self->state.synopsis_index_config);
       size_t col = 0;
       for (const auto& [field, offset] :
            caf::get<record_type>(layout).leaves()) {
@@ -412,13 +442,31 @@ active_partition_actor::behavior_type active_partition(
                            *self, self->state.persisted_indexers, valid_count);
                 return;
               }
+              // Fill in either the sketches or the synopses of the data
+              // the will be serialized to disk.
               auto& mutable_synopsis = self->state.data.synopsis.unshared();
-              // Shrink synopses for addr fields to optimal size.
-              mutable_synopsis.shrink();
               // TODO: It would probably make more sense if the partition
               // synopsis keeps track of offset/events internally.
               mutable_synopsis.offset = self->state.data.offset;
               mutable_synopsis.events = self->state.data.events;
+              mutable_synopsis.use_sketches = self->state.use_sketches;
+              if (self->state.use_sketches) {
+                auto error = std::move(*self->state.sketch_builder)
+                               .finish_into(mutable_synopsis);
+                if (error) {
+                  self->state.persistence_promise.deliver(error);
+                  return;
+                }
+              } else {
+                auto& mutable_builder
+                  = self->state.legacy_synopsis_builder.unshared();
+                // Shrink synopses for addr fields to optimal size.
+                mutable_builder.shrink();
+                mutable_synopsis.type_synopses_
+                  = std::move(mutable_builder.type_synopses_);
+                mutable_synopsis.field_synopses_
+                  = std::move(mutable_builder.field_synopses_);
+              }
               for (auto& [qf, actor] : self->state.indexers) {
                 if (actor == nullptr) {
                   self->state.data.indexer_chunks.emplace_back(qf.name(),
@@ -480,22 +528,39 @@ active_partition_actor::behavior_type active_partition(
               // we store a redundant copy in the partition itself so we can
               // regenerate the synopses as needed. This also means we don't
               // need to handle errors here, since VAST can still start
-              // correctly (if a bit slower) when the write fails.
+              // correctly (if a bit slower) when the fails.
               flatbuffers::FlatBufferBuilder synopsis_builder;
-              if (auto ps
-                  = pack(synopsis_builder, *self->state.data.synopsis)) {
+              flatbuffers::Offset<vast::fbs::PartitionSynopsis> ps_offset;
+              if (self->state.use_sketches) {
+                auto ps = pack(synopsis_builder, *self->state.data.synopsis);
+                if (!ps) {
+                  self->state.persistence_promise.deliver(ps.error());
+                  return;
+                }
+                fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
+                ps_builder.add_partition_synopsis_type(
+                  fbs::partition_synopsis::PartitionSynopsis::v1);
+                ps_builder.add_partition_synopsis(ps->Union());
+                ps_offset = ps_builder.Finish();
+              } else {
+                auto ps
+                  = pack_legacy(synopsis_builder, *self->state.data.synopsis);
+                if (!ps) {
+                  self->state.persistence_promise.deliver(ps.error());
+                  return;
+                }
                 fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
                 ps_builder.add_partition_synopsis_type(
                   fbs::partition_synopsis::PartitionSynopsis::legacy);
                 ps_builder.add_partition_synopsis(ps->Union());
-                auto ps_offset = ps_builder.Finish();
-                fbs::FinishPartitionSynopsisBuffer(synopsis_builder, ps_offset);
-                auto ps_chunk = fbs::release(synopsis_builder);
-                self
-                  ->request(self->state.filesystem, caf::infinite,
-                            atom::write_v, *self->state.synopsis_path, ps_chunk)
-                  .then([=](atom::ok) {}, [=](caf::error) {});
+                ps_offset = ps_builder.Finish();
               }
+              fbs::FinishPartitionSynopsisBuffer(synopsis_builder, ps_offset);
+              auto ps_chunk = fbs::release(synopsis_builder);
+              self
+                ->request(self->state.filesystem, caf::infinite, atom::write_v,
+                          *self->state.synopsis_path, ps_chunk)
+                .then([=](atom::ok) {}, [=](caf::error) { /* FIXME */ });
               auto fbchunk = fbs::release(builder);
               VAST_DEBUG("{} persists partition with a total size of "
                          "{} bytes",

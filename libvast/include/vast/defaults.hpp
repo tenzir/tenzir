@@ -140,6 +140,9 @@ constexpr size_t max_string_size = 1024;
 /// or table).
 constexpr size_t max_container_elements = 256;
 
+/// Whether to use sketches by default when creating new partition synopses.
+constexpr bool use_sketches = false;
+
 } // namespace index
 
 // -- constants for the logger -------------------------------------------------

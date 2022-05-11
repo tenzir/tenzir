@@ -83,7 +83,7 @@ struct hash_algorithm_proxy {
 
 } // namespace detail
 
-/// Generic function to compute a hash diegst over a hashable type. The
+/// Generic function to compute a hash digest over a hashable type. The
 /// implementation chooses the fastest possible way to compute the hash.
 /// @tparam The hash algorithm to use for hashing.
 /// @param x The value to hash.

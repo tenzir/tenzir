@@ -35,9 +35,268 @@
 
 namespace vast::system {
 
+std::vector<partition_info>
+catalog_state::predicate_lookup_impl(const predicate& x) const {
+  using result_type = std::vector<partition_info>;
+  auto lookup_with_sketch
+    = [&](const data& rhs, const vast::uuid& part_id,
+          const partition_synopsis_ptr& part_syn,
+          const qualified_record_field& field,
+          const std::optional<sketch::sketch>& sketch) -> bool {
+    // We need to prune the type's metadata here by converting it to a
+    // concrete type and back, because the type synopses are looked up
+    // independent from names and attributes.
+    auto prune = [&]<concrete_type T>(const T& x) {
+      return type{x};
+    };
+    auto cleaned_type = caf::visit(prune, field.type());
+    // We rely on having empty sketches for the
+    // fields that don't have their own synopsis.
+    if (sketch) {
+      auto opt = sketch->lookup(x.op, rhs);
+      if (!opt || *opt) {
+        VAST_TRACE("catalog selects {} at predicate {}", part_id, x);
+        return true;
+      }
+      // The field has no dedicated synopsis. Check if there is one
+      // for the type in general.
+    } else if (auto it = part_syn->type_sketches_.find(cleaned_type);
+               it != part_syn->type_sketches_.end()) {
+      auto opt = it->second.lookup(x.op, rhs);
+      if (!opt || *opt) {
+        VAST_TRACE("catalog selects {} at predicate {}", part_id, x);
+        return true;
+      }
+    } else {
+      // The catalog couldn't rule out this partition, so we have
+      // to include it in the result set.
+      return true;
+    }
+    return false;
+  };
+  auto lookup_with_synopsis = [&](const data& rhs, const vast::uuid& part_id,
+                                  const partition_synopsis_ptr& part_syn,
+                                  const qualified_record_field& field,
+                                  const synopsis_ptr& syn) -> bool {
+    // We need to prune the type's metadata here by converting it to a
+    // concrete type and back, because the type synopses are looked up
+    // independent from names and attributes.
+    auto prune = [&]<concrete_type T>(const T& x) {
+      return type{x};
+    };
+    auto cleaned_type = caf::visit(prune, field.type());
+    // We rely on having a field -> nullptr mapping here for the
+    // fields that don't have their own synopsis.
+    if (syn) {
+      auto opt = syn->lookup(x.op, make_view(rhs));
+      if (!opt || *opt) {
+        VAST_TRACE("{} selects {} at predicate {}",
+                   detail::pretty_type_name(this), part_id, x);
+        return true;
+      }
+      // The field has no dedicated synopsis. Check if there is one
+      // for the type in general.
+    } else if (auto it = part_syn->type_synopses_.find(cleaned_type);
+               it != part_syn->type_synopses_.end() && it->second) {
+      auto opt = it->second->lookup(x.op, make_view(rhs));
+      if (!opt || *opt) {
+        VAST_TRACE("{} selects {} at predicate {}",
+                   detail::pretty_type_name(this), part_id, x);
+        return true;
+      }
+    } else {
+      // The catalog couldn't rule out this partition, so we have
+      // to include it in the result set.
+      return true;
+    }
+    return false;
+  };
+  // Performs a lookup on all *matching* synopses with operator and
+  // data from the predicate of the expression. The match function
+  // uses a qualified_record_field to determine whether the synopsis
+  // should be queried.
+  auto search = [&](auto match) {
+    VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
+    const auto& rhs = caf::get<data>(x.rhs);
+    result_type result;
+    for (const auto& [part_id, part_syn] : synopses) {
+      if (!part_syn->use_sketches) {
+        for (auto const& [field, syn] : part_syn->field_synopses_)
+          if (match(field))
+            if (lookup_with_synopsis(rhs, part_id, part_syn, field, syn)) {
+              result.push_back({
+                .uuid = part_id,
+                .events = part_syn->events,
+                .max_import_time = part_syn->max_import_time,
+                .schema = part_syn->schema,
+              });
+              break;
+            }
+      } else {
+        for (auto const& [field, sketch] : part_syn->field_sketches_)
+          if (match(field))
+            if (lookup_with_sketch(rhs, part_id, part_syn, field, sketch)) {
+              result.push_back({
+                .uuid = part_id,
+                .events = part_syn->events,
+                .max_import_time = part_syn->max_import_time,
+                .schema = part_syn->schema,
+              });
+              break;
+            }
+      }
+    }
+    VAST_DEBUG("{} checked {} partitions for predicate {} and got {} results",
+               detail::pretty_type_name(this), synopses.size(), x,
+               result.size());
+    // Some calling paths require the result to be sorted.
+    VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+    return result;
+  };
+  auto extract_expr = detail::overload{
+    [&](const meta_extractor& lhs, const data& d) -> result_type {
+      if (lhs.kind == meta_extractor::type) {
+        // We don't have to look into the synopses for type queries, just
+        // at the layout names.
+        result_type result;
+        for (const auto& [part_id, part_syn] : synopses) {
+          for (const auto& [fqf, _] : part_syn->field_synopses_) {
+            // TODO: provide an overload for view of evaluate() so that
+            // we can use string_view here. Fortunately type names are
+            // short, so we're probably not hitting the allocator due to
+            // SSO.
+            if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
+              result.push_back({
+                .uuid = part_id,
+                .events = part_syn->events,
+                .max_import_time = part_syn->max_import_time,
+                .schema = part_syn->schema,
+              });
+              break;
+            }
+          }
+        }
+        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+        return result;
+      } else if (lhs.kind == meta_extractor::import_time) {
+        result_type result;
+        for (const auto& [part_id, part_syn] : synopses) {
+          VAST_ASSERT(part_syn->min_import_time <= part_syn->max_import_time,
+                      "encountered empty or moved-from partition synopsis");
+          auto ts = time_synopsis{
+            part_syn->min_import_time,
+            part_syn->max_import_time,
+          };
+          auto add = ts.lookup(x.op, caf::get<vast::time>(d));
+          if (!add || *add)
+            result.push_back({
+              .uuid = part_id,
+              .events = part_syn->events,
+              .max_import_time = part_syn->max_import_time,
+              .schema = part_syn->schema,
+            });
+        }
+        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+        return result;
+      } else if (lhs.kind == meta_extractor::field) {
+        // We don't have to look into the synopses for type queries, just
+        // at the layout names.
+        result_type result;
+        const auto* s = caf::get_if<std::string>(&d);
+        if (!s) {
+          VAST_WARN("#field meta queries only support string "
+                    "comparisons");
+        } else {
+          for (const auto& [part_id, part_syn] : synopses) {
+            // Compare the desired field name with each field in the
+            // partition.
+            auto matching = [&] {
+              for (const auto& [field, _] : part_syn->field_synopses_) {
+                VAST_ASSERT(!field.is_standalone_type());
+                auto rt = record_type{{field.field_name(), field.type()}};
+                for ([[maybe_unused]] const auto& offset :
+                     rt.resolve_key_suffix(*s, field.layout_name()))
+                  return true;
+              }
+              return false;
+            }();
+            // Only insert the partition if both sides are equal, i.e. the
+            // operator is "positive" and matching is true, or both are
+            // negative.
+            if (!is_negated(x.op) == matching)
+              result.push_back({
+                .uuid = part_id,
+                .events = part_syn->events,
+                .max_import_time = part_syn->max_import_time,
+                .schema = part_syn->schema,
+              });
+          }
+        }
+        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+        return result;
+      }
+      VAST_WARN("{} cannot process attribute extractor: {}",
+                detail::pretty_type_name(this), lhs.kind);
+      return all_partitions();
+    },
+    [&](const field_extractor& lhs, const data& d) -> result_type {
+      auto pred = [&](const auto& field) {
+        if (!compatible(field.type(), x.op, d))
+          return false;
+        VAST_ASSERT(!field.is_standalone_type());
+        auto rt = record_type{{field.field_name(), field.type()}};
+        for ([[maybe_unused]] const auto& offset :
+             rt.resolve_key_suffix(lhs.field, field.layout_name()))
+          return true;
+        return false;
+      };
+      return search(pred);
+    },
+    [&](const type_extractor& lhs, const data& d) -> result_type {
+      auto result = [&] {
+        if (!lhs.type) {
+          auto pred = [&](auto& field) {
+            const auto type = field.type();
+            for (const auto& name : type.names())
+              if (name == lhs.type.name())
+                return compatible(type, x.op, d);
+            return false;
+          };
+          return search(pred);
+        }
+        auto pred = [&](auto& field) {
+          return congruent(field.type(), lhs.type);
+        };
+        return search(pred);
+      }();
+      // Preserve compatibility with databases that were created beore
+      // the #timestamp attribute was removed.
+      if (lhs.type.name() == "timestamp") {
+        auto pred = [](auto& field) {
+          const auto type = field.type();
+          return type.attribute("timestamp").has_value();
+        };
+        detail::inplace_unify(result, search(pred));
+      }
+      return result;
+    },
+    [&](const auto&, const auto&) -> result_type {
+      VAST_WARN("{} cannot process predicate: {}",
+                detail::pretty_type_name(this), x);
+      return all_partitions();
+    },
+  };
+  return caf::visit(extract_expr, x.lhs, x.rhs);
+}
+
 void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   for (auto const& [field, synopsis] : ps.field_synopses_)
     if (synopsis != nullptr && field.type() == string_type{})
+      unprunable_fields.insert(std::string{field.name()});
+  VAST_INFO("updating fields for {} field sketches", ps.field_sketches_.size());
+  // FIXME: Do we also need to care about address_type here?
+  for (auto const& [field, sketch] : ps.field_sketches_)
+    if (sketch && field.type() == string_type{})
       unprunable_fields.insert(std::string{field.name()});
   // TODO/BUG: We also need to prevent pruning for enum types,
   // which also use string literals for lookup. We must be even
@@ -116,6 +375,21 @@ catalog_result catalog_state::lookup(const expression& expr) const {
   return catalog_result{catalog_result::probabilistic, std::move(result)};
 }
 
+std::vector<partition_info> catalog_state::all_partitions() const {
+  std::vector<partition_info> result = {};
+  result.reserve(synopses.size());
+  for (const auto& [partition, synopsis] : synopses) {
+    result.push_back({
+      .uuid = partition,
+      .events = synopsis->events,
+      .max_import_time = synopsis->max_import_time,
+      .schema = synopsis->schema,
+    });
+  }
+  VAST_ASSERT_EXPENSIVE(std::is_sorted(result.begin(), result.end()));
+  return result;
+}
+
 std::vector<partition_info>
 catalog_state::lookup_impl(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
@@ -126,21 +400,6 @@ catalog_state::lookup_impl(const expression& expr) const {
   // rely on `flat_map` already traversing them in the correct order, so
   // no separate sorting step is required.
   using result_type = std::vector<partition_info>;
-  result_type memoized_partitions = {};
-  auto all_partitions = [&] {
-    if (!memoized_partitions.empty() || synopses.empty())
-      return memoized_partitions;
-    memoized_partitions.reserve(synopses.size());
-    for (const auto& [partition, synopsis] : synopses) {
-      memoized_partitions.push_back({
-        .uuid = partition,
-        .events = synopsis->events,
-        .max_import_time = synopsis->max_import_time,
-        .schema = synopsis->schema,
-      });
-    }
-    return memoized_partitions;
-  };
   auto f = detail::overload{
     [&](const conjunction& x) -> result_type {
       VAST_ASSERT(!x.empty());
@@ -183,230 +442,7 @@ catalog_state::lookup_impl(const expression& expr) const {
       return all_partitions();
     },
     [&](const predicate& x) -> result_type {
-      // Performs a lookup on all *matching* synopses with operator and
-      // data from the predicate of the expression. The match function
-      // uses a qualified_record_field to determine whether the synopsis
-      // should be queried.
-      auto search = [&](auto match) {
-        VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
-        const auto& rhs = caf::get<data>(x.rhs);
-        result_type result;
-        for (const auto& [part_id, part_syn] : synopses) {
-          for (const auto& [field, syn] : part_syn->field_synopses_) {
-            if (match(field)) {
-              // We need to prune the type's metadata here by converting it to a
-              // concrete type and back, because the type synopses are looked up
-              // independent from names and attributes.
-              auto prune = [&]<concrete_type T>(const T& x) {
-                return type{x};
-              };
-              auto cleaned_type = caf::visit(prune, field.type());
-              // We rely on having a field -> nullptr mapping here for the
-              // fields that don't have their own synopsis.
-              if (syn) {
-                auto opt = syn->lookup(x.op, make_view(rhs));
-                if (!opt || *opt) {
-                  VAST_TRACE("{} selects {} at predicate {}",
-                             detail::pretty_type_name(this), part_id, x);
-                  result.push_back({
-                    .uuid = part_id,
-                    .events = part_syn->events,
-                    .max_import_time = part_syn->max_import_time,
-                    .schema = part_syn->schema,
-                  });
-                  break;
-                }
-                // The field has no dedicated synopsis. Check if there is one
-                // for the type in general.
-              } else if (auto it = part_syn->type_synopses_.find(cleaned_type);
-                         it != part_syn->type_synopses_.end() && it->second) {
-                auto opt = it->second->lookup(x.op, make_view(rhs));
-                if (!opt || *opt) {
-                  VAST_TRACE("{} selects {} at predicate {}",
-                             detail::pretty_type_name(this), part_id, x);
-                  result.push_back({
-                    .uuid = part_id,
-                    .events = part_syn->events,
-                    .max_import_time = part_syn->max_import_time,
-                    .schema = part_syn->schema,
-                  });
-                  break;
-                }
-              } else {
-                // The catalog couldn't rule out this partition, so we have
-                // to include it in the result set.
-                result.push_back({
-                  .uuid = part_id,
-                  .events = part_syn->events,
-                  .max_import_time = part_syn->max_import_time,
-                  .schema = part_syn->schema,
-                });
-                break;
-              }
-            }
-          }
-        }
-        VAST_DEBUG(
-          "{} checked {} partitions for predicate {} and got {} results",
-          detail::pretty_type_name(this), synopses.size(), x, result.size());
-        // Some calling paths require the result to be sorted.
-        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
-        return result;
-      };
-      auto extract_expr = detail::overload{
-        [&](const meta_extractor& lhs, const data& d) -> result_type {
-          if (lhs.kind == meta_extractor::type) {
-            // We don't have to look into the synopses for type queries, just
-            // at the layout names.
-            result_type result;
-            for (const auto& [part_id, part_syn] : synopses) {
-              for (const auto& [fqf, _] : part_syn->field_synopses_) {
-                // TODO: provide an overload for view of evaluate() so that
-                // we can use string_view here. Fortunately type names are
-                // short, so we're probably not hitting the allocator due to
-                // SSO.
-                if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
-                  result.push_back({
-                    .uuid = part_id,
-                    .events = part_syn->events,
-                    .max_import_time = part_syn->max_import_time,
-                    .schema = part_syn->schema,
-                  });
-                  break;
-                }
-              }
-            }
-            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
-            return result;
-          } else if (lhs.kind == meta_extractor::import_time) {
-            result_type result;
-            for (const auto& [part_id, part_syn] : synopses) {
-              VAST_ASSERT(part_syn->min_import_time
-                            <= part_syn->max_import_time,
-                          "encountered empty or moved-from partition synopsis");
-              auto ts = time_synopsis{
-                part_syn->min_import_time,
-                part_syn->max_import_time,
-              };
-              auto add = ts.lookup(x.op, caf::get<vast::time>(d));
-              if (!add || *add) {
-                result.push_back({
-                  .uuid = part_id,
-                  .events = part_syn->events,
-                  .max_import_time = part_syn->max_import_time,
-                  .schema = part_syn->schema,
-                });
-              }
-            }
-            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
-            return result;
-          } else if (lhs.kind == meta_extractor::field) {
-            // We don't have to look into the synopses for type queries, just
-            // at the layout names.
-            result_type result;
-            const auto* s = caf::get_if<std::string>(&d);
-            if (!s) {
-              VAST_WARN("#field meta queries only support string "
-                        "comparisons");
-            } else {
-              for (const auto& [part_id, part_syn] : synopses) {
-                // Compare the desired field name with each field in the
-                // partition.
-                auto matching = [&](const auto& part_syn) {
-                  for (const auto& [field, _] : part_syn->field_synopses_) {
-                    VAST_ASSERT(!field.is_standalone_type());
-                    auto rt = record_type{{field.field_name(), field.type()}};
-                    for ([[maybe_unused]] const auto& offset :
-                         rt.resolve_key_suffix(*s, field.layout_name()))
-                      return true;
-                  }
-                  return false;
-                }(part_syn);
-                // Only insert the partition if both sides are equal, i.e. the
-                // operator is "positive" and matching is true, or both are
-                // negative.
-                if (!is_negated(x.op) == matching) {
-                  result.push_back({
-                    .uuid = part_id,
-                    .events = part_syn->events,
-                    .max_import_time = part_syn->max_import_time,
-                    .schema = part_syn->schema,
-                  });
-                }
-              }
-            }
-            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
-            return result;
-          }
-          VAST_WARN("{} cannot process attribute extractor: {}",
-                    detail::pretty_type_name(this), lhs.kind);
-          return all_partitions();
-        },
-        [&](const field_extractor& lhs, const data& d) -> result_type {
-          auto pred = [&](const auto& field) {
-            auto match_name = [&] {
-              auto field_name = field.field_name();
-              auto key = std::string_view{lhs.field};
-              if (field_name.length() >= key.length()) {
-                auto pos = field_name.length() - key.length();
-                auto sub = field_name.substr(pos);
-                return sub == key && (pos == 0 || field_name[pos - 1] == '.');
-              }
-              auto layout_name = field.layout_name();
-              if (key.length() > layout_name.length() + 1 + field_name.length())
-                return false;
-              auto pos = key.length() - field_name.length();
-              auto second = key.substr(pos);
-              if (second != field_name)
-                return false;
-              if (key[pos - 1] != '.')
-                return false;
-              auto fpos = layout_name.length() - (pos - 1);
-              return key.substr(0, pos - 1) == layout_name.substr(fpos)
-                     && (fpos == 0 || layout_name[fpos - 1] == '.');
-            };
-            if (!match_name())
-              return false;
-            VAST_ASSERT(!field.is_standalone_type());
-            return compatible(field.type(), x.op, d);
-          };
-          return search(pred);
-        },
-        [&](const type_extractor& lhs, const data& d) -> result_type {
-          auto result = [&] {
-            if (!lhs.type) {
-              auto pred = [&](auto& field) {
-                const auto type = field.type();
-                for (const auto& name : type.names())
-                  if (name == lhs.type.name())
-                    return compatible(type, x.op, d);
-                return false;
-              };
-              return search(pred);
-            }
-            auto pred = [&](auto& field) {
-              return congruent(field.type(), lhs.type);
-            };
-            return search(pred);
-          }();
-          // Preserve compatibility with databases that were created beore
-          // the #timestamp attribute was removed.
-          if (lhs.type.name() == "timestamp") {
-            auto pred = [](auto& field) {
-              const auto type = field.type();
-              return type.attribute("timestamp").has_value();
-            };
-            detail::inplace_unify(result, search(pred));
-          }
-          return result;
-        },
-        [&](const auto&, const auto&) -> result_type {
-          VAST_WARN("{} cannot process predicate: {}",
-                    detail::pretty_type_name(this), x);
-          return all_partitions();
-        },
-      };
-      return caf::visit(extract_expr, x.lhs, x.rhs);
+      return predicate_lookup_impl(x);
     },
     [&](caf::none_t) -> result_type {
       VAST_ERROR("{} received an empty expression",

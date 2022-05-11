@@ -73,6 +73,12 @@ public:
   /// Update the list of fields that should not be touched by the pruner.
   void update_unprunable_fields(const partition_synopsis& ps);
 
+  /// Return the set of candidate partitions for a predicate.
+  std::vector<partition_info> predicate_lookup_impl(const predicate&) const;
+
+  /// Return the list of all partition uuids.
+  std::vector<partition_info> all_partitions() const;
+
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.

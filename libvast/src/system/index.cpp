@@ -138,16 +138,30 @@ caf::error extract_partition_synopsis(
   partition_synopsis ps;
   if (auto error = unpack(*partition_legacy, ps))
     return error;
+  flatbuffers::Offset<vast::fbs::PartitionSynopsis> ps_offset;
   flatbuffers::FlatBufferBuilder builder;
-  auto ps_offset = pack(builder, ps);
-  if (!ps_offset)
-    return ps_offset.error();
-  fbs::PartitionSynopsisBuilder ps_builder(builder);
-  ps_builder.add_partition_synopsis_type(
-    fbs::partition_synopsis::PartitionSynopsis::legacy);
-  ps_builder.add_partition_synopsis(ps_offset->Union());
-  auto flatbuffer = ps_builder.Finish();
-  fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
+  // We can not convert between sketches and synopses, so we
+  // write the same format that we found in the partition.
+  if (!ps.use_sketches) {
+    auto ps_flatbuffer = pack_legacy(builder, ps);
+    if (!ps_flatbuffer)
+      return ps_flatbuffer.error();
+    fbs::PartitionSynopsisBuilder ps_builder(builder);
+    ps_builder.add_partition_synopsis_type(
+      fbs::partition_synopsis::PartitionSynopsis::legacy);
+    ps_builder.add_partition_synopsis(ps_flatbuffer->Union());
+    ps_offset = ps_builder.Finish();
+  } else {
+    auto ps_flatbuffer = pack(builder, ps);
+    if (!ps_flatbuffer)
+      return ps_flatbuffer.error();
+    fbs::PartitionSynopsisBuilder ps_builder(builder);
+    ps_builder.add_partition_synopsis_type(
+      fbs::partition_synopsis::PartitionSynopsis::v1);
+    ps_builder.add_partition_synopsis(ps_flatbuffer->Union());
+    ps_offset = ps_builder.Finish();
+  }
+  fbs::FinishPartitionSynopsisBuffer(builder, ps_offset);
   auto chunk_out = fbs::release(builder);
   return io::save(partition_synopsis_path,
                   std::span{chunk_out->data(), chunk_out->size()});
@@ -497,8 +511,8 @@ void index_state::create_active_partition(const type& layout) {
   stage->out().set_filter(active_partition.store_slot, layout);
   active_partition.spawn_time = std::chrono::steady_clock::now();
   active_partition.actor
-    = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
-                  index_opts, synopsis_opts,
+    = self->spawn(::vast::system::active_partition, id, layout, accountant,
+                  filesystem, index_opts, synopsis_opts,
                   static_cast<store_actor>(active_partition.store), store_name,
                   store_header);
   active_partition.stream_slot
@@ -541,8 +555,6 @@ void index_state::decomission_active_partition(const type& layout) {
           };
           self->send(accountant, report);
         }
-        // The catalog expects to own the partition synopsis it receives,
-        // so we make a copy for the listeners.
         // TODO: We should skip this continuation if we're currently shutting
         // down.
         self->request(catalog, caf::infinite, atom::merge_v, id, ps)

@@ -28,6 +28,7 @@ public:
   caf::expected<sketch> finish() final;
 
   /// Constructs a sketch using master digests.
+  //  TODO: Don't use inheritance for this.
   virtual caf::expected<sketch>
   build(const std::unordered_set<uint64_t>& digests) = 0;
 

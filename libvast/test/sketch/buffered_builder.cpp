@@ -8,6 +8,8 @@
 
 #include "vast/sketch/buffered_builder.hpp"
 
+#include "vast/detail/hash_scalar.hpp"
+
 #define SUITE buffered_builder
 #include "vast/concept/convertible/data.hpp"
 #include "vast/data.hpp"
@@ -15,10 +17,9 @@
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <arrow/array.h>
 #include <arrow/record_batch.h>
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 
@@ -45,12 +46,8 @@ TEST() {
   // Build baseline by hashing strings manually.
   std::unordered_set<uint64_t> manual_digests;
   for (auto i = 0u; i < slice.rows(); ++i)
-    manual_digests.insert(hash(slice.at(i, 1)));
+    manual_digests.insert(detail::hash_scalar<string_type>(slice.at(i, 1)));
   CHECK_EQUAL(builder.digests(), manual_digests);
-  fmt::print("+++++++++++++++++++++\n");
-  for (auto digest : builder.digests())
-    fmt::print("{}\n", digest);
 }
 
 FIXTURE_SCOPE_END()
-

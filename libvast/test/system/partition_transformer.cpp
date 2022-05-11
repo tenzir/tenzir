@@ -217,8 +217,6 @@ TEST(delete transform / persist before done) {
       REQUIRE_EQUAL(partition->partition_type(),
                     vast::fbs::partition::Partition::legacy);
       const auto* partition_legacy = partition->partition_as_legacy();
-      // TODO: Implement a new transform step that deletes
-      // whole events, as opposed to specific fields.
       CHECK_EQUAL(partition_legacy->events(), events);
       vast::legacy_record_type intermediate;
       REQUIRE(!vast::fbs::deserialize_bytes(partition_legacy->combined_layout(),

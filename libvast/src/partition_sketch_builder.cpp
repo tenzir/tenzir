@@ -13,6 +13,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/partition_synopsis.hpp"
 #include "vast/sketch/accumulator_builder.hpp"
 #include "vast/sketch/bloom_filter_builder.hpp"
 #include "vast/sketch/min_max_accumulator.hpp"
@@ -24,31 +25,32 @@ namespace {
 
 using builder_factory = partition_sketch_builder::builder_factory;
 using sketch_builder_ptr = std::unique_ptr<sketch::builder>;
+template <typename T>
+using minmax_builder
+  = sketch::accumulator_builder<sketch::min_max_accumulator<T>>;
 
 sketch_builder_ptr
 make_sketch_builder(const type& t, const index_config::rule* rule) {
   VAST_ASSERT(rule != nullptr);
-  using min_max_sketch_builder
-    = sketch::accumulator_builder<sketch::min_max_accumulator>;
   auto f = detail::overload{
     [](const bool_type&) -> sketch_builder_ptr {
       // We (ab)use the min-max sketch to represent min = false and max = true.
-      return std::make_unique<min_max_sketch_builder>();
+      return std::make_unique<minmax_builder<bool_type>>();
     },
     [](const integer_type&) -> sketch_builder_ptr {
-      return std::make_unique<min_max_sketch_builder>();
+      return std::make_unique<minmax_builder<integer_type>>();
     },
     [](const count_type&) -> sketch_builder_ptr {
-      return std::make_unique<min_max_sketch_builder>();
+      return std::make_unique<minmax_builder<count_type>>();
     },
     [](const real_type&) -> sketch_builder_ptr {
-      return std::make_unique<min_max_sketch_builder>();
+      return std::make_unique<minmax_builder<real_type>>();
     },
     [](const duration_type&) -> sketch_builder_ptr {
-      return std::make_unique<min_max_sketch_builder>();
+      return std::make_unique<minmax_builder<duration_type>>();
     },
     [](const time_type&) -> sketch_builder_ptr {
-      return std::make_unique<min_max_sketch_builder>();
+      return std::make_unique<minmax_builder<time_type>>();
     },
     [=](const string_type&) -> sketch_builder_ptr {
       return std::make_unique<sketch::bloom_filter_builder>(rule->fp_rate);
@@ -99,10 +101,11 @@ builder_factory make_factory(const index_config::rule* rule) {
 } // namespace
 
 caf::expected<partition_sketch_builder>
-partition_sketch_builder::make(index_config config) {
+partition_sketch_builder::make(type layout, index_config config) {
   partition_sketch_builder builder{std::move(config)};
   for (const auto& rule : builder.config_.rules) {
     // Create one sketch per target.
+    // FIXME: Verify that target fields exists in layout.
     for (const auto& target : rule.targets) {
       auto op = to<predicate::operand>(target);
       if (!op)
@@ -124,12 +127,11 @@ partition_sketch_builder::make(index_config config) {
           return caf::none;
         },
         [&builder, &rule](const type_extractor& x) -> caf::error {
-          // TODO: remove the string wrapping once transparent keys work.
-          if (builder.type_factory_.contains(x.type.name()))
+          if (builder.type_factory_.contains(x.type))
             return caf::make_error(ec::unspecified,
                                    fmt::format("duplicate type extractor {}",
                                                x.type.name()));
-          builder.type_factory_.emplace(x.type.name(), make_factory(&rule));
+          builder.type_factory_.emplace(x.type, make_factory(&rule));
           return caf::none;
         },
       };
@@ -141,24 +143,10 @@ partition_sketch_builder::make(index_config config) {
   // top up the type factory to include all basic types.
   static const auto default_rule = index_config::rule{};
   auto default_factory = make_factory(&default_rule);
-  auto top_up = [&](concrete_type auto concrete) {
-    auto t = type{concrete};
-    builder.type_factory_.emplace(t.name(), default_factory);
-  };
-  top_up(bool_type{});
-  top_up(integer_type{});
-  top_up(count_type{});
-  top_up(real_type{});
-  top_up(duration_type{});
-  top_up(time_type{});
-  top_up(string_type{});
-  top_up(pattern_type{});
-  top_up(address_type{});
-  top_up(subnet_type{});
-  // The inner types don't matter here, since we only register the factory for
-  // the name of the outer type, i.e., "list", and "map".
-  top_up(list_type{type{}});
-  top_up(map_type{type{}, type{}});
+  auto const* partition_layout = caf::get_if<record_type>(&layout);
+  VAST_ASSERT_CHEAP(partition_layout);
+  for (auto const& leaf : partition_layout->leaves())
+    builder.type_factory_.emplace(leaf.field.type, default_factory);
   return builder;
 }
 
@@ -166,17 +154,18 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
   const auto& layout = caf::get<record_type>(x.layout());
   auto record_batch = to_record_batch(x);
   // Handle all field sketches.
-  for (auto& [key, factory] : field_factory_) {
+  for (auto const& [key, factory] : field_factory_) {
     auto offsets = layout.resolve_key_suffix(key, x.layout().name());
     auto begin = offsets.begin();
     auto end = offsets.end();
     if (begin == end)
       continue;
-    auto& builder = field_builders_[key];
     // The first type locks in the builder for all matching fields. If
     // subsequent fields have a different type, we emit a warning.
     // Alternatively, we could bifurcate the processing.
     auto first_offset = *begin;
+    auto field = vast::qualified_record_field{x.layout(), first_offset};
+    auto& builder = field_builders_[field];
     auto first_field = layout.field(first_offset);
     if (!builder)
       builder = factory(first_field.type);
@@ -201,24 +190,24 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
     }
   }
   // Handle all type sketches.
-  // FIXME: this doesn't work for nested types yet because we catch types under
-  // a single top-level name. E.g., list<string>, list<count>, etc. will result
-  // in creation of *one* builder for the list type (under the name "list").
   for (auto&& leaf : layout.leaves()) {
     auto add = [&, this](const type& t) -> caf::error {
-      auto i = type_factory_.find(t.name());
+      // TODO: Strip attributes from `t`
+      auto i = type_factory_.find(t);
       if (i == type_factory_.end())
         return caf::none;
       auto& factory = i->second;
       auto& builder = type_builders_[t];
       if (!builder) {
-        VAST_DEBUG("constructing new builder for type '{}'", t);
+        VAST_INFO("constructing new builder for type '{}'", t);
         builder = factory(t);
       }
-      if (!builder)
+      if (!builder) {
+        VAST_INFO("not builder");
         return caf::make_error(
           ec::unspecified,
           fmt::format("failed to construct sketch builder for type '{}'", t));
+      }
       auto xs = record_batch->column(layout.flat_index(leaf.index));
       if (auto err = builder->add(xs))
         return err;
@@ -226,26 +215,44 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
     };
     if (auto err = add(leaf.field.type))
       return err;
-    for (auto alias : leaf.field.type.aliases())
+    for (auto const& alias : leaf.field.type.aliases())
       if (auto err = add(alias))
         return err;
   }
   return caf::none;
 }
 
-caf::expected<partition_sketch> partition_sketch_builder::finish() {
-  // FIXME: implement.
-  return ec::unimplemented;
+caf::error partition_sketch_builder::finish_into(partition_synopsis& ps) && {
+  VAST_ASSERT(ps.field_synopses_.empty() && ps.type_synopses_.empty(),
+              "cannot mix & match sketches and synopses in the same partition "
+              "synopsis");
+  ps.use_sketches = true;
+  ps.type_sketches_.reserve(type_builders_.size());
+  for (auto&& [type, builder] : std::exchange(type_builders_, {})) {
+    VAST_INFO("Finishing builder for type {}", type);
+    auto sketch = builder->finish();
+    if (!sketch) {
+      // FIXME: temporary workaround until list<string> works correctly.
+      continue;
+      // return sketch.error();
+    }
+    ps.type_sketches_.insert(std::make_pair(type, std::move(*sketch)));
+  }
+  for (auto&& [field, builder] : std::exchange(field_builders_, {})) {
+    auto sketch = builder->finish();
+    if (!sketch) {
+      // FIXME: temporary workaround until list<string> works correctly.
+      continue;
+      // return sketch.error();
+    }
+    ps.field_sketches_[field] = std::move(*sketch);
+  }
+  return {};
 }
-
-double partition_sketch_builder::lookup(const expression&) const noexcept {
-  // FIXME: implement.
-  return 0.0;
-};
 
 detail::generator<std::string_view> partition_sketch_builder::fields() const {
   for (const auto& [key, _] : field_builders_)
-    co_yield std::string_view{key};
+    co_yield std::string_view{key.field_name()};
   co_return;
 }
 

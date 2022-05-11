@@ -111,7 +111,7 @@ void print_partition_legacy(
   }
   // Print catalog contents.
   std::cout << indent << "Catalog\n";
-  if (auto partition_synopsis = partition->partition_synopsis()) {
+  if (auto partition_synopsis = partition->partition_synopsis_legacy()) {
     indented_scope _(indent);
     for (auto column_synopsis : *partition_synopsis->synopses()) {
       vast::qualified_record_field fqf;
@@ -134,6 +134,9 @@ void print_partition_legacy(
       }
       std::cout << '\n';
     }
+  }
+  if (auto partition_synopsis = partition->partition_synopsis()) {
+    // TODO
   }
   // Print column indices.
   std::cout << indent << "Column Indices\n";

@@ -28,7 +28,7 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
                spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  // FIXME: Notify exporters with a continuous query.
+  // TODO: Notify exporters with a continuous query.
   auto [archive, index, type_registry, accountant]
     = self->state.registry.find<archive_actor, index_actor, type_registry_actor,
                                 accountant_actor>();
