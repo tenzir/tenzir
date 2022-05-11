@@ -169,17 +169,18 @@ target_compile_definitions(
 # TODO: Keep a copy of the man page in the repository such that we know the last
 # edit date. If pandoc+git is available, rebuild the man page.
 
+# TODO: include date and version information into the YAML frontmatter of the
+# Markdown manpage.
+
 if (VAST_ENABLE_MANPAGES)
   add_custom_command(
     TARGET vast
     POST_BUILD
-    COMMAND "$<TARGET_FILE:vast>" --bare-mode manual >
-            "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
     COMMAND
-      "${PANDOC}" -s -f markdown -t man "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
+      "${PANDOC}" -s -f markdown -t man "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
       -o "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
-    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
-               "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     COMMENT "Generating vast.1"
     VERBATIM)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.1"

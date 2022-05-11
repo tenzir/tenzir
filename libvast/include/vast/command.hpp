@@ -87,9 +87,6 @@ public:
   /// A short phrase that describes the command, e.g., "prints the help text".
   std::string_view description;
 
-  /// Detailed usage instructions written in Markdown.
-  std::string_view documentation;
-
   /// The options of the command.
   caf::config_option_set options;
 
@@ -103,12 +100,12 @@ public:
 
   /// Construct a new command
   command(std::string_view name, std::string_view description,
-          std::string_view documentation, caf::config_option_set opts,
+          caf::config_option_set opts,
           bool visible = true);
 
   /// Construct a new command
   command(std::string_view name, std::string_view description,
-          std::string_view documentation, opts_builder opts,
+          opts_builder opts,
           bool visible = true);
 
   command(command&&) = delete;
