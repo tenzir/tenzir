@@ -57,9 +57,11 @@ Building VAST involves the following steps:
   `-G Ninja` to `cmake`.
   ```bash
   cd vast
-  # Configure the build
   cmake -B build
-  # Optional: Conveniently configure with ccmake
+  ```
+
+  Optionally, you can use the CMake TUI to visually configure the build:
+  ```bash
   ccmake build
   ```
 
