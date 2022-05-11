@@ -91,7 +91,7 @@ public:
   detail::range_map<id, uuid> offset_map = {};
 
   /// The set of fields that should not be touched by the pruner.
-  detail::heterogenous_string_hashset unprunable_fields;
+  detail::heterogeneous_string_hashset unprunable_fields;
 };
 
 /// The result of a catalog query.

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <vast/detail/heterogenous_string_hash.hpp>
+#include <vast/detail/heterogeneous_string_hash.hpp>
 #include <vast/expression.hpp>
 
 namespace vast {
@@ -25,6 +25,6 @@ namespace vast {
 // to
 //
 //     ':string == "u8wm3g4pw100420ydpzc"'
-expression prune(expression e, const detail::heterogenous_string_hashset& hs);
+expression prune(expression e, const detail::heterogeneous_string_hashset& hs);
 
 } // namespace vast

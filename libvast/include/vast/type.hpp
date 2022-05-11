@@ -1990,7 +1990,7 @@ struct hash<T> {
 /// in a container.
 template <vast::type_or_concrete_type T>
 struct equal_to<T> {
-  using is_transparent = void; // Opt-in to heterogenous lookups.
+  using is_transparent = void; // Opt-in to heterogeneous lookups.
 
   template <vast::type_or_concrete_type Lhs, vast::type_or_concrete_type Rhs>
   constexpr bool operator()(const Lhs& lhs, const Rhs& rhs) const noexcept {

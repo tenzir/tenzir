@@ -16,7 +16,7 @@
 
 namespace vast::detail {
 
-struct heterogenous_string_equal {
+struct heterogeneous_string_equal {
   using is_transparent = void;
 
   bool operator()(const std::string& lhs, const std::string& rhs) const {
@@ -32,7 +32,7 @@ struct heterogenous_string_equal {
   }
 };
 
-struct heterogenous_string_hash {
+struct heterogeneous_string_hash {
   using is_transparent = void;
 
   [[nodiscard]] size_t operator()(const char* s) const {
@@ -48,18 +48,18 @@ struct heterogenous_string_hash {
   }
 };
 
-/// A map from std::string to `Value` allowing for heterogenous lookups.
-//  Note that we can't use the C++20 heterogenous unordered_map yet,
+/// A map from std::string to `Value` allowing for heterogeneous lookups.
+//  Note that we can't use the C++20 heterogeneous unordered_map yet,
 //  because we still want to support GCC 10 on Debian. (and of course,
 //  there's a good chance that robin_map would be faster anyways)
 template <typename Value>
-using heterogenous_string_hashmap
-  = tsl::robin_map<std::string, Value, heterogenous_string_hash,
-                   vast::detail::heterogenous_string_equal>;
+using heterogeneous_string_hashmap
+  = tsl::robin_map<std::string, Value, heterogeneous_string_hash,
+                   vast::detail::heterogeneous_string_equal>;
 
-/// A set of `std::string`s allowing for heterogenous lookups.
-using heterogenous_string_hashset
-  = tsl::robin_set<std::string, heterogenous_string_hash,
-                   vast::detail::heterogenous_string_equal>;
+/// A set of `std::string`s allowing for heterogeneous lookups.
+using heterogeneous_string_hashset
+  = tsl::robin_set<std::string, heterogeneous_string_hash,
+                   vast::detail::heterogeneous_string_equal>;
 
 } // namespace vast::detail
