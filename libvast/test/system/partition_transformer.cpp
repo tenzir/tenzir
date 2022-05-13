@@ -34,7 +34,9 @@ using namespace std::string_literals;
 
 namespace {
 
-constexpr const auto IDSPACE_BEGIN = vast::id{42ull};
+auto constexpr const IDSPACE_BEGIN = vast::id{42ull};
+auto const PARTITION_PATH_TEMPLATE = std::string{"/partition-{}.fbs"};
+auto const SYNOPSIS_PATH_TEMPLATE = std::string{"/partition_synopsis-{}.fbs"};
 
 vast::system::idspace_distributor_actor::behavior_type mock_importer() {
   auto current_id = std::make_shared<vast::id>(IDSPACE_BEGIN);
@@ -78,7 +80,6 @@ FIXTURE_SCOPE(partition_transformer_tests, fixture)
 
 TEST(identity transform / done before persist) {
   // Spawn partition transformer
-  auto uuid = vast::uuid::random();
   auto store_id = "segment-store"s;
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
@@ -88,9 +89,10 @@ TEST(identity transform / done before persist) {
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
   auto transformer
-    = self->spawn(vast::system::partition_transformer, uuid, store_id,
-                  synopsis_opts, index_opts, accountant, importer,
-                  type_registry, filesystem, std::move(transform));
+    = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
+                  index_opts, accountant, importer, type_registry, filesystem,
+                  std::move(transform), PARTITION_PATH_TEMPLATE,
+                  SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
   // Stream data
   size_t events = 0;
@@ -100,26 +102,32 @@ TEST(identity transform / done before persist) {
   }
   self->send(transformer, vast::atom::done_v);
   run();
-  auto partition_path = std::filesystem::path{"/partition.fbs"};
-  auto synopsis_path = std::filesystem::path{"/partition_synopsis.fbs"};
-  auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v,
-                          partition_path, synopsis_path);
+  auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
   run();
-  vast::partition_synopsis_ptr synopsis = nullptr;
+  auto synopsis = vast::partition_synopsis_ptr{nullptr};
+  auto uuid = vast::uuid::nil();
   rp.receive(
-    [&](vast::augmented_partition_synopsis& aps) {
-      CHECK_EQUAL(aps.uuid, uuid);
-      CHECK_EQUAL(aps.stats.layouts["zeek.conn"].count, 20ull);
+    [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
+      REQUIRE_EQUAL(apsv.size(), 1ull);
+      auto& aps = apsv.front();
+      CHECK_EQUAL(aps.synopsis->events, 20ull);
+      CHECK_EQUAL(aps.type.name(), "zeek.conn");
+      uuid = aps.uuid;
       synopsis = aps.synopsis;
     },
     [&](caf::error& err) {
       FAIL("failed to persist: " << err);
     });
   // Verify serialized data
-  auto partition_rp = self->request(filesystem, caf::infinite,
-                                    vast::atom::read_v, partition_path);
-  auto synopsis_rp = self->request(filesystem, caf::infinite,
-                                   vast::atom::read_v, synopsis_path);
+  auto partition_path
+    = fmt::format(fmt::runtime(PARTITION_PATH_TEMPLATE), uuid);
+  auto synopsis_path = fmt::format(fmt::runtime(SYNOPSIS_PATH_TEMPLATE), uuid);
+  auto partition_rp
+    = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                    std::filesystem::path{partition_path});
+  auto synopsis_rp
+    = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                    std::filesystem::path{synopsis_path});
   run();
   partition_rp.receive(
     [&](vast::chunk_ptr& partition_chunk) {
@@ -151,7 +159,6 @@ TEST(identity transform / done before persist) {
 
 TEST(delete transform / persist before done) {
   // Spawn partition transformer
-  auto uuid = vast::uuid::random();
   auto store_id = "segment-store"s;
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
@@ -162,15 +169,13 @@ TEST(delete transform / persist before done) {
   REQUIRE_NOERROR(delete_step);
   transform->add_step(std::move(*delete_step));
   auto transformer
-    = self->spawn(vast::system::partition_transformer, uuid, store_id,
-                  synopsis_opts, index_opts, accountant, importer,
-                  type_registry, filesystem, std::move(transform));
+    = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
+                  index_opts, accountant, importer, type_registry, filesystem,
+                  std::move(transform), PARTITION_PATH_TEMPLATE,
+                  SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
   // Stream data
-  auto partition_path = std::filesystem::path{"/partition.fbs"};
-  auto synopsis_path = std::filesystem::path{"/partition_synopsis.fbs"};
-  auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v,
-                          partition_path, synopsis_path);
+  auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
   run();
   size_t events = 0;
   for (auto& slice : zeek_conn_log) {
@@ -179,20 +184,29 @@ TEST(delete transform / persist before done) {
   }
   self->send(transformer, vast::atom::done_v);
   run();
-  vast::partition_synopsis_ptr synopsis = nullptr;
+  auto synopsis = vast::partition_synopsis_ptr{nullptr};
+  auto uuid = vast::uuid::nil();
   rp.receive(
-    [&](vast::augmented_partition_synopsis& aps) {
+    [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
+      REQUIRE_EQUAL(apsv.size(), 1ull);
+      auto& aps = apsv.front();
       REQUIRE(aps.synopsis);
       synopsis = aps.synopsis;
+      uuid = aps.uuid;
     },
     [&](const caf::error& e) {
       FAIL("unexpected error" << e);
     });
   // Verify serialized data
-  auto partition_rp = self->request(filesystem, caf::infinite,
-                                    vast::atom::read_v, partition_path);
-  auto synopsis_rp = self->request(filesystem, caf::infinite,
-                                   vast::atom::read_v, synopsis_path);
+  auto partition_path
+    = fmt::format(fmt::runtime(PARTITION_PATH_TEMPLATE), uuid);
+  auto synopsis_path = fmt::format(fmt::runtime(SYNOPSIS_PATH_TEMPLATE), uuid);
+  auto partition_rp
+    = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                    std::filesystem::path{partition_path});
+  auto synopsis_rp
+    = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                    std::filesystem::path{synopsis_path});
   run();
   partition_rp.receive(
     [&](vast::chunk_ptr& partition_chunk) {
@@ -215,7 +229,7 @@ TEST(delete transform / persist before done) {
       CHECK(!column.has_value());
     },
     [](const caf::error& e) {
-      FAIL("unexpected error" << e);
+      FAIL("unexpected error " << e);
     });
   synopsis_rp.receive(
     [&](vast::chunk_ptr& synopsis_chunk) {
@@ -229,8 +243,99 @@ TEST(delete transform / persist before done) {
       CHECK_EQUAL(synopsis_legacy->id_range()->end(), IDSPACE_BEGIN + events);
     },
     [](const caf::error& e) {
-      FAIL("unexpected error" << e);
+      FAIL("unexpected error " << e);
     });
+}
+
+TEST(partition with multiple types) {
+  // Spawn partition transformer
+  auto store_id = "segment-store"s;
+  auto synopsis_opts = vast::index_config{};
+  auto index_opts = caf::settings{};
+  auto transform = std::make_shared<vast::transform>(
+    "partition_transform"s, std::vector<std::string>{"zeek.conn"});
+  auto identity_step = vast::make_transform_step("identity", vast::record{});
+  REQUIRE_NOERROR(identity_step);
+  transform->add_step(std::move(*identity_step));
+  auto transformer
+    = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
+                  index_opts, accountant, importer, type_registry, filesystem,
+                  std::move(transform), PARTITION_PATH_TEMPLATE,
+                  SYNOPSIS_PATH_TEMPLATE);
+  REQUIRE(transformer);
+  // Stream data with three different types
+  size_t events = 0;
+  for (auto& slice : suricata_dns_log) {
+    events += slice.rows();
+    self->send(transformer, slice);
+  }
+  for (auto& slice : suricata_http_log) {
+    events += slice.rows();
+    self->send(transformer, slice);
+  }
+  for (auto& slice : suricata_dns_log) {
+    events += slice.rows();
+    self->send(transformer, slice);
+  }
+  for (auto& slice : suricata_flow_log) {
+    events += slice.rows();
+    self->send(transformer, slice);
+  }
+  self->send(transformer, vast::atom::done_v);
+  run();
+  auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
+  run();
+  auto synopses = std::vector<vast::partition_synopsis_ptr>{};
+  auto uuids = std::vector<vast::uuid>{};
+  auto stats = vast::index_statistics{};
+  rp.receive(
+    [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
+      CHECK_EQUAL(apsv.size(), 3ull);
+      for (auto& aps : apsv) {
+        stats.layouts[std::string{aps.type.name()}].count
+          += aps.synopsis->events;
+        uuids.push_back(aps.uuid);
+        synopses.push_back(aps.synopsis);
+      }
+    },
+    [&](caf::error& err) {
+      FAIL("failed to persist: " << err);
+    });
+  CHECK_EQUAL(stats.layouts["suricata.dns"].count, 2ull);
+  CHECK_EQUAL(stats.layouts["suricata.flow"].count, 1ull);
+  CHECK_EQUAL(stats.layouts["suricata.http"].count, 1ull);
+  size_t total_count = 0ull;
+  for (auto const& [layout, stats] : stats.layouts)
+    total_count += stats.count;
+  CHECK_EQUAL(total_count, events);
+  // Verify that the partitions exist on disk.
+  for (auto& uuid : uuids) {
+    auto partition_path
+      = fmt::format(fmt::runtime(PARTITION_PATH_TEMPLATE), uuid);
+    auto synopsis_path
+      = fmt::format(fmt::runtime(SYNOPSIS_PATH_TEMPLATE), uuid);
+    auto partition_rp
+      = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                      std::filesystem::path{partition_path});
+    auto synopsis_rp
+      = self->request(filesystem, caf::infinite, vast::atom::read_v,
+                      std::filesystem::path{synopsis_path});
+    run();
+    partition_rp.receive(
+      [&](vast::chunk_ptr& partition_chunk) {
+        CHECK(partition_chunk);
+      },
+      [&](const caf::error&) {
+        FAIL("failed to read partition " << uuid);
+      });
+    synopsis_rp.receive(
+      [&](vast::chunk_ptr& synopsis_chunk) {
+        CHECK(synopsis_chunk);
+      },
+      [&](const caf::error&) {
+        FAIL("failed to read synopsis " << uuid);
+      });
+  }
 }
 
 TEST(identity partition transform via the index) {
@@ -305,8 +410,9 @@ TEST(identity partition transform via the index) {
                            vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
-    [=](const vast::partition_info& info) {
-      CHECK_EQUAL(info.events, events);
+    [=](const std::vector<vast::partition_info>& infos) {
+      REQUIRE_EQUAL(infos.size(), 1ull);
+      CHECK_EQUAL(infos[0].events, events);
     },
     [](const caf::error& e) {
       FAIL("unexpected error" << e);
@@ -323,8 +429,9 @@ TEST(identity partition transform via the index) {
                            vast::system::keep_original_partition::no);
   run();
   rp5.receive(
-    [=](const vast::partition_info& info) {
-      CHECK_EQUAL(info.events, events);
+    [=](const std::vector<vast::partition_info>& infos) {
+      REQUIRE_EQUAL(infos.size(), 1ull);
+      CHECK_EQUAL(infos[0].events, events);
     },
     [](const caf::error& e) {
       FAIL("unexpected error" << e);
@@ -385,9 +492,8 @@ TEST(select transform with an empty result set) {
                            vast::system::keep_original_partition::no);
   run();
   rp2.receive(
-    [=](const vast::partition_info& info) {
-      CHECK_EQUAL(info.uuid, vast::uuid::nil());
-      CHECK_EQUAL(info.events, 0ull);
+    [=](const std::vector<vast::partition_info>& infos) {
+      CHECK_EQUAL(infos.size(), 0ull);
     },
     [](const caf::error& e) {
       FAIL("unexpected error" << e);

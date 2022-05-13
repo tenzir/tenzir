@@ -161,9 +161,17 @@ struct index_state {
   // Maps partitions to their expected location on the file system.
   [[nodiscard]] std::filesystem::path partition_path(const uuid& id) const;
 
+  /// Returns a format string that can be formatted with a partition id to
+  /// get the location of the corresponding partition.
+  [[nodiscard]] std::string partition_path_template() const;
+
   // Maps partition synopses to their expected location on the file system.
   [[nodiscard]] std::filesystem::path
   partition_synopsis_path(const uuid& id) const;
+
+  /// Returns a format string that can be formatted with a partition id to
+  /// get the location of the corresponding partition synopsis.
+  [[nodiscard]] std::string partition_synopsis_path_template() const;
 
   caf::error load_from_disk();
 

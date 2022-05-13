@@ -96,7 +96,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
                         transform, result.partitions,
                         keep_original_partition::no)
               .then(
-                [self, rp](const partition_info&) mutable {
+                [self, rp](const std::vector<partition_info>&) mutable {
                   VAST_DEBUG("{} applied filter transform with query {}", *self,
                              self->state.query_);
                   rp.deliver(atom::ok_v);

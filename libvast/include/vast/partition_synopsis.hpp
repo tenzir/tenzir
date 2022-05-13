@@ -108,19 +108,25 @@ struct partition_info {
   time max_import_time;
 
   /// How many events of each type the partition contains.
-  index_statistics stats;
+  //  A `partition_info` is only created for new partitions, so
+  //  it can not be a heterogenous legacy partition but must have
+  //  exactly one type.
+  vast::type type;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_info& x) {
     return f(caf::meta::type_name("partition_info"), x.uuid, x.events,
-             x.max_import_time, x.stats);
+             x.max_import_time, x.type);
   }
 };
 
 /// A partition synopsis with some additional information.
+//  A `augmented_partition_synopsis` is only created for new
+//  partitions, so it can not be a heterogenous legacy partition
+//  but must have exactly one type.
 struct augmented_partition_synopsis {
   vast::uuid uuid;
-  index_statistics stats;
+  vast::type type;
   partition_synopsis_ptr synopsis;
 };
 

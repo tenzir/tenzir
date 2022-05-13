@@ -192,13 +192,17 @@ using partition_creation_listener_actor = typed_actor_fwd<
 
 /// The CATALOG actor interface.
 using catalog_actor = typed_actor_fwd<
-  // Bulk import a set of partition synopses.
+  // Reinitialize the catalog from a set of partition synopses. Used at
+  // startup, so the map is expected to be huge and we use a shared_ptr
+  // to be sure it's not accidentally copied.
   caf::replies_to<
     atom::merge,
     std::shared_ptr<std::map<uuid, partition_synopsis_ptr>>>::with<atom::ok>,
   // Merge a single partition synopsis.
-  caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with< //
-    atom::ok>,
+  caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with<atom::ok>,
+  // Merge a set of partition synopsis.
+  caf::replies_to<atom::merge,
+                  std::vector<augmented_partition_synopsis>>::with<atom::ok>,
   // Get *ALL* partition synopses stored in the catalog.
   caf::replies_to<atom::get>::with<std::vector<partition_synopsis_pair>>,
   // Erase a single partition synopsis.
@@ -206,6 +210,9 @@ using catalog_actor = typed_actor_fwd<
   // Atomically remove one and merge another partition synopsis
   caf::replies_to<atom::replace, uuid, uuid,
                   partition_synopsis_ptr>::with<atom::ok>,
+  // Atomatically replace a set of partititon synopses with another.
+  caf::replies_to<atom::replace, std::vector<uuid>,
+                  std::vector<augmented_partition_synopsis>>::with<atom::ok>,
   // Return the candidate partitions for an expression.
   caf::replies_to<atom::candidates, vast::uuid,
                   vast::expression>::with<catalog_result>,
@@ -261,6 +268,8 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<uuid, uint32_t>,
   // Erases the given partition from the INDEX.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
+  // Erases the given set of partitions from the INDEX.
+  caf::replies_to<atom::erase, std::vector<uuid>>::with<atom::done>,
   // Applies the given transformation to the partition.
   // When keep_original_partition is yes: erases the existing partition and
   // returns the synopsis of the new partition. If the partition is completely
@@ -268,7 +277,7 @@ using index_actor = typed_actor_fwd<
   // in-place transform keeping the old ids, and makes a new partition
   // preserving the old one(s).
   caf::replies_to<atom::apply, transform_ptr, std::vector<uuid>,
-                  keep_original_partition>::with<partition_info>,
+                  keep_original_partition>::with<std::vector<partition_info>>,
   // Makes the identity of the importer known to the index.
   caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
@@ -345,9 +354,9 @@ using filesystem_actor = typed_actor_fwd<
 
 /// The interface of an BULK PARTITION actor.
 using partition_transformer_actor = typed_actor_fwd<
-  // Persist transformed partition to given path.
-  caf::replies_to<atom::persist, std::filesystem::path,
-                  std::filesystem::path>::with<augmented_partition_synopsis>,
+  // Persist the transformed partitions and return the generated
+  // partition synopses.
+  caf::replies_to<atom::persist>::with<std::vector<augmented_partition_synopsis>>,
   // INTERNAL: Continuation handler for `atom::done`.
   caf::reacts_to<atom::internal, atom::resume, atom::done, vast::id>>
   // query::extract API
@@ -519,6 +528,7 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::partition_synopsis_pair>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::augmented_partition_synopsis)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::augmented_partition_synopsis>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::transform_ptr)
 #undef vast_uuid_synopsis_map
 
