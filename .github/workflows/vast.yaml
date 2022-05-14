@@ -1,38 +1,38 @@
 name: VAST
+
 on:
-  workflow_dispatch:
-    inputs:
-      arguments:
-        description: "Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`"
-        required: false
-        default: ""
-  push:
-    branches:
-      - master
-      - v*
+# workflow_dispatch:
+#   inputs:
+#     arguments:
+#       description: "Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`"
+#       required: false
+#       default: ""
+# push:
+#   branches:
+#     - master
+#     - v*
   pull_request:
     types:
       - opened
       - synchronize
-  release:
-    types:
-      - published
-env:
-  CCACHE_MAXSIZE: "5G"
+# release:
+#   types:
+#     - published
+
+# Cancel all in-progress runs for this workflow, unless we're running on master.
+# This ensures that we don't run needlessly when pushing twice, and also don't
+# update the cache needlessly.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-  cancel-previous-runs:
-    name: Cancel Previous Runs
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Cancel Previous Runs
-        if: github.event_name == 'pull_request'
-        uses: styfle/cancel-workflow-action@0.9.1
-        with:
-          access_token: ${{ github.token }}
 
-  determine-version:
-    name: Determine Version
+  # We need to first determine the version to avoid races between jobs when
+  # using tags to determine artifact names, as the output of git-describe may
+  # change when a tag is pushed between jobs.
+  configure-workflow:
+    name: Configure Workflow
     runs-on: ubuntu-20.04
     outputs:
       build-version: ${{ steps.determine-version.outputs.build-version }}
@@ -42,900 +42,110 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Fetch Tags
-        run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Determine Version
         id: determine-version
         run: |
+          git fetch origin +refs/tags/*:refs/tags/*
           build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
           echo "::set-output name=build-version::${build_version}"
           echo "::set-output name=release-version::${release_version}"
 
-  changelog:
-    needs: cancel-previous-runs
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
-    name: Changelog
-    runs-on: ubuntu-20.04
-    container: debian:bullseye-slim
-    steps:
-      - name: Install Dependencies
-        run: |
-          apt-get update
-          apt-get -y install \
-            build-essential \
-            ca-certificates \
-            flatbuffers-compiler-dev \
-            g++-10 \
-            gcc-10 \
-            git \
-            gnupg2 \
-            jq \
-            libflatbuffers-dev \
-            libfmt-dev \
-            libpcap-dev tcpdump \
-            libsimdjson-dev \
-            libspdlog-dev \
-            libssl-dev \
-            libunwind-dev \
-            libyaml-cpp-dev \
-            libxxhash-dev \
-            lsb-release \
-            ninja-build \
-            pkg-config \
-            python3-dev \
-            python3-pip \
-            python3-venv \
-            wget
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --upgrade cmake
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-      - name: Configure Build
-        env:
-          CC: gcc-10
-          CXX: g++-10
-        run: |
-          cmake -B build \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
-            -DVAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
-      - name: Generate CHANGELOG.md
-        run: |
-          cmake --build build --target changelog
-      - name: Upload CHANGELOG.md
-        uses: actions/upload-artifact@v3
-        with:
-          name: CHANGELOG.md
-          path: build/CHANGELOG.md
-      - name: Check CHANGELOG.md
-        if: github.event_name == 'pull_request'
-        run: |
-          alias is_unchanged="git diff --exit-code $(git merge-base 'origin/${{ github.event.pull_request.base.ref }}' HEAD) --"
-          if is_unchanged cmake/VASTVersionFallback.cmake; then
-            # CHANGELOG.md must not be modified in non-release PRs, unless the
-            # template also changed.
-            is_unchanged CHANGELOG.md || ! is_unchanged cmake/VASTChangelog.cmake.in
-          else
-            # CHANGELOG.md must be modified in release PRs
-            ! is_unchanged CHANGELOG.md
-            # Check whether the updated CHANGELOG.md is correct
-            cmake --build build --target update-changelog
-            git diff-index --exit-code HEAD -- CHANGELOG.md
-          fi
-
-  docs:
-    needs: changelog
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
-    name: Docs
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Delete existing CHANGELOG.md
-        run:
-          rm CHANGELOG.md
-      - name: Download new CHANGELOG.md
-        uses: actions/download-artifact@v3
-        with:
-          name: CHANGELOG.md
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16.x
-          cache-dependency-path: docs/yarn.lock
-          cache: yarn
-      - name: Install dependencies
-        working-directory: docs
-        run: yarn install --frozen-lockfile
-      - name: Test build website
-        working-directory: docs
-        run: yarn build
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build
-          user_name: tenzir-bot
-          user_email: engineering@tenzir.com
-
-  build-debian:
+  build:
+    name: Build ${{ matrix.build.id }}
     needs:
-      - cancel-previous-runs
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
-    name: Debian ${{ matrix.configure.tag }} (${{ matrix.build.compiler }})
-    runs-on: ubuntu-20.04
-    container: debian:bullseye-slim
+      - configure-workflow
     strategy:
       fail-fast: false
       matrix:
         build:
-          - extra-flags:
-            compiler: GCC
-            cc: gcc-10
-            cxx: g++-10
-        configure:
-          - tag: Release
-            flags: -DCMAKE_BUILD_TYPE:STRING=Release
-            ci-flags: -DCMAKE_BUILD_TYPE:STRING=CI
-    env:
-      BUILD_DIR: build
-      CC: ${{ matrix.build.cc }}
-      CXX: ${{ matrix.build.cxx }}
-      CCACHE_ABSSTDERR: true
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "${{ github.workspace }}/.ccache"
-      CCACHE_HASH_DIR: true
-      CCACHE_SLOPPINESS: "file_macro,time_macros"
-      CCACHE_UNIFY: true
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      DEBIAN_FRONTEND: noninteractive
-      DOCKER_BUILDKIT: 1
+          - id: macOS
+            os: macos-latest
+            dependencies:
+              - apache-arrow
+              - ccache
+              - flatbuffers
+              - fmt
+              - libunwind-headers
+              - ninja
+              - pandoc
+              - simdjson
+              - spdlog
+              - xxhash
+              - yaml-cpp
+          - id: Linux
+            os: ubuntu-latest
+            dependencies:
+              # FIXME: incomplete
+              - libxxhash-dev
+    runs-on: ${{ matrix.build.os }}
     steps:
-      - name: Install Dependencies
-        run: |
-          apt-get update
-          apt-get -y install \
-            apt-transport-https \
-            build-essential \
-            ca-certificates \
-            ccache \
-            curl \
-            flatbuffers-compiler-dev \
-            g++-10 \
-            gcc-10 \
-            git \
-            gnupg2 gnupg-agent \
-            jq \
-            libcaf-dev \
-            libflatbuffers-dev \
-            libfmt-dev \
-            libpcap-dev tcpdump \
-            libsimdjson-dev \
-            libspdlog-dev \
-            libssl-dev \
-            libunwind-dev \
-            libyaml-cpp-dev \
-            libxxhash-dev \
-            lsb-release \
-            ninja-build \
-            pandoc \
-            pkg-config \
-            python3-dev \
-            python3-pip \
-            python3-venv \
-            software-properties-common \
-            wget
-          # Apache Arrow (c.f. https://arrow.apache.org/install/)
-          wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-          apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-          apt-get update
-          apt-get -y install libarrow-dev
-
-          # install CMake from pip -- we need at least 3.17 in CI for CCache
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --upgrade cmake
-
-          cmake --version
-
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      - name: Fetch Submodules and Tags
+          submodules: recursive
+      - name: Prepare Homebrew Cache (macOS)
+        id: prepare-homebrew-cache
+        if: ${{ runner.os == 'macOS' }}
         run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-
-      - name: Configure Environment
-        run: |
-          PACKAGE_NAME="$(echo "vast-${{ needs.determine-version.outputs.build-version }}-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-
-      - name: Fetch ccache Cache
-        uses: pat-s/always-upload-cache@v3.0.1
+          homebrew_cache="$(brew --cache)"
+          homebrew_core_version="$(git -C "$(brew --repo homebrew/core)" rev-parse HEAD)"
+          echo "::set-output name=homebrew-cache::${homebrew_cache}"
+          echo "::set-output name=homebrew-core-version::${homebrew_core_version}"
+          rm -rf "${homebrew_cache}"
+      - name: Configure Homebrew Cache (macOS)
+        if: ${{ runner.os == 'macOS' }}
+        uses: actions/cache@v2
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
-
-      - name: Configure
-        run: |
-          python3 --version
-          python3 -m pip --version
-          "$CC" --version
-          "$CXX" --version
-          ccache --version
-          # Zero the cache statistics (but not the configuration options).
-          ccache --zero-stats
-          ccache --show-config
-          cmake -B "$BUILD_DIR" \
-            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
-            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
-            -DCPACK_GENERATOR:STRING=TGZ \
-            -DVAST_PLUGINS:STRING="plugins/pcap" \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF \
-            -DVAST_ENABLE_DSCAT:BOOL=ON \
-            -DVAST_ENABLE_LSVAST:BOOL=ON \
-            -DVAST_ENABLE_MDX_REGENERATE:BOOL=ON \
-            ${{ matrix.build.extra-flags }} \
-            ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
-
-      - name: Compile All Targets
-        run: |
-          cmake --build "$BUILD_DIR" --target all --parallel --verbose
-
-      - name: Show ccache Statistics
-        run: |
-          # Print statistics counter IDs and corresponding values.
-          ccache --show-stats
-          # Print statistics about cache compression.
-          ccache --show-compression
-
-      - name: Run Unit Tests
+          path: ${{ steps.prepare-homebrew-cache.outputs.homebrew-cache }}
+          key: homebrew-${{ github.workflow }}-${{ runner.os }}-${{ steps.prepare-homebrew-cache.outputs.homebrew-core-version }}
+          restore-keys: homebrew-${{ github.workflow }}-${{ runner.os }}-
+      - name: Install Dependencies (macOS)
+        if: ${{ runner.os == 'macOS' }}
         env:
-          CTEST_OUTPUT_ON_FAILURE: YES
-        # --test-dir is not yet supported in the ctest version we're using here.
-        working-directory: ${{ env.BUILD_DIR }}
-        run: |
-          ctest --parallel
-
-      - name: Install
-        run: |
-          cmake --install "$BUILD_DIR"
-
-      - name: Run Integration Tests
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
-
-      - name: Upload Integration Test Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: "vast-integration-test-debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}"
-          path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
-          if-no-files-found: ignore
-
-      - name: Package
-        env:
-          DESTDIR: $PWD
-        run: |
-          cmake --build "$BUILD_DIR" --target package
-
-      - name: Upload Artifact to GitHub
-        uses: actions/upload-artifact@v3
-        with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
-
-      - name: Configure GCS Credentials
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v0
-        with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
-
-      - name: Upload Artifact to GCS
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
-
-      # This step ensures that assets from previous runs are cleaned up to avoid
-      # failure of the next step (asset upload)
-      - name: Delete existing Release Assets
-        if: github.event_name == 'release'
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          # don't fail if no previous assets exist.
-          fail-if-no-assets: false
-          # only delete assets when `tag` refers to a release
-          fail-if-no-release: tru
-          assets: "${{ env.PUBLISH_NAME }}.tar.gz"
-
-      - name: Publish to GitHub Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
-          # The asset names are constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-gcc.tar.gz
-          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-clang.tar.gz
-          # for builds of the latest release.
-          asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
-          asset_content_type: application/gzip
-
-      - name: Publish VAST.spdx to GitHub Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "VAST.spdx"
-          asset_name: "VAST.spdx"
-          asset_content_type: text/plain
-
-  build-macos:
-    needs:
-      - cancel-previous-runs
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
-    name: macOS ${{ matrix.configure.tag }} (${{ matrix.build.compiler }})
-    runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        build:
-          - extra-flags:
-            compiler: Clang
-            cc: clang
-            cxx: clang++
-        configure:
-          - tag: Release
-            flags: -DCMAKE_BUILD_TYPE=Release
-            ci-flags: -DCMAKE_BUILD_TYPE=CI
-    env:
-      BUILD_DIR: build
-      CC: ${{ matrix.build.cc }}
-      CXX: ${{ matrix.build.cxx }}
-      CCACHE_ABSSTDERR: true
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "${{ github.workspace }}/.ccache"
-      CCACHE_HASH_DIR: true
-      CCACHE_SLOPPINESS: "file_macro,time_macros"
-      CCACHE_UNIFY: true
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-
-      - name: Setup Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: "3.9"
-
-      - name: Install Dependencies
-        env:
-          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
-          HOMEBREW_NO_ANALYTICS: 1
-          HOMEBREW_NO_INSTALL_CLEANUP: 1
           HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_UPGRADE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
         run: |
-          brew --version
-          brew install \
-            apache-arrow \
-            ccache \
-            flatbuffers \
-            fmt \
-            gnu-sed \
-            libpcap \
-            libunwind-headers \
-            llvm \
-            ninja \
-            openssl \
-            pandoc \
-            pkg-config \
-            rsync \
-            simdjson \
-            spdlog \
-            tcpdump \
-            yaml-cpp \
-            xxhash
-
-      - name: Configure Environment
-        run: |
-          PACKAGE_NAME="$(echo "vast-${{ needs.determine-version.outputs.build-version }}-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-
-      - name: Setup Homebrew Clang
-        if: matrix.build.compiler == 'Clang'
-        run: |
+          brew install --formulae --display-times -- \
+            ${{ join(matrix.build.dependencies, ' ') }}
           llvm_root="$(brew --prefix llvm)"
           echo "${llvm_root}/bin" >> $GITHUB_PATH
-          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
-
-      - name: Fetch ccache Cache
-        uses: pat-s/always-upload-cache@v3.0.1
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
-
-      - name: Configure
-        run: |
-          python --version
-          pip --version
-          "$CC" --version
-          "$CXX" --version
-          ccache --version
-          # Zero the cache statistics (but not the configuration options).
-          ccache --zero-stats
-          ccache --show-config
-          cmake -B "$BUILD_DIR" \
-            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
-            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
-            -DCPACK_GENERATOR:STRING=TGZ \
-            -DVAST_PLUGINS:STRING="plugins/pcap" \
-            -DVAST_ENABLE_LSVAST:BOOL=ON \
-            -DVAST_ENABLE_MDX_REGENERATE:BOOL=ON \
-            -DVAST_ENABLE_DSCAT:BOOL=ON \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
-            ${{ matrix.build.extra-flags }} \
-            ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
-
-      - name: Compile All Targets
-        run: |
-          cmake --build "$BUILD_DIR" --target all --parallel --verbose
-
-      - name: Show ccache Statistics
-        run: |
-          # Print statistics counter IDs and corresponding values.
-          ccache --show-stats
-          # Print statistics about cache compression.
-          ccache --show-compression
-
-      - name: Run Unit Tests
+          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+      - name: Install Dependencies (Linux)
+        if: ${{ runner.os == 'Linux' }}
         env:
-          CTEST_OUTPUT_ON_FAILURE: YES
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          ctest --test-dir "$BUILD_DIR" --parallel
-
-      - name: Install
-        run: |
-          cmake --install "$BUILD_DIR"
-
-      - name: Run Integration Tests
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
-
-      - name: Upload Integration Test Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: "vast-integration-test-macos-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}"
-          path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
-          if-no-files-found: ignore
-
-      - name: Package
-        env:
-          DESTDIR: $PWD
-        run: |
-          cmake --build "$BUILD_DIR" --target package
-
-      - name: Upload Artifact to Github
-        uses: actions/upload-artifact@v3
-        with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
-
-      # This step ensures that assets from previous runs are cleaned up to avoid
-      # failure of the next step (asset upload)
-      - name: Delete existing Release Assets
-        if: github.event_name == 'release'
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          # don't fail if no previous assets exist
-          fail-if-no-assets: false
-          # only delete assets when `tag` refers to a release
-          fail-if-no-release: true
-          assets: "${{ env.PUBLISH_NAME }}.tar.gz"
-
-      - name: Publish to GitHub Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
-          # https://github.com/tenzir/vast/releases/latest/download/vast-darwin-release-appleclang.tar.gz
-          # for builds of the latest release.
-          asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
-          asset_content_type: application/gzip
-
-  build-plugins:
-    needs:
-      - build-debian
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-20.04
-    container: debian:bullseye-slim
-    strategy:
-      fail-fast: false
-      matrix:
-        plugin:
-          - name: Example Analyzer
-            target: example-analyzer
-            path: examples/plugins/analyzer
-            dependencies:
-          - name: Example Transform
-            target: example-transform
-            path: examples/plugins/transform
-            dependencies:
-          - name: Summarize
-            target: summarize
-            path: plugins/summarize
-          - name: Broker
-            target: broker
-            path: plugins/broker
-            dependencies:
-              - libbroker-dev
-          - name: Sigma
-            target: sigma
-            path: plugins/sigma
-    env:
-      INSTALL_DIR: "${{ github.workspace }}/_install"
-      BUILD_DIR: "${{ github.workspace }}/_build"
-      CC: "gcc"
-      CXX: "g++"
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      CTEST_OUTPUT_ON_FAILURE: YES
-      DEBIAN_FRONTEND: noninteractive
-      DESTDIR: "${{ github.workspace }}"
-    name: ${{ matrix.plugin.name }} Plugin
-    steps:
-      - name: Install Dependencies
-        run: |
-          apt-get update
-          apt-get -y install \
-            ${{ join(matrix.plugin.dependencies, ' ') }} \
-            apt-transport-https \
-            build-essential \
-            ca-certificates \
-            curl \
-            flatbuffers-compiler-dev \
-            g++-10 \
-            gcc-10 \
-            git \
-            gnupg2 gnupg-agent \
-            jq \
-            libcaf-dev \
-            libflatbuffers-dev \
-            libfmt-dev \
-            libpcap-dev tcpdump \
-            libsimdjson-dev \
-            libspdlog-dev \
-            libssl-dev \
-            libunwind-dev \
-            libyaml-cpp-dev \
-            libxxhash-dev \
-            lsb-release \
-            ninja-build \
-            python3-dev \
-            python3-pip \
-            python3-venv \
-            software-properties-common \
-            wget
-          # Apache Arrow (c.f. https://arrow.apache.org/install/)
-          wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-          apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-          apt-get update
-          apt-get -y install libarrow-dev
-          # Install CMake from pip
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --upgrade cmake
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-      - name: Determine VAST Package Name
-        id: configure
-        run: |
-          PACKAGE_NAME="$(echo "vast-${{ needs.determine-version.outputs.build-version }}-$(uname -s)-release-gcc" | awk '{ print tolower($0) }')"
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-      - name: Download VAST
-        uses: actions/download-artifact@v3
-        with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-      - name: Install VAST
-        run: |
-          mkdir ${INSTALL_DIR}
-          tar -C ${INSTALL_DIR} -xzvf "${PACKAGE_NAME}.tar.gz" --strip-components 1
-          echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
+          sudo apt-get install --yes -- \
+            ${{ join(matrix.build.dependencies, ' ') }}
       - name: Configure Build
         env:
-          VAST_DIR: "${{ env.INSTALL_DIR }}"
+          CCACHE_ABSSTDERR: true
+          CCACHE_COMPRESS: true
+          CCACHE_COMPRESSLEVEL: 0
+          CCACHE_HASH_DIR: true
+          CCACHE_SLOPPINESS: "file_macro,time_macros"
+          CCACHE_UNIFY: true
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_GENERATOR: Ninja
+          CMAKE_MAKE_PROGRAM: ninja
         run: |
-          python3 --version
-          python3 -m pip --version
-          cmake --version
-          cmake -S '${{ matrix.plugin.path }}' -B "$BUILD_DIR"
+          cmake -B "${{ runner.temp }}/build"
+      - name: Configure ccache
+        uses: hendrikmuhs/ccache-action@v1.1
+        with:
+          key: ${{ github.workflow }}-${{ hashFiles(format('{0}/build/CMakeCache.txt', runner.temp)) }}
       - name: Build
         run: |
-          cmake --build "$BUILD_DIR" --target all --parallel
-      - name: Run Unit Tests
-        env:
-          CTEST_OUTPUT_ON_FAILURE: 1
-        # --test-dir is not yet supported in the ctest version we're using here.
-        working-directory: ${{ env.BUILD_DIR }}
-        run: |
-          ctest --parallel
-      - name: Run Integration Tests
-        id: integration_tests
-        # We intentionally run the plugin integration tests before
-        # installing, because that is a use-case we want to explicitly
-        # support for easier plugin development.
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
+          cmake --build "${{ runner.temp }}/build"
       - name: Install
         run: |
-          cmake --install "$BUILD_DIR"
-      - name: Upload Integration Test Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: "vast-${{ matrix.plugin.target }}-integration-test"
-          path: "${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test"
-          if-no-files-found: ignore
-      - name: Install
-        run: |
-          cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
-
-  build-docker:
-    needs:
-      - cancel-previous-runs
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
-    name: Docker
-    runs-on: ubuntu-20.04
-    env:
-      DOCKER_BUILDKIT: 1
-      # We explicitly disable SSE instructions here: The CI runners support it,
-      # but we want to support our prebuilt Docker images on older machines as
-      # well.
-      VAST_BUILD_OPTIONS: >-
-        -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
-        -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-      - name: Set VAST and Plugin Versions
-        run: |
-          # Since the Docker build does not have the Git context, we set
-          # version fallbacks manually here.
-          vast_tag="${{ needs.determine-version.outputs.build-version }}"
-          VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -DVAST_VERSION_TAG:STRING=${vast_tag}"
-          for plugin in $(ls plugins); do
-            var="VAST_PLUGIN_${plugin^^}_REVISION"
-            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "plugins/${plugin}")"
-            VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
-          done
-          echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
-      - name: Build Dependencies Docker Image
-        run: |
-          docker build . -t tenzir/vast-deps:latest --target dependencies \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
-      - name: Build Development Docker Image
-        run: |
-          docker build . -t tenzir/vast-dev:latest --target development \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
-      - name: Build Production Docker Image
-        run: |
-          docker build . -t tenzir/vast:latest --target production \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
-      - name: Build Lambda Docker Image
-        working-directory: cloud/aws
-        run: |
-          docker build docker/ -f docker/lambda.Dockerfile -t tenzir/vast-lambda:latest \
-            --build-arg VAST_VERSION=latest
-      - name: Login to Docker Hub
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      - name: Publish Dependencies Docker Image
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          docker push tenzir/vast-deps:latest
-          docker tag tenzir/vast-deps:latest "tenzir/vast-deps:${GITHUB_SHA}"
-          docker push "tenzir/vast-deps:${GITHUB_SHA}"
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            release_tag="${{ needs.determine-version.outputs.release-version }}"
-            docker tag tenzir/vast-deps:latest "tenzir/vast-deps:${release_tag}"
-            docker push "tenzir/vast-deps:${release_tag}"
-          fi
-      - name: Publish Development Docker Image
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          docker push tenzir/vast-dev:latest
-          docker tag tenzir/vast-dev:latest "tenzir/vast-dev:${GITHUB_SHA}"
-          docker push "tenzir/vast-dev:${GITHUB_SHA}"
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            release_tag="${{ needs.determine-version.outputs.release-version }}"
-            docker tag tenzir/vast-dev:latest "tenzir/vast-dev:${release_tag}"
-            docker push "tenzir/vast-dev:${release_tag}"
-          fi
-      - name: Publish Production Docker Image
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          docker push tenzir/vast:latest
-          docker tag tenzir/vast:latest "tenzir/vast:${GITHUB_SHA}"
-          docker push "tenzir/vast:${GITHUB_SHA}"
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            release_tag="${{ needs.determine-version.outputs.release-version }}"
-            docker tag tenzir/vast:latest "tenzir/vast:${release_tag}"
-            docker push "tenzir/vast:${release_tag}"
-          fi
-
-  build-nix:
-    needs: cancel-previous-runs
-    name: Nix Static (${{ matrix.nix.target }})
-    runs-on: ubuntu-20.04
-    strategy:
-      fail-fast: false
-      matrix:
-        nix:
-          - target: "vast"
-            build-options: >-
-              -DVAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
-              -DVAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
-          - target: "vast-ci"
-            build-options: >-
-              -DVAST_ENABLE_AUTO_VECTORIZATION:BOOL=OFF
-    env:
-      BUILD_DIR: build
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v17
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@v10
-        with:
-          name: vast
-          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
-
-      - name: Build Static Binary
-        env:
-          STATIC_BINARY_TARGET: ${{ matrix.nix.target }}
-        run: |
-          nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
-            ${{ matrix.nix.build-options }}
-
-      - name: Create Paths
-        id: create_paths
-        run: |
-          ARTIFACT_NAME=$(ls "${BUILD_DIR}" | grep "${{ matrix.nix.target }}.*.tar.gz")
-          echo "::set-output name=artifact_name::${ARTIFACT_NAME}"
-
-      - name: Upload Artifact to Github
-        uses: actions/upload-artifact@v3
-        with:
-          name: "${{ steps.create_paths.outputs.artifact_name }}"
-          path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
-
-      - name: Setup Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: "3.9"
-
-      - name: Configure GCS Credentials
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v0
-        with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
-
-      - name: Upload Artifact to GCS (push)
-        if: github.event_name == 'push'
-        env:
-          PUBLIC_GCS_BUCKET: tenzir-public-data
-          STATIC_BINARY_FOLDER: vast-static-builds
-        run: |
-          gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
-
-      - name: Upload Artifact to GCS (release)
-        if: github.event_name == 'release'
-        env:
-          PUBLIC_GCS_BUCKET: tenzir-public-data
-          STATIC_BINARY_FOLDER: vast-static-builds
-        run: |
-          RELEASE_MONTH=$(echo "${{ steps.create_paths.outputs.artifact_name }}" | cut -d"-" -f2)
-          gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${RELEASE_MONTH}-static-latest.tar.gz"
-
-      # This step ensures that assets from previous runs are cleaned up to avoid
-      # failure of the next step (asset upload)
-      - name: Delete Release Assets
-        if: github.event_name == 'release'
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          # don't fail if no previous assets exist
-          fail-if-no-assets: false
-          # only delete assets when `tag` refers to a release
-          fail-if-no-release: true
-          assets: "${{ matrix.nix.target }}-linux-static.tar.gz"
-
-      - name: Upload Release Assets
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
-          # The asset name is constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
-          # for a build of the latest release.
-          asset_name: "${{ matrix.nix.target }}-linux-static.tar.gz"
-          asset_content_type: application/gzip
+          cmake --install "${{ runner.temp }}/build" \
+            --prefix "${{ runner.temp }}/install"
