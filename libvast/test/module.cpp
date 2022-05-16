@@ -568,15 +568,19 @@ to_type2(const data& declaration, std::string_view name) {
     }
   }
   auto found_type = decl.find("type");
+  auto found_enum = decl.find("enum");
   auto found_list = decl.find("list");
   auto found_map = decl.find("map");
   auto found_record = decl.find("record");
   auto is_type_found = found_type != decl.end();
+  auto is_enum_found = found_enum != decl.end();
   auto is_list_found = found_list != decl.end();
   auto is_map_found = found_map != decl.end();
   auto is_record_found = found_record != decl.end();
   int type_selector_cnt = 0;
   if (is_type_found)
+    type_selector_cnt++;
+  if (is_enum_found)
     type_selector_cnt++;
   if (is_list_found)
     type_selector_cnt++;
@@ -604,6 +608,26 @@ to_type2(const data& declaration, std::string_view name) {
     // create a type alias or a placeholder.
     return parsed_type(type{name, type_expected->parsed, std::move(attributes)},
                        std::move(type_expected->providers));
+  }
+  // Enumeration
+  if (is_enum_found) {
+    const auto* enum_list_ptr = caf::get_if<list>(&found_enum->second);
+    if (enum_list_ptr == nullptr)
+      return caf::make_error(ec::parse_error, "parses an enum with an invalid "
+                                              "format");
+    const auto& enum_list = *enum_list_ptr;
+    if (enum_list.empty())
+      return caf::make_error(ec::parse_error, "parses an empty enum");
+    auto enum_fields = std::vector<enumeration_type::field_view>{};
+    for (const auto& enum_value : enum_list) {
+      const auto* enum_string_ptr = caf::get_if<std::string>(&enum_value);
+      if (enum_string_ptr == nullptr)
+        return caf::make_error(ec::parse_error, "parses an enum value with an "
+                                                "invalid format");
+      enum_fields.push_back({*enum_string_ptr});
+    }
+    return parsed_type{
+      type{name, enumeration_type{enum_fields}, std::move(attributes)}};
   }
   // List
   if (is_list_found) {
@@ -926,6 +950,89 @@ caf::expected<module_ng2> to_module2(const data& declaration) {
   }
   return module_ng2{.types = resolved_types};
 }
+
+//////////////////////////////////////////////////////////////////////////////
+// Strawman API
+// FIXME: Move it to its final place
+/////////////////////////////////////////////////////////////////////////////
+
+/// The resolved Module parsed from multiple module files in different module
+/// directories.
+struct module_ng {
+  /// The path to the module files.
+  std::vector<std::string> filenames = {};
+
+  /// The map of the module names to the type names within the module and the
+  /// parsed configuration from the YAML configuration file.
+  std::map<std::string, std::map<std::string, record>> dir;
+
+  /// The name of the module
+  std::string name = {};
+
+  /// The description of the module
+  std::string description = {};
+
+  std::vector<std::string> references = {};
+  std::vector<type> types = {};
+  concepts_map concepts = {};
+  models_map models = {};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, module_ng& x) {
+    return f(x.name, x.description, x.references, x.types, x.concepts,
+             x.models);
+  }
+
+  inline static const record_type& layout() noexcept {
+    static const auto result = record_type{
+      {"module", string_type{}},
+      {"description", string_type{}},
+      {"references", list_type{string_type{}}},
+      {"types", list_type{record_type{}}},
+      {"concepts", concepts_data_layout},
+      {"models", models_data_layout},
+    };
+    return result;
+  };
+
+  // MAYBE:static caf::error merge(const module& other);
+  // MAYBE static module combine(const module& other);
+};
+
+caf::expected<module_ng>
+load_module_ng(const std::filesystem::path& module_file);
+
+/// The global identifier namespace of modules.
+struct module_gin {
+  std::map<std::string, module_ng> modules;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, module_gin& x) {
+    return f(x.modules);
+  }
+
+private:
+  caf::error
+  load_recursive(const detail::stable_set<std::filesystem::path>& module_dirs,
+                 size_t max_recursion = defaults::max_recursion);
+};
+
+// FIXME: Maybe not needed
+// static caf::expected<module_gin>
+// load_module_gin(const caf::actor_system_config& cfg);
+
+using symbol_table_ng = std::map<std::string, type>;
+
+caf::error
+convert(const record& input, type& out, const symbol_table_ng& table);
+
+caf::error convert(const record&, type&, const symbol_table_ng&) {
+  return caf::none;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// The unit tests
+/////////////////////////////////////////////////////////////////////////////
 
 TEST(YAML Type - parsing string with attributs and parsing a known type) {
   std::vector<type> known_types;
@@ -1329,6 +1436,24 @@ TEST(YAML Module - order independent parsing - type aliases) {
   CHECK_EQUAL(result, expected_result);
 }
 
+TEST(YAML Module - order independent parsing - type enumeration) {
+  auto declaration = record{{
+    "types",
+    record{
+      {
+        "enum_field",
+        record{{"enum", list{"on", "off", "unknown"}}},
+      },
+    },
+  }};
+  auto result = unbox(to_module2(declaration));
+  auto expected_result = module_ng2{
+    .types = {
+      type{"enum_field", enumeration_type{{"on"}, {"off"}, {"unknown"}}},
+    }};
+  CHECK_EQUAL(result, expected_result);
+}
+
 TEST(YAML Module - order independent parsing - list_type) {
   auto declaration = record{{
     "types",
@@ -1349,7 +1474,7 @@ TEST(YAML Module - order independent parsing - list_type) {
   CHECK_EQUAL(result, expected_result);
 }
 
-TEST(YAML Type - order indepenedent parsing - map_type) {
+TEST(YAML Module - order indepenedent parsing - map_type) {
   std::vector<type> known_types;
   auto declaration = record{{
     "types",
@@ -1373,7 +1498,7 @@ TEST(YAML Type - order indepenedent parsing - map_type) {
   CHECK_EQUAL(result, expected_result);
 }
 
-TEST(YAML Type - order indepenedent parsing - record_type) {
+TEST(YAML Module - order indepenedent parsing - record_type) {
   std::vector<type> known_types;
   auto declaration = record{{
     "types",

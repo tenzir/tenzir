@@ -30,11 +30,6 @@
 #include <filesystem>
 
 namespace vast {
-
-caf::error convert(const record& in, type& out, const symbol_table_ng& table) {
-  return caf::none;
-}
-
 caf::expected<module> module::merge(const module& s1, const module& s2) {
   auto result = s2;
   for (const auto& t : s1) {
