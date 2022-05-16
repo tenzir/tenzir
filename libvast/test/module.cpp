@@ -443,7 +443,10 @@ struct parsed_type {
   }
 };
 
-caf::expected<parsed_type> to_builtin_type(const data& declaration) {
+/// Returns a built-in type or a partial placeholder type. The name and
+/// attributes must be added by the caller. It does not handle inline
+/// declarations.
+caf::expected<parsed_type> to_builtin(const data& declaration) {
   const auto* aliased_type_name_ptr = caf::get_if<std::string>(&declaration);
   if (aliased_type_name_ptr == nullptr)
     return caf::make_error(ec::parse_error, "built-in type can only be a "
@@ -453,7 +456,7 @@ caf::expected<parsed_type> to_builtin_type(const data& declaration) {
     fmt::format("Trying to create type aliased_type: {}", aliased_type_name));
   // Check built-in types first
   if (aliased_type_name == "bool")
-    return parsed_type{type{bool_type{}}};
+    return parsed_type(type{bool_type{}});
   if (aliased_type_name == "integer")
     return parsed_type{type{integer_type{}}};
   if (aliased_type_name == "count")
@@ -474,11 +477,43 @@ caf::expected<parsed_type> to_builtin_type(const data& declaration) {
     return parsed_type{type{subnet_type{}}};
   VAST_TRACE(fmt::format("Creating placeholder type for aliased_type: {}",
                          aliased_type_name));
-  // Returning a partial placeholder type the name and attributes must be
-  // added by the call site
+  // Returning a partial placeholder
   return parsed_type{type{aliased_type_name, type{}}, aliased_type_name};
 }
 
+caf::expected<parsed_type>
+to_type2(const data& declaration, std::string_view name);
+
+caf::expected<parsed_type>
+to_record2(const std::vector<vast::data>& record_list) {
+  if (record_list.empty())
+    return caf::make_error(ec::parse_error, "parses an empty record");
+  auto record_fields = std::vector<record_type::field_view>{};
+  auto providers = std::vector<std::string_view>{};
+  for (const auto& record_value : record_list) {
+    const auto* record_record_ptr = caf::get_if<record>(&record_value);
+    if (record_record_ptr == nullptr)
+      return caf::make_error(ec::parse_error, "parses an record with invalid "
+                                              "format");
+    const auto& record_record = *record_record_ptr;
+    if (record_record.size() != 1)
+      return caf::make_error(ec::parse_error, "parses an record field with an "
+                                              "invalid format");
+    auto type_or_error
+      = to_type2(record_record.begin()->second, std::string_view{});
+    if (!type_or_error)
+      return type_or_error.error();
+    providers.insert(providers.end(),
+                     std::make_move_iterator(type_or_error->providers.begin()),
+                     std::make_move_iterator(type_or_error->providers.end()));
+    record_fields.emplace_back(record_record.begin()->first,
+                               type_or_error->parsed);
+  }
+  return parsed_type{type{record_type{record_fields}}, std::move(providers)};
+}
+
+/// Can handle inline declartaions
+/// FIXME: name optional?
 caf::expected<parsed_type>
 to_type2(const data& declaration, std::string_view name) {
   // Prevent using reserved names as types names
@@ -493,7 +528,7 @@ to_type2(const data& declaration, std::string_view name) {
   // Type names can contain any character that the YAML parser can handle - no
   // need to check for allowed characters.
   if (aliased_type_name_ptr != nullptr)
-    return to_builtin_type(declaration);
+    return to_builtin(declaration);
   const auto* decl_ptr = caf::get_if<record>(&declaration);
   if (decl_ptr == nullptr)
     return caf::make_error(ec::parse_error, "parses type alias with invalid "
@@ -534,12 +569,28 @@ to_type2(const data& declaration, std::string_view name) {
   }
   auto found_type = decl.find("type");
   auto found_list = decl.find("list");
+  auto found_map = decl.find("map");
+  auto found_record = decl.find("record");
   auto is_type_found = found_type != decl.end();
   auto is_list_found = found_list != decl.end();
+  auto is_map_found = found_map != decl.end();
+  auto is_record_found = found_record != decl.end();
+  int type_selector_cnt = 0;
+  if (is_type_found)
+    type_selector_cnt++;
+  if (is_list_found)
+    type_selector_cnt++;
+  if (is_map_found)
+    type_selector_cnt++;
+  if (is_record_found)
+    type_selector_cnt++;
+  if (type_selector_cnt != 1)
+    return caf::make_error(ec::parse_error, "expects one of type, enum, list, "
+                                            "map, record");
   // Type alias
   if (is_type_found) {
     // It can only be a built int type
-    auto type_expected = to_builtin_type(found_type->second);
+    auto type_expected = to_builtin(found_type->second);
     if (!type_expected)
       return type_expected.error();
     if (!type_expected->parsed)
@@ -571,6 +622,55 @@ to_type2(const data& declaration, std::string_view name) {
                             std::move(attributes)},
                        std::move(type_expected->providers));
   }
+  // Map
+  if (is_map_found) {
+    const auto* map_record_ptr = caf::get_if<record>(&found_map->second);
+    if (map_record_ptr == nullptr)
+      return caf::make_error(ec::parse_error, "parses a map with an invalid "
+                                              "format");
+    const auto& map_record = *map_record_ptr;
+    auto found_key = map_record.find("key");
+    auto found_value = map_record.find("value");
+    if (found_key == map_record.end() || found_value == map_record.end())
+      return caf::make_error(ec::parse_error, "parses a map without a key or a "
+                                              "value");
+    auto key_type_expected = to_type2(found_key->second, std::string_view{});
+    if (!key_type_expected)
+      return key_type_expected.error();
+    auto value_type_expected
+      = to_type2(found_value->second, std::string_view{});
+    if (!value_type_expected)
+      return value_type_expected.error();
+    VAST_TRACE(
+      fmt::format("Creating map type with name: {}, "
+                  "placeholder key: {}, nested key type: {},"
+                  "placeholder value: {}, nested value type: {}",
+                  name, !key_type_expected->parsed, key_type_expected->parsed,
+                  !value_type_expected->parsed, value_type_expected->parsed));
+    auto providers = std::vector(std::move(key_type_expected->providers));
+    providers.insert(
+      providers.end(),
+      std::make_move_iterator(value_type_expected->providers.begin()),
+      std::make_move_iterator(value_type_expected->providers.end()));
+    return parsed_type{
+      type{name,
+           map_type{key_type_expected->parsed, value_type_expected->parsed},
+           std::move(attributes)},
+      std::move(providers)};
+  }
+  // Record or Record algebra
+  if (is_record_found) {
+    const auto* record_list_ptr = caf::get_if<list>(&found_record->second);
+    if (record_list_ptr != nullptr) {
+      // Record
+      auto new_record = to_record2(*record_list_ptr);
+      if (!new_record)
+        return new_record.error();
+      return parsed_type(type{name, new_record->parsed, std::move(attributes)},
+                         std::move(new_record->providers));
+    }
+    // TODO Record algebra
+  }
   // FIXME: record and other types from previous version
   return caf::make_error(ec::parse_error, "unimplemented");
 }
@@ -580,7 +680,7 @@ to_type2(const record::value_type& variable_declaration) {
   return to_type2(variable_declaration.second, variable_declaration.first);
 }
 
-std::variant<std::vector<std::string_view>, type>
+caf::expected<type>
 try_resolve(const type& to_resolve, const std::vector<type>& resolved_types);
 
 struct placeholder {
@@ -605,15 +705,12 @@ try_read_placeholder(const type& placeholder_candidate) {
   return std::nullopt;
 }
 
-std::variant<std::vector<std::string_view>, type>
-try_resolve_list(const list_type& unresolved_list_type,
-                 const std::vector<type>& resolved_types) {
-  VAST_TRACE("Resolving list_type");
-  if (auto placeholder
-      = try_read_placeholder(unresolved_list_type.value_type());
-      placeholder) {
-    VAST_TRACE("Resolving placeholder while resolving list_type with "
-               "placeholder name: {}",
+caf::expected<type>
+resolve_placeholder_or_inline(const type& unresolved_type,
+                              const std::vector<type>& resolved_types) {
+  if (auto placeholder = try_read_placeholder(unresolved_type); placeholder) {
+    VAST_TRACE("Resolving placeholder with "
+               "name: {}",
                placeholder->name);
     auto type_found
       = std::find_if(resolved_types.begin(), resolved_types.end(),
@@ -621,57 +718,58 @@ try_resolve_list(const list_type& unresolved_list_type,
                        return placeholder->aliased_name == resolved_type.name();
                      });
     if (type_found == resolved_types.end())
-      return std::vector<std::string_view>{placeholder->aliased_name};
-    return type{list_type{*type_found}};
+      return caf::make_error(ec::parse_error, ""); // FIXME:
+    return *type_found;
   }
-  VAST_TRACE("Resolving complex type while resolving list_type");
-  return try_resolve(unresolved_list_type.value_type(), resolved_types);
+  VAST_TRACE("Resolving inline type while resolving list_type");
+  return try_resolve(unresolved_type, resolved_types);
 }
 
-// std::vector<std::string_view> // FIXME: Mod this
-std::variant<std::vector<std::string_view>, type>
-try_resolv_map(const map_type& unresolved_map_type,
-               const std::vector<type>& resolved_types) {
-  std::vector<std::string_view> unresolved{};
-  /*  if (is_placeholder(unresolved_map_type.key_type()))
-    unresolved.push_back(
-      placeholder_aliased_name(unresolved_map_type.key_type()));
-  else {
-    auto deep_unresolved
-      = try_resolve_internal(unresolved_map_type.key_type(), resolved_types);
-    unresolved.insert(unresolved.end(), deep_unresolved.begin(),
-                      deep_unresolved.end());
+/// Returns the list type. The name and attribute must be added by the caller.
+caf::expected<type> resolve_list(const list_type& unresolved_list_type,
+                                 const std::vector<type>& resolved_types) {
+  VAST_TRACE("Resolving list_type");
+  auto resolved_type = resolve_placeholder_or_inline(
+    unresolved_list_type.value_type(), resolved_types);
+  if (!resolved_type)
+    return caf::make_error(ec::parse_error,
+                           "Failed to resolve list type: "); // FIXME:
+  return type{list_type{*resolved_type}};
+}
+
+caf::expected<type> resolve_map(const map_type& unresolved_map_type,
+                                const std::vector<type>& resolved_types) {
+  VAST_TRACE("Resolving map_type");
+  auto resolved_key_type = resolve_placeholder_or_inline(
+    unresolved_map_type.key_type(), resolved_types);
+  if (!resolved_key_type)
+    return caf::make_error(ec::parse_error,
+                           "Failed to resolve map key type: "); // FIXME:
+  auto resolved_value_type = resolve_placeholder_or_inline(
+    unresolved_map_type.value_type(), resolved_types);
+  if (!resolved_value_type)
+    return caf::make_error(ec::parse_error,
+                           "Failed to resolve map value type: "); // FIXME:
+  return type{map_type{*resolved_key_type, *resolved_value_type}};
+}
+
+caf::expected<type> resolve_record(const record_type& unresolved_record_type,
+                                   const std::vector<type>& resolved_types) {
+  VAST_TRACE("Resolving record_type");
+  auto record_fields = std::vector<record_type::field_view>{};
+  for (const auto& field : unresolved_record_type.fields()) {
+    const auto& resolved_type
+      = resolve_placeholder_or_inline(field.type, resolved_types);
+    if (!resolved_type)
+      return caf::make_error(
+        ec::parse_error,
+        "Failed to resolve record field key type: "); // FIXME:
+    record_fields.emplace_back(field.name, *resolved_type);
   }
-  if (is_placeholder(unresolved_map_type.value_type()))
-    unresolved.push_back(
-      placeholder_aliased_name(unresolved_map_type.value_type()));
-  else {
-    auto deep_unresolved
-      = try_resolve_internal(unresolved_map_type.value_type(),
-  resolved_types); unresolved.insert(unresolved.end(),
-  deep_unresolved.begin(), deep_unresolved.end());
-                      }*/
-  return unresolved;
+  return type{record_type{record_fields}};
 }
 
-// std::vector<std::string_view> // FIXME: Mod this
-std::variant<std::vector<std::string_view>, type>
-try_resolve_record(const record_type& unresolved_record_type,
-                   const std::vector<type>& resolved_types) {
-  std::vector<std::string_view> unresolved{};
-  /*  for (const auto& field : unresolved_record_type.fields()) {
-    if (is_placeholder(field.type))
-      unresolved.push_back(placeholder_aliased_name(field.type));
-    else {
-      auto deep_unresolved = try_resolve_internal(field.type, resolved_types);
-      unresolved.insert(unresolved.end(), deep_unresolved.begin(),
-                        deep_unresolved.end());
-    }
-    }*/
-  return unresolved;
-}
-
-std::variant<std::vector<std::string_view>, type>
+caf::expected<type>
 try_resolve(const type& to_resolve, const std::vector<type>& resolved_types) {
   if (auto placeholder = try_read_placeholder(to_resolve); placeholder) {
     VAST_TRACE("Resolving placeholder");
@@ -683,37 +781,71 @@ try_resolve(const type& to_resolve, const std::vector<type>& resolved_types) {
     // FIXME: no duplicates should be allowed into resolved_types, check
     // somewhere!
     if (type_found == resolved_types.end())
-      return std::vector<std::string_view>{placeholder->aliased_name};
+      return caf::make_error(ec::logic_error, "placeholder type is not "
+                                              "resolved yet");
     // FIXME: TEST if the placeholder type is not a Type Alias!
     return type{placeholder->name, *type_found};
   }
   auto collect_unresolved = detail::overload{
     [&](const list_type& unresolved_list_type) {
-      VAST_TRACE("Resolving list_type: {}", unresolved_list_type);
-      return try_resolve_list(unresolved_list_type, resolved_types);
+      return resolve_list(unresolved_list_type, resolved_types);
     },
     [&](const map_type& unresolved_map_type) {
-      return try_resolv_map(unresolved_map_type, resolved_types);
+      return resolve_map(unresolved_map_type, resolved_types);
     },
     [&](const record_type& unresolved_record_type) {
-      return try_resolve_record(unresolved_record_type, resolved_types);
+      return resolve_record(unresolved_record_type, resolved_types);
     },
     [&](const concrete_type auto&) {
-      VAST_ERROR("Unhandled type in try_resolve: {}", to_resolve);
-      std::variant<std::vector<std::string_view>, type> result
-        = std::vector<std::string_view>{};
+      caf::expected<type> result = caf::make_error(
+        ec::logic_error,
+        fmt::format("Unhandled type in try_resolve: {}", to_resolve));
       return result;
     },
   };
   VAST_TRACE("Resolving complex type: {}", to_resolve);
   auto resolution_result = caf::visit(collect_unresolved, to_resolve);
-  if (std::holds_alternative<type>(resolution_result)) {
-    VAST_TRACE("Creating type with name {}, type: {}", to_resolve.name(),
-               std::get<type>(resolution_result));
-    return type{to_resolve.name(), std::get<type>(resolution_result)};
-  } else
-    return std::get<std::vector<std::string_view>>(resolution_result);
+  if (resolution_result)
+    return type{to_resolve.name(), *resolution_result};
+  return caf::make_error(ec::logic_error, "Unexpected resolution failure");
 }
+
+class resolution_manager {
+public:
+  caf::expected<type>
+  next_to_resolve(const std::vector<parsed_type>& unresolved_types) {
+    while (true) {
+      if (resolving_types_.empty()) {
+        const auto& to_resolve = unresolved_types.front();
+        resolving_types_.push_back(to_resolve.parsed.name());
+      }
+      const auto type_name_to_resolve = resolving_types_.back();
+      const auto& type_to_resolve
+        = std::find_if(unresolved_types.begin(), unresolved_types.end(),
+                       [&](const auto& current_parsed_type) {
+                         return current_parsed_type.parsed.name()
+                                == type_name_to_resolve;
+                       });
+      // Not amongst unresolved types so it should  be resolved already
+      if (type_to_resolve == unresolved_types.end())
+        //  return type_to_resolve->parsed;
+        return caf::make_error(ec::logic_error, "unresolved type expected");
+      if (!type_to_resolve->providers.empty()) {
+        resolving_types_.insert(resolving_types_.end(),
+                                type_to_resolve->providers.begin(),
+                                type_to_resolve->providers.end());
+      }
+      if (type_name_to_resolve == resolving_types_.back())
+        return type_to_resolve->parsed;
+    };
+  }
+  void resolved() {
+    resolving_types_.pop_back();
+  }
+
+private:
+  std::vector<std::string_view> resolving_types_{};
+};
 
 caf::expected<module_ng2> to_module2(const data& declaration) {
   const auto* decl_ptr = caf::get_if<record>(&declaration);
@@ -736,66 +868,61 @@ caf::expected<module_ng2> to_module2(const data& declaration) {
   std::vector<parsed_type> parsed_types;
   // Resolve aliases to built-in types or create placeholder types
   for (const auto& current_type : types) {
-    const auto& parsed_type = to_type2(current_type);
+    const auto parsed_type = to_type2(current_type);
     if (!parsed_type)
       return parsed_type.error();
     parsed_types.push_back(*parsed_type);
   }
   std::vector<type> resolved_types;
-  std::vector<std::string_view> resolving_types;
   // Move parsed items that are already resolved to resolved types.
   auto removed_items = std::remove_if(parsed_types.begin(), parsed_types.end(),
                                       [](const auto& current_type) {
                                         return current_type.providers.empty();
                                       });
-  for (auto i = removed_items; i < parsed_types.end(); i++)
+  for (auto i = removed_items; i < parsed_types.end(); i++) {
+    VAST_TRACE("Resolved: {}", i->parsed.name());
     resolved_types.push_back(i->parsed);
+  }
   parsed_types.erase(removed_items, parsed_types.end());
+  // Remove dependencies already resolved
+  for (auto& parsed_type : parsed_types) {
+    std::erase_if(parsed_type.providers, [&](const auto& current_provider) {
+      return std::any_of(resolved_types.begin(), resolved_types.end(),
+                         [&](const auto& resolved_type) {
+                           return current_provider == resolved_type.name();
+                         });
+    });
+  }
   // From this point on parsed types contain only types that need to be
   // resolved.
   // FIXME: Make the changed meaning of parsed_type clearer: rename or
   // extract! Attempt to resolve type
   VAST_TRACE("Before resolving {}", parsed_types.empty());
+  resolution_manager manager{};
   while (!parsed_types.empty()) {
     // FIXME: In case of an invalid schema parsed_types may never get empty!
-    if (resolving_types.empty()) {
-      const auto& to_resolve = parsed_types.front();
-      resolving_types.push_back(to_resolve.parsed.name());
-    }
-    const auto type_name_to_resolve = resolving_types.back();
-    const auto& type_to_resolve
-      = std::find_if(parsed_types.begin(), parsed_types.end(),
-                     [&](const auto& current_parsed_type) {
-                       return current_parsed_type.parsed.name()
-                              == type_name_to_resolve;
-                     });
-    if (type_to_resolve == parsed_types.end())
-      return caf::make_error(ec::parse_error, "parses an unresolvable type");
-    VAST_TRACE(fmt::format("Try to resolve: {}", type_name_to_resolve));
-    if (auto resolve_result
-        = try_resolve(type_to_resolve->parsed, resolved_types);
-        std::holds_alternative<std::vector<std::string_view>>(resolve_result)) {
-      auto unresolved_type_names
-        = std::get<std::vector<std::string_view>>(resolve_result);
-      resolving_types.insert(
-        resolving_types.end(),
-        std::make_move_iterator(unresolved_type_names.begin()),
-        std::make_move_iterator(unresolved_type_names.end()));
-      VAST_TRACE(fmt::format("Resolution failed becaue of type: {}",
-                             type_name_to_resolve));
-    } else {
-      auto resolved_type = std::get<type>(resolve_result);
-      VAST_TRACE(fmt::format("Resolution succeeded. Type: {}", resolved_type));
-      VAST_TRACE("The parsed_types.size {}", parsed_types.size());
-      std::erase_if(parsed_types, [&](const auto& current_type) {
-        VAST_TRACE("Examining: {} {}", current_type.parsed.name(),
-                   resolved_type.name());
-        return current_type.parsed.name() == resolved_type.name();
+    auto type_to_resolve = manager.next_to_resolve(parsed_types);
+    if (!type_to_resolve)
+      return caf::make_error(ec::parse_error, "Failed to determine next type "
+                                              "to resolve");
+    VAST_TRACE("Next to resolve: {}", type_to_resolve->name());
+    auto resolve_result = try_resolve(*type_to_resolve, resolved_types);
+    if (!resolve_result)
+      return caf::make_error(
+        ec::parse_error, fmt::format("Failed to resolve: {}", type_to_resolve));
+    auto resolved_type = *resolve_result;
+    std::erase_if(parsed_types, [&](const auto& current_type) {
+      return current_type.parsed.name() == resolved_type.name();
+    });
+    VAST_TRACE("Resolved: {}", resolved_type.name());
+    resolved_types.push_back(resolved_type);
+    // Remove the resolved dependency
+    for (auto& parsed_type : parsed_types) {
+      std::erase_if(parsed_type.providers, [&](const auto& current) {
+        return current == resolved_type.name();
       });
-      VAST_TRACE("The parsed_types.size 2 {}", parsed_types.size());
-      resolved_types.push_back(resolved_type);
-      resolving_types.pop_back();
     }
+    manager.resolved();
   }
   return module_ng2{.types = resolved_types};
 }
@@ -1206,19 +1333,84 @@ TEST(YAML Module - order independent parsing - list_type) {
   auto declaration = record{{
     "types",
     record{
-      {
-        "type1",
-        record{{"list", "type2"}},
-      },
-      {
-        "type2",
-        record{{"type", "string"}},
-      },
+      {"type1", record{{"list", "type2"}}},
+      {"type2", record{{"list", "type3"}}},
+      {"type3", record{{"type", "string"}}},
     },
   }};
   auto result = unbox(to_module2(declaration));
   auto expected_result = module_ng2{
-    .types = {type{"type2", string_type{}},
-              type{"type1", list_type{type{"type2", string_type{}}}}}};
+    .types
+    = {type{"type3", string_type{}},
+       type{"type2", list_type{type{"type3", string_type{}}}},
+       type{"type1", list_type{
+                       type{"type2", list_type{type{"type3", string_type{}}}},
+                     }}}};
   CHECK_EQUAL(result, expected_result);
 }
+
+TEST(YAML Type - order indepenedent parsing - map_type) {
+  std::vector<type> known_types;
+  auto declaration = record{{
+    "types",
+    record{
+      {"map_type",
+       record{
+         {"map", record{{"key", "type1"}, {"value", "type2"}}},
+       }},
+      {"type1", record{{"type", "count"}}},
+      {"type2", record{{"type", "string"}}},
+    },
+  }};
+  auto result = unbox(to_module2(declaration));
+  auto expected_result
+    = module_ng2{.types = {
+                   type{"type1", count_type{}},
+                   type{"type2", string_type{}},
+                   type{"map_type", map_type{type{"type1", count_type{}},
+                                             type{"type2", string_type{}}}},
+                 }};
+  CHECK_EQUAL(result, expected_result);
+}
+
+TEST(YAML Type - order indepenedent parsing - record_type) {
+  std::vector<type> known_types;
+  auto declaration = record{{
+    "types",
+    record{
+      {
+        "record_field",
+        record{{"record",
+                list{
+                  record{
+                    {"source",
+                     record{
+                       {"type", "type2"},
+                     }},
+                  },
+                  record{
+                    {"destination",
+                     record{
+                       {"type", "type3"},
+                     }},
+                  },
+                }}},
+      },
+      {"type2", record{{"type", "string"}}},
+      {"type3", record{{"type", "string"}}},
+    },
+  }};
+  auto result = unbox(to_module2(declaration));
+  auto expected_result = module_ng2{
+    .types = {
+      type{"type2", string_type{}},
+      type{"type3", string_type{}},
+      type{"record_field",
+           record_type{{"source", type{"type2", string_type{}}},
+                       {"destination", type{"type3", string_type{}}}}},
+    }};
+  CHECK_EQUAL(result, expected_result);
+}
+
+// FIXME:: Write checks with attributes!
+// FIXME:: Test case: Map both key and value depends on the same type!
