@@ -190,9 +190,6 @@ public:
   /// Returns the `vast import <format>` helptext.
   [[nodiscard]] virtual const char* reader_help() const = 0;
 
-  /// Returns the `vast import <format>` documentation.
-  [[nodiscard]] virtual const char* reader_documentation() const = 0;
-
   /// Returns the options for the `vast import <format>` and `vast spawn source
   /// <format>` commands.
   [[nodiscard]] virtual caf::config_option_set
@@ -217,9 +214,6 @@ public:
 
   /// Returns the `vast export <format>` helptext.
   [[nodiscard]] virtual const char* writer_help() const = 0;
-
-  /// Returns the `vast export <format>` documentation.
-  [[nodiscard]] virtual const char* writer_documentation() const = 0;
 
   /// Returns the options for the `vast export <format>` and `vast spawn sink
   /// <format>` commands.

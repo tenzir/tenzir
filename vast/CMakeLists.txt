@@ -175,8 +175,7 @@ target_compile_definitions(
 if (VAST_ENABLE_MANPAGES)
   add_custom_command(
     TARGET vast
-    POST_BUILD
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
+    POST_BUILD DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
     COMMAND
       "${PANDOC}" -s -f markdown -t man "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
       -o "${CMAKE_CURRENT_BINARY_DIR}/vast.1"

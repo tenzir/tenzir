@@ -100,13 +100,11 @@ public:
 
   /// Construct a new command
   command(std::string_view name, std::string_view description,
-          caf::config_option_set opts,
-          bool visible = true);
+          caf::config_option_set opts, bool visible = true);
 
   /// Construct a new command
   command(std::string_view name, std::string_view description,
-          opts_builder opts,
-          bool visible = true);
+          opts_builder opts, bool visible = true);
 
   command(command&&) = delete;
   command(const command&) = delete;

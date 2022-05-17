@@ -169,9 +169,8 @@ auto make_pivot_command() {
 }
 
 auto make_send_command() {
-  return std::make_unique<command>("send",
-                                   "sends a message to a registered actor",
-                                   opts("?vast.send"), false);
+  return std::make_unique<command>(
+    "send", "sends a message to a registered actor", opts("?vast.send"), false);
 }
 
 auto make_spawn_source_command() {
@@ -250,9 +249,8 @@ auto make_spawn_sink_command() {
 }
 
 auto make_spawn_command() {
-  auto spawn
-    = std::make_unique<command>("spawn", "creates a new component",
-                                opts("?vast.spawn"));
+  auto spawn = std::make_unique<command>("spawn", "creates a new component",
+                                         opts("?vast.spawn"));
   spawn->add_subcommand("accountant", "spawns the accountant",
                         opts("?vast.spawn.accountant"), false);
   spawn->add_subcommand("archive", "creates a new archive",
@@ -306,8 +304,7 @@ auto make_start_command() {
 }
 
 auto make_stop_command() {
-  return std::make_unique<command>(
-    "stop", "stops a node", opts("?vast.stop"));
+  return std::make_unique<command>("stop", "stops a node", opts("?vast.stop"));
 }
 
 auto make_version_command() {
@@ -439,8 +436,7 @@ auto make_root_command(std::string_view path) {
                                            "data");
   ob = add_index_opts(std::move(ob));
   ob = add_archive_opts(std::move(ob));
-  auto root
-    = std::make_unique<command>(path, "", std::move(ob));
+  auto root = std::make_unique<command>(path, "", std::move(ob));
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_dump_command());
   root->add_subcommand(make_export_command());

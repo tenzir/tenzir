@@ -84,7 +84,7 @@ help for a specific format, run `vast import <format> help`.
 
 The `json` import format consumes [line-delimited
 JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects
-according to a specified schema. That is, one line corresponds to one event.
+according to a specified [schema][schemas]. That is, one line corresponds to one event.
 The object field names correspond to record field names.
 
 JSON can express only a subset VAST's data model. For example, VAST has
@@ -108,8 +108,8 @@ vast import --type=zeek.conn json < data.json
 
 Passing a schema type via `--type` is necessary because the NDJSON objects are
 just a collection of fields. VAST cannot know how to name the corresponding
-table without an external hint. See the section on [mapping input records to
-schemas](#map-input-records-to-schemas) for details.
+table without an external hint. See the section on [mapping events to
+schemas](#map-events-to-schemas) for details.
 
 ### CSV
 
@@ -137,9 +137,8 @@ Analogous to the JSON import, you can ingest the CSV data as follows.
 vast import --type=zeek.conn csv < data.csv
 ```
 
-See the section on [mapping input records to
-schemas](#map-input-records-to-schemas) for a detailed explanation of the
-`--type` option.
+See the section on [mapping events to schemas](#map-events-to-schemas) for a
+detailed explanation of the `--type` option.
 
 :::warning Potentially bad example
 We need to discuss whether we want to keep this example, because subsequent
@@ -202,6 +201,45 @@ batch of Zeek logs:
 ```bash
 gunzip -c *.gz | vast import zeek
 ```
+
+#### Broker
+
+The `broker` import command ingests events via Zeek's
+[Broker](https://github.com/zeek/broker) communication library.
+
+Broker provides a topic-based publish-subscribe communication layer and
+standardized data model to interact with the Zeek ecosystem. Using the `broker`
+reader, VAST can transparently establish a connection to Zeek and subscribe log
+events. Letting Zeek send events directly to VAST cuts out the operational
+hassles of going through file-based logs.
+
+To connect to a Zeek instance, run the `broker` command without arguments:
+
+    # Spawn a Broker endpoint, connect to localhost:9999/tcp, and subscribe
+    # to the topic `zeek/logs/` to acquire Zeek logs.
+    vast import broker
+
+Logs should now flow from Zeek to VAST, assuming that Zeek has the following
+default settings:
+
+- The script variable `Broker::default_listen_address` is set to `127.0.0.1`.
+  Zeek populates this variable with the value from the environment variable
+  `ZEEK_DEFAULT_LISTEN_ADDRESS`, which defaults to `127.0.0.1`.
+- The script variable `Broker::default_port` is set to `9999/tcp`.
+- The script variable `Log::enable_remote_logging` is set to `T`.
+
+Note: you can spawn Zeek with `Log::enable_local_logging=F` to avoid writing
+additional local log files.
+
+You can also spawn a Broker endpoint that is listening instead of connecting:
+
+    # Spawn a Broker endpoint, listen on localhost:8888/tcp, and subscribe
+    # to the topic `foo/bar`.
+    vast import broker --listen --port=8888 --topic=foo/bar
+
+By default, VAST automatically subscribes to the topic `zeek/logs/` because
+this is where Zeek publishes log events. Use `--topic` to set a different topic.
+
 ### Suricata
 
 The `import suricata` command format consumes [Eve
@@ -211,7 +249,7 @@ format to log all types of activity as single stream of [line-delimited
 JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON).
 
 The Suricata "format" is a technically a JSON format, with a hard-coded
-[selector](#map-input-records-to-schemas) that maps the value of the
+[selector](#map-events-to-schemas) that maps the value of the
 `event_type` field to the prefix `suricata`.
 
 Here's a Suricata `eve.log` example:
@@ -304,15 +342,16 @@ cat path/to/*.bin | vast import netflow
 
 ### PCAP
 
-[PCAP](http://www.tcpdump.org) is the de-facto standard format for network
-packet captures. VAST supports reading and writing PCAP traces via `libpcap`. On
-the ingest path, VAST can either read packets from a trace file or in *live
-mode* from a network interface.
+VAST supports reading and writing [PCAP](http://www.tcpdump.org) traces via
+`libpcap`. On the read path, VAST can either acquire packets from a trace file
+or in *live mode* from a network interface.
 
 While decapsulating packets, VAST extracts
 [802.1Q](https://en.wikipedia.org/wiki/IEEE_802.1Q) VLAN tags into the nested
 `vlan` record, consisting of an `outer` and `inner` field for the respective
-12-bit VLAN ID of the tags.
+tags. The value of the VLAN tag corresponds to the 12-bit VLAN identifier (VID).
+Special values include `0` (frame does not carry a VLAN ID) and `0xFFF`
+(reserved value; sometimes wildcard match).
 
 In addition, VAST computes the [Community
 ID](https://github.com/corelight/community-id-spec) per packet to support
@@ -466,11 +505,13 @@ argus -r trace.pcap -w - |
   vast import -t argus.record csv
 ```
 
-## Discard events at parse time
+## Discard events from a data source
 
-An optional filter expression allows for importing the relevant subset of
-information only. For example, you might want to import Suricata Eve JSON, but
-skip over all events of type `suricata.stats`.
+To reduce the volume of a data source or to filter out unwanted content, you can
+provide a filter expression to the `import` command.
+
+For example, you might want to import Suricata Eve JSON, but skip over all
+events of type `suricata.stats`:
 
 ```bash
 vast import suricata '#type != "suricata.stats"' < path/to/eve.json
@@ -478,13 +519,96 @@ vast import suricata '#type != "suricata.stats"' < path/to/eve.json
 
 See the [query language documentation](/docs/understand-vast/query-language/) to
 learn more about how to express filters.
+## Infer a schema automatically
+:::note Auto-inference underway
+We have planned to make big improvements to the schema management. Most notably,
+writing a schema will be optional in the future, i.e., only needed when tuning
+data semantics.
+:::
 
-## Map input records to schemas
+The `infer` command attempts to deduce a [schema][schemas], given a sample of
+data. For example, consider this JSON data:
 
-For some input formats, such as JSON and CSV, VAST requires an existing schema
-to find the corresponding type definition and use higher-level types.
+:::caution Example Missing
+Coming soon!
+:::
 
-There exist two ways to tell VAST how to map input records to schemas:
+Run `head data.json | vast infer` to print schema that you can paste into a
+module.
+
+:::caution Example Missing
+Coming soon!
+:::
+
+The idea is that `infer` jump-starts the schema writing process by providing a
+reasonable blueprint. You still need to provide the right name for the type and
+perform adjustments, such as replacing some generic types with more semantic
+aliases, e.g., using the `timstamp` alias instead of type `time` to designate
+the event timestamp.
+
+## Write a schema manually
+
+A [schema][schemas] is a record [type][types] with a name so that VAST can
+represent it as a table internally. You would write a schema manually or extend
+an existing schema if your goal is tuning type semantics and performance. For
+example, if you have a field of type `string` that only holds IP addresses, you
+can upgrade it to type `addr` and enjoy the benefits of richer query
+expressions, e.g., top-k prefix search. Or if you onboard a new data source, you
+can ship a schema along with [concept][concepts] mappings for a deeper
+integration.
+
+You write a schema (and potentially accompanying types, concepts, and models) in
+[module][modules].
+
+Let's write one from scratch, for a tiny dummy data source called *foo* that
+produces CSV of this kind:
+
+```csv
+date,target,message
+2022-05-17,6.6.6.6,foo bar
+2022-05-18,1.2.3.4,bar
+```
+
+The corresponding schema type looks like this:
+
+```yaml
+TODO
+```
+
+You can embed this type definition in dedicated `foo` module:
+
+```yaml
+TODO
+```
+
+Copy the above contents in a new file `foo.yaml` and adapt your VAST
+configuration to load modules from an additional module path:
+
+```yaml
+TODO
+```
+
+Restart VAST and you're ready to ingest the CSV with richer typing:
+
+```bash
+vast import csv < foo.csv
+```
+
+:::note Why YAML?
+Why YAML and not X? The primary reason is that YAML is the most common
+configuration language, and VAST uses it also for its configuration. But isn't
+the nesting excessive? Yes, it can be painful, but the alternatives are not
+rosier either. TOML and JSON create a lot of churn, and VAST's previous DSL is
+unnecessary cognitive load for a user who wants to get things done.
+:::
+
+## Map events to schemas
+
+For some input formats, such as JSON and CSV, VAST requires an existing
+[schema][schemas] to find the corresponding type definition and use higher-level
+types.
+
+There exist two ways to tell VAST how to map events to schemas:
 
 1. **Field Matching**: by default, VAST checks every new record whether there
    exists a corresponding schema where the record fields match. If found, VAST
@@ -497,39 +621,18 @@ There exist two ways to tell VAST how to map input records to schemas:
    VAST permanently tracks imported event types. They do not need to be
    specified again for consecutive imports.
 
-2. **Selector Specification**: some input records have a dedicated field to
-   indicate the type name of a particular event. For example, Suricata EVE JSON
-   records have an `event_type` field that contains `flow`, `dns`, `smb`, etc.,
-   to signal what object structure to expect.
+2. **Selector Specification**: some events have a dedicated field to indicate
+   the type name of a particular event. For example, Suricata EVE JSON records
+   have an `event_type` field that contains `flow`, `dns`, `smb`, etc., to
+   signal what object structure to expect.
 
    To designate a selector field, use the `--selector=FIELD:PREFIX` option to
    specify a colon-separated field-name-to-schema-prefix mapping, e.g.,
    `vast import json --selector=event_type:suricata` reads the value from the
    field `event_type` and prefixes it with `suricata.` to look for a
    corresponding schema.
-## Provide a schema for unknown types
 
-:::caution Text Missing
-Coming soon!
-:::
-
-## Infer a schema from data
-The `infer` command implements basic schema inference. For example,
-`head data.json | vast infer` will print a schema that can be [embedded into a
-module](#organize-types-into-modules).
-
-The idea is that `infer` jump-starts the schema writing process by providing a
-reasonable blueprint. You still need to provide the right name for the type and
-perform adjustments, such as replacing some generic types with more semantic
-aliases, e.g., using the `timstamp` alias instead of type `time` to designate
-the event timestamp.
-
-:::caution Example Missing
-Coming soon!
-:::
-
-## Organize types into modules
-
-:::caution Text Missing
-Coming soon!
-:::
+[types]: /docs/understand-vast/data-model/types
+[concepts]: /docs/understand-vast/data-model/types
+[schemas]: /docs/understand-vast/data-model/types#schemas
+[modules]: /docs/understand-vast/data-model/modules
