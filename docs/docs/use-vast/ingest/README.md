@@ -565,27 +565,41 @@ produces CSV of this kind:
 
 ```csv
 date,target,message
-2022-05-17,6.6.6.6,foo bar
-2022-05-18,1.2.3.4,bar
+2022-05-17,10.0.0.1,foo
+2022-05-18,10.0.0.2,bar
+2022-05-18,10.0.0.3,bar
 ```
 
 The corresponding schema type looks like this:
 
 ```yaml
-TODO
+message:
+  record:
+    - date: time
+    - target: addr
+    - message: msg
 ```
 
-You can embed this type definition in dedicated `foo` module:
+You can embed this type definition in a dedicated `foo` module:
 
 ```yaml
-TODO
+module: foo
+types:
+  message:
+    record:
+      - date: time
+      - target: addr
+      - message: msg
 ```
 
-Copy the above contents in a new file `foo.yaml` and adapt your VAST
-configuration to load modules from an additional module path:
+Place this module in an existing module directory, such as`/etc/vast/schema`, or
+tell VAST in your `vast.yaml` configuration file where to look for additional
+modules via the `module-dirs` key:
 
 ```yaml
-TODO
+vast:
+  module-dirs:
+    - path/to/modules
 ```
 
 Restart VAST and you're ready to ingest the CSV with richer typing:
