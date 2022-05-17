@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "vast/fwd.hpp"
-
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string/char.hpp"
@@ -18,7 +16,6 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/stable_set.hpp"
-#include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
 
 #include <caf/expected.hpp>
