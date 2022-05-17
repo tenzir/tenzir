@@ -37,24 +37,30 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
     using namespace parsers;
     using namespace parser_literals;
     using namespace std::chrono;
+    // clang-format off
     auto unit
       = "nanoseconds"_p  ->* [] { return cast(nanoseconds(1)); }
+      | "nanosecond"_p   ->* [] { return cast(nanoseconds(1)); }
       | "nsecs"_p        ->* [] { return cast(nanoseconds(1)); }
       | "nsec"_p         ->* [] { return cast(nanoseconds(1)); }
       | "ns"_p           ->* [] { return cast(nanoseconds(1)); }
       | "microseconds"_p ->* [] { return cast(microseconds(1)); }
+      | "microsecond"_p  ->* [] { return cast(microseconds(1)); }
       | "usecs"_p        ->* [] { return cast(microseconds(1)); }
       | "usec"_p         ->* [] { return cast(microseconds(1)); }
       | "us"_p           ->* [] { return cast(microseconds(1)); }
       | "milliseconds"_p ->* [] { return cast(milliseconds(1)); }
+      | "millisecond"_p  ->* [] { return cast(milliseconds(1)); }
       | "msecs"_p        ->* [] { return cast(milliseconds(1)); }
       | "msec"_p         ->* [] { return cast(milliseconds(1)); }
       | "ms"_p           ->* [] { return cast(milliseconds(1)); }
       | "seconds"_p      ->* [] { return cast(seconds(1)); }
+      | "second"_p       ->* [] { return cast(seconds(1)); }
       | "secs"_p         ->* [] { return cast(seconds(1)); }
       | "sec"_p          ->* [] { return cast(seconds(1)); }
       | "s"_p            ->* [] { return cast(seconds(1)); }
       | "minutes"_p      ->* [] { return cast(minutes(1)); }
+      | "minute"_p       ->* [] { return cast(minutes(1)); }
       | "mins"_p         ->* [] { return cast(minutes(1)); }
       | "min"_p          ->* [] { return cast(minutes(1)); }
       | "m"_p            ->* [] { return cast(minutes(1)); }
@@ -72,6 +78,7 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
       | "year"_p         ->* [] { return cast(hours(24 * 365)); }
       | "y"_p            ->* [] { return cast(hours(24 * 365)); }
       ;
+    // clang-format on
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       auto p = ignore(real_opt_dot) >> ignore(*space) >> unit;
       return p(f, l, unused);
