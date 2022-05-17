@@ -15,7 +15,8 @@ include(CTest)
 find_package(VAST REQUIRED)
 VASTRegisterPlugin(
   TARGET parquet-store
-  ENTRYPOINT parquet_store.cpp)
+  ENTRYPOINT parquet_store.cpp
+  TEST_SOURCES tests/parquet_store.cpp)
 
 if (BUILD_SHARED_LIBS)
   set(ARROW_LIBRARY arrow_shared)
@@ -31,5 +32,6 @@ message("${PARQUET_PATH}")
 get_filename_component(PARQUET_PATH "${PARQUET_PATH}" DIRECTORY)
 message("${PARQUET_PATH}")
 
-find_package(Parquet CONFIG REQUIRED PATHS "${PARQUET_PATH}/cmake/arrow" NO_DEFAULT_PATH)
+find_package(Parquet CONFIG REQUIRED PATHS "${PARQUET_PATH}/cmake/arrow"
+             NO_DEFAULT_PATH)
 target_link_libraries(parquet-store PRIVATE "${PARQUET_LIBRARY}")
