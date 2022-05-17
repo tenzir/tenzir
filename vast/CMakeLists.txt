@@ -125,17 +125,30 @@ install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 
 set(VAST_PLUGINS
     ""
-    CACHE STRING "Specify a list of plugins to build with VAST")
+    CACHE STRING "Specify a list of plugins to build with VAST (supports
+    globbing)")
 cmake_dependent_option(
   VAST_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF
   "NOT VAST_ENABLE_STATIC_EXECUTABLE" ON)
 add_feature_info("VAST_ENABLE_STATIC_PLUGINS" VAST_ENABLE_STATIC_PLUGINS
                  "force plugins to be linked statically.")
 if (VAST_PLUGINS)
-  list(SORT VAST_PLUGINS)
-  foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
-    if (NOT IS_ABSOLUTE "${plugin_source_dir}")
-      string(PREPEND plugin_source_dir "${PROJECT_SOURCE_DIR}/")
+  foreach (plugin_source_glob IN LISTS VAST_PLUGINS)
+    if (IS_ABSOLUTE "${plugin_source_glob}")
+      list(APPEND plugin_source_globs "${plugin_source_glob}")
+    else ()
+      list(APPEND plugin_source_globs
+           "${PROJECT_SOURCE_DIR}/${plugin_source_glob}")
+    endif ()
+  endforeach ()
+  file(
+    GLOB plugin_source_dirs
+    LIST_DIRECTORIES ON
+    CONFIGURE_DEPENDS ${plugin_source_globs})
+  list(SORT plugin_source_dirs)
+  foreach (plugin_source_dir IN LISTS plugin_source_dirs)
+    if (NOT IS_DIRECTORY "${plugin_source_dir}")
+      continue()
     endif ()
     get_filename_component(plugin_binary_dir "${plugin_source_dir}" NAME)
     string(PREPEND plugin_binary_dir "${PROJECT_BINARY_DIR}/plugins/")
