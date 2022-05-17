@@ -3305,7 +3305,12 @@ int sum_type_access<arrow::DataType>::index_from_type(
                               caf::detail::tl_size<extension_types>::value>());
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
   auto result = table[x.id()];
-  VAST_ASSERT(result != unknown_id, "unexpected Arrow type id");
+  VAST_ASSERT(result != unknown_id, fmt::format("unexpected Arrow type id '{}' "
+                                                "for type '{}' is not in "
+                                                "caf::sum_type_access<arrow::"
+                                                "DataType>::types",
+                                                x.id(), x.ToString())
+                                      .c_str());
   if (result == extension_id) {
     for (const auto& [id, index] : extension_table) {
       if (id == static_cast<const arrow::ExtensionType&>(x).extension_name())
