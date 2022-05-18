@@ -52,12 +52,6 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
         },
         [=](caf::unit_t&, const std::vector<table_slice_column>& columns) {
           VAST_ASSERT(self->state.idx != nullptr);
-          // NOTE: It seems like having the `#skip` attribute should lead to
-          // no index being created at all (as opposed to creating it and
-          // never adding data), but that was the behaviour of the previous
-          // implementation so we're keeping it for now.
-          if (self->state.has_skip_attribute)
-            return;
           for (const auto& column : columns)
             column.slice().append_column_to_index(column.index(),
                                                   *self->state.idx);

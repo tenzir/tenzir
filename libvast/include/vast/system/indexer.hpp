@@ -31,10 +31,6 @@ struct indexer_state {
   /// The index holding the data.
   value_index_ptr idx;
 
-  /// Whether the type of this indexer has the `#skip` attribute, implying that
-  /// the incoming data should not be indexed.
-  bool has_skip_attribute;
-
   /// The partition id to which this indexer belongs (for log messages).
   uuid partition_id;
 
