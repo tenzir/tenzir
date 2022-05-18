@@ -27,28 +27,36 @@
 
 using namespace vast;
 
+/// Converts a declaration into a vast type.
+/// @param known_types types already converted
+/// @param declaration the type declaration parsed from yaml module config file
+/// @param name the name for the declaration
 caf::expected<type>
 to_type(const std::vector<type>& known_types, const data& declaration,
         std::string_view name = "");
 
 caf::expected<record_type>
-to_record(const std::vector<type>& known_types,
-          const std::vector<vast::data>& record_list) {
+to_record(const std::vector<type>& known_types, const list& record_list) {
   if (record_list.empty())
-    return caf::make_error(ec::parse_error, "parses an empty record");
+    return caf::make_error(ec::parse_error, "record types must have at least "
+                                            "one field");
   auto record_fields = std::vector<record_type::field_view>{};
+  record_fields.reserve(record_list.size());
   for (const auto& record_value : record_list) {
     const auto* record_record_ptr = caf::get_if<record>(&record_value);
     if (record_record_ptr == nullptr)
-      return caf::make_error(ec::parse_error, "parses an record with invalid "
-                                              "format");
+      return caf::make_error(ec::parse_error, "a field in record type must be "
+                                              "specified as a YAML dictionary");
     const auto& record_record = *record_record_ptr;
     if (record_record.size() != 1)
-      return caf::make_error(ec::parse_error, "parses an record field with an "
-                                              "invalid format");
+      return caf::make_error(ec::parse_error, "a field in a record type can "
+                                              "have only a single key in the "
+                                              "YAML dictionary");
     auto type_or_error = to_type(known_types, record_record.begin()->second);
     if (!type_or_error)
-      return type_or_error.error();
+      return caf::make_error(
+        ec::parse_error, fmt::format("failed to parse record type field: {}",
+                                     type_or_error.error()));
     record_fields.emplace_back(record_record.begin()->first, *type_or_error);
   }
   return record_type{record_fields};
@@ -64,9 +72,165 @@ type get_known_type(const std::vector<type>& known_types,
   return {}; // none type
 }
 
-std::vector<std::string> reserved_names
-  = {"bool",    "integer", "count",  "real", "duration", "time", "string",
-     "pattern", "address", "subnet", "enum", "list",     "map",  "record"};
+constexpr auto reserved_names
+  = std::array{"bool", "integer", "count",   "real",    "duration",
+               "time", "string",  "pattern", "address", "subnet",
+               "enum", "list",    "map",     "record"};
+
+caf::expected<type> to_enum(std::string_view name, const data& enumeration,
+                            std::vector<type::attribute_view>&& attributes) {
+  const auto* enum_list_ptr = caf::get_if<list>(&enumeration);
+  if (enum_list_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "enum must be specified as a "
+                                            "YAML list");
+  const auto& enum_list = *enum_list_ptr;
+  if (enum_list.empty())
+    return caf::make_error(ec::parse_error, "enum cannot be empty");
+  auto enum_fields = std::vector<enumeration_type::field_view>{};
+  enum_fields.reserve(enum_list.size());
+  for (const auto& enum_value : enum_list) {
+    const auto* enum_string_ptr = caf::get_if<std::string>(&enum_value);
+    if (enum_string_ptr == nullptr)
+      return caf::make_error(ec::parse_error, "enum value must be specified "
+                                              "as a YAML string");
+    enum_fields.push_back({*enum_string_ptr});
+  }
+  return type{name, enumeration_type{enum_fields}, std::move(attributes)};
+}
+
+caf::expected<type> to_map(std::string_view name, const data& map_to_parse,
+                           std::vector<type::attribute_view>&& attributes,
+                           const std::vector<type>& known_types) {
+  const auto* map_record_ptr = caf::get_if<record>(&map_to_parse);
+  if (map_record_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "a map type must be specified as "
+                                            "a YAML dictionary");
+  const auto& map_record = *map_record_ptr;
+  auto found_key = map_record.find("key");
+  auto found_value = map_record.find("value");
+  if (found_key == map_record.end() || found_value == map_record.end())
+    return caf::make_error(ec::parse_error, "a map type must have both a key "
+                                            "and a value");
+  auto key_type_expected = to_type(known_types, found_key->second);
+  if (!key_type_expected)
+    return caf::make_error(ec::parse_error,
+                           fmt::format("failed to parse map key: {}",
+                                       key_type_expected.error()));
+  auto value_type_expected = to_type(known_types, found_value->second);
+  if (!value_type_expected)
+    return caf::make_error(ec::parse_error,
+                           fmt::format("failed to parse map value: {}",
+                                       value_type_expected.error()));
+  return type{name, map_type{*key_type_expected, *value_type_expected},
+              std::move(attributes)};
+}
+
+caf::expected<type>
+to_record_algebra(std::string_view name, const data& record_algebra,
+                  std::vector<type::attribute_view>&& attributes,
+                  const std::vector<type>& known_types) {
+  const auto* record_algebra_record_ptr = caf::get_if<record>(&record_algebra);
+  if (record_algebra_record_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "record algebra must be "
+                                            "specified as a YAML dictionary");
+  const auto& record_algebra_record = *record_algebra_record_ptr;
+  auto found_base = record_algebra_record.find("base");
+  auto found_implant = record_algebra_record.find("implant");
+  auto found_extend = record_algebra_record.find("extend");
+  auto is_base_found = found_base != record_algebra_record.end();
+  auto is_implant_found = found_implant != record_algebra_record.end();
+  auto is_extend_found = found_extend != record_algebra_record.end();
+  int name_clash_specifier_cnt = 0;
+  record_type::merge_conflict merge_conflict_handling
+    = record_type::merge_conflict::fail;
+  if (is_base_found)
+    name_clash_specifier_cnt++;
+  if (is_implant_found) {
+    name_clash_specifier_cnt++;
+    // right is the new record type
+    merge_conflict_handling = record_type::merge_conflict::prefer_left;
+  }
+  if (is_extend_found) {
+    name_clash_specifier_cnt++;
+    merge_conflict_handling = record_type::merge_conflict::prefer_right;
+  }
+  if (name_clash_specifier_cnt >= 2)
+    return caf::make_error(ec::parse_error, "record algebra must contain "
+                                            "only one of 'base', 'implant', "
+                                            "'extend'");
+  // create new record type
+  auto found_fields = record_algebra_record.find("fields");
+  if (found_fields == record_algebra_record.end())
+    return caf::make_error(ec::parse_error, "record algebra must have one "
+                                            "'fields'");
+  const auto* fields_list_ptr = caf::get_if<list>(&found_fields->second);
+  if (fields_list_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "'fields' in record algebra must "
+                                            "be specified as YAML list");
+  auto new_record_or_error = to_record(known_types, *fields_list_ptr);
+  if (!new_record_or_error)
+    return caf::make_error(ec::parse_error,
+                           fmt::format("failed to parse record algebra "
+                                       "fields: {}",
+                                       new_record_or_error.error()));
+  auto new_record = new_record_or_error.value();
+  // retrive records (base, implant or extend)
+  if (name_clash_specifier_cnt == 0)
+    return type{name, new_record, std::move(attributes)};
+  const auto& records = is_base_found      ? found_base->second
+                        : is_implant_found ? found_implant->second
+                                           : found_extend->second;
+  const auto* records_list_ptr = caf::get_if<list>(&records);
+  if (records_list_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "'base', 'implant' or 'extend' "
+                                            "in a record algebra must be "
+                                            "specified as a YAML list");
+  const auto& record_list = *records_list_ptr;
+  if (record_list.empty())
+    return caf::make_error(ec::parse_error, "a record algebra cannot have an "
+                                            "empty 'base', 'implant' or "
+                                            "'extend'");
+  std::optional<record_type> merged_base_record{};
+  for (const auto& record : record_list) {
+    const auto* record_name_ptr = caf::get_if<std::string>(&record);
+    if (record_name_ptr == nullptr)
+      return caf::make_error(
+        ec::parse_error, "the 'base', 'implant' or 'extend' keywords of a "
+                         "record algebra must be specified as a YAML string");
+    const auto& record_name = *record_name_ptr;
+    const auto& base_type = get_known_type( // base or implant or extend
+      known_types, record_name);
+    if (!base_type)
+      return caf::make_error(ec::parse_error,
+                             "parses unknown record type when parsing a "
+                             "record algebra base, implant or extend");
+    for (const auto& attribute : base_type.attributes())
+      attributes.push_back(attribute);
+    const auto* base_record_ptr = caf::get_if<record_type>(&base_type);
+    if (base_record_ptr == nullptr)
+      return caf::make_error(ec::parse_error, "'base', 'implant' or 'extend' "
+                                              "of a record algebra must be "
+                                              "specified as YAML dictionary");
+    if (!merged_base_record) {
+      merged_base_record = *base_record_ptr;
+      continue;
+    }
+    const auto new_merged_base_record = merge(
+      *merged_base_record, *base_record_ptr, record_type::merge_conflict::fail);
+    if (!new_merged_base_record)
+      return caf::make_error(ec::parse_error,
+                             "types in 'base', 'implant' or 'extend' conflicts "
+                             "with a type in record algebra 'fields'");
+    merged_base_record = *new_merged_base_record;
+  }
+  auto final_merged_record
+    = merge(*merged_base_record, new_record, merge_conflict_handling);
+  if (!final_merged_record)
+    return caf::make_error(ec::parse_error,
+                           fmt::format("failed to merge record algebra: {}",
+                                       final_merged_record.error()));
+  return type{name, *final_merged_record, std::move(attributes)};
+}
 
 caf::expected<type> to_type(const std::vector<type>& known_types,
                             const data& declaration, std::string_view name) {
@@ -78,7 +242,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
                   }))
     return caf::make_error(
       ec::parse_error,
-      fmt::format("parses a new type with a reserved name: {}", name));
+      fmt::format("type declaration cannot use a reserved name: {}", name));
   // Type names can contain any character that the YAML parser can handle - no
   // need to check for allowed characters.
   if (known_type_name_ptr != nullptr) {
@@ -112,19 +276,19 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
                                                           known_type_name));
     return type{name, known_type};
   }
-  const auto* decl_ptr = caf::get_if<record>(&declaration);
-  if (decl_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "parses type alias with invalid "
-                                            "format");
-  const auto& decl = *decl_ptr;
+  const auto* declaration_record_ptr = caf::get_if<record>(&declaration);
+  if (declaration_record_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "type alias must be specified as a "
+                                            "YAML dictionary");
+  const auto& declaration_record = *declaration_record_ptr;
   // Get the optional attributes
   auto attributes = std::vector<type::attribute_view>{};
-  auto found_attributes = decl.find("attributes");
-  if (found_attributes != decl.end()) {
+  auto found_attributes = declaration_record.find("attributes");
+  if (found_attributes != declaration_record.end()) {
     const auto* attribute_list = caf::get_if<list>(&found_attributes->second);
     if (attribute_list == nullptr)
-      return caf::make_error(ec::parse_error, "parses an attribute list with "
-                                              "an invalid format");
+      return caf::make_error(ec::parse_error, "the attribute list must be "
+                                              "specified as a YAML list");
     for (const auto& attribute : *attribute_list) {
       const auto* attribute_string_ptr = caf::get_if<std::string>(&attribute);
       if (attribute_string_ptr != nullptr)
@@ -132,19 +296,17 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
       else {
         const auto* attribute_record_ptr = caf::get_if<record>(&attribute);
         if (attribute_record_ptr == nullptr)
-          return caf::make_error(ec::parse_error, "parses an attribute with an "
-                                                  "invalid format");
+          return caf::make_error(ec::parse_error, "attribute must be specified "
+                                                  "as a YAML dictionary");
         const auto& attribute_record = *attribute_record_ptr;
         if (attribute_record.size() != 1)
-          return caf::make_error(ec::parse_error, "parses an attribute not "
-                                                  "having one and only one "
-                                                  "field");
+          return caf::make_error(ec::parse_error, "attribute must have a "
+                                                  "single field");
         const auto& attribute_key = attribute_record.begin()->first;
         const auto* attribute_value_ptr
           = caf::get_if<std::string>(&attribute_record.begin()->second);
         if (attribute_value_ptr == nullptr)
-          return caf::make_error(ec::parse_error, "parses an attribute with a "
-                                                  "non-string value");
+          return caf::make_error(ec::parse_error, "attribute must be a string");
         const auto& attribute_value = *attribute_value_ptr;
         attributes.push_back({attribute_key, attribute_value});
       }
@@ -152,84 +314,47 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
   }
   // Check that only one of type, enum, list, map and record is specified
   // by the user
-  auto found_type = decl.find("type");
-  auto found_enum = decl.find("enum");
-  auto found_list = decl.find("list");
-  auto found_map = decl.find("map");
-  auto found_record = decl.find("record");
-  auto is_type_found = found_type != decl.end();
-  auto is_enum_found = found_enum != decl.end();
-  auto is_list_found = found_list != decl.end();
-  auto is_map_found = found_map != decl.end();
-  auto is_record_found = found_record != decl.end();
-  int type_selector_cnt = 0;
-  if (is_type_found)
-    type_selector_cnt++;
-  if (is_enum_found)
-    type_selector_cnt++;
-  if (is_list_found)
-    type_selector_cnt++;
-  if (is_map_found)
-    type_selector_cnt++;
-  if (is_record_found)
-    type_selector_cnt++;
+  auto found_type = declaration_record.find("type");
+  auto found_enum = declaration_record.find("enum");
+  auto found_list = declaration_record.find("list");
+  auto found_map = declaration_record.find("map");
+  auto found_record = declaration_record.find("record");
+  auto is_type_found = found_type != declaration_record.end();
+  auto is_enum_found = found_enum != declaration_record.end();
+  auto is_list_found = found_list != declaration_record.end();
+  auto is_map_found = found_map != declaration_record.end();
+  auto is_record_found = found_record != declaration_record.end();
+  int type_selector_cnt
+    = static_cast<int>(is_type_found) + static_cast<int>(is_enum_found)
+      + static_cast<int>(is_list_found) + static_cast<int>(is_map_found)
+      + static_cast<int>(is_record_found);
   if (type_selector_cnt != 1)
-    return caf::make_error(ec::parse_error, "expects one of type, enum, list, "
-                                            "map, record");
+    return caf::make_error(ec::parse_error, "one of type, enum, list, map, "
+                                            "record is expected");
   // Type alias
   if (is_type_found) {
     auto type_expected = to_type(known_types, found_type->second);
     if (!type_expected)
-      return type_expected.error();
+      return caf::make_error(ec::parse_error,
+                             fmt::format("failed to parse type alias: {}",
+                                         type_expected.error()));
     return type{name, *type_expected, std::move(attributes)};
   }
   // Enumeration
-  if (is_enum_found) {
-    const auto* enum_list_ptr = caf::get_if<list>(&found_enum->second);
-    if (enum_list_ptr == nullptr)
-      return caf::make_error(ec::parse_error, "parses an enum with an invalid "
-                                              "format");
-    const auto& enum_list = *enum_list_ptr;
-    if (enum_list.empty())
-      return caf::make_error(ec::parse_error, "parses an empty enum");
-    auto enum_fields = std::vector<enumeration_type::field_view>{};
-    for (const auto& enum_value : enum_list) {
-      const auto* enum_string_ptr = caf::get_if<std::string>(&enum_value);
-      if (enum_string_ptr == nullptr)
-        return caf::make_error(ec::parse_error, "parses an enum value with an "
-                                                "invalid format");
-      enum_fields.push_back({*enum_string_ptr});
-    }
-    return type{name, enumeration_type{enum_fields}, std::move(attributes)};
-  }
+  if (is_enum_found)
+    return to_enum(name, found_enum->second, std::move(attributes));
   // List
   if (is_list_found) {
     auto type_expected = to_type(known_types, found_list->second);
     if (!type_expected)
-      return type_expected.error();
+      return caf::make_error(ec::parse_error,
+                             fmt::format("failed to parse list: {}",
+                                         type_expected.error()));
     return type{name, list_type{*type_expected}, std::move(attributes)};
   }
   // Map
-  if (is_map_found) {
-    const auto* map_record_ptr = caf::get_if<record>(&found_map->second);
-    if (map_record_ptr == nullptr)
-      return caf::make_error(ec::parse_error, "parses a map with an invalid "
-                                              "format");
-    const auto& map_record = *map_record_ptr;
-    auto found_key = map_record.find("key");
-    auto found_value = map_record.find("value");
-    if (found_key == map_record.end() || found_value == map_record.end())
-      return caf::make_error(ec::parse_error, "parses a map without a key or a "
-                                              "value");
-    auto key_type_expected = to_type(known_types, found_key->second);
-    if (!key_type_expected)
-      return key_type_expected.error();
-    auto value_type_expected = to_type(known_types, found_value->second);
-    if (!value_type_expected)
-      return value_type_expected.error();
-    return type{name, map_type{*key_type_expected, *value_type_expected},
-                std::move(attributes)};
-  }
+  if (is_map_found)
+    return to_map(name, found_map->second, std::move(attributes), known_types);
   // Record or Record algebra
   if (is_record_found) {
     const auto* record_list_ptr = caf::get_if<list>(&found_record->second);
@@ -237,109 +362,16 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
       // Record
       const auto& new_record = to_record(known_types, *record_list_ptr);
       if (!new_record)
-        return new_record.error();
+        return caf::make_error(ec::parse_error,
+                               fmt::format("failed to parse record: {}",
+                                           new_record.error()));
       return type{name, *new_record, std::move(attributes)};
     }
     // Record algebra
-    const auto* record_algebra_record_ptr
-      = caf::get_if<record>(&found_record->second);
-    if (record_algebra_record_ptr == nullptr)
-      return caf::make_error(ec::parse_error, "parses a record with an "
-                                              "invalid format");
-    const auto& record_algebra_record = *record_algebra_record_ptr;
-    auto found_base = record_algebra_record.find("base");
-    auto found_implant = record_algebra_record.find("implant");
-    auto found_extend = record_algebra_record.find("extend");
-    auto is_base_found = found_base != record_algebra_record.end();
-    auto is_implant_found = found_implant != record_algebra_record.end();
-    auto is_extend_found = found_extend != record_algebra_record.end();
-    int name_clash_specifier_cnt = 0;
-    record_type::merge_conflict merge_conflict_handling
-      = record_type::merge_conflict::fail;
-    if (is_base_found)
-      name_clash_specifier_cnt++;
-    if (is_implant_found) {
-      name_clash_specifier_cnt++;
-      // right is the new record type
-      merge_conflict_handling = record_type::merge_conflict::prefer_left;
-    }
-    if (is_extend_found) {
-      name_clash_specifier_cnt++;
-      merge_conflict_handling = record_type::merge_conflict::prefer_right;
-    }
-    if (name_clash_specifier_cnt >= 2)
-      return caf::make_error(ec::parse_error,
-                             "expects at most one of base, implant, "
-                             "extend");
-    // create new record type
-    auto found_fields = record_algebra_record.find("fields");
-    if (found_fields == record_algebra_record.end())
-      return caf::make_error(ec::parse_error, "expects a fields in record "
-                                              "algebra");
-    const auto* fields_list_ptr = caf::get_if<list>(&found_fields->second);
-    if (fields_list_ptr == nullptr)
-      return caf::make_error(ec::parse_error, "parses a record algebra with "
-                                              "invalid fields");
-    auto new_record_or_error = to_record(known_types, *fields_list_ptr);
-    if (!new_record_or_error)
-      return new_record_or_error.error();
-    auto new_record = new_record_or_error.value();
-    // retrive records (base, implant or extend)
-    if (name_clash_specifier_cnt == 0)
-      return type{name, new_record, std::move(attributes)};
-    const auto& records = is_base_found      ? found_base->second
-                          : is_implant_found ? found_implant->second
-                                             : found_extend->second;
-    const auto* records_list_ptr = caf::get_if<list>(&records);
-    if (records_list_ptr == nullptr)
-      return caf::make_error(ec::parse_error,
-                             "parses a record algebra with "
-                             "invalid base, implant or extend");
-    const auto& record_list = *records_list_ptr;
-    if (record_list.empty())
-      return caf::make_error(ec::parse_error, "parses a record algebra with "
-                                              "empty base, implant or extend");
-    std::optional<record_type> merged_base_record{};
-    for (const auto& record : record_list) {
-      const auto* record_name_ptr = caf::get_if<std::string>(&record);
-      if (record_name_ptr == nullptr)
-        return caf::make_error(ec::parse_error,
-                               "parses a record algebra base, implant or "
-                               "extend with invalid content");
-      const auto& record_name = *record_name_ptr;
-      const auto& base_type = get_known_type( // base or implant or extend
-        known_types, record_name);
-      if (!base_type)
-        return caf::make_error(ec::parse_error,
-                               "parses unknown record type when parsing a "
-                               "record algebra base, implant or extend");
-      for (const auto& attribute : base_type.attributes())
-        attributes.push_back(attribute);
-      const auto* base_record_ptr = caf::get_if<record_type>(&base_type);
-      if (base_record_ptr == nullptr)
-        return caf::make_error(ec::parse_error,
-                               "parses a record algebra base, implant or "
-                               "extend with invalid format");
-      if (!merged_base_record) {
-        merged_base_record = *base_record_ptr;
-        continue;
-      }
-      const auto new_merged_base_record
-        = merge(*merged_base_record, *base_record_ptr,
-                record_type::merge_conflict::fail);
-      if (!new_merged_base_record)
-        return caf::make_error(ec::parse_error,
-                               "parses conflicting record types when parsing a "
-                               "record algebra base, implant or extend");
-      merged_base_record = *new_merged_base_record;
-    }
-    auto final_merged_record
-      = merge(*merged_base_record, new_record, merge_conflict_handling);
-    if (!final_merged_record)
-      return final_merged_record.error();
-    return type{name, *final_merged_record, std::move(attributes)};
+    return to_record_algebra(name, found_record->second, std::move(attributes),
+                             known_types);
   }
-  return caf::make_error(ec::parse_error, "parses unknown type");
+  return caf::make_error(ec::parse_error, "unknown type");
 }
 
 caf::expected<type> to_type(const std::vector<type>& known_types,
