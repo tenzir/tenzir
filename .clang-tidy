@@ -18,6 +18,7 @@ Checks: >
   -cppcoreguidelines-pro-type-union-access,
   -llvm-header-guard,
   -modernize-use-trailing-return-type,
+  -readability-identifier-length,
   -readability-braces-around-statements,
   -readability-else-after-return,
   -readability-function-cognitive-complexity,
