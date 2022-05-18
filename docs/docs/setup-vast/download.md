@@ -15,7 +15,7 @@ Get the source code by cloning our Git repository or downloading an archive.
 Use `git` to clone our repository hosted on GitHub:
 
 ```bash
-git clone --recursive git@github.com/tenzir/vast.git
+git clone --recursive https://github.com/tenzir/vast
 ```
 
 You can check out the `stable` branch to get the latest released version:
@@ -37,23 +37,29 @@ development version:
 
 ## Packages
 
-We offer pre-built versions of VAST containing a statically linked binary, for the
-[latest release][latest-release] and the current development version.
+We offer pre-built versions of VAST containing a statically linked binary, for
+the [latest release][latest-release-build] and the [current development
+version][development-version-build].
 
 <div align="center" class="padding-bottom--md">
-  <a class="button button--md button--primary" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Static Build (Release)</a>
+  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Static Build (Release)</a>
+  <a class="button button--md button--info margin-left--md" href="https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz">Static Build (Development)</a>
 </div>
 
-For development versions or a specific Git commit, you need to navigate through
-the GitHub CI to find the build artifact:
+We also offer prebuilt statically linked binaries for every git commit to the
+`master` branch.
 
-1. Browse to the [VAST static workflow][vast-workflow]
-2. Click on the latest run, e.g., `Merge pull request...`
-3. Scroll to the end of the page
-4. Click on the artifact filename, e.g.,
-   `vast-v1.0.0-101-g6e7a4ef1a4-linux-static.tar.gz`
+```bash
+https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-${version}-linux-static.tar.gz
+```
 
-[vast-workflow]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST%22
+To determine the version, check out the desired commit locally and run this
+command:
+
+```bash
+version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
+```
+
 ## Images
 
 Our CI builds Docker images for the latest release and the current development
@@ -68,3 +74,5 @@ Read our [Docker instructions](/docs/setup-vast/deploy/docker) for more details
 on using Docker.
 
 [latest-release]: https://github.com/tenzir/vast/releases/latest
+[latest-release-build]: https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
+[development-version-build]: https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
