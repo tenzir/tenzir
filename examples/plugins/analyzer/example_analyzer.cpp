@@ -173,8 +173,7 @@ public:
   std::pair<std::unique_ptr<command>, command::factory>
   make_command() const override {
     auto example = std::make_unique<command>(
-      "example", "help for the example plugin command",
-      "documentation for the example plugin command", command::opts());
+      "example", "help for the example plugin command", command::opts());
     auto example_command
       = [](const invocation&, caf::actor_system&) -> caf::message {
       std::cout << "Hello, world!" << std::endl;
