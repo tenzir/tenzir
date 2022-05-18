@@ -149,9 +149,13 @@ void print_partition_legacy(
     indented_scope _(indent);
     for (size_t i = 0; i < indexes->size(); ++i) {
       auto field = combined_layout.field(i);
-      const auto* index = indexes->Get(i);
       auto name = field.name;
-      auto sz = index->index()->data()->size();
+      const auto* index = indexes->Get(i);
+      if (!index) {
+        std::cout << indent << "(missing index field " << name << ")\n";
+        continue;
+      }
+      auto sz = index && index->index() ? index->index()->data()->size() : 0;
       std::cout << indent << name << ": " << fmt::to_string(field.type);
       if (options.format.print_bytesizes)
         std::cout << " (" << print_bytesize(sz, options.format) << ")";
@@ -159,7 +163,7 @@ void print_partition_legacy(
       bool expand
         = std::find(expand_indexes.begin(), expand_indexes.end(), name)
           != expand_indexes.end();
-      if (expand) {
+      if (expand && index->index()) {
         vast::factory_traits<vast::value_index>::initialize();
         vast::value_index_ptr state_ptr;
         if (auto error
