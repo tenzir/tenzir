@@ -48,7 +48,7 @@ struct indexer_state {
 /// Indexes a table slice column with a single value index.
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               type index_type, caf::settings index_opts);
+               const std::string& name, value_index_ptr index);
 
 /// An indexer that was recovered from on-disk state. It can only respond
 /// to queries, but not add eny more entries.
