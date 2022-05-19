@@ -247,9 +247,7 @@ caf::error merge_environment(record& config) {
         // These environment variables have been manually checked already.
         // Inserting them into the config would ignore higher-precedence values
         // from the command line.
-        if (*config_key == "vast.config" || *config_key == "vast.plugins"
-            || *config_key == "vast.plugin-dirs"
-            || *config_key == "vast.bare-mode" || *config_key == "vast.config")
+        if (*config_key == "vast.bare-mode" || *config_key == "vast.config")
           continue;
         // Try first as vast::data, which is richer.
         if (auto x = to<data>(value)) {
@@ -384,6 +382,28 @@ caf::error configuration::parse(int argc, char** argv) {
   else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE"))
     if (*vast_bare_mode == "true")
       caf::put(content, "vast.bare-mode", true);
+  // Gather and parse all to-be-considered configuration files.
+  std::vector<std::string> cli_configs;
+  for (auto& arg : command_line)
+    if (arg.starts_with("--config="))
+      cli_configs.push_back(arg.substr(9));
+  if (auto configs = collect_config_files(config_dirs(*this), cli_configs))
+    config_files = std::move(*configs);
+  else
+    return configs.error();
+  auto config = load_config_files(config_files);
+  if (!config)
+    return config.error();
+  *config = flatten(*config);
+  if (auto err = merge_environment(*config))
+    return err;
+  // From here on, we go into CAF land with the goal to put the configuration
+  // into the members of this actor_system_config instance.
+  auto settings = to_settings(std::move(*config));
+  if (!settings)
+    return settings.error();
+  if (auto err = embed_config(*settings))
+    return err;
   // Detect when plugins, plugin-dirs, or schema-dirs are specified on the
   // command line. This needs to happen before the regular parsing of the
   // command line since plugins may add additional commands and schemas.
@@ -415,28 +435,6 @@ caf::error configuration::parse(int argc, char** argv) {
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   VAST_ASSERT(ec == caf::pec::success);
   VAST_ASSERT(it == plugin_args.end());
-  // Gather and parse all to-be-considered configuration files.
-  std::vector<std::string> cli_configs;
-  for (auto& arg : command_line)
-    if (arg.starts_with("--config="))
-      cli_configs.push_back(arg.substr(9));
-  if (auto configs = collect_config_files(config_dirs(*this), cli_configs))
-    config_files = std::move(*configs);
-  else
-    return configs.error();
-  auto config = load_config_files(config_files);
-  if (!config)
-    return config.error();
-  *config = flatten(*config);
-  if (auto err = merge_environment(*config))
-    return err;
-  // From here on, we go into CAF land with the goal to put the configuration
-  // into the members of this actor_system_config instance.
-  auto settings = to_settings(std::move(*config));
-  if (!settings)
-    return settings.error();
-  if (auto err = embed_config(*settings))
-    return err;
   // Now parse all CAF options from the command line. Prior to doing so, we
   // clear the config_file_path first so it does not use caf-application.ini as
   // fallback during actor_system_config::parse().
