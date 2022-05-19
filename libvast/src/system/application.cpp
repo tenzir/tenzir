@@ -279,7 +279,9 @@ auto make_spawn_command() {
 
 auto make_status_command() {
   return std::make_unique<command>(
-    "status", "shows properties of a server process",
+    "status",
+    "shows properties of a server process by component; optional positional "
+    "arguments allow for filtering by component name",
     opts("?vast.status")
       .add<bool>("detailed", "add more information to the output")
       .add<bool>("debug", "include extra debug information"));
