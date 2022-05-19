@@ -33,7 +33,7 @@ plugins=(
   "${toplevel}/plugins/pcap"
   "${toplevel}/plugins/sigma"
   "${toplevel}/plugins/summarize"
-  "${toplevel}/plugins/parquet_store"
+  "${toplevel}/plugins/parquet-store"
 )
 
 while [ $# -ne 0 ]; do
