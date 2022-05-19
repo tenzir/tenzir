@@ -45,19 +45,6 @@ node](/docs/setup-vast) listening at `localhost:42000`.
 
 ![Ingest process](/img/ingest.png)
 
-## Load input from a carrier
-
-A *carrier* is responsible for acquiring data from a dedicated I/O path, such as
-a file, network socket, a custom transport path via a 3rd-party library.
-
-:::note Implementation underway
-We are currently reworking the inbound data path by separating the I/O-bound
-loading phase from the subsequent CPU-bound parsing phase. To date, these stages
-are intertwined and take place together. Moving forward, it will be possible to
-mix and match carriers and formats. To date, the format dictates the carrier and
-is not possible to configure separately.
-:::
-
 ## Choose an import format
 
 The *format* defines the encoding of data. ASCII formats include JSON, CSV, or
@@ -88,9 +75,9 @@ according to a specified [schema][schemas]. That is, one line corresponds to one
 The object field names correspond to record field names.
 
 JSON can express only a subset VAST's data model. For example, VAST has
-first-class support IP addresses but they are strings in JSON. To get the most
-out of your data and retain domain semantics, [define a schema for your JSON
-objects](#provide-a-schema-for-unknown-types).
+first-class support for IP addresses but they are strings in JSON. To get the
+most out of your data and retain domain semantics, [define a schema for your
+JSON objects](#provide-a-schema-for-unknown-types).
 
 Consider the this example JSON file `data.json`:
 
@@ -441,7 +428,7 @@ argus -r trace
 To read from standard input, use `-r -`. Similarly, to write to standard
 output, use `-w -`.
 
-#### Convert argus to CSV
+#### Convert Argus to CSV
 
 Converting `argus` output to CSV requires the following flags:
 
@@ -533,7 +520,7 @@ data. For example, consider this JSON data:
 Coming soon!
 :::
 
-Run `head data.json | vast infer` to print schema that you can paste into a
+Run `head -1 data.json | vast infer` to print schema that you can paste into a
 module.
 
 :::caution Example Missing
