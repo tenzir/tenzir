@@ -53,11 +53,6 @@ again for consecutive imports.
 The import command parses events into table slices (batches). The following
 options control the batching:
 
-#### `vast.import.batch-encoding`
-
-Selects the encoding of table slices. Available options are `msgpack`
-(row-based) and `arrow` (column-based).
-
 #### `vast.import.batch-size`
 
 Sets an upper bound for the number of events per table slice.
