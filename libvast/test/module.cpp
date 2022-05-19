@@ -35,14 +35,14 @@ caf::expected<type>
 to_type(const std::vector<type>& known_types, const data& declaration,
         std::string_view name = "");
 
-caf::expected<record_type>
-to_record(const std::vector<type>& known_types, const list& record_list) {
-  if (record_list.empty())
+caf::expected<record_type> to_record(const std::vector<type>& known_types,
+                                     const list& field_declarations) {
+  if (field_declarations.empty())
     return caf::make_error(ec::parse_error, "record types must have at least "
                                             "one field");
   auto record_fields = std::vector<record_type::field_view>{};
-  record_fields.reserve(record_list.size());
-  for (const auto& record_value : record_list) {
+  record_fields.reserve(field_declarations.size());
+  for (const auto& record_value : field_declarations) {
     const auto* record_record_ptr = caf::get_if<record>(&record_value);
     if (record_record_ptr == nullptr)
       return caf::make_error(ec::parse_error, "a field in record type must be "
