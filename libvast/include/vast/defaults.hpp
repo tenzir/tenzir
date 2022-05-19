@@ -31,7 +31,7 @@ constexpr size_t max_recursion = 100;
 namespace import {
 
 /// Maximum size for sources that generate table slices.
-constexpr size_t table_slice_size = 1024;
+constexpr size_t table_slice_size = 1 << 16; // 64 ki
 
 /// The default table slice type when arrow is available.
 constexpr auto table_slice_type = table_slice_encoding::arrow;
@@ -207,7 +207,7 @@ constexpr std::chrono::seconds disk_scan_interval = std::chrono::minutes{1};
 constexpr size_t disk_monitor_step_size = 1;
 
 /// Maximum number of events per INDEX partition.
-constexpr size_t max_partition_size = 1'048'576; // 1_Mi
+constexpr size_t max_partition_size = 1 << 22; // 4 Mi
 
 /// Timeout after which an active partition is forcibly flushed.
 constexpr caf::timespan active_partition_timeout = std::chrono::hours{1};
