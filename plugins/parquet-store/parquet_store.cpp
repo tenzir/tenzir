@@ -50,7 +50,7 @@ std::filesystem::path store_path_for_partition(const uuid& partition_id) {
   return std::filesystem::path{"archive"} / store_filename;
 }
 
-std::optional<std::shared_ptr<arrow::Array>>
+std::shared_ptr<arrow::Array>
 fix_enum_array(const enumeration_type& et,
                const std::shared_ptr<arrow::Array>& arr) {
   switch (arr->type_id()) {
@@ -89,14 +89,14 @@ fix_enum_array(const enumeration_type& et,
 /// Transform a chunked array by applying a mapping function `Mapper` over each
 /// chunk and constructs a new array from the transformed chunks.
 template <typename Mapper, class VastType>
-std::optional<std::shared_ptr<arrow::ChunkedArray>>
+std::shared_ptr<arrow::ChunkedArray>
 map_chunked_array(const VastType& t,
                   const std::shared_ptr<arrow::ChunkedArray>& arr, Mapper m) {
   auto chunks = arrow::ArrayVector{};
   chunks.reserve(arr->num_chunks());
   for (const auto& chunk : arr->chunks()) {
-    if (std::optional<std::shared_ptr<arrow::Array>> c = m(t, chunk))
-      chunks.push_back(*c);
+    if (std::shared_ptr<arrow::Array> c = m(t, chunk))
+      chunks.push_back(c);
     else
       return arr;
   }
@@ -104,26 +104,25 @@ map_chunked_array(const VastType& t,
   return result.ValueOrDie();
 }
 
-std::optional<std::shared_ptr<arrow::Array>>
+std::shared_ptr<arrow::Array>
 map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
   auto f = detail::overload{
-    [&](const enumeration_type& et)
-      -> std::optional<std::shared_ptr<arrow::Array>> {
+    [&](const enumeration_type& et) -> std::shared_ptr<arrow::Array> {
       return fix_enum_array(et, array);
     },
-    [&](const pattern_type&) -> std::optional<std::shared_ptr<arrow::Array>> {
+    [&](const pattern_type&) -> std::shared_ptr<arrow::Array> {
       if (pattern_type::to_arrow_type()->Equals(array->type()))
         return {};
       return std::make_shared<pattern_type::array_type>(
         pattern_type::to_arrow_type(), array);
     },
-    [&](const address_type&) -> std::optional<std::shared_ptr<arrow::Array>> {
+    [&](const address_type&) -> std::shared_ptr<arrow::Array> {
       if (address_type::to_arrow_type()->Equals(array->type()))
         return {}; // address is not always wrong, only when inside maps
       return std::make_shared<address_type::array_type>(
         address_type::to_arrow_type(), array);
     },
-    [&](const subnet_type&) -> std::optional<std::shared_ptr<arrow::Array>> {
+    [&](const subnet_type&) -> std::shared_ptr<arrow::Array> {
       if (subnet_type::to_arrow_type()->Equals(array->type()))
         return {};
       auto sa = std::static_pointer_cast<arrow::StructArray>(array);
@@ -146,30 +145,29 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
       return std::make_shared<subnet_type::array_type>(
         subnet_type::to_arrow_type(), struct_array);
     },
-    [&](const list_type& lt) -> std::optional<std::shared_ptr<arrow::Array>> {
+    [&](const list_type& lt) -> std::shared_ptr<arrow::Array> {
       auto list_array = std::static_pointer_cast<arrow::ListArray>(array);
       if (auto fixed_array = map_array(lt.value_type(), list_array->values()))
         return std::make_shared<arrow::ListArray>(
           lt.to_arrow_type(), list_array->length(), list_array->value_offsets(),
-          *fixed_array, list_array->null_bitmap(), list_array->null_count());
+          fixed_array, list_array->null_bitmap(), list_array->null_count());
       return {};
     },
-    [&](const map_type& mt) -> std::optional<std::shared_ptr<arrow::Array>> {
+    [&](const map_type& mt) -> std::shared_ptr<arrow::Array> {
       auto ma = std::static_pointer_cast<arrow::MapArray>(array);
       auto key_array = map_array(mt.key_type(), ma->keys());
       auto val_array = map_array(mt.value_type(), ma->items());
       if (!key_array && !val_array)
         return {};
-      auto ka = key_array ? *key_array : ma->keys();
-      auto va = val_array ? *val_array : ma->items();
+      auto ka = key_array ? key_array : ma->keys();
+      auto va = val_array ? val_array : ma->items();
       return std::make_shared<arrow::MapArray>(mt.to_arrow_type(), ma->length(),
                                                ma->value_offsets(), ka, va,
                                                ma->null_bitmap(),
                                                ma->null_count());
     },
-    [&](const record_type& rt) -> std::optional<std::shared_ptr<arrow::Array>> {
+    [&](const record_type& rt) -> std::shared_ptr<arrow::Array> {
       auto struct_array = std::static_pointer_cast<arrow::StructArray>(array);
-      // TODO: detail::zip doesn't seem to work with a generator and a vector
       auto it = struct_array->fields().begin();
       auto children = std::vector<std::shared_ptr<arrow::Array>>{};
       children.reserve(rt.num_fields());
@@ -178,7 +176,7 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
         auto mapped_arr = map_array(field.type, *it);
         if (mapped_arr) {
           modified = true;
-          children.push_back(*mapped_arr);
+          children.push_back(mapped_arr);
         } else {
           children.push_back(*it);
         }
@@ -190,7 +188,8 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
         rt.to_arrow_type(), struct_array->length(), children,
         struct_array->null_bitmap(), struct_array->null_count());
     },
-    [&](const auto&) -> std::optional<std::shared_ptr<arrow::Array>> {
+    [&](const auto& t) -> std::shared_ptr<arrow::Array> {
+      VAST_ASSERT(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
   };
@@ -200,48 +199,51 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
 /// Transform a given `ChunkedArray` according to the provided VAST type
 /// `ChunkedArray`s only occurr at the outermost level, and the VAST type
 /// that is not properly represented at this level is `enumeration_type`.
-std::optional<std::shared_ptr<arrow::ChunkedArray>>
+std::shared_ptr<arrow::ChunkedArray>
 restore_enum_chunk_array(const vast::type& t,
                          std::shared_ptr<arrow::ChunkedArray> array) {
   auto f = detail::overload{
-    [&](const enumeration_type& et)
-      -> std::optional<std::shared_ptr<arrow::ChunkedArray>> {
+    [&](const enumeration_type& et) -> std::shared_ptr<arrow::ChunkedArray> {
       return map_chunked_array(et, array, fix_enum_array);
     },
-    [&](
-      const list_type&) -> std::optional<std::shared_ptr<arrow::ChunkedArray>> {
+    [&](const list_type&) -> std::shared_ptr<arrow::ChunkedArray> {
       return map_chunked_array(t, array, map_array);
     },
-    [&](
-      const map_type&) -> std::optional<std::shared_ptr<arrow::ChunkedArray>> {
+    [&](const map_type&) -> std::shared_ptr<arrow::ChunkedArray> {
       return map_chunked_array(t, array, map_array);
     },
-    [&](const record_type&)
-      -> std::optional<std::shared_ptr<arrow::ChunkedArray>> {
+    [&](const record_type&) -> std::shared_ptr<arrow::ChunkedArray> {
       return map_chunked_array(t, array, map_array);
     },
-    [&](const auto&) -> std::optional<std::shared_ptr<arrow::ChunkedArray>> {
+    [&](const auto&) -> std::shared_ptr<arrow::ChunkedArray> {
+      VAST_ASSERT(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
   };
   return caf::visit(f, t);
 }
 
-/// Rewrite the table to replace dictionary<utf8, int32> with the proper
-/// extension type for enumerations.
+/// Transform the table such that it adheres to the given arrow schema
+/// This is a work around for the lack of support for our extension types in the
+/// arrow parquet reader.
 std::shared_ptr<arrow::Table>
-map_enum_dictionary(const std::shared_ptr<arrow::Schema>& target_schema,
-                    const std::shared_ptr<arrow::Table>& table) {
+align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
+                      const std::shared_ptr<arrow::Table>& table) {
+  const auto start = std::chrono::steady_clock::now();
   auto arrays = arrow::ChunkedArrayVector{};
   auto rt = caf::get<record_type>(type::from_arrow(*target_schema));
   for (int i = 0; i < table->num_columns(); ++i) {
     if (auto new_arr
         = restore_enum_chunk_array(rt.field(i).type, table->column(i)))
-      arrays.push_back(*new_arr);
+      arrays.push_back(new_arr);
     else
       arrays.push_back(table->column(i));
   }
-  return arrow::Table::Make(target_schema, arrays, table->num_rows());
+  auto new_table = arrow::Table::Make(target_schema, arrays, table->num_rows());
+  const auto delta = std::chrono::steady_clock::now() - start;
+  VAST_DEBUG("table schema aligned in {}[ns]",
+             data{std::chrono::duration_cast<duration>(delta)});
+  return new_table;
 }
 
 // Handler for `vast::query` that is shared between active and passive stores.
@@ -260,7 +262,7 @@ handle_lookup(Actor& self, const vast::query& query,
   uint64_t num_hits = 0ull;
   auto record_batch_reader = arrow::TableBatchReader(*table);
   auto handle_query = detail::overload{
-    [&](const query::count& count) {
+    [&](const query::count& count) -> caf::expected<uint64_t> {
       if (count.mode == query::count::estimate)
         die("logic error detected - count estimate should not load "
             "partition");
@@ -272,14 +274,18 @@ handle_lookup(Actor& self, const vast::query& query,
           num_hits += result;
           self->send(count.sink, result);
         } else {
-          VAST_WARN("skipping record batch that failed to read: '{}'",
-                    rb.status());
+          return caf::make_error(ec::format_error,
+                                 fmt::format("unable to read record batch: {}",
+                                             rb.status().ToString()));
         }
       }
+      return num_hits;
     },
-    [&](const query::extract& extract) {
+    [&](const query::extract& extract) -> caf::expected<uint64_t> {
       if (extract.policy == query::extract::preserve_ids) {
-        return self->send(extract.sink, table_slice{});
+        self->send(extract.sink, table_slice{});
+        return caf::make_error(ec::invalid_query, "preserve_ids not supported "
+                                                  "in parquet format");
       }
       for (const auto& rb : record_batch_reader) {
         if (rb.ok()) {
@@ -288,16 +294,17 @@ handle_lookup(Actor& self, const vast::query& query,
           if (final_slice) {
             num_hits += final_slice->rows();
             self->send(extract.sink, *final_slice);
-          } else {
-            // TODO: error handling?
-            fmt::print(stderr, "tp;no slice today\n");
           }
+        } else {
+          return caf::make_error(ec::format_error,
+                                 fmt::format("unable to read record batch: {}",
+                                             rb.status().ToString()));
         }
       }
+      return num_hits;
     },
   };
-  caf::visit(handle_query, query.cmd);
-  return num_hits;
+  return caf::visit(handle_query, query.cmd);
 }
 
 std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
@@ -309,7 +316,7 @@ std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
   if (!arrow_metadata.ok())
     return {};
   auto decoded = detail::base64::decode(*arrow_metadata);
-  auto schema_buf = std::make_shared<arrow::Buffer>(decoded);
+  auto schema_buf = arrow::Buffer(decoded);
   arrow::ipc::DictionaryMemo dict_memo;
   arrow::io::BufferReader input(schema_buf);
   auto arrow_schema = arrow::ipc::ReadSchema(&input, &dict_memo);
@@ -320,10 +327,8 @@ std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
 
 caf::expected<std::shared_ptr<arrow::Table>>
 read_parquet_buffer(const chunk_ptr& chunk) {
-  const auto* ptr
-    = static_cast<const uint8_t*>(static_cast<const void*>(chunk->data()));
-  auto bufr = std::make_shared<arrow::io::BufferReader>(
-    ptr, detail::narrow_cast<int64_t>(chunk->size()));
+  VAST_ASSERT(chunk);
+  auto bufr = std::make_shared<arrow::io::BufferReader>(as_arrow_buffer(chunk));
   auto parquet_reader = parquet::ParquetFileReader::Open(bufr);
   auto arrow_schema
     = parse_arrow_schema_from_metadata(parquet_reader->metadata());
@@ -335,7 +340,7 @@ read_parquet_buffer(const chunk_ptr& chunk) {
   std::shared_ptr<arrow::Table> table{};
   if (!file_reader->ReadTable(&table).ok())
     return caf::exit_reason::unhandled_exception;
-  return map_enum_dictionary(arrow_schema, table);
+  return align_table_to_schema(arrow_schema, table);
 }
 
 system::store_actor::behavior_type

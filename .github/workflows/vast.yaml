@@ -621,6 +621,9 @@ jobs:
           - name: Sigma
             target: sigma
             path: plugins/sigma
+          - name: Parquet
+            target: parquet-store
+            path: plugins/parquet_store
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
