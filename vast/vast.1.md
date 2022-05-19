@@ -1,16 +1,24 @@
 ---
 title: VAST
+section: 1
+header: General Commands Manual
 author: Tenzir GmbH
 ---
 
 # NAME
-`vast` -- manage a VAST node
+
+`vast` -- manages a VAST node
 
 # OVERVIEW
-This section describes the VAST system and its components from a user
-interaction point of view.
 
-# TODO: write the meat of this manpage
+VAST is an embeddable security telemetry engine for structured event data.
+Tailor-made for security operations, VAST is the foundation for many data-driven
+detection and response uses cases, such as operationalizing threat intelligence,
+threat hunting, event contextualization, and advanced detection engineering.
+
+# USAGE
+
+TODO
 
 # ISSUES
 
