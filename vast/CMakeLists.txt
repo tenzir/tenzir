@@ -170,15 +170,17 @@ target_compile_definitions(
 # deterministic builds.
 string(TIMESTAMP VAST_LAST_COMMIT_DATE)
 if (VAST_ENABLE_MANPAGES)
-  add_custom_command(
-    TARGET vast
-    POST_BUILD DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
+  add_custom_target(
+    vast-manpage
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
     COMMAND
-      "${PANDOC}" -s -f markdown -t man -v date:${VAST_LAST_COMMIT_DATE} "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
+      "${PANDOC}" -s -f gfm -t man -V date:${VAST_LAST_COMMIT_DATE}
+      "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
       -o "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     COMMENT "Generating vast.1"
     VERBATIM)
+  add_dependencies(vast vast-manpage)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
           DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
 endif ()
