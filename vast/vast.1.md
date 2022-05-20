@@ -36,11 +36,11 @@ vast -h
 
 ## Start VAST
 
- Use the `start` command to spin up a VAST server:
+Use the `start` command to spin up a VAST server:
 
- ```bash
- vast start
- ```
+```bash
+vast start
+```
 
 ## Ingest data
 
@@ -48,18 +48,18 @@ Use the `import` command to ingest data via standard input, which takes a
 *format* as sub-command. For example, to ingest Suricata logs, add `suricata`
 after `import`:
 
- ```bash
- vast import suricata < eve.log
- ```
+```bash
+vast import suricata < eve.log
+```
 
 ## Query data
 
 Use the `export` command to run execute query and receive results on standard
 output. Like `import`, `export` needs a format as sub-command:
 
- ```bash
- vast export json '6.6.6.6 || (dst_port < 1024 && proto == "UDP")'
- ```
+```bash
+vast export json '6.6.6.6 || (dst_port < 1024 && proto == "UDP")'
+```
 
 ## Next steps
 

@@ -183,9 +183,11 @@ hassles of going through file-based logs.
 
 To connect to a Zeek instance, run the `broker` command without arguments:
 
-    # Spawn a Broker endpoint, connect to localhost:9999/tcp, and subscribe
-    # to the topic `zeek/logs/` to acquire Zeek logs.
-    vast import broker
+```bash
+# Spawn a Broker endpoint, connect to localhost:9999/tcp, and subscribe
+# to the topic `zeek/logs/` to acquire Zeek logs.
+vast import broker
+```
 
 Logs should now flow from Zeek to VAST, assuming that Zeek has the following
 default settings:
@@ -201,9 +203,11 @@ additional local log files.
 
 You can also spawn a Broker endpoint that is listening instead of connecting:
 
-    # Spawn a Broker endpoint, listen on localhost:8888/tcp, and subscribe
-    # to the topic `foo/bar`.
-    vast import broker --listen --port=8888 --topic=foo/bar
+```bash
+# Spawn a Broker endpoint, listen on localhost:8888/tcp, and subscribe
+# to the topic `foo/bar`.
+vast import broker --listen --port=8888 --topic=foo/bar
+```
 
 By default, VAST automatically subscribes to the topic `zeek/logs/` because
 this is where Zeek publishes log events. Use `--topic` to set a different topic.
@@ -253,7 +257,7 @@ nc -vlkU eve.sock | vast import suricata
 
 ### NetFlow
 
-:::info Pro feature
+:::info Commercial Plugin
 This feature is available as commercial plugin that runs on top open-source
 VAST. Please [contact us](mailto:sales@tenzir.com) if you'd like to try it out.
 :::
@@ -446,7 +450,7 @@ StartTime,Flgs,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,TotPkts,TotBytes,State,SrcP
 09-11-18+09:01:33.914414, e        ,udp,192.168.1.1,626,   ->,224.0.0.1,626,1,75,REQ,1,0,0.000000,-0.000000
 ```
 
-#### Ingest argus CSV
+#### Ingest Argus CSV
 
 Since VAST has [native CSV support](#CSV), ingesting Argus CSV output only
 requires an adequate schema. VAST already ships with an argus schema containing a
