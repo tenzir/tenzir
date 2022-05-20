@@ -67,6 +67,8 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
     auto qualified_index = flatbuffer->indexes()->Get(position);
     auto index = qualified_index->index();
     auto data = index->data();
+    if (!data)
+      return {};
     value_index_ptr state_ptr;
     if (auto error = fbs::deserialize_bytes(data, state_ptr)) {
       VAST_ERROR("{} failed to deserialize indexer at {} with error: "
@@ -124,9 +126,7 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
     auto index = qualified_index->index();
     if (!index)
       return caf::make_error(ec::format_error, //
-                             "missing index name in qualified index");
-    if (!index->data())
-      return caf::make_error(ec::format_error, "missing data in index");
+                             "missing index field in qualified index");
   }
   if (auto error = unpack(*partition.uuid(), state.id))
     return error;

@@ -31,10 +31,6 @@ struct indexer_state {
   /// The index holding the data.
   value_index_ptr idx;
 
-  /// Whether the type of this indexer has the `#skip` attribute, implying that
-  /// the incoming data should not be indexed.
-  bool has_skip_attribute;
-
   /// The partition id to which this indexer belongs (for log messages).
   uuid partition_id;
 
@@ -48,7 +44,7 @@ struct indexer_state {
 /// Indexes a table slice column with a single value index.
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               type index_type, caf::settings index_opts);
+               const std::string& name, value_index_ptr index);
 
 /// An indexer that was recovered from on-disk state. It can only respond
 /// to queries, but not add eny more entries.

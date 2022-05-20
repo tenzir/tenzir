@@ -19,6 +19,7 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/partition_common.hpp"
 #include "vast/detail/settings.hpp"
@@ -44,6 +45,7 @@
 #include "vast/time.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
+#include "vast/value_index_factory.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/broadcast_downstream_manager.hpp>
@@ -112,9 +114,11 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   // Note that the deserialization code relies on the order of indexers within
   // the flatbuffers being preserved.
   for (const auto& [name, chunk] : x.indexer_chunks) {
-    auto data = builder.CreateVector(
-      reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size());
     auto fieldname = builder.CreateString(name);
+    auto data
+      = chunk ? builder.CreateVector(
+          reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size())
+              : 0;
     fbs::value_index::detail::LegacyValueIndexBuilder vbuilder(builder);
     vbuilder.add_data(data);
     auto vindex = vbuilder.Finish();
@@ -237,8 +241,19 @@ active_partition_actor::behavior_type active_partition(
            caf::get<record_type>(layout).leaves()) {
         auto qf = qualified_record_field{layout, offset};
         auto& idx = self->state.indexers[qf];
+        auto has_skip_attribute = field.type.attribute("skip").has_value();
+        if (has_skip_attribute)
+          continue;
         if (!idx) {
-          idx = self->spawn(active_indexer, field.type, index_opts);
+          auto value_index
+            = factory<vast::value_index>::make(field.type, index_opts);
+          if (!value_index) {
+            VAST_WARN("{} could not spawn value index with options {} for "
+                      "field {}",
+                      *self, index_opts, field);
+            continue;
+          }
+          idx = self->spawn(active_indexer, qf.name(), std::move(value_index));
           auto slot = self->state.stage->add_outbound_path(idx);
           self->state.stage->out().set_filter(slot, qf);
           VAST_DEBUG("{} spawned new indexer for field {} at slot {}", *self,
@@ -355,10 +370,17 @@ active_partition_actor::behavior_type active_partition(
           caf::make_error(ec::logic_error, "partition has no indexers"));
         return;
       }
-      VAST_DEBUG("{} sends 'snapshot' to {} indexers", *self,
-                 self->state.indexers.size());
-      for (auto& kv : self->state.indexers) {
-        self->request(kv.second, caf::infinite, atom::snapshot_v)
+      auto& indexers = self->state.indexers;
+      auto valid_count
+        = std::count_if(indexers.begin(), indexers.end(), [](auto& idx) {
+            return idx.second != nullptr;
+          });
+      VAST_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);
+      for (auto& [field_, indexer] : self->state.indexers) {
+        auto field = field_;
+        if (indexer == nullptr)
+          continue;
+        self->request(indexer, caf::infinite, atom::snapshot_v)
           .then(
             [=](chunk_ptr chunk) {
               ++self->state.persisted_indexers;
@@ -378,11 +400,10 @@ active_partition_actor::behavior_type active_partition(
               VAST_DEBUG("{} got chunk from {}", *self, sender);
               self->state.chunks.emplace(sender, chunk);
               if (self->state.persisted_indexers
-                  < self->state.indexers.size()) {
+                  < detail::narrow_cast<size_t>(valid_count)) {
                 VAST_DEBUG("{} waits for more chunks after receiving {} out of "
                            "{}",
-                           *self, self->state.persisted_indexers,
-                           self->state.indexers.size());
+                           *self, self->state.persisted_indexers, valid_count);
                 return;
               }
               auto& mutable_synopsis = self->state.data.synopsis.unshared();
@@ -393,6 +414,11 @@ active_partition_actor::behavior_type active_partition(
               mutable_synopsis.offset = self->state.data.offset;
               mutable_synopsis.events = self->state.data.events;
               for (auto& [qf, actor] : self->state.indexers) {
+                if (actor == nullptr) {
+                  self->state.data.indexer_chunks.emplace_back(qf.name(),
+                                                               nullptr);
+                  continue;
+                }
                 auto actor_id = actor.id();
                 auto chunk_it = self->state.chunks.find(actor_id);
                 if (chunk_it == self->state.chunks.end()) {
@@ -409,7 +435,7 @@ active_partition_actor::behavior_type active_partition(
                 // partition version. As-is, this breaks if multiple fields with
                 // the same fully qualified name but different types exist in
                 // the same partition.
-                self->state.data.indexer_chunks.push_back(
+                self->state.data.indexer_chunks.emplace_back(
                   std::make_pair(qf.name(), chunk_it->second));
               }
               // Create the partition flatbuffer.
@@ -487,7 +513,7 @@ active_partition_actor::behavior_type active_partition(
             },
             [=](caf::error err) {
               VAST_ERROR("{} failed to persist indexer for {} with error: {}",
-                         *self, kv.first.name(), err);
+                         *self, field.name(), err);
               ++self->state.persisted_indexers;
               if (!self->state.persistence_promise.pending())
                 self->state.persistence_promise.deliver(std::move(err));

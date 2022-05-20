@@ -30,10 +30,9 @@ namespace vast::system {
 
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               type index_type, caf::settings index_opts) {
-  self->state.name = fmt::format("indexer-{}", index_type);
-  self->state.has_skip_attribute = index_type.attribute("skip").has_value();
-  self->state.idx = factory<value_index>::make(index_type, index_opts);
+               const std::string& name, value_index_ptr value_index) {
+  self->state.name = fmt::format("indexer-{}", name);
+  self->state.idx = std::move(value_index);
   if (!self->state.idx) {
     VAST_ERROR("{} failed to construct value index", *self);
     self->quit(caf::make_error(ec::unspecified, "failed to construct value "
@@ -53,12 +52,6 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
         },
         [=](caf::unit_t&, const std::vector<table_slice_column>& columns) {
           VAST_ASSERT(self->state.idx != nullptr);
-          // NOTE: It seems like having the `#skip` attribute should lead to
-          // no index being created at all (as opposed to creating it and
-          // never adding data), but that was the behaviour of the previous
-          // implementation so we're keeping it for now.
-          if (self->state.has_skip_attribute)
-            return;
           for (const auto& column : columns)
             column.slice().append_column_to_index(column.index(),
                                                   *self->state.idx);
