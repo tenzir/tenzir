@@ -113,7 +113,6 @@ private:
 
 // Handler for `vast::query` that is shared between active and passive stores.
 // Returns a the number of events that match the query.
-// Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
 caf::expected<uint64_t>
 handle_lookup(Actor& self, const vast::query_context& query_context,
