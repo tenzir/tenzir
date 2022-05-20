@@ -58,11 +58,15 @@ VAST supports [reading](/docs/use-vast/ingest#pcap) and writing
 [PCAP](http://www.tcpdump.org) traces via `libpcap`. On the write path, VAST can
 write packets to a trace file.
 
+:::info Writing PCAP traces
 VAST can only write PCAP traces for events of type `pcap.packet`. To avoid
-bogus trace file files, VAST appends `#type == "pcap.packet"` to every query
-expression.
+bogus trace file files, VAST automatically appends `#type == "pcap.packet"` to
+every query expression.
+:::
 
-Below are some examples queries.
+Below are some examples queries the generate PCAP traces. In principle, you can
+also use other output formats aside from `pcap`. These will render the binary
+PCAP packet representation in the `payload` field.
 
 #### Extract packets in a specific time range
 
