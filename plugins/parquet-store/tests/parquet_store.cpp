@@ -127,19 +127,21 @@ FIXTURE_SCOPE(filesystem_tests, fixture)
 //   CHECK_EQUAL(results[0].rows(), expected_rows[0].rows());
 // }
 
-TEST(parquet store slice roundtrip) {
-  auto et = enumeration_type{{"foo"}, {"bar"}, {"bank"}};
-  auto mt_et_count = map_type{et, count_type{}};
-  auto mt_addr_et = map_type{address_type{}, et};
-  auto mt_pattern_subnet = map_type{pattern_type{}, subnet_type{}};
-  auto lt = list_type{subnet_type{}};
-  auto elt = list_type{et};
-  auto rt = record_type{
+namespace {
+
+struct table_slice_fixture {
+  enumeration_type et = enumeration_type{{"foo"}, {"bar"}, {"bank"}};
+  map_type mt_et_count = map_type{et, count_type{}};
+  map_type mt_addr_et = map_type{address_type{}, et};
+  map_type mt_pattern_subnet = map_type{pattern_type{}, subnet_type{}};
+  list_type lt = list_type{subnet_type{}};
+  list_type elt = list_type{et};
+  record_type rt = record_type{
     {"f9_1", et},
     {"f9_2", string_type{}},
   };
   // nested record of record to simulate multiple nesting levels
-  auto rrt = record_type{
+  record_type rrt = record_type{
     {"f11_1",
      record_type{
        {"f11_1_1", et},
@@ -151,8 +153,8 @@ TEST(parquet store slice roundtrip) {
        {"f11_2_2", pattern_type{}},
      }},
   };
-  auto lrt = list_type{rt};
-  auto t = record_type{
+  list_type lrt = list_type{rt};
+  record_type t = record_type{
     {"f1", type{string_type{}, {{"key", "value"}}}},
     {"f2", count_type{}},
     {"f3", pattern_type{}},
@@ -166,41 +168,41 @@ TEST(parquet store slice roundtrip) {
     {"f11", mt_pattern_subnet},
     {"f12", rrt},
   };
-  auto f1_string = list{"n1", "n2", {}, "n4"};
-  auto f2_count = list{1_c, {}, 3_c, 4_c};
-  auto f3_pattern = list{pattern("p1"), {}, pattern("p3"), {}};
-  auto f4_address = list{
+  list f1_string = list{"n1", "n2", {}, "n4"};
+  list f2_count = list{1_c, {}, 3_c, 4_c};
+  list f3_pattern = list{pattern("p1"), {}, pattern("p3"), {}};
+  list f4_address = list{
     unbox(to<address>("172.16.7.29")),
     {},
     unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")),
     unbox(to<address>("2001:db8::")),
   };
-  auto f5_subnet = list{
+  list f5_subnet = list{
     unbox(to<subnet>("172.16.7.0/8")),
     unbox(to<subnet>("172.16.0.0/16")),
     unbox(to<subnet>("172.0.0.0/24")),
     {},
   };
-  auto f6_enum = list{1_e, {}, 0_e, 0_e};
-  auto f7_list_subnet = list{
+  list f6_enum = list{1_e, {}, 0_e, 0_e};
+  list f7_list_subnet = list{
     list{f5_subnet[0], f5_subnet[1]},
     list{},
     list{f5_subnet[3], f5_subnet[2]},
     {},
   };
-  auto f8_map_enum_count = list{
+  list f8_map_enum_count = list{
     map{{0_e, 42_c}, {1_e, 23_c}},
     map{{2_e, 0_c}, {0_e, caf::none}, {1_e, 2_c}},
     map{{1_e, 42_c}, {2_e, caf::none}},
     map{},
   };
-  auto f9_enum_list = list{
+  list f9_enum_list = list{
     list{{1_e, 2_e, caf::none}},
     caf::none,
     list{{caf::none}},
     list{{0_e, 2_e, caf::none}},
   };
-  auto f10_map_addr_enum = list{
+  list f10_map_addr_enum = list{
     map{{unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")), 0_e},
         {unbox(to<address>("2001:db8::")), caf::none}},
     map{},
@@ -208,7 +210,7 @@ TEST(parquet store slice roundtrip) {
     map{{unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")), 1_e},
         {unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")), caf::none}},
   };
-  auto f11_map_pattern_subnet = list{
+  list f11_map_pattern_subnet = list{
     map{{pattern("l8"), unbox(to<subnet>("172.16.7.0/8"))},
         {pattern("l16"), unbox(to<subnet>("172.16.0.0/16"))},
         {pattern("l24"), unbox(to<subnet>("172.0.0.0/24"))}},
@@ -219,7 +221,7 @@ TEST(parquet store slice roundtrip) {
     map{},
     caf::none,
   };
-  auto slice = make_slice(
+  table_slice slice = make_slice(
     t, f1_string, f2_count, f3_pattern, f4_address, f5_subnet, f6_enum,
     f7_list_subnet, f8_map_enum_count, f9_enum_list, f10_map_addr_enum,
     f11_map_pattern_subnet,
@@ -228,6 +230,48 @@ TEST(parquet store slice roundtrip) {
     f4_address, // f12_2_1
     f3_pattern  // f12_2_2
   );
+};
+
+} // namespace
+
+TEST(active parquet store query) {
+  auto f = table_slice_fixture();
+  auto slice = f.slice;
+  slice.offset(23);
+  auto uuid = vast::uuid::random();
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  REQUIRE(plugin);
+  // auto active_store_actor = vast::plugins::parquet_store:
+  auto builder
+    = plugin->make_store_builder(accountant, filesystem, uuid)->first;
+  auto slices = std::vector<table_slice>{slice};
+  vast::detail::spawn_container_source(sys, slices, builder);
+  run();
+  auto ids = ::vast::make_ids({23});
+  auto results = query(builder, vast::ids{}, vast::query::extract::drop_ids);
+  run();
+  CHECK_EQUAL(results.size(), 1ull);
+  auto expected_rows = select(slice, ids);
+  check_column(results[0], 0, string_type{}, f.f1_string);
+  check_column(results[0], 1, count_type{}, f.f2_count);
+  check_column(results[0], 2, pattern_type{}, f.f3_pattern);
+  check_column(results[0], 3, address_type{}, f.f4_address);
+  check_column(results[0], 4, subnet_type{}, f.f5_subnet);
+  check_column(results[0], 5, f.et, f.f6_enum);
+  check_column(results[0], 6, f.lt, f.f7_list_subnet);
+  check_column(results[0], 7, f.mt_et_count, f.f8_map_enum_count);
+  check_column(results[0], 8, f.elt, f.f9_enum_list);
+  check_column(results[0], 9, f.mt_addr_et, f.f10_map_addr_enum);
+  check_column(results[0], 10, f.mt_pattern_subnet, f.f11_map_pattern_subnet);
+  check_column(results[0], 11, f.et, f.f6_enum);              // f12_1_1
+  check_column(results[0], 12, subnet_type{}, f.f5_subnet);   // f12_1_2
+  check_column(results[0], 13, address_type{}, f.f4_address); // f12_2_1
+  check_column(results[0], 14, pattern_type{}, f.f3_pattern); // f12_2_2
+}
+
+TEST(passive parquet store query) {
+  auto f = table_slice_fixture();
+  auto slice = f.slice;
   slice.offset(23);
   auto uuid = vast::uuid::random();
   const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
@@ -247,23 +291,23 @@ TEST(parquet store slice roundtrip) {
   auto ids = ::vast::make_ids({23});
   auto results = query(*store, vast::ids{}, vast::query::extract::drop_ids);
   run();
-  CHECK_EQUAL(results.size(), 1ull);
+  REQUIRE_EQUAL(results.size(), 1ull);
   auto expected_rows = select(slice, ids);
-  check_column(results[0], 0, string_type{}, f1_string);
-  check_column(results[0], 1, count_type{}, f2_count);
-  check_column(results[0], 2, pattern_type{}, f3_pattern);
-  check_column(results[0], 3, address_type{}, f4_address);
-  check_column(results[0], 4, subnet_type{}, f5_subnet);
-  check_column(results[0], 5, et, f6_enum);
-  check_column(results[0], 6, lt, f7_list_subnet);
-  check_column(results[0], 7, mt_et_count, f8_map_enum_count);
-  check_column(results[0], 8, elt, f9_enum_list);
-  check_column(results[0], 9, mt_addr_et, f10_map_addr_enum);
-  check_column(results[0], 10, mt_pattern_subnet, f11_map_pattern_subnet);
-  check_column(results[0], 11, et, f6_enum);                // f12_1_1
-  check_column(results[0], 12, subnet_type{}, f5_subnet);   // f12_1_2
-  check_column(results[0], 13, address_type{}, f4_address); // f12_2_1
-  check_column(results[0], 14, pattern_type{}, f3_pattern); // f12_2_2
+  check_column(results[0], 0, string_type{}, f.f1_string);
+  check_column(results[0], 1, count_type{}, f.f2_count);
+  check_column(results[0], 2, pattern_type{}, f.f3_pattern);
+  check_column(results[0], 3, address_type{}, f.f4_address);
+  check_column(results[0], 4, subnet_type{}, f.f5_subnet);
+  check_column(results[0], 5, f.et, f.f6_enum);
+  check_column(results[0], 6, f.lt, f.f7_list_subnet);
+  check_column(results[0], 7, f.mt_et_count, f.f8_map_enum_count);
+  check_column(results[0], 8, f.elt, f.f9_enum_list);
+  check_column(results[0], 9, f.mt_addr_et, f.f10_map_addr_enum);
+  check_column(results[0], 10, f.mt_pattern_subnet, f.f11_map_pattern_subnet);
+  check_column(results[0], 11, f.et, f.f6_enum);              // f12_1_1
+  check_column(results[0], 12, subnet_type{}, f.f5_subnet);   // f12_1_2
+  check_column(results[0], 13, address_type{}, f.f4_address); // f12_2_1
+  check_column(results[0], 14, pattern_type{}, f.f3_pattern); // f12_2_2
 }
 
 FIXTURE_SCOPE_END()

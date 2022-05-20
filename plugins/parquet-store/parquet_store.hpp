@@ -15,6 +15,7 @@
 #include <vast/fwd.hpp>
 #include <vast/plugin.hpp>
 #include <vast/system/actors.hpp>
+#include <vast/type.hpp>
 #include <vast/uuid.hpp>
 
 #include <arrow/table.h>
@@ -34,9 +35,11 @@ struct store_builder_state {
   /// Actor handle of the filesystem.
   system::filesystem_actor fs_ = {};
 
-  /// The record batches added to this partition
-  arrow::RecordBatchVector record_batches_ = {};
+  /// The table slices added to this partition.
+  std::vector<table_slice> table_slices_ = {};
 
+  /// The layout of the first record batch.
+  std::optional<type> vast_type_;
   /// Number of events in this store.
   size_t num_rows_ = {};
 };
