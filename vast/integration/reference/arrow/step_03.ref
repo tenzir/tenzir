@@ -1,6 +1,4 @@
     -- field metadata --
-    -- field metadata --
-    VAST:attributes:0: '{ "ioc": "" }'
     VAST:name:0: 'port'
   -- field metadata --
   -- field metadata --
