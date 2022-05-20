@@ -106,32 +106,12 @@ form. The first line in a CSV file must contain a header that describes the
 field names. The remaining lines contain concrete values. Except for the header,
 one line corresponds to one event.
 
-Analogous to [ingesting JSON](#JSON), it is necessary to select a layout via
-`--type` whose field names correspond to the CSV header field names.
+Ingesting CSV is similar to [ingesting JSON](#JSON). It is also necessary to
+[select a layout](#map-events-to-schemas) via `--type` whose field names
+correspond to the CSV header field names.
 
-Let's take a subset of the above JSON in an example CSV file `data.csv`:
-
-```csv
-ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,proto,conn_state
-2011-08-15T03:36:16.748830Z,CKmcUPexVMCAAkl6h,210.87.254.81,3,147.32.84.165,1,icmp,OTH
-2011-08-15T03:37:11.992151Z,CTluup1eVngpaS6e2i,147.32.84.165,3923,218.108.143.87,22,tcp,S0
-2011-08-15T03:37:12.593013Z,C4KKBn3pbBOEm8XWOk,147.32.84.165,3924,218.108.189.111,22,tcp,S0
-```
-
-Analogous to the JSON import, you can ingest the CSV data as follows.
-
-```bash
-vast import --type=zeek.conn csv < data.csv
-```
-
-See the section on [mapping events to schemas](#map-events-to-schemas) for a
-detailed explanation of the `--type` option.
-
-:::warning Potentially bad example
-We need to discuss whether we want to keep this example, because subsequent
-invocation of the JSON and CSV import yield a warning on import that the type
-registry `detected an incompatible layout change for zeek.conn`.
-:::
+For a real-world example of ingesting CSV, take a look a the section covering
+[argus](#argus) below.
 
 ### Zeek
 
