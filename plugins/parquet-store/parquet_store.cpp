@@ -188,7 +188,7 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
         rt.to_arrow_type(), struct_array->length(), children,
         struct_array->null_bitmap(), struct_array->null_count());
     },
-    [&](const auto& t) -> std::shared_ptr<arrow::Array> {
+    [&](const auto&) -> std::shared_ptr<arrow::Array> {
       VAST_ASSERT(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
@@ -450,7 +450,7 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices) {
   auto status
     = parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink,
                                  1 << 24, writer_props, arrow_writer_props);
-  VAST_ASSERT(status.ok());
+  VAST_ASSERT(status.ok(), status.ToString().c_str());
   return sink->Finish().ValueOrDie();
 }
 
