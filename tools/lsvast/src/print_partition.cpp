@@ -155,7 +155,9 @@ void print_partition_legacy(
         std::cout << indent << "(missing index field " << name << ")\n";
         continue;
       }
-      auto sz = index && index->index() ? index->index()->data()->size() : 0;
+      auto sz = index->index() && index->index()->data()
+                  ? index->index()->data()->size()
+                  : 0;
       std::cout << indent << name << ": " << fmt::to_string(field.type);
       if (options.format.print_bytesizes)
         std::cout << " (" << print_bytesize(sz, options.format) << ")";
