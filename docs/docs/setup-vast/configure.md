@@ -38,13 +38,7 @@ vast foo --option # option applies to command 'foo'
 ```
 :::
 
-### Getting help
-
-Internally, VAST implicitly generates three sub-commands for every command:
-
-1. `help` for displaying brief usage
-2. `documentation` for more more details and description
-3. `manual` for rendering a man page
+### Get help
 
 You get short usage instructions for every command by adding the `help`
 sub-command or providing the option `--help` (which has the shorthand `-h`):
@@ -61,23 +55,6 @@ The same help pattern applies to (sub-)commands:
 vast export help
 vast export --help
 vast export -h
-```
-
-In addition to brief usage instructions, the `documentation` command provides
-more comprehensive information. The output is in Markdown
-([CommonMark](https://commonmark.org/)) format. We recommend using
-[glow](https://github.com/charmbracelet/glow) to render the output in the
-terminal:
-
-```bash
-vast import documentation | glow -
-```
-
-Finally, the `manual` subcommand prints a man-page-like output for a given
-command, plus all contained subcommands:
-
-```bash
-vast import manual | glow -
 ```
 
 ## Environment Variables
