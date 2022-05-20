@@ -246,38 +246,44 @@ align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
   return new_table;
 }
 
+template <typename Actor>
+caf::expected<uint64_t>
+handle_lookup(Actor& self, const vast::query& query,
+              const std::shared_ptr<arrow::Table>& table) {
+  auto table_slices = std::vector<table_slice>{};
+  for (const auto& rb : arrow::TableBatchReader(*table)) {
+    if (!rb.ok())
+      return caf::make_error(ec::format_error,
+                             fmt::format("unable to read record batch: {} ",
+                                         rb.status().ToString()));
+    table_slices.push_back(arrow_table_slice_builder::create(*rb));
+  }
+  return handle_lookup(self, query, table_slices);
+}
+
 // Handler for `vast::query` that is shared between active and passive stores.
 // Returns a the number of events that match the query.
 // Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
 caf::expected<uint64_t>
 handle_lookup(Actor& self, const vast::query& query,
-              const std::shared_ptr<arrow::Table>& table) {
+              const std::vector<table_slice>& table_slices) {
+  if (table_slices.empty())
+    return 0;
   const auto& ids = query.ids;
-  const auto layout = type::from_arrow(*table->schema());
   auto expr = expression{};
-  if (auto e = tailor(query.expr, layout); e) {
+  if (auto e = tailor(query.expr, table_slices[0].layout()); e) {
     expr = *e;
   }
   uint64_t num_hits = 0ull;
-  auto record_batch_reader = arrow::TableBatchReader(*table);
   auto handle_query = detail::overload{
     [&](const query::count& count) -> caf::expected<uint64_t> {
-      if (count.mode == query::count::estimate)
-        die("logic error detected - count estimate should not load "
-            "partition");
+      VAST_ASSERT(count.mode != query::count::estimate);
       std::shared_ptr<arrow::RecordBatch> batch{};
-      for (const auto& rb : record_batch_reader) {
-        if (rb.ok()) {
-          const auto slice = arrow_table_slice_builder::create(*rb);
-          auto result = count_matching(slice, expr, ids);
-          num_hits += result;
-          self->send(count.sink, result);
-        } else {
-          return caf::make_error(ec::format_error,
-                                 fmt::format("unable to read record batch: {}",
-                                             rb.status().ToString()));
-        }
+      for (const auto& slice : table_slices) {
+        auto result = count_matching(slice, expr, ids);
+        num_hits += result;
+        self->send(count.sink, result);
       }
       return num_hits;
     },
@@ -287,18 +293,11 @@ handle_lookup(Actor& self, const vast::query& query,
         return caf::make_error(ec::invalid_query, "preserve_ids not supported "
                                                   "in parquet format");
       }
-      for (const auto& rb : record_batch_reader) {
-        if (rb.ok()) {
-          const auto slice = arrow_table_slice_builder::create(*rb);
-          auto final_slice = filter(slice, expr, ids);
-          if (final_slice) {
-            num_hits += final_slice->rows();
-            self->send(extract.sink, *final_slice);
-          }
-        } else {
-          return caf::make_error(ec::format_error,
-                                 fmt::format("unable to read record batch: {}",
-                                             rb.status().ToString()));
+      for (const auto& slice : table_slices) {
+        auto final_slice = filter(slice, expr, ids);
+        if (final_slice) {
+          num_hits += final_slice->rows();
+          self->send(extract.sink, *final_slice);
         }
       }
       return num_hits;
@@ -383,8 +382,6 @@ store(system::store_actor::stateful_pointer<store_state> self,
       auto start = std::chrono::steady_clock::now();
       auto slices = std::vector<table_slice>{};
       auto num_hits = handle_lookup(self, query, self->state.table_);
-      // if (!num_hits)
-      //   return num_hits.error();
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
       self->send(self->state.accountant_, "parquet-store.lookup.runtime",
@@ -395,7 +392,7 @@ store(system::store_actor::stateful_pointer<store_state> self,
                  *num_hits,
                  vast::system::metrics_metadata{{"query", id_str},
                                                 {"store-type", "passive"}});
-      return *num_hits;
+      return num_hits;
     },
     [](atom::erase, const ids&) -> caf::result<uint64_t> {
       return ec::unimplemented;
@@ -413,9 +410,13 @@ auto add_table_slices(
   system::store_builder_actor::stateful_pointer<store_builder_state> self) {
   return [self](caf::unit_t&, std::vector<table_slice>& batch) {
     for (auto& slice : batch) {
-      const auto& record_batch = to_record_batch(slice);
-      self->state.num_rows_ += record_batch->num_rows();
-      self->state.record_batches_.push_back(record_batch);
+      if (self->state.vast_type_) {
+        VAST_ASSERT(*self->state.vast_type_ == slice.layout());
+      } else {
+        self->state.vast_type_ = slice.layout();
+      }
+      self->state.num_rows_ += slice.rows();
+      self->state.table_slices_.push_back(slice);
     }
     VAST_TRACE("[{}::{}] received batch of {} table slices", *self,
                self->state.id_, batch.size());
@@ -438,8 +439,11 @@ std::shared_ptr<parquet::ArrowWriterProperties> arrow_writer_properties() {
   return builder.build();
 }
 
-auto write_parquet_buffer(const arrow::RecordBatchVector& batches) {
+auto write_parquet_buffer(const std::vector<table_slice>& slices) {
   auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto batches = arrow::RecordBatchVector{};
+  for (const auto& slice : slices)
+    batches.push_back(to_record_batch(slice));
   auto table = arrow::Table::FromRecordBatches(batches).ValueOrDie();
   auto writer_props = writer_properties();
   auto arrow_writer_props = arrow_writer_properties();
@@ -453,12 +457,12 @@ auto write_parquet_buffer(const arrow::RecordBatchVector& batches) {
 auto finish_parquet(
   system::store_builder_actor::stateful_pointer<store_builder_state> self) {
   return [self](caf::unit_t&, const caf::error&) {
-    auto buffer = write_parquet_buffer(self->state.record_batches_);
+    auto buffer = write_parquet_buffer(self->state.table_slices_);
     VAST_TRACE("[{}::{}] write triggered, w/ {} records in {} table slices, "
                "parquet file "
                "size: {} bytes",
                *self, self->state.id_, self->state.num_rows_,
-               self->state.record_batches_.size(), buffer->size());
+               self->state.table_slices_.size(), buffer->size());
     auto path = store_path_for_partition(self->state.id_);
     auto c = chunk::make(buffer);
     auto bytes = std::span<const std::byte>{c->data(), c->size()};
@@ -486,8 +490,8 @@ system::store_builder_actor::behavior_type store_builder(
   self->state.accountant_ = std::move(accountant);
   self->state.fs_ = std::move(fs);
   return {
-    [](const query&) -> caf::result<uint64_t> {
-      return ec::unimplemented;
+    [self](const query& query) -> caf::result<uint64_t> {
+      return handle_lookup(self, query, self->state.table_slices_);
     },
     [](atom::erase, const ids&) -> caf::result<uint64_t> {
       return ec::unimplemented;
