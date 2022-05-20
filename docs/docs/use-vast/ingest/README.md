@@ -142,12 +142,13 @@ JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects
 as produced by the
 [json-streaming-logs](https://github.com/corelight/json-streaming-logs) package.
 Unlike stock Zeek JSON logs, where one file contains exactly one log type, the
-streaming format contains different log event types in a single stream and uses
-an additional `_path` field to disambiguate the log type. For stock Zeek JSON
-logs, use the existing `import json` with the `--type` option to specify the log
-type.
+streaming format contains different log event types multiplexed in a single
+stream and uses an additional `_path` field to disambiguate the log type. For
+stock Zeek JSON logs, use the existing `import json` with the `--type` option to
+specify the log type. You do not need to specify a type for Zeek TSV, because
+VAST can infer the type from `#path` comment.
 
-Here's an example of a typical Zeek `conn.log`:
+Here's an example of a typical Zeek `conn.log` in TSV form:
 
 ```
 #separator \x09
@@ -270,13 +271,6 @@ To import from a UNIX domain socket, combine netcat with a `vast import`:
 nc -vlkU eve.sock | vast import suricata
 ```
 
-:::tip multimport
-If you need a more flexible way to feed Suricata logs into VAST, check out
-[multimport](https://github.com/satta/multimport) by Sascha Steinbiss. This
-powerful utility load-balances Suricata logs over a scalable number of VAST
-import processes and handles failures gracefully.
-:::
-
 ### NetFlow
 
 :::info Pro feature
@@ -359,6 +353,7 @@ You can also acquire packets by listening on an interface:
 ```bash
 vast import pcap -i eth0
 ```
+
 #### Real-World Traffic Replay
 
 When reading PCAP data from a trace, VAST processes packets directly one after
@@ -506,7 +501,9 @@ vast import suricata '#type != "suricata.stats"' < path/to/eve.json
 
 See the [query language documentation](/docs/understand-vast/query-language/) to
 learn more about how to express filters.
+
 ## Infer a schema automatically
+
 :::note Auto-inference underway
 We have planned to make big improvements to the schema management. Most notably,
 writing a schema will be optional in the future, i.e., only needed when tuning
@@ -595,14 +592,6 @@ Restart VAST and you're ready to ingest the CSV with richer typing:
 vast import csv < foo.csv
 ```
 
-:::note Why YAML?
-Why YAML and not X? The primary reason is that YAML is the most common
-configuration language, and VAST uses it also for its configuration. But isn't
-the nesting excessive? Yes, it can be painful, but the alternatives are not
-rosier either. TOML and JSON create a lot of churn, and VAST's previous DSL is
-unnecessary cognitive load for a user who wants to get things done.
-:::
-
 ## Map events to schemas
 
 For some input formats, such as JSON and CSV, VAST requires an existing
@@ -617,10 +606,17 @@ There exist two ways to tell VAST how to map events to schemas:
 
    The `--type=PREFIX` option makes it possible to restrict the set of candidate
    schemas to type names with a given prefix, in case there exist multiple
-   schemas with identical field names.
+   schemas with identical field names. "Prefix" here means up to a dot delimiter
+   or a full type name, e.g., `suricata` or `suricata.dns` are valid prefixes,
+   but neither `suricat` nor `suricata.d`.
 
-   VAST permanently tracks imported event types. They do not need to be
-   specified again for consecutive imports.
+   :::info Performance Boost
+   In case the prefix specified by `--type` yields *exactly one* possible
+   candidate schema, VAST can operate substantially faster. The reason is that
+   VAST disambiguates multiple schemas by comparing their normalized
+   representation, which works by computing hash of the list of sorted field
+   names and comparing it to the hash of the candidate types.
+   :::
 
 2. **Selector Specification**: some events have a dedicated field to indicate
    the type name of a particular event. For example, Suricata EVE JSON records
