@@ -774,39 +774,6 @@ public:
     return "imports PCAP logs from STDIN or file";
   }
 
-  /// Returns the `vast import <format>` documentation.
-  [[nodiscard]] const char* reader_documentation() const override {
-    return R"__(The `import pcap` command uses [libpcap](https://www.tcpdump.org) to read
-network packets from a trace or an interface.
-
-The `spawn source pcap` command spawns a PCAP source inside the node and is the
-analog to the `import pcap` command.
-
-VAST computes the [Community ID](https://github.com/corelight/community-id-spec)
-per packet for better pivoting support. Adding the string representation
-to the table slice imposes an overhead of approximately 15% of the ingestion
-rate. The option `--disable-community-id` disables the computation completely.
-
-While decapsulating packets, VAST extracts
-[802.1Q](https://en.wikipedia.org/wiki/IEEE_802.1Q) VLAN tags into the `vlan`
-record, consisting of an `outer` and `inner` field for the respective tags. The
-value of the VLAN tag corresponds to the 12-bit VLAN identifier (VID). Special
-values include `0` (frame does not carry a VLAN ID) and `0xFFF` (reserved value;
-sometimes wildcard match).
-
-The PCAP import format has many additional options that offer a user interface
-that should be familiar to users of other tools interacting with PCAPs. To see
-a list of all available options, run `vast import pcap help`.
-
-Here's an example that reads from the network interface `en0` cuts off packets
-after 65535 bytes.
-
-```bash
-sudo vast import pcap --interface=en0 --cutoff=65535
-```
-)__";
-  }
-
   /// Returns the options for the `vast import <format>` and `vast spawn source
   /// <format>` commands.
   [[nodiscard]] caf::config_option_set
@@ -842,16 +809,6 @@ sudo vast import pcap --interface=en0 --cutoff=65535
   /// Returns the `vast export <format>` helptext.
   [[nodiscard]] const char* writer_help() const override {
     return "exports query results in PCAP format";
-  }
-
-  /// Returns the `vast export <format>` documentation.
-  [[nodiscard]] const char* writer_documentation() const override {
-    return R"__(The PCAP export format uses [libpcap](https://www.tcpdump.org) to write PCAP
-events as a trace.
-
-This command only supports events of type `pcap.packet`. As a result, VAST
-transforms a provided query expression `E` into `#type == "pcap.packet" && E`.
-)__";
   }
 
   /// Returns the options for the `vast export <format>` and `vast spawn sink

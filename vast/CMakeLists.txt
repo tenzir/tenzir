@@ -166,22 +166,21 @@ target_compile_definitions(
 
 # -- man page ------------------------------------------------------------------
 
-# TODO: Keep a copy of the man page in the repository such that we know the last
-# edit date. If pandoc+git is available, rebuild the man page.
-
+# TODO: Feed the last commit date in. Using the current date breaks
+# deterministic builds.
+string(TIMESTAMP VAST_LAST_COMMIT_DATE)
 if (VAST_ENABLE_MANPAGES)
-  add_custom_command(
-    TARGET vast
-    POST_BUILD
-    COMMAND "$<TARGET_FILE:vast>" --bare-mode manual >
-            "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
+  add_custom_target(
+    vast-manpage
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
     COMMAND
-      "${PANDOC}" -s -f markdown -t man "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
-      -o "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
-    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1.md"
-               "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
+      "${PANDOC}" -s -f gfm -t man -V date:${VAST_LAST_COMMIT_DATE}
+      "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md" -o
+      "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     COMMENT "Generating vast.1"
     VERBATIM)
+  add_dependencies(vast vast-manpage)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
           DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
 endif ()

@@ -39,7 +39,7 @@ struct fixture {
   caf::actor_system sys{cfg};
   invocation inv;
 
-  fixture() : root{"vast", "", "", command::opts()} {
+  fixture() : root{"vast", "", command::opts()} {
   }
 
   caf::variant<caf::none_t, std::string, caf::error>
@@ -75,12 +75,12 @@ FIXTURE_SCOPE(command_tests, fixture)
 
 TEST(names) {
   using svec = std::vector<std::string>;
-  auto aa = root.add_subcommand("a", "", "", command::opts())
-              ->add_subcommand("aa", "", "", command::opts());
-  aa->add_subcommand("aaa", "", "", command::opts());
-  aa->add_subcommand("aab", "", "", command::opts());
+  auto aa = root.add_subcommand("a", "", command::opts())
+              ->add_subcommand("aa", "", command::opts());
+  aa->add_subcommand("aaa", "", command::opts());
+  aa->add_subcommand("aab", "", command::opts());
   CHECK_EQUAL(aa->name, "aa");
-  root.add_subcommand("b", "", "", command::opts());
+  root.add_subcommand("b", "", command::opts());
   svec names;
   for_each(root, [&](auto& cmd) { names.emplace_back(cmd.full_name()); });
   CHECK_EQUAL(names, svec({"vast", "a", "a aa", "a aa aaa", "a aa aab", "b"}));
@@ -91,13 +91,13 @@ TEST(flat command invocation) {
     {"foo", foo},
     {"bar", bar},
   };
-  auto fptr = root.add_subcommand("foo", "", "",
+  auto fptr = root.add_subcommand("foo", "",
                                   command::opts()
                                     .add<int>("value,v", "some int")
                                     .add<bool>("flag", "some flag"));
   CHECK_EQUAL(fptr->name, "foo");
   CHECK_EQUAL(fptr->full_name(), "foo");
-  auto bptr = root.add_subcommand("bar", "", "", command::opts());
+  auto bptr = root.add_subcommand("bar", "", command::opts());
   CHECK_EQUAL(bptr->name, "bar");
   CHECK_EQUAL(bptr->full_name(), "bar");
   CHECK(is_error(exec("nop", factory)));
@@ -116,13 +116,13 @@ TEST(nested command invocation) {
     {"foo", foo},
     {"foo bar", bar},
   };
-  auto fptr = root.add_subcommand("foo", "", "",
+  auto fptr = root.add_subcommand("foo", "",
                                   command::opts()
                                     .add<int>("value,v", "some int")
                                     .add<bool>("flag", "some flag"));
   CHECK_EQUAL(fptr->name, "foo");
   CHECK_EQUAL(fptr->full_name(), "foo");
-  auto bptr = fptr->add_subcommand("bar", "", "", command::opts());
+  auto bptr = fptr->add_subcommand("bar", "", command::opts());
   CHECK_EQUAL(bptr->name, "bar");
   CHECK_EQUAL(bptr->full_name(), "foo bar");
   CHECK(is_error(exec("nop", factory)));
@@ -143,7 +143,7 @@ TEST(nested command invocation) {
 
 TEST(version command) {
   command::factory factory{{"version", system::version_command}};
-  root.add_subcommand("version", "", "", command::opts());
+  root.add_subcommand("version", "", command::opts());
   CHECK_VARIANT_EQUAL(exec("version", factory), caf::none);
 }
 
@@ -151,7 +151,7 @@ TEST(missing argument) {
   auto factory = command::factory{
     {"foo", foo},
   };
-  root.add_subcommand("foo", "", "",
+  root.add_subcommand("foo", "",
                       command::opts().add<int>("value,v", "some int"));
   CHECK(is_error(exec("foo -v", factory)));
 }

@@ -53,12 +53,15 @@ Building VAST involves the following steps:
   git clone --recursive https://github.com/tenzir/vast
   ```
 
-2. Configure the build with CMake. We recommend passing `-G Ninja` to the build
-   configuration to use `ninja` for faster builds.
+2. Configure the build with CMake. For faster builds, we recommend passing
+  `-G Ninja` to `cmake`.
   ```bash
   cd vast
-  cmake -B build -G Ninja
-  # Optional: Conveniently configure with ccmake
+  cmake -B build
+  ```
+
+  Optionally, you can use the CMake TUI to visually configure the build:
+  ```bash
   ccmake build
   ```
 

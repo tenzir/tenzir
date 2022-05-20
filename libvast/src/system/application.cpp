@@ -12,7 +12,6 @@
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
-#include "vast/documentation.hpp"
 #include "vast/error.hpp"
 #include "vast/plugin.hpp"
 #include "vast/system/configuration.hpp"
@@ -54,7 +53,6 @@ command::opts_builder add_archive_opts(command::opts_builder ob) {
 auto make_count_command() {
   return std::make_unique<command>(
     "count", "count hits for a query without exporting data",
-    documentation::vast_count,
     opts("?vast.count")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<bool>("estimate,e", "estimate an upper bound by "
@@ -63,13 +61,11 @@ auto make_count_command() {
 
 auto make_dump_command() {
   auto dump = std::make_unique<command>(
-    "dump", "print configuration objects as JSON", documentation::vast_dump,
+    "dump", "print configuration objects as JSON",
     opts("?vast.dump").add<bool>("yaml", "format output as YAML"));
   dump->add_subcommand("concepts", "print all registered concept definitions",
-                       documentation::vast_dump_concepts,
                        opts("?vast.dump.concepts"));
   dump->add_subcommand("models", "print all registered model definitions",
-                       documentation::vast_dump_models,
                        opts("?vast.dump.models"));
   return dump;
 }
@@ -77,7 +73,6 @@ auto make_dump_command() {
 auto make_explore_command() {
   return std::make_unique<command>(
     "explore", "explore context around query results",
-    documentation::vast_explore,
     opts("?vast.explore")
       .add<std::string>("format", "output format (default: JSON)")
       .add<std::string>("after,A", "include all records up to this much"
@@ -95,7 +90,6 @@ auto make_export_command() {
     "export",
     "exports query results to STDOUT or file, expects a subcommand to select "
     "the format",
-    documentation::vast_export,
     opts("?vast.export")
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
@@ -110,20 +104,16 @@ auto make_export_command() {
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));
   export_->add_subcommand("zeek", "exports query results in Zeek format",
-                          documentation::vast_export_zeek,
                           opts("?vast.export.zeek")
                             .add<bool>("disable-timestamp-tags",
                                        "whether the output should contain "
                                        "#open/#close tags"));
   export_->add_subcommand("csv", "exports query results in CSV format",
-                          documentation::vast_export_csv,
                           opts("?vast.export.csv"));
   export_->add_subcommand("ascii", "exports query results in ASCII format",
-                          documentation::vast_export_ascii,
                           opts("?vast.export.ascii"));
   export_->add_subcommand(
     "json", "exports query results in JSON format",
-    documentation::vast_export_json,
     opts("?vast.export.json")
       .add<bool>("flatten", "flatten nested objects into "
                             "the top-level")
@@ -133,10 +123,8 @@ auto make_export_command() {
       .add<bool>("omit-nulls", "omit null fields in JSON objects"));
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
-                          documentation::vast_export_null,
                           opts("?vast.export.null"));
   export_->add_subcommand("arrow", "exports query results in Arrow format",
-                          documentation::vast_export_arrow,
                           opts("?vast.export.arrow"));
 
   for (const auto& plugin : plugins::get()) {
@@ -144,7 +132,6 @@ auto make_export_command() {
       auto opts_category
         = fmt::format("?vast.export.{}", writer->writer_format());
       export_->add_subcommand(writer->writer_format(), writer->writer_help(),
-                              writer->writer_documentation(),
                               writer->writer_options(opts(opts_category)));
     }
   }
@@ -153,26 +140,25 @@ auto make_export_command() {
 
 auto make_infer_command() {
   return std::make_unique<command>(
-    "infer", "infers the schema from data", documentation::vast_infer,
+    "infer", "infers the schema from data",
     opts("?vast.infer")
       .add<size_t>("buffer,b", "maximum number of bytes to buffer")
       .add<std::string>("read,r", "path to the input data"));
 }
 
 auto make_kill_command() {
-  return std::make_unique<command>("kill", "terminates a component", "",
+  return std::make_unique<command>("kill", "terminates a component",
                                    opts("?vast.kill"), false);
 }
 
 auto make_peer_command() {
-  return std::make_unique<command>("peer", "peers with another node", "",
+  return std::make_unique<command>("peer", "peers with another node",
                                    opts("?vast.peer"), false);
 }
 
 auto make_pivot_command() {
   auto pivot = std::make_unique<command>(
     "pivot", "extracts related events of a given type",
-    documentation::vast_pivot,
     opts("?vast.pivot")
       .add<size_t>("flush-interval,f", "flush to disk after this many packets "
                                        "(only with the PCAP plugin)")
@@ -183,15 +169,13 @@ auto make_pivot_command() {
 }
 
 auto make_send_command() {
-  return std::make_unique<command>("send",
-                                   "sends a message to a registered actor", "",
-                                   opts("?vast.send"), false);
+  return std::make_unique<command>(
+    "send", "sends a message to a registered actor", opts("?vast.send"), false);
 }
 
 auto make_spawn_source_command() {
   auto spawn_source = std::make_unique<command>(
     "source", "creates a new source inside the node",
-    documentation::vast_spawn_source,
     opts("?vast.spawn.source")
       .add<std::string>("batch-encoding", "encoding type of table slices")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
@@ -208,29 +192,23 @@ auto make_spawn_source_command() {
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
   spawn_source->add_subcommand("csv",
                                "creates a new CSV source inside the node",
-                               documentation::vast_spawn_source_csv,
                                opts("?vast.spawn.source.csv"));
   spawn_source->add_subcommand(
     "json", "creates a new JSON source inside the node",
-    documentation::vast_spawn_source_json,
     opts("?vast.spawn.source.json")
       .add<std::string>("selector", "read the event type from the given field "
                                     "(specify as '<field>[:<prefix>]')"));
   spawn_source->add_subcommand("suricata",
                                "creates a new Suricata source inside the node",
-                               documentation::vast_spawn_source_suricata,
                                opts("?vast.spawn.source.suricata"));
   spawn_source->add_subcommand("syslog",
                                "creates a new Syslog source inside the node",
-                               documentation::vast_spawn_source_syslog,
                                opts("?vast.spawn.source.syslog"));
   spawn_source->add_subcommand(
     "test", "creates a new test source inside the node",
-    documentation::vast_spawn_source_test,
     opts("?vast.spawn.source.test").add<size_t>("seed", "the PRNG seed"));
   spawn_source->add_subcommand("zeek",
                                "creates a new Zeek source inside the node",
-                               documentation::vast_spawn_source_zeek,
                                opts("?vast.spawn.source.zeek"));
   for (const auto& plugin : plugins::get()) {
     if (const auto* reader = plugin.as<reader_plugin>()) {
@@ -238,7 +216,6 @@ auto make_spawn_source_command() {
         = fmt::format("?vast.spawn.source.{}", reader->reader_format());
       spawn_source->add_subcommand(reader->reader_format(),
                                    reader->reader_help(),
-                                   reader->reader_documentation(),
                                    reader->reader_options(opts(opts_category)));
     }
   }
@@ -247,25 +224,24 @@ auto make_spawn_source_command() {
 
 auto make_spawn_sink_command() {
   auto spawn_sink = std::make_unique<command>(
-    "sink", "creates a new sink", "",
+    "sink", "creates a new sink",
     opts("?vast.spawn.sink")
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket"),
     false);
-  spawn_sink->add_subcommand("zeek", "creates a new Zeek sink", "",
+  spawn_sink->add_subcommand("zeek", "creates a new Zeek sink",
                              opts("?vast.spawn.sink.zeek"));
-  spawn_sink->add_subcommand("ascii", "creates a new ASCII sink", "",
+  spawn_sink->add_subcommand("ascii", "creates a new ASCII sink",
                              opts("?vast.spawn.sink.ascii"));
-  spawn_sink->add_subcommand("csv", "creates a new CSV sink", "",
+  spawn_sink->add_subcommand("csv", "creates a new CSV sink",
                              opts("?vast.spawn.sink.csv"));
-  spawn_sink->add_subcommand("json", "creates a new JSON sink", "",
+  spawn_sink->add_subcommand("json", "creates a new JSON sink",
                              opts("?vast.spawn.sink.json"));
   for (const auto& plugin : plugins::get()) {
     if (const auto* writer = plugin.as<writer_plugin>()) {
       auto opts_category
         = fmt::format("?vast.spawn.sink.{}", writer->writer_format());
       spawn_sink->add_subcommand(writer->writer_format(), writer->writer_help(),
-                                 writer->writer_documentation(),
                                  writer->writer_options(opts(opts_category)));
     }
   }
@@ -273,29 +249,28 @@ auto make_spawn_sink_command() {
 }
 
 auto make_spawn_command() {
-  auto spawn
-    = std::make_unique<command>("spawn", "creates a new component",
-                                documentation::vast_spawn, opts("?vast.spawn"));
-  spawn->add_subcommand("accountant", "spawns the accountant", "",
+  auto spawn = std::make_unique<command>("spawn", "creates a new component",
+                                         opts("?vast.spawn"));
+  spawn->add_subcommand("accountant", "spawns the accountant",
                         opts("?vast.spawn.accountant"), false);
-  spawn->add_subcommand("archive", "creates a new archive", "",
+  spawn->add_subcommand("archive", "creates a new archive",
                         add_archive_opts(opts("?vast.spawn.archive")), false);
   spawn->add_subcommand(
-    "explorer", "creates a new explorer", "",
+    "explorer", "creates a new explorer",
     opts("?vast.spawn.explorer")
       .add<vast::duration>("after,A", "timebox after each result")
       .add<vast::duration>("before,B", "timebox before each result"),
     false);
   spawn->add_subcommand(
-    "exporter", "creates a new exporter", "",
+    "exporter", "creates a new exporter",
     opts("?vast.spawn.exporter")
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
       .add<uint64_t>("events,e", "maximum number of results"),
     false);
-  spawn->add_subcommand("importer", "creates a new importer", "",
+  spawn->add_subcommand("importer", "creates a new importer",
                         opts("?vast.spawn.importer"), false);
-  spawn->add_subcommand("index", "creates a new index", "",
+  spawn->add_subcommand("index", "creates a new index",
                         add_index_opts(opts("?vast.spawn.index")), false);
   spawn->add_subcommand(make_spawn_source_command());
   spawn->add_subcommand(make_spawn_sink_command());
@@ -305,7 +280,6 @@ auto make_spawn_command() {
 auto make_status_command() {
   return std::make_unique<command>(
     "status", "shows properties of a server process",
-    documentation::vast_status,
     opts("?vast.status")
       .add<bool>("detailed", "add more information to the output")
       .add<bool>("debug", "include extra debug information"));
@@ -313,7 +287,7 @@ auto make_status_command() {
 
 auto make_start_command() {
   return std::make_unique<command>(
-    "start", "starts a node", documentation::vast_start,
+    "start", "starts a node",
     opts("?vast.start")
       .add<bool>("print-endpoint", "print the client endpoint on stdout")
       .add<std::vector<std::string>>("commands", "an ordered list of commands "
@@ -330,13 +304,11 @@ auto make_start_command() {
 }
 
 auto make_stop_command() {
-  return std::make_unique<command>(
-    "stop", "stops a node", documentation::vast_stop, opts("?vast.stop"));
+  return std::make_unique<command>("stop", "stops a node", opts("?vast.stop"));
 }
 
 auto make_version_command() {
   return std::make_unique<command>("version", "prints the software version",
-                                   documentation::vast_version,
                                    opts("?vast.version"));
 }
 
@@ -416,7 +388,6 @@ auto make_root_command(std::string_view path) {
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
   // interested in "vast".
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
-  // For documentation, we use the complete man-page formatted as Markdown
   const auto binary = detail::objectpath();
   auto module_desc
     = "list of directories to look for schema files ([/etc/vast/schema"s;
@@ -465,8 +436,7 @@ auto make_root_command(std::string_view path) {
                                            "data");
   ob = add_index_opts(std::move(ob));
   ob = add_archive_opts(std::move(ob));
-  auto root
-    = std::make_unique<command>(path, "", documentation::vast, std::move(ob));
+  auto root = std::make_unique<command>(path, "", std::move(ob));
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_dump_command());
   root->add_subcommand(make_export_command());
@@ -489,7 +459,7 @@ auto make_root_command(std::string_view path) {
 
 std::unique_ptr<command> make_import_command() {
   auto import_ = std::make_unique<command>(
-    "import", "imports data from STDIN or file", documentation::vast_import,
+    "import", "imports data from STDIN or file",
     opts("?vast.import")
       .add<std::string>("batch-encoding", "encoding type of table slices")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
@@ -506,36 +476,29 @@ std::unique_ptr<command> make_import_command() {
       .add<std::string>("type,t", "filter event type based on prefix matching")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
   import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
-                          documentation::vast_import_zeek,
                           opts("?vast.import.zeek"));
   import_->add_subcommand("zeek-json",
                           "imports Zeek JSON logs from STDIN or file",
-                          documentation::vast_import_zeek,
                           opts("?vast.import.zeek-json"));
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
-                          documentation::vast_import_csv,
                           opts("?vast.import.csv"));
   import_->add_subcommand(
-    "json", "imports JSON with schema", documentation::vast_import_json,
+    "json", "imports JSON with schema",
     opts("?vast.import.json")
       .add<std::string>("selector", "read the event type from the given field "
                                     "(specify as '<field>[:<prefix>]')"));
   import_->add_subcommand("suricata", "imports suricata eve json",
-                          documentation::vast_import_suricata,
                           opts("?vast.import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
-                          documentation::vast_import_syslog,
                           opts("?vast.import.syslog"));
   import_->add_subcommand(
     "test", "imports random data for testing or benchmarking",
-    documentation::vast_import_test,
     opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
   for (const auto& plugin : plugins::get()) {
     if (const auto* reader = plugin.as<reader_plugin>()) {
       auto opts_category
         = fmt::format("?vast.import.{}", reader->reader_format());
       import_->add_subcommand(reader->reader_format(), reader->reader_help(),
-                              reader->reader_documentation(),
                               reader->reader_options(opts(opts_category)));
     }
   }

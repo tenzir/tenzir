@@ -198,71 +198,21 @@ void render_parse_error(const command& cmd, const invocation& inv,
   }
 }
 
-// Prints Markdown-formatted documentation for the taraget command.
-void doctext(const command& cmd, std::ostream& out) {
-  // TODO render with proper framing.
-  out << std::left << cmd.documentation;
-}
-
-void manheader(std::ostream& out) {
-  out << "% VAST(1)\n"
-         "% Tenzir GmbH\n"
-         "\n"
-         "# NAME\n"
-         "\n"
-         "`vast` -- manage a VAST node\n"
-         "\n"
-         "# OVERVIEW\n"
-         "\n"
-         "This section describes the VAST system and its components from a "
-         "user "
-         "interaction point of view.\n"
-         "\n";
-}
-
-void manfooter(std::ostream& out) {
-  out << "# ISSUES\n"
-         "\n"
-         "If you encounter a bug or have suggestions for improvement, please "
-         "file "
-         "an issue at <http://vast.fail>.\n"
-         "\n"
-         "# SEE ALSO\n"
-         "\n"
-         "Visit <http://vast.io> for more information about VAST.\n";
-}
-
-// Prints Markdown-formatted documentation for the target command and all its
-// subcommands with headers of increasing depth.
-void mantext(const command& cmd, std::ostream& out,
-             std::string::size_type depth) {
-  auto header_prefix = std::string(depth, '#');
-  out << header_prefix << ' ' << cmd.name << "\n\n";
-  doctext(cmd, out);
-  for (const auto& subcmd : cmd.children)
-    if (subcmd->visible)
-      mantext(*subcmd, out, depth + 1);
-  out << '\n';
-}
-
 } // namespace
 
 command::command(std::string_view name, std::string_view description,
-                 std::string_view documentation, caf::config_option_set opts,
-                 bool visible)
+                 caf::config_option_set opts, bool visible)
   : parent{nullptr},
     name{name},
     description{description},
-    documentation{documentation},
     options{std::move(opts)},
     children{},
     visible{visible} {
 }
 
 command::command(std::string_view name, std::string_view description,
-                 std::string_view documentation, command::opts_builder opts,
-                 bool visible)
-  : command(name, description, documentation, opts.finish(), visible) {
+                 command::opts_builder opts, bool visible)
+  : command(name, description, opts.finish(), visible) {
 }
 
 std::string command::full_name() const {
@@ -297,10 +247,6 @@ caf::error parse_impl(invocation& result, const command& cmd,
   result.assign(&cmd, position, last);
   if (get_or(result.options, "help", false))
     return caf::none;
-  if (get_or(result.options, "documentation", false))
-    return caf::none;
-  if (get_or(result.options, "manual", false))
-    return caf::none;
   bool has_subcommand;
   switch (state) {
     default: {
@@ -324,16 +270,6 @@ caf::error parse_impl(invocation& result, const command& cmd,
   // Check for help option.
   if (has_subcommand && *position == "help") {
     put(result.options, "help", true);
-    return caf::none;
-  }
-  // Check for docomentation option.
-  if (has_subcommand && *position == "documentation") {
-    put(result.options, "documentation", true);
-    return caf::none;
-  }
-  // Check for manual option.
-  if (has_subcommand && *position == "manual") {
-    put(result.options, "manual", true);
     return caf::none;
   }
   if (!has_subcommand)
@@ -367,16 +303,6 @@ parse(const command& root, command::argument_iterator first,
   }
   if (get_or(result.options, "help", false)) {
     helptext(*target, std::cout);
-    return caf::no_error;
-  }
-  if (get_or(result.options, "documentation", false)) {
-    doctext(*target, std::cout);
-    return caf::no_error;
-  }
-  if (get_or(result.options, "manual", false)) {
-    manheader(std::cout);
-    mantext(*target, std::cout, 3);
-    manfooter(std::cout);
     return caf::no_error;
   }
   return result;
