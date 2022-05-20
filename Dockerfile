@@ -42,7 +42,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev && \
+    apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev && \
     rm -rf /var/lib/apt/lists/* *.deb
 
 # VAST
@@ -146,7 +146,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow800 && \
+    apt-get -y --no-install-recommends install libarrow800 libparquet800 && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast
