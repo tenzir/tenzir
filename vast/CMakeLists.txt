@@ -175,8 +175,8 @@ if (VAST_ENABLE_MANPAGES)
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
     COMMAND
       "${PANDOC}" -s -f gfm -t man -V date:${VAST_LAST_COMMIT_DATE}
-      "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
-      -o "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
+      "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md" -o
+      "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     COMMENT "Generating vast.1"
     VERBATIM)
