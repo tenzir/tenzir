@@ -25,6 +25,9 @@
 #include <vector>
 
 namespace vast {
+
+class data;
+
 /// A sequence of types.
 class module : detail::equality_comparable<module> {
 public:
