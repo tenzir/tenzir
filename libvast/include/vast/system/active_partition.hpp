@@ -122,9 +122,6 @@ struct active_partition_state {
   /// A readable name for this partition
   std::string name = {};
 
-  /// Whether VAST is configured to use partition-local stores.
-  bool partition_local_stores = {};
-
   /// Actor handle of the accountant.
   accountant_actor accountant = {};
 

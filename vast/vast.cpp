@@ -107,18 +107,23 @@ int main(int argc, char** argv) {
         &cfg, "vast.meta-index-fp-rate")) {
     if (auto catalog_fp_rate = caf::get_if<double>( //
           &cfg, "vast.catalog-fp-rate")) {
-      VAST_ERROR("The 'vast.meta-index-fp-rate' option is deprecated; please "
+      VAST_ERROR("the 'vast.meta-index-fp-rate' option is deprecated; please "
                  "remove it from your configuration");
       return EXIT_FAILURE;
     }
-    VAST_WARN("The 'vast.meta-index-fp-rate' option is deprecated; "
+    VAST_WARN("the 'vast.meta-index-fp-rate' option is deprecated; "
               "automatically setting its replacement 'vast.catalog-fp-rate' "
               "instead");
     caf::put(cfg.content, "vast.catalog-fp-rate", *meta_index_fp_rate);
   }
   if (caf::holds_alternative<bool>(cfg, "vast.use-legacy-query-scheduler"))
-    VAST_WARN("The 'vast.use-legacy-query-scheduler' option is deprecated; "
+    VAST_WARN("the 'vast.use-legacy-query-scheduler' option is deprecated; "
               "it will be removed with the next minor release of VAST.");
+  if (caf::get_or(cfg, "vast.store-backend", "segment-store") == "archive") {
+    VAST_WARN("the 'vast.store-backend' option 'archive' is deprecated; "
+              "automatically using 'segment-store' instead");
+    caf::put(cfg.content, "vast.store-backend", "segment-store");
+  }
   // Eagerly verify the export transform configuration, to avoid hidden
   // configuration errors that pop up the first time a user tries to run
   // `vast export`.
