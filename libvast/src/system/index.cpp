@@ -446,26 +446,21 @@ void index_state::create_active_partition(const type& layout) {
   // the archive itself so it can handle multiple input streams.)
   std::string store_name = {};
   chunk_ptr store_header = chunk::make_empty();
-  if (partition_local_stores) {
-    store_name = store_plugin->name();
-    auto builder_and_header
-      = store_plugin->make_store_builder(accountant, filesystem, id);
-    if (!builder_and_header) {
-      VAST_ERROR("could not create new active partition: {}",
-                 render(builder_and_header.error()));
-      self->quit(builder_and_header.error());
-      return;
-    }
-    auto& [builder, header] = *builder_and_header;
-    store_header = header;
-    active_partition.store = builder;
-    active_partition.store_slot
-      = stage->add_outbound_path(active_partition.store);
-    stage->out().set_filter(active_partition.store_slot, layout);
-  } else {
-    store_name = "legacy_archive";
-    active_partition.store = global_store;
+  store_name = store_plugin->name();
+  auto builder_and_header
+    = store_plugin->make_store_builder(accountant, filesystem, id);
+  if (!builder_and_header) {
+    VAST_ERROR("could not create new active partition: {}",
+               render(builder_and_header.error()));
+    self->quit(builder_and_header.error());
+    return;
   }
+  auto& [builder, header] = *builder_and_header;
+  store_header = header;
+  active_partition.store = builder;
+  active_partition.store_slot
+    = stage->add_outbound_path(active_partition.store);
+  stage->out().set_filter(active_partition.store_slot, layout);
   active_partition.spawn_time = std::chrono::steady_clock::now();
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
@@ -489,8 +484,7 @@ void index_state::decomission_active_partition(const type& layout) {
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
   stage->out().close(active_partition->second.stream_slot);
-  if (partition_local_stores)
-    stage->out().close(active_partition->second.store_slot);
+  stage->out().close(active_partition->second.store_slot);
   stage->out().force_emit_batches();
   // Persist active partition asynchronously.
   auto part_dir = partition_path(id);
@@ -817,10 +811,6 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.synopsis_opts = std::move(index_config);
   // The global archive gets hard-coded special treatment for backwards
   // compatibility.
-  self->state.partition_local_stores = store_backend != "archive";
-  if (self->state.partition_local_stores)
-    VAST_VERBOSE("{} uses partition-local stores instead of the archive",
-                 *self);
   if (dir != catalog_dir)
     VAST_VERBOSE("{} uses {} for catalog data", *self, catalog_dir);
   // Set members.
@@ -830,17 +820,15 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accept_queries = true;
   self->state.max_concurrent_partition_lookups
     = max_concurrent_partition_lookups;
-  if (self->state.partition_local_stores) {
-    self->state.store_plugin = plugins::find<store_plugin>(store_backend);
-    if (!self->state.store_plugin) {
-      auto error = caf::make_error(ec::invalid_configuration,
-                                   fmt::format("could not find "
-                                               "store plugin '{}'",
-                                               store_backend));
-      VAST_ERROR("{}", render(error));
-      self->quit(error);
-      return index_actor::behavior_type::make_empty_behavior();
-    }
+  self->state.store_plugin = plugins::find<store_plugin>(store_backend);
+  if (!self->state.store_plugin) {
+    auto error = caf::make_error(ec::invalid_configuration,
+                                 fmt::format("could not find "
+                                             "store plugin '{}'",
+                                             store_backend));
+    VAST_ERROR("{}", render(error));
+    self->quit(error);
+    return index_actor::behavior_type::make_empty_behavior();
   }
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);

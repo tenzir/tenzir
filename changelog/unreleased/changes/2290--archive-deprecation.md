@@ -1,0 +1,3 @@
+The `vast.store-backend` configuration option no longer supports the `archive`,
+and instead always uses the superior `segment-store` instead. Events stored in
+the archive will continue to be available in queries.

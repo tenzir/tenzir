@@ -195,7 +195,6 @@ active_partition_actor::behavior_type active_partition(
   self->state.data.store_header = std::move(header);
   self->state.partition_capacity
     = get_or(index_opts, "cardinality", defaults::system::max_partition_size);
-  self->state.partition_local_stores = store_id != "archive";
   self->state.store = std::move(store);
   self->state.synopsis_index_config = synopsis_opts;
   // The active partition stage is a caf stream stage that takes

@@ -236,9 +236,6 @@ struct index_state {
   /// from disk.
   bool accept_queries = {};
 
-  /// Whether we should use a partition-local store for the active partition.
-  bool partition_local_stores = {};
-
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
