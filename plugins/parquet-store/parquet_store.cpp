@@ -521,7 +521,7 @@ caf::error plugin::initialize(data options) {
 
 [[nodiscard]] const char* plugin::name() const {
   return "parquet-store";
-};
+}
 
 [[nodiscard]] caf::expected<plugin::builder_and_header>
 plugin::make_store_builder(system::accountant_actor accountant,
