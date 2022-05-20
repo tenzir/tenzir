@@ -167,6 +167,7 @@ struct table_slice_fixture {
     {"f10", mt_addr_et},
     {"f11", mt_pattern_subnet},
     {"f12", rrt},
+    {"f13", duration_type{}},
   };
   list f1_string = list{"n1", "n2", {}, "n4"};
   list f2_count = list{1_c, {}, 3_c, 4_c};
@@ -221,6 +222,8 @@ struct table_slice_fixture {
     map{},
     caf::none,
   };
+  list f12_duration
+    = list{duration{13323100000}, caf::none, caf::none, caf::none};
   table_slice slice = make_slice(
     t, f1_string, f2_count, f3_pattern, f4_address, f5_subnet, f6_enum,
     f7_list_subnet, f8_map_enum_count, f9_enum_list, f10_map_addr_enum,
@@ -228,8 +231,8 @@ struct table_slice_fixture {
     f6_enum,    // f12_1_1 re-using existing data arrays for convenience
     f5_subnet,  // f12_1_2
     f4_address, // f12_2_1
-    f3_pattern  // f12_2_2
-  );
+    f3_pattern, // f12_2_2
+    f12_duration);
 };
 
 } // namespace
@@ -267,6 +270,7 @@ TEST(active parquet store query) {
   check_column(results[0], 12, subnet_type{}, f.f5_subnet);   // f12_1_2
   check_column(results[0], 13, address_type{}, f.f4_address); // f12_2_1
   check_column(results[0], 14, pattern_type{}, f.f3_pattern); // f12_2_2
+  check_column(results[0], 15, duration_type{}, f.f12_duration);
 }
 
 TEST(passive parquet store query) {
