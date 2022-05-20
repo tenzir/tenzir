@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
               "it will be removed with the next minor release of VAST.");
   if (caf::get_or(cfg, "vast.store-backend", "segment-store") == "archive") {
     VAST_WARN("the 'vast.store-backend' option 'archive' is deprecated; "
-              "automatically using the 'segment-store' instead");
+              "automatically using 'segment-store' instead");
     caf::put(cfg.content, "vast.store-backend", "segment-store");
   }
   // Eagerly verify the export transform configuration, to avoid hidden
