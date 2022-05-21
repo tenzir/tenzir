@@ -31,7 +31,7 @@ const config = {
           remarkPlugins: [require('mdx-mermaid')],
         },
         theme: {
-          customCss: require.resolve('./src/css/custom.css'),
+          customCss: require.resolve('./src/css/custom.scss'),
         },
       }),
     ],
@@ -60,7 +60,8 @@ const config = {
           },
           {
             href: 'https://github.com/tenzir/vast',
-            label: 'GitHub',
+            'aria-label': 'GitHub',
+            className: 'header-github-link',
             position: 'right',
           },
         ],
