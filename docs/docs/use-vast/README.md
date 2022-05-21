@@ -26,8 +26,8 @@ flowchart TB
     transform(Transform):::future
     introspect(Introspect):::future
   end
-  click ingest "/vast/docs/use-vast/ingest" "Ingest Data"
-  %%click query "/vast/docs/use-vast/query" "Query Data"
-  %%click transform "/vast/docs/use-vast/transform" "Transform Data"
-  %%click introspect "/vast/docs/use-vast/introspect" "Introspect Data"
+  click ingest "/docs/use-vast/ingest" "Ingest Data"
+  %%click query "/docs/use-vast/query" "Query Data"
+  %%click transform "/docs/use-vast/transform" "Transform Data"
+  %%click introspect "/docs/use-vast/introspect" "Introspect Data"
 ```
