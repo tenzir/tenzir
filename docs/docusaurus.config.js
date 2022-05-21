@@ -16,6 +16,10 @@ const config = {
   organizationName: 'tenzir', // Usually your GitHub org/user name.
   projectName: 'vast', // Usually your repo name.
 
+  plugins: [
+    'docusaurus-plugin-sass',
+  ],
+
   presets: [
     [
       'classic',
