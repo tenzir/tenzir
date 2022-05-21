@@ -59,6 +59,12 @@ const config = {
             position: 'left',
           },
           {
+            href: 'http://slack.tenzir.com',
+            'aria-label': 'Slack',
+            className: 'header-slack-link',
+            position: 'right',
+          },
+          {
             href: 'https://github.com/tenzir/vast',
             'aria-label': 'GitHub',
             className: 'header-github-link',
