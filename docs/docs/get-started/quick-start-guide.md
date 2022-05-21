@@ -5,7 +5,7 @@ takes you through a tour of the key use cases.
 ## Run VAST
 
 Experimenting with a static binary or Docker image is often the easiest way to
-get started. Read our [setup instructions](/vast/docs/setup-vast/) for a more
+get started. Read our [setup instructions](/docs/setup-vast/) for a more
 elaborate route.
 
 import Tabs from '@theme/Tabs';
