@@ -35,10 +35,10 @@ flowchart LR
   instance <--> configure
   instance <--> tune
   %% Links
-  click download "/vast/docs/setup-vast/download/" "Download VAST"
-  click build "/vast/docs/setup-vast/build/" "Build VAST"
-  click install "/vast/docs/setup-vast/install/" "Install VAST"
-  click deploy "/vast/docs/setup-vast/deploy/" "Deploy VAST"
-  click configure "/vast/docs/setup-vast/configure/" "Configure VAST"
-  click tune "/vast/docs/setup-vast/tune/" "Tune VAST"
+  click download "/docs/setup-vast/download/" "Download VAST"
+  click build "/docs/setup-vast/build/" "Build VAST"
+  click install "/docs/setup-vast/install/" "Install VAST"
+  click deploy "/docs/setup-vast/deploy/" "Deploy VAST"
+  click configure "/docs/setup-vast/configure/" "Configure VAST"
+  click tune "/docs/setup-vast/tune/" "Tune VAST"
 ```

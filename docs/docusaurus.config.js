@@ -15,6 +15,7 @@ const config = {
   favicon: 'img/favicon.ico',
   organizationName: 'tenzir', // Usually your GitHub org/user name.
   projectName: 'vast', // Usually your repo name.
+  trailingSlash: false, // GitHub Pages already adds a slash
 
   plugins: [
     'docusaurus-plugin-sass',
@@ -29,9 +30,16 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl: 'https://github.com/tenzir/vast/tree/master/docs',
           remarkPlugins: [require('mdx-mermaid')],
+          showLastUpdateTime: true,
+          showLastUpdateAuthor: true,
         },
         theme: {
           customCss: require.resolve('./src/css/custom.scss'),
+        },
+        sitemap: {
+          changefreq: 'weekly',
+          priority: 0.5,
+          ignorePatterns: ['/tags/**'],
         },
       }),
     ],
