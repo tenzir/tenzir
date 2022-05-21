@@ -8,8 +8,8 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 const config = {
   title: 'VAST',
   tagline: 'Actionable insights at your fingertips.',
-  url: 'https://tenzir.github.io',
-  baseUrl: '/vast/',
+  url: 'https://vast.io',
+  baseUrl: '/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'error',
   favicon: 'img/favicon.ico',
