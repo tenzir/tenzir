@@ -16,6 +16,10 @@ const config = {
   organizationName: 'tenzir', // Usually your GitHub org/user name.
   projectName: 'vast', // Usually your repo name.
 
+  plugins: [
+    'docusaurus-plugin-sass',
+  ],
+
   presets: [
     [
       'classic',
@@ -27,7 +31,7 @@ const config = {
           remarkPlugins: [require('mdx-mermaid')],
         },
         theme: {
-          customCss: require.resolve('./src/css/custom.css'),
+          customCss: require.resolve('./src/css/custom.scss'),
         },
       }),
     ],
@@ -55,11 +59,24 @@ const config = {
             position: 'left',
           },
           {
+            href: 'http://slack.tenzir.com',
+            'aria-label': 'Slack',
+            className: 'header-slack-link',
+            position: 'right',
+          },
+          {
             href: 'https://github.com/tenzir/vast',
-            label: 'GitHub',
+            'aria-label': 'GitHub',
+            className: 'header-github-link',
             position: 'right',
           },
         ],
+      },
+      announcementBar: {
+        content:
+        '⚠ This site is still under construction. Your <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/discussions">feedback</a> is welcome! Please also consider giving us a <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">GitHub ⭐ star</a>',
+        backgroundColor: '#f1f2f2',
+        isCloseable: false,
       },
       footer: {
         links: [
