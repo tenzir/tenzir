@@ -33,6 +33,13 @@ const config = {
           showLastUpdateTime: true,
           showLastUpdateAuthor: true,
         },
+        blog: {
+          blogTitle: 'VAST Blog',
+          blogDescription: 'News from the VAST community',
+          blogSidebarCount: 10,
+          blogSidebarTitle: 'Blog Posts',
+          postsPerPage: 20,
+        },
         theme: {
           customCss: require.resolve('./src/css/custom.scss'),
         },
@@ -60,6 +67,11 @@ const config = {
             docId: 'get-started/README',
             position: 'left',
             label: 'Docs',
+          },
+          {
+            to: 'blog',
+            label: 'Blog',
+            position: 'left'
           },
           {
             to: '/changelog',
