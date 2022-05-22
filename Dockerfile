@@ -48,7 +48,6 @@ RUN apt-get update && \
 # VAST
 COPY changelog ./changelog
 COPY cmake ./cmake
-COPY docs ./docs
 COPY examples ./examples
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
