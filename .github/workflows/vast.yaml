@@ -131,10 +131,10 @@ jobs:
             git diff-index --exit-code HEAD -- CHANGELOG.md
           fi
 
-  docs:
+  web:
     needs: changelog
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
-    name: Docs
+    name: Websit
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -149,20 +149,20 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 16.x
-          cache-dependency-path: docs/yarn.lock
+          cache-dependency-path: web/yarn.lock
           cache: yarn
       - name: Install dependencies
-        working-directory: docs
+        working-directory: web
         run: yarn install --frozen-lockfile
       - name: Test build website
-        working-directory: docs
+        working-directory: web
         run: yarn build
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build
+          publish_dir: web/build
           user_name: tenzir-bot
           user_email: engineering@tenzir.com
 

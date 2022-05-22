@@ -82,7 +82,7 @@ const config = {
       },
       announcementBar: {
         content:
-        '⚠ This site is still under construction. Your <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/discussions">feedback</a> is welcome! Please also consider giving us a <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">GitHub ⭐ star</a>',
+        '🚧 This site is under construction. Help us by <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/discussions">leaving your feedback 💬</a> and a <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">GitHub ⭐ star</a>.',
         backgroundColor: '#f1f2f2',
         isCloseable: false,
       },
