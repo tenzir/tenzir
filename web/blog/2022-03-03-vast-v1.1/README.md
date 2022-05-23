@@ -10,7 +10,7 @@ Dear community, we are excited to announce [VAST v1.1][github-vast-release],
 which ships with exciting new features: *query language plugins* to exchange the
 query expression frontend, and *compaction* as a mechanism for expressing
 fine-grained data retention policies and gradually aging out data instead of
-simply deleting it. 
+simply deleting it.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v1.1.0
 
@@ -95,7 +95,7 @@ via "group-by" and "aggregate".
 
 Based on how the transformation is invoked in VAST, the boundary for determining
 what goes into a grouping can be a table slice (e.g., during import/export) or
-an entire partition (during compaction). 
+an entire partition (during compaction).
 
 How this works is best shown on example data. Consider the following events
 representing flow data that contain a source IP address, a start and end

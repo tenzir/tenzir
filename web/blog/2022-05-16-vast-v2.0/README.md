@@ -186,7 +186,7 @@ changed for the address, subnet, pattern, and enumeration types, which are now
 modeled as [Arrow Extension
 Types](https://arrow.apache.org/docs/format/Columnar.html#extension-types). The
 record type is no longer flattened. The mapping of VAST types to Apache Arrow
-data types  is now considered stable. 
+data types  is now considered stable.
 
 ## Smaller Things
 
