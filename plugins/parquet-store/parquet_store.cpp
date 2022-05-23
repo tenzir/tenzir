@@ -270,7 +270,9 @@ handle_lookup(Actor& self, const vast::query& query,
               const std::vector<table_slice>& table_slices) {
   if (table_slices.empty())
     return 0;
-  const auto& ids = query.ids;
+  // table slices from parquet can't utilize query hints because we don't retain
+  // the global ids.
+  const auto& ids = vast::ids{};
   auto expr = expression{};
   if (auto e = tailor(query.expr, table_slices[0].layout()); e) {
     expr = *e;

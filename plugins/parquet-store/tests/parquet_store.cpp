@@ -11,6 +11,7 @@
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/chunk.hpp>
 #include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/subnet.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/spawn_container_source.hpp>
@@ -40,11 +41,17 @@ auto make_slice(const record_type& layout, std::vector<T> x0,
   return builder->finish();
 }
 
-template <concrete_type T>
-auto check_column(const table_slice& slice, int c, const T& t,
-                  const std::vector<data>& ref) {
-  for (size_t r = 0; r < ref.size(); ++r)
-    CHECK_VARIANT_EQUAL(slice.at(r, c, type{t}), make_view(ref[r]));
+auto compare_table_slices(const table_slice& left, const table_slice& right) {
+  REQUIRE_EQUAL(left.columns(), right.columns());
+  REQUIRE_EQUAL(left.rows(), right.rows());
+  REQUIRE_EQUAL(left.layout(), right.layout());
+  CHECK_EQUAL(left.import_time(), right.import_time());
+  CHECK_EQUAL(left.offset(), right.offset());
+  for (int col = 0; col < left.columns(); ++col) {
+    for (int row = 0; row < left.rows(); ++row) {
+      CHECK_VARIANT_EQUAL(left.at(row, col), right.at(row, col));
+    }
+  }
 }
 
 count operator"" _c(unsigned long long int x) {
@@ -62,16 +69,15 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     filesystem = self->spawn(memory_filesystem);
   }
 
-  std::vector<vast::table_slice>
-  query(const vast::system::store_actor& actor, const vast::ids& ids,
-        vast::query::extract::mode preserve_ids
-        = vast::query::extract::preserve_ids) {
+  std::vector<table_slice>
+  query(const system::store_actor& actor, const ids& ids,
+        query::extract::mode preserve_ids = query::extract::preserve_ids,
+        const expression& expr = {}) {
     bool done = false;
     uint64_t tally = 0;
     uint64_t rows = 0;
-    std::vector<vast::table_slice> result;
-    auto query
-      = vast::query::make_extract(self, preserve_ids, vast::expression{});
+    std::vector<table_slice> result;
+    auto query = query::make_extract(self, preserve_ids, expr);
     query.ids = ids;
     self->send(actor, query);
     run();
@@ -100,32 +106,31 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(filesystem_tests, fixture)
 
-// TEST(parquet store roundtrip) {
-//   auto xs = std::vector<vast::table_slice>{suricata_dns_log[0]};
-//   xs[0].offset(23u);
-//   auto uuid = vast::uuid::random();
-//   const auto* plugin =
-//   vast::plugins::find<vast::store_plugin>("parquet-store"); REQUIRE(plugin);
-//   auto builder_and_header
-//     = plugin->make_store_builder(accountant, filesystem, uuid);
-//   REQUIRE_NOERROR(builder_and_header);
-//   auto& [builder, header] = *builder_and_header;
-//   vast::detail::spawn_container_source(sys, xs, builder);
-//   run();
-//   // The local store expects a single stream source, so the data should be
-//   // flushed to disk after the source disconnected.
-//   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
-//   REQUIRE_NOERROR(store);
-//   run();
-//   auto ids = ::vast::make_ids({23});
-//   fmt::print(stderr, "tp;parquet input layout\n{}\n", xs[0].layout());
-//   auto results = query(*store, ids, vast::query::extract::drop_ids);
-//   run();
-//   CHECK_EQUAL(results.size(), 1ull);
-//   CHECK_EQUAL(results[0].offset(), 23ull);
-//   auto expected_rows = select(xs[0], ids);
-//   CHECK_EQUAL(results[0].rows(), expected_rows[0].rows());
-// }
+TEST(parquet store roundtrip) {
+  auto xs = std::vector<vast::table_slice>{suricata_dns_log[0]};
+  xs[0].offset(23u);
+  auto uuid = vast::uuid::random();
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  REQUIRE(plugin);
+  auto builder_and_header
+    = plugin->make_store_builder(accountant, filesystem, uuid);
+  REQUIRE_NOERROR(builder_and_header);
+  auto& [builder, header] = *builder_and_header;
+  vast::detail::spawn_container_source(sys, xs, builder);
+  run();
+  // The parquet store expects a single stream source, so the data should be
+  // flushed to disk after the source disconnected.
+  auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
+  REQUIRE_NOERROR(store);
+  run();
+  auto ids = ::vast::make_ids({23});
+  auto results = query(*store, ids, vast::query::extract::drop_ids);
+  run();
+  CHECK_EQUAL(results.size(), 1ull);
+  // CHECK_EQUAL(results[0].offset(), 23ull);
+  auto expected_rows = select(xs[0], ids);
+  CHECK_EQUAL(results[0].rows(), expected_rows[0].rows());
+}
 
 namespace {
 
@@ -237,7 +242,7 @@ struct table_slice_fixture {
 
 } // namespace
 
-TEST(active parquet store query) {
+TEST(active parquet store fetch - all query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   slice.offset(23);
@@ -254,26 +259,10 @@ TEST(active parquet store query) {
   auto results = query(builder, vast::ids{}, vast::query::extract::drop_ids);
   run();
   CHECK_EQUAL(results.size(), 1ull);
-  auto expected_rows = select(slice, ids);
-  check_column(results[0], 0, string_type{}, f.f1_string);
-  check_column(results[0], 1, count_type{}, f.f2_count);
-  check_column(results[0], 2, pattern_type{}, f.f3_pattern);
-  check_column(results[0], 3, address_type{}, f.f4_address);
-  check_column(results[0], 4, subnet_type{}, f.f5_subnet);
-  check_column(results[0], 5, f.et, f.f6_enum);
-  check_column(results[0], 6, f.lt, f.f7_list_subnet);
-  check_column(results[0], 7, f.mt_et_count, f.f8_map_enum_count);
-  check_column(results[0], 8, f.elt, f.f9_enum_list);
-  check_column(results[0], 9, f.mt_addr_et, f.f10_map_addr_enum);
-  check_column(results[0], 10, f.mt_pattern_subnet, f.f11_map_pattern_subnet);
-  check_column(results[0], 11, f.et, f.f6_enum);              // f12_1_1
-  check_column(results[0], 12, subnet_type{}, f.f5_subnet);   // f12_1_2
-  check_column(results[0], 13, address_type{}, f.f4_address); // f12_2_1
-  check_column(results[0], 14, pattern_type{}, f.f3_pattern); // f12_2_2
-  check_column(results[0], 15, duration_type{}, f.f12_duration);
+  compare_table_slices(slice, results[0]);
 }
 
-TEST(passive parquet store query) {
+TEST(passive parquet store fetch - all query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   slice.offset(23);
@@ -296,22 +285,36 @@ TEST(passive parquet store query) {
   auto results = query(*store, vast::ids{}, vast::query::extract::drop_ids);
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
-  auto expected_rows = select(slice, ids);
-  check_column(results[0], 0, string_type{}, f.f1_string);
-  check_column(results[0], 1, count_type{}, f.f2_count);
-  check_column(results[0], 2, pattern_type{}, f.f3_pattern);
-  check_column(results[0], 3, address_type{}, f.f4_address);
-  check_column(results[0], 4, subnet_type{}, f.f5_subnet);
-  check_column(results[0], 5, f.et, f.f6_enum);
-  check_column(results[0], 6, f.lt, f.f7_list_subnet);
-  check_column(results[0], 7, f.mt_et_count, f.f8_map_enum_count);
-  check_column(results[0], 8, f.elt, f.f9_enum_list);
-  check_column(results[0], 9, f.mt_addr_et, f.f10_map_addr_enum);
-  check_column(results[0], 10, f.mt_pattern_subnet, f.f11_map_pattern_subnet);
-  check_column(results[0], 11, f.et, f.f6_enum);              // f12_1_1
-  check_column(results[0], 12, subnet_type{}, f.f5_subnet);   // f12_1_2
-  check_column(results[0], 13, address_type{}, f.f4_address); // f12_2_1
-  check_column(results[0], 14, pattern_type{}, f.f3_pattern); // f12_2_2
+  compare_table_slices(slice, results[0]);
+}
+
+TEST(passive parquet store selective query) {
+  auto f = table_slice_fixture();
+  auto slice = f.slice;
+  auto expr = to<expression>("f1 == \"n1\"");
+  slice.offset(23);
+  auto uuid = vast::uuid::random();
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  REQUIRE(plugin);
+  auto builder_and_header
+    = plugin->make_store_builder(accountant, filesystem, uuid);
+  REQUIRE_NOERROR(builder_and_header);
+  auto& [builder, header] = *builder_and_header;
+  auto slices = std::vector<table_slice>{slice};
+  vast::detail::spawn_container_source(sys, slices, builder);
+  run();
+  // The local store expects a single stream source, so the data should be
+  // flushed to disk after the source disconnected.
+  auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
+  REQUIRE_NOERROR(store);
+  run();
+  auto ids = ::vast::make_ids({23});
+  auto results = query(*store, ids, vast::query::extract::drop_ids, *expr);
+  run();
+  REQUIRE_EQUAL(results.size(), 1ull);
+  fmt::print(stderr, "tp; {}\n", expr);
+  const auto& expected_slice = filter(slice, *expr, vast::ids{});
+  compare_table_slices(*expected_slice, results[0]);
 }
 
 FIXTURE_SCOPE_END()
