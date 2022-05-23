@@ -30,8 +30,18 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl: 'https://github.com/tenzir/vast/tree/master/docs',
           remarkPlugins: [require('mdx-mermaid')],
-          showLastUpdateTime: true,
-          showLastUpdateAuthor: true,
+          // TODO: The last update author and time is always the person that
+          // triggered the last deployment and the time of that deployment.
+          // Ideally we'd show this information, but as-is it's unnecessary.
+          showLastUpdateTime: false,
+          showLastUpdateAuthor: false,
+        },
+        blog: {
+          blogTitle: 'VAST Blog',
+          blogDescription: 'News from the VAST community',
+          blogSidebarCount: 10,
+          blogSidebarTitle: 'Blog Posts',
+          postsPerPage: 20,
         },
         theme: {
           customCss: require.resolve('./src/css/custom.scss'),
@@ -62,6 +72,11 @@ const config = {
             label: 'Docs',
           },
           {
+            to: 'blog',
+            label: 'Blog',
+            position: 'left'
+          },
+          {
             to: '/changelog',
             label: 'Changelog',
             position: 'left',
@@ -82,7 +97,7 @@ const config = {
       },
       announcementBar: {
         content:
-        '⚠ This site is still under construction. Your <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/discussions">feedback</a> is welcome! Please also consider giving us a <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">GitHub ⭐ star</a>',
+        'This site is under construction. Help us by leaving <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/discussions">feedback</a> and a <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">GitHub Star</a>.',
         backgroundColor: '#f1f2f2',
         isCloseable: false,
       },
