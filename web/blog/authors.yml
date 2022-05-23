@@ -11,3 +11,10 @@ dominiklohmann:
   url: https://github.com/dominiklohmann
   image_url: https://github.com/dominiklohmann.png
   email: dominik@tenzir.com
+
+lava:
+  name: Benno Evers
+  title: Principal Engineer
+  url: https://github.com/lava
+  image_url: https://github.com/lava.png
+  email: benno@tenzir.com
