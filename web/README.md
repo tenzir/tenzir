@@ -29,5 +29,5 @@ The resulting `build` directory can be served using any static hosting service.
 We use a [github actions workflow][workflow] to deploy this site with every push
 to master.
 
-[site]: https://docs.tenzir.com/vast
+[site]: https://vast.io/
 [workflow]: https://github.com/tenzir/vast/blob/master/.github/workflows/docs.yaml
