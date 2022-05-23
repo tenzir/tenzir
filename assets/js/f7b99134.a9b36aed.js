@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[9737],{42520:function(e){e.exports=JSON.parse('{"permalink":"/blog/tags/query","page":1,"postsPerPage":20,"totalPages":1,"totalCount":4,"blogDescription":"News from the VAST community","blogTitle":"VAST Blog"}')}}]);
