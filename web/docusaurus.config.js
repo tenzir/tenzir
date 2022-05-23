@@ -37,7 +37,7 @@ const config = {
           showLastUpdateAuthor: false,
         },
         blog: {
-          blogTitle: 'VAST Blog',
+          blogTitle: 'Blog',
           blogDescription: 'News from the VAST community',
           blogSidebarCount: 10,
           blogSidebarTitle: 'Blog Posts',
