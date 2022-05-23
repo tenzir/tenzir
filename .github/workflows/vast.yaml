@@ -163,6 +163,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: web/build
+          cname: vast.io
           user_name: tenzir-bot
           user_email: engineering@tenzir.com
 
