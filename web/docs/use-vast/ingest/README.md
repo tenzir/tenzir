@@ -257,10 +257,9 @@ nc -vlkU eve.sock | vast import suricata
 
 ### NetFlow
 
-:::info Commercial Plugin
-This feature is available as commercial plugin that runs on top open-source
-VAST. Please [contact us](mailto:sales@tenzir.com) if you'd like to try it out.
-:::
+import CommercialPlugin from '@site/presets/CommercialPlugin.md';
+
+<CommercialPlugin/>
 
 [NetFlow](https://en.wikipedia.org/wiki/NetFlow) is suite of protocols for
 computing and relaying flow-level statistics. An *exporter*, such as a router or
