@@ -30,8 +30,11 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl: 'https://github.com/tenzir/vast/tree/master/docs',
           remarkPlugins: [require('mdx-mermaid')],
-          showLastUpdateTime: true,
-          showLastUpdateAuthor: true,
+          // TODO: The last update author and time is always the person that
+          // triggered the last deployment and the time of that deployment.
+          // Ideally we'd show this information, but as-is it's unnecessary.
+          showLastUpdateTime: false,
+          showLastUpdateAuthor: false,
         },
         blog: {
           blogTitle: 'VAST Blog',
