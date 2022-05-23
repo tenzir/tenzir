@@ -30,7 +30,8 @@ caf::expected<caf::actor>
 spawn_sink(caf::local_actor* self, spawn_arguments& args) {
   // Bail out early for bogus invocations.
   if (caf::get_or(args.inv.options, "vast.node", false))
-    return caf::make_error(ec::parse_error, "cannot start a local node");
+    return caf::make_error(ec::invalid_argument, "cannot run 'vast start' with "
+                                                 "-N/--node");
   if (!args.empty())
     return unexpected_arguments(args);
   auto writer
