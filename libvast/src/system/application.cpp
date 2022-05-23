@@ -402,7 +402,7 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("config", "path to a configuration file")
         .add<bool>("bare-mode",
                    "disable user and system configuration, schema and plugin "
-                   "directoriegs lookup and static and dynamic plugin "
+                   "directories lookup and static and dynamic plugin "
                    "autoloading (this may only be used on the command line)")
         .add<std::string>("console-verbosity", "output verbosity level on the "
                                                "console")
