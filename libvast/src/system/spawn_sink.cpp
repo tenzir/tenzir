@@ -30,8 +30,10 @@ caf::expected<caf::actor>
 spawn_sink(caf::local_actor* self, spawn_arguments& args) {
   // Bail out early for bogus invocations.
   if (caf::get_or(args.inv.options, "vast.node", false))
-    return caf::make_error(ec::invalid_argument, "cannot run 'vast start' with "
-                                                 "-N/--node");
+    return caf::make_error(ec::invalid_configuration,
+                           "unable to spawn a remote sink when spawning a "
+                           "node locally instead of connecting to one; please "
+                           "unset the option vast.node");
   if (!args.empty())
     return unexpected_arguments(args);
   auto writer

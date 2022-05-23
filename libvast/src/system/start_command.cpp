@@ -47,9 +47,11 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
                             inv.arguments.end()));
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
-    return caf::make_message(caf::make_error(ec::parse_error, "cannot start a "
-                                                              "local "
-                                                              "node"));
+    return caf::make_message(
+      caf::make_error(ec::invalid_configuration,
+                      "unable to run 'vast start' when spawning a "
+                      "node locally instead of connecting to one; please "
+                      "unset the option vast.node"));
   // Construct an endpoint.
   endpoint node_endpoint;
   auto str = get_or(inv.options, "vast.endpoint", defaults::system::endpoint);

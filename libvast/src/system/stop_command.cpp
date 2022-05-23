@@ -25,8 +25,11 @@ caf::message stop_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE_SCOPE("{}", inv);
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
-    return caf::make_message(caf::make_error(
-      ec::invalid_configuration, "cannot start and immediately stop a node"));
+    return caf::make_message(
+      caf::make_error(ec::invalid_configuration,
+                      "unable to run 'vast stop' when spawning a "
+                      "node locally instead of connecting to one; please "
+                      "unset the option vast.node"));
   // Obtain VAST node.
   caf::scoped_actor self{sys};
   auto node = connect_to_node(self, content(sys.config()));
