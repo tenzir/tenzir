@@ -27,6 +27,7 @@
 #include "vast/system/default_configuration.hpp"
 #include "vast/system/make_transforms.hpp"
 
+#include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>
 
 #include <csignal>
@@ -123,6 +124,24 @@ int main(int argc, char** argv) {
     VAST_WARN("the 'vast.store-backend' option 'archive' is deprecated; "
               "automatically using 'segment-store' instead");
     caf::put(cfg.content, "vast.store-backend", "segment-store");
+  }
+  // Eagerly verify that the Arrow libraries we're using have Zstd support so we
+  // can assert this works when serializing record batches.
+  {
+    auto compression_level
+      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
+    if (!compression_level.ok()) {
+      VAST_ERROR("failed to create codec: {}",
+                 compression_level.status().ToString());
+      return EXIT_FAILURE;
+    }
+    auto codec = arrow::util::Codec::Create(
+      arrow::Compression::ZSTD, compression_level.MoveValueUnsafe());
+    if (!codec.ok()) {
+      VAST_ERROR("failed to create codec: {}",
+                 compression_level.status().ToString());
+      return EXIT_FAILURE;
+    }
   }
   // Eagerly verify the export transform configuration, to avoid hidden
   // configuration errors that pop up the first time a user tries to run
