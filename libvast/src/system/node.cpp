@@ -146,7 +146,15 @@ caf::message send_command(const invocation& inv, caf::actor_system&) {
 }
 
 void collect_component_status(node_actor::stateful_pointer<node_state> self,
-                              status_verbosity v) {
+                              status_verbosity v,
+                              const std::vector<std::string>& components) {
+  const auto has_component = [&](std::string_view name) {
+    return components.empty()
+           || std::any_of(components.begin(), components.end(),
+                          [&](const auto& component) {
+                            return component == name;
+                          });
+  };
   struct extra_state {
     size_t memory_usage = 0;
     static void deliver(caf::typed_response_promise<std::string>&& promise,
@@ -166,38 +174,42 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   };
   auto rs = make_status_request_state<extra_state, std::string>(self);
   // Pre-fill the version information.
-  auto version = retrieve_versions();
-  rs->content["version"] = version;
+  if (has_component("version")) {
+    auto version = retrieve_versions();
+    rs->content["version"] = version;
+  }
   // Pre-fill our result with system stats.
-  auto system = record{};
-  if (v >= status_verbosity::info) {
-    system["in-memory-table-slices"] = count{table_slice::instances()};
-    system["database-path"] = self->state.dir.string();
-    merge(detail::get_status(), system, policy::merge_lists::no);
+  if (has_component("system")) {
+    auto system = record{};
+    if (v >= status_verbosity::info) {
+      system["in-memory-table-slices"] = count{table_slice::instances()};
+      system["database-path"] = self->state.dir.string();
+      merge(detail::get_status(), system, policy::merge_lists::no);
+    }
+    if (v >= status_verbosity::detailed) {
+      auto config_files = list{};
+      std::transform(system::loaded_config_files().begin(),
+                     system::loaded_config_files().end(),
+                     std::back_inserter(config_files),
+                     [](const std::filesystem::path& x) {
+                       return x.string();
+                     });
+      std::transform(plugins::loaded_config_files().begin(),
+                     plugins::loaded_config_files().end(),
+                     std::back_inserter(config_files),
+                     [](const std::filesystem::path& x) {
+                       return x.string();
+                     });
+      system["config-files"] = std::move(config_files);
+    }
+    if (v >= status_verbosity::debug) {
+      auto& sys = self->system();
+      system["running-actors"] = count{sys.registry().running()};
+      system["detached-actors"] = count{sys.detached_actors()};
+      system["worker-threads"] = count{sys.scheduler().num_workers()};
+    }
+    rs->content["system"] = std::move(system);
   }
-  if (v >= status_verbosity::detailed) {
-    auto config_files = list{};
-    std::transform(system::loaded_config_files().begin(),
-                   system::loaded_config_files().end(),
-                   std::back_inserter(config_files),
-                   [](const std::filesystem::path& x) {
-                     return x.string();
-                   });
-    std::transform(plugins::loaded_config_files().begin(),
-                   plugins::loaded_config_files().end(),
-                   std::back_inserter(config_files),
-                   [](const std::filesystem::path& x) {
-                     return x.string();
-                   });
-    system["config-files"] = std::move(config_files);
-  }
-  if (v >= status_verbosity::debug) {
-    auto& sys = self->system();
-    system["running-actors"] = count{sys.registry().running()};
-    system["detached-actors"] = count{sys.detached_actors()};
-    system["worker-threads"] = count{sys.scheduler().num_workers()};
-  }
-  rs->content["system"] = std::move(system);
   const auto timeout = defaults::system::initial_request_timeout;
   // Send out requests and collects answers.
   for (const auto& [label, component] : self->state.registry.components()) {
@@ -208,6 +220,8 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     // proxied, so using `component.actor.home_system().node()` will result in
     // a different `node_id` from the one we actually want to compare.
     if (component.actor.node() != self->node())
+      continue;
+    if (!has_component(component.type))
       continue;
     collect_status(rs, timeout, v, component.actor, rs->content, label);
   }
@@ -331,7 +345,11 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
     verbosity = status_verbosity::detailed;
   if (caf::get_or(inv.options, "vast.status.debug", false))
     verbosity = status_verbosity::debug;
-  collect_component_status(self, verbosity);
+  if (inv.arguments.empty())
+    VAST_VERBOSE("{} collects status for all components", *self);
+  else
+    VAST_VERBOSE("{} collects status for components {}", *self, inv.arguments);
+  collect_component_status(self, verbosity, inv.arguments);
   return caf::none;
 }
 
