@@ -544,10 +544,10 @@ void index_state::schedule_lookups() {
     // 1. Get the partition with the highest accumulated priority.
     auto next = pending_queries.next();
     if (!next) {
-      VAST_TRACE("{} did not find a partition to query", *self);
+      VAST_DEBUG("{} did not find a partition to query", *self);
       return;
     }
-    VAST_TRACE("{} schedules partition {} for {}", *self, next->partition,
+    VAST_DEBUG("{} schedules partition {} for {}", *self, next->partition,
                next->queries);
     // 2. Acquire the actor for the selected partition, potentially materializing
     //    it from its persisted state.
@@ -614,7 +614,7 @@ void index_state::schedule_lookups() {
                   it->second.query)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
-            VAST_TRACE("{} received {} results for query {} from partition {}",
+            VAST_DEBUG("{} received {} results for query {} from partition {}",
                        *self, n, qid, pid);
             handle_completion();
           },
@@ -1277,6 +1277,8 @@ index(index_actor::stateful_pointer<index_state> self,
         = query::make_extract(sink, query::extract::drop_ids, match_everything);
       query.id = self->state.pending_queries.create_query_id();
       query.priority = 100;
+      VAST_DEBUG("{} emplaces {} for transform {}", *self, query,
+                 transform->name());
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
       auto err = self->state.pending_queries.insert(
         query_state{.query = query,

@@ -145,9 +145,9 @@ void partition_transformer_state::fulfill(
     ->request(fs, caf::infinite, atom::write_v, path_data.synopsis_path,
               *stream_data.synopsis_chunk)
     .then([](atom::ok) { /* nop */ },
-          [path = path_data.synopsis_path](const caf::error& e) {
-            VAST_WARN("could not write transformed synopsis to {}: {}", path,
-                      e);
+          [self, path = path_data.synopsis_path](const caf::error& e) {
+            VAST_WARN("{} could not write transformed synopsis to {}: {}",
+                      *self, path, e);
           });
   self
     ->request(fs, caf::infinite, atom::write_v, path_data.partition_path,
@@ -198,7 +198,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       const auto* slice_identity = as_bytes(slice).data();
       self->state.original_import_times[slice_identity] = old_import_time;
       if (auto err = self->state.transform->add(std::move(slice))) {
-        VAST_ERROR("partition_transformer failed to add slice: {}", err);
+        VAST_ERROR("{} failed to add slice: {}", *self, err);
         return;
       }
       // Adjust the import time range iff necessary.
@@ -211,7 +211,7 @@ partition_transformer_actor::behavior_type partition_transformer(
     [self](atom::done) {
       auto transformed = self->state.transform->finish();
       if (!transformed) {
-        VAST_ERROR("partition_transformer failed to finish transform: {}",
+        VAST_ERROR("{} failed to finish transform: {}", *self,
                    transformed.error());
         return;
       }
@@ -276,7 +276,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         },
         [](caf::unit_t&, const caf::error&) { /* nop */ });
       self->state.stage->add_outbound_path(self->state.store_builder);
-      VAST_DEBUG("partition-transformer received all table slices");
+      VAST_DEBUG("{} received all table slices", *self);
       self
         ->request(self->state.idspace_distributor, caf::infinite,
                   atom::reserve_v, self->state.events)
@@ -290,7 +290,7 @@ partition_transformer_actor::behavior_type partition_transformer(
           });
     },
     [self](atom::internal, atom::resume, atom::done, vast::id offset) {
-      VAST_DEBUG("partition-transformer got new offset {}", offset);
+      VAST_DEBUG("{} got new offset {}", *self, offset);
       self->state.data.offset = offset;
       for (auto& slice : self->state.slices) {
         slice.offset(offset);
@@ -342,8 +342,7 @@ partition_transformer_actor::behavior_type partition_transformer(
     [self](atom::persist, std::filesystem::path partition_path,
            std::filesystem::path synopsis_path)
       -> caf::result<augmented_partition_synopsis> {
-      VAST_DEBUG("partition-transformer will persist itself to {}",
-                 partition_path);
+      VAST_DEBUG("{} will persist itself to {}", *self, partition_path);
       auto path_data = partition_transformer_state::path_data{};
       path_data.partition_path = std::move(partition_path);
       path_data.synopsis_path = std::move(synopsis_path);

@@ -276,7 +276,7 @@ TEST(identity partition transform via the index) {
     });
   // Check how big the partition is.
   auto rp2 = self->request(filesystem, caf::infinite, vast::atom::read_v,
-                           index_dir / fmt::format("{:l}.mdx", partition_uuid));
+                           index_dir / fmt::format("{}.mdx", partition_uuid));
   run();
   size_t events = 0;
   rp2.receive(
@@ -312,7 +312,7 @@ TEST(identity partition transform via the index) {
       FAIL("unexpected error" << e);
     });
   auto rp4 = self->request(filesystem, caf::infinite, vast::atom::read_v,
-                           index_dir / fmt::format("{:l}.mdx", partition_uuid));
+                           index_dir / fmt::format("{}.mdx", partition_uuid));
   run();
   rp4.receive([&](vast::chunk_ptr&) {},
               [](const caf::error& e) {

@@ -119,7 +119,7 @@ struct active_partition_state {
   uint64_t partition_capacity = 0ull;
   index_config synopsis_index_config = {};
 
-  /// A readable name for this partition
+  /// A readable name for this partition.
   std::string name = {};
 
   /// Actor handle of the accountant.
