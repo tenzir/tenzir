@@ -1285,8 +1285,7 @@ index(index_actor::stateful_pointer<index_state> self,
       static const auto match_everything
         = vast::predicate{meta_extractor{meta_extractor::type},
                           relational_operator::ni, data{""}};
-      auto query
-        = query::make_extract(sink, query::extract::drop_ids, match_everything);
+      auto query = query::make_extract(sink, match_everything);
       query.id = self->state.pending_queries.create_query_id();
       query.priority = 100;
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());

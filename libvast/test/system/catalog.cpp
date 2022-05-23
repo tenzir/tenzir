@@ -180,8 +180,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     expr += hhmmss;
     expr += ".0";
     std::vector<uuid> result;
-    auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
-                                       unbox(to<expression>(expr)));
+    auto q = vast::query::make_extract(self, unbox(to<expression>(expr)));
     auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
                             std::move(q));
     run();
@@ -201,8 +200,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   auto lookup(catalog_actor& meta_idx, expression expr) {
     std::vector<uuid> result;
-    auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
-                                       std::move(expr));
+    auto q = vast::query::make_extract(self, std::move(expr));
     auto rp
       = self->request(meta_idx, caf::infinite, vast::atom::candidates_v, q);
     run();

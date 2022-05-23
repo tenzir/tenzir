@@ -1310,8 +1310,7 @@ legacy_index(index_actor::stateful_pointer<legacy_index_state> self,
       static const auto match_everything
         = vast::predicate{meta_extractor{meta_extractor::type},
                           relational_operator::ni, data{""}};
-      auto query
-        = query::make_extract(sink, query::extract::drop_ids, match_everything);
+      auto query = query::make_extract(sink, match_everything);
       auto query_id = self->state.create_query_id();
       auto lookup = legacy_query_state{query_id, query, old_partition_ids,
                                        std::move(*worker)};

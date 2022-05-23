@@ -40,17 +40,15 @@ struct query {
 
   /// An extract query to retrieve the events that match the expression.
   struct extract {
-    enum mode { drop_ids, preserve_ids };
     system::receiver_actor<table_slice> sink;
-    mode policy = {};
 
     friend bool operator==(const extract& lhs, const extract& rhs) {
-      return lhs.sink == rhs.sink && lhs.policy == rhs.policy;
+      return lhs.sink == rhs.sink;
     }
 
     template <class Inspector>
     friend auto inspect(Inspector& f, extract& x) {
-      return f(caf::meta::type_name("vast.query.extract"), x.sink, x.policy);
+      return f(caf::meta::type_name("vast.query.extract"), x.sink);
     }
   };
 
@@ -82,10 +80,8 @@ struct query {
   }
 
   template <class Actor>
-  static query
-  make_extract(const Actor& sink, extract::mode p, expression expr) {
-    return {extract{caf::actor_cast<system::receiver_actor<table_slice>>(sink),
-                    p},
+  static query make_extract(const Actor& sink, expression expr) {
+    return {extract{caf::actor_cast<system::receiver_actor<table_slice>>(sink)},
             std::move(expr)};
   }
 
@@ -153,16 +149,8 @@ struct formatter<vast::query> {
             break;
         }
       },
-      [&](const vast::query::extract& cmd) {
+      [&](const vast::query::extract&) {
         out = format_to(out, "extract(");
-        switch (cmd.policy) {
-          case vast::query::extract::drop_ids:
-            out = format_to(out, "drop_ids, ");
-            break;
-          case vast::query::extract::preserve_ids:
-            out = format_to(out, "preserve_ids, ");
-            break;
-        }
       },
     };
     caf::visit(f, value.cmd);

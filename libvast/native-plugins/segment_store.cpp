@@ -147,24 +147,10 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const vast::query& query,
       for (size_t i = 0; i < slices.size(); ++i) {
         const auto& slice = slices[i];
         const auto& checker = checkers[i];
-        if (extract.policy == query::extract::preserve_ids) {
-          for (auto& sub_slice : select(slice, ids)) {
-            if (query.expr == expression{}) {
-              self->send(extract.sink, sub_slice);
-              num_hits += sub_slice.rows();
-            } else {
-              auto hits = evaluate(checker, sub_slice);
-              num_hits += rank(hits);
-              for (auto& final_slice : select(sub_slice, hits))
-                self->send(extract.sink, final_slice);
-            }
-          }
-        } else {
-          auto final_slice = filter(slice, checker, ids);
-          if (final_slice) {
-            num_hits += final_slice->rows();
-            self->send(extract.sink, *final_slice);
-          }
+        auto final_slice = filter(slice, checker, ids);
+        if (final_slice) {
+          num_hits += final_slice->rows();
+          self->send(extract.sink, *final_slice);
         }
       }
     },

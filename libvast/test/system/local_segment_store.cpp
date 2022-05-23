@@ -37,8 +37,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     uint64_t tally = 0;
     uint64_t rows = 0;
     std::vector<vast::table_slice> result;
-    auto query = vast::query::make_extract(
-      self, vast::query::extract::preserve_ids, vast::expression{});
+    auto query = vast::query::make_extract(self, vast::expression{});
     query.ids = ids;
     self->send(actor, query);
     run();
@@ -96,7 +95,6 @@ TEST(local store roundtrip) {
   auto results = query(*store, ids);
   run();
   CHECK_EQUAL(results.size(), 1ull);
-  CHECK_EQUAL(results[0].offset(), 23ull);
   auto expected_rows = select(xs[0], ids);
   CHECK_EQUAL(results[0].rows(), expected_rows[0].rows());
 }

@@ -195,11 +195,7 @@ exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options, std::vector<transform>&& transforms) {
   self->state.options = options;
-  auto perserve_ids = has_preserve_ids_option(self->state.options)
-                        ? query::extract::preserve_ids
-                        : query::extract::drop_ids;
-  self->state.query
-    = vast::query::make_extract(self, perserve_ids, std::move(expr));
+  self->state.query = vast::query::make_extract(self, std::move(expr));
   self->state.query.priority = has_low_priority_option(self->state.options)
                                  ? query::priority::low
                                  : query::priority::normal;
