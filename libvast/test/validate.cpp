@@ -1,0 +1,106 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#define SUITE validate
+
+#include "vast/validate.hpp"
+
+#include "vast/data.hpp"
+#include "vast/test/test.hpp"
+#include "vast/type.hpp"
+
+namespace {
+
+using namespace vast;
+
+// clang-format off
+
+auto test_layout = record_type{
+    {"time", record_type{
+      {"interval", duration_type{}},
+      {"rules", list_type{record_type{
+        {"name", string_type{}},
+      }}},
+    }},
+    {"space", record_type{
+      {"mode", string_type{}},
+      {"weights", list_type{record_type{
+        {"types", list_type{string_type{}}},
+      }}},
+    }}
+  };
+
+// clang-format on
+
+} // namespace
+
+TEST(exhaustive validation) {
+  auto data = vast::from_yaml(R"_(
+    time:
+      interval: 24 hours
+      rules:
+        - name: rule1
+    space:
+      mode: depeche
+      weights:
+        - types: ["type1", "type2"]
+  )_");
+  REQUIRE_NOERROR(data);
+  auto valid = caf::error{};
+  CHECK_EQUAL(vast::validate(*data, test_layout, validate::permissive), valid);
+  CHECK_EQUAL(vast::validate(*data, test_layout, validate::strict), valid);
+  CHECK_EQUAL(vast::validate(*data, test_layout, validate::exhaustive), valid);
+}
+
+TEST(no rules configured) {
+  auto data = vast::from_yaml(R"_(
+    time:
+      interval: 1 day
+      rules: []
+    space:
+      mode: weighted-age
+      weights: []
+  )_");
+  REQUIRE_NOERROR(data);
+  auto valid = caf::error{};
+  // Should be fine
+  CHECK_EQUAL(vast::validate(*data, test_layout, validate::strict), valid);
+  CHECK_EQUAL(vast::validate(*data, test_layout, validate::exhaustive), valid);
+}
+
+TEST(extra field) {
+  auto data = vast::from_yaml(R"_(
+    time:
+      rules:
+        - name: foo
+          jkl: false
+    asdf: true
+  )_");
+  REQUIRE_NOERROR(data);
+  auto valid = caf::error{};
+  CHECK_EQUAL(vast::validate(*data, test_layout, validate::permissive), valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::strict), valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::exhaustive),
+                  valid);
+}
+
+TEST(incompatible field) {
+  auto data = vast::from_yaml(R"_(
+    space:
+      weights:
+        - # !! types should be a list
+          types: zeek.conn
+  )_");
+  REQUIRE_NOERROR(data);
+  auto valid = caf::error{};
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::permissive),
+                  valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::strict), valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::exhaustive),
+                  valid);
+}
