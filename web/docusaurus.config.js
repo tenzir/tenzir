@@ -67,7 +67,7 @@ const config = {
         items: [
           {
             type: 'doc',
-            docId: 'get-started/README',
+            docId: 'about-vast/README',
             position: 'left',
             label: 'Docs',
           },
@@ -107,8 +107,8 @@ const config = {
             title: 'Docs',
             items: [
               {
-                label: 'Get Started',
-                to: '/docs/get-started',
+                label: 'About VAST',
+                to: '/docs/about-vast',
               },
               {
                 label: 'Setup VAST',
