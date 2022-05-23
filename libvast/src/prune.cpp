@@ -66,7 +66,6 @@ struct pruner {
       }
       if (!optimized)
         result.push_back(caf::visit(*this, operand));
-      VAST_INFO("{}", result);
     }
     return result;
   }
