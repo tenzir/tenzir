@@ -46,6 +46,12 @@ void explorer_state::forward_results(vast::table_slice slice) {
     return;
   // Check which of the ids in this slice were already sent to the sink
   // and forward those that were not.
+  // TODO: This could be made more efficient by creating the hashers for
+  // each row at once and go over the underlying record batch in columnar
+  // fashion.
+  // TODO (alternative): We should consider changing the approach and
+  // collect all results from the intial expression to construct a single
+  // optimized second expression instead.
   ewah_bitmap unseen = {};
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   unseen.append_bits(false, offset);
