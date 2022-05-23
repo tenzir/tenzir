@@ -130,11 +130,20 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
 template <typename PartitionState>
 std::vector<system::evaluation_triple>
 evaluate(const PartitionState& state, const expression& expr) {
-  std::vector<system::evaluation_triple> result;
+  auto combined_layout = state.combined_layout();
+  if (!combined_layout) {
+    // The partition may not have a combined layout yet, simply because it does
+    // not have any events yet. This is not an error, so we simply return an
+    // empty set of evaluation triples here.
+    VAST_DEBUG("{} cannot evaluate expression because it has no layout",
+               *state.self);
+    return {};
+  }
   // Pretend the partition is a table, and return fitted predicates for the
   // partitions layout.
   // TODO: Should resolve take a record_type directly?
-  auto resolved = resolve(expr, type{*state.combined_layout()});
+  std::vector<system::evaluation_triple> result;
+  auto resolved = resolve(expr, type{*combined_layout});
   for (auto& kvp : resolved) {
     // For each fitted predicate, look up the corresponding INDEXER
     // according to the specified type of extractor.
