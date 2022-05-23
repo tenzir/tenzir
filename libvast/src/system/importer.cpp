@@ -235,10 +235,10 @@ void importer_state::send_report() {
   auto num_schemas_seen = schema_counters.size();
   std::vector<performance_sample> samples = {};
   samples.reserve(num_schemas_seen + 2);
-  samples.emplace_back("importer"s, measurement_);
-  samples.emplace_back("node_throughput"s, node_throughput);
+  samples.push_back(performance_sample{"importer"s, measurement_});
+  samples.push_back(performance_sample{"node_throughput"s, node_throughput});
   for (const auto& [name, count] : schema_counters)
-    samples.emplace_back(name, measurement{elapsed, count});
+    samples.push_back(performance_sample{name, measurement{elapsed, count}});
   auto r = performance_report{
     .data = std::move(samples),
   };
