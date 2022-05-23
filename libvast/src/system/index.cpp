@@ -482,6 +482,7 @@ void index_state::create_active_partition(const type& layout) {
   active_partition.capacity = partition_capacity;
   active_partition.id = id;
   VAST_DEBUG("{} created new partition {}", *self, id);
+  counters.active_partitions_created += 1;
 }
 
 void index_state::decomission_active_partition(const type& layout) {
@@ -681,6 +682,7 @@ void index_state::send_report() {
   auto query_counters = get_query_counters(pending_queries);
   auto msg = report{
     .data = {
+      {"index.active_partitions_created", counters.active_partitions_created},
       {"scheduler.backlog.custom", query_counters.num_custom_prio},
       {"scheduler.backlog.low", query_counters.num_low_prio},
       {"scheduler.backlog.normal", query_counters.num_normal_prio},
