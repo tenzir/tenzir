@@ -131,10 +131,10 @@ jobs:
             git diff-index --exit-code HEAD -- CHANGELOG.md
           fi
 
-  web:
+  website:
     needs: changelog
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
-    name: Websit
+    name: Website
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
