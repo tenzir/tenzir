@@ -1,20 +1,16 @@
 # Query
 
-:::caution Text Missing
-Coming soon!
-:::
+import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+
+<MissingDocumentation/>
 
 ## Choose an export format
 
-:::caution Text Missing
-Coming soon!
-:::
+<MissingDocumentation/>
 
 ### Zeek
 
-:::caution Text Missing
-Coming soon!
-:::
+<MissingDocumentation/>
 
 #### Broker
 

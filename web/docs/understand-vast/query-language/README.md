@@ -1,4 +1,5 @@
 # Query Language
-:::caution Text Missing
-Coming soon!
-:::
+
+import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+
+<MissingDocumentation/>

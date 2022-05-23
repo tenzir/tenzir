@@ -1,5 +1,5 @@
 # Understand VAST
 
-:::note
-Coming soon!
-:::
+import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+
+<MissingDocumentation/>

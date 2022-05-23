@@ -1,8 +1,9 @@
 # Modules
 
-:::caution Text Missing
-Coming soon!
-:::
+import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+
+<MissingDocumentation/>
+
 ## Type Definition Rules
 
 All defined type names and aliases share one *global* identifier namespace.
@@ -27,6 +28,7 @@ following rules exist to make manipulation of the namespace manageable:
 VAST processes all directories *recursively*. This means you are free to split
 the content over a directory structure of your choice.
 :::
+
 ## Module Directory Lookup
 
 VAST ships with modules containing type definitions and aliases for common
