@@ -131,14 +131,14 @@ int main(int argc, char** argv) {
     auto compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
     if (!compression_level.ok()) {
-      VAST_ERROR("failed to create codec: {}",
+      VAST_ERROR("failed to configure Zstd codec for Apache Arrow: {}",
                  compression_level.status().ToString());
       return EXIT_FAILURE;
     }
     auto codec = arrow::util::Codec::Create(
       arrow::Compression::ZSTD, compression_level.MoveValueUnsafe());
     if (!codec.ok()) {
-      VAST_ERROR("failed to create codec: {}",
+      VAST_ERROR("failed to create Zstd codec for Apache Arrow: {}",
                  compression_level.status().ToString());
       return EXIT_FAILURE;
     }
