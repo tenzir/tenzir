@@ -496,16 +496,14 @@ data semantics.
 The `infer` command attempts to deduce a [schema][schemas], given a sample of
 data. For example, consider this JSON data:
 
-:::caution Example Missing
-Coming soon!
-:::
+import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+
+<MissingDocumentation/>
 
 Run `head -1 data.json | vast infer` to print schema that you can paste into a
 module.
 
-:::caution Example Missing
-Coming soon!
-:::
+<MissingDocumentation/>
 
 The idea is that `infer` jump-starts the schema writing process by providing a
 reasonable blueprint. You still need to provide the right name for the type and
