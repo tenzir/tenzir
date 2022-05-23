@@ -43,8 +43,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     uint64_t tally = 0;
     uint64_t rows = 0;
     std::vector<table_slice> result;
-    auto query
-      = query::make_extract(self, query::extract::drop_ids, expression{});
+    auto query = query::make_extract(self, expression{});
     query.ids = ids;
     self->send(a, query);
     run();

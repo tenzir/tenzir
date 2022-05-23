@@ -211,8 +211,7 @@ TEST(empty partition roundtrip) {
   auto expr = vast::expression{vast::predicate{vast::field_extractor{"x"},
                                                vast::relational_operator::equal,
                                                vast::data{0u}}};
-  auto q = vast::query::make_extract(self, vast::query::extract::drop_ids,
-                                     std::move(expr));
+  auto q = vast::query::make_extract(self, std::move(expr));
   auto rp2 = self->request(catalog, caf::infinite, vast::atom::candidates_v,
                            std::move(q));
   run();

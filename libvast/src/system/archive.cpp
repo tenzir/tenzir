@@ -204,26 +204,11 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                        self->send(count.sink, result);
                      },
                      [&](const query::extract& extract) {
-                       if (extract.policy == query::extract::preserve_ids) {
-                         for (auto& sub_slice :
-                              select(*slice, self->state.session_ids)) {
-                           if (request.query.expr == expression{}) {
-                             request.num_hits += sub_slice.rows();
-                             self->send(extract.sink, sub_slice);
-                           } else {
-                             auto hits = evaluate(checker, sub_slice);
-                             request.num_hits += rank(hits);
-                             for (auto& final_slice : select(sub_slice, hits))
-                               self->send(extract.sink, final_slice);
-                           }
-                         }
-                       } else {
-                         auto final_slice
-                           = filter(*slice, checker, self->state.session_ids);
-                         if (final_slice) {
-                           request.num_hits += final_slice->rows();
-                           self->send(extract.sink, *final_slice);
-                         }
+                       auto final_slice
+                         = filter(*slice, checker, self->state.session_ids);
+                       if (final_slice) {
+                         request.num_hits += final_slice->rows();
+                         self->send(extract.sink, *final_slice);
                        }
                      },
                    },

@@ -41,43 +41,42 @@ explorer_state::explorer_state(caf::event_based_actor*) {
 }
 
 void explorer_state::forward_results(vast::table_slice slice) {
+  // Discard all if the client already has enough.
+  if (num_sent == limits.total)
+    return;
   // Check which of the ids in this slice were already sent to the sink
   // and forward those that were not.
-  vast::bitmap unseen;
+  // TODO: This could be made more efficient by creating the hashers for
+  // each row at once and go over the underlying record batch in columnar
+  // fashion.
+  // TODO (alternative): We should consider changing the approach and
+  // collect all results from the intial expression to construct a single
+  // optimized second expression instead.
+  ewah_bitmap unseen = {};
+  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
+  unseen.append_bits(false, offset);
   for (size_t i = 0; i < slice.rows(); ++i) {
-    auto id = slice.offset() + i;
-    auto [_, new_] = returned_ids.insert(id);
-    if (new_) {
-      vast::ids tmp;
-      tmp.append_bits(false, id);
-      tmp.append_bits(true, 1);
-      unseen |= tmp;
-    }
+    default_hash h;
+    for (size_t j = 0; j < slice.columns(); ++j)
+      hash_append(h, slice.at(i, j));
+    auto digest = h.finish();
+    auto [_, new_] = returned_ids.insert(digest);
+    unseen.append_bits(new_, 1);
+    if (num_sent + rank(unseen) == limits.total)
+      break;
   }
   VAST_TRACE("{} forwards {} hits", *self, rank(unseen));
   if (unseen.empty())
     return;
-  std::vector<table_slice> slices;
-  if (unseen.size() == slice.rows()) {
-    slices.push_back(slice);
-  } else {
-    // If a slice was partially known, divide it up and forward only those
-    // ids that the source hasn't received yet.
-    slices = vast::select(slice, unseen);
+  if (all<0>(unseen))
+    return;
+  if (unseen.size() != slice.rows()) {
+    auto maybe_slice = vast::filter(slice, unseen);
+    VAST_ASSERT(maybe_slice);
+    slice = *maybe_slice;
   }
-  // Send out the prepared slices up to the configured limit.
-  for (auto slice : slices) {
-    if (num_sent >= limits.total)
-      break;
-    if (num_sent + slice.rows() <= limits.total) {
-      self->send(sink, slice);
-      num_sent += slice.rows();
-    } else {
-      auto truncated = truncate(slice, limits.total - num_sent);
-      self->send(sink, truncated);
-      num_sent += truncated.rows();
-    }
-  }
+  self->send(sink, slice);
+  num_sent += slice.rows();
 }
 
 caf::behavior
@@ -226,7 +225,6 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         auto query = to_string(*expr);
         VAST_TRACE("{} spawns new exporter with query {}", *self, query);
         auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
-        caf::put(exporter_invocation.options, "vast.export.preserve-ids", true);
         caf::put(exporter_invocation.options, "vast.export.max-events",
                  st.limits.per_result);
         ++self->state.running_exporters;
