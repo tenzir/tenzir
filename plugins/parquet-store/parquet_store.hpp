@@ -35,11 +35,15 @@ struct store_builder_state {
   /// Actor handle of the filesystem.
   system::filesystem_actor fs_ = {};
 
+  /// Destination parquet file name.
+  std::filesystem::path path_ = {};
+
   /// The table slices added to this partition.
   std::vector<table_slice> table_slices_ = {};
 
   /// The layout of the first record batch.
   std::optional<type> vast_type_;
+
   /// Number of events in this store.
   size_t num_rows_ = {};
 };
@@ -51,6 +55,7 @@ struct store_state {
 
   std::shared_ptr<arrow::Table> table_ = {};
 
+  /// Source parquet file name.
   std::filesystem::path path_ = {};
 
   /// Actor handle of the accountant.
