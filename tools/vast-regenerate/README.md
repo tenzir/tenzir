@@ -1,27 +1,16 @@
-# mdx-regenerate
+# vast-regenerate
 
-This is an advanced tool intended mainly for operators of large VAST
-deployments.
+This is an developer-facing tool intended mainly debugging
+and aiding rescue operations on broken databases. Only
+use this if you know what you're doing, or if you don't care
+about the contents of your database.
 
-## Motivation
-
-In a typical VAST database directory, the 'index/' subdirectory contains two
-kinds of files: Partitions and partition synopses. The latter can be recognized
-by the ".mdx" file extension. The data contained in the partition synopses is
-also redundanctly stored in the partitions itself, but is usually read from a
-separate file as a perfomance optimization.
-
-During startup VAST attempts to construct the "catalog" out of all the
-partition synopses. Where the files are missing, corrupted or outdated they
-are regenerated from the data contained.
-
-For large databases, this regeneration process can take a lot of time. If it
-is known ahead of time that a bulk conversion will be required upon the next
-restart of VAST, this tool can be used to regenerate the .mdx-files ahead of
-time to minimize the downtime.
+It has two modes, regenerating .mdx partition synopsis files
+from existing partitions, and recreating a new index.bin
+file from a list of partitions.
 
 ## Usage
 
-Simply point `mdx-regenerate` to a VAST database directory
+See
 
-    mdx-regenerate /path/to/vast.db
+    vast-regenerate --help
