@@ -21,9 +21,12 @@
 #include <vast/plugin.hpp>
 #include <vast/query.hpp>
 #include <vast/system/posix_filesystem.hpp>
+#include <vast/system/status.hpp>
 #include <vast/test/fixtures/actor_system_and_events.hpp>
 #include <vast/test/memory_filesystem.hpp>
 #include <vast/test/test.hpp>
+
+#include <chrono>
 
 namespace vast::plugins::parquet {
 
@@ -47,8 +50,8 @@ auto compare_table_slices(const table_slice& left, const table_slice& right) {
   REQUIRE_EQUAL(left.layout(), right.layout());
   CHECK_EQUAL(left.import_time(), right.import_time());
   CHECK_EQUAL(left.offset(), right.offset());
-  for (int col = 0; col < left.columns(); ++col) {
-    for (int row = 0; row < left.rows(); ++row) {
+  for (size_t col = 0; col < left.columns(); ++col) {
+    for (size_t row = 0; row < left.rows(); ++row) {
       CHECK_VARIANT_EQUAL(left.at(row, col), right.at(row, col));
     }
   }
@@ -82,7 +85,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     self->send(actor, query);
     run();
     std::this_thread::sleep_for(std::chrono::seconds{1});
-
     self
       ->do_receive(
         [&](uint64_t x) {
@@ -97,7 +99,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     REQUIRE_EQUAL(rows, tally);
     return result;
   }
-
   vast::system::accountant_actor accountant = {};
   vast::system::filesystem_actor filesystem;
 };
@@ -242,14 +243,13 @@ struct table_slice_fixture {
 
 } // namespace
 
-TEST(active parquet store fetch - all query) {
+TEST(active parquet store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   slice.offset(23);
   auto uuid = vast::uuid::random();
   const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
   REQUIRE(plugin);
-  // auto active_store_actor = vast::plugins::parquet_store:
   auto builder
     = plugin->make_store_builder(accountant, filesystem, uuid)->first;
   auto slices = std::vector<table_slice>{slice};
@@ -262,7 +262,7 @@ TEST(active parquet store fetch - all query) {
   compare_table_slices(slice, results[0]);
 }
 
-TEST(passive parquet store fetch - all query) {
+TEST(passive parquet store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   slice.offset(23);
@@ -312,9 +312,82 @@ TEST(passive parquet store selective query) {
   auto results = query(*store, ids, vast::query::extract::drop_ids, *expr);
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
-  fmt::print(stderr, "tp; {}\n", expr);
   const auto& expected_slice = filter(slice, *expr, vast::ids{});
   compare_table_slices(*expected_slice, results[0]);
+}
+
+TEST(passive parquet store erase) {
+  auto f = table_slice_fixture();
+  auto slice = f.slice;
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  REQUIRE(plugin);
+  auto builder_and_header
+    = plugin->make_store_builder(accountant, filesystem, vast::uuid::random());
+  REQUIRE_NOERROR(builder_and_header);
+  auto& [builder, header] = *builder_and_header;
+  auto slices = std::vector<table_slice>{slice};
+  vast::detail::spawn_container_source(sys, slices, builder);
+  run();
+  // The local store expects a single stream source, so the data should be
+  // flushed to disk after the source disconnected.
+  auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
+  REQUIRE_NOERROR(store);
+  run();
+  self->send(*store, atom::erase_v, make_ids({id_range(0, 4)}));
+  run();
+}
+
+TEST(active parquet store erase) {
+  auto f = table_slice_fixture();
+  auto slice = f.slice;
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  REQUIRE(plugin);
+  auto builder
+    = plugin->make_store_builder(accountant, filesystem, vast::uuid::random())
+        ->first;
+  auto slices = std::vector<table_slice>{slice};
+  vast::detail::spawn_container_source(sys, slices, builder);
+  run();
+  auto r = self->request(builder, std::chrono::milliseconds(100), atom::erase_v,
+                         make_ids({id_range(0, 4)}));
+  run();
+  r.receive(
+    [](uint64_t removed_rows) {
+      CHECK_EQUAL(removed_rows, 4ull);
+    },
+    [](caf::error&) {
+      FAIL("non-acknowledged delete");
+    });
+  run();
+}
+
+TEST(active parquet store status) {
+  auto f = table_slice_fixture();
+  auto slice = f.slice;
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  REQUIRE(plugin);
+  auto uuid = vast::uuid::random();
+  auto builder
+    = plugin->make_store_builder(accountant, filesystem, uuid)->first;
+  auto slices = std::vector<table_slice>{slice};
+  vast::detail::spawn_container_source(sys, slices, builder);
+  run();
+  auto r = self->request(builder, std::chrono::milliseconds(100),
+                         atom::status_v, vast::system::status_verbosity::info);
+  run();
+  r.receive(
+    [uuid](record& status) {
+      fmt::print(stderr, "tp;status: {}\n", status);
+      auto stps = caf::get<record>(status["parquet-store"]);
+      CHECK_EQUAL(std::filesystem::path{"archive"}
+                    / fmt::format("{}.parquet", uuid),
+                  stps["path"]);
+      CHECK_EQUAL(4_c, stps["events"]);
+    },
+    [](caf::error&) {
+      FAIL("failed status request");
+    });
+  run();
 }
 
 FIXTURE_SCOPE_END()

@@ -396,8 +396,27 @@ store(system::store_actor::stateful_pointer<store_state> self,
                                                 {"store-type", "passive"}});
       return num_hits;
     },
-    [](atom::erase, const ids&) -> caf::result<uint64_t> {
-      return ec::unimplemented;
+    [self](atom::erase, const ids& xs) -> caf::result<uint64_t> {
+      // TODO: segment store tracks in-flight erase requests similar to queries.
+      // however, in our case we don't support erasing a subset of the data, so
+      // we can just delete the file directly?
+      auto num_rows = rank(xs);
+      VAST_ASSERT(
+        num_rows == 0
+        || num_rows
+             == static_cast<unsigned long>(self->state.table_->num_rows()));
+      auto rp = self->make_response_promise<uint64_t>();
+      self
+        ->request(self->state.fs_, caf::infinite, atom::erase_v,
+                  self->state.path_)
+        .then(
+          [rp, num_rows](atom::done) mutable {
+            rp.deliver(num_rows);
+          },
+          [&](caf::error& err) mutable {
+            rp.deliver(std::move(err));
+          });
+      return rp;
     },
   };
 }
@@ -465,15 +484,14 @@ auto finish_parquet(
                "size: {} bytes",
                *self, self->state.id_, self->state.num_rows_,
                self->state.table_slices_.size(), buffer->size());
-    auto path = store_path_for_partition(self->state.id_);
     auto c = chunk::make(buffer);
     auto bytes = std::span<const std::byte>{c->data(), c->size()};
-    // TODO: remove extra-write to local fs for debugging ;)
-    vast::io::write(std::filesystem::path{"/tmp/archive"} / path, bytes);
-    self->request(self->state.fs_, caf::infinite, atom::write_v, path, c)
+    self
+      ->request(self->state.fs_, caf::infinite, atom::write_v,
+                self->state.path_, c)
       .then(
-        [self, path](atom::ok) {
-          VAST_TRACE("flush archive ./vast.db/{}", path);
+        [self](atom::ok) {
+          VAST_TRACE("flush archive ./vast.db/{}", self->state.path_);
           self->state.self_ = nullptr;
         },
         [self](caf::error& err) {
@@ -491,12 +509,15 @@ system::store_builder_actor::behavior_type store_builder(
   self->state.id_ = id;
   self->state.accountant_ = std::move(accountant);
   self->state.fs_ = std::move(fs);
+  self->state.path_ = store_path_for_partition(self->state.id_);
   return {
     [self](const query& query) -> caf::result<uint64_t> {
       return handle_lookup(self, query, self->state.table_slices_);
     },
-    [](atom::erase, const ids&) -> caf::result<uint64_t> {
-      return ec::unimplemented;
+    [self](atom::erase, const ids& ids) -> caf::result<uint64_t> {
+      self->state.table_slices_ = {};
+      self->state.num_rows_ = 0;
+      return rank(ids);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
@@ -504,8 +525,13 @@ system::store_builder_actor::behavior_type store_builder(
         self, in, init_parquet, add_table_slices(self), finish_parquet(self));
       return {};
     },
-    [](atom::status, system::status_verbosity) -> caf::result<record> {
-      return ec::unimplemented;
+    [self](atom::status, system::status_verbosity) -> caf::result<record> {
+      auto result = record{};
+      auto store = record{};
+      store["events"] = count{self->state.num_rows_};
+      store["path"] = self->state.path_.string();
+      result["parquet-store"] = std::move(store);
+      return result;
     },
   };
 }
