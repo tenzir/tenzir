@@ -616,6 +616,10 @@ void index_state::schedule_lookups() {
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
             VAST_DEBUG("{} received {} results for query {} from partition {}",
                        *self, n, qid, pid);
+            // No results indicate this partition was a false positive for the
+            // query.
+            if (n == 0)
+              counters.partition_false_positives++;
             handle_completion();
           },
           [this, handle_completion, qid,
@@ -664,6 +668,7 @@ void index_state::send_report() {
   auto query_counters = get_query_counters(pending_queries);
   auto msg = report{
     .data = {
+      {"catalog.lookup.false-positives", counters.partition_false_positives},
       {"scheduler.backlog.custom", query_counters.num_custom_prio},
       {"scheduler.backlog.low", query_counters.num_low_prio},
       {"scheduler.backlog.normal", query_counters.num_normal_prio},

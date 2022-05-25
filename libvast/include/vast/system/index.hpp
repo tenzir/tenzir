@@ -139,6 +139,9 @@ struct index_counters {
 
   /// How many partitions were scheduled for queries.
   size_t partition_scheduled = 0;
+
+  /// How many partitions did not produce any results for a query.
+  size_t partition_false_positives = 0;
 };
 
 /// The state of the index actor.
