@@ -194,7 +194,7 @@ struct accountant_state_impl {
                    const metrics_metadata& metadata, time ts, std::ostream& os,
                    bool real_time) {
     auto buf = to_json_line(actor_id, ts, key, x, metadata);
-    os.write(buf.data(), buf.size());
+    os.write(buf.data(), detail::narrow_cast<std::streamsize>(buf.size()));
     if (real_time)
       os << std::flush;
     return os;
@@ -358,13 +358,14 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     [self](const std::string& key, integer value, metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
-      self->state->record(self->current_sender()->id(), key, value.value,
-                          metadata);
+      self->state->record(self->current_sender()->id(), key,
+                          detail::narrow_cast<double>(value.value), metadata);
     },
     [self](const std::string& key, count value, metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
-      self->state->record(self->current_sender()->id(), key, value, metadata);
+      self->state->record(self->current_sender()->id(), key,
+                          detail::narrow_cast<double>(value), metadata);
     },
     [self](const std::string& key, real value, metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
