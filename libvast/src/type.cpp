@@ -1276,10 +1276,9 @@ type::resolve(std::vector<std::string_view> extractors,
       .current_extractors = std::exchange(next_extractors, extractors),
     });
   };
-  const auto step_out_and_advance = [&]() noexcept {
+  const auto step_out = [&]() noexcept {
     cursor.pop_back();
     contexts.pop_back();
-    advance();
   };
   const auto leaf_matches = [&](std::string_view kind) -> bool {
     return node_matches
@@ -1288,12 +1287,20 @@ type::resolve(std::vector<std::string_view> extractors,
                             return matches_type(extractor, kind);
                           });
   };
+  // Now that we have all the individual pieces assembled, let's actually look
+  // at all relevant nodes and yield any matches we see on our way. The loop
+  // determines the next node based on the current context and the current node.
   while (node) {
     switch (node->type_type()) {
+      // We cannot resolve none type nodes, so we just move on to the next node.
       case fbs::type::Type::NONE: {
         advance();
         break;
       }
+      // For leaf type nodes, i.e., nodes that have no inner type node, we check
+      // whether we match had a match based on a parent node or whether we match
+      // a type extractor for the type's kind, and return the current cursor if
+      // we have a match. We always advance the cursor to the next node.
 #define VAST_HANDLE_LEAF_TYPE(id, kind)                                        \
   case fbs::type::Type::id##_type: {                                           \
     if (leaf_matches(kind))                                                    \
@@ -1313,34 +1320,37 @@ type::resolve(std::vector<std::string_view> extractors,
         VAST_HANDLE_LEAF_TYPE(subnet, "subnet")
         VAST_HANDLE_LEAF_TYPE(enumeration, "enum")
 #undef VAST_HANDLE_LEAF_TYPE
+      // In the current model, list and map are leaf types. However, there exist
+      // plans to change this to allow offsets to point inside lists and maps,
+      // so we don't allow type extractors like `:list` for them for now.
       case fbs::type::Type::list_type:
       case fbs::type::Type::map_type: {
-        // Yield the current node if it matched, and then move on to the next
-        // node. Note that for list and map we don't support type extractors by
-        // kind to allow for future extensions to the extractor language that
-        // treat list and maps as non-leaf types.
         if (node_matches)
           co_yield cursor;
         advance();
         break;
       }
+      // Our current node is a record type. This can mean one of three things:
+      // 1. We need to step in because we just arrived at a new nesting level.
+      // 2. We need to step out because we moved past the end of the current
+      //    nesting level.
+      // 3. We look at the current field and try to identify whether the field
+      //    name matches, and then move the node to the field's type if we have
+      //    a match.
       case fbs::type::Type::record_type: {
-        // Detect whether we just recursed a level deeper. This happens whenever
-        // the root of the current context does not match the current node.
+        // Option 1: We step in.
         if (contexts.empty() || node != contexts.back().root)
           step_in();
         const auto& record_type = *node->type_as_record_type();
         const auto* fields = record_type.fields();
         VAST_ASSERT(fields);
-        // Detect whether we're past the end of the current level and need to
-        // step back to the last context.
+        // Option 2: We step out.
         if (cursor.back() >= fields->size()) {
-          step_out_and_advance();
+          step_out();
+          advance();
           break;
         }
-        // At this point we can be certain we're looking at the field we wanted
-        // to look at, so we compare its name against all remaining extractors
-        // to try to create a match.
+        // Option 3: We look at the current field.
         const auto* field = fields->Get(cursor.back());
         VAST_ASSERT(field);
         node = field->type_nested_root();
@@ -1379,6 +1389,10 @@ type::resolve(std::vector<std::string_view> extractors,
         }
         break;
       }
+      // Our current node is an enriched type. For the resolution process, only
+      // the type name is relevant. We try to match it as a type extractor, or
+      // strip it from field extractors that start with the type name. We always
+      // move to the nested type node without advancing the cursor.
       case fbs::type::Type::enriched_type: {
         const auto& enriched_type = *node->type_as_enriched_type();
         if (const auto* name = enriched_type.name()) {
