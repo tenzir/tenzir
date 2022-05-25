@@ -406,11 +406,25 @@ TEST(record_type name resolving) {
 TEST(extractor resolution) {
   // Convenience macro for checking the results.
   const auto check = [](const type& t, std::string_view extractor,
-                        const std::vector<offset>& expected_values,
+                        const std::vector<offset>& expected_values_leaves,
+                        const std::vector<offset>& expected_values_non_leaves,
                         const concepts_map* concepts = nullptr) {
     MESSAGE("checking extractor " << extractor);
-    CHECK_EQUAL(detail::collect(t.resolve(extractor, concepts)),
-                expected_values);
+    const auto actual_values_leaves
+      = detail::collect(t.resolve(extractor, concepts, true));
+    CHECK_EQUAL(actual_values_leaves, expected_values_leaves);
+    auto actual_values_non_leaves
+      = detail::collect(t.resolve(extractor, concepts, false));
+    actual_values_non_leaves.erase(
+      std::remove_if(actual_values_non_leaves.begin(),
+                     actual_values_non_leaves.end(),
+                     [&](const offset& value) {
+                       return std::find(actual_values_leaves.begin(),
+                                        actual_values_leaves.end(), value)
+                              != actual_values_leaves.end();
+                     }),
+      actual_values_non_leaves.end());
+    CHECK_EQUAL(actual_values_non_leaves, expected_values_non_leaves);
   };
   {
     const auto t = type{
@@ -454,44 +468,44 @@ TEST(extractor resolution) {
       },
     };
     MESSAGE("empty extractor yields no results");
-    check(t, "", {});
+    check(t, "", {}, {});
     MESSAGE("just a type name suffix yields no results");
-    check(t, "vast.foo", {});
-    check(t, "foo", {});
+    check(t, "vast.foo", {}, {{}});
+    check(t, "foo", {}, {});
     MESSAGE("field extractors yield the specified leaf");
-    check(t, "i", {{0}});
-    check(t, "r", {{3, 1, 1}});
-    check(t, "r.p", {{1, 0}});
-    check(t, "r.a", {{1, 1}, {3, 1, 0}});
-    check(t, "r.r", {{3, 1, 1}});
-    check(t, "r.not_i", {{1, 2}});
-    check(t, "b", {{2}});
-    check(t, "r2", {});
-    check(t, "r2.s", {{3, 0}});
-    check(t, "r2.r", {});
-    check(t, "r2.r.a", {{3, 1, 0}});
-    check(t, "r2.r.r", {{3, 1, 1}});
-    check(t, "vast.foo.r2.r.r", {{3, 1, 1}, {4}});
+    check(t, "i", {{0}}, {});
+    check(t, "r", {{3, 1, 1}}, {{1}, {3, 1}});
+    check(t, "r.p", {{1, 0}}, {});
+    check(t, "r.a", {{1, 1}, {3, 1, 0}}, {});
+    check(t, "r.r", {{3, 1, 1}}, {});
+    check(t, "r.not_i", {{1, 2}}, {});
+    check(t, "b", {{2}}, {});
+    check(t, "r2", {}, {{3}});
+    check(t, "r2.s", {{3, 0}}, {});
+    check(t, "r2.r", {}, {{3, 1}});
+    check(t, "r2.r.a", {{3, 1, 0}}, {});
+    check(t, "r2.r.r", {{3, 1, 1}}, {});
+    check(t, "vast.foo.r2.r.r", {{3, 1, 1}, {4}}, {});
     MESSAGE("qualified field extractors yield the specified leaf");
-    check(t, "vast.foo.i", {{0}});
-    check(t, "vast.foo.r", {});
-    check(t, "vast.foo.r.p", {{1, 0}});
-    check(t, "vast.foo.r.a", {{1, 1}});
-    check(t, "vast.foo.r.r", {});
-    check(t, "vast.foo.r.not_i", {{1, 2}});
-    check(t, "vast.foo.b", {{2}});
-    check(t, "vast.foo.r2", {});
-    check(t, "vast.foo.r2.s", {{3, 0}});
-    check(t, "vast.foo.r2.r", {});
-    check(t, "vast.foo.r2.r.a", {{3, 1, 0}});
-    check(t, "vast.foo.vast.foo.r2.r.r", {{4}});
+    check(t, "vast.foo.i", {{0}}, {});
+    check(t, "vast.foo.r", {}, {{1}});
+    check(t, "vast.foo.r.p", {{1, 0}}, {});
+    check(t, "vast.foo.r.a", {{1, 1}}, {});
+    check(t, "vast.foo.r.r", {}, {});
+    check(t, "vast.foo.r.not_i", {{1, 2}}, {});
+    check(t, "vast.foo.b", {{2}}, {});
+    check(t, "vast.foo.r2", {}, {{3}});
+    check(t, "vast.foo.r2.s", {{3, 0}}, {});
+    check(t, "vast.foo.r2.r", {}, {{3, 1}});
+    check(t, "vast.foo.r2.r.a", {{3, 1, 0}}, {});
+    check(t, "vast.foo.vast.foo.r2.r.r", {{4}}, {});
     MESSAGE("qualified field extractors can also start at a non-root node");
-    check(t, "bar.s", {{3, 0}});
-    check(t, "bar.r", {});
-    check(t, "bar.r.a", {{3, 1, 0}});
+    check(t, "bar.s", {{3, 0}}, {});
+    check(t, "bar.r", {}, {{3, 1}});
+    check(t, "bar.r.a", {{3, 1, 0}}, {});
     MESSAGE("types in qualified field extractors can only occur at the start");
-    check(t, "vast.foo.r2.bar.r.a", {});
-    check(t, "r2.bar.r.a", {});
+    check(t, "vast.foo.r2.bar.r.a", {}, {});
+    check(t, "r2.bar.r.a", {}, {});
     MESSAGE("extractors support concept resolution in case of exact matches");
     {
       const auto concepts = concepts_map{
@@ -514,10 +528,10 @@ TEST(extractor resolution) {
            .concepts = {"test.bar"},
          }},
       };
-      check(t, "test.foo", {{0}, {3, 0}, {3, 1, 1}}, &concepts);
-      check(t, "foo", {}, &concepts);
-      check(t, "test.bar", {{0}, {3, 1, 1}}, &concepts);
-      check(t, "bar", {}, &concepts);
+      check(t, "test.foo", {{0}, {3, 0}, {3, 1, 1}}, {}, &concepts);
+      check(t, "foo", {}, {}, &concepts);
+      check(t, "test.bar", {{0}, {3, 1, 1}}, {}, &concepts);
+      check(t, "bar", {}, {{3}}, &concepts);
     }
     MESSAGE("concepts have precedence over field extractors");
     {
@@ -529,11 +543,13 @@ TEST(extractor resolution) {
            .concepts = {},
          }},
       };
-      check(t, "vast.foo.r.p", {{1, 1}, {3, 1, 0}}, &concepts);
+      check(t, "vast.foo.r.p", {{1, 1}, {3, 1, 0}}, {}, &concepts);
     }
     MESSAGE("extractors can also match type names");
-    check(t, ":count", {{1, 0}, {1, 2}});
-    check(t, ":port", {{1, 0}});
+    check(t, ":count", {{1, 0}, {1, 2}}, {});
+    check(t, ":port", {{1, 0}}, {});
+    check(t, ":vast.foo", {}, {{}});
+    check(t, ":bar", {}, {{3}});
     MESSAGE("concepts can resolve to type extractors");
     {
       const auto concepts = concepts_map{
@@ -544,19 +560,20 @@ TEST(extractor resolution) {
            .concepts = {},
          }},
       };
-      check(t, "test.foo", {{1, 0}, {1, 2}}, &concepts);
+      check(t, "test.foo", {{1, 0}, {1, 2}}, {}, &concepts);
     }
     MESSAGE("subsections of field extractors can be replaced with a wildcard");
     check(
       t, "*",
-      {{0}, {1, 0}, {1, 1}, {1, 2}, {2}, {3, 0}, {3, 1, 0}, {3, 1, 1}, {4}, {5}});
-    check(t, "r.*", {{1, 0}, {1, 1}, {1, 2}, {3, 1, 0}, {3, 1, 1}});
-    check(t, "*.r.*", {{1, 0}, {1, 1}, {1, 2}, {3, 1, 0}, {3, 1, 1}});
-    check(t, "vast.foo.*.r.*", {{3, 1, 0}, {3, 1, 1}});
-    check(t, "*.*.r.*", {{3, 1, 0}, {3, 1, 1}});
-    check(t, "*.*.r", {{3, 1, 1}});
+      {{0}, {1, 0}, {1, 1}, {1, 2}, {2}, {3, 0}, {3, 1, 0}, {3, 1, 1}, {4}, {5}},
+      {{}, {1}, {3}, {3, 1}});
+    check(t, "r.*", {{1, 0}, {1, 1}, {1, 2}, {3, 1, 0}, {3, 1, 1}}, {});
+    check(t, "*.r.*", {{1, 0}, {1, 1}, {1, 2}, {3, 1, 0}, {3, 1, 1}}, {});
+    check(t, "vast.foo.*.r.*", {{3, 1, 0}, {3, 1, 1}}, {});
+    check(t, "*.*.r.*", {{3, 1, 0}, {3, 1, 1}}, {});
+    check(t, "*.*.r", {{3, 1, 1}}, {{3, 1}});
     MESSAGE("type extractors do not support wildcards");
-    check(t, ":*", {});
+    check(t, ":*", {}, {});
   }
 }
 

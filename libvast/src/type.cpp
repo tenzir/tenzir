@@ -1148,14 +1148,15 @@ detail::generator<type> type::aliases() const noexcept {
 }
 
 detail::generator<offset>
-type::resolve(std::string_view extractor,
-              const concepts_map* concepts) const noexcept {
-  return resolve(std::vector{extractor}, concepts);
+type::resolve(std::string_view extractor, const concepts_map* const concepts,
+              const bool restrict_to_leaves) const noexcept {
+  return resolve(std::vector{extractor}, concepts, restrict_to_leaves);
 }
 
 detail::generator<offset>
 type::resolve(std::vector<std::string_view> extractors,
-              const concepts_map* concepts) const noexcept {
+              const concepts_map* const concepts,
+              const bool restrict_to_leaves) const noexcept {
   // Helper functions for prefix- and suffix-matching up to the dot-delimiter.
   const auto try_strip_prefix
     = [](std::string_view extractor,
@@ -1322,8 +1323,11 @@ type::resolve(std::vector<std::string_view> extractors,
       //    a match.
       case fbs::type::Type::record_type: {
         // Option 1: We step in.
-        if (contexts.empty() || node != contexts.back().root)
+        if (contexts.empty() || node != contexts.back().root) {
+          if (!restrict_to_leaves && node_matches)
+            co_yield cursor;
           step_in();
+        }
         const auto& record_type = *node->type_as_record_type();
         const auto* fields = record_type.fields();
         VAST_ASSERT(fields);
@@ -1380,6 +1384,8 @@ type::resolve(std::vector<std::string_view> extractors,
                 VAST_ASSERT(!next_extractors.empty());
                 if (next_extractors.back() != *remaining_extractor)
                   next_extractors.push_back(*remaining_extractor);
+              } else {
+                node_matches = true;
               }
             }
           }
