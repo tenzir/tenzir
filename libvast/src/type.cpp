@@ -1336,7 +1336,6 @@ type::resolve(std::vector<std::string_view> extractors,
         // Option 3: We look at the current field.
         const auto* field = fields->Get(cursor.back());
         VAST_ASSERT(field);
-        node = field->type_nested_root();
         const auto* name = field->name();
         VAST_ASSERT(name);
         // For every extractor, try to strip the name as a prefix. If we have a
@@ -1353,26 +1352,8 @@ type::resolve(std::vector<std::string_view> extractors,
               next_extractors.push_back(*remaining_extractor);
           }
         }
-        // Try suffix matching the field name itself against the initial
-        // extractors if we are in the first layer exactly. This is required
-        // because for some very old partitons we used to flatten the available
-        // qualified record fields into a single record type for convenience,
-        // and we cannot distinguish easily whether we have a partition using
-        // that old combined layout format or the new format where we just store
-        // the type itself.
-        // TODO: This should probably be opt-in with some flag.
-        if (!node_matches && cursor.size() == 1) {
-          for (const auto extractor : extractors) {
-            const auto [name_mismatch, extractor_mismatch]
-              = std::mismatch(name->rbegin(), name->rend(), extractor.rbegin(),
-                              extractor.rend());
-            if (extractor_mismatch == extractor.rend()
-                && (name_mismatch == name->rend() || *name_mismatch == '.')) {
-              node_matches = true;
-              break;
-            }
-          }
-        }
+        // In the next iteration, take a closer look at the field's type.
+        node = field->type_nested_root();
         break;
       }
       // Our current node is an enriched type. For the resolution process, only

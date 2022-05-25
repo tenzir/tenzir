@@ -460,17 +460,17 @@ TEST(extractor resolution) {
     check(t, "foo", {});
     MESSAGE("field extractors yield the specified leaf");
     check(t, "i", {{0}});
-    check(t, "r", {{3, 1, 1}, {4}});
+    check(t, "r", {{3, 1, 1}});
     check(t, "r.p", {{1, 0}});
     check(t, "r.a", {{1, 1}, {3, 1, 0}});
-    check(t, "r.r", {{3, 1, 1}, {4}});
+    check(t, "r.r", {{3, 1, 1}});
     check(t, "r.not_i", {{1, 2}});
     check(t, "b", {{2}});
     check(t, "r2", {});
     check(t, "r2.s", {{3, 0}});
     check(t, "r2.r", {});
     check(t, "r2.r.a", {{3, 1, 0}});
-    check(t, "r2.r.r", {{3, 1, 1}, {4}});
+    check(t, "r2.r.r", {{3, 1, 1}});
     check(t, "vast.foo.r2.r.r", {{3, 1, 1}, {4}});
     MESSAGE("qualified field extractors yield the specified leaf");
     check(t, "vast.foo.i", {{0}});
@@ -514,9 +514,9 @@ TEST(extractor resolution) {
            .concepts = {"test.bar"},
          }},
       };
-      check(t, "test.foo", {{0}, {3, 0}, {3, 1, 1}, {4}}, &concepts);
+      check(t, "test.foo", {{0}, {3, 0}, {3, 1, 1}}, &concepts);
       check(t, "foo", {}, &concepts);
-      check(t, "test.bar", {{0}, {3, 1, 1}, {4}}, &concepts);
+      check(t, "test.bar", {{0}, {3, 1, 1}}, &concepts);
       check(t, "bar", {}, &concepts);
     }
     MESSAGE("concepts have precedence over field extractors");
