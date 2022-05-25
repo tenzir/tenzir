@@ -30,6 +30,7 @@ struct metrics_metadata : std::vector<std::pair<std::string, std::string>> {
 struct data_point {
   std::string key;
   caf::variant<duration, time, int64_t, uint64_t, double> value;
+  metrics_metadata metadata = {};
 
   template <class Inspector>
   friend typename Inspector::result_type inspect(Inspector& f, data_point& s) {
@@ -50,6 +51,7 @@ struct report {
 struct performance_sample {
   std::string key;
   measurement value;
+  metrics_metadata metadata = {};
 
   template <class Inspector>
   friend typename Inspector::result_type
