@@ -6,7 +6,7 @@
     extra-trusted-public-keys = "vast.cachix.org-1:0L8rErLUuFAdspyGYYQK3Sgs9PYRMzkLEqS2GxfaQhA=";
   };
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/1882c6b7368fd284ad01b0a5b5601ef136321292";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/c4998c7bf6c84e3f5d7abe63a6ea8d110c2dbd95";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
