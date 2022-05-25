@@ -80,9 +80,9 @@ file(
        python3 -m venv \"$env_dir\"
      fi
      . \"$env_dir/bin/activate\"
-     python -m pip install --upgrade pip
-     python -m pip install -r \"$base_dir/requirements.txt\"
-     python \"$base_dir/integration.py\" \
+     python3 -m pip install --upgrade pip
+     python3 -m pip install -r \"$base_dir/requirements.txt\"
+     python3 \"$base_dir/integration.py\" \
       --app \"$app\" \
       --directory vast-integration-test \
       --set \"$base_dir\"/vast_integration_suite.yaml \
@@ -92,7 +92,7 @@ file(
      mkdir -p \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\"
      $app --bare-mode -N -d \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test/vast.db\" \
        import -r \"$base_dir\"/data/suricata/eve.json suricata
-     python \"$base_dir/integration.py\" \
+     python3 \"$base_dir/integration.py\" \
       --app \"$<TARGET_FILE:lsvast>\" \
       --directory \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\" \
       --set \"$base_dir\"/lsvast_integration_suite.yaml \
