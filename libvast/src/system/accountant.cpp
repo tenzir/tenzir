@@ -341,7 +341,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       auto& st = *self->state;
       st.actor_map[self->current_sender()->id()] = name;
       self->monitor(self->current_sender());
-      if (name == "importer")
+      if (name == "importer" && st.cfg.self_sink.enable)
         st.mgr->add_outbound_path(self->current_sender(),
                                   std::make_tuple(std::string{"accountant"}));
     },
