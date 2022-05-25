@@ -261,10 +261,7 @@ caf::error merge_environment(record& config) {
                                            "variable {}={} to VAST value: {}",
                                            key, value, x.error()));
         } else {
-          return caf::make_error(ec::parse_error,
-                                 fmt::format("could not parse environment "
-                                             "variable {} value '{}': {}",
-                                             key, value, config_value.error()));
+          config[*config_key] = std::string{value};
         }
       }
   return caf::none;
