@@ -1193,6 +1193,12 @@ type::resolve(std::vector<std::string_view> extractors,
       return std::string_view{};
     return what.substr(0, index - 1);
   };
+  const auto matches_type
+    = [](std::string_view extractor, std::string_view name_or_kind) -> bool {
+    VAST_ASSERT(!extractor.empty());
+    VAST_ASSERT(!name_or_kind.empty());
+    return extractor[0] == ':' && extractor.substr(1) == name_or_kind;
+  };
   // Resolve concepts if we have a concepts map.
   if (concepts) {
     // We keep an additional set of already resolved concepts to avoid recursing
@@ -1275,26 +1281,46 @@ type::resolve(std::vector<std::string_view> extractors,
     contexts.pop_back();
     advance();
   };
+  const auto leaf_matches = [&](std::string_view kind) -> bool {
+    return node_matches
+           || std::any_of(extractors.begin(), extractors.end(),
+                          [&](std::string_view extractor) noexcept {
+                            return matches_type(extractor, kind);
+                          });
+  };
   while (node) {
     switch (node->type_type()) {
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type:
-      case fbs::type::Type::integer_type:
-      case fbs::type::Type::count_type:
-      case fbs::type::Type::real_type:
-      case fbs::type::Type::duration_type:
-      case fbs::type::Type::time_type:
-      case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
-      case fbs::type::Type::address_type:
-      case fbs::type::Type::subnet_type:
-      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::NONE: {
+        advance();
+        break;
+      }
+#define VAST_HANDLE_LEAF_TYPE(id, kind)                                        \
+  case fbs::type::Type::id##_type: {                                           \
+    if (leaf_matches(kind))                                                    \
+      co_yield cursor;                                                         \
+    advance();                                                                 \
+    break;                                                                     \
+  }
+        VAST_HANDLE_LEAF_TYPE(bool, "bool")
+        VAST_HANDLE_LEAF_TYPE(integer, "int")
+        VAST_HANDLE_LEAF_TYPE(count, "count")
+        VAST_HANDLE_LEAF_TYPE(real, "real")
+        VAST_HANDLE_LEAF_TYPE(duration, "duration")
+        VAST_HANDLE_LEAF_TYPE(time, "time")
+        VAST_HANDLE_LEAF_TYPE(string, "string")
+        VAST_HANDLE_LEAF_TYPE(pattern, "pattern")
+        VAST_HANDLE_LEAF_TYPE(address, "addr")
+        VAST_HANDLE_LEAF_TYPE(subnet, "subnet")
+        VAST_HANDLE_LEAF_TYPE(enumeration, "enum")
+#undef VAST_HANDLE_LEAF_TYPE
       case fbs::type::Type::list_type:
       case fbs::type::Type::map_type: {
-        // Yield the current node if it matched.
+        // Yield the current node if it matched, and then move on to the next
+        // node. Note that for list and map we don't support type extractors by
+        // kind to allow for future extensions to the extractor language that
+        // treat list and maps as non-leaf types.
         if (node_matches)
           co_yield cursor;
-        // Since we're at a leaf we need to move horizontally to the next node.
         advance();
         break;
       }
@@ -1356,11 +1382,17 @@ type::resolve(std::vector<std::string_view> extractors,
       case fbs::type::Type::enriched_type: {
         const auto& enriched_type = *node->type_as_enriched_type();
         if (const auto* name = enriched_type.name()) {
-          // Check whether the extractor is a suffix of the type's name, and if
-          // it is, yield the cursor and exit.
-          // TODO: Do we want to be able to specify just the latter part of a
-          // type's name, omitting the module?
           for (const auto& extractor : extractors) {
+            // Check whether the extractor is a type extractor and matches the
+            // type name exactly.
+            if (matches_type(extractor, name->string_view())) {
+              node_matches = true;
+              continue;
+            }
+            // Check whether the extractor is a suffix of the type's name, and
+            // if it is, yield the cursor and exit.
+            // TODO: Do we want to be able to specify just the latter part of a
+            // type's name, omitting the module?
             if (auto remaining_extractor
                 = try_strip_prefix(extractor, name->string_view())) {
               if (!remaining_extractor->empty()) {

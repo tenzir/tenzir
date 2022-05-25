@@ -529,6 +529,21 @@ TEST(extractor resolution) {
       };
       check(t, "vast.foo.r.p", {{1, 1}, {3, 1, 0}}, &concepts);
     }
+    MESSAGE("extractors can also match type names");
+    check(t, ":count", {{1, 0}, {1, 2}});
+    check(t, ":port", {{1, 0}});
+    MESSAGE("concepts can resolve to type extractors");
+    {
+      const auto concepts = concepts_map{
+        {"test.foo",
+         concept_{
+           .description = "foo",
+           .fields = {"r.p", ":count"},
+           .concepts = {},
+         }},
+      };
+      check(t, "test.foo", {{1, 0}, {1, 2}}, &concepts);
+    }
   }
 }
 
