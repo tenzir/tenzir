@@ -14,6 +14,7 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/type.hpp"
+#include "vast/type_set.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
@@ -50,6 +51,15 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
 }
 
+const record_type& concept_::layout() noexcept {
+  static const auto result = record_type{
+    {"description", string_type{}},
+    {"fields", list_type{string_type{}}},
+    {"concepts", list_type{string_type{}}},
+  };
+  return result;
+}
+
 const type concepts_data_layout = type{map_type{
   type{string_type{}, {{"key", "concept.name"}}},
   record_type{
@@ -59,6 +69,14 @@ const type concepts_data_layout = type{map_type{
 
 bool operator==(const model& lhs, const model& rhs) {
   return lhs.definition == rhs.definition;
+}
+
+const record_type& model::layout() noexcept {
+  static const auto result = record_type{
+    {"description", string_type{}},
+    {"definition", list_type{string_type{}}},
+  };
+  return result;
 }
 
 const type models_data_layout = type{map_type{

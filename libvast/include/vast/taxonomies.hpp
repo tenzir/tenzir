@@ -11,7 +11,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/stable_map.hpp"
-#include "vast/type_set.hpp"
 
 #include <caf/meta/type_name.hpp>
 #include <fmt/format.h>
@@ -45,14 +44,7 @@ struct concept_ {
              c.concepts);
   }
 
-  inline static const record_type& layout() noexcept {
-    static const auto result = record_type{
-      {"description", string_type{}},
-      {"fields", list_type{string_type{}}},
-      {"concepts", list_type{string_type{}}},
-    };
-    return result;
-  }
+  static const record_type& layout() noexcept;
 };
 
 /// Maps concept names to their definitions.
@@ -79,13 +71,7 @@ struct model {
     return f(caf::meta::type_name("model"), m.description, m.definition);
   }
 
-  inline static const record_type& layout() noexcept {
-    static const auto result = record_type{
-      {"description", string_type{}},
-      {"definition", list_type{string_type{}}},
-    };
-    return result;
-  }
+  static const record_type& layout() noexcept;
 };
 
 /// Maps model names to their definitions.

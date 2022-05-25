@@ -1148,12 +1148,14 @@ detail::generator<type> type::aliases() const noexcept {
 }
 
 detail::generator<offset>
-type::resolve(std::string_view extractor) const noexcept {
-  return resolve(std::vector{extractor});
+type::resolve(std::string_view extractor,
+              const concepts_map* concepts) const noexcept {
+  return resolve(std::vector{extractor}, concepts);
 }
 
 detail::generator<offset>
-type::resolve(std::vector<std::string_view> extractors) const noexcept {
+type::resolve(std::vector<std::string_view> extractors,
+              const concepts_map* concepts) const noexcept {
   // Helper functions for prefix- and suffix-matching up to the dot-delimiter.
   // TODO: Re-add support for wildcards and quoting.
   const auto try_strip = [](auto what_begin, auto what_end, auto prefix_begin,
@@ -1191,6 +1193,31 @@ type::resolve(std::vector<std::string_view> extractors) const noexcept {
       return std::string_view{};
     return what.substr(0, index - 1);
   };
+  // Resolve concepts if we have a concepts map.
+  if (concepts) {
+    // We keep an additional set of already resolved concepts to avoid recursing
+    // indefinitely if there's a loop in the concept definitions.
+    auto resolved_concepts = detail::stable_set<std::string_view>{};
+    auto resolved_extractors = std::vector<std::string_view>{};
+    auto try_resolve_concept // NOLINTNEXTLINE(misc-no-recursion)
+      = [&](auto&& try_resolve_concept,
+            std::string_view extractor) noexcept -> void {
+      const auto concept_ = concepts->find(extractor);
+      if (concept_ == concepts->end()) {
+        resolved_extractors.push_back(extractor);
+        return;
+      }
+      if (!resolved_concepts.insert(extractor).second)
+        return;
+      for (const auto& resolved_field : concept_->second.fields)
+        resolved_extractors.emplace_back(resolved_field);
+      for (const auto& resolved_concept : concept_->second.concepts)
+        try_resolve_concept(try_resolve_concept, resolved_concept);
+    };
+    for (const auto extractor : extractors)
+      try_resolve_concept(try_resolve_concept, extractor);
+    extractors = std::move(resolved_extractors);
+  }
   // We assert in various places of the below code that the extractor or partial
   // extractors are not empty, which is why we're returning early if that's the
   // case. This is also always correct since both field and type names must not

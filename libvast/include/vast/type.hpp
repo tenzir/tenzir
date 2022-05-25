@@ -19,6 +19,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/offset.hpp"
+#include "vast/taxonomies.hpp"
 
 #include <arrow/builder.h>
 #include <arrow/extension_type.h>
@@ -360,15 +361,19 @@ public:
   /// fields whose type is named `port`.
   ///
   /// @param extractor The extractor to resolve.
+  /// @param concepts An optional list of concepts used to map extractors onto a
+  /// set of extractors or other concepts.
   /// @returns An ordered, duplicate-free list of offsets described by the
   /// extractor.
   [[nodiscard]] detail::generator<offset>
-  resolve(std::string_view extractor) const noexcept;
+  resolve(std::string_view extractor, const concepts_map* concepts
+                                      = nullptr) const noexcept;
 
   /// Resolves a list of extractors on this type into an ordered, duplicate-free
   /// list of offsets. See the single-extractor overload for more documentation.
   [[nodiscard]] detail::generator<offset>
-  resolve(std::vector<std::string_view> extractor) const noexcept;
+  resolve(std::vector<std::string_view> extractors, const concepts_map* concepts
+                                                    = nullptr) const noexcept;
 
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;

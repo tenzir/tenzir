@@ -406,9 +406,11 @@ TEST(record_type name resolving) {
 TEST(extractor resolution) {
   // Convenience macro for checking the results.
   const auto check = [](const type& t, std::string_view extractor,
-                        const std::vector<offset>& expected_values) {
+                        const std::vector<offset>& expected_values,
+                        const concepts_map* concepts = nullptr) {
     MESSAGE("checking extractor " << extractor);
-    CHECK_EQUAL(detail::collect(t.resolve(extractor)), expected_values);
+    CHECK_EQUAL(detail::collect(t.resolve(extractor, concepts)),
+                expected_values);
   };
   {
     const auto t = type{
@@ -488,6 +490,45 @@ TEST(extractor resolution) {
     MESSAGE("types in qualified field extractors can only occur at the start");
     check(t, "vast.foo.r2.bar.r.a", {});
     check(t, "r2.bar.r.a", {});
+    MESSAGE("extractors support concept resolution in case of exact matches");
+    {
+      const auto concepts = concepts_map{
+        {"test.foo",
+         concept_{
+           .description = "foo",
+           .fields = {"vast.foo.r2.s"},
+           .concepts = {"test.bar", "test.baz"},
+         }},
+        {"test.bar",
+         concept_{
+           .description = "bar",
+           .fields = {"vast.foo.i", "r.r"},
+           .concepts = {"test.infinite_loop"},
+         }},
+        {"test.infinite_loop",
+         concept_{
+           .description = "infinite_loop",
+           .fields = {},
+           .concepts = {"test.bar"},
+         }},
+      };
+      check(t, "test.foo", {{0}, {3, 0}, {3, 1, 1}, {4}}, &concepts);
+      check(t, "foo", {}, &concepts);
+      check(t, "test.bar", {{0}, {3, 1, 1}, {4}}, &concepts);
+      check(t, "bar", {}, &concepts);
+    }
+    MESSAGE("concepts have precedence over field extractors");
+    {
+      const auto concepts = concepts_map{
+        {"vast.foo.r.p",
+         concept_{
+           .description = "foo.r.p",
+           .fields = {"r.a"},
+           .concepts = {},
+         }},
+      };
+      check(t, "vast.foo.r.p", {{1, 1}, {3, 1, 0}}, &concepts);
+    }
   }
 }
 
