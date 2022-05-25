@@ -449,6 +449,8 @@ TEST(extractor resolution) {
          }},
         // 4
         {"vast.foo.r2.r.r", string_type{}},
+        // 5
+        {"*", integer_type{}},
       },
     };
     MESSAGE("empty extractor yields no results");
@@ -544,6 +546,17 @@ TEST(extractor resolution) {
       };
       check(t, "test.foo", {{1, 0}, {1, 2}}, &concepts);
     }
+    MESSAGE("subsections of field extractors can be replaced with a wildcard");
+    check(
+      t, "*",
+      {{0}, {1, 0}, {1, 1}, {1, 2}, {2}, {3, 0}, {3, 1, 0}, {3, 1, 1}, {4}, {5}});
+    check(t, "r.*", {{1, 0}, {1, 1}, {1, 2}, {3, 1, 0}, {3, 1, 1}});
+    check(t, "*.r.*", {{1, 0}, {1, 1}, {1, 2}, {3, 1, 0}, {3, 1, 1}});
+    check(t, "vast.foo.*.r.*", {{3, 1, 0}, {3, 1, 1}});
+    check(t, "*.*.r.*", {{3, 1, 0}, {3, 1, 1}});
+    check(t, "*.*.r", {{3, 1, 1}});
+    MESSAGE("type extractors do not support wildcards");
+    check(t, ":*", {});
   }
 }
 

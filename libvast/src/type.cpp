@@ -1157,41 +1157,24 @@ detail::generator<offset>
 type::resolve(std::vector<std::string_view> extractors,
               const concepts_map* concepts) const noexcept {
   // Helper functions for prefix- and suffix-matching up to the dot-delimiter.
-  // TODO: Re-add support for wildcards and quoting.
-  const auto try_strip = [](auto what_begin, auto what_end, auto prefix_begin,
-                            auto prefix_end) -> std::string_view::size_type {
-    VAST_ASSERT(prefix_begin != prefix_end);
-    const auto [what_mismatch, prefix_mismatch]
-      = std::mismatch(what_begin, what_end, prefix_begin, prefix_end);
-    if (prefix_mismatch == prefix_end) {
-      if (what_mismatch == what_end)
-        return 0;
-      if (*what_mismatch == '.')
-        return what_mismatch - what_begin;
-    }
-    return std::string_view::npos;
-  };
   const auto try_strip_prefix
-    = [&try_strip](std::string_view what,
-                   std::string_view prefix) -> std::optional<std::string_view> {
-    const auto index
-      = try_strip(what.begin(), what.end(), prefix.begin(), prefix.end());
-    if (index == std::string_view::npos)
-      return std::nullopt;
-    if (index == 0)
-      return std::string_view{};
-    return what.substr(index + 1);
-  };
-  const auto try_strip_suffix
-    = [&try_strip](std::string_view what,
-                   std::string_view suffix) -> std::optional<std::string_view> {
-    const auto index
-      = try_strip(what.rbegin(), what.rend(), suffix.rbegin(), suffix.rend());
-    if (index == std::string_view::npos)
-      return std::nullopt;
-    if (index == 0)
-      return std::string_view{};
-    return what.substr(0, index - 1);
+    = [](std::string_view extractor,
+         std::string_view name) -> std::optional<std::string_view> {
+    if (extractor[0] == '*') {
+      if (extractor.size() == 1)
+        return std::string_view{};
+      if (extractor[1] == '.')
+        return extractor.substr(2);
+    }
+    const auto [extractor_mismatch, name_mismatch] = std::mismatch(
+      extractor.begin(), extractor.end(), name.begin(), name.end());
+    if (name_mismatch == name.end()) {
+      if (extractor_mismatch == extractor.end())
+        return std::string_view{};
+      if (*extractor_mismatch == '.')
+        return extractor.substr(extractor_mismatch + 1 - extractor.begin());
+    }
+    return std::nullopt;
   };
   const auto matches_type
     = [](std::string_view extractor, std::string_view name_or_kind) -> bool {
@@ -1380,8 +1363,11 @@ type::resolve(std::vector<std::string_view> extractors,
         // TODO: This should probably be opt-in with some flag.
         if (!node_matches && cursor.size() == 1) {
           for (const auto extractor : extractors) {
-            if (const auto remaining_extractor
-                = try_strip_suffix(name->string_view(), extractor)) {
+            const auto [name_mismatch, extractor_mismatch]
+              = std::mismatch(name->rbegin(), name->rend(), extractor.rbegin(),
+                              extractor.rend());
+            if (extractor_mismatch == extractor.rend()
+                && (name_mismatch == name->rend() || *name_mismatch == '.')) {
               node_matches = true;
               break;
             }
