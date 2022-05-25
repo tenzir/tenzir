@@ -242,6 +242,7 @@ void importer_state::send_report() {
   for (const auto& [name, count] : schema_counters)
     samples.push_back(performance_sample{
       "ingest", measurement{elapsed, count}, {{"schema", name}}});
+  schema_counters.clear();
   auto r = performance_report{
     .data = std::move(samples),
   };
