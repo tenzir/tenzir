@@ -9,13 +9,17 @@ discussion](https://github.com/tenzir/vast/discussions).
 ## What is VAST?
 
 VAST is an embeddable telemetry engine for structured event data, purpose-built
-for use cases in security operations. Consider VAST if you want to:
+for use cases in security operations.
 
-- Build a federated detection and response architecture
-- Store, aggregate, and manage massive amounts of telemetry
-- Operationalize threat intelligence
-- Empower threat hunters
-- Engineer and deploy detections
+### Use Cases
+
+Consider VAST if you want to:
+
+- Store, aggregate, and manage massive amounts of security telemetry
+- BYO data science and data engineering tools for security analytics
+- Build a foundation for a federated detection and response architecture
+- Operationalize threat intelligence and detect at the edge
+- Empower threat hunters with a data-centric investigation tool
 
 If you're unsure whether VAST is the right tool for your use case, keep reading.
 
@@ -28,10 +32,18 @@ illustrates the placement of VAST in the spectrum of *Observability* ⇔
 
 ![VAST Spectra](/img/ecosystem.png)
 
-We compare VAST to SIEM and data warehouses next, but skip a comparison with
-metrics services that we deem out of scope.
+There exist a lot of database systems out there, and you may ask yourself the
+question: why not use that other system instead? To help answer this question,
+we offer a brief guidance below when other systems might be a better fit.
 
-### VAST vs. SIEM
+### VAST vs. SIEMs
+
+Traditional SIEMs support basic search and a fixed set of analytics operations.
+Most systems face scaling issues and are therefore limited for comprehensive
+analysis that includes high-volume telemetry. They also lack good support for
+threat hunting and raw exploratory data analysis. Consequently, advanced
+emerging use cases, such as data science and detection engineering, require
+additional data-centric workbenches.
 
 VAST *complements* a [SIEM][siem] nicely with the following use cases:
 
@@ -40,7 +52,7 @@ VAST *complements* a [SIEM][siem] nicely with the following use cases:
   the data in VAST, you remove bottlenecks and can selectively forward the
   activity that matters to your SIEM.
 
-- **Compliance**: VAST has fine-grained retention span configuration to meet
+- **Compliance**: VAST supports fine-grained retention configuration to meet
   [GDPR](https://en.wikipedia.org/wiki/General_Data_Protection_Regulation) and
   other regulatory requirements. When storage capacity needs careful management,
   VAST's *compaction* feature allows for weighted ageing of your data, so that
@@ -55,12 +67,14 @@ VAST *complements* a [SIEM][siem] nicely with the following use cases:
   workloads, with your own tools, e.g., to run iterative clustering algorithms
   or complex feature extraction in conjunction with machine learning.
 
+[siem]: https://en.wikipedia.org/wiki/Security_information_and_event_management
+[arrow]: https://arrow.apache.org
+
+:::note Recommendation
 Unlike a heavy-weight legacy SIEM, VAST is highly embeddable so that you can
 run it everywhere: containerized in the public cloud, on bare-metal appliances
 deep in the network, or at the edge.
-
-[siem]: https://en.wikipedia.org/wiki/Security_information_and_event_management
-[arrow]: https://arrow.apache.org
+:::
 
 ### VAST vs. Data Warehouses
 
@@ -93,22 +107,33 @@ the following relevant use cases where VAST has the edge:
   performing threshold-based detections. Data warehouses work well for (3) but
   rarely for (1) and (2) as well.
 
-Bottom line: data warehouses may be well-suited for raw data processing, but
-a data backbone for security operations has a lot more domain-specific
-demands. The required heavy lifting to bridge this gap is cost and time
-prohibitive for any security operations center. This is why we built VAST.
+:::note Recommendation
+Data warehouses may be well-suited for raw data processing, but a data backbone
+for security operations has a lot more domain-specific demands. The required
+heavy lifting to bridge this gap is cost and time prohibitive for any security
+operations center. This is why we built VAST.
+:::
 
-## Why not VAST?
+### VAST vs. Relational DBs
 
-VAST is the right choice when you need to analyze large amounts of security
-telemetry for specific use cases in security operations. There exist a lot of
-database systems out there, and you may ask yourself the question: why not use
-that other system instead?
+Unlike [OLAP](#vast-vs-data-warehouses) workloads,
+[OLTP](https://en.wikipedia.org/wiki/Online_transaction_processing) workloads
+have strong transactional and consistency guarantees, e.g., when performing
+inserts, updates, and deletes. These extra guarantees come at a cost of
+throughput and latency when working with large datasets, but are rarely needed
+in security analytics (e.g., ingestion is an append-only operation). In a domain
+of incomplete data, VAST trades correctness for performance and availability,
+i.e., throttles a data source with backpressure instead of falling behind and
+risking out-of-memory scenarios.
 
-To help answer this question, we offer a brief guidance when other systems might
-be a better fit.
+:::note Recommendation
+If you aim to perform numerous modifications on a small subset of event data,
+with medium ingest rates, relational databases, like PostgreSQL or MySQL, might
+be a better fit. VAST's columnar data representation is ill-suited for row-level
+modifications.
+:::
 
-### Document DBs
+### VAST vs. Document DBs
 
 Document DBs, such as MongoDB, offer worry-free ingestion of unstructured
 data. They scale well horizontally and flexible querying.
@@ -145,7 +170,7 @@ and other information retrieval techniques are still relevant for security
 analytics, for which VAST has basic support.
 :::
 
-### Timeseries DBs
+### VAST vs. Timeseries DBs
 
 Timeseries databases share a lot in common with [OLAP
 engines](#vast-vs-data-warehouses), but put center data organization around
@@ -160,7 +185,7 @@ attributes. If your analysis involve running more complex detections, or
 include needle-in-haystack searches, VAST might be a better fit.
 :::
 
-### Key-Value DBs
+### VAST vs. Key-Value DBs
 
 A key-value store performs a key-based point or range lookup to retrieve one or
 more values. Security telemetry is high-dimensional data and there are many more
@@ -174,26 +199,7 @@ facilitate certain capabilities, e.g., when processing watch lists. (VAST offers
 a *matcher* plugin for this purpose.)
 :::
 
-### Relational DBs
-
-Unlike [OLAP](#vast-vs-data-warehouses) workloads,
-[OLTP](https://en.wikipedia.org/wiki/Online_transaction_processing) workloads
-have strong transactional and consistency guarantees, e.g., when performing
-inserts, updates, and deletes. These extra guarantees come at a cost of
-throughput and latency when working with large datasets, but are rarely needed
-in security analytics (e.g., ingestion is an append-only operation). In a domain
-of incomplete data, VAST trades correctness for performance and availability,
-i.e., throttles a data source with backpressure instead of falling behind and
-risking out-of-memory scenarios.
-
-:::note Recommendation
-If you aim to perform numerous modifications on a small subset of event data,
-with medium ingest rates, relational databases, like PostgreSQL or MySQL, might
-be a better fit. VAST's columnar data representation is ill-suited for row-level
-modifications.
-:::
-
-### Graph DBs
+### VAST vs. Graph DBs
 
 Graph databases are purpose-built for answering complex queries over networks of
 nodes and their relationships, such as finding shortest paths, measuring node
