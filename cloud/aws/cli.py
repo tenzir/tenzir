@@ -154,12 +154,20 @@ def deploy_lambda_image(c):
 
 
 @task
-def run_vast_task(c):
+def run_vast_task(c, cmd_override=None):
     """Start a new VAST server task on Fargate. DANGER: might lead to inconsistant state"""
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     subnet = terraform_output(c, "step-2", "ids_appliances_subnet_id")
     sg = terraform_output(c, "step-2", "vast_security_group")
     task_def = terraform_output(c, "step-2", "vast_task_definition")
+    overrides = {}
+    if cmd_override is not None:
+        overrides["containerOverrides"] = [
+            {
+                "name": "main",
+                "command": [cmd_override],
+            },
+        ]
     task_res = aws("ecs").run_task(
         cluster=cluster,
         count=1,
@@ -175,6 +183,7 @@ def run_vast_task(c):
             }
         },
         taskDefinition=task_def,
+        overrides=overrides,
     )
     task_arn = task_res["tasks"][0]["taskArn"].split("/")[-1]
     print(f"Started task {task_arn}")
