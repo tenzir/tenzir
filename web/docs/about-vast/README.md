@@ -138,12 +138,11 @@ search engine uses (inverted) indexes and ranking methods to return the most
 relevant results for a given combination of search terms.
 
 :::note Recommendation
-However, most of the security telemetry arrives as structured log/event data, as
-opposed to unstructured textual data. If your primary use case involves working
-with text, VAST might not be a good fit. That said, it's still possible to
-leverage information retrieval techniques for security analytics. For example,
-Elastic is a popular SIEM that works well for medium-sized workloads but
-exhibits poor vertical scaling.
+Most of the security telemetry arrives as structured log/event data, as opposed
+to unstructured textual data. If your primary use case involves working with
+text, VAST might not be a good fit. That said, needle-in-haystack search
+and other information retrieval techniques are still relevant for security
+analytics, for which VAST has basic support.
 :::
 
 ### Timeseries DBs
@@ -156,9 +155,9 @@ time.
 If you plan to access your event data through time domain and need to model the
 majority of data as series, a timeseries DBs may suit the bill. If you access
 data through other (spatial) attributes, like IP addresses or domains, a
-timeseries DB might not be good fit—especially for high-cardinality
-attributes. If your security analysis involves running more complex detection,
-VAST might be a better fit.
+traditional timeseries DB might not be good fit—especially for high-cardinality
+attributes. If your analysis involve running more complex detections, or
+include needle-in-haystack searches, VAST might be a better fit.
 :::
 
 ### Key-Value DBs
@@ -181,26 +180,32 @@ Unlike [OLAP](#vast-vs-data-warehouses) workloads,
 [OLTP](https://en.wikipedia.org/wiki/Online_transaction_processing) workloads
 have strong transactional and consistency guarantees, e.g., when performing
 inserts, updates, and deletes. These extra guarantees come at a cost of
-throughput and latency when working with large datasets, as common in security
-analytics.
+throughput and latency when working with large datasets, but are rarely needed
+in security analytics (e.g., ingestion is an append-only operation). In a domain
+of incomplete data, VAST trades correctness for performance and availability,
+i.e., throttles a data source with backpressure instead of falling behind and
+risking out-of-memory scenarios.
 
 :::note Recommendation
 If you aim to perform numerous modifications on a small subset of event data,
 with medium ingest rates, relational databases, like PostgreSQL or MySQL, might
-be a better fit.
+be a better fit. VAST's columnar data representation is ill-suited for row-level
+modifications.
 :::
 
 ### Graph DBs
 
 Graph databases are purpose-built for answering complex queries over networks of
 nodes and their relationships, such as finding shortest paths, measuring node
-centrality, or identifying connected components.
+centrality, or identifying connected components. While networks and
+communication patterns can naturally be represented as graphs, traditional
+security analytics query patterns may not benefit from a graph representation.
 
 :::note Recommendation
 If graph-centric queries dominate your use case, VAST is not the right execution
-engine. VAST can still prove valuable in storing the raw telemetry and
-shipping datasets to the graph engine, e.g., through a high-bandwidth Arrow
-integration.
+engine. VAST can still prove valuable as foundation for graph analytics by
+storing the raw telemetry and feeding it (via Arrow) into graph engines that
+support ad-hoc data frame analysis.
 :::
 
 ## What's Next?
@@ -222,7 +227,7 @@ user:
    that provides light-weight indexing and manages schema meta data.
    👉 *Read here if you want to know why VAST is built the way it is.*
 4. [Develop VAST](/docs/develop-vast) provides developer-oriented resources to
-   customize VAST, e.g., write own plugins or enhance the source code.
+   work on VAST, e.g., write own plugins or enhance the source code.
    👉 *Look here if you are ready to get your hands dirty and write code.*
 
-If you would like to a hands-on introduction to VAST, turn the page!
+Ready to take VAST for spin? Turn the page for a quick hands-on walk-through.
