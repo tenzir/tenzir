@@ -1455,6 +1455,40 @@ TEST(YAML Module - type alias) {
   CHECK_EQUAL(result, expected_result);
 }
 
+TEST(YAML Module - yaml alias node) {
+  auto yaml = "types:\n"
+              "  type1:\n"
+              "    list: &record1\n"
+              "      record:\n"
+              "      - src: addr\n"
+              "      - dst: addr\n"
+              "\n"
+              "  type2:\n"
+              "    map:\n"
+              "      key: string\n"
+              "      value: *record1\n";
+  auto declaration = unbox(from_yaml(yaml));
+  auto result = unbox(to_module2(declaration));
+  auto expected = module_ng2{
+    .types = {type{
+                "type1",
+                list_type{record_type{
+                  {"src", address_type{}},
+                  {"dst", address_type{}},
+                }},
+              },
+              type{
+                "type2",
+                map_type{string_type{},
+                         record_type{
+                           {"src", address_type{}},
+                           {"dst", address_type{}},
+                         }},
+              }},
+  };
+  CHECK_EQUAL(result, expected);
+}
+
 TEST(YAML Module - order independent parsing - type aliases) {
   auto declaration = record{{
     "types",
