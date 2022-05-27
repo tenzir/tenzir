@@ -1,7 +1,7 @@
 <p align="center">
 
-<img src="./docs/static/img/vast-white.svg#gh-dark-mode-only" width="75%" alt="VAST">
-<img src="./docs/static/img/vast-black.svg#gh-light-mode-only" width="75%" alt="VAST">
+<img src="./web/static/img/vast-white.svg#gh-dark-mode-only" width="75%" alt="VAST">
+<img src="./web/static/img/vast-black.svg#gh-light-mode-only" width="75%" alt="VAST">
 
 </p>
 

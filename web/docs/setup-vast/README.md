@@ -4,8 +4,6 @@ This section covers the different stages of the setup process that ultimately
 yield a running VAST instance. You have several options to enter the setup
 pipeline, based on what intermediate artifact you would like to begin with.
 
-👇 Click on any blue actions to get started.
-
 ```mermaid
 flowchart LR
   classDef action fill:#00a4f1,stroke:none,color:#eee
@@ -42,3 +40,62 @@ flowchart LR
   click configure "/docs/setup-vast/configure/" "Configure VAST"
   click tune "/docs/setup-vast/tune/" "Tune VAST"
 ```
+
+:::tip Quick Start
+Want hands-on experience with VAST? Then continue with a quick tour below. 👇
+:::
+
+## Run VAST
+
+To get up and running quickly, we recommend using the static binary or Docker
+image:
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs>
+<TabItem value="static" label="Static Binary" default>
+If you have a Linux at your fingertips, just download and extract our package
+with a static binary:
+
+```bash
+mkdir /opt/vast
+cd /opt/vast
+wget https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
+mkdir -p /opt/vast
+tar xzf vast-linux-static.tar.gz -C /opt/vast
+export PATH="/opt/bin/vast:$PATH" # based on your shell, e.g., fish_add_path /opt/bin/vast
+vast start
+```
+</TabItem>
+<TabItem value="docker" label="Docker">
+For a container deployment, use our official Docker image:
+
+```bash
+docker pull tenzir/vast
+mkdir -p /tmp/db # persistent state
+docker run -dt --name=vast --rm -p 42000:42000 -v /tmp/db:/var/lib/vast \
+  tenzir/vast start
+```
+</TabItem>
+</Tabs>
+
+Now that you have running VAST node, you can start ingesting data.
+
+## Ingest Data
+
+import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+
+<MissingDocumentation/>
+
+## Query Data
+
+<MissingDocumentation/>
+
+## Transform Data
+
+<MissingDocumentation/>
+
+## Match Data
+
+<MissingDocumentation/>
