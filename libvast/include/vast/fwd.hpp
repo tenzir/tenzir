@@ -336,7 +336,6 @@ struct component_state;
 struct component_state_map;
 struct data_point;
 struct index_state;
-struct legacy_index_state;
 struct measurement;
 struct catalog_result;
 struct metrics_metadata;

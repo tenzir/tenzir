@@ -135,20 +135,6 @@ using partition_actor = typed_actor_fwd<
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// A set of relevant partition actors, and their uuids.
-// TODO: Move this elsewhere.
-using query_map = std::vector<std::pair<uuid, partition_actor>>;
-
-/// The QUERY SUPERVISOR actor interface.
-using query_supervisor_actor = typed_actor_fwd<
-  /// Reacts to a query and a set of relevant partitions by sending several
-  /// `vast::ids` to the index_client_actor, followed by a final `atom::done`.
-  caf::reacts_to<atom::supervise, uuid, query, query_map,
-                 receiver_actor<atom::done>>,
-  /// Tells the supervisor that the sink for this query has exited and
-  /// further work is unnecessary.
-  caf::reacts_to<atom::shutdown, atom::sink>>::unwrap;
-
 /// The EVALUATOR actor interface.
 using evaluator_actor = typed_actor_fwd<
   // Evaluates the expression and responds with matching ids.
@@ -198,12 +184,6 @@ using accountant_actor = typed_actor_fwd<
   caf::reacts_to<atom::telemetry>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
-
-/// The QUERY SUPERVISOR MASTER actor interface.
-using query_supervisor_master_actor = typed_actor_fwd<
-  // Enlist the QUERY SUPERVISOR as an available worker.
-  caf::reacts_to<atom::worker, query_supervisor_actor>,
-  caf::reacts_to<atom::worker, atom::wakeup, query_supervisor_actor>>::unwrap;
 
 /// The PARTITION CREATION LISTENER actor interface.
 using partition_creation_listener_actor = typed_actor_fwd<
@@ -279,12 +259,6 @@ using index_actor = typed_actor_fwd<
   caf::replies_to<atom::resolve, expression>::with<catalog_result>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
-  // INTERNAL: The actual query evaluation handler. Does the catalog lookup,
-  // sends the response triple to the client, and schedules the first batch of
-  // partitions.
-  caf::replies_to<atom::internal, query, query_supervisor_actor,
-                  caf::actor_addr>::with< //
-    query_cursor>,
   // Erases the given partition from the INDEX.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
   // Applies the given transformation to the partition.
@@ -299,8 +273,6 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the QUERY SUPERVISOR MASTER actor.
-  ::extend_with<query_supervisor_master_actor>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -527,9 +499,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::catalog_actor))
   VAST_ADD_TYPE_ID((vast::system::node_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
-  VAST_ADD_TYPE_ID((vast::system::query_map))
-  VAST_ADD_TYPE_ID((vast::system::query_supervisor_actor))
-  VAST_ADD_TYPE_ID((vast::system::query_supervisor_master_actor))
   VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>))
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))

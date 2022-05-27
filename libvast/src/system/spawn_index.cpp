@@ -16,7 +16,6 @@
 #include "vast/logger.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/legacy_index.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
@@ -56,22 +55,6 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     if (auto err = convert(as_data, index_config))
       return err;
     VAST_VERBOSE("using customized indexing configuration {}", index_config);
-  }
-  if (opt("vast.use-legacy-query-scheduler", false)) {
-    auto handle = self->spawn(
-      legacy_index, accountant, filesystem, archive, catalog, type_registry,
-      indexdir,
-      // TODO: Pass these options as a vast::data object instead.
-      opt("vast.store-backend", std::string{sd::store_backend}),
-      opt("vast.max-partition-size", sd::max_partition_size),
-      opt("vast.active-partition-timeout", sd::active_partition_timeout),
-      opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
-      opt("vast.max-taste-partitions", sd::taste_partitions),
-      opt("vast.max-queries", sd::num_query_supervisors),
-      std::filesystem::path{opt("vast.catalog-dir", indexdir.string())},
-      std::move(index_config));
-    VAST_VERBOSE("{} spawned the index", *self);
-    return caf::actor_cast<caf::actor>(handle);
   }
   auto handle = self->spawn(
     index, accountant, filesystem, archive, catalog, type_registry, indexdir,
