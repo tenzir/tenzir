@@ -2,7 +2,8 @@
 
 This directory contains code and content of the official VAST website at
 https://vast.io. We use [Docusaurus](https://docusaurus.io/) as driving
-framework and an [enhanced flavor of Markdown](TODO) for primary content.
+framework and an [enhanced flavor of
+Markdown](https://docusaurus.io/docs/markdown-features) for primary content.
 
 ## Structure
 
@@ -44,8 +45,5 @@ yarn build
 
 The resulting `build` directory can be served using any static hosting service.
 
-For the main site, we use a [github actions workflow][workflow] to deploy with
-every push to master.
-
-[site]: https://vast.io/
-[workflow]: https://github.com/tenzir/vast/blob/master/.github/workflows/docs.yaml
+For the main site, we use a GitHub Actions workflow to deploy with every push to
+master.

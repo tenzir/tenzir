@@ -9,10 +9,11 @@ We use [Docusaurus](https://docusaurus.io/) as site framework.
 
 To view the entire site (including the documentation) locally,
 change to the [`/web`](https://github.com/tenzir/vast/tree/master/web/)
-directory and invoke [yarn](https://yarnpkg.com/):
+directory and invoke [`yarn`](https://yarnpkg.com/), or to be on the safe side,
+`yarn install --frozen-lockfile` to avoid pollution from global dependencies.
+Then build and serve the site via:
 
 ```bash
-yarn
 yarn start
 ```
 
