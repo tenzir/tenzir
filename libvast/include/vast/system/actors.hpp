@@ -135,10 +135,6 @@ using partition_actor = typed_actor_fwd<
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// A set of relevant partition actors, and their uuids.
-// TODO: Move this elsewhere.
-using query_map = std::vector<std::pair<uuid, partition_actor>>;
-
 /// The EVALUATOR actor interface.
 using evaluator_actor = typed_actor_fwd<
   // Evaluates the expression and responds with matching ids.
@@ -503,7 +499,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::catalog_actor))
   VAST_ADD_TYPE_ID((vast::system::node_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
-  VAST_ADD_TYPE_ID((vast::system::query_map))
   VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>))
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))
