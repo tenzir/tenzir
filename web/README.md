@@ -27,8 +27,17 @@ to the local file
 
 Use [yarn](https://yarnpkg.com/) to build and view the site locally:
 
-```
+```bash
+# Setup environment.
 yarn
+# Safer than just 'yarn' as it avoids global dependency pollution.
+yarn install --frozen-lockfile
+```
+
+After installing dependencies, build the site via Docusaurus and serve at
+http://localhost:3000:
+
+```bash
 yarn start
 ```
 
