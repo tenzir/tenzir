@@ -118,8 +118,8 @@ int main(int argc, char** argv) {
     caf::put(cfg.content, "vast.catalog-fp-rate", *meta_index_fp_rate);
   }
   if (caf::holds_alternative<bool>(cfg, "vast.use-legacy-query-scheduler"))
-    VAST_WARN("the 'vast.use-legacy-query-scheduler' option is deprecated; "
-              "it will be removed with the next minor release of VAST.");
+    VAST_WARN("the 'vast.use-legacy-query-scheduler' option no longer exists "
+              "and will be ignored.");
   if (caf::get_or(cfg, "vast.store-backend", "segment-store") == "archive") {
     VAST_WARN("the 'vast.store-backend' option 'archive' is deprecated; "
               "automatically using 'segment-store' instead");
