@@ -72,10 +72,10 @@ struct parsed_type {
 /// @param declaration the type declaration parsed from yaml module config file
 /// @param name the name for the declaration
 caf::expected<parsed_type>
-to_type2(const data& declaration, std::string_view name);
+parse(const data& declaration, std::string_view name);
 
 caf::expected<parsed_type>
-to_record2(const std::vector<vast::data>& field_declarations) {
+parse(const std::vector<vast::data>& field_declarations) {
   if (field_declarations.empty())
     return caf::make_error(ec::parse_error,
                            fmt::format("record types must have at least "
@@ -100,7 +100,7 @@ to_record2(const std::vector<vast::data>& field_declarations) {
                                          "YAML dictionary; while parsing: {}",
                                          record_value));
     auto type_or_error
-      = to_type2(record_record.begin()->second, std::string_view{});
+      = parse(record_record.begin()->second, std::string_view{});
     if (!type_or_error)
       return caf::make_error(
         ec::parse_error, fmt::format("failed to parse record type field: {}",
@@ -115,8 +115,8 @@ to_record2(const std::vector<vast::data>& field_declarations) {
 }
 
 caf::expected<parsed_type>
-to_enum2(std::string_view name, const data& enumeration,
-         std::vector<type::attribute_view>&& attributes) {
+parse_enum(std::string_view name, const data& enumeration,
+           std::vector<type::attribute_view>&& attributes) {
   const auto* enum_list_ptr = caf::get_if<list>(&enumeration);
   if (enum_list_ptr == nullptr)
     return caf::make_error(
@@ -145,8 +145,8 @@ to_enum2(std::string_view name, const data& enumeration,
 }
 
 caf::expected<parsed_type>
-to_map2(std::string_view name, const data& map_to_parse,
-        std::vector<type::attribute_view>&& attributes) {
+parse_map(std::string_view name, const data& map_to_parse,
+          std::vector<type::attribute_view>&& attributes) {
   const auto* map_record_ptr = caf::get_if<record>(&map_to_parse);
   if (map_record_ptr == nullptr)
     return caf::make_error(ec::parse_error,
@@ -163,14 +163,14 @@ to_map2(std::string_view name, const data& map_to_parse,
                                        "and a value; while parsing: {} with "
                                        "name: {}",
                                        map_to_parse, name));
-  auto key_type_expected = to_type2(found_key->second, std::string_view{});
+  auto key_type_expected = parse(found_key->second, std::string_view{});
   if (!key_type_expected)
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to parse map key: {}; while "
                                        "parsing: {} with name: {}",
                                        key_type_expected.error(), map_to_parse,
                                        name));
-  auto value_type_expected = to_type2(found_value->second, std::string_view{});
+  auto value_type_expected = parse(found_value->second, std::string_view{});
   if (!value_type_expected)
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to parse map value: {}; while "
@@ -196,10 +196,9 @@ to_map2(std::string_view name, const data& map_to_parse,
 
 /// Only one of is_base and is_implement and is_extend can be true, if both
 /// is_base and is_extend is false then is_extend is assumed to be true.
-caf::expected<parsed_type>
-to_record_algebra(std::string_view name, parsed_type&& new_record, bool is_base,
-                  bool is_implant,
-                  const std::vector<std::string_view>& algebra_records) {
+caf::expected<parsed_type> make_parsed_record_algebra(
+  std::string_view name, parsed_type&& new_record, bool is_base,
+  bool is_implant, const std::vector<std::string_view>& algebra_records) {
   auto base_type = is_base      ? enumeration_type{{"base"}}
                    : is_implant ? enumeration_type{{"implant"}}
                                 : enumeration_type{{"extend"}};
@@ -221,8 +220,8 @@ to_record_algebra(std::string_view name, parsed_type&& new_record, bool is_base,
 }
 
 caf::expected<parsed_type>
-to_record_algebra2(std::string_view name, const data& record_algebra,
-                   std::vector<type::attribute_view>&& attributes) {
+parse_record_algebra(std::string_view name, const data& record_algebra,
+                     std::vector<type::attribute_view>&& attributes) {
   const auto* record_algebra_record_ptr = caf::get_if<record>(&record_algebra);
   if (record_algebra_record_ptr == nullptr)
     return caf::make_error(ec::parse_error,
@@ -264,7 +263,7 @@ to_record_algebra2(std::string_view name, const data& record_algebra,
                                        "be specified as YAML list; while "
                                        "parsing: {} with name: {}",
                                        record_algebra, name));
-  auto new_record_or_error = to_record2(*fields_list_ptr);
+  auto new_record_or_error = parse(*fields_list_ptr);
   if (!new_record_or_error)
     return caf::make_error(
       ec::parse_error,
@@ -309,14 +308,14 @@ to_record_algebra2(std::string_view name, const data& record_algebra,
                     record_algebra, name));
     algebra_records.emplace_back(*record_name_ptr);
   }
-  return to_record_algebra(name, std::move(new_record), is_base_found,
-                           is_implant_found, algebra_records);
+  return make_parsed_record_algebra(name, std::move(new_record), is_base_found,
+                                    is_implant_found, algebra_records);
 }
 
 /// Returns a built-in type or a partial placeholder type. The name and
 /// attributes must be added by the caller. It does not handle inline
 /// declarations.
-caf::expected<parsed_type> to_builtin(const data& declaration) {
+caf::expected<parsed_type> parse_builtin(const data& declaration) {
   const auto* aliased_type_name_ptr = caf::get_if<std::string>(&declaration);
   if (aliased_type_name_ptr == nullptr)
     return caf::make_error(ec::parse_error,
@@ -356,7 +355,7 @@ caf::expected<parsed_type> to_builtin(const data& declaration) {
 /// Can handle inline declartaions
 /// FIXME: name optional?
 caf::expected<parsed_type>
-to_type2(const data& declaration, std::string_view name) {
+parse(const data& declaration, std::string_view name) {
   // Prevent using reserved names as types names
   if (std::any_of(reserved_names.begin(), reserved_names.end(),
                   [&](const auto& reserved_name) {
@@ -370,7 +369,7 @@ to_type2(const data& declaration, std::string_view name) {
   // Type names can contain any character that the YAML parser can handle - no
   // need to check for allowed characters.
   if (aliased_type_name_ptr != nullptr)
-    return to_builtin(declaration);
+    return parse_builtin(declaration);
   const auto* declaration_record_ptr = caf::get_if<record>(&declaration);
   if (declaration_record_ptr == nullptr)
     return caf::make_error(ec::parse_error,
@@ -450,7 +449,7 @@ to_type2(const data& declaration, std::string_view name) {
   // Type alias
   if (is_type_found) {
     // It can only be a built int type
-    auto type_expected = to_builtin(found_type->second);
+    auto type_expected = parse_builtin(found_type->second);
     if (!type_expected)
       return caf::make_error(
         ec::parse_error, fmt::format("failed to parse type alias: {}; while "
@@ -470,10 +469,10 @@ to_type2(const data& declaration, std::string_view name) {
   }
   // Enumeration
   if (is_enum_found)
-    return to_enum2(name, found_enum->second, std::move(attributes));
+    return parse_enum(name, found_enum->second, std::move(attributes));
   // List
   if (is_list_found) {
-    auto type_expected = to_type2(found_list->second, std::string_view{});
+    auto type_expected = parse(found_list->second, std::string_view{});
     if (!type_expected)
       return caf::make_error(
         ec::parse_error, fmt::format("failed to parse list: {}; while parsing: "
@@ -493,13 +492,13 @@ to_type2(const data& declaration, std::string_view name) {
   }
   // Map
   if (is_map_found)
-    return to_map2(name, found_map->second, std::move(attributes));
+    return parse_map(name, found_map->second, std::move(attributes));
   // Record or Record algebra
   if (is_record_found) {
     const auto* record_list_ptr = caf::get_if<list>(&found_record->second);
     if (record_list_ptr != nullptr) {
       // Record
-      auto new_record = to_record2(*record_list_ptr);
+      auto new_record = parse(*record_list_ptr);
       if (!new_record)
         return caf::make_error(
           ec::parse_error, fmt::format("failed to parse record: {}, while "
@@ -509,15 +508,15 @@ to_type2(const data& declaration, std::string_view name) {
                          std::move(new_record->providers));
     }
     // Record algebra
-    return to_record_algebra2(name, found_record->second,
-                              std::move(attributes));
+    return parse_record_algebra(name, found_record->second,
+                                std::move(attributes));
   }
   return caf::make_error(ec::logic_error, "unknown type found when parsing");
 }
 
 caf::expected<parsed_type>
 to_type2(const record::value_type& variable_declaration) {
-  return to_type2(variable_declaration.second, variable_declaration.first);
+  return parse(variable_declaration.second, variable_declaration.first);
 }
 
 caf::expected<type> resolve(const bool is_algebra, const type& to_resolve,
