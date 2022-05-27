@@ -77,21 +77,28 @@ to_type2(const data& declaration, std::string_view name);
 caf::expected<parsed_type>
 to_record2(const std::vector<vast::data>& field_declarations) {
   if (field_declarations.empty())
-    return caf::make_error(ec::parse_error, "record types must have at least "
-                                            "one field");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("record types must have at least "
+                                       "one field; while parsing: {}",
+                                       field_declarations));
   auto record_fields = std::vector<record_type::field_view>{};
   auto providers = std::vector<std::string_view>{};
   record_fields.reserve(field_declarations.size());
   for (const auto& record_value : field_declarations) {
     const auto* record_record_ptr = caf::get_if<record>(&record_value);
     if (record_record_ptr == nullptr)
-      return caf::make_error(ec::parse_error, "a field in record type must be "
-                                              "specified as a YAML dictionary");
+      return caf::make_error(ec::parse_error,
+                             fmt::format("a field in record type must be "
+                                         "specified as a YAML dictionary, "
+                                         "while parsing: {}",
+                                         record_value));
     const auto& record_record = *record_record_ptr;
     if (record_record.size() != 1)
-      return caf::make_error(ec::parse_error, "a field in a record type can "
-                                              "have only a single key in the "
-                                              "YAML dictionary");
+      return caf::make_error(ec::parse_error,
+                             fmt::format("a field in a record type can "
+                                         "have only a single key in the "
+                                         "YAML dictionary; while parsing: {}",
+                                         record_value));
     auto type_or_error
       = to_type2(record_record.begin()->second, std::string_view{});
     if (!type_or_error)
@@ -112,18 +119,25 @@ to_enum2(std::string_view name, const data& enumeration,
          std::vector<type::attribute_view>&& attributes) {
   const auto* enum_list_ptr = caf::get_if<list>(&enumeration);
   if (enum_list_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "enum must be specified as a "
-                                            "YAML list");
+    return caf::make_error(
+      ec::parse_error, fmt::format("enum must be specified as a "
+                                   "YAML list; while parsing: {} with name: {}",
+                                   enumeration, name));
   const auto& enum_list = *enum_list_ptr;
   if (enum_list.empty())
-    return caf::make_error(ec::parse_error, "enum cannot be empty");
+    return caf::make_error(ec::parse_error, fmt::format("enum cannot be empty; "
+                                                        "while parsing: {} "
+                                                        "with name: {}",
+                                                        enumeration, name));
   auto enum_fields = std::vector<enumeration_type::field_view>{};
   enum_fields.reserve(enum_list.size());
   for (const auto& enum_value : enum_list) {
     const auto* enum_string_ptr = caf::get_if<std::string>(&enum_value);
     if (enum_string_ptr == nullptr)
-      return caf::make_error(ec::parse_error, "enum value must be specified "
-                                              "as a YAML string");
+      return caf::make_error(ec::parse_error,
+                             fmt::format("enum value must be specified "
+                                         "as a YAML string; while parsing: {}",
+                                         enum_value));
     enum_fields.push_back({*enum_string_ptr});
   }
   return parsed_type{
@@ -135,24 +149,34 @@ to_map2(std::string_view name, const data& map_to_parse,
         std::vector<type::attribute_view>&& attributes) {
   const auto* map_record_ptr = caf::get_if<record>(&map_to_parse);
   if (map_record_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "a map type must be specified as "
-                                            "a YAML dictionary");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("a map type must be specified as "
+                                       "a YAML dictionary; while parsing: {} "
+                                       "with name: {}",
+                                       map_to_parse, name));
   const auto& map_record = *map_record_ptr;
   auto found_key = map_record.find("key");
   auto found_value = map_record.find("value");
   if (found_key == map_record.end() || found_value == map_record.end())
-    return caf::make_error(ec::parse_error, "a map type must have both a key "
-                                            "and a value");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("a map type must have both a key "
+                                       "and a value; while parsing: {} with "
+                                       "name: {}",
+                                       map_to_parse, name));
   auto key_type_expected = to_type2(found_key->second, std::string_view{});
   if (!key_type_expected)
     return caf::make_error(ec::parse_error,
-                           fmt::format("failed to parse map key: {}",
-                                       key_type_expected.error()));
+                           fmt::format("failed to parse map key: {}; while "
+                                       "parsing: {} with name: {}",
+                                       key_type_expected.error(), map_to_parse,
+                                       name));
   auto value_type_expected = to_type2(found_value->second, std::string_view{});
   if (!value_type_expected)
     return caf::make_error(ec::parse_error,
-                           fmt::format("failed to parse map value: {}",
-                                       value_type_expected.error()));
+                           fmt::format("failed to parse map value: {}; while "
+                                       "parsing: {} with name: {}",
+                                       value_type_expected.error(),
+                                       map_to_parse, name));
   VAST_TRACE(
     fmt::format("Creating map type with name: {}, "
                 "placeholder key: {}, nested key type: {},"
@@ -201,8 +225,11 @@ to_record_algebra2(std::string_view name, const data& record_algebra,
                    std::vector<type::attribute_view>&& attributes) {
   const auto* record_algebra_record_ptr = caf::get_if<record>(&record_algebra);
   if (record_algebra_record_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "record algebra must be "
-                                            "specified as a YAML dictionary");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("record algebra must be "
+                                       "specified as a YAML dictionary; while "
+                                       "parsing: {} with name: {}",
+                                       record_algebra, name));
   const auto& record_algebra_record = *record_algebra_record_ptr;
   auto found_base = record_algebra_record.find("base");
   auto found_implant = record_algebra_record.find("implant");
@@ -218,24 +245,32 @@ to_record_algebra2(std::string_view name, const data& record_algebra,
   if (is_extend_found)
     name_clash_specifier_cnt++;
   if (name_clash_specifier_cnt >= 2)
-    return caf::make_error(ec::parse_error, "record algebra must contain "
-                                            "only one of 'base', 'implant', "
-                                            "'extend'");
+    return caf::make_error(
+      ec::parse_error, fmt::format("record algebra must contain "
+                                   "only one of 'base', 'implant', "
+                                   "'extend'; while parsing: {} with name: {}",
+                                   record_algebra, name));
   // create new record type
   auto found_fields = record_algebra_record.find("fields");
   if (found_fields == record_algebra_record.end())
-    return caf::make_error(ec::parse_error, "record algebra must have one "
-                                            "'fields'");
+    return caf::make_error(
+      ec::parse_error, fmt::format("record algebra must have one "
+                                   "'fields'; while parsing: {}, with name: {}",
+                                   record_algebra, name));
   const auto* fields_list_ptr = caf::get_if<list>(&found_fields->second);
   if (fields_list_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "'fields' in record algebra must "
-                                            "be specified as YAML list");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("'fields' in record algebra must "
+                                       "be specified as YAML list; while "
+                                       "parsing: {} with name: {}",
+                                       record_algebra, name));
   auto new_record_or_error = to_record2(*fields_list_ptr);
   if (!new_record_or_error)
-    return caf::make_error(ec::parse_error,
-                           fmt::format("failed to parse record algebra "
-                                       "fields: {}",
-                                       new_record_or_error.error()));
+    return caf::make_error(
+      ec::parse_error,
+      fmt::format("failed to parse record algebra "
+                  "fields: {}; while parsing: {} with name: {}",
+                  new_record_or_error.error(), record_algebra, name));
   auto new_record = new_record_or_error.value();
   // retrieve records (base, implant or extend)
   if (name_clash_specifier_cnt == 0)
@@ -247,14 +282,19 @@ to_record_algebra2(std::string_view name, const data& record_algebra,
                                            : found_extend->second;
   const auto* records_list_ptr = caf::get_if<list>(&records);
   if (records_list_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "'base', 'implant' or 'extend' "
-                                            "in a record algebra must be "
-                                            "specified as a YAML list");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("'base', 'implant' or 'extend' "
+                                       "in a record algebra must be "
+                                       "specified as a YAML list; while "
+                                       "parsing: {} with name: {}",
+                                       record_algebra, name));
   const auto& record_list = *records_list_ptr;
   if (record_list.empty())
-    return caf::make_error(ec::parse_error, "a record algebra cannot have an "
-                                            "empty 'base', 'implant' or "
-                                            "'extend'");
+    return caf::make_error(
+      ec::parse_error, fmt::format("a record algebra cannot have an "
+                                   "empty 'base', 'implant' or "
+                                   "'extend'; while parsing: {} with name: {}",
+                                   record_algebra, name));
   std::optional<record_type> merged_base_record{};
   std::vector<std::string_view> algebra_records{};
   algebra_records.reserve(record_list.size());
@@ -262,8 +302,11 @@ to_record_algebra2(std::string_view name, const data& record_algebra,
     const auto& record_name_ptr = caf::get_if<std::string>(&record);
     if (record_name_ptr == nullptr)
       return caf::make_error(
-        ec::parse_error, "the 'base', 'implant' or 'extend' keywords of a "
-                         "record algebra must be specified as a YAML string");
+        ec::parse_error,
+        fmt::format("the 'base', 'implant' or 'extend' keywords of a "
+                    "record algebra must be specified as a YAML string; while "
+                    "parsing: {} with name: {}",
+                    record_algebra, name));
     algebra_records.emplace_back(*record_name_ptr);
   }
   return to_record_algebra(name, std::move(new_record), is_base_found,
@@ -276,8 +319,10 @@ to_record_algebra2(std::string_view name, const data& record_algebra,
 caf::expected<parsed_type> to_builtin(const data& declaration) {
   const auto* aliased_type_name_ptr = caf::get_if<std::string>(&declaration);
   if (aliased_type_name_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "built-in type can only be a "
-                                            "string");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("built-in type can only be a "
+                                       "string; while parsing: {}",
+                                       declaration));
   const auto& aliased_type_name = *aliased_type_name_ptr;
   VAST_TRACE(
     fmt::format("Trying to create type aliased_type: {}", aliased_type_name));
@@ -317,9 +362,10 @@ to_type2(const data& declaration, std::string_view name) {
                   [&](const auto& reserved_name) {
                     return name == reserved_name;
                   }))
-    return caf::make_error(
-      ec::parse_error,
-      fmt::format("type declaration cannot use a reserved name: {}", name));
+    return caf::make_error(ec::parse_error,
+                           fmt::format("type declaration cannot use a reserved "
+                                       "name: {}; while parsing: {}",
+                                       name, declaration));
   const auto* aliased_type_name_ptr = caf::get_if<std::string>(&declaration);
   // Type names can contain any character that the YAML parser can handle - no
   // need to check for allowed characters.
@@ -327,10 +373,13 @@ to_type2(const data& declaration, std::string_view name) {
     return to_builtin(declaration);
   const auto* declaration_record_ptr = caf::get_if<record>(&declaration);
   if (declaration_record_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "parses type alias with invalid "
-                                            "format"
-                                            "type alias must be specified as a "
-                                            "YAML dictionary");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("parses type alias with invalid "
+                                       "format"
+                                       "type alias must be specified as a "
+                                       "YAML dictionary; while parsing: {} "
+                                       "with name: {}",
+                                       declaration, name));
   const auto& declaration_record = *declaration_record_ptr;
   // Get the optional attributes
   auto attributes = std::vector<type::attribute_view>{};
@@ -338,8 +387,11 @@ to_type2(const data& declaration, std::string_view name) {
   if (found_attributes != declaration_record.end()) {
     const auto* attribute_list = caf::get_if<list>(&found_attributes->second);
     if (attribute_list == nullptr)
-      return caf::make_error(ec::parse_error, "the attribute list must be "
-                                              "specified as a YAML list");
+      return caf::make_error(ec::parse_error,
+                             fmt::format("the attribute list must be "
+                                         "specified as a YAML list; while "
+                                         "parsing: {} with name: {}",
+                                         declaration, name));
     attributes.reserve(attribute_list->size());
     for (const auto& attribute : *attribute_list) {
       const auto* attribute_string_ptr = caf::get_if<std::string>(&attribute);
@@ -348,17 +400,26 @@ to_type2(const data& declaration, std::string_view name) {
       else {
         const auto* attribute_record_ptr = caf::get_if<record>(&attribute);
         if (attribute_record_ptr == nullptr)
-          return caf::make_error(ec::parse_error, "attribute must be specified "
-                                                  "as a YAML dictionary");
+          return caf::make_error(ec::parse_error,
+                                 fmt::format("attribute must be specified "
+                                             "as a YAML dictionary: {}; while "
+                                             "parsing: {} with name: {}",
+                                             attribute, declaration, name));
         const auto& attribute_record = *attribute_record_ptr;
         if (attribute_record.size() != 1)
-          return caf::make_error(ec::parse_error, "attribute must have a "
-                                                  "single field");
+          return caf::make_error(ec::parse_error,
+                                 fmt::format("attribute must have a "
+                                             "single field: {}; while parsing: "
+                                             "{} with name: {}",
+                                             attribute, declaration, name));
         const auto& attribute_key = attribute_record.begin()->first;
         const auto* attribute_value_ptr
           = caf::get_if<std::string>(&attribute_record.begin()->second);
         if (attribute_value_ptr == nullptr)
-          return caf::make_error(ec::parse_error, "attribute must be a string");
+          return caf::make_error(ec::parse_error,
+                                 fmt::format("attribute must be a string: {}; "
+                                             "while parsing: {} with name: {}",
+                                             attribute, declaration, name));
         const auto& attribute_value = *attribute_value_ptr;
         attributes.push_back({attribute_key, attribute_value});
       }
@@ -381,16 +442,20 @@ to_type2(const data& declaration, std::string_view name) {
       + static_cast<int>(is_list_found) + static_cast<int>(is_map_found)
       + static_cast<int>(is_record_found);
   if (type_selector_cnt != 1)
-    return caf::make_error(ec::parse_error, "one of type, enum, list, map, "
-                                            "record is expected");
+    return caf::make_error(ec::parse_error,
+                           fmt::format("one of type, enum, list, map, "
+                                       "record is expected; while parsing: {} "
+                                       "with name: {}",
+                                       declaration, name));
   // Type alias
   if (is_type_found) {
     // It can only be a built int type
     auto type_expected = to_builtin(found_type->second);
     if (!type_expected)
-      return caf::make_error(ec::parse_error,
-                             fmt::format("failed to parse type alias: {}",
-                                         type_expected.error()));
+      return caf::make_error(
+        ec::parse_error, fmt::format("failed to parse type alias: {}; while "
+                                     "parsing: {} with name: {}",
+                                     type_expected.error(), declaration, name));
     if (!type_expected->parsed)
       VAST_TRACE(fmt::format("Creating a placeholder with name: {}, "
                              "nested_type: {}",
@@ -410,9 +475,10 @@ to_type2(const data& declaration, std::string_view name) {
   if (is_list_found) {
     auto type_expected = to_type2(found_list->second, std::string_view{});
     if (!type_expected)
-      return caf::make_error(ec::parse_error,
-                             fmt::format("failed to parse list: {}",
-                                         type_expected.error()));
+      return caf::make_error(
+        ec::parse_error, fmt::format("failed to parse list: {}; while parsing: "
+                                     "{} with name: {}",
+                                     type_expected.error(), declaration, name));
     if (!type_expected->parsed)
       VAST_TRACE(fmt::format("Creating placeholder list type with name: {}, "
                              "nested_type: {}",
@@ -435,9 +501,10 @@ to_type2(const data& declaration, std::string_view name) {
       // Record
       auto new_record = to_record2(*record_list_ptr);
       if (!new_record)
-        return caf::make_error(ec::parse_error,
-                               fmt::format("failed to parse record: {}",
-                                           new_record.error()));
+        return caf::make_error(
+          ec::parse_error, fmt::format("failed to parse record: {}, while "
+                                       "parsing: {} with name: {}",
+                                       new_record.error(), declaration, name));
       return parsed_type(type{name, new_record->parsed, std::move(attributes)},
                          std::move(new_record->providers));
     }
