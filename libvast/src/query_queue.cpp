@@ -137,6 +137,26 @@ query_queue::activate(const uuid& qid, uint32_t num_partitions) {
   return caf::none;
 }
 
+bool query_queue::mark_partition_erased(const uuid& pid) {
+  auto it = std::find_if(partitions.begin(), partitions.end(),
+                         [&](const auto& entry) {
+                           return entry.partition == pid;
+                         });
+  if (it != partitions.end()) {
+    it->erased = true;
+    return true;
+  }
+  it = std::find_if(inactive_partitions.begin(), inactive_partitions.end(),
+                    [&](const auto& entry) {
+                      return entry.partition == pid;
+                    });
+  if (it != inactive_partitions.end()) {
+    it->erased = true;
+    return true;
+  }
+  return false;
+}
+
 std::optional<query_queue::entry> query_queue::next() {
   while (!partitions.empty()) {
     auto result = std::move(partitions.back());

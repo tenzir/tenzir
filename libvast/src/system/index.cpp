@@ -569,9 +569,9 @@ void index_state::schedule_lookups() {
                  it != persisted_partitions.end())
           part = inmem_partitions.get_or_load(partition_id);
       }
-      if (!part)
-        VAST_VERBOSE("{} failed to load partition {} that was part of a query",
-                     *self, partition_id);
+      if (!part && !next->erased)
+        VAST_WARN("{} failed to load partition {} that was part of a query",
+                  *self, partition_id);
       return part;
     };
     auto partition_actor = acquire(next->partition);
@@ -1148,6 +1148,13 @@ index(index_actor::stateful_pointer<index_state> self,
             auto partition_actor
               = self->state.inmem_partitions.eject(partition_id);
             self->state.persisted_partitions.erase(partition_id);
+            // We don't remove the partition from the queue directly because the
+            // query API requires clients to keep track of the number of
+            // candidate partitions. Removing the partition from the queue
+            // would require us to update the partition counters in the query
+            // states and the client would go out of sync. That would require
+            // the index to deal with a few complicated corner cases.
+            self->state.pending_queries.mark_partition_erased(partition_id);
             self
               ->request<caf::message_priority::high>(
                 self->state.filesystem, caf::infinite, atom::mmap_v, path)
