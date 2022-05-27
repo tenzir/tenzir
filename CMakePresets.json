@@ -1,17 +1,11 @@
 {
   "version": 3,
-  "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 21,
-    "patch": 0
-  },
   "configurePresets": [
     {
       "name": "nix-base",
       "hidden": true,
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_FIND_FRAMEWORK": "LAST",
         "CMAKE_FIND_PACKAGE_PREFER_CONFIG": "ON",
         "CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY": "OFF",
@@ -21,6 +15,31 @@
         "VAST_ENABLE_LSVAST": "ON",
         "VAST_ENABLE_MDX_REGENERATE": "ON",
         "VAST_PLUGINS": "${sourceDir}/plugins/broker;${sourceDir}/plugins/pcap;${sourceDir}/plugins/sigma;${sourceDir}/plugins/summarize"
+      }
+    },
+    {
+      "name": "nix-debug",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "VAST_ENABLE_BUNDLED_CAF": "ON",
+        "VAST_PLUGINS": "${sourceDir}/plugins/pcap;${sourceDir}/plugins/sigma;${sourceDir}/plugins/summarize"
+      }
+    },
+    {
+      "name": "nix-redeb",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+      }
+    },
+    {
+      "name": "nix-release",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF"
       }
     },
     {
@@ -36,37 +55,29 @@
     },
     {
       "name": "nix-clang-debug",
-      "inherits": ["nix-base", "clang-base"],
-      "displayName": "Clang Debug Config",
+      "inherits": ["nix-base", "nix-debug", "clang-base"],
+      "displayName": "Nix Clang Debug Config",
       "binaryDir": "${sourceDir}/build/clang/debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/debug",
-        "VAST_ENABLE_ASAN": "ON",
-        "VAST_ENABLE_BUNDLED_CAF": "ON",
-        "VAST_PLUGINS": "${sourceDir}/plugins/pcap;${sourceDir}/plugins/sigma;${sourceDir}/plugins/summarize"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/debug"
       }
     },
     {
       "name": "nix-clang-redeb",
-      "inherits": ["nix-base", "clang-base"],
-      "displayName": "Clang Redeb Config",
+      "inherits": ["nix-base", "nix-redeb", "clang-base"],
+      "displayName": "Nix Clang RelWithDebInfo Config",
       "binaryDir": "${sourceDir}/build/clang/redeb",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/redeb",
-        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/redeb"
       }
     },
     {
       "name": "nix-clang-release",
-      "inherits": ["nix-base", "clang-base"],
-      "displayName": "Clang Release Config",
+      "inherits": ["nix-base", "nix-release", "clang-base"],
+      "displayName": "Nix Clang Release Config",
       "binaryDir": "${sourceDir}/build/clang/release",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/release",
-        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/release"
       }
     },
     {
@@ -79,15 +90,11 @@
     },
     {
       "name": "nix-gcc-debug",
-      "inherits": ["nix-base", "gcc-base"],
-      "displayName": "GCC Debug Config",
+      "inherits": ["nix-base", "nix-debug", "gcc-base"],
+      "displayName": "Nix GCC Debug Config",
       "binaryDir": "${sourceDir}/build/gcc/debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/debug",
-        "VAST_ENABLE_ASAN": "ON",
-        "VAST_ENABLE_BUNDLED_CAF": "ON",
-        "VAST_PLUGINS": "${sourceDir}/plugins/pcap;${sourceDir}/plugins/sigma;${sourceDir}/plugins/summarize"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/debug"
       },
       "environment": {
         "LDFLAGS": "-fuse-ld=lld"
@@ -95,13 +102,11 @@
     },
     {
       "name": "nix-gcc-redeb",
-      "inherits": ["nix-base", "gcc-base"],
-      "displayName": "GCC Redeb Config",
+      "inherits": ["nix-base", "nix-redeb", "gcc-base"],
+      "displayName": "Nix GCC RelWithDebInfo Config",
       "binaryDir": "${sourceDir}/build/gcc/redeb",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/redeb",
-        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/redeb"
       },
       "environment": {
         "LDFLAGS": "-fuse-ld=lld"
@@ -109,13 +114,11 @@
     },
     {
       "name": "nix-gcc-release",
-      "inherits": ["nix-base", "gcc-base"],
-      "displayName": "GCC Release Config",
+      "inherits": ["nix-base", "nix-release", "gcc-base"],
+      "displayName": "Nix GCC Release Config",
       "binaryDir": "${sourceDir}/build/gcc/release",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/release",
-        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/release"
       },
       "environment": {
         "LDFLAGS": "-fuse-ld=gold"
@@ -131,14 +134,8 @@
         "CMAKE_C_COMPILER": "x86_64-unknown-linux-musl-gcc",
         "CMAKE_CXX_COMPILER": "x86_64-unknown-linux-musl-g++",
         "CMAKE_SYSTEM_NAME": "Linux",
-        "CMAKE_SYSTEM_PROCESSOR": "x86_64",
-        "CPACK_GENERATOR": "DEB",
-        "CPACK_PACKAGING_INSTALL_PREFIX": "/opt",
-        "CPACK_PACKAGE_CONTACT": "engineering@tenzir.com",
-        "VAST_ENABLE_BACKTRACE": "ON",
         "VAST_ENABLE_BUNDLED_CAF": "OFF",
         "VAST_ENABLE_JEMALLOC": "ON",
-        "VAST_ENABLE_RELOCATABLE_INSTALLATIONS": "ON",
         "VAST_ENABLE_UNIT_TESTS": "OFF",
         "VAST_ENABLE_STATIC_EXECUTABLE": "ON"
       }
@@ -146,7 +143,7 @@
     {
       "name": "nix-gcc-static-debug",
       "inherits": ["nix-static"],
-      "displayName": "GCC Static Debug Config",
+      "displayName": "Nix GCC Static Debug Config",
       "binaryDir": "${sourceDir}/build/gcc-static/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -156,7 +153,7 @@
     {
       "name": "nix-gcc-static-redeb",
       "inherits": ["nix-static"],
-      "displayName": "GCC Static Redeb Config",
+      "displayName": "Nix GCC Static RelWithDebInfo Config",
       "binaryDir": "${sourceDir}/build/gcc-static/redeb",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
@@ -166,7 +163,7 @@
     {
       "name": "nix-gcc-static-release",
       "inherits": ["nix-static"],
-      "displayName": "GCC Static Release Config",
+      "displayName": "Nix GCC Static Release Config",
       "binaryDir": "${sourceDir}/build/gcc-static/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
