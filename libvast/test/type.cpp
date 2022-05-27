@@ -600,6 +600,13 @@ TEST(extractor resolution) {
     MESSAGE("type extractors do not support wildcards");
     check(t, ":*", {}, {}, {}, {});
   }
+  {
+    const auto t = type{"port", count_type{}};
+    MESSAGE("type extractors also work on non-record types");
+    check(t, ":port", {{}}, {{}}, {{}}, {{}});
+    check(t, ":count", {{}}, {{}}, {{}}, {{}});
+    check(t, ":string", {}, {}, {}, {});
+  }
 }
 
 TEST(record_type flat index computation) {
