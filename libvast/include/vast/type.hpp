@@ -347,6 +347,15 @@ public:
   /// Returns all aliases of this type, excluding this type itself.
   [[nodiscard]] detail::generator<type> aliases() const noexcept;
 
+  /// Control how extractor resolution works.
+  enum class extraction {
+    magic,     ///< Extract all type nodes based on a best-effort match.
+    prefix,    ///< Extract all type nodes based on an exact match.
+    suffix,    ///< Extract leaf type nodes only based on a suffix match.
+    flattened, ///< Extract leaf type ndoes only. Requires the type to be
+               ///< flattened.
+  };
+
   /// Resolves an extractor on this type into an ordered, duplicate-free list of
   /// offsets.
   ///
@@ -361,23 +370,21 @@ public:
   /// types named `port`.
   ///
   /// @param extractor The extractor to resolve.
+  /// @param extraction Determines which nodes the extraction algorithm yields.
   /// @param concepts An optional list of concepts used to map extractors onto a
   /// set of extractors or other concepts.
-  /// @param restrict_to_leaves Whether to restrict the output to leaves nodes.
-  /// Please be careful when using offsets to non-leaf nodes, as this is not
-  /// well supported by the type system.
+  /// @pre When using the flattened extraction the type must be flattened.
   /// @returns An ordered, duplicate-free list of offsets described by the
   /// extractor.
   [[nodiscard]] detail::generator<offset>
-  resolve(std::string_view extractor, const concepts_map* concepts = nullptr,
-          bool restrict_to_leaves = true) const noexcept;
+  resolve(std::string_view extractor, enum extraction extraction,
+          const concepts_map* concepts = nullptr) const noexcept;
 
   /// Resolves a list of extractors on this type into an ordered, duplicate-free
   /// list of offsets. See the single-extractor overload for more documentation.
   [[nodiscard]] detail::generator<offset>
-  resolve(std::vector<std::string_view> extractors,
-          const concepts_map* concepts = nullptr,
-          bool restrict_to_Leaves = true) const noexcept;
+  resolve(std::vector<std::string_view> extractors, enum extraction extraction,
+          const concepts_map* concepts = nullptr) const noexcept;
 
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;

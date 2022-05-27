@@ -1148,36 +1148,45 @@ detail::generator<type> type::aliases() const noexcept {
 }
 
 detail::generator<offset>
-type::resolve(std::string_view extractor, const concepts_map* const concepts,
-              const bool restrict_to_leaves) const noexcept {
-  return resolve(std::vector{extractor}, concepts, restrict_to_leaves);
+type::resolve(std::string_view extractor, const enum extraction extraction,
+              const concepts_map* const concepts) const noexcept {
+  return resolve(std::vector{extractor}, extraction, concepts);
 }
 
 detail::generator<offset>
 type::resolve(std::vector<std::string_view> extractors,
-              const concepts_map* const concepts,
-              const bool restrict_to_leaves) const noexcept {
-  // Helper functions for prefix- and suffix-matching up to the dot-delimiter.
-  const auto try_strip_prefix
-    = [](std::string_view extractor,
-         std::string_view name) -> std::optional<std::string_view> {
+              const enum extraction extraction,
+              const concepts_map* const concepts) const noexcept {
+  // Helper functions for matching field extractors partially or type extractors
+  // entirely.
+  const auto try_match_field_extractor
+    = [](std::string_view extractor, std::string_view name,
+         bool evaluate_subsections) -> std::optional<std::string_view> {
     if (extractor[0] == '*') {
       if (extractor.size() == 1)
         return std::string_view{};
       if (extractor[1] == '.')
         return extractor.substr(2);
     }
-    const auto [extractor_mismatch, name_mismatch] = std::mismatch(
-      extractor.begin(), extractor.end(), name.begin(), name.end());
-    if (name_mismatch == name.end()) {
-      if (extractor_mismatch == extractor.end())
-        return std::string_view{};
-      if (*extractor_mismatch == '.')
-        return extractor.substr(extractor_mismatch + 1 - extractor.begin());
+    while (!name.empty()) {
+      const auto [extractor_mismatch, name_mismatch] = std::mismatch(
+        extractor.begin(), extractor.end(), name.begin(), name.end());
+      if (name_mismatch == name.end()) {
+        if (extractor_mismatch == extractor.end())
+          return std::string_view{};
+        if (*extractor_mismatch == '.')
+          return extractor.substr(extractor_mismatch + 1 - extractor.begin());
+      }
+      if (!evaluate_subsections)
+        break;
+      const auto next_delimiter = name.find('.');
+      name = next_delimiter != std::string_view::npos
+               ? name.substr(next_delimiter + 1)
+               : std::string_view{};
     }
     return std::nullopt;
   };
-  const auto matches_type
+  const auto match_type_extractor
     = [](std::string_view extractor, std::string_view name_or_kind) -> bool {
     VAST_ASSERT(!extractor.empty());
     VAST_ASSERT(!name_or_kind.empty());
@@ -1248,11 +1257,19 @@ type::resolve(std::vector<std::string_view> extractors,
   // Helper functions for modifying the node and context with clear naems.
   const auto advance = [&]() noexcept {
     node_matches = false;
-    node = contexts.empty() ? nullptr : contexts.back().root;
-    cursor.back() += 1;
-    next_extractors = extractors;
+    if (cursor.empty()) {
+      node = nullptr;
+    } else {
+      node = contexts.back().root;
+      cursor.back() += 1;
+      // FIXME: is this correct?
+      next_extractors = extraction == extraction::prefix
+                          ? std::vector<std::string_view>{}
+                          : extractors;
+    }
   };
   const auto step_in = [&]() noexcept {
+    VAST_ASSERT(extraction != extraction::flattened || contexts.empty());
     node_matches = false;
     cursor.push_back(0);
     contexts.push_back({
@@ -1268,7 +1285,7 @@ type::resolve(std::vector<std::string_view> extractors,
     return node_matches
            || std::any_of(extractors.begin(), extractors.end(),
                           [&](std::string_view extractor) noexcept {
-                            return matches_type(extractor, kind);
+                            return match_type_extractor(extractor, kind);
                           });
   };
   // Now that we have all the individual pieces assembled, let's actually look
@@ -1303,17 +1320,9 @@ type::resolve(std::vector<std::string_view> extractors,
         VAST_HANDLE_LEAF_TYPE(address, "addr")
         VAST_HANDLE_LEAF_TYPE(subnet, "subnet")
         VAST_HANDLE_LEAF_TYPE(enumeration, "enum")
+        VAST_HANDLE_LEAF_TYPE(list, "list")
+        VAST_HANDLE_LEAF_TYPE(map, "map")
 #undef VAST_HANDLE_LEAF_TYPE
-      // In the current model, list and map are leaf types. However, there exist
-      // plans to change this to allow offsets to point inside lists and maps,
-      // so we don't allow type extractors like `:list` for them for now.
-      case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type: {
-        if (node_matches)
-          co_yield cursor;
-        advance();
-        break;
-      }
       // Our current node is a record type. This can mean one of three things:
       // 1. We need to step in because we just arrived at a new nesting level.
       // 2. We need to step out because we moved past the end of the current
@@ -1324,8 +1333,11 @@ type::resolve(std::vector<std::string_view> extractors,
       case fbs::type::Type::record_type: {
         // Option 1: We step in.
         if (contexts.empty() || node != contexts.back().root) {
-          if (!restrict_to_leaves && node_matches)
-            co_yield cursor;
+          if (extraction == extraction::magic
+              || extraction == extraction::prefix) {
+            if (node_matches || leaf_matches("record"))
+              co_yield cursor;
+          }
           step_in();
         }
         const auto& record_type = *node->type_as_record_type();
@@ -1346,10 +1358,10 @@ type::resolve(std::vector<std::string_view> extractors,
         // full match we mark this node to be yielded if it turns out to be a
         // leaf node. If we have a partial match, we add the remaining extractor
         // to the list of extractors for the next iteration.
-        auto& context = contexts.back();
-        for (const auto extractor : context.current_extractors) {
-          if (const auto remaining_extractor
-              = try_strip_prefix(extractor, name->string_view())) {
+        const auto evaluate_subsections = extraction == extraction::flattened;
+        for (const auto extractor : contexts.back().current_extractors) {
+          if (const auto remaining_extractor = try_match_field_extractor(
+                extractor, name->string_view(), evaluate_subsections)) {
             if (remaining_extractor->empty())
               node_matches = true;
             else
@@ -1366,36 +1378,44 @@ type::resolve(std::vector<std::string_view> extractors,
       // move to the nested type node without advancing the cursor.
       case fbs::type::Type::enriched_type: {
         const auto& enriched_type = *node->type_as_enriched_type();
-        if (const auto* name = enriched_type.name()) {
-          for (const auto& extractor : extractors) {
-            // Check whether the extractor is a type extractor and matches the
-            // type name exactly.
-            if (matches_type(extractor, name->string_view())) {
+        // Move on to the nested type *without* adding another context layer.
+        node = enriched_type.type_nested_root();
+        const auto* name = enriched_type.name();
+        if (!name)
+          break;
+        for (const auto& extractor : extractors) {
+          // Check whether the extractor is a type extractor and matches the
+          // type name exactly.
+          if (match_type_extractor(extractor, name->string_view())) {
+            node_matches = true;
+            continue;
+          }
+          if (extraction == extraction::flattened)
+            continue;
+          // Check whether the extractor is a suffix of the type's name, and
+          // if it is, yield the cursor and exit. We unconditionally support
+          // matching subsections here.
+          const auto evaluate_subsecitons = true;
+          if (auto remaining_extractor = try_match_field_extractor(
+                extractor, name->string_view(), evaluate_subsecitons)) {
+            if (!remaining_extractor->empty()) {
+              if (next_extractors.empty()
+                  || next_extractors.back() != *remaining_extractor)
+                next_extractors.push_back(*remaining_extractor);
+            } else {
               node_matches = true;
-              continue;
-            }
-            // Check whether the extractor is a suffix of the type's name, and
-            // if it is, yield the cursor and exit.
-            // TODO: Do we want to be able to specify just the latter part of a
-            // type's name, omitting the module?
-            if (auto remaining_extractor
-                = try_strip_prefix(extractor, name->string_view())) {
-              if (!remaining_extractor->empty()) {
-                VAST_ASSERT(!next_extractors.empty());
-                if (next_extractors.back() != *remaining_extractor)
-                  next_extractors.push_back(*remaining_extractor);
-              } else {
-                node_matches = true;
-              }
             }
           }
         }
-        // Move on to the nested type *without* adding another context layer.
-        node = enriched_type.type_nested_root();
         break;
       }
     }
   }
+  // Verify that we actually visited all nodes.
+  VAST_ASSERT(!node);
+  VAST_ASSERT(!node_matches);
+  VAST_ASSERT(cursor.empty());
+  VAST_ASSERT(contexts.empty());
 }
 
 bool is_container(const type& type) noexcept {

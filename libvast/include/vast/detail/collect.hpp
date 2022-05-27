@@ -23,7 +23,7 @@ template <class Container, class T>
 Container collect(vast::detail::generator<T> g, size_t size_hint = 0) {
   Container result = {};
   if (size_hint)
-    result.reserve(size_hint);
+    result.reserve(result.size() + size_hint);
   for (auto&& x : g)
     result.emplace(result.end(), std::move(x));
   return result;
