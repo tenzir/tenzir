@@ -28,7 +28,7 @@ const config = {
       ({
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
-          editUrl: 'https://github.com/tenzir/vast/tree/master/docs',
+          editUrl: 'https://github.com/tenzir/vast/tree/master/web',
           remarkPlugins: [require('mdx-mermaid')],
           // TODO: The last update author and time is always the person that
           // triggered the last deployment and the time of that deployment.
