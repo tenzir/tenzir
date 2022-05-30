@@ -340,27 +340,30 @@ partition_transformer_actor::behavior_type partition_transformer(
     },
     [self](atom::internal, atom::resume, atom::done, vast::id offset) {
       VAST_DEBUG("{} got new offset {}", *self, offset);
-      for (auto& [_, data] : self->state.data) {
+      for (auto& [layout, data] : self->state.data) {
         data.offset = offset;
+        // Push the slices to the store.
+        // TODO: This could be optimized by storing the slices in a map
+        // of vectors so we can iterate immediately over the correct range.
         for (auto& slice : self->state.slices) {
+          if (slice.layout() != layout)
+            continue;
           slice.offset(offset);
           offset += slice.rows();
           self->state.add_slice(slice);
           self->state.stage->out().push(slice);
         }
+        auto& mutable_synopsis = data.synopsis.unshared();
+        mutable_synopsis.shrink();
+        // TODO: It would probably make more sense if the partition
+        // synopsis keeps track of offset/events internally.
+        mutable_synopsis.offset = data.offset;
+        mutable_synopsis.events = data.events;
       }
       for (auto& [layout, typed_indexers] : self->state.indexers)
         for (auto& [qf, idx] : typed_indexers)
           self->state.data[layout].indexer_chunks.emplace_back(qf.name(),
                                                                chunkify(idx));
-      for (auto& [layout, partition_data] : self->state.data) {
-        auto& mutable_synopsis = partition_data.synopsis.unshared();
-        mutable_synopsis.shrink();
-        // TODO: It would probably make more sense if the partition
-        // synopsis keeps track of offset/events internally.
-        mutable_synopsis.offset = partition_data.offset;
-        mutable_synopsis.events = partition_data.events;
-      }
       detail::shutdown_stream_stage(self->state.stage);
       auto stream_data = partition_transformer_state::stream_data{
         .partition_chunks
