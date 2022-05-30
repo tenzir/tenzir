@@ -20,8 +20,10 @@
 #include <exception>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #if __has_include(<coroutine>)
 
