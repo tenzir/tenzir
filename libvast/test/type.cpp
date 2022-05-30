@@ -608,8 +608,16 @@ TEST(extractor resolution) {
     check(t, "vast.*.r2.s", {{3, 0}}, {{3, 0}}, {{3, 0}}, {});
     check(t, "vast.*.r2.r", {{3, 1}}, {}, {{3, 1}}, {});
     check(t, "vast.*.r2.r.a", {{3, 1, 0}}, {{3, 1, 0}}, {{3, 1, 0}}, {});
-    MESSAGE("type extractors do not support wildcards");
-    check(t, ":*", {}, {}, {}, {});
+    MESSAGE("type extractors also support wildcards");
+    check(t, ":vast.*", {{}}, {}, {{}}, {});
+    check(t, ":*.foo", {{}}, {}, {{}}, {});
+    // clang-format off
+    check(t, ":*",
+          {{}, {0}, {1}, {1, 0}, {1, 1}, {1, 2}, {2}, {3}, {3, 0}, {3, 1}, {3, 1, 0}, {3, 1, 1}, {4}},
+          {{0}, {1, 0}, {1, 1}, {1, 2}, {2}, {3, 0}, {3, 1, 0}, {3, 1, 1}, {4}},
+          {{}, {0}, {1}, {1, 0}, {1, 1}, {1, 2}, {2}, {3}, {3, 0}, {3, 1}, {3, 1, 0}, {3, 1, 1}, {4}},
+          {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}});
+    // clang-format on
   }
   {
     const auto t = type{"port", count_type{}};

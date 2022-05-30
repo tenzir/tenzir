@@ -1190,48 +1190,56 @@ type::resolve(std::vector<std::string_view> extractors,
     }
     return std::nullopt;
   };
+  // Helper function for splitting a string_view at the first dot.
+  const auto split_at_first_dot = [](std::string_view what) noexcept
+    -> std::pair<std::string_view, std::string_view> {
+    const auto dot = what.find('.');
+    if (dot == std::string_view::npos)
+      return {what, {}};
+    return {what.substr(0, dot), what.substr(dot + 1)};
+  };
+  const auto try_match_field_extractor_subsections_impl
+    = [&](std::string_view extractor,
+          std::string_view name) noexcept -> std::optional<std::string_view> {
+    auto extractor_head = std::string_view{};
+    auto name_head = std::string_view{};
+    do {
+      std::tie(extractor_head, extractor) = split_at_first_dot(extractor);
+      std::tie(name_head, name) = split_at_first_dot(name);
+      const auto remainder
+        = try_match_field_extractor(extractor_head, name_head);
+      if (!remainder || !remainder->empty())
+        return std::nullopt;
+      if (name.empty())
+        return extractor;
+    } while (!extractor.empty());
+    return std::nullopt;
+  };
   // Helper function for matching a field extractor subsection by subsection.
   // Returns all partially matched remaining extractors.
   const auto try_match_field_extractor_subsections
     = [&](std::string_view extractor,
           std::string_view name) noexcept -> std::vector<std::string_view> {
-    const auto split_at_dot = [](std::string_view what) noexcept
-      -> std::pair<std::string_view, std::string_view> {
-      const auto dot = what.find('.');
-      if (dot == std::string_view::npos)
-        return {what, {}};
-      return {what.substr(0, dot), what.substr(dot + 1)};
-    };
     auto result = std::vector<std::string_view>{};
-    auto name_n_outer = name;
-    auto name_1_outer = std::string_view{};
     do {
-      auto name_n = name_n_outer;
-      auto name_1 = std::string_view{};
-      auto extractor_n = extractor;
-      auto extractor_1 = std::string_view{};
-      do {
-        std::tie(extractor_1, extractor_n) = split_at_dot(extractor_n);
-        std::tie(name_1, name_n) = split_at_dot(name_n);
-        const auto remainder = try_match_field_extractor(extractor_1, name_1);
-        if (!remainder || !remainder->empty())
-          break;
-        if (name_n.empty()) {
-          result.push_back(extractor_n);
-          break;
-        }
-      } while (!extractor_n.empty());
-      std::tie(name_1_outer, name_n_outer) = split_at_dot(name_n_outer);
-    } while (!name_n_outer.empty());
+      if (const auto remaining_extractor
+          = try_match_field_extractor_subsections_impl(extractor, name))
+        result.push_back(*remaining_extractor);
+      name = split_at_first_dot(name).second;
+    } while (!name.empty());
     return result;
   };
   // Helper function for matching a type extractor exactly.
   const auto match_type_extractor
-    = [](std::string_view extractor,
-         std::string_view name_or_kind) noexcept -> bool {
+    = [&](std::string_view extractor,
+          std::string_view name_or_kind) noexcept -> bool {
     VAST_ASSERT(!extractor.empty());
     VAST_ASSERT(!name_or_kind.empty());
-    return extractor[0] == ':' && extractor.substr(1) == name_or_kind;
+    if (extractor[0] != ':')
+      return false;
+    const auto remaining_extractor = try_match_field_extractor_subsections_impl(
+      extractor.substr(1), name_or_kind);
+    return remaining_extractor && remaining_extractor->empty();
   };
   // Helper function for matching a type extractor exactly against a set of
   // extractors.
