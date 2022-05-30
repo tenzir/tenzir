@@ -137,7 +137,7 @@ void partition_transformer_state::fulfill(
     if (!synopsis_chunk)
       continue;
     auto filename
-      = fmt::format(fmt::runtime(self->state.synopsis_path_template), id);
+      = fmt::format(VAST_FMT_RUNTIME(self->state.synopsis_path_template), id);
     auto synopsis_path = std::filesystem::path{filename};
     self
       ->request(fs, caf::infinite, atom::write_v, synopsis_path, synopsis_chunk)
@@ -170,7 +170,7 @@ void partition_transformer_state::fulfill(
       .synopsis = std::move(synopsis),
     };
     auto filename
-      = fmt::format(fmt::runtime(self->state.partition_path_template), id);
+      = fmt::format(VAST_FMT_RUNTIME(self->state.partition_path_template), id);
     auto partition_path = std::filesystem::path{filename};
     self
       ->request(fs, caf::infinite, atom::write_v, partition_path,

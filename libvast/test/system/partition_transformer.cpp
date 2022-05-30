@@ -199,8 +199,9 @@ TEST(delete transform / persist before done) {
     });
   // Verify serialized data
   auto partition_path
-    = fmt::format(fmt::runtime(PARTITION_PATH_TEMPLATE), uuid);
-  auto synopsis_path = fmt::format(fmt::runtime(SYNOPSIS_PATH_TEMPLATE), uuid);
+    = fmt::format(VAST_FMT_RUNTIME(PARTITION_PATH_TEMPLATE), uuid);
+  auto synopsis_path
+    = fmt::format(VAST_FMT_RUNTIME(SYNOPSIS_PATH_TEMPLATE), uuid);
   auto partition_rp
     = self->request(filesystem, caf::infinite, vast::atom::read_v,
                     std::filesystem::path{partition_path});
