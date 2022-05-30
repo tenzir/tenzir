@@ -1168,8 +1168,9 @@ detail::generator<offset>
 type::resolve(std::vector<std::string_view> extractors,
               const enum extraction extraction,
               const concepts_map* const concepts) const noexcept {
-  // Helper functions for matching field extractors partially or type extractors
-  // entirely.
+  // Helper function for matching a field extractor exactly. Returns nullopt in
+  // case there is no match, or the remainder after the dot separator if there
+  // is a match.
   const auto try_match_field_extractor
     = [](std::string_view extractor,
          std::string_view name) noexcept -> std::optional<std::string_view> {
@@ -1189,10 +1190,11 @@ type::resolve(std::vector<std::string_view> extractors,
     }
     return std::nullopt;
   };
+  // Helper function for matching a field extractor subsection by subsection.
+  // Returns all partially matched remaining extractors.
   const auto try_match_field_extractor_subsections
     = [&](std::string_view extractor,
           std::string_view name) noexcept -> std::vector<std::string_view> {
-    // We need to evaluate every subsection of both the extractor and the key.
     const auto split_at_dot = [](std::string_view what) noexcept
       -> std::pair<std::string_view, std::string_view> {
       const auto dot = what.find('.');
@@ -1223,11 +1225,23 @@ type::resolve(std::vector<std::string_view> extractors,
     } while (!name_n_outer.empty());
     return result;
   };
+  // Helper function for matching a type extractor exactly.
   const auto match_type_extractor
-    = [](std::string_view extractor, std::string_view name_or_kind) -> bool {
+    = [](std::string_view extractor,
+         std::string_view name_or_kind) noexcept -> bool {
     VAST_ASSERT(!extractor.empty());
     VAST_ASSERT(!name_or_kind.empty());
     return extractor[0] == ':' && extractor.substr(1) == name_or_kind;
+  };
+  // Helper function for matching a type extractor exactly against a set of
+  // extractors.
+  const auto match_any_type_extractor
+    = [&](const std::vector<std::string_view>& extractors,
+          std::string_view name_or_kind) noexcept -> bool {
+    return std::any_of(extractors.begin(), extractors.end(),
+                       [&](std::string_view extractor) noexcept {
+                         return match_type_extractor(extractor, name_or_kind);
+                       });
   };
   // Resolve concepts if we have a concepts map.
   if (concepts) {
@@ -1318,13 +1332,6 @@ type::resolve(std::vector<std::string_view> extractors,
     cursor.pop_back();
     contexts.pop_back();
   };
-  const auto leaf_matches = [&](std::string_view kind) -> bool {
-    return node_matches
-           || std::any_of(extractors.begin(), extractors.end(),
-                          [&](std::string_view extractor) noexcept {
-                            return match_type_extractor(extractor, kind);
-                          });
-  };
   // Now that we have all the individual pieces assembled, let's actually look
   // at all relevant nodes and yield any matches we see on our way. The loop
   // determines the next node based on the current context and the current node.
@@ -1341,7 +1348,7 @@ type::resolve(std::vector<std::string_view> extractors,
       // we have a match. We always advance the cursor to the next node.
 #define VAST_HANDLE_LEAF_TYPE(id, kind)                                        \
   case fbs::type::Type::id##_type: {                                           \
-    if (leaf_matches(kind))                                                    \
+    if (node_matches || match_any_type_extractor(extractors, kind))            \
       co_yield cursor;                                                         \
     advance();                                                                 \
     break;                                                                     \
@@ -1372,7 +1379,7 @@ type::resolve(std::vector<std::string_view> extractors,
         if (contexts.empty() || node != contexts.back().root) {
           if (extraction == extraction::magic
               || extraction == extraction::prefix) {
-            if (node_matches || leaf_matches("record"))
+            if (node_matches || match_any_type_extractor(extractors, "record"))
               co_yield cursor;
           }
           step_in();
