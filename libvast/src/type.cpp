@@ -1154,6 +1154,17 @@ type::resolve(std::string_view extractor, const enum extraction extraction,
 }
 
 detail::generator<offset>
+type::resolve(const std::vector<std::string>& extractors,
+              enum extraction extraction,
+              const concepts_map* concepts) const noexcept {
+  auto views = std::vector<std::string_view>{};
+  views.reserve(extractors.size());
+  for (const auto& extractor : extractors)
+    views.emplace_back(extractor);
+  return resolve(views, extraction, concepts);
+}
+
+detail::generator<offset>
 type::resolve(std::vector<std::string_view> extractors,
               const enum extraction extraction,
               const concepts_map* const concepts) const noexcept {

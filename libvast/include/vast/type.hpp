@@ -383,6 +383,13 @@ public:
   /// Resolves a list of extractors on this type into an ordered, duplicate-free
   /// list of offsets. See the single-extractor overload for more documentation.
   [[nodiscard]] detail::generator<offset>
+  resolve(const std::vector<std::string>& extractors,
+          enum extraction extraction,
+          const concepts_map* concepts = nullptr) const noexcept;
+
+  /// Resolves a list of extractors on this type into an ordered, duplicate-free
+  /// list of offsets. See the single-extractor overload for more documentation.
+  [[nodiscard]] detail::generator<offset>
   resolve(std::vector<std::string_view> extractors, enum extraction extraction,
           const concepts_map* concepts = nullptr) const noexcept;
 
