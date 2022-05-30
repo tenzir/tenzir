@@ -24,10 +24,18 @@
 
 namespace vast::system {
 
-bool partition_transformer_selector::operator()(
-  const vast::type& filter, const vast::table_slice& slice) const {
-  return slice.layout() == filter;
+namespace {
+
+void update_statistics(index_statistics& stats, const table_slice& slice) {
+  auto layout_name = slice.layout().name();
+  auto& layouts = stats.layouts;
+  auto it = layouts.find(layout_name);
+  if (it == layouts.end())
+    it = layouts.emplace(std::string{layout_name}, layout_statistics{}).first;
+  it.value().count += slice.rows();
 }
+
+} // namespace
 
 void store_or_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
@@ -57,16 +65,34 @@ void store_or_fulfill(
   }
 }
 
+active_partition_state::serialization_data&
+partition_transformer_state::create_or_get_partition(const table_slice& slice) {
+  auto const& layout = slice.layout();
+  // x marks the spot
+  auto [x, end] = data.equal_range(layout);
+  if (x == end) {
+    x = data.insert(
+      std::make_pair(layout, active_partition_state::serialization_data{}));
+  } else {
+    x = std::prev(end);
+    // Create a new partition if inserting the slice would overflow
+    // the old one.
+    if (x->second.events + slice.rows() > partition_capacity)
+      x = data.insert(
+        std::make_pair(layout, active_partition_state::serialization_data{}));
+  }
+  return x->second;
+}
+
 // Since we don't have to answer queries while this partition is being
 // constructed, we don't have to spawn separate indexer actors and
 // stream data but can just compute everything inline here.
-void partition_transformer_state::add_slice(const table_slice& slice) {
+void partition_transformer_state::update_type_ids_and_indexers(
+  std::unordered_map<std::string, ids>& type_ids,
+  const vast::uuid& partition_id, const table_slice& slice) {
   const auto& layout = slice.layout();
-  // data.events += slice.rows();
-  data[layout].synopsis.unshared().add(slice, partition_capacity,
-                                       synopsis_opts);
   // Update type ids
-  auto it = data[layout].type_ids.emplace(layout.name(), ids{}).first;
+  auto it = type_ids.emplace(layout.name(), ids{}).first;
   auto& ids = it->second;
   auto first = slice.offset();
   auto last = slice.offset() + slice.rows();
@@ -78,7 +104,7 @@ void partition_transformer_state::add_slice(const table_slice& slice) {
   for (size_t flat_index = 0;
        const auto& [field, offset] : caf::get<record_type>(layout).leaves()) {
     const auto qf = qualified_record_field{layout, offset};
-    auto& typed_indexers = indexers[layout];
+    auto& typed_indexers = indexers[partition_id];
     auto it = typed_indexers.find(qf);
     if (it == typed_indexers.end()) {
       const auto skip = field.type.attribute("skip").has_value();
@@ -149,6 +175,7 @@ void partition_transformer_state::fulfill(
                         *self, synopsis_path, e);
             });
   }
+  // Make a write request to the filesystem actor for every partition.
   auto fanout_counter
     = detail::make_fanout_counter<std::vector<augmented_partition_synopsis>>(
       stream_data.partition_chunks->size(),
@@ -163,7 +190,12 @@ void partition_transformer_state::fulfill(
         self->quit();
       });
   for (auto& [id, layout, partition_chunk] : *stream_data.partition_chunks) {
-    auto synopsis = std::move(self->state.data[layout].synopsis);
+    auto rng = self->state.data.equal_range(layout);
+    auto it = std::find_if(rng.first, rng.second, [id = id](auto const& kv) {
+      return kv.second.id == id;
+    });
+    VAST_ASSERT(it != rng.second); // The id must exist with this layout.
+    auto synopsis = std::move(it->second.synopsis);
     auto aps = augmented_partition_synopsis{
       .uuid = id,
       .type = layout,
@@ -210,7 +242,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.store_id = std::move(store_id);
   return {
     [self](vast::table_slice& slice) {
-      // auto const& layout = slice.layout();
+      update_statistics(self->state.stats_in, slice);
       // Store the old import time before applying any transformations to the
       // data, as for now we do not want to assign a new import time range to
       // transformed partitions.
@@ -239,7 +271,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         auto const& layout = slice.layout();
         // TODO: Technically we'd only need to send *new* layouts here.
         self->send(self->state.type_registry, atom::put_v, layout);
-        auto& partition_data = self->state.data[layout];
+        auto& partition_data = self->state.create_or_get_partition(slice);
         if (!partition_data.synopsis) {
           partition_data.id = vast::uuid::random();
           partition_data.store_id = self->state.store_id;
@@ -254,16 +286,11 @@ partition_transformer_actor::behavior_type partition_transformer(
         const auto* slice_identity = as_bytes(slice).data();
         if (!self->state.original_import_times.contains(slice_identity))
           slice.import_time(self->state.max_import_time);
-        auto layout_name = layout.name();
-        auto& layouts = self->state.stats_out.layouts;
-        auto it = layouts.find(layout_name);
-        if (it == layouts.end())
-          it = layouts.emplace(std::string{layout_name}, layout_statistics{})
-                 .first;
-        it.value().count += slice.rows();
+        update_statistics(self->state.stats_out, slice);
         partition_data.events += slice.rows();
         self->state.events += slice.rows();
-        self->state.slices.push_back(std::move(slice));
+        self->state.partition_slices[partition_data.id].push_back(
+          std::move(slice));
       }
       self->state.original_import_times.clear();
       auto stream_data = partition_transformer_state::stream_data{
@@ -279,7 +306,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       // ...otherwise, prepare for writing out the transformed data by creating
       // new stores, sending out the slices and requesting new idspace.
       auto store_id = self->state.store_id;
-      const auto* store_plugin = plugins::find<vast::store_plugin>(store_id);
+      auto const* store_plugin = plugins::find<vast::store_plugin>(store_id);
       if (!store_plugin) {
         self->state.stream_error
           = caf::make_error(ec::invalid_argument,
@@ -295,15 +322,7 @@ partition_transformer_actor::behavior_type partition_transformer(
           // to `out` from external code below.
           /* nop */
         },
-        [](caf::unit_t&, const caf::error&) { /* nop */ },
-        // For this stream stage we want a `broadcast_downstream_manager<T>`,
-        // where slices only go the store with the correct layout, so:
-        //
-        //   T:      vast::table_slice
-        //   Filter: vast::type
-        //   Select: vast::(anon)::partition_transformer_selector
-        caf::policy::arg<caf::broadcast_downstream_manager<
-          table_slice, vast::type, partition_transformer_selector>>{});
+        [](caf::unit_t&, const caf::error&) { /* nop */ });
       for (auto& [layout, partition_data] : self->state.data) {
         if (partition_data.events == 0)
           continue;
@@ -318,12 +337,11 @@ partition_transformer_actor::behavior_type partition_transformer(
           return;
         }
         partition_data.store_header = builder_and_header->second;
-        auto [store_builder_it, _] = self->state.store_builders.insert(
-          std::make_pair(layout, builder_and_header->first));
-        auto& store_builder = store_builder_it->second;
-        VAST_ASSERT(store_builder);
-        auto slot = self->state.stage->add_outbound_path(store_builder);
-        self->state.stage->out().set_filter(slot, layout);
+        // Empirically adding the outbound path and pushing data to it
+        // need to be separated by a continuation, although I'm not
+        // completely sure why.
+        self->state.slots[partition_data.id]
+          = self->state.stage->add_outbound_path(builder_and_header->first);
       }
       VAST_DEBUG("{} received all table slices", *self);
       self
@@ -342,29 +360,31 @@ partition_transformer_actor::behavior_type partition_transformer(
       VAST_DEBUG("{} got new offset {}", *self, offset);
       for (auto& [layout, data] : self->state.data) {
         data.offset = offset;
+        auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
-        // TODO: This could be optimized by storing the slices in a map
-        // of vectors so we can iterate immediately over the correct range.
-        for (auto& slice : self->state.slices) {
-          if (slice.layout() != layout)
-            continue;
+        // auto& builder = self->state.store_builders.at(data.id);
+        auto slot = self->state.slots.at(data.id);
+        // auto slot = self->state.stage->add_outbound_path(builder);
+        for (auto& slice : self->state.partition_slices[data.id]) {
           slice.offset(offset);
           offset += slice.rows();
-          self->state.add_slice(slice);
-          self->state.stage->out().push(slice);
+          self->state.stage->out().push_to(slot, slice);
+          self->state.update_type_ids_and_indexers(data.type_ids, data.id,
+                                                   slice);
+          mutable_synopsis.add(slice, self->state.partition_capacity,
+                               self->state.synopsis_opts);
         }
-        auto& mutable_synopsis = data.synopsis.unshared();
+        // Update the synopsis
         mutable_synopsis.shrink();
-        // TODO: It would probably make more sense if the partition
+        // TODO: It would make more sense if the partition
         // synopsis keeps track of offset/events internally.
         mutable_synopsis.offset = data.offset;
         mutable_synopsis.events = data.events;
       }
-      for (auto& [layout, typed_indexers] : self->state.indexers)
-        for (auto& [qf, idx] : typed_indexers)
-          self->state.data[layout].indexer_chunks.emplace_back(qf.name(),
-                                                               chunkify(idx));
       detail::shutdown_stream_stage(self->state.stage);
+      for (auto& [layout, data] : self->state.data)
+        for (auto& [qf, idx] : self->state.indexers[data.id])
+          data.indexer_chunks.emplace_back(qf.name(), chunkify(idx));
       auto stream_data = partition_transformer_state::stream_data{
         .partition_chunks
         = std::vector<std::tuple<vast::uuid, vast::type, chunk_ptr>>{},
@@ -377,18 +397,17 @@ partition_transformer_actor::behavior_type partition_transformer(
         for (auto& [layout, partition_data] :
              self->state.data) { // Pack partitions
           flatbuffers::FlatBufferBuilder builder;
-          auto indexers_it = self->state.indexers.find(layout);
+          auto indexers_it = self->state.indexers.find(partition_data.id);
           if (indexers_it == self->state.indexers.end()) {
             stream_data.partition_chunks
-              = caf::make_error(ec::logic_error, "cannot create partition with "
-                                                 "empty layout");
+              = caf::make_error(ec::logic_error, "missing data for partition");
             return;
           }
           auto& indexers = indexers_it->second;
           auto fields = std::vector<struct record_type::field>{};
           fields.reserve(indexers.size());
           for (const auto& [qf, _] : indexers)
-            fields.push_back({std::string{qf.name()}, qf.type()});
+            fields.emplace_back(std::string{qf.name()}, qf.type());
           auto partition = pack(builder, partition_data, record_type{fields});
           if (!partition) {
             stream_data.partition_chunks = partition.error();
