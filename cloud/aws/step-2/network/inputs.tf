@@ -1,5 +1,5 @@
 module "env" {
-  source = "../env"
+  source = "../../modules/env"
 }
 
 variable "peered_vpc_id" {}

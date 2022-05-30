@@ -26,7 +26,7 @@ module "vast_server" {
   task_cpu    = 2048
   task_memory = 4096
 
-  docker_image        = "${module.env.vast_server_image}:${var.vast_version}"
+  docker_image        = "tenzir/vast:${var.vast_version}"
   storage_type        = var.vast_server_storage_type
   storage_mount_point = "/var/lib/vast"
 
@@ -40,7 +40,7 @@ module "vast_server" {
 }
 
 module "vast_client" {
-  source = "./lambda"
+  source = "../modules/lambda"
 
   function_base_name = "client"
   region_name        = var.region_name
