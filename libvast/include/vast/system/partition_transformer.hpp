@@ -24,12 +24,6 @@
 
 namespace vast::system {
 
-/// Helper class used to route table slices to the correct store.
-struct partition_transformer_selector {
-  bool
-  operator()(const vast::type& filter, const vast::table_slice& column) const;
-};
-
 /// Similar to the active partition, but all contents come in a single
 /// stream, a transform is applied and no queries need to be answered
 /// while the partition is constructed.
@@ -50,7 +44,17 @@ struct partition_transformer_state {
 
   partition_transformer_state() = default;
 
-  void add_slice(const table_slice& slice);
+  // Update the `type_ids` map with the information of the given slice.
+  void
+  update_type_ids_and_indexers(std::unordered_map<std::string, ids>& type_ids,
+                               const vast::uuid& partition_id,
+                               const table_slice& slice);
+
+  // Returns the partition in which to insert this slice, maybe creating a new
+  // partition.
+  active_partition_state::serialization_data&
+  create_or_get_partition(const table_slice& slice);
+
   void fulfill(
     partition_transformer_actor::stateful_pointer<partition_transformer_state>
       self,
@@ -66,21 +70,21 @@ struct partition_transformer_state {
   /// Actor handle of the accountant.
   accountant_actor accountant = {};
 
-  /// Actor handle of the store builder for this partition.
-  detail::flat_map<type, store_builder_actor> store_builders = {};
-
   /// Actor handle of the filesystem actor.
   filesystem_actor fs = {};
 
   /// The transform to be applied to the data.
   transform_ptr transform = {};
 
+  using stage_type
+    = caf::stream_stage<table_slice,
+                        caf::broadcast_downstream_manager<table_slice>>;
+  using source_type = typename stage_type::stream_source;
+
   /// The stream stage to send table slices to the store(s).
-  //  TODO: Use a specialized downstream manager that has
-  //  a map from layout to store.
-  using partition_transformer_stream_stage_ptr = caf::stream_stage_ptr<
-    table_slice, caf::broadcast_downstream_manager<
-                   table_slice, vast::type, partition_transformer_selector>>;
+  using partition_transformer_stream_stage_ptr
+    = caf::stream_stage_ptr<table_slice,
+                            caf::broadcast_downstream_manager<table_slice>>;
 
   partition_transformer_stream_stage_ptr stage = {};
 
@@ -89,9 +93,6 @@ struct partition_transformer_state {
 
   /// Cached transform error, if the transform returns one.
   caf::error transform_error = {};
-
-  /// Cached table slices in this partition.
-  std::vector<table_slice> slices = {};
 
   /// The maximum number of events per partition. (not really necessary, but
   /// required by the partition synopsis)
@@ -111,13 +112,21 @@ struct partition_transformer_state {
   vast::time max_import_time = {};
 
   /// The data of the newly created partition(s).
-  detail::flat_map<type, active_partition_state::serialization_data> data = {};
+  std::multimap<type, active_partition_state::serialization_data> data = {};
+
+  // TODO: Consider having a single map {uuid -> (slices, indexers, slot)}
+
+  // Maps each builder to its stream slot.
+  std::unordered_map<uuid, caf::outbound_stream_slot<table_slice>> slots = {};
+
+  /// Cached table slices in this partition.
+  std::unordered_map<uuid, std::vector<table_slice>> partition_slices = {};
 
   /// Stores the value index for each field.
   // Fields with a `#skip` attribute are stored as `nullptr`.
   using value_index_map
     = detail::stable_map<qualified_record_field, value_index_ptr>;
-  detail::flat_map<vast::type, value_index_map> indexers = {};
+  detail::flat_map<vast::uuid, value_index_map> indexers = {};
 
   /// Store id for partitions.
   std::string store_id;
