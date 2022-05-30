@@ -547,6 +547,16 @@ void index_state::schedule_lookups() {
       VAST_DEBUG("{} did not find a partition to query", *self);
       return;
     }
+    auto immediate_completion = [&](const query_queue::entry& x) {
+      for (auto qid : x.queries)
+        if (auto client = pending_queries.handle_completion(qid))
+          self->send(*client, atom::done_v);
+    };
+    if (next->erased) {
+      VAST_DEBUG("{} skips erased partition {}", *self, next->partition);
+      immediate_completion(*next);
+      continue;
+    }
     VAST_DEBUG("{} schedules partition {} for {}", *self, next->partition,
                next->queries);
     // 2. Acquire the actor for the selected partition, potentially materializing
@@ -570,17 +580,15 @@ void index_state::schedule_lookups() {
           part = inmem_partitions.get_or_load(partition_id);
       }
       if (!part)
-        VAST_VERBOSE("{} failed to load partition {} that was part of a query",
-                     *self, partition_id);
+        VAST_WARN("{} failed to load partition {} that was part of a query",
+                  *self, partition_id);
       return part;
     };
     auto partition_actor = acquire(next->partition);
     if (!partition_actor) {
       // We need to mark failed partitions as completed to avoid clients going
       // out of sync.
-      for (auto qid : next->queries)
-        if (auto client = pending_queries.handle_completion(qid))
-          self->send(*client, atom::done_v);
+      immediate_completion(*next);
       continue;
     }
     counters.partition_scheduled++;
@@ -1148,6 +1156,13 @@ index(index_actor::stateful_pointer<index_state> self,
             auto partition_actor
               = self->state.inmem_partitions.eject(partition_id);
             self->state.persisted_partitions.erase(partition_id);
+            // We don't remove the partition from the queue directly because the
+            // query API requires clients to keep track of the number of
+            // candidate partitions. Removing the partition from the queue
+            // would require us to update the partition counters in the query
+            // states and the client would go out of sync. That would require
+            // the index to deal with a few complicated corner cases.
+            self->state.pending_queries.mark_partition_erased(partition_id);
             self
               ->request<caf::message_priority::high>(
                 self->state.filesystem, caf::infinite, atom::mmap_v, path)
