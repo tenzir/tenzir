@@ -1171,31 +1171,57 @@ type::resolve(std::vector<std::string_view> extractors,
   // Helper functions for matching field extractors partially or type extractors
   // entirely.
   const auto try_match_field_extractor
-    = [](std::string_view extractor, std::string_view name,
-         bool evaluate_subsections) -> std::optional<std::string_view> {
+    = [](std::string_view extractor,
+         std::string_view name) noexcept -> std::optional<std::string_view> {
     if (extractor[0] == '*') {
       if (extractor.size() == 1)
         return std::string_view{};
       if (extractor[1] == '.')
         return extractor.substr(2);
     }
-    while (!name.empty()) {
-      const auto [extractor_mismatch, name_mismatch] = std::mismatch(
-        extractor.begin(), extractor.end(), name.begin(), name.end());
-      if (name_mismatch == name.end()) {
-        if (extractor_mismatch == extractor.end())
-          return std::string_view{};
-        if (*extractor_mismatch == '.')
-          return extractor.substr(extractor_mismatch + 1 - extractor.begin());
-      }
-      if (!evaluate_subsections)
-        break;
-      const auto next_delimiter = name.find('.');
-      name = next_delimiter != std::string_view::npos
-               ? name.substr(next_delimiter + 1)
-               : std::string_view{};
+    const auto [extractor_mismatch, name_mismatch] = std::mismatch(
+      extractor.begin(), extractor.end(), name.begin(), name.end());
+    if (name_mismatch == name.end()) {
+      if (extractor_mismatch == extractor.end())
+        return std::string_view{};
+      if (*extractor_mismatch == '.')
+        return extractor.substr(extractor_mismatch + 1 - extractor.begin());
     }
     return std::nullopt;
+  };
+  const auto try_match_field_extractor_subsections
+    = [&](std::string_view extractor,
+          std::string_view name) noexcept -> std::vector<std::string_view> {
+    // We need to evaluate every subsection of both the extractor and the key.
+    const auto split_at_dot = [](std::string_view what) noexcept
+      -> std::pair<std::string_view, std::string_view> {
+      const auto dot = what.find('.');
+      if (dot == std::string_view::npos)
+        return {what, {}};
+      return {what.substr(0, dot), what.substr(dot + 1)};
+    };
+    auto result = std::vector<std::string_view>{};
+    auto name_n_outer = name;
+    auto name_1_outer = std::string_view{};
+    do {
+      auto name_n = name_n_outer;
+      auto name_1 = std::string_view{};
+      auto extractor_n = extractor;
+      auto extractor_1 = std::string_view{};
+      do {
+        std::tie(extractor_1, extractor_n) = split_at_dot(extractor_n);
+        std::tie(name_1, name_n) = split_at_dot(name_n);
+        const auto remainder = try_match_field_extractor(extractor_1, name_1);
+        if (!remainder || !remainder->empty())
+          break;
+        if (name_n.empty()) {
+          result.push_back(extractor_n);
+          break;
+        }
+      } while (!extractor_n.empty());
+      std::tie(name_1_outer, name_n_outer) = split_at_dot(name_n_outer);
+    } while (!name_n_outer.empty());
+    return result;
   };
   const auto match_type_extractor
     = [](std::string_view extractor, std::string_view name_or_kind) -> bool {
@@ -1369,14 +1395,33 @@ type::resolve(std::vector<std::string_view> extractors,
         // full match we mark this node to be yielded if it turns out to be a
         // leaf node. If we have a partial match, we add the remaining extractor
         // to the list of extractors for the next iteration.
-        const auto evaluate_subsections = extraction == extraction::flattened;
-        for (const auto extractor : contexts.back().current_extractors) {
-          if (const auto remaining_extractor = try_match_field_extractor(
-                extractor, name->string_view(), evaluate_subsections)) {
-            if (remaining_extractor->empty())
-              node_matches = true;
-            else
-              next_extractors.push_back(*remaining_extractor);
+        if (extraction == extraction::flattened) {
+          auto remaining_extractors = std::vector<std::string_view>{};
+          for (const auto extractor : contexts.back().current_extractors) {
+            for (const auto remaining_extractor :
+                 try_match_field_extractor_subsections(extractor,
+                                                       name->string_view())) {
+              if (remaining_extractor.empty()) {
+                node_matches = true;
+                break;
+              }
+              remaining_extractors.push_back(remaining_extractor);
+            }
+          }
+          if (!node_matches)
+            next_extractors.insert(
+              next_extractors.end(),
+              std::make_move_iterator(remaining_extractors.begin()),
+              std::make_move_iterator(remaining_extractors.end()));
+        } else {
+          for (const auto extractor : contexts.back().current_extractors) {
+            if (const auto remaining_extractor
+                = try_match_field_extractor(extractor, name->string_view())) {
+              if (remaining_extractor->empty())
+                node_matches = true;
+              else
+                next_extractors.push_back(*remaining_extractor);
+            }
           }
         }
         // In the next iteration, take a closer look at the field's type.
@@ -1406,17 +1451,23 @@ type::resolve(std::vector<std::string_view> extractors,
           // Check whether the extractor is a suffix of the type's name, and
           // if it is, yield the cursor and exit. We unconditionally support
           // matching subsections here.
-          const auto evaluate_subsecitons = true;
-          if (auto remaining_extractor = try_match_field_extractor(
-                extractor, name->string_view(), evaluate_subsecitons)) {
-            if (!remaining_extractor->empty()) {
-              if (next_extractors.empty()
-                  || next_extractors.back() != *remaining_extractor)
-                next_extractors.push_back(*remaining_extractor);
-            } else {
+          auto remaining_extractors = std::vector<std::string_view>{};
+          for (const auto remaining_extractor :
+               try_match_field_extractor_subsections(extractor,
+                                                     name->string_view())) {
+            if (remaining_extractor.empty()) {
               node_matches = true;
+              break;
             }
+            if (remaining_extractors.empty()
+                || remaining_extractors.back() != remaining_extractor)
+              remaining_extractors.push_back(remaining_extractor);
           }
+          if (!node_matches)
+            next_extractors.insert(
+              next_extractors.end(),
+              std::make_move_iterator(remaining_extractors.begin()),
+              std::make_move_iterator(remaining_extractors.end()));
         }
         break;
       }
