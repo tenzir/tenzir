@@ -269,12 +269,44 @@ generator<T> generator_promise<T>::get_return_object() noexcept {
 
 } // namespace internal
 
-template <typename FUNC, typename T>
-generator<std::invoke_result_t<FUNC&, typename generator<T>::iterator::reference>>
-fmap(FUNC func, generator<T> source) {
-  for (auto&& value : source) {
-    co_yield std::invoke(func, static_cast<decltype(value)>(value));
+/// A utility function to collect all results produced by a `generator<T>` into
+/// a suitable container.
+///
+/// Example:
+///     auto g = vast::detail::generator<string_view>{};
+///     auto v = vast::detail::collect<std::vector<std::string>>(g);
+template <class Container, class T>
+  requires requires(Container c, T& t) {
+    c.reserve(size_t{});
+    c.emplace(c.end(), t);
   }
+Container collect(vast::detail::generator<T> g, size_t size_hint = 0) {
+  Container result = {};
+  if (size_hint)
+    result.reserve(result.size() + size_hint);
+  for (auto&& x : std::move(g))
+    result.emplace(result.end(), std::move(x));
+  return result;
+}
+
+/// A utility function to collect all results produced by a `generator<T>` into
+/// a `std::vector<T>`.
+///
+/// Example:
+///     auto g = vast::detail::generator<int>{};
+///     auto v = vast::detail::collect(g);
+template <class T>
+std::vector<T> collect(vast::detail::generator<T> g, size_t size_hint = 0) {
+  return collect<std::vector<T>>(std::move(g), size_hint);
+}
+
+/// A utility function to collect the first result produced by a `generator<T>`
+/// into a `std::optional<T>`.
+template <class T>
+std::optional<T> maybe(vast::detail::generator<T> g) {
+  for (auto&& x : std::move(g))
+    return x;
+  return std::nullopt;
 }
 
 } // namespace vast::detail

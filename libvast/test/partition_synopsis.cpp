@@ -12,7 +12,6 @@
 
 #include "vast/bloom_filter_synopsis.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/collect.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 

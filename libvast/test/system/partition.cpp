@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/detail/collect.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/string_synopsis.hpp"

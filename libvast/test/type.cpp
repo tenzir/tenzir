@@ -11,7 +11,6 @@
 #include "vast/type.hpp"
 
 #include "vast/data.hpp"
-#include "vast/detail/collect.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
