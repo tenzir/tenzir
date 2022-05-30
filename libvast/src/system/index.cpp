@@ -547,6 +547,16 @@ void index_state::schedule_lookups() {
       VAST_DEBUG("{} did not find a partition to query", *self);
       return;
     }
+    auto immediate_completion = [&](const query_queue::entry& x) {
+      for (auto qid : x.queries)
+        if (auto client = pending_queries.handle_completion(qid))
+          self->send(*client, atom::done_v);
+    };
+    if (next->erased) {
+      VAST_DEBUG("{} skips erased partition {}", *self, next->partition);
+      immediate_completion(*next);
+      continue;
+    }
     VAST_DEBUG("{} schedules partition {} for {}", *self, next->partition,
                next->queries);
     // 2. Acquire the actor for the selected partition, potentially materializing
@@ -569,7 +579,7 @@ void index_state::schedule_lookups() {
                  it != persisted_partitions.end())
           part = inmem_partitions.get_or_load(partition_id);
       }
-      if (!part && !next->erased)
+      if (!part)
         VAST_WARN("{} failed to load partition {} that was part of a query",
                   *self, partition_id);
       return part;
@@ -578,9 +588,7 @@ void index_state::schedule_lookups() {
     if (!partition_actor) {
       // We need to mark failed partitions as completed to avoid clients going
       // out of sync.
-      for (auto qid : next->queries)
-        if (auto client = pending_queries.handle_completion(qid))
-          self->send(*client, atom::done_v);
+      immediate_completion(*next);
       continue;
     }
     counters.partition_scheduled++;
