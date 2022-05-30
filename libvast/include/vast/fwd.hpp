@@ -41,6 +41,7 @@ class ListType;
 class MapType;
 class MemoryPool;
 class RecordBatch;
+class Scalar;
 class Schema;
 class StringType;
 class StructType;

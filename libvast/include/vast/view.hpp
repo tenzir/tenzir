@@ -526,6 +526,11 @@ data_view to_canonical(const type& t, const data_view& x);
 /// @return A data view on the internal representation of the value.
 data_view to_internal(const type& t, const data_view& x);
 
+/// Converts a type and data pair into an Arrow Scalar.
+/// @pre type_check(type, view)
+std::shared_ptr<arrow::Scalar>
+to_arrow_scalar(const type& type, const data_view& view) noexcept;
+
 } // namespace vast
 
 namespace std {

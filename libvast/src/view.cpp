@@ -8,6 +8,7 @@
 
 #include "vast/view.hpp"
 
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/operator.hpp"
@@ -248,7 +249,7 @@ bool type_check(const type& x, const data_view& y) {
         return false;
       for (size_t i = 0; const auto& [k, v] : u) {
         const auto field = t.field(i++);
-        if (field.name != k || type_check(field.type, v))
+        if (field.name != k || !type_check(field.type, v))
           return false;
       }
       return true;
@@ -386,6 +387,101 @@ data_view to_internal(const type& t, const data_view& x) {
     },
   };
   return caf::visit(v, x, t);
+}
+
+std::shared_ptr<arrow::Scalar>
+to_arrow_scalar(const type& type, const data_view& view) noexcept {
+  VAST_ASSERT(type);
+  VAST_ASSERT(type_check(type, view));
+  auto f = detail::overload{
+    [&]<concrete_type Type>(
+      [[maybe_unused]] const Type& t) -> std::shared_ptr<arrow::Scalar> {
+      if constexpr (detail::is_any_v<Type, map_type, enumeration_type,
+                                     subnet_type>) {
+        // TODO: This is slow because we create a single-element Array and then
+        // use that API to get a scalar for the first element, but I cannot
+        // figure out how to create a scalar for map, enumeraion, or subnet
+        // types directly. -- DL
+        auto builder = t.make_arrow_builder(arrow::default_memory_pool());
+        VAST_ASSERT(builder);
+        auto append_result = append_builder(
+          t, *builder,
+          caf::get<typename view_trait<type_to_data_t<Type>>::type>(view));
+        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+        auto array = builder->Finish().ValueOrDie();
+        return array->GetScalar(0).ValueOrDie();
+      } else {
+        return std::make_shared<type_to_arrow_scalar_t<Type>>(
+          caf::get<typename view_trait<type_to_data_t<Type>>::type>(view));
+      }
+    },
+    [&](const integer_type&) -> std::shared_ptr<arrow::Scalar> {
+      return std::make_shared<type_to_arrow_scalar_t<integer_type>>(
+        caf::get<typename view_trait<type_to_data_t<integer_type>>::type>(view)
+          .value);
+    },
+    [&](const duration_type&) -> std::shared_ptr<arrow::Scalar> {
+      return std::make_shared<type_to_arrow_scalar_t<duration_type>>(
+        caf::get<typename view_trait<type_to_data_t<duration_type>>::type>(view)
+          .count(),
+        arrow::TimeUnit::NANO);
+    },
+    [&](const string_type&) -> std::shared_ptr<arrow::Scalar> {
+      return std::make_shared<type_to_arrow_scalar_t<string_type>>(materialize(
+        caf::get<typename view_trait<type_to_data_t<string_type>>::type>(view)));
+    },
+    [&](const pattern_type&) -> std::shared_ptr<arrow::Scalar> {
+      return std::make_shared<type_to_arrow_scalar_t<pattern_type>>(
+        to_arrow_scalar(
+          vast::type{string_type{}},
+          caf::get<typename view_trait<type_to_data_t<pattern_type>>::type>(view)
+            .string()),
+        pattern_type::to_arrow_type());
+    },
+    [&](const time_type&) -> std::shared_ptr<arrow::Scalar> {
+      return std::make_shared<type_to_arrow_scalar_t<time_type>>(
+        caf::get<typename view_trait<type_to_data_t<time_type>>::type>(view)
+          .time_since_epoch()
+          .count(),
+        arrow::TimeUnit::NANO);
+    },
+    [&](const address_type&) -> std::shared_ptr<arrow::Scalar> {
+      const auto bytes = as_bytes(
+        caf::get<typename view_trait<type_to_data_t<address_type>>::type>(
+          view));
+      return std::make_shared<type_to_arrow_scalar_t<address_type>>(
+        std::make_shared<arrow::FixedSizeBinaryScalar>(
+          arrow::Buffer::Wrap(bytes.data(), bytes.size())),
+        address_type::to_arrow_type());
+    },
+    [&](const list_type& lt) -> std::shared_ptr<arrow::Scalar> {
+      const auto vt = lt.value_type();
+      auto builder = vt.make_arrow_builder(arrow::default_memory_pool());
+      for (const auto& element :
+           caf::get<typename view_trait<type_to_data_t<list_type>>::type>(
+             view)) {
+        const auto append_result = append_builder(vt, *builder, element);
+        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+      }
+      return std::make_shared<type_to_arrow_scalar_t<list_type>>(
+        builder->Finish().ValueOrDie(), vt.to_arrow_type());
+    },
+    [&](const record_type& rt) -> std::shared_ptr<arrow::Scalar> {
+      auto scalars = std::vector<std::shared_ptr<arrow::Scalar>>{};
+      scalars.reserve(rt.num_fields());
+      const auto& typed_view
+        = caf::get<typename view_trait<type_to_data_t<record_type>>::type>(
+          view);
+      for (size_t index = 0; const auto& field : rt.fields())
+        scalars.push_back(
+          to_arrow_scalar(field.type, typed_view->at(index++).second));
+      return std::make_shared<type_to_arrow_scalar_t<record_type>>(
+        std::move(scalars), rt.to_arrow_type());
+    },
+  };
+  if (caf::holds_alternative<caf::none_t>(view))
+    return arrow::MakeNullScalar(type.to_arrow_type());
+  return caf::visit(f, type);
 }
 
 } // namespace vast

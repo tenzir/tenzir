@@ -6,10 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/arrow_table_slice_builder.hpp"
+#define SUITE view
+
+#include "vast/test/test.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#define SUITE view
-#include "vast/test/test.hpp"
+#include <arrow/scalar.h>
 
 using namespace vast;
 using namespace std::literals;
@@ -180,4 +184,42 @@ TEST(hashing views) {
   CHECK_EQUAL(stdhash{}(v), stdhash{}(make_view(v)));
   CHECK_EQUAL(stdhash{}(m), stdhash{}(make_view(m)));
   CHECK_EQUAL(stdhash{}(r), stdhash{}(make_view(r)));
+}
+
+TEST(arrow scalar conversion) {
+  // A naive implementation of to_arrow_scalar that is easy to verify and used
+  // for producing the expected values.
+  auto naive_to_arrow_scalar = [](const type& type, const data_view& view) {
+    REQUIRE(type_check(type, view));
+    auto builder = type.make_arrow_builder(arrow::default_memory_pool());
+    REQUIRE(builder);
+    auto append_result = append_builder(type, *builder, view);
+    if (!append_result.ok())
+      FAIL(append_result.ToString());
+    auto array = builder->Finish();
+    if (!array.ok())
+      FAIL(array.status().ToString());
+    auto scalar = array.MoveValueUnsafe()->GetScalar(0);
+    if (!scalar.ok())
+      FAIL(scalar.status().ToString());
+    return scalar.MoveValueUnsafe();
+  };
+  auto check = [&](const type& type, const data_view& view) {
+    MESSAGE("checking type " << fmt::to_string(type) << " with data "
+                             << fmt::to_string(view));
+    const auto expected = naive_to_arrow_scalar(type, view);
+    const auto value = to_arrow_scalar(type, view);
+    REQUIRE(expected);
+    REQUIRE(value);
+    CHECK(expected->Equals(*value));
+  };
+  // TODO: Implement such a check for all types.
+  check(type{bool_type{}}, true);
+  check(type{bool_type{}}, false);
+  check(type{integer_type{}}, integer{42});
+  check(type{count_type{}}, count{42});
+  check(type{record_type{{"foo", string_type{}}}},
+        make_data_view(record{{"foo", "123"}}));
+  check(type{string_type{}}, "123"sv);
+  check(type{string_type{}}, "123"sv);
 }
