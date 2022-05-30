@@ -395,16 +395,6 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       self->state.erase(partition);
       return atom::ok_v;
     },
-    [=](atom::replace, uuid old_partition, uuid new_partition,
-        partition_synopsis_ptr& synopsis) -> atom::ok {
-      // There's technically no need for this assertion, at some point
-      // we probably want to remove it or add a new `atom::update` handler
-      // for in-place replacements.
-      VAST_ASSERT(old_partition != new_partition);
-      self->state.merge(new_partition, std::move(synopsis));
-      self->state.erase(old_partition);
-      return atom::ok_v;
-    },
     [=](atom::replace, std::vector<uuid> old_uuids,
         std::vector<augmented_partition_synopsis> new_synopses) -> atom::ok {
       for (auto const& uuid : old_uuids)

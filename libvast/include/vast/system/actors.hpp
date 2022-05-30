@@ -207,9 +207,6 @@ using catalog_actor = typed_actor_fwd<
   caf::replies_to<atom::get>::with<std::vector<partition_synopsis_pair>>,
   // Erase a single partition synopsis.
   caf::replies_to<atom::erase, uuid>::with<atom::ok>,
-  // Atomically remove one and merge another partition synopsis
-  caf::replies_to<atom::replace, uuid, uuid,
-                  partition_synopsis_ptr>::with<atom::ok>,
   // Atomatically replace a set of partititon synopses with another.
   caf::replies_to<atom::replace, std::vector<uuid>,
                   std::vector<augmented_partition_synopsis>>::with<atom::ok>,
