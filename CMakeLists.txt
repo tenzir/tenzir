@@ -759,13 +759,14 @@ if (NOT VAST_IS_SUBPROJECT)
       ${CMAKE_CPP_FLAGS} ${CMAKE_CPP_FLAGS_${CMAKE_BUILD_TYPE}}")
     string(STRIP "${_lang_flags}" _lang_flags)
     if (_lang_flags)
-      message(
+      list(
+        APPEND
+        build_summary
         " * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info} with ${_lang_flags})"
       )
     else ()
-      message(
-        STATUS " * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info})"
-      )
+      list(APPEND build_summary
+           " * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info})")
     endif ()
   endforeach ()
   list(APPEND build_summary " * Linker: ${CMAKE_LINKER}")
