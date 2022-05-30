@@ -4,9 +4,8 @@
 The type declaration syntax does not provide a way to name inline types, which
 means that only top-level types can have a name.
 
-If multiple declarations use the same inline type, it is worth declaring the
-inline type at the top level, giving it a name and referring to it by that
-name. Example:
+If multiple declarations use the same inline type, it may be worth to use YAML
+node aliases. Example:
 
 ```yaml
 # 1. The same inline type is used multiple times:
@@ -27,21 +26,18 @@ type2:
 ```
 
 ```yaml
-# 2. Declare the type used multiple times at the top level instead of inlining:
+# 2. Using a YAML node alias:
 
 type1:
-  list: record_type
+  list: &record1
+    record:
+    - src: addr
+    - dst: addr
 
 type2:
   map:
     key: string
-    value: record_type
-
-record_type:
-  record:
-    - src: addr
-    - dst: addr
-
+    value: *record1
 ```
 
 Type1 and type2 in the first example are equivalent to type1 and type2 in the
@@ -51,8 +47,7 @@ There are no restrictions on declaration names; if the YAML parser can handle a
 name, then it is a valid name. To prevent confusion the only rule is that a
 declaration name cannot be a VAST type name: `bool`, `integer`, `count`, `real`,
 `duration`, `time`, `string`, `pattern`, `addr`, `subnet`, `enum`, `list`,
-`map`, `record`. There is no equivalent for the VAST none type in a YAML Module,
-so `none` is not a reserved name.
+`map`, `record`.
 
 ## Type Alias
 
@@ -148,7 +143,8 @@ type_alias:
   type: string
   attributes:
     - attr1_key: attr1_value
-    - attr2_value
+    - attr2_value:
+    - attr3_value
 ```
 
 ```yaml
