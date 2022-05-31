@@ -41,7 +41,7 @@ file, and we plan to fix that deficiency in an upcoming release.
 The current implementation does not optimize query execution for the underlying
 columnar storage, in particular it doesn't leverage predicate pushdown and
 projection at the partition or file level.
-j
+
 1. Row-based candidate checks don't utilize the columnar format to its fullest.
    - Evaluates candidate events row by row.
    - Should evaluate one column at a time, using e.g. Arrow compute functions.
