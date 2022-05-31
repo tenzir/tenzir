@@ -114,19 +114,24 @@ struct partition_transformer_state {
   /// The data of the newly created partition(s).
   std::multimap<type, active_partition_state::serialization_data> data = {};
 
-  // TODO: Consider having a single map {uuid -> (slices, indexers, slot)}
+  /// Auxiliary data required to create the final partition flatbuffer.
+  struct buildup {
+    /// The stream slot of the associated store builder.
+    // Note that we don't need to store the builder
+    // itself, it will shut itself down automatically.
+    caf::outbound_stream_slot<table_slice> slot = {};
 
-  // Maps each builder to its stream slot.
-  std::unordered_map<uuid, caf::outbound_stream_slot<table_slice>> slots = {};
+    /// Cached table slices in this partition.
+    std::vector<table_slice> slices = {};
 
-  /// Cached table slices in this partition.
-  std::unordered_map<uuid, std::vector<table_slice>> partition_slices = {};
+    /// Stores the value index for each field.
+    // Fields with a `#skip` attribute are stored as `nullptr`.
+    using value_index_map
+      = detail::stable_map<qualified_record_field, value_index_ptr>;
+    value_index_map indexers = {};
+  };
 
-  /// Stores the value index for each field.
-  // Fields with a `#skip` attribute are stored as `nullptr`.
-  using value_index_map
-    = detail::stable_map<qualified_record_field, value_index_ptr>;
-  detail::flat_map<vast::uuid, value_index_map> indexers = {};
+  std::unordered_map<uuid, buildup> partition_buildup;
 
   /// Store id for partitions.
   std::string store_id;

@@ -104,7 +104,7 @@ void partition_transformer_state::update_type_ids_and_indexers(
   for (size_t flat_index = 0;
        const auto& [field, offset] : caf::get<record_type>(layout).leaves()) {
     const auto qf = qualified_record_field{layout, offset};
-    auto& typed_indexers = indexers[partition_id];
+    auto& typed_indexers = partition_buildup.at(partition_id).indexers;
     auto it = typed_indexers.find(qf);
     if (it == typed_indexers.end()) {
       const auto skip = field.type.attribute("skip").has_value();
@@ -289,7 +289,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         update_statistics(self->state.stats_out, slice);
         partition_data.events += slice.rows();
         self->state.events += slice.rows();
-        self->state.partition_slices[partition_data.id].push_back(
+        self->state.partition_buildup[partition_data.id].slices.push_back(
           std::move(slice));
       }
       self->state.original_import_times.clear();
@@ -340,7 +340,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         // Empirically adding the outbound path and pushing data to it
         // need to be separated by a continuation, although I'm not
         // completely sure why.
-        self->state.slots[partition_data.id]
+        self->state.partition_buildup.at(partition_data.id).slot
           = self->state.stage->add_outbound_path(builder_and_header->first);
       }
       VAST_DEBUG("{} received all table slices", *self);
@@ -362,10 +362,9 @@ partition_transformer_actor::behavior_type partition_transformer(
         data.offset = offset;
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
-        // auto& builder = self->state.store_builders.at(data.id);
-        auto slot = self->state.slots.at(data.id);
-        // auto slot = self->state.stage->add_outbound_path(builder);
-        for (auto& slice : self->state.partition_slices[data.id]) {
+        auto& buildup = self->state.partition_buildup.at(data.id);
+        auto slot = buildup.slot;
+        for (auto& slice : buildup.slices) {
           slice.offset(offset);
           offset += slice.rows();
           self->state.stage->out().push_to(slot, slice);
@@ -375,16 +374,17 @@ partition_transformer_actor::behavior_type partition_transformer(
                                self->state.synopsis_opts);
         }
         // Update the synopsis
-        mutable_synopsis.shrink();
         // TODO: It would make more sense if the partition
         // synopsis keeps track of offset/events internally.
+        mutable_synopsis.shrink();
         mutable_synopsis.offset = data.offset;
         mutable_synopsis.events = data.events;
+        // Create the value indices.
+        for (auto& [qf, idx] :
+             self->state.partition_buildup.at(data.id).indexers)
+          data.indexer_chunks.emplace_back(qf.name(), chunkify(idx));
       }
       detail::shutdown_stream_stage(self->state.stage);
-      for (auto& [layout, data] : self->state.data)
-        for (auto& [qf, idx] : self->state.indexers[data.id])
-          data.indexer_chunks.emplace_back(qf.name(), chunkify(idx));
       auto stream_data = partition_transformer_state::stream_data{
         .partition_chunks
         = std::vector<std::tuple<vast::uuid, vast::type, chunk_ptr>>{},
@@ -397,13 +397,14 @@ partition_transformer_actor::behavior_type partition_transformer(
         for (auto& [layout, partition_data] :
              self->state.data) { // Pack partitions
           flatbuffers::FlatBufferBuilder builder;
-          auto indexers_it = self->state.indexers.find(partition_data.id);
-          if (indexers_it == self->state.indexers.end()) {
+          auto indexers_it
+            = self->state.partition_buildup.find(partition_data.id);
+          if (indexers_it == self->state.partition_buildup.end()) {
             stream_data.partition_chunks
               = caf::make_error(ec::logic_error, "missing data for partition");
             return;
           }
-          auto& indexers = indexers_it->second;
+          auto& indexers = indexers_it->second.indexers;
           auto fields = std::vector<struct record_type::field>{};
           fields.reserve(indexers.size());
           for (const auto& [qf, _] : indexers)
