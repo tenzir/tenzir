@@ -1514,8 +1514,7 @@ TEST(YAML Module - yaml alias node) {
                            "    type: string\n"
                            "    attributes:\n"
                            "      - attr1_key:\n"
-                           "      - attr2_key\n"
-                           "      - : value1\n";
+                           "      - attr2_key\n";
   const auto declaration = unbox(from_yaml(yaml));
   const auto result = unbox(to_module2(declaration));
   const auto expected = module_ng2{
@@ -1534,9 +1533,7 @@ TEST(YAML Module - yaml alias node) {
                            {"dst", address_type{}},
                          }},
               },
-              type{"type3",
-                   string_type{},
-                   {{"attr1_key"}, {"attr2_key"}, {"null", "value1"}}}},
+              type{"type3", string_type{}, {{"attr1_key"}, {"attr2_key"}}}},
   };
   CHECK_EQUAL(result, expected);
 }
